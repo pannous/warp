@@ -239,6 +239,23 @@ given_from(first: int): Arguments := {
 	for i in first..arg_count() { added(list, arg(i)) }
 	list
 }
+# a program's arguments: its name, then the driver's from `first` on, a `--` there left out (`warp app.warp -- a b`)
+program_arguments(name: text, first: int): Arguments := {
+	list = arguments()
+	added(list, name)
+	start = if first < arg_count() and same_text(arg(first), "--") then first + 1 else first
+	for i in start..arg_count() { added(list, arg(i)) }
+	list
+}
+# the module the driver's word `at` names, run with the words after it
+module_ran(at: int): nothing := {
+	module = read_file(arg(at))
+	if module.length == 0 {
+		complain(joined("no module at ", arg(at)))
+		exit(1)
+	}
+	run(module, program_arguments(arg(at), at + 1), "")
+}
 
 # what main gave, printed as its kind is
 print_result(result: pointer): nothing := {
@@ -350,28 +367,27 @@ instance_shown(context: handle, instance: pointer, value: pointer): text := {
 
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile (src/compiler/standalone.rs
 # run_compiler: the file, the module, its folder, lib/, runtime.wasm), then the module runs with the arguments
-compiled_and_run(file: text): nothing := {
+compiled_and_run(compiler: text, at: int): nothing := {
+	file = arg(at)
 	library = library_folder()
 	output = compiled_path()
-	compiling = compiler_arguments()
+	compiling = compiler_arguments(compiler)
 	added(compiling, file)
 	added(compiling, output)
 	added(compiling, folder_of(file))
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
-	compiler_ran(compiling)
-	written_run(output, file, 2)
+	file_ran(compiler, compiling)
+	written_run(output, file, at + 1)
 }
 # warp.wasm of lib/, the compiler and its commands
 compiler_path(): text := joined(library_folder(), "/warp.wasm")
-# its arguments: its own path, the words after it added
-compiler_arguments(): Arguments := {
+# a compiler's arguments: its own path, the words after it added
+compiler_arguments(compiler: text): Arguments := {
 	list = arguments()
-	added(list, compiler_path())
+	added(list, compiler)
 	list
 }
-# warp.wasm run with the arguments
-compiler_ran(given: Arguments): nothing := file_ran(compiler_path(), given)
 # the module of a file (a compiler) run with the arguments, its machine code kept beside it (compiled_module)
 file_ran(path: text, given: Arguments): nothing := {
 	module = read_file(path)
@@ -389,10 +405,7 @@ written_run(output: text, name: text, first: int): nothing := {
 		complain(joined("warp.wasm wrote no module of ", name))
 		exit(1)
 	}
-	running = arguments()
-	added(running, name)
-	for i in first..arg_count() { added(running, arg(i)) }
-	run(program, running, "")
+	run(program, program_arguments(name, first), "")
 }
 
 ## machine code
@@ -807,12 +820,5 @@ if appended.length > 0 { run(appended, given_from(0), "") } else {
 		complain("usage: driver <app.warp | app.wasm> [arguments…]")
 		exit(2)
 	}
-	if ends_with(arg(1), ".warp") { compiled_and_run(arg(1)) } else {
-		module = read_file(arg(1))
-		if module.length == 0 {
-			complain(joined("no module at ", arg(1)))
-			exit(1)
-		}
-		run(module, given_from(1), "")
-	}
+	if ends_with(arg(1), ".warp") { compiled_and_run(compiler_path(), 1) } else { module_ran(1) }
 }

@@ -3,7 +3,9 @@
 # The native warp (decision native-warp-in-core, notes/roadmap_native_harness.md step 2): the warp command as a native
 # executable, warp.wasm hosted through driver.warp. It only tells apart what the words name:
 #   warp app.wasm args…   the module run
-#   warp app.warp args…   compiled by warp.wasm, then run with the arguments
+#   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
+#   warp run app.…        the same; `warp pure …` too (warp.wasm is the pure compiler)
+#   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
 #   warp                  warp.wasm's help
 #   warp rebuild          warp.wasm built anew from lib/ by the seed (rebuilt)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
@@ -18,13 +20,13 @@ realpath(path: pointer, resolved: pointer): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 FOLDER_MODE = 493
 
-# warp.wasm with this executable's words: a command runs, code is compiled to WARP_RUN_TO and run after
-hosted(): nothing := {
+# a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
+hosted(compiler: text, first: int): nothing := {
 	output = compiled_path()
-	given = compiler_arguments()
-	for i in 1..arg_count() { added(given, arg(i)) }
+	given = compiler_arguments(compiler)
+	for i in first..arg_count() { added(given, arg(i)) }
 	setenv(c_string("WARP_RUN_TO"), c_string(output), 1)
-	compiler_ran(given)
+	file_ran(compiler, given)
 	unsetenv(c_string("WARP_RUN_TO"))
 	if read_file(output).length > 0 { written_run(output, "code", arg_count()) }
 }
@@ -84,21 +86,18 @@ real_path(path: text): text := {
 # a file of warp code: its name ends in .warp, or a file of that name exists
 is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).length > 0
 
-if arg_count() < 2 {
-	given = compiler_arguments()
+# `run` and `pure` say what the bare words do, `self` names warp-self.wasm as the compiler
+prefixed = arg_count() > 1 and (same_text(arg(1), "run") or same_text(arg(1), "pure") or same_text(arg(1), "self"))
+first = if prefixed then 2 else 1
+compiler = if prefixed and same_text(arg(1), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path()
+if arg_count() <= first {
+	given = compiler_arguments(compiler)
 	added(given, "help")
-	compiler_ran(given)
+	file_ran(compiler, given)
 } else {
-	if ends_with(arg(1), ".wasm") {
-		module = read_file(arg(1))
-		if module.length == 0 {
-			complain(joined("no module at ", arg(1)))
-			exit(1)
-		}
-		run(module, given_from(1), "")
-	} else {
-		if same_text(arg(1), "rebuild") { rebuilt() } else {
-			if is_warp_file(arg(1)) { compiled_and_run(arg(1)) } else { hosted() }
+	if ends_with(arg(first), ".wasm") { module_ran(first) } else {
+		if not prefixed and same_text(arg(1), "rebuild") { rebuilt() } else {
+			if is_warp_file(arg(first)) { compiled_and_run(compiler, first) } else { hosted(compiler, first) }
 		}
 	}
 }
