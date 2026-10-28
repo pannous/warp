@@ -194,6 +194,14 @@ write_runtime(file: text) := {
 	if made is text { raise made }
 	write_bytes(file, made)
 }
+# <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp library_module), for
+# programs to be linked to; `warp rebuild` writes one beside warp.wasm for each
+write_module(name: text, runtime_file: text, file: text) := {
+	program = checked_program("use " + name + "\nø", library_folder, prelude_source)
+	made = library_module(program, read_bytes(runtime_file), lowered_runtime_words(), host_words)
+	if made is text { raise made }
+	write_bytes(file, made)
+}
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
 show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
@@ -211,5 +219,6 @@ match command {
 	"repl": repl()
 	"repl-step": repl_step(args#2, args#3, args#4)
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
+	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
 	_: if command in running_commands then refuse_running(command) else refuse_native(command)
 }

@@ -192,7 +192,7 @@ def prepended_bytes(functions: list): list {
 	parts = [types, section(section_ids.import, runtime_part(section_ids.import)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
 		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(1)), codes, texts]
 	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
-	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + marks
+	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + marks + runtime_sections(functions)
 }
 # runtime.wasm's names and the program's behind them
 def prepended_names(functions: list, classes: list, own_globals: list): list {
@@ -204,3 +204,17 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 	content += runtime_names(names_subsections.tags, [])
 	section(section_ids.custom, name_bytes("name") + content)
 }
+
+## a library module prebuilt (card modules-prebuilt, notes/runtime_linking.md "Library modules"): its words compiled
+## once behind runtime.wasm from their declared kinds, its own items numbered from the runtime's counts, every index
+## operand padded and listed, so a link appends it behind the runtime and the modules before it
+library_module(program: Node, runtime_wasm: list, runtime: Node, host: map): any := {
+	prepend_runtime(runtime_wasm)
+	module.relocating = yes
+	made = typed_wasm_module(program, runtime, host, {})
+	module.relocating = no
+	made
+}
+# where the module's own items start in each index space (relocated): behind the runtime's imports and functions,
+# types, globals and texts
+def own_items_from(): list := [#module.imports + runtime_image.functions, runtime_image.types, #runtime_image.globals, runtime_image.data]

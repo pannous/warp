@@ -76,6 +76,7 @@ export_tag_byte = 4
 call_indirect = 17
 hooks_table = "hooks"
 runtime_section = "warp.runtime"
+library_section = "warp.module"
 # its relocations, and a prebuilt module's: each padded operand's [offset, kind, space] (relocatable), the kind of index
 # it holds and the space it indexes: the runtime's, a module's own, its k-th used module's (2 + k)
 relocations_section = "warp.relocations"
@@ -1344,6 +1345,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		if (module.prebuilding or name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
 	}
 	if prepended() { module.imports = runtime_imports(host) }
+	if prepended() and module.relocating { module.own_from = own_items_from() }
 	c_function_globals()
 	for name in module.runtime.keys {
 		word = module.runtime[name]
