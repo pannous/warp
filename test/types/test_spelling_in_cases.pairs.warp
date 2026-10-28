@@ -1,0 +1,5 @@
+# a read's spelling is in a list of an enum's cases: op_of(n) in [Op.Add, Op.Sub] (card op-of-identity)
+'n = parse("1 + 2"); op_of(n) in [Op.Add, Op.Sub]'	yes
+'n = parse("1 * 2"); op_of(n) in [Op.Add, Op.Sub]'	no
+'"-" in [Op.Add, Op.Sub]'	yes
+'o = Op.Sub; o in [Op.Add, Op.Sub]'	yes

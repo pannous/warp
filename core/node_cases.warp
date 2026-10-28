@@ -135,7 +135,19 @@ node_value(n: Node, builds: map, declared: map): Node := match n {
 	Key(left, Op.Eq, right): spelled_equality(left, Op.Eq, right, n, declared)
 	Key(left, Op.Ne, right): spelled_equality(left, Op.Ne, right, n, declared)
 	List(parts, Bracket.Round, Separator.None): construction(parts, n, builds, declared)
+	List(parts, Bracket.None, Separator.Space): spelled_membership(parts, n, declared)
 	_: n
+}
+
+# `op_of(n) in [Op.Add, Op.Sub]` → op_of(n) in ["+", "-"]: a spelling is in a list of one enum's cases by theirs (card
+# op-of-identity); a name holding a case is compared as it is
+spelled_membership(parts: list, n: Node, declared: map): Node := {
+	if #parts != 3 or parts#2 != symbol("in") or not (parts#1 is text or is_spelled_read(parts#1)) { return n }
+	cases = parts#3
+	if not (is_group(cases) and bracket_of(cases) == "[" and #cases > 0) { return n }
+	enum_name = spelled_enum_of(cases#1, declared)
+	if enum_name == ø or not items_of(cases).all(case => spelled_enum_of(case, declared) == enum_name) { return n }
+	List([parts#1, parts#2, children(cases, case => spelled_text(enum_name, case, declared))], Bracket.None, Separator.Space)
 }
 
 # node.warp's `enum Op {Colon, Dot, …}`
