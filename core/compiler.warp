@@ -18,9 +18,6 @@ library_folder = if not command and #args > 3 then args#4 else run_library()
 # the parser's and the uses' standard modules from that lib/ too, never the folder this compiler was built in
 use_library(library_folder)
 
-# the name the lowered runtime words are kept under
-RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
-
 # the prelude's text, whose definitions a program reaches (prelude_words.warp), built in as the compiler's other data
 prelude_source = module_source("prelude")
 
@@ -30,6 +27,7 @@ RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
 # the text of each file the roots reach by `use`, by its path in core, built into the compiler as it is built
 # (module_source; user 2026-10-26: "this should be baked in by now"): its runtime words never read the lib/ it runs
 # with. A file missing here is read from lib/ (uses.warp file_text)
+// TODO get rid of these, just load via loop (card core-compiler)
 RUNTIME_FILES = {
 	"runtime.warp": module_source("compiler/runtime.warp"),
 	"runtime/extended.warp": module_source("compiler/runtime/extended.warp"),
@@ -76,29 +74,16 @@ root_text(file: text): text := {
 	text.replace("use \"", "use \"" + steps[0 ..< #steps - 1].join("/") + "/")
 }
 
-# the runtime words lowered and kept; keep's answer unused, so a host without the module cache (plain wasmtime answering
-# its imports with defaults) still gets the words
-fresh_runtime_words(): Node := {
-	# the counters numbering the names the passes make (item·3, t·2, closure_lambda_5) as they were: a program then gets
-	# the same names whether its compiler lowered the runtime words in this run or took them kept, so a cold and a warm
-	# module cache give the same bytes (card fixpoint-check)
-	global names_made
-	global fresh_names
+# the runtime words, lowered by the same passes as a program, only to build runtime.wasm: a compile takes them from it
+lowered_runtime_words(): Node := {
 	global built_in_files
-	counted = [names_made, fresh_names]
 	roots = RUNTIME_ROOTS.map(file => root_text(file))
 	built_in_files = {}
 	for file in RUNTIME_FILES.keys { built_in_files[library_folder + "/compiler/" + file] = RUNTIME_FILES[file] }
 	words = lowered_program(roots.join("\n"), library_folder + "/compiler", prelude_source)
 	built_in_files = {}
-	names_made = counted#1
-	fresh_names = counted#2
-	keep(RUNTIME_WORDS, words)
 	words
 }
-# the runtime words, lowered by the same passes as a program; the same at every run while lib/ stays as it is, so kept
-# across runs and lowered once (card pure-warm-start); lowered at the first compile, so `help` needs none
-lowered_runtime_words(): Node := kept(RUNTIME_WORDS) ?? fresh_runtime_words()
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core
 compile(source: text, folder: text): any := {
@@ -115,7 +100,7 @@ compile(source: text, folder: text): any := {
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
 	# behind runtime.wasm
 	prepend_runtime(runtime_bytes())
-	made = typed_wasm_module(program, lowered_runtime_words(), with_c_functions(host_words, foreign#2), emitter_kinds(program))
+	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, foreign#2), emitter_kinds(program))
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
 	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
 	# the warnings once the module is made, as Rust's pure lane says them
@@ -175,28 +160,22 @@ repl() := {
 }
 
 # runtime.wasm beside this compiler, the harness's fifth argument of a compile: the program is compiled behind it (card
-# runtime-prepended), read once, while WARP_PREPENDED=1 (until the gate is green behind it) or a separate module is
-# asked for; else the program compiles the runtime words it calls with it
+# runtime-prepended), read once. A compile has no other runtime: without it, it fails
 RUNTIME_ARGUMENT = 5
-PREPENDED_SETTING = "WARP_PREPENDED"
 # the sixth, of `warp build`: where the same program goes as a separate module, importing runtime.wasm's instance
 # (card wasm-output-variants, notes/runtime_linking.md "Separate modules")
 SEPARATE_ARGUMENT = 6
 separate_file(): text := if command == "" and #args >= SEPARATE_ARGUMENT then args#SEPARATE_ARGUMENT else ""
-global runtime_read = no
 global runtime_held = ø
-runtime_bytes(): any := {
-	if not runtime_read {
-		runtime_read = yes
-		runtime_held = if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" and (env(PREPENDED_SETTING) == "1" or separate_file() != "") then (try read_bytes(args#RUNTIME_ARGUMENT) else ø) else ø
+runtime_bytes(): list := {
+	if runtime_held == ø {
+		if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { throw "no runtime.wasm given (the fifth argument): `warp rebuild` writes it beside warp.wasm" }
+		runtime_held = read_bytes(args#RUNTIME_ARGUMENT)
 	}
 	runtime_held
 }
 # the program just compiled behind runtime.wasm, as a module importing it instead
-separate_module(): list := {
-	if not prepended() { raise "no runtime.wasm beside the compiler to link a separate module against: warp rebuild writes it" }
-	linked_bytes(module.order)
-}
+separate_module(): list := linked_bytes(module.order)
 # runtime.wasm, the runtime words compiled once (emitter/prebuilt.warp), written beside warp.wasm by `warp rebuild`
 RUNTIME_WASM = "runtime.wasm"
 write_runtime(file: text) := {
