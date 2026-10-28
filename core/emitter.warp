@@ -1279,7 +1279,7 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 		for name in module.functions.keys { collect_literal_arguments(module.functions[name].body) }
 		module.shared = shared_names(block_statements(main.body))
 		compile_function(main, [])
-		shown_result(if main.result == ValueKind.Int or main.result == ValueKind.Float then main.result else ValueKind.Node)
+		shown_result(main.result)
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
 		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
 		for name in module.functions.keys {
