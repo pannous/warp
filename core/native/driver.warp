@@ -405,8 +405,8 @@ instance_shown(context: handle, instance: pointer, value: pointer): text := {
 
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile (src/compiler/standalone.rs
 # run_compiler: the file, the module, its folder, lib/, runtime.wasm), then the module runs with the arguments
-compiled_and_run(compiler: text, at: int): nothing := {
-	file = reachable_path(arg(at))
+compiled_and_run(compiler: text, given: text, first: int): nothing := {
+	file = reachable_path(given)
 	library = library_folder()
 	output = compiled_path()
 	compiling = compiler_arguments(compiler)
@@ -416,7 +416,7 @@ compiled_and_run(compiler: text, at: int): nothing := {
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
 	file_ran(compiler, compiling)
-	written_run(output, arg(at), at + 1)
+	written_run(output, given, first)
 }
 # the path absolute, its links resolved (lib/compiler links to core): a compile's folder is the real one, and a file
 # above the current folder (`../a.warp`) is one the module reaches through the preopened root
@@ -902,5 +902,5 @@ if appended.length > 0 { run(appended, given_from(0), "") } else {
 		complain("usage: driver <app.warp | app.wasm> [arguments…]")
 		exit(2)
 	}
-	if ends_with(arg(1), ".warp") { compiled_and_run(compiler_path(), 1) } else { module_ran(1) }
+	if ends_with(arg(1), ".warp") { compiled_and_run(compiler_path(), arg(1), 2) } else { module_ran(1) }
 }
