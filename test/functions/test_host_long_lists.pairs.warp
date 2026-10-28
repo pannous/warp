@@ -1,0 +1,3 @@
+# a host word returning a long list gives it whole, a second of samples through a sound effect (no n² build)
+
+'use sound; #effected([0.5 for i in 1 to 44100], ["gain", 1.0])'	44100
