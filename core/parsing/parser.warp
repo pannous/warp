@@ -1054,10 +1054,11 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				continue
 			}
 			if op.length == 0 or negative_item_at(p) {
-				if not applies(p, left, min_power) { break }
+				if not applies(p, left, min_power) or comprehension_filter_at(p) { break }
 				// `s + f 2 each: 3`: the labelled arguments after the argument are the call's too
 				labelled = labelled_argument(p)
-				given = [if labelled == ø then argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left)) else labelled]
+				// `ys = xs where it > 2`: after a clause word its whole condition or subject, as a statement's (follows_clause_word)
+				given = [if labelled != ø then labelled else if ends_with_clause_word(left) then header_expression(p, 0) else argument(p, not applies_otherwise(p, min_power))]
 				labelled = labelled_argument(p)
 				while labelled != ø {
 					given = given + [labelled]
@@ -3020,7 +3021,7 @@ def iterable_words(p: Parser): Node := {
 	while true {
 		skip_spaces(p)
 		start = p.at
-		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or comprehension_clause_at(p) { break }
+		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or comprehension_clause_at(p) or comprehension_filter_at(p) { break }
 		// a rule's hole after the iterable is the loop's body, `for $i in 1 to $n $body` (card sugar-comprehensions)
 		if words.length == 1 and is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n)) {
 			p.iterable = false
@@ -3030,7 +3031,7 @@ def iterable_words(p: Parser): Node := {
 		if p.at == start { break }
 	}
 	p.iterable = false
-	ends_clause = in_comprehension(p) and (p.at >= p.n or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or keyword_at(p, "for"))
+	ends_clause = in_comprehension(p) and (p.at >= p.n or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or keyword_at(p, "for") or keyword_at(p, "where"))
 	if words.length == 1 or not (at_loop_body(p) or ends_clause) {
 		p.at = after_first
 		return first
@@ -3053,6 +3054,8 @@ def in_comprehension(p: Parser): bool := p.group.bracket == Bracket.Square or p.
 
 // A comprehension's next clause, which ends the iterable before it: `for b` of `[a + b for a in xs for b in ys]`
 def comprehension_clause_at(p: Parser): bool := in_comprehension(p) and keyword_at(p, "for")
+// A comprehension's filter, which ends the iterable before it as `if` does: `where x > 2` of `[x for x in xs where x > 2]`
+def comprehension_filter_at(p: Parser): bool := p.iterable and in_comprehension(p) and keyword_at(p, "where")
 
 // A rule's hole ending a loop's header is its body: `$body` of `for $i in 1 to $n $body`, then the line's end, a
 // closer or the rule's `where`; in a comprehension the loop is an each clause (`[$c for $c in cases of $e]`), its
@@ -3095,6 +3098,11 @@ def loop_body(p: Parser): Node := {
 	if width > 0 { return colon_body(p, width) }
 	block = indented_block(p)
 	if block != ø { return block }
+	// `[x for x in xs where x > 2]`: a comprehension's `where` filters as its `if`
+	if in_comprehension(p) and keyword_at(p, "where") {
+		p.at = p.at + "where".length
+		return symbol("if")
+	}
 	atom(p)
 }
 

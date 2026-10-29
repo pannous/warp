@@ -10,3 +10,8 @@ rewrite $v as list of $t => $v.map($x => $x as $t)
 
 # `count bytes in t`: the text's byte size, ahead of the `in` of a membership (sugar/methods.warp counts x in y)
 rewrite (count bytes in $t) => byte_size($t)
+
+# A filter (card pair-count-filter): `xs where it > 2` is the items the condition holds for, `it` each item, also as a
+# call's argument, `count(xs where it is Pair)`
+rewrite ($xs where $c...) => $xs.filter(it => $c...)
+rewrite $f($xs where $c...) => $f($xs.filter(it => $c...))

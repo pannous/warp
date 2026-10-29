@@ -6,7 +6,6 @@
 # of that list. Rust twin: rust-harness:src/lowering/collections/comprehensions.rs lower
 rewrite [$e for $x in $xs] => ($l = []; for $x in $xs { $l += [$e] }; $l)
 rewrite [$e for $x in $xs if $c $rest...] => ($l = []; for $x in $xs { if $c { $l += [$e $rest...] } }; $l)
-rewrite [$e for $x in $xs where $c $rest...] => [$e for $x in $xs if $c $rest...]
 rewrite [$e for $x in $xs $clause $rest...] => ($l = []; for $x in $xs { $l += [$e $clause $rest...] }; $l)
 rewrite [$e... for $x in $xs $clause] => [$e for $x in $xs $clause]
 rewrite [$e... for $x in $xs if $c] => [$e for $x in $xs if $c]
