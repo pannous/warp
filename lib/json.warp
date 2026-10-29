@@ -1,11 +1,188 @@
-// The standard library module json (notes/stdlib.md section 7): `use json`. Warp data is a superset of JSON; the
-// adapter std_pure parses and writes it (serde_json natively, JSON.parse / JSON.stringify in the browser); parse reads
-// JSON5 too (comments, single quotes, trailing commas, bare keys), and `json(t)` is json.parse(t) without `use json`;
-// `x.json` is the JSON text of any value, to_json(x), also without `use json` (`{a: 1}.json` is {"a":1})
-global parse_json(text: any) := std_pure("json", "parse", [text])
-global json(text: any) := parse_json(text)
-global to_json(value: any) := std_pure("json", "to_json", [value])
-// to_json in a program with classes (class_methods lower_json_classes): an instance is its fields
-to_json_of_classes(value: any, classes: any) := std_pure("json", "to_json", [value, classes])
-// to_json under `use strict` (class_methods lower_json_calls): a fraction is an error, not a float with a warning
-exact_json(value: any, classes: any) := std_pure("json", "exact_json", [value, classes])
+// The standard library module json (notes/stdlib.md section 7): `use json`. Warp data is a superset of JSON, read and
+// written here in warp, alike under every host: parse reads JSON5 too (comments, single quotes, trailing commas, bare
+// keys), and `json(t)` is json.parse(t) without `use json`; `x.json` is the JSON text of any value, to_json(x), also
+// without `use json` (`{a: 1}.json` is {"a":1}), code in the JsonLogic shape (`1+1` is {"+":[1,1]})
+JSON_SPACE = [" ", "\t", "\n", "\r"]
+JSON_NUMBER_CHARACTERS = "+-0123456789.eE"
+JSON_ESCAPED = {"n": "\n", "t": "\t", "r": "\r", "b": chr(8), "f": chr(12)}
+JSON_ESCAPES = {"\"": "\\\"", "\\": "\\\\", "\n": "\\n", "\t": "\\t", "\r": "\\r"}
+JSON_LITERALS = {"true": yes, "false": no, "null": ø}
+// the types of a key that is no instance of a class
+KEY_TYPES = ["code", "key"]
+// the operators of code that are entries of an object, `{a: 1+2}` is {"a":{"+":[1,2]}}
+JSON_ENTRY_OPERATORS = ["", ":", "=", ":="]
+HEX_DIGITS = "0123456789abcdef"
+JSON_WORD_ENDS = ":,]}/"
+
+global parse_json(source: any) := {
+	read = json_read(source, json_skipped(source, 1))
+	if json_skipped(source, read#2) <= #source { raise json_refusal(source, "more after the value") }
+	read#1
+}
+// json of warp data, `json{ 'a':1 }`, is that data
+global json(source: any) := if source is text then parse_json(source) else source
+global to_json(value: any) := json_written(value, no)
+// `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
+global json_text(value: any): any := if value is map and "json" in value then value["json"] else to_json(value)
+// the old form naming the classes whose instances are their fields: every instance is
+to_json_of_classes(value: any, classes: any) := to_json(value)
+// to_json under `use strict`: a fraction JSON writes only approximately is an error
+exact_json(value: any, classes: any) := json_written(value, yes)
+
+json_refusal(source, problem) := "" + source + " is no json: " + problem
+// the place of the first character after spaces and comments from at on
+json_skipped(source: text, at: int) := {
+	while at <= #source {
+		if source#at in JSON_SPACE { at += 1 }
+		else if source[at - 1..<at + 1] == "//" { while at <= #source and source#at != "\n" { at += 1 } }
+		else if source[at - 1..<at + 1] == "/*" {
+			at += 2
+			while at < #source and source[at - 1..<at + 1] != "*/" { at += 1 }
+			at += 2
+		}
+		else { return at }
+	}
+	at
+}
+// [the value written at that place, the place after it]
+json_read(source: text, at: int) := {
+	if at > #source { raise json_refusal(source, "it ends early") }
+	first = source#at
+	if first == "{" { return json_object_read(source, at + 1) }
+	if first == "[" { return json_array_read(source, at + 1) }
+	if first == "\"" or first == "'" { return json_text_read(source, at + 1, first) }
+	if first in JSON_NUMBER_CHARACTERS { return json_number_read(source, at) }
+	word = json_word_read(source, at)
+	if word#1 in JSON_LITERALS { return [JSON_LITERALS[word#1], word#2] }
+	raise json_refusal(source, "unexpected " + first)
+}
+json_object_read(source: text, at: int) := {
+	object = {}
+	at = json_skipped(source, at)
+	while at <= #source and source#at != "}" {
+		key = if source#at == "\"" or source#at == "'" then json_text_read(source, at + 1, source#at) else json_word_read(source, at)
+		at = json_skipped(source, key#2)
+		if at > #source or source#at != ":" { raise json_refusal(source, "no : after the key " + key#1) }
+		value = json_read(source, json_skipped(source, at + 1))
+		object[key#1] = value#1
+		at = json_after_item(source, value#2, "}")
+	}
+	if at > #source { raise json_refusal(source, "no closing }") }
+	[object, at + 1]
+}
+json_array_read(source: text, at: int) := {
+	items = []
+	at = json_skipped(source, at)
+	while at <= #source and source#at != "]" {
+		item = json_read(source, at)
+		items += [item#1]
+		at = json_after_item(source, item#2, "]")
+	}
+	if at > #source { raise json_refusal(source, "no closing ]") }
+	[items, at + 1]
+}
+// the place after an item and its comma, at the closing bracket when none follows
+json_after_item(source: text, at: int, closing: text): int := {
+	at = json_skipped(source, at)
+	if at <= #source and source#at == "," { return json_skipped(source, at + 1) }
+	if at <= #source and source#at != closing { raise json_refusal(source, "no , or " + closing + " after an item") }
+	at
+}
+json_text_read(source: text, at: int, quote: text) := {
+	read = ""
+	while at <= #source and source#at != quote {
+		if source#at == "\\" {
+			escaped = source#(at + 1)
+			if escaped == "u" {
+				read += chr(hex_value(source[at + 1..<at + 5]))
+				at += 6
+			} else {
+				read += JSON_ESCAPED.get("" + escaped) ?? escaped
+				at += 2
+			}
+		} else {
+			read += source#at
+			at += 1
+		}
+	}
+	if at > #source { raise json_refusal(source, "no closing " + quote) }
+	[read, at + 1]
+}
+// a number: a whole one exactly, however long, one with a fraction or an exponent a float
+json_number_read(source: text, at: int) := {
+	end = at
+	while end <= #source and source#end in JSON_NUMBER_CHARACTERS { end += 1 }
+	digits = source[at - 1..<end - 1]
+	fractional = "." in digits or "e" in digits or "E" in digits
+	[if fractional then float(digits) else whole_number(digits), end]
+}
+whole_number(digits: text) := {
+	negative = digits#1 == "-"
+	n = 0
+	for digit in digits { if digit != "-" and digit != "+" { n = n * 10 + ord(digit) - 48 } }
+	if negative then 0 - n else n
+}
+hex_value(digits: text): int := {
+	n = 0
+	for digit in digits.lower() { n = n * 16 + HEX_DIGITS.find(digit) - 1 }
+	n
+}
+// a bare word, a JSON5 key or a literal: up to a space or a character of JSON's syntax
+json_word_read(source: text, at: int) := {
+	end = at
+	while end <= #source and source#end not in JSON_WORD_ENDS and source#end not in JSON_SPACE { end += 1 }
+	if end == at { raise json_refusal(source, "unexpected " + source#at) }
+	[source[at - 1..<end - 1], end]
+}
+
+// the JSON text of a value, an instance its fields; exact refuses a fraction it can't write so
+json_written(value: any, exact: bool): text := {
+	written = (part => json_written(part, exact))
+	if value == ø { return "null" }
+	if value is bool { return if value then "true" else "false" }
+	if value is int { return "" + value }
+	if value is number { return json_number(value, exact) }
+	if value is text or value is codepoint { return json_quoted("" + value) }
+	if value is symbol { return json_quoted(value.name) }
+	if value is map or (value is key and type(value).name not in KEY_TYPES) { return json_fields(value, written) }
+	if value is key { return json_code_key(value, written) }
+	if value is list { return json_list(value, written) }
+	json_quoted("" + value)
+}
+// a fraction as its decimal digits when it ends, `-1/8` is -0.125, else as the float nearest it
+json_number(value: any, exact: bool): text := {
+	spelled = "" + value
+	if "/" not in spelled { return spelled }
+	if exact { raise "JSON has no exact " + spelled + ": it cannot be written as JSON exactly" }
+	"" + float(value)
+}
+json_quoted(source: text): text := {
+	quoted = "\""
+	for character in source {
+		code = ord(character)
+		quoted += JSON_ESCAPES.get("" + character) ?? (if code < 32 then "\\u00" + HEX_DIGITS#(code / 16 + 1) + HEX_DIGITS#(code % 16 + 1) else character)
+	}
+	quoted + "\""
+}
+// a map's entries, an instance's fields, as an object
+json_fields(value: any, written: function): text := json_object(value.keys.map(key => [json_key(key), written(value[key])]))
+json_key(key: any): text := if key is text then key else if key is symbol then key.name else "" + key
+// [[key, its JSON], …] as an object
+json_object(entries) := "{" + entries.map(entry => json_quoted(entry#1) + ":" + entry#2).join(",") + "}"
+// code: an entry `a: 1` an object, an operation its operator and operands, `not x` {"not":["x"]}
+json_code_key(n: any, written: function): text := {
+	if n.op in JSON_ENTRY_OPERATORS { return json_object([[json_key(n.key), written(n.value)]]) }
+	"{" + json_quoted(n.op) + ":[" + [n.key, n.value].filter(side => side != ø).map(written).join(",") + "]}"
+}
+// code in curly braces an object, its items without a key numbered by their place; a group of one its item; any
+// other list an array
+json_list(n: any, written: function): text := {
+	if n.bracket == "(" and #n == 1 { return written(n#1) }
+	if n.bracket != "{" { return "[" + n.map(written).join(",") + "]" }
+	entries = []
+	for item in n {
+		if item is key and item.op in JSON_ENTRY_OPERATORS { entries += [[json_key(item.key), written(item.value)]] }
+		else { entries += [["" + #entries, written(item)]] }
+	}
+	json_object(entries)
+}

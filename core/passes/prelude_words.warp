@@ -375,12 +375,13 @@ with_type_module_uses(program: Node): Node := {
 	modules = type_modules.filter(module => module in wanted and module not in used)
 	with_module_uses(program, modules + global_word_modules(program, own, used))
 }
-# the modules of the global words a program names and binds nothing to, each once
+# the modules of the global words a program names, or a sugar rule reaching it writes (`x.json` json_text), and binds
+# nothing to, each once
 global_word_modules(program: Node, own: any, used: list): list := {
 	bound = names_bound_in(program)
 	words = global_words()
 	modules = []
-	for word in symbol_words(program) {
+	for word in symbol_words(program) + sugar_words_of(program) {
 		module = words.get(word)
 		if module != ø and word not in own and word not in bound and module not in used and module not in modules { modules += [module] }
 	}
