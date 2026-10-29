@@ -9,6 +9,7 @@ use "walk.warp"
 use "uses.warp"
 use "../analysis/builtin_signatures.warp"
 use "scope.warp"
+use "../emitter/c_imports.warp"
 
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
@@ -620,6 +621,7 @@ called_words(n: Node): list := {
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
+	for source in sources#1 { for d in c_declarations_in(source) { used_c_functions[d#1] = d } }
 	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [], sources#2.map(std_module_path))
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen]
