@@ -1,4 +1,4 @@
-# The layout rules of warp fix (as src/formatting/rules.rs lays out code): each takes the scanned lines and gives every
+# The layout rules of warp fix (as rust-harness:src/formatting/rules.rs lays out code): each takes the scanned lines and gives every
 # line's new text. They read the text only, never the parse tree, so they change only what reads the same.
 use "scan.warp"
 

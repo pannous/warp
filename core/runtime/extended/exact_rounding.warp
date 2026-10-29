@@ -1,4 +1,4 @@
-## exact rounding: Rust's exact_floor … exact_div_assign (src/wasm_emitter/numbers/exact.rs) as words over an Int
+## exact rounding: Rust's exact_floor … exact_div_assign (rust-harness:src/wasm_emitter/numbers/exact.rs) as words over an Int
 ## $Node's numerator and denominator; a $Ratio n/0 is ±∞ by n's sign and 0/0 is NaN, as Rust reads them
 use "../intrinsics.warp"
 use "../../analysis/kinds.warp"

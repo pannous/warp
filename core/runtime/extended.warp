@@ -4,7 +4,7 @@
 # words hand an extended value to the hooks core/runtime/bridge.warp declares, whose bodies are this
 # file's, at its end. The emitter calls these words where a program needs them, compiling each on its first
 # call like any runtime word.
-# Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS) and src/compiler/self_hosted.rs, the words of each file its
+# Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS) and rust-harness:src/compiler/self_hosted.rs, the words of each file its
 # `use` lines name in their order.
 use "extended/big_ints.warp"
 use "extended/exact.warp"

@@ -232,6 +232,7 @@ match command {
 	"help": show_help()
 	"version": show_version()
 	"parse": show_parsed()
+	"parse-code": write_parse_code(args#2, args#3)
 	"data": show_data()
 	"lower": show_lowered()
 	"uses": show_uses()

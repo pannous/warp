@@ -1,4 +1,4 @@
-# The definitions of a module's text a program reaches (Rust twin: src/modules/prelude_slices.rs), for the prelude and
+# The definitions of a module's text a program reaches (Rust twin: rust-harness:src/modules/prelude_slices.rs), for the prelude and
 # each standard module the program uses (`use case_tables`): a call of a word the program defines nowhere brings that
 # word's definition, and those it calls in turn, as Rust's resolve loads them. The text is cut into slices, one per
 # top-level `name(…) := …` or `name = …`; the reached ones are parsed after the program's own statements, so its
@@ -176,11 +176,11 @@ names_within(n: Node, with_keys: bool): list := {
 }
 
 # the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),
-# the matcher of a structural match arm (node_matches.warp)
+# the matcher of a structural match arm (node_matches.warp), an int type's show (int_types.warp)
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else [])
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else [])
 }
 
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
@@ -259,7 +259,7 @@ is_value_definition(statement: Node): bool := {
 	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 }
 
-# `alias keys = map_keys` of a module: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
+# `alias keys = map_keys` of a module: the word by each alias (Rust: rust-harness:src/modules/declarations.rs, an alias declares
 # nothing, its calls call the word)
 module_aliases(source: text): any := {
 	aliases = {}
@@ -362,11 +362,11 @@ definition_head_of(statement: Node): any := {
 }
 
 # the standard modules named after a builtin type word (Rust's type_modules: lib/<word>.warp for a word of
-# BUILTIN_TYPES in src/lowering/types/type_tests.rs), and the reals, whose `π` a program names bare
+# BUILTIN_TYPES in rust-harness:src/lowering/types/type_tests.rs), and the reals, whose `π` a program names bare
 type_modules = ["list", "map", "text", "time", "reals"]
 
 # `xs.flatten()`, `unique(xs)`: a program calling a word of exactly one type module, a word it defines nowhere and no
-# library word, uses that module, a `use` in front of it (Rust twin: src/modules/implicit_modules.rs
+# library word, uses that module, a `use` in front of it (Rust twin: rust-harness:src/modules/implicit_modules.rs
 # with_type_module_uses; a word of two such modules needs its `use`)
 with_type_module_uses(program: Node): Node := {
 	own = own_heads(program)
@@ -389,7 +389,7 @@ global_word_modules(program: Node, own: any, used: list): list := {
 	modules = []
 	for word in symbol_words(program) + sugar_words_of(program) {
 		module = words.get(word)
-		if module != ø and word not in own and word not in bound and module not in used and module not in modules { modules += [module] }
+		if module != ø and word not in own and word not in bound and word not in used and module not in used and module not in modules { modules += [module] }
 	}
 	modules
 }
@@ -415,7 +415,8 @@ implicit_modules(source: text, index_file: text): list := {
 	providers = type_module_providers()
 	free = free_words(program)
 	modules = []
-	for word in candidates.filter(word => word in free and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
+	# (the module a `use` names is no word of it: `use hash` beside color's hash)
+	for word in candidates.filter(word => word in free and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
 		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }

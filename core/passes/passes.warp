@@ -1,5 +1,5 @@
 # The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): a source parsed by parser.warp, then
-# each pass twin in the order src/pipeline.rs runs its Rust twin. A pass joins here once its twin matches.
+# each pass twin in the order rust-harness:src/pipeline.rs runs its Rust twin. A pass joins here once its twin matches.
 use "../parsing/parser.warp"
 use "../parsing/interpolation.warp"
 use "../parsing/number_words.warp"
@@ -29,9 +29,8 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 use "property_accessors.warp"
-use "routes.warp"
 
-# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES, which also lowers
+# the keyword rewrites among the sugar passes, one walk (Rust twin: rust-harness:src/pipeline.rs SUGAR_PHRASES, which also lowers
 # `xs .* 2` and `(p).a`: lib/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
 sugar_phrases_table = [[is_lookup_word, lookup_phrase]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
@@ -69,7 +68,7 @@ owned_refusal(refusal: text, form: text?): text := {
 }
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
-# outside src/compiler/self_hosted.rs, first principles in warp
+# outside rust-harness:src/compiler/self_hosted.rs, first principles in warp
 pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # a node after every pure pass, in order
@@ -99,7 +98,7 @@ global kept_comprehension_sugar = []
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
-	own = early_sugared(interpolation(with_uses(routes(program), folder)))
+	own = early_sugared(interpolation(with_uses(program, folder)))
 	bindings = rule_bindings(own)
 	kept_first_sugar = sugar_rules(bindings, first_sugar_module_names)
 	kept_sugar = sugar_rules(bindings, sugar_module_names())
@@ -141,7 +140,7 @@ checked_program(source: text, folder: text, prelude: text): Node := {
 # [the view of the checked program, what its checks diagnosed: [level, message, fix] each]
 checked(source: text, folder: text, prelude: text): list := [view_of(checked_program(source, folder, prelude)), diagnosed]
 
-# One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
+# One stage of a compile Rust drives (card warp-pipeline-suite, rust-harness:src/compiler/self_hosted.rs): [0, source] gives the
 # parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them and the
 # diagnostics of its checks (cards pure-runs, pure-diagnostics), with the definitions of the prelude's text it
 # reaches and the program's uses read from its folder
