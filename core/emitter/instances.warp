@@ -326,6 +326,8 @@ declares_type(n: Node): bool := type(n) is key and key_of(n) == opaque_symbol an
 # `type Name = text`, `type View = list or int`: a declaration of no body naming another type or a union
 is_type_alias(n: Node): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and aliased_spelling(value_of(n)) != ø
 aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
+# a case of a variants declaration, `A`, or one spelled otherwise, `A = "a"`
+variant_name(variant: any): text := if kind_of(variant) == "key" then variant#3#2 else variant#2
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
@@ -335,8 +337,10 @@ record_type(name: any, body: any): any := {
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
 	if name#2 == "variants" {
 		enum_name = declared_type_name(name)
-		module.enum_cases[enum_name] = name#3[3..].map(variant => variant#2)
-		for variant in name#3[3..] { module.variants[variant#2] = (module.variants.get(variant#2) ?? []) + [enum_name] }
+		module.enum_cases[enum_name] = name#3[3..].map(variant => variant_name(variant))
+		for variant in name#3[3..] { module.variants[variant_name(variant)] = (module.variants.get(variant_name(variant)) ?? []) + [enum_name] }
+		module.case_spellings[enum_name] = {}
+		for variant in name#3[3..].filter(variant => kind_of(variant) == "key") { module.case_spellings[enum_name][variant_name(variant)] = variant#4#2 }
 		if #name#3 > 3 { module.sum_types[declared_type_name(name)] = "cases" }
 	}
 	if name#2 in base_class_layers and kind_of(name#3) == "symbol" {
