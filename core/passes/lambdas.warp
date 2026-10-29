@@ -249,7 +249,19 @@ lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := 
 	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
 	# `sq 3` of `sq = x => x*x`: a variable holding a function, given its arguments, calls it
 	if #words > 1 and is_variable(name_of(words#1), locals, lowering) and lowering.function_values.has(name_of(words#1)) { return lowered_call(words, call_node(words#1, arguments_of(words)), locals, lowering) }
+	nested = if name_of(words#1) in locals then ø else nested_phrase(words, lowering)
+	if nested != ø { return lowered_phrase(nested, n, locals, lowering) }
 	group_like(n, [words#1] + arguments_of(words).map(word => lowered_lambdas(word, locals, lowering)))
+}
+# `f g 1`, `first add 1 2`: more words than the function takes, a function word where its last argument goes: that
+# word's phrase is the argument, f(g(1)), as Rust's words take their arguments by their parameters (card
+# prelude-word-calls); ø for other words
+nested_phrase(words: list, lowering: Lowering): list? := {
+	taken = lowering.arities.get(name_of(words#1)) ?? 0
+	if taken == 0 or #words <= taken + 1 { return ø }
+	last = words#(taken + 1)
+	if not (last is symbol and (lowering.arities.get(name_of(last)) ?? 0) > 0) { return ø }
+	words[0 ..< taken] + [List(words[taken ..], Bracket.None, Separator.Space)]
 }
 
 # `x.f(a)`: of a field the program gives a function value (callable_fields), the function it holds called,

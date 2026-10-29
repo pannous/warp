@@ -1,0 +1,5 @@
+# and/or beside a statement's nothing, `c and print x`: the nothing is ø (card samples-logic-none)
+'x = yes and print 3; x == ø'	yes
+'no and print 3'	no
+'x = 0 and print 5; x'	0
+'s = 0; for 1 to 4: it % 2 < 1 and (s += it); s'	6
