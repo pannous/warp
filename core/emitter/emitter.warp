@@ -1132,7 +1132,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.As and (is_held_kind(target)) {
 		value = expression_code(body, left)
 		if text_reader(target) != ø { return cast(value, target) }
-		if target == ValueKind.Text { return if value.kind == ValueKind.Node then runtime_call("cast_text", [value]) else shown_text(value) }
+		if target == ValueKind.Text { return if value.kind == ValueKind.Node then shown_text(runtime_call("spelled_case", [value])) else shown_text(value) }
 		# `"ab" as list` is its characters, as Rust's emit_cast
 		if target == ValueKind.List and value.kind == ValueKind.Text { return runtime_call("text_chars", [value]) }
 		# `65 as codepoint` is 'A', `2 as char` the digit '2'
