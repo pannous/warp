@@ -67,10 +67,23 @@ rows(db: int, query: text) := {
 }
 
 // runs `query` on `db` for what it does; the count of the rows it changed
-run_query(db: int, query: text) := {
+run_query(db: int, query: text) := run_bound(db, query, [])
+// runs `query` with its `?`s bound to `values` in order, each an int (a yes/no as 1 or 0), a float, a text or ø (null),
+// so no value is spliced into SQL; the count of the rows it changed
+run_bound(db: int, query: text, values: list) := {
 	statement = sqlite3_prepare_v2(db, query, -1)
+	for i in 1 to count(values) { bound(statement, i, values#i) }
 	stepped = sqlite3_step(statement)
 	while stepped == SQLITE_ROW { stepped = sqlite3_step(statement) }
 	sqlite3_finalize(statement)
 	sqlite3_changes(db)
+}
+// sqlite3_bind_text's SQLITE_TRANSIENT: SQLite copies the text, whose C copy lasts only the call
+SQLITE_TRANSIENT = -1
+bound(statement: int, index: int, value: any) := {
+	if value == ø { return sqlite3_bind_null(statement, index) }
+	if value is bool { return sqlite3_bind_int64(statement, index, if value then 1 else 0) }
+	if value is int { return sqlite3_bind_int64(statement, index, value) }
+	if value is float { return sqlite3_bind_double(statement, index, value) }
+	sqlite3_bind_text(statement, index, str(value), -1, SQLITE_TRANSIENT)
 }

@@ -12,6 +12,7 @@ use "clauses.warp"
 use "../analysis/builtin_signatures.warp"
 use "../analysis/words.warp"
 use "class_methods.warp"
+use "definitions.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node): Node := match target {
@@ -159,6 +160,7 @@ resolved(n: Node, overloaded: map, called: map): Node := {
 }
 
 arity_overloads(program: Node): Node := {
+	program = result_overloads(program)
 	overloaded = overloaded_arities(program)
 	typed_overloads(if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program)))
 }
@@ -226,19 +228,36 @@ overloaded_types(program: Node): map := {
 	overloaded
 }
 
-# name → the parameter types of each of the program's definitions of it
-defined_types(program: Node): map := {
-	signatures = {}
+# name → the calls its definitions name, `f(a, b)` of `f(a, b) := …`, in declaration order
+definitions_named(program: Node): map := {
+	named = {}
 	# nodes_in walks the last part first: reversed, the definitions come in declaration order
 	for n in nodes_in(program).reverse() {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
-			if name not in signatures { signatures[name] = [] }
-			signatures[name] = signatures[name] + [parameter_types(call)]
+			if name not in named { named[name] = [] }
+			named[name] = named[name] + [call]
 		}
 	}
+	named
+}
+# name → the parameter types of each of the program's definitions of it
+defined_types(program: Node): map := {
+	named = definitions_named(program)
+	signatures = {}
+	for name in named.keys { signatures[name] = named[name].map(call => parameter_types(call)) }
 	signatures
+}
+# name → how many arguments each variant must be given, its parameters without a default (a library line's all)
+variant_least(program: Node, overloaded: map): map := {
+	named = definitions_named(program)
+	least = {}
+	for name in overloaded.keys {
+		own = named[name].map(call => arity_of(call)#1)
+		least[name] = own + overloaded[name][#own ..].map(types => #types)
+	}
+	least
 }
 
 # a library word the program defines for other types, `sin(x: Real) := …` beside math's `sin(x: float)`: the library's
@@ -297,7 +316,8 @@ assigned_kinds(program: Node): map := {
 
 # what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
 # values', the result a builtin declares (`floor(x)` a float), `-x`, `√x` and `a + b`, `a - b`, `a * b` of known numbers
-class ArgumentJudge { variables: map; own: map }
+# least: each overloaded name's variants' least argument counts (variant_least)
+class ArgumentJudge { variables: map; own: map; least: map = {} }
 keeps_numbers(op: Op): bool := match op {
 	Op.Add: yes
 	Op.Sub: yes
@@ -403,7 +423,7 @@ function_type_arity(type: text): int? := {
 # the sum of the arguments' fits, ø when one does not fit
 variant_fit(kinds: list, types: list): int? := {
 	total = 0
-	for at in 1 to #types {
+	for at in 1 to #kinds {
 		one = argument_fit(kinds#at, types#at)
 		if one == ø { return ø }
 		total += one
@@ -426,7 +446,7 @@ run_time_test(argument: Node, type: text): Node := {
 }
 
 # the places of the arguments a variant tests at run time: those of untold kind it takes no `any` for
-tested_places(kinds: list, types: list): list := (1 to #types).filter(at => kinds#at == ø and types#at != any_word)
+tested_places(kinds: list, types: list): list := (1 to #kinds).filter(at => kinds#at == ø and types#at != any_word)
 
 # the candidates testing more arguments first, of those the one widening fewer first, else in declaration order
 in_test_order(candidates: list, kinds: list): list := {
@@ -483,11 +503,13 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	arguments = items_of(n)[1 ..]
-	variants = overloaded[name].filter(types => #types == #arguments)
+	# a call may leave out the defaulted parameters at the end, `lowpass(sig, 800)` of `lowpass(signal, frequency, q = 0.707)`
+	least = judge.least[name]
+	variants = (1 to #overloaded[name]).filter(at => least#at <= #arguments and #arguments <= #overloaded[name]#at).map(at => overloaded[name]#at)
 	kinds = arguments.map(argument => known_kind(argument, judge))
 	fitting = variants.filter(types => variant_fit(kinds, types) != ø)
 	written = "${n}"
-	listed = variants.map(types => name + "(" + types.join(", ") + ")").join(", ")
+	listed = overloaded[name].map(types => name + "(" + types.join(", ") + ")").join(", ")
 	if not kinds.all(kind => kind != ø) and #fitting > 1 {
 		return dispatched(name, best_first(fitting, kinds), kinds, arguments, "`" + written + "` fits no single variant of " + listed)
 	}
@@ -515,9 +537,107 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
-	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program)))
+	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
 	if #variants == 0 then resolved else separated(bracketed(statements_in(resolved) + variants, ""), ";")
+}
+
+# --- by result type (decision cleanup-cuts; notes/dispatch.md "Dispatch on return type") ---
+# `to render text as pdf: …` beside `to render text as docx: …` are the variants render·pdf and render·docx, each
+# declaring its result; a call takes the one its expected type names, `(render "x") as pdf`, `docx d = render "x"`,
+# `d: docx = render "x"`, an argument for a parameter declared docx; any other call the first declared, with a warning
+# naming the explicit form
+
+# `pdf` of `f(t) as pdf := …` and `f(t): pdf := …`, which definitions.warp holds as `{the result: pdf = …; the result}`;
+# ø of a definition declaring no result
+written_result(n: Node): text? := {
+	held = held_result(n)
+	if definition_call(n) != ø and held is symbol then required_type(name_of(held)) else ø
+}
+
+# name → the result types of its definitions in declaration order, for each name defined with several, all written
+# and all different, all taking the same parameters (parameter types tell `f(x: int): int` and `f(x: float): float` apart)
+overloaded_results(program: Node): map := {
+	results = {}
+	taken = {}
+	for n in nodes_in(program).reverse() {
+		call = definition_call(n)
+		if call != ø {
+			name = name_of(call#1)
+			if name not in results {
+				results[name] = []
+				taken[name] = []
+			}
+			results[name] = results[name] + [written_result(n)]
+			taken[name] = taken[name] + [parameter_types(call)]
+		}
+	}
+	overloaded = {}
+	for name in results.keys {
+		if #results[name] > 1 and results[name].all(type => type != ø) and all_different(results[name]) and taken[name].all(types => types == taken[name]#1) { overloaded[name] = results[name] }
+	}
+	overloaded
+}
+
+result_variant(name: text, type: text): text := name + "·" + type
+
+# the call `(f x)` or `f x` of an overloaded f, ø of another node
+overloaded_call(n: Node, overloaded: map): Node? := {
+	call = if is_round(n) and #n == 1 then n#1 else if is_round(n) and separator_of(n) == " " then List(items_of(n), Bracket.None, Separator.Space) else n
+	if is_call_form(call) and #call > 0 and call#1 is symbol and name_of(call#1) in overloaded then call else ø
+}
+
+# the call of f's variant returning `type`; n itself when it calls no overloaded f or none of f's returns it
+returning(n: Node, type: any, overloaded: map): Node := {
+	call = overloaded_call(n, overloaded)
+	if call == ø or not (type is symbol) or not (name_of(type) in overloaded[name_of(call#1)]) { return n }
+	group_like(call, [symbol(result_variant(name_of(call#1), name_of(type)))] + items_of(call)[1 ..])
+}
+
+# the type an assignment's target declares: docx of `d: docx`; ø of another target
+declared_type(target: Node): Node? := if is_key(target, Op.Colon) then value_of(target) else ø
+
+# the call `g(a, b)` with each argument for a parameter g's one definition declares a type of that type's variant
+for_parameters(n: Node, overloaded: map, parameters: map): Node := {
+	if not (is_call_form(n) and #n > 1 and n#1 is symbol and name_of(n#1) in parameters and #parameters[name_of(n#1)] == 1) { return n }
+	types = parameters[name_of(n#1)]#1
+	if #types != #n - 1 { return n }
+	group_like(n, [n#1] + (1 to #types).map(at => returning(n#(at + 1), symbol(types#at), overloaded)))
+}
+
+# top-down: each definition renamed to its variant, each call to the variant its expected type names
+result_resolved(n: Node, overloaded: map, parameters: map): Node := {
+	call = definition_call(n)
+	if call != ø {
+		name = name_of(call#1)
+		target = if name in overloaded then renamed_target(key_of(n), result_variant(name, written_result(n))) else key_of(n)
+		return Key(target, Op.Define, result_resolved(value_of(n), overloaded, parameters))
+	}
+	if is_key(n, Op.As) and overloaded_call(key_of(n), overloaded) != ø and returning(key_of(n), value_of(n), overloaded) != key_of(n) {
+		return result_resolved(returning(key_of(n), value_of(n), overloaded), overloaded, parameters)
+	}
+	if is_key(n, Op.Assign) and declared_type(key_of(n)) != ø {
+		n = Key(key_of(n), Op.Assign, returning(value_of(n), declared_type(key_of(n)), overloaded))
+	}
+	# `docx d = render "x"`, which the parser reads as `docx (d = render "x")`
+	if is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 is symbol and is_key(n#2, Op.Assign) {
+		n = group_like(n, [n#1, Key(key_of(n#2), Op.Assign, returning(value_of(n#2), n#1, overloaded))])
+	}
+	n = for_parameters(n, overloaded, parameters)
+	untold = overloaded_call(n, overloaded)
+	if untold != ø and untold == n {
+		name = name_of(n#1)
+		taken = overloaded[name]#1
+		diagnose(call_of("result_variant_taken", [name, overloaded[name].join(", "), taken, "${n}"]), n)
+		n = returning(n, symbol(taken), overloaded)
+	}
+	children(n, x => result_resolved(x, overloaded, parameters))
+}
+
+result_overloads(program: Node): Node := {
+	overloaded = overloaded_results(program)
+	parameters = defined_types(program)
+	result_resolved(program, overloaded, parameters)
 }
