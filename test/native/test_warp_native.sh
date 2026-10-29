@@ -78,6 +78,9 @@ if [ -x "$stage/warp" ]; then
 	check "a sound file" "$(cd "$stage" && ./warp $'use sound\nplay "a.wav"' 2>&1 | head -1)" "sound file: a.wav"
 	check "the view outside a window: the terminal's, else COLUMNS and LINES" "$(COLUMNS=133 LINES=41 native '[view_width(), view_height()]')" "[133 41]"
 	check "the view of a terminal" "$(script -q /dev/null sh -c 'stty cols 101 rows 31; cd "$1" && ./warp "[view_width(), view_height()]"' sh "$stage" </dev/null | grep -o '\[[0-9]* [0-9]*\]')" "[101 31]"
+	painting=$(native 'paint([0, 1, 0xFF00FF00, 0], 2, 2)')
+	check "paint, a PNG" "${painting%%:*} $(file -b "${painting#*: }")" "painted 2×2 PNG image data, 2 x 2, 8-bit/color RGB, non-interlaced"
+	check "paint of a shader" "$(native 'paint("fn x", 2, 2, ø)')" "paint of a shader: the native warp has no GPU yet (warp-rust renders it)"
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
 	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"

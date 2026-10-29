@@ -51,6 +51,11 @@ def exported_builders(): any {
 	f.code = runtime_call("node_length", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 	f = exported_function("item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Node)
 	f.code = runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])]).code
+	# an int item, a yes/no's 1 or 0 too (paint's pixels), and whether a value is a text (a shader's)
+	f = exported_function("int_item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Int)
+	f.code = runtime_call("int_admitted", [runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])])]).code
+	f = exported_function("is_textual", [ValueKind.Node], ValueKind.Bool)
+	f.code = runtime_call("textual_node", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 }
 # a node a host reads as the text print shows (runtime/text.warp shown_at), which no host walking GC objects needs:
 # the native driver's host words, and what a program raised (its trap_detail), made once

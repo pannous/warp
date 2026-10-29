@@ -655,10 +655,14 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 	word = name_of(code)
 	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
-	if typed == ø or typed == "" { return no }
+	if typed == ø or typed == "" { typed = conversion_type(word) }
+	if typed == ø { return no }
 	if wanted == value_word then not (typed in yes_no_types) else typed == wanted
 }
 
+# what a type word converts, unless the program binds it: a value of another type (`int 3.7 == 3` is int(3.7) == 3),
+# yes or no for the yes/no type's own (`bool x == y` stays bool(x == y)), decision function-words-consume
+conversion_type(word: text): text? := if word in type_words and not rule_scope.has(word) then (if word in ["bool", "boolean"] then "bool" else any_word) else ø
 # the type of a typed library word's first parameter (lib/prelude.warp, lib/math.warp), else ø (builtin_signatures.warp
 # word_lines)
 library_first_type(word: text): text? := {

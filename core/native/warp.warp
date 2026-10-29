@@ -23,7 +23,6 @@ use "tests.warp"
 
 setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
 unsetenv(name: pointer): i32 from "c"
-mkdir(path: pointer, mode: i32): i32 from "c"
 fork(): i32 from "c"
 waitpid(child: i32, status: pointer, options: i32): i32 from "c"
 fdopen(descriptor: i32, mode: pointer): handle from "c"
@@ -31,7 +30,6 @@ getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
 execv(path: pointer, arguments: pointer): i32 from "c"
 execvp(name: pointer, arguments: pointer): i32 from "c"
-FOLDER_MODE = 493
 STDIN = 0
 STDOUT = 1
 
