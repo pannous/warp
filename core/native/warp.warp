@@ -259,6 +259,8 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if same_text(word, "version") or same_text(word, "--version") { return versioned(compiler) }
 	# a plain `warp app.warp` serves its routes (lib/web.warp routes_end), `warp run app.warp` runs it once
 	if is_warp_file(word) and not prefixed { setenv(c_string("WARP_SERVE"), c_string("yes"), 1) }
+	# and the program knows its file (lib/storage.warp keeps its tables beside it)
+	if is_warp_file(word) { setenv(c_string("WARP_PROGRAM"), c_string(word), 1) }
 	if is_warp_file(word) { return compiled_and_run(compiler, word, first + 1) }
 	hosted(compiler, first)
 }
