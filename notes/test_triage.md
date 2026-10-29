@@ -25,6 +25,10 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | `tests/fixtures/…` in 18 files, 70 failing lines (test/modules/test_wasm_modules, test_include, test_import_compiled, test_module_signals; test/control/test_reflection_words; test/ffi/test_component_short_use; test/wasm/test_wasm.warp) | `include tests/fixtures/counter` | `include test/fixtures/counter` | the folder is test/ now; with the new path `include "test/fixtures/counter.warp"` works, unquoted paths stay a gap |
 | test/parser/test_newline_precedence.warp:18 | 56 | 55 | `fib := it < 2 ? it : …` starts 0, 1: fib(10) is 55 |
 | test/ffi/test_foreign_lines.pairs.warp:4 | π | 3.141592653589793 | atan2 is a float function; the exact π comes only from π |
+| test/lists/test_list_literal_sign.pairs.warp:12, 14, 15 | [4, 2] / [4] / 4 | [5 -1 2] / … / 5 then -1 | glued-negative: a minus spaced before and glued after starts a new item (`[a -1]` = [a, -1]) |
+| test/lists/test_signed_operand_list.pairs.warp:14; test/operators/test_negated_call_operand.pairs.warp:15 | 4 | 5 then -1 | glued-negative: `x -1` is x then -1 |
+| test/operators/test_minus_after_callable.pairs.warp:19, 21, 22 | 3 / 2 / 4 | x then -2 … | glued-negative, as above (`a - 1`, `a-1` stay subtraction) |
+| test/operators/test_minus_after_callable.pairs.warp:11 | -3 | -2 | call-takes-right: `f -2 + 1` = f(-2 + 1) |
 
 ## Held (esoteric)
 
