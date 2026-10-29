@@ -215,6 +215,7 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
+		List(items, Bracket.Round, Separator.Space): lowered_phrase(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Comma): comma_call(n, locals, lowering)
 		List(items, bracket, separator): List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
 		_: n
@@ -269,6 +270,8 @@ is_plain_value(word: Node, locals: list, lowering: Lowering): bool := word is nu
 # `f 3 4`, words side by side: the first calls the others, its name kept; a lambda first is called with them,
 # `(x => x*2) 4` as `(x => x*2)(4)` (and `{it*2} 4`, lib/sugar/calls.warp)
 lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
+	# `(a -1)`, `(a b)` of variables: a bound value heads no call, the values side by side are their list
+	if #words > 1 and words.all(word => is_plain_value(word, locals, lowering)) { return List(words, Bracket.Square, Separator.Comma) }
 	if #words > 1 and is_lambda(words#1) { return lowered_call(words, call_node(words#1, arguments_of(words)), locals, lowering) }
 	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
 	# `sq 3` of `sq = x => x*x`: a variable holding a function, given its arguments, calls it
