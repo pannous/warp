@@ -254,7 +254,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # program defines itself, never the module's; linked_words: each linked module word by name, its kinds and result,
 # which the program declares (prelude_words.warp declared_only) and the analyzer takes as they are
 # Every compile starts with a fresh Module (fresh_module): nothing of one compile reaches the next
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; relocates_program: bool = no; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; linked_closures_shown: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; relocates_program: bool = no; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; linked_closures_shown: map = {} }
 
 module = Module({}, [])
 # a new compile's module, emitting the same file
@@ -802,12 +802,15 @@ def interned_symbol(body: Body, word: text): TypedCode {
 }
 # an enum's case, `Coin.Dime`, or a bare `Dime` of the one enum declaring it: made once, kept in the global
 # `case·Coin·Dime`, its enum's number in the kind's info byte, so two enums' cases of one name never equal (decision
-# enum-identity, card case-enum-carry)
+# enum-identity, card case-enum-carry); a case spelled otherwise, `A = "a"`, holds its spelling as its second value,
+# which it equals (runtime equality.warp)
 def case_value(enum_name: text, case: text): TypedCode {
 	if enum_name not in module.enum_numbers { module.enum_numbers[enum_name] = #module.enum_numbers.keys + 1 }
 	index = relocatable(relocated.globals, declared_global("case·" + enum_name + "·" + case, ValueKind.Node)#1)
 	kept = [op.global_get] + index
-	made = node(Kind.Symbol + module.enum_numbers[enum_name] * KindUnit.Info, text_bytes(case))
+	spelling = (module.case_spellings.get(enum_name) ?? {}).get(case)
+	kind = Kind.Symbol + module.enum_numbers[enum_name] * KindUnit.Info
+	made = if spelling == ø then node(kind, text_bytes(case)) else [op.i64_const] + sleb(kind) + text_bytes(case) + node(Kind.Text, text_bytes(spelling)) + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 	TypedCode(ValueKind.Node, kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept)
 }
 # `Coin.Dime`, or a bare `Dime` of the one enum declaring it (local_value)
@@ -1112,7 +1115,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.As and (is_held_kind(target)) {
 		value = expression_code(body, left)
 		if text_reader(target) != ø { return cast(value, target) }
-		if target == ValueKind.Text { return shown_text(value) }
+		if target == ValueKind.Text { return if value.kind == ValueKind.Node then runtime_call("cast_text", [value]) else shown_text(value) }
 		# `"ab" as list` is its characters, as Rust's emit_cast
 		if target == ValueKind.List and value.kind == ValueKind.Text { return runtime_call("text_chars", [value]) }
 		# `65 as codepoint` is 'A', `2 as char` the digit '2'
@@ -1336,6 +1339,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.parents = {}
 	module.variants = {}
 	module.enum_cases = {}
+	module.case_spellings = {}
 	module.enum_numbers = {}
 	module.sum_types = {}
 	module.errors = {}

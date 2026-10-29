@@ -5,7 +5,7 @@
 class Warp < Formula
   desc "Wasm-first programming language and data notation (successor of Wasp, written in warp)"
   homepage "https://github.com/pannous/warp"
-  version "1.4.1"
+  version "1.5.1"
   license all_of: ["AGPL-3.0-or-later", "MIT"]
 
   depends_on "binaryen" # wasm-opt, which `warp build` trims a program's module with
@@ -15,22 +15,22 @@ class Warp < Formula
   on_macos do
     on_arm do
       url "#{RELEASE}-aarch64-apple-darwin.tar.gz"
-      sha256 "ece900cd9d84beb8dbed4c519a44f83bd679705aa6263b69a6e9a1a0265d9ba0"
+      sha256 "56cdf5c160fb65be407f0cc74c630f2e93533d8215b25183c319b85bb3dec6f5"
     end
     on_intel do
       url "#{RELEASE}-x86_64-apple-darwin.tar.gz"
-      sha256 "cba7fecc8b4a41f7b8945e45c1ac6c820482b988bb0716668cf4ad5065bb4de1"
+      sha256 "f5e66a080430a4b8390fe697d8420c084eb5b3a4b039adfa471f16a8d522b876"
     end
   end
 
   on_linux do
     on_arm do
       url "#{RELEASE}-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "7ee117f887deb93cb35ced09069595c8a27092fbf94bf6eeea74ab9243e48b5b"
+      sha256 "61556b659fcf6a5a198e351a393169274c4be2011397450481c7d4de23001c9a"
     end
     on_intel do
       url "#{RELEASE}-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "0e340390ec00cabad9a92f169194560ebb506125db4c40d0d67cf36c4f29da7f"
+      sha256 "7bfa435879ec03d2de703852ecf9fe9f06cc22f429a6277d3fdbd122d5f96422"
     end
   end
 

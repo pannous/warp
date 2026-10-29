@@ -309,7 +309,7 @@ library_word(word: text): text := word + name_joiner + "library"
 
 # words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
 # `xs.first(3)` first_items (Rust twin: library_words.rs ARITY_VARIANTS)
-arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
+arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["count", 2, "count_in"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
 arity_variant(name: text, count: int): any := {
 	for variant in arity_variants { if variant#1 == name and variant#2 == count { return variant#3 } }
 	ø
