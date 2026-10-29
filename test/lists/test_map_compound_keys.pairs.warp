@@ -1,0 +1,3 @@
+# a map indexed by a variable key in a compound assignment stays a map index (card sugar-word-modules-overreach)
+'f(key: text) := { m = {}; m[key] = 1; m[key] += 1; m }; f("a")["a"]'	2
+'f(k: text) := { m = {}; m[k] = 1; m[k] += 1; m }; f("a")["a"]'	2

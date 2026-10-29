@@ -1823,25 +1823,37 @@ def library_glyph_operators(): list {
 	library_operators
 }
 
-// The classes the bundled modules at the top of lib/ declare, read off their text once a run: class → its module,
-// `class Time` of units (decision expected-type-names: a parameter typed Time finds its values there)
-global module_classes = ø
-def declared_classes_modules(): map {
-	if module_classes == ø { module_classes = classes_scanned() }
-	module_classes
+// What the bundled modules at the top of lib/ declare for every program, read off their text once a run: "words",
+// word → the module declaring it global, `global play(file: text) := …` (decision bizarre-global: a program naming it
+// uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
+// expected-type-names: a parameter typed Time finds its values there)
+global module_declarations = ø
+def bundled_declarations(): map {
+	if module_declarations == ø {
+		module_declarations = declarations_scanned()
+	}
+	module_declarations
 }
-def classes_scanned(): map {
+def global_words(): map := bundled_declarations()["words"]
+def declared_classes_modules(): map := bundled_declarations()["classes"]
+def declarations_scanned(): map {
+	words = {}
 	classes = {}
 	for path in LIBRARY_FILES.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
 			for line in LIBRARY_FILES[path].split("\n") {
+				if line.starts_with(GLOBAL_MARK) {
+					word = name_starting(line[#GLOBAL_MARK ..])
+					if word and line[#GLOBAL_MARK + #word ..].starts_with("(") { words[word] = module }
+				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
 			}
 		}
 	}
-	classes
+	{"words": words, "classes": classes}
 }
+GLOBAL_MARK = "global "
 CLASS_MARK = "class "
 // the name a text starts with, "" when none
 def name_starting(line: text): text {
@@ -1859,9 +1871,19 @@ def folder_of(path: text): text {
 	parts[0 ..< #parts - 1].join("/")
 }
 // The sources of the standard modules a source uses by name, read from lib/ beside this compiler (module_source takes
-// a name written out only); a compile has written the use of each it reaches by a word (with_implicit_uses)
+// a name written out only), and of those whose global words it names (`play "mozart.mp3"`, words.warp global_words)
 // Rust twin: declaration_scan.rs used_std_modules
-def used_module_sources(source: text): list := module_sources(used_modules(source))
+def used_module_sources(source: text): list := module_sources(reached_modules(source))
+// the standard modules a source uses by name or reaches by one of their global words
+def reached_modules(source: text): list {
+	modules = used_modules(source)
+	code = code_only(source)
+	words = global_words()
+	for word in words.keys {
+		if not modules.contains(words[word]) and mentions_word(code, word) { modules += [words[word]] }
+	}
+	modules
+}
 def module_sources(modules: list): list {
 	sources = []
 	for module in modules {
