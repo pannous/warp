@@ -2,6 +2,7 @@
 # names on the left of `=` assigns nothing (a function keyword, `def f(x) = e`, went before the passes:
 # lib/sugar/functions.warp, as `var x = 1` went to lib/sugar/declarations.warp). `f = { it * 2 }` is the definition
 # `f := { it * 2 }`.
+use "int_types.warp"
 use "walk.warp"
 use "../analysis/words.warp"
 use "../parsing/phrase_blocks.warp"
@@ -220,7 +221,7 @@ is_call(n: Node): bool := match n {
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
 	# then data written as data (data_blocks.warp), once the definitions say which functions take it
-	data_blocks(bottom_up(conversions(methods_lifted(statics_hoisted(program))), definition))
+	data_blocks(bottom_up(conversions(int_types(methods_lifted(statics_hoisted(program)))), definition))
 }
 
 # A program's conversions (decision general-conversions; Rust twin: src/lowering/types/conversions.rs): `Person as

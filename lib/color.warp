@@ -1,18 +1,34 @@
-// The standard library module color (decision implicit-standard-words): a color is a number 0xAARRGGBB, the named
-// colors, rgb, hsv, with_alpha and alpha_of; draw paints them
+// The standard library module color (decision implicit-standard-words): a color is a number 0xAARRGGBB of its own type
+// (core/passes/int_types.warp), which prints as its name or #RRGGBB; the named colors, rgb, hsv, with_alpha and
+// alpha_of; draw paints them, arithmetic sees the number
 use math
-black = 0xFF000000
-white = 0xFFFFFFFF
-gray = 0xFF808080
-red = 0xFFFF0000
-green = 0xFF00A000
-blue = 0xFF0000FF
-yellow = 0xFFFFD700
-orange = 0xFFFF8C00
-purple = 0xFF8000C0
+type Color = int
+black = 0xFF000000 as Color
+white = 0xFFFFFFFF as Color
+gray = 0xFF808080 as Color
+red = 0xFFFF0000 as Color
+green = 0xFF00A000 as Color
+blue = 0xFF0000FF as Color
+yellow = 0xFFFFD700 as Color
+orange = 0xFFFF8C00 as Color
+purple = 0xFF8000C0 as Color
+opaque = 0xFF000000
+hex_digits = "0123456789ABCDEF"
 
+// red, else its hash
+show(c: Color) := {
+	named = [[black, "black"], [white, "white"], [gray, "gray"], [red, "red"], [green, "green"], [blue, "blue"], [yellow, "yellow"], [orange, "orange"], [purple, "purple"]]
+	for pair in named { if pair[0] == c { return pair[1] } }
+	hash(c)
+}
+// #FF0000, and #80FF0000 when not opaque
+hash(c: Color) := "#" + hex_text(c, if c /! 16777216 == 255 then 6 else 8)
+// the number 0xAARRGGBB itself
+hex(c: Color) := c as int
+// the low digits of n in upper-case hexadecimal, zeros in front
+hex_text(n, digits) := join([hex_digits[(n /! 16 ^ (digits - 1 - i)) % 16] for i in 0..digits], "")
 // r, g, b from 0 to 255
-rgb(r, g, b) := 0xFF000000 + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)
+rgb(r, g, b) := (opaque + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)) as Color
 // hue in degrees, saturation and value from 0 to 1
 def hsv(h, s, v) {
 	hue = (h % 360) / 60.0
@@ -26,5 +42,5 @@ def hsv(h, s, v) {
 	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
 }
 // alpha from 0 (invisible) to 1 (opaque)
-with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
+with_alpha(color, alpha) := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216) as Color
 alpha_of(color) := color /! 16777216
