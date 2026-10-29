@@ -47,7 +47,7 @@ node_length(n: Node): int := {
 	if kind_code(n) == Kind.List { return #unboxed_list(n) }
 	if kind_code(n) == Kind.Text { return text_count(unboxed_text(n)) }
 	if kind_code(n) == Kind.Codepoint { return 1 }
-	fail()
+	no_length_of(n)
 }
 # `xs.pop()`: the last item, dropped from xs in place by lowering its count (Rust's list_drop_last), so every alias
 # sees the shorter list
