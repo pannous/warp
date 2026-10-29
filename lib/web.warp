@@ -128,9 +128,10 @@ serve(port: int) := {
 	}
 }
 
-// the end of a program with routes: served when the native warp runs it as a program (WARP_SERVE), else nothing
-routes_end() := {
-	if getenv("WARP_SERVE") == ø { return ø }
+// the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
+// else that value, the program's result
+routes_end(value: any = ø) := {
+	if getenv("WARP_SERVE") == ø { return value }
 	port = getenv("WARP_PORT")
 	serve(if port == ø then DEFAULT_PORT else int(port))
 }
