@@ -374,6 +374,8 @@ global_word_modules(program: Node, own: any, used: list): list := {
 # own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
 implicit_modules(source: text, index_file: text): list := {
 	index = word_index(index_file)
+	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
+	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	code = code_only(source)
 	candidates = index.keys.filter(word => mentions_word(code, word))
 	if #candidates == 0 { return [] }
