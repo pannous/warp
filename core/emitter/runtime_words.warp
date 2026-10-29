@@ -120,6 +120,8 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"ratio_of_parts": made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, node_payload(values#1) + node_payload(values#2) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))))
 		"numerator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(values#1.code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 0])))
 		"denominator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(values#1.code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 1])))
+		# has_plain_parts(r) of a local r: both parts in an $i64box (its code read twice)
+		"has_plain_parts": TypedCode(ValueKind.Bool, plain_part_test(values#1.code, 0) + plain_part_test(values#1.code, 1) + [op.i32_and])
 		# big_int_of(negative, count): an Int $Node of a $BigInt of count zero limbs; limb(n, i), set_limb(n, i, v) one
 		# limb as an int from 0 to 2^32 - 1 (runtime/extended/big_ints.warp)
 		"big_int_of": made_by("BigInt", TypedCode(ValueKind.Node, node(Kind.Int, converted(values#1, ValueKind.Bool) + index_code(values#2) + gc_code(gc_ops.array_new_default, [gc_type(gc.limbs)]) + gc_code(gc_ops.struct_new, [gc_type(gc.big_int)]))))
@@ -151,7 +153,7 @@ program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same_node"]
 intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1,
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, same_list: 2, same_node: 2, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
@@ -243,6 +245,7 @@ def ratio_node(numerator: list, denominator: list): TypedCode {
 	made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, box(numerator) + box(denominator) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))))
 }
 def ratio_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
+def plain_part_test(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
 def ratio_part(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
 # the $Limbs array of an Int $Node holding a $BigInt
 def limbs_of(code: list): list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
