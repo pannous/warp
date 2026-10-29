@@ -69,3 +69,5 @@ samples/**/*.stored.json
 /core/native/warp
 
 notes/OLD/
+*.bak
+**/*.bak
