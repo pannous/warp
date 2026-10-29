@@ -3,3 +3,7 @@
 'xs=[1,-2]; if all xs > 0 {1} else {0}'	0
 'xs=[1,2,3,4]; ok = count xs > 3; ok'	yes
 'xs=[1,2]; ok = max xs > 0; ok'	yes
+# a function of an untyped parameter before a comparison reads two ways: refused, naming both (decision untyped-fit-ambiguous)
+'sq(x) := x*x; sq 2 == 4'	error
+'sq(x: int) := x*x; sq 2 == 4'	yes
+'sq(x) := x*x; (sq 2) == 4'	yes
