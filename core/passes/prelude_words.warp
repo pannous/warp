@@ -657,8 +657,8 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 		used = use_target(statement)
 		if used is symbol and file_used(statement, folder) == ø and name_of(used) not in seen {
 			seen += [name_of(used)]
-			source = file_text(std_module_path(name_of(used)))
-			if source != ø {
+			source = used_module_text(name_of(used))
+			if source != "" {
 				inner = used_module_sources(statements_in(source_parse(std_module_path(name_of(used)), source)), folder, seen)
 				sources += inner#1 + [source]
 				seen = inner#2
