@@ -1,4 +1,4 @@
-# The emitter core (card emits-wasm, notes/self_hosting.md step 15; Rust twin: src/wasm_emitter): the lowered
+# The emitter core (card emits-wasm, notes/self_hosting.md step 15; Rust twin: rust-harness:src/wasm_emitter): the lowered
 # program (pipeline::lower) as a node gives a wasm module as a list of bytes, whose main returns the program's value.
 # The core knows ints (i64), floats (f64), yes/no conditions (i32), characters (i32), texts (GC byte arrays), lists
 # (GC vectors), arithmetic, comparisons, locals, functions, if and while, print (layout: notes/self_hosting.md "Value
@@ -44,11 +44,11 @@ export_memory_byte = 2
 export_global_byte = 3
 # a recursion group of types in the type section (rec), the class structs (module_layout.warp type_entries)
 rec_group_byte = 78
-# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
+# the globals the runner reads after a trap (rust-harness:src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
 # the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
 # longer needs that word's frame on the stack, which Cranelift's inlining takes away)
 exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name"]
-# trap_position holds line * columns_per_line + column, Rust's line << 12 | column (src/wasm_emitter/control/traps.rs
+# trap_position holds line * columns_per_line + column, Rust's line << 12 | column (rust-harness:src/wasm_emitter/control/traps.rs
 # encoded_position)
 columns_per_line = 4096
 import_function_byte = 0
@@ -92,7 +92,7 @@ runtime_space = 0
 own_space = 1
 # the closure arities runtime.wasm holds a closure·call hook for, 0 to these
 hook_arities = 8
-# `try` (Rust's src/wasm_emitter/control/try_guard.rs): while one runs (try_depth above 0) a runtime error throws the
+# `try` (Rust's rust-harness:src/wasm_emitter/control/try_guard.rs): while one runs (try_depth above 0) a runtime error throws the
 # tag warp_error(i32), which the try's try_table catches; otherwise it traps as before
 error_tag_name = "warp_error"
 try_depth_name = "try_depth"
@@ -100,15 +100,15 @@ trap_name_global = "trap_name"
 # the trap-only functions of a missing field or switch case: their prefix, then the name (error_function)
 no_field_prefix = "no_field_"
 no_case_prefix = "no_case_"
-# `data e`: e as written (src/lowering/control/blocks.rs DATA_WORD)
+# `data e`: e as written (rust-harness:src/lowering/control/blocks.rs DATA_WORD)
 catch_clause_byte = 0
 mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
 # [storage type, mutable]. $text: the UTF-8 bytes; $list: a vector, its items boxed; $Node(kind i64, data anyref,
 # value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box; an exact
-# rational an Int $Node holding a $Ratio(numerator, denominator) of two $i64box (src/run/wasm_reader.rs read_payload);
+# rational an Int $Node holding a $Ratio(numerator, denominator) of two $i64box (rust-harness:src/run/wasm_reader.rs read_payload);
 # a positioned node a $MetaNode, the final subtype (79, one supertype) of the open $Node (80, none) adding its line,
-# column and comment (src/wasm_emitter/type_manager.rs emit_meta_node_type); an integer beyond 64 bits an Int $Node
+# column and comment (rust-harness:src/wasm_emitter/type_manager.rs emit_meta_node_type); an integer beyond 64 bits an Int $Node
 # holding a $BigInt(negative, limbs), its magnitude little-endian base 2^32 limbs in a $Limbs array of i32, no leading
 # zero one (Rust's $BigInt, read back by read_payload; runtime/extended/big_ints.warp).
 # A module declares a type only once its code uses it, as it compiles a runtime word on its first call (decision
@@ -230,7 +230,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # from first_text_segment on; placed: the functions in order so far
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
-# host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
+# host: the host words a module may import, name → [[parameter kind…], [result kind…]] (rust-harness:src/host.rs)
 # errors: the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); class_defaults the values of the fields an instance may leave out, [view] each by name (an
@@ -997,7 +997,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	sequence(body, items_of(n))
 }
 
-# `[e 2]`, `q.k = e`: an item written into a list or field, shown `data·item: e`, `data·field: e` (src/compiler/node_views.rs
+# `[e 2]`, `q.k = e`: an item written into a list or field, shown `data·item: e`, `data·field: e` (rust-harness:src/compiler/node_views.rs
 # SHOWN_LIST_ITEM; core/passes/data_items.warp), and the runtime word that fails where it holds an Error; "" for any other word
 data_item_check(mark: text): text := if mark == HiddenWord.DataItem then "held_list_item" else if mark == HiddenWord.DataField then "held_field" else ""
 # an item as written into a list or field: an Error there fails as "a list item holds no error" (Rust's emit_data_item);
@@ -1250,7 +1250,7 @@ def logical_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCod
 	TypedCode(kind, test + [op.if] + value_type(kind) + converted(given#1, kind) + [op.else] + converted(given#2, kind) + [op.end])
 }
 
-## host words: the program's environment, imported from the "host" module (src/host.rs)
+## host words: the program's environment, imported from the "host" module (rust-harness:src/host.rs)
 # the words a program reaches: those it refers to (not the keys of its maps: `{paint: …}` names no paint), the runtime
 # words its library words and std calls stand for, and theirs in turn: the host and WASI words they call are imported
 def reached_words(program: Node): any {
@@ -1328,7 +1328,7 @@ listed_items(n: Node): list := if is_empty_list(n) then [] else items_of(n)
 # core/runtime.warp lowered by the same pipeline
 wasm_module(program: Node, runtime: Node): any := hosted_wasm_module(program, runtime, {})
 
-# as wasm_module, the host words `host` names importable (src/compiler/self_hosted.rs passes src/host.rs's)
+# as wasm_module, the host words `host` names importable (rust-harness:src/compiler/self_hosted.rs passes rust-harness:src/host.rs's)
 hosted_wasm_module(program: Node, runtime: Node, host: map): any := typed_wasm_module(program, runtime, host, {})
 
 # as hosted_wasm_module, an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS); again

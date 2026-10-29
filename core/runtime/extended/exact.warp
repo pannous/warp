@@ -96,7 +96,7 @@ power(base: int, exponent: int): int := {
 	out
 }
 # `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
-# src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
+# rust-harness:src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
 # 14142135623730951/10^16; ∞ and NaN have no fraction
 float_as_exact(x: float): Node := {
 	# x - x is 0 for every finite x, NaN for ∞ and NaN
@@ -144,7 +144,7 @@ floor_quotient(a: int, b: int): int := {
 	}
 	q
 }
-# `base ^ exponent` of exact numbers (src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
+# `base ^ exponent` of exact numbers (rust-harness:src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
 # inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names. An int
 # to a positive power is unbounded, 2^10000 a big int of 3011 digits (big_ints.warp)
 exact_pow(base: Node, exponent: Node): Node := {
@@ -159,7 +159,7 @@ exact_pow(base: Node, exponent: Node): Node := {
 	# a ratio in lowest terms stays in lowest terms raised to any power
 	ratio_of(int_pow(ratio_numerator(base), times), int_pow(ratio_denominator(base), times))
 }
-# base ^ exponent by squaring, exponent at least 0 (src/wasm_emitter/numbers/big_int/slow_paths.rs int_pow); a product
+# base ^ exponent by squaring, exponent at least 0 (rust-harness:src/wasm_emitter/numbers/big_int/slow_paths.rs int_pow); a product
 # beyond the int range fails in int_overflow, where Rust's turns into a big int
 int_pow(base: int, exponent: int): int := {
 	if exponent < 0 { fail() }

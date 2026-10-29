@@ -1,5 +1,5 @@
 // raylib through its C library (card pure-c-imports): `use raylib`, or `import DrawCircle from "raylib"`, declares these
-// functions; warp-host loads libraylib (Homebrew's libraylib.dylib, libraylib.so) and calls them. A Color is its four
+// functions; the native warp loads libraylib (Homebrew's libraylib.dylib, libraylib.so) and calls them. A Color is its four
 // bytes as one i32, 0xAABBGGRR, which is how C passes the struct by value on arm64 and x86-64.
 InitWindow(width: i32, height: i32, title: text): void from 'raylib'
 CloseWindow(): void from 'raylib'

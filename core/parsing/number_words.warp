@@ -1,5 +1,5 @@
 # English number words are numbers (`one plus two` is 3) unless the program names a variable, parameter or function
-# so (card times-phrases; Rust twin: src/lowering/words/number_words.rs). Keys (`{one: 1}`), members (`x.one`) and
+# so (card times-phrases; Rust twin: rust-harness:src/lowering/words/number_words.rs). Keys (`{one: 1}`), members (`x.one`) and
 # quoted data (`data [one]`) stay words. Each one hints its digits where it is written (card carries-line).
 use "../passes/walk.warp"
 use "../passes/scope.warp"

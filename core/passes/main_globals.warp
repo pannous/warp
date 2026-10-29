@@ -1,5 +1,5 @@
 # A function changes a main-level variable only when it is declared `global` (wiki/effects.md; card port-remaining;
-# Rust twin: src/analyzer/main_globals.rs): updating main's n from a function (`n += 1`, `xs[i] = 9`, `xs.add(x)`)
+# Rust twin: rust-harness:src/analyzer/main_globals.rs): updating main's n from a function (`n += 1`, `xs[i] = 9`, `xs.add(x)`)
 # is the error main_variable_change(n), binding it fresh (`n = 5`) the warning local_or_global(n, f), taking it as
 # the function's own local.
 use "walk.warp"

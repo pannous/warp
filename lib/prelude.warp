@@ -172,7 +172,7 @@ round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
-// own sum: src/lowering/words/library_words.rs)
+// own sum: rust-harness:src/lowering/words/library_words.rs)
 sum(xs) := fold(xs, 0, +)
 // a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
 // The template names no helper word (card after-sum): it lands in the program's code, where a program's own word of
@@ -245,7 +245,7 @@ from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwx
 radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
 hex_text(n: int) := radix_text(n, 16, "0x")
 binary_text(n: int) := radix_text(n, 2, "0b")
-// a value's form as its kind field holds it (card kind-reflection, src/type_kinds.rs), what the lib printers read:
+// a value's form as its kind field holds it (card kind-reflection, rust-harness:src/type_kinds.rs), what the lib printers read:
 // the Kind in the low byte (Int 1, Text 3, Key 6, List 8, Error 11, …), the info byte above it (a key's operator, a
 // list's bracket, an Int's bool 1, hex 2 or binary 3), and the mark of a type value (`int`, `type(x)`; code is
 // `x is code`); the Kind and the info byte are KIND_BITS wide, the type value mark is bit 54 (TYPE_VALUE_MARK)
@@ -315,7 +315,7 @@ decimal_text(numerator: int, denominator: int) := {
 	}
 	text
 }
-// x as a fraction, by its continued fraction (src/numbers/real.rs computes it exactly for √2, π, … written in the program):
+// x as a fraction, by its continued fraction (rust-harness:src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
 // convergent that is the same float. A precision replaces the default limit (`within: 1e-40` reaches beyond it)
@@ -418,7 +418,7 @@ random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then 
 random(x) := random_of(x)
 random(a, b) := random_between(a, b)
 // the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
-// warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
+// rust-harness:crates/warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
 // program's own name of the same word wins
 battery() := system_value("battery")
 charging() := system_value("charging") != 0
@@ -483,7 +483,7 @@ time_days(form: int, position: int): int := if form == 1 then position else posi
 time_nanos(form: int, position: int): int := if form == 1 then 0 else floor_mod(position, 86400000000000)
 floor_mod(n: int, divisor: int): int := n - n /! divisor * divisor
 // Howard Hinnant's calendar over day numbers (days since 1970-01-01, proleptic Gregorian), the one warp copy of
-// src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on it.
+// rust-harness:src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on it.
 // civil_from_days: eras of 400 years from 0000-03-01, a year from March
 civil_era(days: int): int := (days + 719468) /! 146097
 civil_day_of_era(days: int): int := days + 719468 - civil_era(days) * 146097

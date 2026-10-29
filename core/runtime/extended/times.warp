@@ -1,4 +1,4 @@
-## times (card time-primitives; Rust twin: src/wasm_emitter/time): a time node of a form (src/time/mod.rs TimeForm:
+## times (card time-primitives; Rust twin: rust-harness:src/wasm_emitter/time): a time node of a form (rust-harness:src/time/mod.rs TimeForm:
 ## kinds.warp TimeFormCode) and a position, read by the intrinsics
 ## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
 use "../intrinsics.warp"
@@ -26,8 +26,8 @@ duration_of(months: int, days: int, nanos: int): Node := {
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
 local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 
-## times (card time-text-warp; src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
-## of kind Time, its form in the info bits (src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
+## times (card time-text-warp; rust-harness:src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
+## of kind Time, its form in the info bits (rust-harness:src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
 ## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
 time_form(n: Node): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
 # whether n is a time, what made_case(Made.Time, …) tests

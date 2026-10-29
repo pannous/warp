@@ -1,7 +1,7 @@
 # TODO move to lib/time  (card time-arithmetic-move)
 
 # Arithmetic on times and durations at run time (card time-arithmetic-warp; Rust twin:
-# src/wasm_emitter/time/time_arithmetic.rs, notes/dates_at_run_time.md): `d + 1 day`, `t - 90 minutes`, `a - b`,
+# rust-harness:src/wasm_emitter/time/time_arithmetic.rs, notes/dates_at_run_time.md): `d + 1 day`, `t - 90 minutes`, `a - b`,
 # `1 month + 2 days`, `3 * 1 hour`, as calendar.rs `Time::add`, `since`, `Duration::plus` and `times` do for constants.
 # A class library beside lib/units.warp, not a compiler pass nor a runtime part (card time-arithmetic-library): the
 # compiler never loads it, as Span's plus would send every `+` it compiles through operator dispatch. Its
@@ -28,7 +28,7 @@ mismatched = "cannot subtract a date, a local time, an instant and a zoned time 
 not_arithmetic = "a time takes + or - a duration, a duration takes + or - a duration and * a whole number: nothing else is arithmetic on times"
 lengths_vary = "cannot order durations that compare differently on different dates (months and days have no fixed length)"
 
-# the order of src/time/mod.rs TimeForm: a form's code is its index there
+# the order of rust-harness:src/time/mod.rs TimeForm: a form's code is its index there
 enum TimeForm { Instant, Date, Local, Duration, Zoned, Clock }
 time_forms = [TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned, TimeForm::Clock]
 time_form(code: int): TimeForm := time_forms#(code + 1)

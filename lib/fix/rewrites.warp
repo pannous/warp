@@ -1,5 +1,5 @@
 # The rewrites of warp fix: hints, each naming what is written at a place and the warp spelling meant there, which the
-# fix applies. They read the text only (as src/formatting/synonyms.rs's I-meant rewrites, without the compiler).
+# fix applies. They read the text only (as rust-harness:src/formatting/synonyms.rs's I-meant rewrites, without the compiler).
 use "scan.warp"
 
 # what is written at a line's column (from 0), the text meant instead, and the rule that says so; the finders below give

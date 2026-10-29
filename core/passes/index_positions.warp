@@ -1,4 +1,4 @@
-# Indexes and positions (decisions index-position and index-units; Rust twin: src/lowering/collections/index_positions.rs):
+# Indexes and positions (decisions index-position and index-units; Rust twin: rust-harness:src/lowering/collections/index_positions.rs):
 # `index` counts from 0 (`xs[i]`), `position` from 1 (`xs#p`), both ints. A variable declared one, `p: position = v`
 # or `position p = v`, holds its value counted its way: a position given to an index is one less, an index given to a
 # position one more, so `i: index = "a👍🏽b".find("b")` is 2 and `p: position = …` 3. `find(t, part)` and `index_of`

@@ -1,5 +1,5 @@
 # Closures (emitter.warp's part): closure values, their calls through dispatchers, the text a closure shows
-## closures (Rust's lowering: src/lowering/definitions/closures.rs)
+## closures (Rust's lowering: rust-harness:src/lowering/definitions/closures.rs)
 # `closure_new(target, captured…)`: a Function $Node holding the list [the target's number, the captured values…], its
 # value the target's name, as Rust's reads back; module.closures holds [target name, captured count] by number.
 # `closure_call_<n>(f, a…)`: a function made once per arity n, its code written last (dispatcher_code), that calls the
@@ -11,7 +11,7 @@ name_joiner = "·"
 # `closure_text(f)`: the text of a closure, its lambda as written (`x => x*2`) or its target's name, a function made
 # once, its code written last (closure_text_code), as Rust's function_text table
 closure_text_name = "closure_text"
-# the targets Rust's lowering lifts from a lambda (src/lowering/definitions/closures.rs is_lambda_function)
+# the targets Rust's lowering lifts from a lambda (rust-harness:src/lowering/definitions/closures.rs is_lambda_function)
 lambda_prefixes = ["closure_lambda_", "lambda_value_"]
 is_lifted_lambda(name: text): bool := lambda_prefixes.any(prefix => name.starts_with(prefix))
 # the operators a closure takes part in (node_equal compares closures)
@@ -108,7 +108,7 @@ def class_value_calls(f: Function, arity: int): list {
 }
 # a value called that is no closure fails in not_a_function; the closure's number picks, in one br_table jump, the
 # target's call on the captured values and the arguments (a test per closure made every call scan them all); a closure
-# of another arity fails in wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)
+# of another arity fails in wrong_number_of_arguments (the runtime errors of Rust's rust-harness:src/wasm_emitter/functions/closures.rs)
 dispatcher_code(f: Function): any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]

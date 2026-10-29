@@ -27,7 +27,7 @@
 # then $t else $b)` computes a once; a pattern of statements `($a; $b)` matches a run of them in a block; a rule's result is rewritten again until no rule fires; `T for $x in $xs...` splices T once for each item of a rest hole; a template of statements in a value's place is that value's block; `·` glues
 # words and holes into a name (`square·$a`, `$i·end`, F5). What the
 # template adds sits where the rewritten code was written, so errors point at the user's code (notes/rewrites.md).
-# Rust twin: src/modules/rewrites.rs lower
+# Rust twin: rust-harness:src/modules/rewrites.rs lower
 use "walk.warp"
 use "scope.warp"
 use "uses.warp"
@@ -102,7 +102,7 @@ extension_module_names = [
 	"compiler/extensions/tuples"
 	"compiler/extensions/safe_navigation"
 ]
-first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words"]
+first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words", "sugar/dot_calls"]
 # every other file of lib/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
 sugar_folder = "sugar/"
 placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
@@ -929,6 +929,8 @@ may_be_list(code: Node, scope: text, vectors: list): bool := {
 	if code is symbol { return vectors#1.has(scoped_name(scope, name_of(code))) }
 	if is_group(code) and bracket_of(code) == "[" { return yes }
 	if is_key(code, Op.Dot) and value_of(code) is symbol { return is_swizzle_word(name_of(value_of(code))) }
+	# a value in parentheses, `sqrt([4, 9])`: as the value
+	if is_round(code) and #code == 1 and may_be_list(code#1, scope, vectors) { return yes }
 	if not (is_round(code) and #code > 0 and code#1 is symbol) { return no }
 	name_of(code#1) in list_giving_words or vectors#2.has(name_of(code#1))
 }

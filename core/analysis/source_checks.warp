@@ -1,5 +1,5 @@
-# The checks of a program as written (card pure-diagnostics; Rust twins: src/analyzer/checks/lints.rs,
-# discarded_values.rs, src/numbers/units.rs): they read parser.warp's nodes with their attribute layers (the mark of
+# The checks of a program as written (card pure-diagnostics; Rust twins: rust-harness:src/analyzer/checks/lints.rs,
+# discarded_values.rs, rust-harness:src/numbers/units.rs): they read parser.warp's nodes with their attribute layers (the mark of
 # `x.upper!`) and diagnose facts, whose messages are in warnings.data
 use "../passes/walk.warp"
 use "../passes/scope.warp"
