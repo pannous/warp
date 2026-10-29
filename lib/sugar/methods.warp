@@ -15,6 +15,8 @@ rewrite ($x in $xs) => collection_contains($xs, $x)
 rewrite ($xs contains $x) => collection_contains($xs, $x)
 rewrite ($xs has $x) => collection_contains($xs, $x)
 rewrite ($xs includes $x) => collection_contains($xs, $x)
+# the count of a membership is the count of x in y
+rewrite (count collection_contains($xs, $x)) => count($xs, $x)
 
 # `(p).a` is `p.a` (notes/layers.md, sugar): parentheses around a variable before a dot only group it; the parser gives
 # the call `f()` the form of the group `(f)`, so a function's name keeps its call, `f().b`. Rust twin:
