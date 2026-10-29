@@ -1,10 +1,14 @@
-# A function's own words (card name-params): `f.name` the text it is named by, `f.params` (also `f.parameters`) the
-# names of its parameters, `f.body` the code it computes (lib/rule_words.warp parameters_named, body_of); a word it has
-# none of but another one means is refused naming that one
+# A function's own words (cards name-params, doc-signature): `f.name` the text it is named by, `f.params` (also
+# `f.parameters`) the names of its parameters, `f.body` the code it computes, `f.doc` its doc text, `f.signature` and
+# `f.return_type` as the analyzer infers them (lib/rule_words.warp parameters_named, body_of, doc_of, signature_text,
+# return_kind); a word it has none of but another one means is refused naming that one
 rewrite $f.name => $n where $f is symbol and $f is function and $n = spelled($f)
 rewrite $f.params => [$names...] where $f is symbol and $f is function and $names = parameters_named($f, $program)
 rewrite $f.parameters => [$names...] where $f is symbol and $f is function and $names = parameters_named($f, $program)
 rewrite $f.body => data $b where $f is symbol and $f is function and $b = body_of($f, $program)
+rewrite $f.doc => $d where $f is symbol and $f is function and $d = doc_of($f, $program, $source)
+rewrite $f.signature => $s where $f is symbol and $f is function and $s = signature_text($f, $program)
+rewrite $f.return_type => $r where $f is symbol and $f is function and $r = return_kind($f, $program)
 rewrite $f.description => $refused where $f is symbol and $f is function and $refused = misnamed($f, description, doc)
 rewrite $f.returns => $refused where $f is symbol and $f is function and $refused = misnamed($f, returns, return_type)
 rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)

@@ -123,17 +123,70 @@ parameters_named(name: Node, program: Node): any := {
 	if definition == ø { return ø }
 	List(definition_parameters(definition), Bracket.Square, Separator.Comma)
 }
-definition_parameters(definition: Node): list := if is_definition(definition) then defined_parameters(definition).map(parameter_name) else lambda_parameters(key_of(value_of(definition)))
+definition_parameters(definition: Node): list := function_parameters_written(definition).map(parameter_name)
+# the parameters as the definition writes them, `a: int` of `f(a: int) := …`, `x` of `f = x => …`
+function_parameters_written(definition: Node): list := {
+	if is_definition(definition) { return defined_parameters(definition) }
+	taken = key_of(value_of(definition))
+	if is_group(taken) then items_of(taken) else [taken]
+}
+# `(a: int, b: int) -> int`: the parameters as written, untyped ones by their name alone, and the kind its result
+# has; ø when the program defines no such function or no kind is known of its result
+signature_text(name: Node, program: Node): any := {
+	definition = function_definition(name, program)
+	if definition == ø { return ø }
+	returned = function_result_kind(name, definition)
+	if returned == ø { return ø }
+	"(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
+}
+# `int` of `twice(x) := x*2`: the kind the analyzer infers for the function's result
+return_kind(name: Node, program: Node): any := {
+	definition = function_definition(name, program)
+	if definition == ø then ø else function_result_kind(name, definition)
+}
+function_result_kind(name: Node, definition: Node): any := {
+	found = kinds(definition).functions.get("${name}")
+	if found == ø then ø else found.result
+}
+parameter_shown(written: Node): text := {
+	parameter = parameter_of(written)
+	if parameter.type_name == "" then parameter.name else parameter.name + ": " + parameter.type_name
+}
 # the code the function computes, `x*2` of `twice(x) := x*2`; ø when the program defines no such function
 body_of(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
 	if definition == ø { return ø }
 	if is_definition(definition) then value_of(definition) else value_of(value_of(definition))
 }
+# a function's doc: its body's leading text, else the comment lines right above its definition, in the program's
+# source (`$source`, which keeps what the parse drops) or the module defining it (lerp's `// the value a fraction t of
+# the way from a to b`); "" without
+doc_of(name: Node, program: Node, source: text): text := {
+	body = body_of(name, program)
+	if body != ø and is_sequence_block(body) and #body > 1 and body#1 is text { return "${body#1}" }
+	word = "${name}"
+	found = comment_above(source, word)
+	modules = word_index(word_index_file()).get(word) ?? []
+	for module in modules { if found == "" { found = comment_above(used_module_text(module), word) } }
+	found
+}
+# the comment lines right above the line defining the word, without their marks; "" when none
+comment_above(source: text, word: text): text := {
+	comments = []
+	for line in source.split("\n") {
+		trimmed = line.trim()
+		if defines_function(trimmed, word) { return comments.join("\n") }
+		comments = if is_comment_line(trimmed) then comments + [comment_text(trimmed)] else []
+	}
+	""
+}
+defines_function(line: text, word: text): bool := ["fun ", "def "].any(keyword => line.starts_with(keyword + word + "(") or line.starts_with(keyword + word + " ")) or ((line.starts_with(word + "(") or line.starts_with(word + " ")) and (line.contains(":=") or line.contains("=>")))
+is_comment_line(line: text): bool := line.starts_with("//") or line == "#" or line.starts_with("# ")
+comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1) ..].trim()
 # `twice.description`: a word a function has none of, the compile refused with the word it means
 misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, misnamed: misnamed}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed}
