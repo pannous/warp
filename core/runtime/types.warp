@@ -33,6 +33,8 @@ held_kind_bit(n: Node): int := {
 }
 # a type value `int`: a symbol marked TYPE_VALUE_MARK above its kind
 names_a_type(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.TypeValue
+# a class value of that name, the callee a closure dispatcher builds an instance of (closures.warp class_value_calls)
+names_class(n: Node, name: text): bool := names_a_type(n) and same_bytes(unboxed_text(n), name)
 # a type value tests as the type it names: the words of the types a core type covers (type_tests.rs type_matches); a
 # third copy of the type words beside words.warp type_kinds and emitter.warp core_type_words, as runtime bodies read no
 # compiler globals yet (beautify-round, runtime constants)
