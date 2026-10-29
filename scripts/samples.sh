@@ -11,9 +11,10 @@ PARALLEL=4
 # a sample calling a C window library opens its window whatever WARP_NO_WINDOW says: not run, counted apart (until
 # FFI windows honour WARP_NO_WINDOW, warp-native-harness)
 WINDOW_LIBRARIES='raylib|SDL|glfw'
-# a server sample whose routes the native warp doesn't serve yet exits 0 with this line: not served, counted apart
-# (card native-server)
-UNSERVED='routes found: the native warp serves none'
+# a server sample serves until its timeout once it printed this (lib/web.warp serve): served, counted apart; each on a
+# port of its own from SERVER_PORTS on, as several run at once
+SERVING='^serving http://'
+SERVER_PORTS=8300
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
@@ -23,19 +24,20 @@ mkdir -p "$results/out"
 one() {
 	local out=$results/out/$(echo "$1" | tr / _)
 	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
-	(cd "$tree" && WARP_NO_WINDOW=1 timeout "$SECONDS_EACH" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
+	local port=$((SERVER_PORTS + $(echo "$1" | cksum | cut -d' ' -f1) % 1000))
+	(cd "$tree" && WARP_NO_WINDOW=1 WARP_PORT=$port timeout "$SECONDS_EACH" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first
-	[ $status -eq 0 ] && grep -aq "$UNSERVED" "$out.err" && { echo "SRV  $1"; return; }
+	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
 	first=$(grep -av '^wasm-rt warning\|^warning: ' "$out.err" | grep -am1 . | tr '\t' ' ' | cut -c1-200)
 	[ $status -eq 124 ] && first="timed out after ${SECONDS_EACH} s"
 	echo "FAIL $1: ${first:-exit $status, nothing on stderr}"
 }
 export -f one
-export tree results WARP SECONDS_EACH WINDOW_LIBRARIES UNSERVED
+export tree results WARP SECONDS_EACH WINDOW_LIBRARIES SERVING SERVER_PORTS
 
 day=$results/$(date +%F).txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$day"
-echo "samples: $(grep -c '^ok' "$day") of $(wc -l <"$day" | tr -d ' ') run, $(grep -c '^WIN' "$day") need a window, $(grep -c '^SRV' "$day") not served ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $day"
+echo "samples: $(grep -c '^ok\|^SRV' "$day") of $(wc -l <"$day" | tr -d ' ') run, $(grep -c '^WIN' "$day") need a window, $(grep -c '^SRV' "$day") serve ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $day"
 # the failures by first error, its position and quotes left out so one cause groups
 grep -a '^FAIL' "$day" | sed 's/^FAIL [^:]*: //; s/"[^"]*"/"…"/g; s/ at samples\/[^ ]*//; s/ (no owner)//' | sort | uniq -c | sort -rn

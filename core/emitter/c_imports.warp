@@ -81,6 +81,14 @@ c_type_of(word: text): text := {
 
 # the foreign lines of `text`
 c_declarations_in(content: text): list := content.split("\n").map(line => c_declaration(line)).filter(d => d != ø)
+# the C functions of the standard modules a compile's program uses, name → declaration (prelude_words.warp
+# with_used_modules): a module a pass or rule brings (`use web` of server routes) calls C as one its text names does
+global used_c_functions = {}
+# the program's own C functions and those of the modules it uses, its own first
+with_used_c_functions(functions: map): map := {
+	for name in used_c_functions.keys { if not functions.has(name) { functions[name] = used_c_functions[name] } }
+	functions
+}
 
 # the foreign lines of lib/c.warp, lib/math.warp and the native files at `native_paths`
 c_catalog(library_folder: text, native_paths: list): list := {
