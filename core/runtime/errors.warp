@@ -82,6 +82,15 @@ returned_error(): int := {
 	fail()
 	0
 }
+# `length(5)`, `length.([1, 2, 3])`: only a list, a text or a character has a length; the value named
+no_length(): int := {
+	fail()
+	0
+}
+no_length_of(value: Node): int := {
+	global trap_detail = value
+	no_length()
+}
 raised(value: Node): int := {
 	global trap_detail = value
 	returned_error()

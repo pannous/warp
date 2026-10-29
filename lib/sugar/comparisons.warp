@@ -1,8 +1,0 @@
-# A call before a comparison (notes/layers.md, sugar): `sq 2 == 4` parses as `sq (2 == 4)`; a function whose first
-# parameter is typed as a value, not yes/no, takes the call, `sq(2) == 4`. An untyped one stays as parsed.
-rewrite ($f $a == $b) => $f($a) == $b where $f takes value
-rewrite ($f $a != $b) => $f($a) != $b where $f takes value
-rewrite ($f $a < $b) => $f($a) < $b where $f takes value
-rewrite ($f $a > $b) => $f($a) > $b where $f takes value
-rewrite ($f $a <= $b) => $f($a) <= $b where $f takes value
-rewrite ($f $a >= $b) => $f($a) >= $b where $f takes value
