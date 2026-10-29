@@ -1,0 +1,5 @@
+# a step and an item's write notify the variable's listeners (card once-after)
+'x=3; n=0; on set x {n+=1}; x--; x++; x++; n'	3
+'x=3; seen=0; on change x {seen+=1}; y = x--; [y, x]'	[3, 2]
+'xs=[1,2]; n=0; on change xs {n+=1}; xs#1 = 9; xs#1 = 9; n'	1
+'xs=[1,2]; first=0; on change xs {first+=old#1}; xs#1 = 9; first'	1
