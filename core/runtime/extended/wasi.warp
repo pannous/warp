@@ -32,10 +32,12 @@ scratch_fd(): int := 20
 scratch_bytes(): int := 32
 # the bytes one call moves at most, below the one page of memory
 wasi_chunk(): int := 32768
-# path_open's flags: follow symlinks; create, truncate; the rights asked for (read, seek, write)
+# path_open's flags: follow symlinks; create, truncate; the rights asked for: a file read (read, seek), one written
+# (read, seek, write): a read-only file opened to write fails (EACCES), so reading asks no more than it needs
 wasi_follow_links(): int := 1
 wasi_create_new(): int := 9
-wasi_file_rights(): int := 70
+wasi_read_rights(): int := 6
+wasi_write_rights(): int := 70
 wasi_stdin(): int := 0
 wasi_stderr(): int := 2
 wasi_first_preopen(): int := 3
@@ -96,7 +98,8 @@ opened_file(path: text, open: int): int := {
 	place = preopened_place(path)
 	if place#1 < 0 { return 0 - wasi_no_entry() }
 	put_scratch_bytes(scratch_bytes(), place#2)
-	error = path_open(place#1, wasi_follow_links(), output_address() + scratch_bytes(), byte_count(place#2), open, wasi_file_rights(), wasi_file_rights(), 0, output_address() + scratch_fd())
+	rights = if open == 0 then wasi_read_rights() else wasi_write_rights()
+	error = path_open(place#1, wasi_follow_links(), output_address() + scratch_bytes(), byte_count(place#2), open, rights, rights, 0, output_address() + scratch_fd())
 	if error != 0 then 0 - error else scratch_word(scratch_fd())
 }
 file_failure(word: text, path: text, error: int): Node := {

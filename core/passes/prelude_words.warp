@@ -9,6 +9,7 @@ use "walk.warp"
 use "uses.warp"
 use "../analysis/builtin_signatures.warp"
 use "scope.warp"
+use "../emitter/c_imports.warp"
 
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
@@ -190,6 +191,10 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 	# definition replaces the module's
 	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
 	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
+	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
+	# stays its local
+	module_names = definition_slices(module).map(slice => slice#1)
+	program_globals = statements_in(program).filter(is_global_declaration).map(declared_name).filter(name => name != ø and name not in module_names)
 	# [name, text, the name written] of each slice: a replaced one under its library_word, for an alias's call
 	slices = definition_slices(module).map(slice => if kept(slice) then slice + [slice#1] else [library_word(slice#1), slice#2, slice#1])
 	# the statements of each reached slice, by its text
@@ -211,6 +216,7 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
 				else if slice#2 in declared { slice_node = declared_only(slice_node) }
+				slice_node = with_own_locals(slice_node, program_globals)
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
@@ -300,10 +306,18 @@ aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
 	count = #n - 1 + receivers
 	word = if called in aliases then aliases[called] else arity_variant(called, count)
 	if word == ø or shadows(own, called, count) { return n }
-	group_like(n, [symbol(if word in own then library_word(word) else word)] + items_of(n)[1 ..])
+	group_like(n, [symbol(if word in own and not word.starts_with(OPERATOR_FUNCTION_PREFIX) then library_word(word) else word)] + items_of(n)[1 ..])
+}
+is_global_declaration(statement: Node): bool := is_key(statement, Op.Colon) and key_of(statement) == symbol("global")
+# a module's definition with each of the program's globals it binds itself renamed apart (card module-hygiene)
+with_own_locals(definition: Node, program_globals: list): Node := {
+	bound = names_bound_in(definition)
+	for name in program_globals.filter(name => name in bound) { definition = renamed(definition, name, symbol(name + name_joiner + "local")) }
+	definition
 }
 # the module's own definition of a word the program defines too, which an alias or variant means: `round(x, 2)` calls
-# the prelude's round_to beside a program's round_to (card module-hygiene)
+# the prelude's round_to beside a program's round_to (card module-hygiene); an operator's function is overloaded
+# beside the module's, never replaced (with_reached's kept), so its alias calls it as it is (shell's matches)
 library_word(word: text): text := word + name_joiner + "library"
 
 # words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
@@ -535,7 +549,7 @@ bare_calls(program: Node, providers: map): list := {
 }
 # the names the program binds anywhere, its own wherever it says them, never a module's word (card module-hygiene):
 # a variable `now = …`, a function and its parameters `f(was, now)`, a key `{g: 5}`, `x: int`, `Person{name: …}`, a
-# lambda's or an arm's pattern `(a, b) => …`, `for now in …`, a class
+# lambda's or an arm's pattern `(a, b) => …`, `for now in …`, a class, an enum and its cases
 names_bound_in(n: Node): any := {
 	found = {}
 	waiting = [n]
@@ -554,12 +568,17 @@ names_bound_in(n: Node): any := {
 				while left is key { left = key_of(left) }
 				if left is symbol { found[name_of(left)] = yes }
 				if is_group(left) { for item in left { found[name_of(leftmost_symbol(item))] = yes } }
+				# the variants of a sum type, `type D = A | E(x)`
+				if is_type_view(key_of(part)) { for variant in alternatives(value_of(part)) { found[name_of(leftmost_symbol(variant))] = yes } }
 			}
 			if is_key(part, Op.Colon) and left is symbol and left != symbol("global") { found[name_of(left)] = yes }
 			if is_key(part, Op.Arrow) { for name in pattern_names(left) { found[name] = yes } }
 			waiting += [key_of(part), value_of(part)]
 		} else if is_group(part) {
 			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			# an enum and its cases, `enum K { B, D }`: B is the program's, never sound's note
+			enum = declared_enum(part)
+			if enum != ø { for name in [enum#1] + enum#2 { found[name] = yes } }
 			for item in part { waiting += [item] }
 		}
 	}
@@ -581,6 +600,9 @@ iteration_variables(items: list): list := {
 	found
 }
 # `x` of a parameter `x`, `x: int`, `x = 1`
+# `A | E(x) | F`: A, E(x) and F
+is_type_view(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
+alternatives(n: Node): list := if is_key(n, Op.Or) or is_key(n, Op.BitOr) then alternatives(key_of(n)) + alternatives(value_of(n)) else [n]
 leftmost_symbol(n: Node): Node := {
 	while n is key { n = key_of(n) }
 	if n is symbol then n else symbol("")
@@ -620,6 +642,7 @@ called_words(n: Node): list := {
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
+	for source in sources#1 { for d in c_declarations_in(source) { used_c_functions[d#1] = d } }
 	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [], sources#2.map(std_module_path))
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen]

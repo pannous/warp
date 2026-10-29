@@ -1,0 +1,9 @@
+# a plain `warp app.warp` serves its routes over HTTP (lib/web.warp, card native-server): a request as the client
+# sends it, the answer as the server writes it
+'get "/" { "hi" }; use web; http_served("GET / HTTP/1.1\r\nHost: x\r\n\r\n").split("\r\n\r\n")#2'	'hi'
+'get "/sq/:n:int" { n * n }; use web; http_served("GET /sq/7 HTTP/1.1\r\n\r\n").split("\r\n")#2'	'Content-Type: application/json'
+'post "/echo" { request.body }; use web; http_served("POST /echo HTTP/1.1\r\nContent-Length: 2\r\n\r\nok").split("\r\n\r\n")#2'	'ok'
+'get "/t" { status 418; header "X-Kind" "tea"; "tea" }; use web; http_served("GET /t HTTP/1.1\r\n\r\n").split("\r\n")#1'	"HTTP/1.1 418 I'm a teapot"
+'get "/t" { header "X-Kind" "tea"; "tea" }; use web; http_served("GET /t HTTP/1.1\r\n\r\n").split("\r\n")#3'	'X-Kind: tea'
+'get "/" { "hi" }; use web; http_served("GET /nope HTTP/1.1\r\n\r\n").split("\r\n")#1'	'HTTP/1.1 404 Not Found'
+'get "/t" { status 418; "tea" }; get "/" { "hi" }; use web; http_served("GET /t HTTP/1.1\r\n\r\n"); http_served("GET / HTTP/1.1\r\n\r\n").split("\r\n")#1'	'HTTP/1.1 200 OK'
