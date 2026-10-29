@@ -1,0 +1,6 @@
+# card int-text: a number and its unit spaced apart bind before the operator between two quantities
+'2 km + 500 m'	2.5km
+'500 m + 2 km'	2500m
+'x = 2 km + 500 m; x'	2.5km
+'2 km < 500 m'	false
+'2 km * 3 + 1 km'	7km

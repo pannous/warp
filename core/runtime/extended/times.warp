@@ -44,6 +44,10 @@ times_of_different_kinds_have_no_order() := {
 	fail()
 	0
 }
+# an operand of a time's + - * as lib/time_arithmetic.warp time_operation takes it: its form, -1 for a whole number,
+# and its position, a whole number's value
+operand_form(n: Node): int := if is_time(n) then time_form(n) else -1
+operand_position(n: Node): int := unboxed_int(n)
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
 local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 
