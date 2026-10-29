@@ -18,9 +18,8 @@ rewrite ($xs has $x) => collection_contains($xs, $x)
 rewrite ($xs includes $x) => collection_contains($xs, $x)
 # the count of a membership is the count of x in y
 rewrite count(collection_contains($xs, $x)) => count_in($xs, $x)
-# a method before its arguments calls it with them, as a word does: `t.split " "` is t.split(" "), `t.replace "tea"
-# "coffee"` t.replace("tea", "coffee"); after the membership words, so `xs contains x` stays one
-rewrite ($r.$m $x $more...) => $r.$m($x, $more...) where $x is not unbound
+# `t.replace "tea" with: "coffee"`: a member followed by arguments, unbracketed, is its call
+rewrite $x.$f $b $a... => $x.$f($b, $a...) where $f is symbol and $x is not enum and $b is not block
 
 # `(p).a` is `p.a` (notes/layers.md, sugar): parentheses around a variable before a dot only group it; the parser gives
 # the call `f()` the form of the group `(f)`, so a function's name keeps its call, `f().b`. Rust twin:

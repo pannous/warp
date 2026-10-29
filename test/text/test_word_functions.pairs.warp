@@ -1,0 +1,9 @@
+# a text's word functions (card sample-word-functions): split without a separator splits on whitespace runs; a parameter's label names it at the call; a member followed by arguments is its call
+'"ab  cd\tef".split'	["ab", "cd", "ef"]
+'count "the quick brown fox".split'	4
+'"ab-cd".split "-"'	["ab", "cd"]
+'"I like tea".replace "tea" with: "coffee"'	"I like coffee"
+'replace("I like tea", "tea", with: "coffee")'	"I like coffee"
+'f(x, for y) := x - y; f(5, for: 2)'	3
+'[1, 2].map x => x * 2'	[2, 4]
+'"the quick brown fox".split.map length'	[3, 5, 5, 3]

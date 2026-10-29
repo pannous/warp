@@ -1357,13 +1357,16 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	typed = typed_hole(pattern)
 	if typed != ø { return is_hole_kind(code, typed.kind) and hole_binding(typed.hole, code, bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
-	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
+	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
 }
 
 # a tuple pattern `($a, $b)` matches a tuple, never the call `f(a, b)`, whose parentheses hold no commas
 tuple_fits(pattern: Node, code: Node): bool := not (bracket_of(pattern) == "(" and separator_of(pattern) == ",") or separator_of(code) == ","
+# an unbracketed phrase pattern `$x.$f $b $a...` matches a phrase, never a sequence of statements (a block `{$b...}`
+# matches its statements)
+phrase_fits(pattern: Node, code: Node): bool := bracket_of(pattern) != "" or separator_of(pattern) != " " or not (separator_of(code) in statement_separators)
 
 items_match(patterns: list, items: list, bound: map): bool := {
 	rest_at = ø
