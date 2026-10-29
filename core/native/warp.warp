@@ -65,6 +65,7 @@ rebuilt(): nothing := {
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
 	built = joined(compiler_path(), ".new")
 	file_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
+	rebaked(built, compiler, library)
 	file_ran(built, words(built, "optimize", built, built, "", ""))
 	stamped(built, library)
 	runtime = joined(library, "/runtime.wasm")
@@ -75,6 +76,23 @@ rebuilt(): nothing := {
 	machine_code_moved(built, compiler_path())
 	rename(c_string(built), c_string(compiler_path()))
 	print(joined("rebuilt ", compiler_path()))
+}
+# the seed's build carries the library as the seed cut and parsed it: where its own cut differs (a changed slicer or
+# parser), it compiles compiler.warp once more, so the library baked into warp.wasm is always its own (card once-seed)
+rebaked(built: text, compiler: text, library: text): nothing := {
+	answer = joined(built, ".baked")
+	file_ran(built, words(built, "baked-current", answer, "", "", ""))
+	said = read_file(answer)
+	unlink(answer)
+	if not same_text(said, "yes") {
+		print(joined(joined("rebuild: the baked library is not this compiler's (", said), "), built once more"))
+		runtime = joined(built, ".runtime.wasm")
+		file_ran(built, words(built, "runtime", runtime, "", "", ""))
+		again = joined(built, ".again")
+		file_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
+		rename(c_string(again), c_string(built))
+		unlink(runtime)
+	}
 }
 # the build stamp appended to a build file, a custom section warp.build of lines as the Rust harness wrote them
 # (rust-harness:src/compiler/standalone.rs current_build): lib/, its compiler inputs hash (left empty: no run compares it, decision

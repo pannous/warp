@@ -190,7 +190,9 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 	if op == "as" { return converted_kind(n, scope) }
 	if op == "and" or op == "or" { return logical_kind(inferred_kind(key_of(n), scope), inferred_kind(value_of(n), scope)) }
 	if op in comparison_ops { return ValueKind.Int }
-	if (op == "√" or op == "∛") and is_empty(key_of(n)) { return if inferred_kind(value_of(n), scope) == ValueKind.Data or inferred_kind(value_of(n), scope) == ValueKind.Empty then ValueKind.Data else ValueKind.Float }
+	# `√x` of a float a float, of any other value lib/reals.warp's exact root (decision exact-roots)
+	if op == "√" and is_empty(key_of(n)) { return if inferred_kind(value_of(n), scope) == ValueKind.Float then ValueKind.Float else ValueKind.Data }
+	if op == "∛" and is_empty(key_of(n)) { return if inferred_kind(value_of(n), scope) == ValueKind.Data or inferred_kind(value_of(n), scope) == ValueKind.Empty then ValueKind.Data else ValueKind.Float }
 	if is_empty(key_of(n)) and op != "#" and op != "if" and op != "while" { return inferred_kind(value_of(n), scope) }
 	if op == "?" and is_key(value_of(n), Op.Colon) { return choice_kind(key_of(value_of(n)), value_of(value_of(n)), scope) }
 	if op == "else" and is_key(key_of(n), Op.Then) { return choice_kind(value_of(key_of(n)), value_of(n), scope) }

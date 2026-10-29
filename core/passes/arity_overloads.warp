@@ -324,12 +324,12 @@ keeps_numbers(op: Op): bool := match op {
 	Op.Mul: yes
 	_: no
 }
-# `-x`, `‖x‖` keep a number's kind, `√x`, `∛x` give a float
+# `-x`, `‖x‖` keep a number's kind, `√x` a float's (any other root is exact, lib/reals.warp), `∛x` gives a float
 prefixed_kind(op: Op, number: list?): list? := match op {
 	Op.Sub: number
 	Op.Neg: number
 	Op.Abs: number
-	Op.Sqrt: if number != ø then ["float", ø] else ø
+	Op.Sqrt: if number != ø and number#1 == "float" then number else ø
 	Op.Cbrt: if number != ø then ["float", ø] else ø
 	_: ø
 }

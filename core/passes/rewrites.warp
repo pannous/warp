@@ -557,11 +557,12 @@ dropped_rules(path: text, lines: list, rule_lines: list, rules: list, module: te
 # fixed-startup-cost). A compiler built by one that bakes none reads them where it runs
 LIBRARY_RULES = library_rules()
 library_rules(within: text = ""): map := {}
-# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any
+# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any, read off its fresh parse, never the building
+# compiler's baked one (uses.warp baked_tables)
 packed_rules(files: map): map := {
 	packed = {}
 	for path in files.keys {
-		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(written_rules(run_library() + "/" + path, files[path], "").map(rule_node), Bracket.Square, Separator.Comma)) }
+		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(rules_parsed(plain_node(parsed(rules_ended(files[path]))), "", files[path]).map(rule_node), Bracket.Square, Separator.Comma)) }
 	}
 	packed
 }
