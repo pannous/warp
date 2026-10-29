@@ -1,0 +1,8 @@
+# decision float-contagion: a float meeting an instance of a class with a float() makes a float; an exact decimal stays exact
+'type(1.0f * π)'	'float'
+'(2 as float) / π'	0.6366197723675814
+'π * (2 as float)'	6.283185307179586
+'x = 0.5f; x * τ'	3.141592653589793
+'type(1.0 * π)'	'Real'
+'text(3 / π)'	'3/π'
+'text(√8)'	'2√2'

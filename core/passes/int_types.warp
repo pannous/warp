@@ -2,13 +2,11 @@
 # mark of its own above its Kind, as a yes/no is a marked Int: `x as Color` marks it, `x is Color` tests the mark and
 # the type's `show(c: Color)` gives its text wherever it prints (class_methods.warp's text·shown); arithmetic,
 # comparisons and C calls see the plain int. Core names no such type: each declaration gets the next mark
-use "walk.warp"
-use "../analysis/kinds.warp"
+use "int_type_shows.warp"
 use "class_methods.warp"
 
 # the first mark an int type takes: 1 is a yes/no's
 FIRST_INT_MARK = 2
-showing_word = "show"
 shown_parameter = symbol("self")
 
 # the program with its int types marked and shown
@@ -22,16 +20,8 @@ int_types(program: Node): Node := {
 	marked = bottom_up(program, n => int_type_used(n, kinds))
 	showers = kinds.keys.filter(name => statements_in(marked).any(statement => shower_of(statement) == name))
 	if #showers == 0 { return marked }
-	statements = statements_in(marked).map(statement => if shower_of(statement) != ø then shower_renamed(statement) else statement)
+	statements = statements_in(marked).map(statement => if shower_of(statement) in showers then shower_renamed(statement) else statement)
 	group_like(marked, with_int_types_shown(statements, showers, kinds))
-}
-# `type Color = int`: Color; ø for any other statement
-int_type_name(statement: Node): text? := {
-	if not is_key(statement, Op.Assign) or value_of(statement) != symbol("int") { return ø }
-	declared = key_of(statement)
-	if not (is_key(declared, Op.Colon) and key_of(declared) == opaque_symbol) { return ø }
-	view = value_of(declared)
-	if kind_of(view) == "type" and view#3 == ø then declared_type_name(view#2) else ø
 }
 # `x as Color` marks x, `x is Color` tests its mark
 int_type_used(n: Node, kinds: map): Node := {
@@ -40,14 +30,6 @@ int_type_used(n: Node, kinds: map): Node := {
 	if is_key(n, Op.As) { return call_of("int_marked", [key_of(n), kind]) }
 	if is_key(n, Op.Is) { return Key(call_of("int_mark_of", [key_of(n)]), Op.Eq, kind) }
 	n
-}
-# `show(c: Color) := …`: Color; ø for any other statement
-shower_of(statement: Node): text? := {
-	if not is_key(statement, Op.Define) { return ø }
-	head = key_of(statement)
-	if not (is_group(head) and #head == 2 and head#1 == symbol(showing_word) and is_key(head#2, Op.Colon)) { return ø }
-	typed = value_of(head#2)
-	if typed is symbol then name_of(typed) else ø
 }
 # a type's show under its own name, show·Color, so that every int type has one
 shower_renamed(statement: Node): Node := {
