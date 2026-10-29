@@ -1,0 +1,1 @@
+single-capital-names: merge origin/main — a program's enum and its cases and a sum type's variants are its own names (enum K { B, D } pulls no sound note); a module's locals named like a program's global stay its own (hsv's hue). Smoke-tested after the push (hello green).
