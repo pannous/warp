@@ -54,6 +54,7 @@ RANDOM_BELOW_WORD = 6
 RANDOM_SEED_WORD = 7
 SYSTEM_VALUE_WORD = 8
 STD_PURE_WORD = 9
+PAINT_WORD = 10
 
 wasm_config_new(): handle from "warp_wasmtime"
 wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -105,6 +106,8 @@ library_function(library: pointer, name: pointer): handle from "c"
 native_call(function: handle, integers: pointer, floats: pointer, float_result: i32): i64 from "c"
 handle_id(pointer: handle): i32 from "c"
 terminal_size(rows: i32): i32 from "c"
+next_painting(): i32 from "c"
+mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 handle_known(id: i32): bool from "c"
 handle_pointer(id: i32): handle from "c"
@@ -302,11 +305,12 @@ resolved_path(path: text): text := {
 	copy
 }
 # where the compiled module goes for its run: a file of this process in $TMPDIR
-compiled_path(): text := {
+compiled_path(): text := joined(joined(joined(temporary_folder(), "warp-native-"), text_of(getpid())), ".wasm")
+# $TMPDIR, ending in a slash
+temporary_folder(): text := {
 	folder = getenv("TMPDIR")
 	if folder.length == 0 { folder = "/tmp/" }
-	if not ends_with(folder, "/") { folder = joined(folder, "/") }
-	joined(joined(joined(folder, "warp-native-"), text_of(getpid())), ".wasm")
+	if ends_with(folder, "/") then folder else joined(folder, "/")
 }
 
 ## a module's run
@@ -447,6 +451,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "random_seed") { return RANDOM_SEED_WORD }
 	if same_text(name, "system_value") { return SYSTEM_VALUE_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
+	if same_text(name, "paint") { return PAINT_WORD }
 	unanswered_word(name)
 }
 # a host word the driver doesn't answer (a library's: draw_shape, gpu_compute, …), as a word that names it when called:
@@ -672,6 +677,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == RANDOM_BELOW_WORD { return int_result((drand48() * (number as f64)) as i64, results) }
 	if word == RANDOM_SEED_WORD { return srand48(number) }
 	context = wasmtime_caller_context(caller)
+	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
@@ -694,14 +700,25 @@ float_result(x: f64, result: pointer): nothing := {
 	float_at(result + VALUE_OFFSET).value = x
 }
 # the item of a list value of the module, counted from 1, as a value (its export item_at)
-item_of(caller: handle, context: handle, list: pointer, index: i64): pointer := {
+item_of(caller: handle, context: handle, list: pointer, index: i64): pointer := indexed(caller, context, "item_at", list, index)
+# the module's export `name` of a list value and an index, its result
+indexed(caller: handle, context: handle, name: text, list: pointer, index: i64): pointer := {
 	values = allocate(2 * VALUE_BYTES)
 	memcpy(values, native_pointer(list), VALUE_BYTES)
 	byte_at(values + VALUE_BYTES).value = KIND_I64
 	long_at(values + VALUE_BYTES + VALUE_OFFSET).value = index
 	item = allocate(VALUE_BYTES)
-	guest_call(caller, context, "item_at", values, 2, item)
+	guest_call(caller, context, name, values, 2, item)
 	item
+}
+# the module's export `name` of one value, its int result
+guest_number(caller: handle, context: handle, name: text, value: pointer): i64 := long_at(guest_result(caller, context, name, value) + VALUE_OFFSET).value
+# … its yes/no result
+guest_flag(caller: handle, context: handle, name: text, value: pointer): bool := word_at(guest_result(caller, context, name, value) + VALUE_OFFSET).value != 0
+guest_result(caller: handle, context: handle, name: text, value: pointer): pointer := {
+	result = allocate(VALUE_BYTES)
+	guest_call(caller, context, name, value, 1, result)
+	result
 }
 
 ## the host words of warp's commands (core/commands/commands.warp), warp over libc
@@ -783,6 +800,122 @@ guest_int(caller: handle, context: handle, name: text, n: i64, result: pointer):
 }
 # a text of the driver's as a text node of the module's
 guest_text_of(caller: handle, context: handle, t: text, result: pointer): nothing := guest_text(caller, context, native_pointer(t.address), t.length as i64, result)
+
+## paint (card paint-native): the pixels as a PNG in the temporary folder, warp-paint/paint.png, then paint-2.png …
+## within one run, named on stderr, as warp-rust writes them headless (src/graphics/paint.rs): 0 paper, a value with
+## an alpha byte its color, any other ink. A shader paints on the GPU, which the native warp has not yet
+PAPER = 250
+INK = 29
+COLOR_FROM = 16777216
+STORED_MOST = 65535
+ADLER_MODULUS = 65521
+FOLDER_MODE = 493
+# the PNG signature: 89, P N G, CR LF, 1A, LF
+PNG_SIGNATURE_HIGH = 2303741511
+PNG_SIGNATURE_LOW = 218765834
+painted(caller: handle, context: handle, given: pointer): nothing := {
+	width = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
+	height = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+	if guest_flag(caller, context, "is_textual", given) {
+		complain("paint of a shader: the native warp has no GPU yet (warp-rust renders it)")
+		exit(1)
+	}
+	count = guest_number(caller, context, "item_count", given)
+	if count < width * height {
+		complain(joined(joined(joined(joined("paint: ", text_of(width)), "x"), text_of(height)), joined(" needs more pixels than ", text_of(count))))
+		exit(1)
+	}
+	if width > 0 and height > 0 { png_written(pixels_of(caller, context, given, width * height), width, height) }
+}
+# the first n pixels of the picture, as ints
+pixels_of(caller: handle, context: handle, picture: pointer, n: i64): pointer := {
+	pixels = allocate((n * 8) as i32)
+	for i in 0..n { long_at(pixels + i * 8).value = long_at(indexed(caller, context, "int_item_at", picture, i + 1) + VALUE_OFFSET).value }
+	pixels
+}
+png_written(pixels: pointer, width: i64, height: i64): nothing := {
+	colored = no
+	for i in 0..width * height { if long_at(pixels + i * 8).value >= COLOR_FROM { colored = yes } }
+	channels = if colored then 3 else 1
+	row = 1 + width * channels
+	rows = allocate((row * height) as i32)
+	for y in 0..height {
+		byte_at(rows + y * row).value = 0
+		for x in 0..width { shaded(long_at(pixels + (y * width + x) * 8).value, rows + y * row + 1 + x * channels, colored) }
+	}
+	header = allocate(13)
+	big_endian(header, width)
+	big_endian(header + 4, height)
+	byte_at(header + 8).value = 8
+	byte_at(header + 9).value = if colored then 2 else 0
+	for i in 10..13 { byte_at(header + i).value = 0 }
+	deflated = zlib_stored(rows, row * height)
+	png = allocate((8 + 25 + 12 + deflated.length + 12) as i32)
+	big_endian(png, PNG_SIGNATURE_HIGH)
+	big_endian(png + 4, PNG_SIGNATURE_LOW)
+	at = chunk(png + 8, "IHDR", header, 13)
+	at = chunk(at, "IDAT", deflated.address, deflated.length as i64)
+	at = chunk(at, "IEND", 0, 0)
+	folder = joined(temporary_folder(), "warp-paint")
+	mkdir(c_string(folder), FOLDER_MODE)
+	number = next_painting()
+	path = joined(folder, if number == 1 then "/paint.png" else joined(joined("/paint-", text_of(number)), ".png"))
+	file = fopen(c_string(path), c_string("wb"))
+	fwrite(native_pointer(png), 1, at - png, file)
+	fclose(file)
+	complain(joined(joined(joined(joined(joined("painted ", text_of(width)), "×"), text_of(height)), ": "), path))
+}
+# a pixel's bytes: gray, or red, green and blue
+shaded(value: i64, at: pointer, colored: bool): nothing := {
+	if value >= COLOR_FROM {
+		byte_at(at).value = ((value >> 16) & 255) as u8
+		if colored { byte_at(at + 1).value = ((value >> 8) & 255) as u8 }
+		if colored { byte_at(at + 2).value = (value & 255) as u8 }
+	} else {
+		shade = if value == 0 then PAPER else INK
+		for c in 0..(if colored then 3 else 1) { byte_at(at + c).value = shade as u8 }
+	}
+}
+big_endian(at: pointer, value: i64): nothing := {
+	for i in 0..4 { byte_at(at + i).value = ((value >> (24 - 8 * i)) & 255) as u8 }
+}
+# a PNG chunk at `at`: length, type, data, the CRC of type and data; where the next goes
+chunk(at: pointer, type: text, data: pointer, length: i64): pointer := {
+	big_endian(at, length)
+	memcpy(at + 4, native_pointer(type.address), 4)
+	if length > 0 { memcpy(at + 8, native_pointer(data), length) }
+	big_endian(at + 8 + length, crc32_of(text_from(at + 4, (length + 4) as u32)) as i64)
+	at + 12 + length
+}
+# the bytes as a zlib stream of stored (uncompressed) deflate blocks
+zlib_stored(bytes: pointer, length: i64): text := {
+	blocks = (length + STORED_MOST - 1) / STORED_MOST
+	if blocks == 0 { blocks = 1 }
+	size = 2 + blocks * 5 + length + 4
+	out = allocate(size as i32)
+	byte_at(out).value = 120
+	byte_at(out + 1).value = 1
+	at = out + 2
+	for b in 0..blocks {
+		start = b * STORED_MOST
+		part = if length - start < STORED_MOST then length - start else STORED_MOST
+		byte_at(at).value = if b == blocks - 1 then 1 else 0
+		byte_at(at + 1).value = (part & 255) as u8
+		byte_at(at + 2).value = (part >> 8) as u8
+		byte_at(at + 3).value = ((part & 255) xor 255) as u8
+		byte_at(at + 4).value = ((part >> 8) xor 255) as u8
+		if part > 0 { memcpy(at + 5, native_pointer(bytes + start), part) }
+		at = at + 5 + part
+	}
+	low = 1
+	high = 0
+	for i in 0..length {
+		low = (low + byte_at(bytes + i).value as i64) % ADLER_MODULUS
+		high = (high + low) % ADLER_MODULUS
+	}
+	big_endian(at, high * 65536 + low)
+	text_from(out, size as u32)
+}
 
 ## regex: POSIX's extended syntax, on macOS enhanced (\s \w \d \b, (?:…)) to what Rust's regex crate reads alike
 REGEX_BYTES = 256

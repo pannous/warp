@@ -25,6 +25,8 @@ static uint32_t module_address(struct w2c_wasi__snapshot__preview1* wasi, void* 
 // an address of the module's memory as the C pointer it is, for a program to hold as a handle (`native_pointer(address:
 // pointer): handle from "c"`): the glue made it the pointer already
 void* native_pointer(void* address) { return address; }
+// paint's count in this run, from 1: its PNG's number (core/native/driver.warp painted)
+int32_t next_painting(void) { static int32_t painted; return ++painted; }
 // the terminal's rows, else its columns, on standard output; 0 outside a terminal (ioctl is variadic: called here, not
 // through native_call)
 int32_t terminal_size(int32_t rows) {
