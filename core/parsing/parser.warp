@@ -17,7 +17,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: list; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: list; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): list := view_of(parsed(source))
@@ -999,8 +999,11 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
+			outer_indexing = p.indexing
+			p.indexing = true
 			index = slice_from_start(p)
 			if index == ø { index = expression(p, 0) }
+			p.indexing = outer_indexing
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
 			left = subscript(left, index)
@@ -1050,7 +1053,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = operator_call(glyph, [left, expression(p, fixity_level(Fixity.Infix) + 1)])
 				continue
 			}
-			if op.length == 0 {
+			if op.length == 0 or negative_item_at(p) {
 				if not applies(p, left, min_power) { break }
 				// `s + f 2 each: 3`: the labelled arguments after the argument are the call's too
 				labelled = labelled_argument(p)
@@ -1590,6 +1593,14 @@ def is_element(n: Node): bool := match n {
 	Key(target, op, index): op == Op.Hash
 	_: false
 }
+// `[a -1]`, `f it -1`, `x -1`: a minus spaced before and glued after starts a negative operand, a new item, not a
+// subtraction (decision glued-negative); `a - 1` and `a-1` subtract, so does `-` inside an index, `xs[i -1]`
+def negative_item_at(p: Parser): bool {
+	if p.indexing or not is_at(p.code, p.at, '-', p.n) or p.at == 0 or not is_blank(p.code[p.at - 1]) { return false }
+	next = peek(p.code, p.at + 1, p.n)
+	not is_blank(next) and not "=->".contains(next)
+}
+
 // The left power of `#`, which a glued `[` indexes with
 INDEX_POWER = 170
 

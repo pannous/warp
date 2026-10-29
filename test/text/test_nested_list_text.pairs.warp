@@ -1,9 +1,9 @@
 # from test_nested_list_text.rs: edit the Rust test, then run the script again
 
 # a_nested_list_has_the_text_of_its_literal
-'t = [[1 2] [3]]; str(t)'	'[[1 2] [3]]'
-'f() := [[1 2] [3]]; str(f())'	'[[1 2] [3]]'
-'t = [[1 2] [3 [4 5]]]; str(t)'	'[[1 2] [3 [4 5]]]'
+'t = [[1 2] [3]]; str(t)'	'[[1, 2], [3]]'
+'f() := [[1 2] [3]]; str(f())'	'[[1, 2], [3]]'
+'t = [[1 2] [3 [4 5]]]; str(t)'	'[[1, 2], [3, [4, 5]]]'
 
 # a_count_takes_the_indexed_element
 'm = [[1 2 3] [4 5 6]]; #m#1'	3

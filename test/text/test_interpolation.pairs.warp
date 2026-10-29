@@ -15,7 +15,7 @@
 
 # holes_take_parameters_lists_and_exact_numbers
 'f(n):="n is \\(n)"; f(4)'	'n is 4'
-'xs=[1 2]; "xs=\\(xs)"'	'xs=[1 2]'
+'xs=[1 2]; "xs=\\(xs)"'	'xs=[1, 2]'
 'y=2.5; "v=\\(y)"'	'v=2.5'
 '"a \\("b") c"'	'a b c'
 
@@ -32,7 +32,7 @@
 '"a\\$b"'	'a$b'
 
 # dollar_arguments_and_templates_keep_working
-# triage-held 2026-10-28: shell-style positional parameter $0 in a function body :: 'add1(x):=$0+1; add1(3)'	4
+'add1(x):=$0+1; add1(3)'	4
 'file="a b";c=sh "rm -f \\(file)";c#3'	'a b'
 'a="x";b="y";q=sql "SELECT * FROM t WHERE a = $a AND b = ${b}";q#3'	'y'
 

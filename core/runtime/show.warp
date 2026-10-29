@@ -77,7 +77,8 @@ quoted_text(t: text): text := {
 }
 # the bytes of `"` and `\`, which a quoted text escapes
 is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
-list_text(xs: list): text := "[" + items_text(xs) + "]"
+# a list as `warp format` writes it, `[1, "ab"]` (decision shown-spaced)
+list_text(xs: list): text := "[" + joined_items(xs, ", ") + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
 items_text(xs: list): text := joined_items(xs, " ")
 joined_items(xs: list, joiner: text): text := {
@@ -88,13 +89,17 @@ joined_items(xs: list, joiner: text): text := {
 	}
 	inner
 }
-# `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
+# `a: 1`; a class instance as its class's show() gives it (decision show-hook), else `Point{x: 1, y: 2}`, its fields a map
 key_text(entry: Node): text := {
 	value = key_value(entry)
+	if marked_kind(entry) == Marked.Instance {
+		shown = instance_show(entry)
+		if not is_null(shown) { return node_text(shown) }
+	}
 	if marked_kind(entry) == Marked.Instance and not is_null(instance_entries(entry)) { return key_name(entry) + node_text(instance_entries(entry)) }
 	if marked_kind(entry) == Marked.Instance { return key_name(entry) + node_text(value) }
 	operator = key_operator(entry)
-	if text_order(operator, ":") == 0 { return key_name(entry) + ":" + node_code(value) }
+	if text_order(operator, ":") == 0 { return key_name(entry) + ": " + node_code(value) }
 	# `y+z`, `y and z`: a word operator between spaces
 	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
 	node_code(entry_key(entry)) + spaced + node_code(value)

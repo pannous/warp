@@ -31,6 +31,7 @@ class Quantity {
 	in(u) := to(u).shown()
 	shown() := amount / scale
 	text() := quantity_text(this)
+	show() := quantity_text(this)
 }
 
 // the dimensions, each a class of its own: a parameter `duration: Time` takes a duration only

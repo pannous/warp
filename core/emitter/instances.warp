@@ -180,6 +180,7 @@ instance_entries_name = "instance_entries"
 instance_field_at_name = "instance_field_at"
 instance_place_name = "instance_place"
 is_class_instance_name = "is_class_instance"
+instance_show_name = "instance_show"
 def class_depth(class_name: text): int { if class_name in module.parents then 1 + class_depth(module.parents[class_name]) else 0 }
 def made_classes(): list {
 	made = module.classes.keys.filter(class_name => instance_struct_prefix + class_name in module.class_structs)
@@ -292,6 +293,12 @@ def instance_place_code(f: Function) {
 # operator is marked as an instance too)
 def is_class_instance_code(f: Function) {
 	f.code = if #made_classes() == 0 then [op.i32_const, 0] else [op.local_get, 0] + gc_code(gc_ops.ref_test, [gc_type(instance_struct())])
+}
+# instance_show(m): the text m's class shows it as by its show() (decision show-hook), ø when the program's classes
+# give none (class_methods.warp show·shown)
+def instance_show_code(f: Function) {
+	shown = module.functions.get(instance_show_word)
+	f.code = if shown == ø then [ref_null, gc_type(gc.node)] else boxed(call_values(shown, [TypedCode(ValueKind.Node, [op.local_get, 0])]))
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }

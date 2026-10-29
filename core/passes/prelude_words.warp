@@ -383,7 +383,7 @@ global_word_modules(program: Node, own: any, used: list): list := {
 	modules = []
 	for word in symbol_words(program) + sugar_words_of(program) {
 		module = words.get(word)
-		if module != ø and word not in own and word not in bound and module not in used and module not in modules { modules += [module] }
+		if module != ø and word not in own and word not in bound and word not in used and module not in used and module not in modules { modules += [module] }
 	}
 	modules
 }
@@ -409,7 +409,8 @@ implicit_modules(source: text, index_file: text): list := {
 	providers = type_module_providers()
 	free = free_words(program)
 	modules = []
-	for word in candidates.filter(word => word in free and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
+	# (the module a `use` names is no word of it: `use hash` beside color's hash)
+	for word in candidates.filter(word => word in free and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
 		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }

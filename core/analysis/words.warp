@@ -12,10 +12,10 @@ any_word = "any"
 required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word
 # the hidden words the passes write for the emitter and analyzer, a `·` in each so no program can name them:
 # `ran·without·error{statement}` (what `try` lowers to), `loop·step: i++` (a loop's step, after its body),
-# the guard markers, data items and fields, the shown text of an instance
+# the guard markers, data items and fields, the shown text and form of an instance
 # and the missing part of an `of` lookup, the plain store `x ← v` (`store·value(x, v)`)
 enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·step", TryElse = "try·else",
-	AssertElse = "assert·else", DataItem = "data·item", DataField = "data·field", TextShown = "text·shown", FloatConverted = "float·converted", FloatCast = "float·cast", OfNone = "of·none",
+	AssertElse = "assert·else", DataItem = "data·item", DataField = "data·field", TextShown = "text·shown", FloatConverted = "float·converted", FloatCast = "float·cast", ShowShown = "show·shown", OfNone = "of·none",
 	ViewOpaque = "view·opaque", ViewAttribute = "view·attribute", DataSpliced = "data·spliced", GlueName = "glue·name",
 	GlueHidden = "glue·hidden", MatchSubject = "match·subject", MatchBound = "match·bound", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",

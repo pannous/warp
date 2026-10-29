@@ -2,5 +2,5 @@
 
 # a_map_inside_a_map_keeps_its_braces
 'm = {a:{b:1, c:2}}; m.a.c'	2
-'m = {a:{b:1, c:2}, d:3}; "\\(m)"'	'{a:{b:1 c:2} d:3}'
+'m = {a:{b:1, c:2}, d:3}; "\\(m)"'	'{a: {b: 1, c: 2}, d: 3}'
 'm = {a:{b:1, c:2}}; x = m.a; x == {b:1, c:2}'	true
