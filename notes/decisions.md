@@ -579,3 +579,4 @@ the original questions 1–41: test edits and housekeeping done.
 - one-name-list (user confirmed): `x = 1, 2` makes x the list [1, 2] (2026-10-29)
 - fixed-time-units (user confirmed): second, minute, hour are fixed quantities; day, week, month, year stay calendar durations (2026-10-29)
 - keys-enum (user, revises keys-module): the keys are one enum Key in lib/keys.warp (`Key.escape`, `Key.up`, `Key.space` …, as in `on Key.escape {}`), the bare words (ESC, ENTER, UP, space …) aliases of its cases; `held_key` gives a Key ("" → none headless); `exit()` is exit(0) (2026-10-29)
+- is-pattern-binds, named-arguments-general, split-whitespace (user confirmed 2026-10-29)
