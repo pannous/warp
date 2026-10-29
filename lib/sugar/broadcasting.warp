@@ -1,0 +1,6 @@
+# Broadcasting (P50, notes/broadcasting.md): a word whose parameter is declared a number, given a value that may be a
+# list, applies to each item, decided at run time: floor([1.5, 2.5]) is [1 2], max(v, 0.5) pairs each item with 0.5,
+# max(u, v) the items of two lists by index (prelude each_any, element_wise_any)
+rewrite $f($x) => each_any($x, $e -> $f($e)) where $x is vector and $f takes number
+rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $a is vector and $f takes number
+rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $b is vector and $f takes number
