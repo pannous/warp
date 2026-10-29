@@ -136,6 +136,33 @@ def rules_ended(source: text): text {
 	}
 	if changed then ended.join("\n") else source
 }
+// The words that take a block last, as `if` does (user 2026-10-29: derived from the signature): a function whose last
+// parameter is `body: block` (`once(body: block)`), a rewrite rule whose pattern ends in a `: block` hole (`rewrite
+// whenever $c $body: block`). Baked in by uses.warp module_text; a compiler built by one that bakes none reads them
+// off its library where it runs
+BLOCK_HEADS = block_heads()
+def block_heads(within: text = ""): map := block_heads_in(LIBRARY_FILES)
+def block_heads_in(files: map): map {
+	heads = {}
+	for path in files.keys {
+		for line in files[path].split("\n") {
+			word = block_head_of(line)
+			if word != "" { heads[word] = word }
+		}
+	}
+	heads
+}
+// the word a line declares taking a block last, else ""
+def block_head_of(line: text): text {
+	if line.starts_with(rewrite_line_start) and line.contains(" => ") {
+		pattern = line[rewrite_line_start.length .. line.find(" => ")].trim()
+		words = pattern.split(" ")
+		return if pattern.ends_with(": block") and words.length > 2 and is_name_start(words#1[0]) then words#1 else ""
+	}
+	if not (line.contains("body: block) :=") and is_name_start(line[0])) { return "" }
+	name = line[0 .. name_end(line, 0, line.length)]
+	if line[name.length] == '(' then name else ""
+}
 global entity_table = ø
 def entities(): map {
 	if entity_table == ø {
@@ -604,7 +631,7 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if stray and p.group.grouped { break }
 		if stray { raise "`" + c + "` closes no group" }
 		before = p.at
-		item = if follows_clause_word(found) then header_expression(p, 0) else expression(p, 0)
+		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
 		tabbed = tab_separates(p)
 		newline = skip_blanks(p)
 		if bracket == Bracket.None and newline and line_indent(p) > p.indent {
@@ -658,6 +685,15 @@ def with_trailing_item(assignment: Node, item: Node): Node := match assignment {
 
 // `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
 // Rust twin: conditions.rs ends_with_clause_word
+// `whenever x > y {…}`, `on change x: n += 1`: the words after a block head (BLOCK_HEADS) starting the statement are
+// its head, as `if`'s condition is, up to its body, `{…}` or `: …` (a block); not the body once it was read
+def heads_block(p: Parser, found: list): bool {
+	if found.length == 0 or is_block(found#(found.length)#1) or found#(found.length)#2 != Separator.Space { return false }
+	first = found.length
+	while first > 1 and found#(first - 1)#2 == Separator.Space { first = first - 1 }
+	found#first#1 is symbol and BLOCK_HEADS.has(name_of(found#first#1))
+}
+def head_item(p: Parser): Node := if body_word_width(p) == 1 then listed(Bracket.Curly, Separator.Semicolon, [colon_body(p, 1)]) else header_expression(p, CONDITION_POWER)
 def follows_clause_word(found: list): bool := found.length > 0 and ends_with_clause_word(found#(found.length)#1)
 
 // `where`, `match`, alone or the last word of `for i in xs where`: a word whose condition or subject follows

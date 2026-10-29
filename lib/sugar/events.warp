@@ -2,9 +2,9 @@
 # listens for the first one only; `emit alarm{level: 3}` (also fire, send, trigger) runs the listeners in order and
 # gives the last one's result. A listener is numbered within its event: `h = on alarm {…}`, `listeners of alarm`,
 # `remove h from listeners of alarm`. The registry is the prelude's (lib/prelude.warp listen)
-rewrite on $e $body => listen(data $e, event => $body, no) where $e is symbol
+rewrite on $e $body: block => listen(data $e, event => $body, no) where $e is symbol
 rewrite on $e: $body => listen(data $e, event => $body, no) where $e is symbol
-rewrite once $e $body => listen(data $e, event => $body, yes) where $e is symbol
+rewrite once $e $body: block => listen(data $e, event => $body, yes) where $e is symbol
 rewrite remove $h from listeners of $e => unlisten(data $e, $h) where $e is symbol
 rewrite listeners of ($e -= $h) => unlisten(data $e, $h) where $e is symbol
 rewrite count listeners of $e => count(listeners_of(data $e)) where $e is symbol

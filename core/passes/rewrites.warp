@@ -644,9 +644,15 @@ needed_words(rule: Rule): list := {
 # start the pattern (`rewrite channel $name => …` reads as `rewrite channel ($name => …)`), the words after it continue
 # the template up to `where`, whose `=` holds only the shape's first word (`where $c = channel $name`); `source` is the
 # text the statement was parsed from
+# a pattern ending in a typed hole, `rewrite whenever $c $body: block => …`, which the parser reads as
+# `$body: (block => …)`: the arrow after the typed hole
+typed_hole_arrow(item: Node): Node := match item {
+	Key(hole, Op.Colon, Key(kind, Op.Arrow, template)): if rule_hole(hole) != ø and kind is symbol and name_of(kind) in hole_kinds then Key(Key(hole, Op.Colon, kind), Op.Arrow, template) else item
+	_: item
+}
 rule_of(statement: Node, module: text, source: text): Rule? := {
 	if not is_group(statement) or bracket_of(statement) != "" or separator_of(statement) != " " { return ø }
-	items = items_of(statement)
+	items = items_of(statement).map(typed_hole_arrow)
 	if #items < 2 or items#1 != symbol(rewrite_word) { return ø }
 	arrow_at = 0
 	for index in 1 ..< #items { if arrow_at == 0 and is_key(items[index], Op.Arrow) { arrow_at = index } }
