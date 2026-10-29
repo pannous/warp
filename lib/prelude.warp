@@ -382,8 +382,14 @@ each_any(value: any, f) := if value is list then [f(item) for item in value] els
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
-// row) of every pixel, row by row
-paint_each(f, width, height) := paint([pixel_color(f(i % width, i /! width)) for i in 0..width * height], width, height)
+// row) of every pixel, row by row; in a frame without a window (lib/frames.warp frames_end) at most the window's size,
+// f sampled across the size asked
+global painting_headless_frame = no
+paint_each(f, width, height) := {
+	columns = if painting_headless_frame then min(width, window_width(), window_height() * width /! height) else width
+	rows = columns * height /! width
+	paint([pixel_color(f((i % columns) * width /! columns, (i /! columns) * height /! rows)) for i in 0..columns * rows], columns, rows)
+}
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a function, f(column, row)
 // of each pixel on the CPU (paint_each)
 paint(picture, width, height) := if picture is list then paint(picture, width, height, ø) else paint_each(picture, width, height)

@@ -118,7 +118,7 @@ comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage", "frames"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
@@ -931,9 +931,12 @@ may_be_list(code: Node, scope: text, vectors: list): bool := {
 	if is_key(code, Op.Dot) and value_of(code) is symbol { return is_swizzle_word(name_of(value_of(code))) }
 	# a value in parentheses, `sqrt([4, 9])`: as the value
 	if is_round(code) and #code == 1 and may_be_list(code#1, scope, vectors) { return yes }
+	if is_element_wise_phrase(code) { return yes }
 	if not (is_round(code) and #code > 0 and code#1 is symbol) { return no }
 	name_of(code#1) in list_giving_words or vectors#2.has(name_of(code#1))
 }
+# `v .* 2` as the parser leaves it, before lib/sugar/arithmetic.warp spells it element_wise_any
+is_element_wise_phrase(code: Node): bool := is_spaced(code) and #code == 3 and code#2 is symbol and name_of(code#2) in PHRASE_OPERATORS and name_of(code#2).starts_with(".")
 is_swizzle_word(name: text): bool := #name >= 2 and #name <= 4 and name.all(c => c in "xyzw")
 
 # the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)
