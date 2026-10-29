@@ -13,10 +13,6 @@ sleep_word = "sleep"
 index_of_word = "index_of"
 error_word = "error"
 fail_word = "fail"
-count_word = "count"
-membership_word = "in"
-# `count bytes in t` counts a unit of the text, no membership (lib/sugar/lists.warp)
-counted_units = ["bytes"]
 
 # the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
 source_checks(program: Node, prelude: text): Node := {
@@ -25,7 +21,6 @@ source_checks(program: Node, prelude: text): Node := {
 		located_error(n)
 		spelled_number_join(n)
 		bare_sleep(n)
-		counted_membership(n)
 		text_index_of(n, program)
 		assigned_mutation(n, aliases)
 		lints_of(without_mark(n))
@@ -90,16 +85,6 @@ is_numeral(t: text): bool := {
 	digits = if t.starts_with("-") or t.starts_with("+") then t[1..] else t
 	parts = digits.split(".")
 	#parts <= 2 and #digits > #parts - 1 and parts.all(part => part.chars().all(c => "0123456789".contains(c)))
-}
-
-# --- `count(2 in xs)` counts a yes/no: the count of x in y is xs.count(x) (user 2026-10-29: esoteric, not revived) ---
-
-counted_membership(n: Node) := {
-	if not (is_group(n) and #n > 1 and n#1 == symbol(count_word)) { return ø }
-	counted = items_of(n)[1 ..]
-	if #counted == 1 and is_group(counted#1) and bracket_of(counted#1) == "" { counted = items_of(counted#1) }
-	if #counted == 3 and counted#2 == symbol(membership_word) and not (counted#1 is symbol and name_of(counted#1) in counted_units) { diagnose(call_of("counted_membership", [as_written(counted#1), as_written(counted#3)]), n) }
-	ø
 }
 
 # --- `sleep(1)` needs a unit  ---
