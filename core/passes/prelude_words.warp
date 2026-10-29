@@ -275,10 +275,11 @@ aliased(n: Node, aliases: map, own: map): any := if class_view(n) != ø then wit
 	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own)), aliases, own, 1))
 	_: children(aliased_call(n, aliases, own, 0), x => aliased(x, aliases, own))
 }
-# a method's body aliased, its head as a call on its instance is (`has(x)` as collection_contains(x), as `s.has(x)`
-# calls it), but an operator's (`times(k) := …` stays the class's own `*`), never a field (`m: map = {}`)
+# a method's body aliased, its head named by an alias as a call on its instance is (`has(x)` as collection_contains(x),
+# as `s.has(x)` calls it), but an operator's (`times(k) := …` stays the class's own `*`) or a word another arity
+# varies (`sum()`), never a field (`m: map = {}`)
 aliased_member(member: Node, aliases: map, own: map): any := if is_key(member, Op.Define) and is_group(key_of(member)) then Key(aliased_head(key_of(member), aliases, own), Op.Define, aliased(value_of(member), aliases, own)) else member
-aliased_head(head: Node, aliases: map, own: map): Node := if head#1 is symbol and name_of(head#1) in operator_spellings() then head else aliased_call(head, aliases, own, 1)
+aliased_head(head: Node, aliases: map, own: map): Node := if head#1 is symbol and name_of(head#1) in aliases and name_of(head#1) not in operator_spellings() then aliased_call(head, aliases, own, 1) else head
 # a class declaration with each member, read as the definitions pass reads it, changed by f: a class body is a type
 # view the walks don't enter (`keys.index_of(x)` in a method is aliased so)
 with_members(n: Node, f: function): Node := {
