@@ -197,7 +197,7 @@ RUNTIME_WASM = "runtime.wasm"
 write_runtime(file: text) := {
 	made = runtime_wasm_module(lowered_runtime_words(), host_words)
 	if made is text { raise made }
-	write_bytes(file, made)
+	write_bytes(file, with_call_sites(made))
 }
 # <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp own_items_from), for
 # programs to be linked to; `warp rebuild` writes one beside warp.wasm for each. Every program has the prelude, used
