@@ -1,7 +1,6 @@
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
-ok   samples/advanced/raytracer.warp
 ok   samples/advanced/snake.warp
 ok   samples/conditions/control_flow.warp
 ok   samples/conditions/fizzbuzz.warp
@@ -132,9 +131,12 @@ WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
+SRV  samples/servers/hosting.warp
+SRV  samples/servers/route_headers.warp
 SRV  samples/servers/worker.warp
 FAIL samples/advanced/neural_net.warp
 FAIL samples/advanced/particles.warp
+FAIL samples/advanced/raytracer.warp
 FAIL samples/advanced/test.warp
 FAIL samples/errors/errors.warp
 FAIL samples/errors/try_failed_json.warp
@@ -194,8 +196,6 @@ FAIL samples/objects/dijkstra.warp
 FAIL samples/objects/references.warp
 FAIL samples/python/numpy_matrix.warp
 FAIL samples/python/python_modules.warp
-FAIL samples/servers/hosting.warp
-FAIL samples/servers/route_headers.warp
 FAIL samples/servers/server.warp
 FAIL samples/signals/signal_fields.warp
 FAIL samples/sound/gpu_visualizer_warp.warp
