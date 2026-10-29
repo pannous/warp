@@ -19,6 +19,9 @@ SERVER_PORTS=8300
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
 mkdir -p "$results/out"
+# the tree's own compilers, else a count names the tree's commit but measures whichever compiler is installed (128 to
+# 122 at 08:12 was the installed one's, the trees' own went 131 to 132)
+[ -f "$tree/lib/warp.wasm" ] && export WARP_LIB=${WARP_LIB:-$tree/lib}
 
 # one <sample>: its line of the results
 one() {
@@ -36,8 +39,20 @@ one() {
 export -f one
 export tree results WARP SECONDS_EACH WINDOW_LIBRARIES SERVING SERVER_PORTS
 
+commit=$(git -C "$tree" rev-parse --short=10 HEAD)
 day=$results/$(date +%F).txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$day"
-echo "samples: $(grep -c '^ok\|^SRV' "$day") of $(wc -l <"$day" | tr -d ' ') run, $(grep -c '^WIN' "$day") need a window, $(grep -c '^SRV' "$day") serve ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $day"
+echo "samples: $(grep -c '^ok\|^SRV' "$day") of $(wc -l <"$day" | tr -d ' ') run, $(grep -c '^WIN' "$day") need a window, $(grep -c '^SRV' "$day") serve ($WARP, $commit) -> $day"
+# the samples that changed since the previous run (last.txt, its commit on the first line), so a drop names its
+# samples; each run is kept as <commit>.txt too
+running() { grep -a '^ok\|^SRV' "$1" | awk '{print $2}' | sort; }
+last=$results/last.txt
+if [ -f "$last" ]; then
+	before=$(head -1 "$last") previous=$(tail -n +2 "$last")
+	comm -23 <(running <(echo "$previous")) <(running "$day") | while read -r sample; do echo "  stopped since $before: $(grep -aF " $sample" "$day")"; done
+	comm -13 <(running <(echo "$previous")) <(running "$day") | while read -r sample; do echo "  runs since $before: $sample"; done
+fi
+{ echo "$commit"; cat "$day"; } >"$last"
+cp "$day" "$results/$commit.txt"
 # the failures by first error, its position and quotes left out so one cause groups
 grep -a '^FAIL' "$day" | sed 's/^FAIL [^:]*: //; s/"[^"]*"/"…"/g; s/ at samples\/[^ ]*//; s/ (no owner)//' | sort | uniq -c | sort -rn
