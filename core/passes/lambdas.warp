@@ -1,4 +1,4 @@
-# Lambdas and functions as values (card pure-lambdas; Rust twins: src/lowering/definitions/lambdas.rs, closures.rs):
+# Lambdas and functions as values (card pure-lambdas; Rust twins: rust-harness:src/lowering/definitions/lambdas.rs, closures.rs):
 # - an iteration word over a list and a function, `map(xs, x => x + 1)`, `xs.filter(even)`, `xs.map(f)` of a variable or
 #   parameter f, is a loop, the lambda's body inlined with its parameters renamed, a function name or value
 #   called on each item:

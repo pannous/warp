@@ -9,3 +9,21 @@ rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $b 
 rewrite sqrt $x => each_any($x, $e -> sqrt $e) where $x is vector
 rewrite cbrt $x => each_any($x, $e -> cbrt $e) where $x is vector
 rewrite abs $x => each_any($x, $e -> abs $e) where $x is vector
+# `length each xs`, `length all xs`: the function applied to every element, the explicit broadcast for a word that
+# takes the list itself (length, count, sum), where the one above leaves it (decision each-all-broadcast); `all xs > 0`
+# stays the question whether every element is
+rewrite $f each $xs => $xs.map($e -> $f($e)) where $f is function
+rewrite $f all $xs => $xs.map($e -> $f($e)) where $f is function
+# `all xs > 0` (parsed `all (xs > 0)`): whether every element compares so, `any xs > 0` whether one does
+rewrite (all $xs == $y) => all($xs, $e -> $e == $y)
+rewrite (all $xs != $y) => all($xs, $e -> $e != $y)
+rewrite (all $xs < $y) => all($xs, $e -> $e < $y)
+rewrite (all $xs > $y) => all($xs, $e -> $e > $y)
+rewrite (all $xs <= $y) => all($xs, $e -> $e <= $y)
+rewrite (all $xs >= $y) => all($xs, $e -> $e >= $y)
+rewrite (any $xs == $y) => any($xs, $e -> $e == $y)
+rewrite (any $xs != $y) => any($xs, $e -> $e != $y)
+rewrite (any $xs < $y) => any($xs, $e -> $e < $y)
+rewrite (any $xs > $y) => any($xs, $e -> $e > $y)
+rewrite (any $xs <= $y) => any($xs, $e -> $e <= $y)
+rewrite (any $xs >= $y) => any($xs, $e -> $e >= $y)

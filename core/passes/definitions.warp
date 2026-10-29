@@ -224,7 +224,7 @@ definitions(program: Node): Node := {
 	data_blocks(bottom_up(conversions(int_types(methods_lifted(statics_hoisted(program)))), definition))
 }
 
-# A program's conversions (decision general-conversions; Rust twin: src/lowering/types/conversions.rs): `Person as
+# A program's conversions (decision general-conversions; Rust twin: rust-harness:src/lowering/types/conversions.rs): `Person as
 # text := it.name` says how a Person turns into text, and every `p as text` of the program then uses it. Each target
 # gets one function trying the program's conversions to it in the order written, the built-in one last:
 #   as·text(it) := if it is Person then it.name else it as text

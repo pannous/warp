@@ -1,4 +1,4 @@
-## integers beyond 64 bits, as a power gives them (Rust's twin src/wasm_emitter/numbers/big_int): an Int node of a sign
+## integers beyond 64 bits, as a power gives them (Rust's twin rust-harness:src/wasm_emitter/numbers/big_int): an Int node of a sign
 ## and a magnitude of base 2^32 limbs, little-endian, no leading zero one (intrinsics big_int_of, limb, set_limb).
 ## Extended (decision runtime-split): exact_pow and exact.warp's words reach these, the core through the bridge's hooks
 use "../intrinsics.warp"
@@ -129,7 +129,7 @@ big_int_text(n: Node): text := {
 	out
 }
 ## big ints in sums, differences, products, ordering and floats (card pure-big-int-ops; Rust's twin
-## src/wasm_emitter/numbers/big_int): exact.warp hands an Int that is neither plain nor a ratio here, through the late
+## rust-harness:src/wasm_emitter/numbers/big_int): exact.warp hands an Int that is neither plain nor a ratio here, through the late
 ## intrinsics big_sum, big_difference, big_product, big_order and big_float, the other operand a plain int or a big int.
 ## A result that fits 64 bits is a plain int again, as Rust's
 # a plain int or a big int as a big int: its sign and magnitude

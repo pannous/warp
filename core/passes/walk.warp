@@ -61,7 +61,7 @@ is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 plain(view: View): View := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
-# (mutation.rs reads the mark of `x!`); Rust twin: src/compiler/node_views.rs handled_plain_view
+# (mutation.rs reads the mark of `x!`); Rust twin: rust-harness:src/compiler/node_views.rs handled_plain_view
 bridged(view: View): View := without_layers(view, yes)
 
 # the view without literal layers, without attribute layers unless `attributes`, an empty group but `{}` and `[]` as

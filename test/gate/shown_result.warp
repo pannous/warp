@@ -1,3 +1,4 @@
-# the value a program ends with prints as print shows it, by its class's text() too (export show, card class-text-coercion)
-class Distance { meters: float; text() := "${meters / 1000}km" }
+# the value a program ends with shows as its class's show() gives it (export show, card class-text-coercion; decision
+# show-hook: text() is what print writes)
+class Distance { meters: float; show() := "${meters / 1000}km" }
 Distance(3500)

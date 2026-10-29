@@ -15,16 +15,12 @@ MAIN_WARP=/Users/me/dev/bin/warp  # the native warp (core/native/warp.warp), in 
 # the native warp's folder by a name that outlives installs: what executables it builds find libwarp_wasmtime by
 # (their rpath, card native-rpath-builds-folder)
 MAIN_LIB=/Users/me/dev/bin/lib
-RUST_WARP=/Users/me/dev/bin/warp-rust  # the Rust harness, kept beside it for a round (decision rust-gone-in-1-5)
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
 TREE=/Volumes/Worktrees/integrate2
 SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
-HARNESS_PATHS=(src crates Cargo.toml Cargo.lock build.rs)
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
-BUILDS=/Users/me/dev/bin/warp-builds  # one folder: the installed harness and its compilers, no other builds or links
-# a target dir of its own: the shared one (~/.cargo/config.toml) is overwritten by other sessions' branch builds
-CARGO_TARGET=/Volumes/Build/target-integrate
+BUILDS=/Users/me/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
 
 if_moved= slow=
 arguments=("$@")
@@ -109,76 +105,34 @@ copy_compilers() {
 	done
 }
 
-# the tree's compilers beside the shared binary
+# the tree's compilers into the installed native warp's folder (the slow lane's promoted warp-self.wasm)
 install_compilers() {
 	[ -n "$slow" ] && [ "$(cat "$installed_state/watched")" != "$tip" ] && return  # a newer tip is installed meanwhile
 	local folder lane got
-	folder=$(dirname "$(readlink -f "$RUST_WARP")")
+	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
 	copy_compilers "$TREE/lib" "$folder"
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
-		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$RUST_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
+		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
 		[[ $got == *$EXPECTED* ]] || red "installed $lane compiler: hello got ${got:0:120}"
 	done
-	say "compilers of ${tip:0:10} installed beside $RUST_WARP"
+	say "compilers of ${tip:0:10} installed beside $MAIN_WARP"
 }
 
-# whether the installed binary was built from the harness of $tip ("release build <commit>" in `warp version`)
-harness_current() {
-	local built folder
-	built=$("$RUST_WARP" version 2>&1 | sed -n 's/^release build \([0-9a-f]*\).*/\1/p')
-	folder=$(dirname "$(readlink -f "$RUST_WARP")")
-	# an install by an older script lacks what the current one brings
-	[ -x "$folder/warp-runtime" ] && [ -d "$folder/modules" ] && [ -n "$built" ] && git -C "$TREE" diff --quiet "$built" "$tip" -- "${HARNESS_PATHS[@]}" 2>/dev/null
-}
-
-# built_from_tip <folder>: cargo build of $TREE copied there, true when the binary names $tip, on main or detached
-built_from_tip() {
-	(cd "$TREE" && CARGO_TARGET_DIR=$CARGO_TARGET cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
-	cp "$CARGO_TARGET/release/warp" "$1/warp" || return 1
-	# the stub `warp build` appends a program's machine code to, built alone: with warp's features unified it is 6.9 MB,
-	# not 1.3 MB (card executable-prints-value)
-	(cd "$TREE" && CARGO_TARGET_DIR=$CARGO_TARGET cargo build --release -q -p warp-runtime --bin warp-runtime) &&
-		cp "$CARGO_TARGET/release/warp-runtime" "$1/warp-runtime" || red "harness: the runtime stub warp-runtime did not build"
-	local said
-	said=$("$1/warp" version 2>&1)  # read whole: grep -q quitting early would fail the pipe (pipefail)
-	grep -Eq "^release build ${tip:0:9}( on main)? " <<<"$said"
-}
-
-# the harness of $tip built and installed: its folder in $BUILDS with warp.wasm built by it, hello, the compilers
-# copied in, then ~/dev/bin/warp-rust links there by one rename (a run never meets the new binary without its compilers:
-# card atomic-install) and every older folder goes (user: no stale builds, no warp-<hash> links)
-install_harness() {
-	local folder=$BUILDS/${tip:0:9} got built
-	say "harness of ${tip:0:10} changed: cargo build --release"
-	mkdir -p "$folder" || return 1
-	built_from_tip "$folder" || built_from_tip "$folder" ||
-		{ red "harness: the build says $("$folder/warp" version 2>&1 | sed -n 2p), not ${tip:0:9} of main" --urgent; rm -rf "$folder"; return 1; }
-	# the seed lies beside ~/dev/bin/warp, which the new binary, run from its own folder, does not see
-	# through rebuild.sh, which stamps the build with its inputs: the rebuild.sh of watch then keeps it, not building twice
-	built=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_BINARY=$folder/warp WARP_SEED=$SEED "$scripts/rebuild.sh" pure "$TREE" 2>&1 | tail -1)
-	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$folder/warp" pure samples/hello/hello.warp 2>&1 | tail -1)
-	[[ $got == *$EXPECTED* ]] || { red "harness: hello with the new binary got ${got:0:120} (its rebuild said: ${built:0:120})" --urgent; rm -rf "$folder"; return 1; }
-	copy_compilers "$TREE/lib" "$folder" || { red "harness: the compilers did not copy into $folder" --urgent; rm -rf "$folder"; return 1; }
-	linked "$folder/warp" "$RUST_WARP" || return 1
-	pruned
-	say "harness of ${tip:0:10} installed: $RUST_WARP -> $folder/warp"
-}
-
-# linked <file> <link>: the link (~/dev/bin/warp, warp-rust, lib) made to point to the file or folder by one rename,
+# linked <file> <link>: the link (~/dev/bin/warp, lib) made to point to the file or folder by one rename,
 # relative to the link's folder (mv -h: a link to a folder is replaced, not moved into)
 linked() {
 	ln -sfn "${1#"$(dirname "$2")/"}" "$2.new" && mv -fh "$2.new" "$2"
 }
 
-# the build folders neither ~/dev/bin/warp nor warp-rust links into removed, only once the links are in place: a link
+# the build folders ~/dev/bin/warp doesn't link into removed, only once the links are in place: a link
 # never dangles (2026-10-28: warp pointed into a folder the Rust install had pruned). The newest KEPT_BUILDS folders stay
 # too, and any folder a process still has open: a run started on the previous build reads its warp.wasm and modules
 # until it ends (a full suite wrote an empty results.txt, "No module at …/native-fb9bda25b/warp.wasm", 2026-10-29)
 KEPT_BUILDS=3
 pruned() {
 	local kept=() link folder
-	for link in "$MAIN_WARP" "$RUST_WARP"; do kept+=("$(basename "$(dirname "$(readlink "$link")")")"); done
+	for link in "$MAIN_WARP"; do kept+=("$(basename "$(dirname "$(readlink "$link")")")"); done
 	for folder in $(ls -dt "$BUILDS"/*/ | tail -n +$((KEPT_BUILDS + 1))); do
 		folder=${folder%/}
 		[[ " ${kept[*]} " == *" $(basename "$folder") "* ]] && continue
@@ -188,15 +142,10 @@ pruned() {
 }
 
 # the native warp of $tip in a folder of its own, as a release lays it out (decision rust-gone-in-1-5): the tree's lib/
-# with its compilers and libwarp_wasmtime, and the native warp built from it (core/native/warp.warp by the Rust warp's
-# `warp build native`); hello by it, then ~/dev/bin/warp links there by one rename and the older native folders go.
+# with its compilers and libwarp_wasmtime, and the native warp built from it (core/native/warp.warp by the installed
+# native warp's `warp build native`, the warp-from-warp chain); hello by it, then ~/dev/bin/warp links there by one rename and the older native folders go.
 # The seed stays beside ~/dev/bin/warp, where the native `warp rebuild` looks (the link's folder)
 NATIVE_PREFIX=native-
-# the warp that builds the next native warp: the installed one when it is native (the warp-from-warp chain), else, on
-# the first install, the Rust one
-native_builder() {
-	[[ $(readlink "$MAIN_WARP") == */$NATIVE_PREFIX*/warp ]] && echo "$MAIN_WARP" || echo "$RUST_WARP"
-}
 # native_built <folder> <builder>: the native warp built from the folder's core/native/warp.warp into <folder>/warp
 native_built() {
 	(cd "$1/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$1 "$2" build native warp.warp >/dev/null 2>&1) &&
@@ -206,8 +155,7 @@ install_native() {
 	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got
 	rm -rf "$folder.new" && mkdir -p "$folder.new" || return 1
 	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { red "native warp: lib/ did not copy" --urgent; return 1; }
-	native_built "$folder.new" "$(native_builder)" ||
-		{ say "native warp: the build by $(native_builder) failed: built by $RUST_WARP instead"; native_built "$folder.new" "$RUST_WARP"; } ||
+	native_built "$folder.new" "$MAIN_WARP" ||
 		{ red "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
@@ -224,14 +172,13 @@ watch() {
 	git -C "$TREE" checkout -q --detach "$tip" || return 1
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
 	echo "$tip" >"$state/handled"
-	harness_current || install_harness || return 1
-	# warp's wasmtime C API beside warp and in the user's lib/, where native builds link it from (card wasmtime-bundled)
-	"$scripts/wasmtime-c-api.sh" "$(dirname "$(readlink -f "$RUST_WARP")")" "$MAIN_CHECKOUT/lib" ||
+	# warp's wasmtime C API in the user's lib/ too, where native builds link it from (card wasmtime-bundled); the tree's
+	# lib/ gets it from rebuild.sh
+	"$scripts/wasmtime-c-api.sh" "$MAIN_CHECKOUT/lib" ||
 		red "wasmtime C API: scripts/wasmtime-c-api.sh failed" --urgent
 	"$scripts/rebuild.sh" both "$TREE" || { red "rebuild pure failed" --urgent; return 1; }
-	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$RUST_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
+	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
-	install_compilers
 	install_native
 	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
 	echo "$tip" >"$state/watched"

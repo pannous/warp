@@ -1,5 +1,5 @@
 # What the builtins take and give, as their typed lines of lib/prelude.warp declare it, read once when the file loads:
-# the analyzer's signature table (decision compiler-typed; Rust twin: src/ffi/mod.rs foreign_line, library_words.rs
+# the analyzer's signature table (decision compiler-typed; Rust twin: rust-harness:src/ffi/mod.rs foreign_line, library_words.rs
 # emitted_call_kind, call_result_kind and argument_result): `upper(t: text): text from warp` a runtime function,
 # `count(xs: list): int from emitter` a word the emitter expands. A word may have several lines, one per type of its
 # first value (`reverse(xs: list)`, `reverse(t: text)`).

@@ -1,6 +1,6 @@
 # C functions (emitter.warp's part, card pure-c-imports): a host word with a fourth item is a C function
 # (c_imports.warp); its import is `library.name` as any host word's, and the module describes it for the host in the
-# custom section warp.c_functions, one crates/warp-runtime/src/c_signatures.rs line each
+# custom section warp.c_functions, one rust-harness:crates/warp-runtime/src/c_signatures.rs line each
 c_functions_section = "warp.c_functions"
 # the warp.c_functions lines of the C functions the module imports
 def c_function_lines(): list {

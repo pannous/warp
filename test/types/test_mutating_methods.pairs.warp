@@ -5,5 +5,5 @@
 
 # pop_on_a_list_field
 's = {xs: [1 2 3]}; s.xs.pop()'	3
-'s = {xs: [1 2 3]}; s.xs.pop(); string(s.xs)'	'[1 2]'
+'s = {xs: [1 2 3]}; s.xs.pop(); string(s.xs)'	'[1, 2]'
 's = {listeners: []}; s.listeners.push(3); string(s.listeners)'	'[3]'

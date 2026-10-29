@@ -1,4 +1,4 @@
-# Properties of objects (decision property-accessors; Rust twin: src/lowering/definitions/property_accessors.rs):
+# Properties of objects (decision property-accessors; Rust twin: rust-harness:src/lowering/definitions/property_accessors.rs):
 # `canvas.width` read like a field and, where it has a setter, written like one. A property is defined in warp: its
 # getter `canvas.width := canvas_width`, its setter the one-parameter overload `canvas.width(w) := canvas(w,
 # canvas_height)` or a getter-shaped body reading `it`. A use is the definition's body in place: `canvas.width = 300`,

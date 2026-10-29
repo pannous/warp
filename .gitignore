@@ -67,3 +67,14 @@ samples/**/*.stored.json
 
 # the native warp `warp build native core/native/warp.warp` writes beside its source
 /core/native/warp
+
+notes/OLD/
+*.bak
+**/*.bak
+test/web/task.txt
+
+samples/tune.mid
+
+samples/sound/tune.mid
+
+kick.wav

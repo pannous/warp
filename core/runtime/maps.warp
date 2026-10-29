@@ -173,7 +173,7 @@ collection_contains(c: Node, x: Node): bool := {
 	no
 }
 # `c.index_of(x)`: a list's 1-based position of its first item equal to x, a text's character position, 1 for
-# a map's entry named x; 0 when absent (Rust's collection_position, src/lowering/words/library_words.rs)
+# a map's entry named x; 0 when absent (Rust's collection_position, rust-harness:src/lowering/words/library_words.rs)
 collection_position(c: Node, x: Node): int := {
 	if is_null(c) { return 0 }
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return if not is_null(x) and map_index(c, name_text(x)) > 0 then 1 else 0 }

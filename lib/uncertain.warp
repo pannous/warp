@@ -1,5 +1,5 @@
 // The standard library module uncertain (card uncertain-warp, notes/uncertain_warp.md): `x ± r` as warp classes with
-// operator methods, the twin of src/wasm_emitter/numbers/uncertain.rs (decision P217). `use uncertain`, then
+// operator methods, the twin of rust-harness:src/wasm_emitter/numbers/uncertain.rs (decision P217). `use uncertain`, then
 // `plus_minus(5, 1) + plus_minus(2, 1)` is 7.0 ± 2.0 and `gaussian(5, 1) + gaussian(2, 1)` is 7.0 ± 1.4σ.
 // Not yet the run-time form of a ± literal: the parser still builds Kind::Uncertain nodes (card plus-minus-class).
 

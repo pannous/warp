@@ -1,4 +1,4 @@
-# Definitions of one name with different parameter counts (card pure-lane-merges; Rust: src/lowering/definitions/
+# Definitions of one name with different parameter counts (card pure-lane-merges; Rust: rust-harness:src/lowering/definitions/
 # overloads.rs lower_arity_overloads): `twice(n) := …` and `twice(a, b) := …` are the functions twice·1 and twice·2,
 # and every call names the one its argument count fits, `x.twice(y)` counting its receiver; passed as a value,
 # `bottom_up(n, twice)`, it is the one the called function calls that parameter with. Definitions of one count stay
