@@ -194,6 +194,8 @@ def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [Ty
 # the kinds `+` joins as texts
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo yes?? 
 equalities = {"==": yes, "!=": yes}
+# the order comparisons of two times, as runtime/extended/times.warp time_holds reads them
+time_relations = {"<": 0, "<=": 1, ">": 2, ">=": 3}
 identities = {"===": yes, "!==": yes}
 compiled_compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}

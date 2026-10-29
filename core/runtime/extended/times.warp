@@ -23,14 +23,23 @@ duration_of(months: int, days: int, nanos: int): Node := {
 	unsigned_days = if days < 0 then days + TimeInfoUnit.DayRange else days
 	time_of(TimeFormCode.Duration + unsigned_days * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos)
 }
-# -1, 0 or 1 as a comes before, with or after b: two durations by duration_order, two times of one form by their
-# positions; times of different forms have no order
-time_order(a: Node, b: Node): int := {
-	if is_duration(a) and is_duration(b) { return duration_order(a, b) }
-	if time_form(a) != time_form(b) { return times_of_different_kinds_have_no_order() }
-	sign_of(time_position(a) - time_position(b))
+# `a < b` (relation 0), `a <= b` (1), `a > b` (2), `a >= b` (3) of two times of one form: two times by their positions;
+# two durations yes when it holds on every date, no when on none, else a failure (`1 month < 28 days` is no,
+# `1 month < 30 days` depends on the month); times of different forms have no order
+time_holds(a: Node, b: Node, relation: int): bool := {
+	if time_form(a) != time_form(b) { return times_of_different_kinds_have_no_order() != 0 }
+	# `a > b` is `b < a`
+	smaller = if relation < 2 then a else b
+	larger = if relation < 2 then b else a
+	strict = relation % 2 == 0
+	durations = is_duration(a)
+	fewest = if durations then duration_difference_bound(smaller, larger, no) else time_position(smaller) - time_position(larger)
+	most = if durations then duration_difference_bound(smaller, larger, yes) else fewest
+	if most < 0 or (most == 0 and not strict) { return yes }
+	if fewest > 0 or (fewest == 0 and strict) { return no }
+	durations_compare_differently_on_different_dates() != 0
 }
-# the runtime error of time_order, named to read off the trace as duration_parts_order's
+# the runtime error of time_holds, named to read off the trace
 times_of_different_kinds_have_no_order() := {
 	fail()
 	0
