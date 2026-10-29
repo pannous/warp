@@ -472,7 +472,7 @@ implicit_modules(source: text, index_file: text): list := {
 		if #definers == 0 { raise word + " is defined by " + index[word].join(" and ") + ", none taking these arguments: say which, " + index[word].map(module => "`use " + module + "`").join(" or ") }
 		if definers#1 not in modules and definers#1 not in used {
 			modules += definers
-			diagnose(call_of("implicit_use", [symbol(word), symbol(definers#1)]), program)
+			diagnose(call_of("implicit_use", [symbol(word), symbol(definers#1)]), nodes_in(program).find(n => n == symbol(word)) ?? program)
 		}
 	}
 	modules
