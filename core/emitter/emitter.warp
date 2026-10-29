@@ -754,11 +754,11 @@ def whole(value: TypedCode): TypedCode { admitted(value, ValueKind.Int) }
 # keeps it for every value held as that kind (`x = "a"; x = "b"`: a text, though a one-letter literal is a character)
 widens(body: Body, name: text, held: ValueKind, kind: ValueKind): bool := {
 	if analyzed_local_kind(body.function, name) != ø and held_as(kind, analyzed_local_kind(body.function, name)) { return no }
-	# a yes/no stays one (a number given to it counts as yes when not 0), an int given a yes/no takes 1 or 0
-	if body.names[name] < #body.function.signature.parameters or held == pending or kind == pending or held == ValueKind.Bool or kind == ValueKind.Bool { return no }
-	joint = joint_kind(held, kind)
-	joint != held and (is_held_kind(joint))
+	body.names[name] >= #body.function.signature.parameters and widening(held, kind)
 }
+# whether a variable holding `held` given a `kind` takes their joint kind; a yes/no stays one (a number given to it
+# counts as yes when not 0), an int given a yes/no takes 1 or 0
+widening(held: ValueKind, kind: ValueKind): bool := held != pending and kind != pending and held != ValueKind.Bool and kind != ValueKind.Bool and joint_kind(held, kind) != held and is_held_kind(joint_kind(held, kind))
 
 # `global name = value` declares the module's variable name, which every function reads and writes; a bare
 # `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, 0 until assigned,
@@ -779,10 +779,12 @@ def declare_global(name: text, value: TypedCode): TypedCode {
 	declared_global(name, value.kind)
 	global_assignment(name, value)
 }
-# the module's global name: [its index, its kind], the kind of its first declaration
+# the module's global name: [its index, its kind], the kind of its first declaration, or the joint kind a later value
+# widened it to (`global t = 0.0` an exact whole number, then `t = clock() / 1000.0` a float)
+global_slot(name: text): text := "global·" + name
 def declared_global(name: text, kind: ValueKind): list {
 	if name not in module.globals {
-		module.globals[name] = [#module.global_order, kind]
+		module.globals[name] = [#module.global_order, module.later_kinds.get(global_slot(name)) ?? kind]
 		module.global_order += [name]
 	}
 	module.globals[name]
@@ -790,6 +792,7 @@ def declared_global(name: text, kind: ValueKind): list {
 def global_assignment(name: text, value: TypedCode): TypedCode {
 	entry = module.globals[name]
 	index = relocatable(relocated.globals, entry#1)
+	if widening(entry#2, value.kind) and widens_later(global_slot(name), joint_kind(entry#2, value.kind)) { return TypedCode(entry#2, [op.unreachable]) }
 	TypedCode(entry#2, converted(value, entry#2) + [op.global_set] + index + [op.global_get] + index)
 }
 # `symbol("word")`: one symbol per word and module, made at its first use and kept in the global `symbol·word`, which
