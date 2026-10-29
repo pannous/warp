@@ -7,7 +7,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
-- count-x-in-y held (supervisor, from no-count-membership): the phrase `count x in y` is held like `count(x in y)`; keep the phrase?
 - sample-spellings (supervisor, warp-native-harness; user 2026-10-29: ask later): samples rewritten to the spec instead of new syntax — `height * width int` → `int[height * width]` (circle, filled_circle, mandelbrot_canvas), `(y-center)^2` → `(y - center)^2` (circle; hyphenated names stay names), `moved all particles` → `particles.map(moved)` (particles), and a stray tab before viewer's `def triangles` removed (an indented line continues the one above); keep the originals as language wishes?
 - implicit-standard-words, index scope (worker samples-implicit-use): the word index (lib/modules/words.tsv) covers every standard module's definitions but the prelude, the dialects R, PHP and english too, read from their sources at rebuild, not only from modules that prebuild; a program's own class names never pull a module in (`class C` is not sound's note C).
 - program-match lowering (supervisor): "merge all existing branches" taken as the OK for its run-time matcher in lib/prelude.warp + core/node_matches.warp (landed 9f9ef1ce43).

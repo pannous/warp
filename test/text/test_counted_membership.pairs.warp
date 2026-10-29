@@ -1,0 +1,4 @@
+# the bare phrase counts a yes/no too, refused; the counts it means stay (user 2026-10-29; test/lists/test_count_question.pairs.warp)
+'xs=["a" "b" "a"]; count "a" in xs'	error
+'count([1, 2, 2], 2)'	2
+'count bytes in "äb"'	3
