@@ -1,0 +1,4 @@
+# a range broadcasts like a list (card range-broadcast-trap): a word taking a number applies to each of its numbers
+'sqrt (1 to 4)'	[1, 1.4142135623730951, 1.7320508075688772, 2]
+'abs (-2 to 1)'	[2, 1, 0, 1]
+'xs = 1 to 3; floor(xs)'	[1, 2, 3]

@@ -1045,8 +1045,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == opaque_symbol and kind_of(right) == "type" { return TypedCode(no_kind, []) }
-	# an integer literal beyond 64 bits (parser.warp whole_number): the big int of its digits
-	if left == opaque_symbol and kind_of(right) == "number" { return runtime_call("big_int_of_digits", [text_value(right#2)]) }
+	# a decimal past 18 places (parser.warp decimal_value), an integer literal beyond 64 bits (whole_number): exact
+	if left == opaque_symbol and kind_of(right) == "number" { return if right#2.contains(".") then big_decimal(right#2) else runtime_call("big_int_of_digits", [text_value(right#2)]) }
 	# a time literal (parser.warp's data view, `2024-02-29`, `1 day`): its time node (times.warp)
 	if left == opaque_symbol and kind_of(right) == "data" and is_time_literal(right#2) { return time_literal(right#2) }
 	if left == opaque_symbol { return refuse(opaque_form(right)) }

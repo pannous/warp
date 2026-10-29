@@ -20,6 +20,8 @@ negative_modulo($left, $right, $euclidean, $truncated)	"`{left} % {right}` is {e
 negative_modulo($left, $right)	"`{left} % {right}`: % is Euclidean as in mathematics (never negative), unlike C/Java/JS; use `rem` for the truncated remainder"	""	"negative-modulo@{left} % {right}"
 float_equality($left, $right)	"`{left} == {right}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"	"use ≈ or exact numbers"
 float_inequality($left, $right)	"`{left} != {right}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"	"use ≈ or exact numbers"
+# lints.warp, decision exact-decimal-big: a decimal past 18 places is a ratio of big ints, slow inside a loop
+big_decimal_in_loop($digits)	"{digits} is exact, a ratio of a big denominator past 10^18: each operation on it inside this loop is a long division, some hundred times a float's"	"{digits} as float, or fewer places"	"big-decimal@{digits}"
 arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts the whole `{whole}`, not only its last operand"	"({whole}) as {target} or {tight}"	"arithmetic-conversion@{whole} as {target}"
 # definitions.warp (Rust twin: lowering/types/type_name_matching.rs): a function declared `: T` that can answer ø (decision optional-result)
 optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`"	"{type} → {type}?"	"optional-result@{function}"
