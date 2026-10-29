@@ -79,6 +79,9 @@ if [ -n "$check" ]; then
   exit 0
 fi
 cp "$chosen" "$seed" && echo "refresh-seed: replaced $seed"
+# the old seed's runtime.wasm and machine code go with it: the native warp writes warp-seed.runtime.wasm only when it is
+# missing, so a stale one kept the old runtime words (the new seed's build failed: no field built_spelled_list, 2026-10-29)
+rm -f "${seed%.wasm}.runtime.wasm" "${seed%.wasm}.runtime.wasm.cwasm" "$seed.cwasm" "$seed.driver.cwasm" "$seed.driver.cwasm.key"
 release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
 gh release create "$release" "$seed" --repo pannous/warp --prerelease --title "$release" \
   --notes "The seed compiler: core/compiler.warp of $(git -C "$tree" rev-parse --short HEAD) compiled by a stage that compiles itself once more." &&

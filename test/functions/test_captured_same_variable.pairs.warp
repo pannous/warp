@@ -1,0 +1,10 @@
+# a captured variable is the same variable, whoever assigns it later (decision captured-same-variable, card lambda-captures)
+'x=1; f=()=>x; x=2; f()'	2
+'x=1; f=()=>x; x=2; x=3; f()'	3
+'n=1; show=()=>n; n+=4; show()'	5
+'def g() { k=1; f=()=>k*10; k=2; f() }; g()'	20
+
+# read-only captures stay plain, a lambda's change is seen outside
+'x=1; f=()=>x; f()'	1
+'n=0; inc=()=>{n+=1}; inc(); inc(); n'	2
+'x=1; f=()=>x+1; y=f(); x=5; y'	2
