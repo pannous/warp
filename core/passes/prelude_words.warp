@@ -191,8 +191,11 @@ names_within(n: Node, with_keys: bool): list := {
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + root_words(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
 }
+# the words the emitter calls itself, kept though no statement does: a time's fields (emitter/times.warp time_field) of
+# a program writing a time literal, the parser's data view; the exact root of a program taking one (root_words)
+emitted_words(program: Node): list := (if nodes_in(program).any(is_time_view) then [time_field_word] else []) + root_words(program)
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}
@@ -205,7 +208,7 @@ called_only(program: Node): Node := {
 	statements = statements_in(program)
 	is_brought = statement => brought_names.has(declared_name(statement) ?? "")
 	called = {}
-	pending = statements.filter(statement => not is_brought(statement)).flat_map(words_within)
+	pending = statements.filter(statement => not is_brought(statement)).flat_map(words_within) + emitted_words(program)
 	while #pending > 0 {
 		word = pending#1
 		pending = pending[1 ..]

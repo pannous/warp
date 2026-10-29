@@ -9,6 +9,10 @@ use "../analysis/words.warp"
 opaque_word = HiddenWord.ViewOpaque as text
 # the word as a symbol, made once: the walks compare the left side of every key they pass with it
 opaque_symbol = symbol(opaque_word)
+# a time literal as the parser views it, ["data", "2024-02-29"]; the prelude word its fields are read with
+# (emitter/times.warp time_field)
+is_time_view(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "data"
+time_field_word = "time_field_of"
 
 # the arm of a match any value takes, `_: …`
 other_arm = "_"

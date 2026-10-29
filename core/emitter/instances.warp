@@ -318,6 +318,7 @@ def error_function(name: text): int {
 def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): TypedCode {
 	if value.kind == ValueKind.Node or value.kind == pending { return field_read(body, TypedCode(ValueKind.Node, value.code), name, class_name) }
 	if value.kind == ValueKind.List and is_swizzle(name) { return field_read(body, TypedCode(ValueKind.Node, boxed(value)), name, class_name) }
+	if value.kind == ValueKind.Time and time_fields.has(name) and module.functions.has(time_field_word) { return time_field(value, name) }
 	refuse("the field " + name + " of a " + kind_spelling(value.kind))
 }
 # `m.x = v`: the map with its entry x set to v
