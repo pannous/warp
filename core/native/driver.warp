@@ -88,6 +88,9 @@ wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle):
 wasmtime_linker_define_func(linker: handle, module: text, module_size: i64, name: text, size: i64, type: handle, callback: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
 wasi_config_new(): handle from "warp_wasmtime"
 wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "warp_wasmtime"
+# what a crash says the process was running (lib/native/wasi.c): a module's arguments while it runs
+crash_context_running(arguments: pointer, count: i32): handle from "c"
+crash_context_restored(outer: handle): nothing from "c"
 wasi_config_inherit_stdin(config: handle) from "warp_wasmtime"
 wasi_config_inherit_env(config: handle) from "warp_wasmtime"
 wasi_config_inherit_stdout(config: handle) from "warp_wasmtime"
@@ -499,6 +502,7 @@ word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing 
 
 # the module run with the arguments; its machine code kept in the file `machine_code` when one is named
 run(module: text, given: Arguments, machine_code: text): nothing := {
+	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
 	engine = wasm_engine_new_with_config(warp_config(fuel > 0))
 	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
@@ -536,6 +540,7 @@ run(module: text, given: Arguments, machine_code: text): nothing := {
 	out_of_fuel(trap, fuel)
 	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
 	if results_count > 0 { print_result(results) }
+	crash_context_restored(outer)
 }
 # what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
 # engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
