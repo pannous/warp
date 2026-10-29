@@ -475,6 +475,8 @@ text_words = ["text", "string"]
 # the words casting to a number, `int(x)`, `float(x)`
 cast_words = ["int", "float"]
 float_converting_word = HiddenWord.FloatConverted as text
+# lib/reals.warp's √ of a value not known to be a float
+exact_root_word = "exact_root"
 text_reader(kind: ValueKind): text? := match kind { ValueKind.Int: "text_as_int"; ValueKind.Float: "text_as_float"; _: ø }
 node_cast(kind: ValueKind): text? := match kind { ValueKind.Int: "truncated_int"; ValueKind.Float: "float_cast"; _: ø }
 # `π as float`, `float(x)`: the value of code `n` other than a number literal may be an instance of a class converting
@@ -482,6 +484,12 @@ node_cast(kind: ValueKind): text? := match kind { ValueKind.Int: "truncated_int"
 def instance_cast(n: Node, value: TypedCode, to: ValueKind): TypedCode {
 	if not (n is number) and value.kind == ValueKind.Node and to == ValueKind.Float and float_converting_word in module.functions { return TypedCode(to, converted(call_values(module.functions[float_converting_word], [value]), to)) }
 	cast(value, to)
+}
+# a value known only at run time, as a number word takes it: an instance of a class converting by its float() as that
+# float, `floor(√17)` of an exact root (decision exact-roots: a built-in word reaches the class's own version)
+def instance_number(n: Node, value: TypedCode): TypedCode {
+	if value.kind == ValueKind.Node and float_converting_word in module.functions { return instance_cast(n, value, ValueKind.Float) }
+	value
 }
 def cast(value: TypedCode, to: ValueKind): TypedCode {
 	if value.kind == ValueKind.Text { return runtime_call(text_reader(to), [value]) }
@@ -957,7 +965,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		if name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
 		return length_code(expression_code(body, n#2))
 	}
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression_code(body, n#2)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(instance_number(n#2, expression_code(body, n#2))) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in byte_count_words { return byte_size_code(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("type") { return type_value_of(body, expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ord") { return code_point(expression_code(body, n#2)) }
@@ -1151,8 +1159,13 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return TypedCode(target, converted(value, target))
 	}
 	if operator == Op.Not and left == ø { return TypedCode(ValueKind.Bool, condition(expression_code(body, right)) + [op.i32_eqz]) }
-	# `√x`: the float root, as Rust's emitter gives it
-	if operator == Op.Sqrt and left == ø { return TypedCode(ValueKind.Float, converted(expression_code(body, right), ValueKind.Float) + [wasm_instructions["f64.sqrt"]]) }
+	# `√x`: the float root of a float; of any other value lib/reals.warp's exact one, √9 is 3, √2 stays √2 (decision
+	# exact-roots)
+	if operator == Op.Sqrt and left == ø {
+		rooted = expression_code(body, right)
+		if rooted.kind != ValueKind.Float and exact_root_word in module.functions { return call_values(module.functions[exact_root_word], [TypedCode(ValueKind.Node, boxed(rooted))]) }
+		return TypedCode(ValueKind.Float, converted(rooted, ValueKind.Float) + [wasm_instructions["f64.sqrt"]])
+	}
 	if operator == Op.Cbrt and left == ø { return runtime_call("float_cbrt", [TypedCode(ValueKind.Float, converted(expression_code(body, right), ValueKind.Float))]) }
 	if left === ø or right === ø {
 		other = if left === ø then right else left
