@@ -536,17 +536,19 @@ module_rules_of(path: text, module: text): list := {
 	if baked != ø { return items_of(unpack(baked)).map(packed => unpacked_rule(packed, module)) }
 	written_rules(path, source, module)
 }
-written_rules(path: text, source: text, module: text): list := statements_in(source_parse(path, source)).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+written_rules(path: text, source: text, module: text): list := rules_parsed(source_parse(path, source), source, module)
+rules_parsed(parse: Node, source: text, module: text): list := statements_in(parse).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
 # every bundled module's rules, packed (rule_node), baked in beside its parse: uses.warp module_text writes them in where
 # library_rules() stands; reading them off each parse at every compile was a tenth of a small program's (card
 # fixed-startup-cost). A compiler built by one that bakes none reads them where it runs
 LIBRARY_RULES = library_rules()
 library_rules(within: text = ""): map := {}
-# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any
+# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any, read off its fresh parse, never the building
+# compiler's baked one (uses.warp baked_tables)
 packed_rules(files: map): map := {
 	packed = {}
 	for path in files.keys {
-		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(written_rules(run_library() + "/" + path, files[path], "").map(rule_node), Bracket.Square, Separator.Comma)) }
+		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(rules_parsed(plain_node(parsed(rules_ended(files[path]))), files[path], "").map(rule_node), Bracket.Square, Separator.Comma)) }
 	}
 	packed
 }
