@@ -3,6 +3,8 @@
 // passes the module's values over with these. Included behind lib/native/wasi.c.
 #include <dlfcn.h>
 #include <stdint.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8, PAGE_BYTES = 65536 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
 
@@ -23,6 +25,12 @@ static uint32_t module_address(struct w2c_wasi__snapshot__preview1* wasi, void* 
 // an address of the module's memory as the C pointer it is, for a program to hold as a handle (`native_pointer(address:
 // pointer): handle from "c"`): the glue made it the pointer already
 void* native_pointer(void* address) { return address; }
+// the terminal's rows, else its columns, on standard output; 0 outside a terminal (ioctl is variadic: called here, not
+// through native_call)
+int32_t terminal_size(int32_t rows) {
+	struct winsize size;
+	return ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 ? (rows ? size.ws_row : size.ws_col) : 0;
+}
 // a text of the module, the address of its (address, length) pair, as a NUL-terminated copy the caller frees
 static char* native_text(struct w2c_wasi__snapshot__preview1* wasi, uint32_t text) {
 	return strndup((char*)at(wasi, load32(wasi, text)), load32(wasi, text + 4));
