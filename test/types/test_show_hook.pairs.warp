@@ -1,0 +1,8 @@
+# a value shows as warp code that reads back: an instance by its class's show(), else its structure, spaced as `warp format` writes it; text() stays what print and str write (decisions shown-warp-notation, show-hook, shown-spaced; card shown-results-pasteable)
+'class P { n: int; show() := "P(" + n + ")" }; str([P{n: 3}])'	"[P(3)]"
+'class P { n: int }; str([P{n: 3}, P{n: 4}])'	"[P{n: 3}, P{n: 4}]"
+'class P { n: int; text() := "P" + n }; str(P{n: 3})'	"P3"
+'class P { n: int; text() := "P" + n }; str([P{n: 3}])'	"[P{n: 3}]"
+'use units; str([3.5km])'	"[3.5km]"
+'str({a: 1, b: "x"})'	"{a: 1, b: 'x'}"
+'str([1, "ab", 2.5])'	"[1, \"ab\", 2.5]"

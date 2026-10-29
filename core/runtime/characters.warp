@@ -35,7 +35,7 @@ cast_code_point(n: int): int := {
 	n
 }
 # a code point that continues the character before it: combining marks, variation selectors, skin tones, ZWJ …
-# (src/extensions/strings.rs GRAPHEME_EXTEND, the same table)
+# (rust-harness:src/extensions/strings.rs GRAPHEME_EXTEND, the same table)
 extends_character(c: int): bool := {
 	if c < 768 { return no }
 	if within(c, 768, 879) { return yes }
@@ -70,7 +70,7 @@ extends_character(c: int): bool := {
 pictographic(c: int): bool := within(c, 9728, 10175) or within(c, 126976, 129791)
 # a flag is a pair of these
 regional_indicator(c: int): bool := within(c, 127462, 127487)
-# the byte after the character (grapheme cluster) starting at byte `at` of t (src/extensions/strings.rs
+# the byte after the character (grapheme cluster) starting at byte `at` of t (rust-harness:src/extensions/strings.rs
 # grapheme_clusters): controls stand alone but CR LF, a flag pairs two regional indicators
 character_end(t: text, at: int): int := {
 	# an ASCII byte but CR before another ASCII byte (or the end) is a character of its own: no code point to decode

@@ -1,6 +1,6 @@
 // The standard library module extrema: min and max written in warp (card min-max-lib), of two or more values,
 // `max(3, 7, 5)`, or of one list of candidates, `max([3 7 5])` or `max(xs)`. `use extrema` takes them instead of the
-// builtin src/lowering/collections/min_max.rs expands (a defined min or max turns that lowering off); once measured
+// builtin rust-harness:src/lowering/collections/min_max.rs expands (a defined min or max turns that lowering off); once measured
 // as fast as the builtin (min and max are hot, notes/self_hosting.md), they move into the prelude and min_max.rs goes
 
 // which end of the order a word picks

@@ -1,5 +1,5 @@
 // Python through its C library libpython (card ffi-python-adapter, notes/python_adapter.md): `use python` declares
-// these functions of the Python C API for the program and brings the warp words below. warp-host loads libpython
+// these functions of the Python C API for the program and brings the warp words below. The native warp loads libpython
 // (Linux: the newest libpython3.X.so.1.0 of the library folders; elsewhere see the notes) and calls them; nothing of
 // Python is in the host. The types are lib/c.warp's: a PyObject * is a handle, a C pointer held as an id.
 //   math = python_import("math")
@@ -67,7 +67,7 @@ python_start() := {
 }
 
 // the extension modules of lib-dynload (_contextvars, _decimal, numpy's) find the C API among the process's global
-// symbols, but warp-host loads libpython with its symbols local: loaded again by its soname, they become global
+// symbols, but the native warp loads libpython with its symbols local: loaded again by its soname, they become global
 python_share_symbols(sys: int) := {
 	said = PyObject_GetAttrString(sys, "version")
 	numbers = PyUnicode_AsUTF8(said).split(" ")#1.split(".")

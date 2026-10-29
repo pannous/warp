@@ -8,7 +8,7 @@
 'x=3; x as string'	'3'
 'x="hi"; x as string'	'hi'
 'x=3 as string; x'	'3'
-'x=[1 2]; x as string'	'[1 2]'
+'x=[1 2]; x as string'	'[1, 2]'
 
 # a_parameter_as_list_takes_lists_and_texts
 'l(x) := x as list; 3'	3

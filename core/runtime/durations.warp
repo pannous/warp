@@ -7,9 +7,9 @@ use "instructions.warp"
 # rather than declared here too: that made runtime/extended.warp, which loads both files, refuse floor_quotient as
 # declared twice
 use "extended/exact.warp"
-## durations (card duration-warp; src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
+## durations (card duration-warp; rust-harness:src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
-## bits (src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three
+## bits (rust-harness:src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three
 ## amounts, so they read as calendar.rs Duration does (tests/numbers/test_duration_words.rs)
 # a constant of the durations: an untyped word, as `f(): int :=` has no use yet
 second_nanos() := 1000000000
@@ -78,7 +78,7 @@ duration_parts_order(months: int, days: int, nanos: int): int := {
 	durations_compare_differently_on_different_dates()
 }
 duration_order(a: Node, b: Node): int := duration_parts_order(duration_months(a) - duration_months(b), duration_days(a) - duration_days(b), duration_nanos(a) - duration_nanos(b))
-# the runtime error of duration_parts_order, named for src/wasm_emitter/control/traps.rs to read off the trace
+# the runtime error of duration_parts_order, named for rust-harness:src/wasm_emitter/control/traps.rs to read off the trace
 durations_compare_differently_on_different_dates() := {
 	fail()
 	0

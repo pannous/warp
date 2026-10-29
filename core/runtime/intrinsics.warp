@@ -36,6 +36,8 @@ instance_entries(m: Node): Node from runtime
 instance_field_at(m: Node, index: int): Node from runtime
 instance_place(m: Node, name: text): int from runtime
 is_class_instance(m: Node): bool from runtime
+# the text an instance's class shows it as by its show(), ø when it gives none (decision show-hook)
+instance_show(m: Node): Node from runtime
 # exact rationals
 is_ratio(n: any): bool from runtime
 # whether an Int node holds its number in an $i64box, neither a ratio nor a big int

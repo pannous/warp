@@ -14,6 +14,7 @@ class Real {
 	-(other) := if other is Real and other.pi_power == pi_power then real_of(coefficient - other.coefficient, pi_power) else float() - real_float(other)
 	compare(other) := float() - real_float(other)
 	text() := coefficient_text(coefficient, pi_power_text(pi_power))
+	show() := coefficient_text(coefficient, pi_power_text(pi_power))
 }
 
 real_of(coefficient: number, pi_power: int) := if coefficient == 0 or pi_power == 0 then coefficient else Real(coefficient, pi_power)

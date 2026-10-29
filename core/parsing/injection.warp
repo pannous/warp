@@ -1,4 +1,4 @@
-# Typed templates for other languages (Rust twin: src/text/injection.rs; wiki/Footguns.md "SQL and shell injection"):
+# Typed templates for other languages (Rust twin: rust-harness:src/text/injection.rs; wiki/Footguns.md "SQL and shell injection"):
 # `sql "SELECT * FROM t WHERE name = $name"` is no text building: the literal is the query, a `?` per hole, and the
 # holes are its parameters, so a value never changes the query's shape. `sh "ls -l $dir"` is an argument vector run
 # without a shell, a hole one whole argument. `execute` runs only a sql template, `exec` only a sh one. interpolation

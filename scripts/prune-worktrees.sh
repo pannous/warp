@@ -3,8 +3,7 @@
 # into origin/main, which nobody
 # else removes (54 worktrees, 56 local and 39 remote branches on 2026-10-14). Nothing unmerged is touched:
 #   1. a worktree on a branch whose HEAD origin/main holds (also as equal patches after a rebase or squash), idle for
-#      IDLE_HOURS, whose only uncommitted changes are the Cargo version tweak (TWEAK_FILES) and with no untracked
-#      files: removed with its branch
+#      IDLE_HOURS, with no uncommitted changes and no untracked files: removed with its branch
 #   2. local and remote branches origin/main holds the same way, with no worktree checked out and a tip older than
 #      IDLE_HOURS
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
@@ -22,7 +21,6 @@ WARP=/Users/me/dev/angles/warp
 WORKTREE_ROOTS=(/Volumes/Worktrees)
 DONOR=/Volumes/Worktrees/warp  # named after the project: the volume may hold other projects
 LEFTOVERS=$WARP/data/worktree-leftovers
-TWEAK_FILES=(Cargo.toml Cargo.lock crates/warp-runtime/Cargo.toml)
 IDLE_HOURS=${IDLE_HOURS:-6}
 LEFTOVER_DAYS=2
 KEPT_BRANCHES=(main HEAD)
@@ -61,7 +59,7 @@ $git worktree list --porcelain | awk '/^worktree /{path=$2} /^branch /{sub("refs
 while read -r worktree branch; do
   in_worktree_roots $worktree && (( ! ${KEPT_WORKTREES[(Ie)$worktree]} )) || { checked_out+=($branch); continue; }
   worktree_status=$(git -C $worktree status --porcelain 2>/dev/null)
-  changed=$(print -r -- $worktree_status | grep -v '^??' | cut -c4- | grep -vxF -f <(print -l $TWEAK_FILES))
+  changed=$(print -r -- $worktree_status | grep -v '^??')
   if ! merged $(git -C $worktree rev-parse HEAD) || [[ -n $changed ]] || recently_written $worktree; then
     checked_out+=($branch)
   elif print -r -- $worktree_status | grep -q '^??'; then

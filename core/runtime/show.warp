@@ -16,7 +16,7 @@ case_spelling(case: Node): text := if is_null(key_value(case)) then unboxed_text
 # `x as text`: a case its spelling, any other value its text (decision enum-raw-values)
 # `x as text`: a case as its spelling, any other value as it shows (an instance by its class's text())
 spelled_case(n: Node): Node := if is_case_node(n) and not is_null(key_value(n)) then key_value(n) else n
-# the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
+# the text of a boxed value of a kind known only at run time (kind codes: rust-harness:src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names. Only the
 # empty value prints ø: a `ø:` case would take an empty list too, which prints [] (it equals ø, as in Rust)
 node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_type(n) then "class " + unboxed_text(n) else match n {
@@ -54,7 +54,7 @@ node_code(n: Node): text := match n {
 # a value as `warp test` reads it back (WARP_VALUE_AS_DATA): as a list shows it, a type value as the symbol naming it,
 # as Rust reads one back
 value_code(n: Node): text := if names_a_type(n) then unboxed_text(n) else node_code(n)
-# a one-character text reads as the character it is (src/node/serialization.rs)
+# a one-character text reads as the character it is (rust-harness:src/node/serialization.rs)
 text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
 quoted_text(t: text): text := {
@@ -77,7 +77,8 @@ quoted_text(t: text): text := {
 }
 # the bytes of `"` and `\`, which a quoted text escapes
 is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
-list_text(xs: list): text := "[" + items_text(xs) + "]"
+# a list as `warp format` writes it, `[1, "ab"]` (decision shown-spaced)
+list_text(xs: list): text := "[" + joined_items(xs, ", ") + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
 items_text(xs: list): text := joined_items(xs, " ")
 joined_items(xs: list, joiner: text): text := {
@@ -88,13 +89,17 @@ joined_items(xs: list, joiner: text): text := {
 	}
 	inner
 }
-# `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
+# `a: 1`; a class instance as its class's show() gives it (decision show-hook), else `Point{x: 1, y: 2}`, its fields a map
 key_text(entry: Node): text := {
 	value = key_value(entry)
+	if marked_kind(entry) == Marked.Instance {
+		shown = instance_show(entry)
+		if not is_null(shown) { return node_text(shown) }
+	}
 	if marked_kind(entry) == Marked.Instance and not is_null(instance_entries(entry)) { return key_name(entry) + node_text(instance_entries(entry)) }
 	if marked_kind(entry) == Marked.Instance { return key_name(entry) + node_text(value) }
 	operator = key_operator(entry)
-	if text_order(operator, ":") == 0 { return key_name(entry) + ":" + node_code(value) }
+	if text_order(operator, ":") == 0 { return key_name(entry) + ": " + node_code(value) }
 	# `y+z`, `y and z`: a word operator between spaces
 	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
 	node_code(entry_key(entry)) + spaced + node_code(value)

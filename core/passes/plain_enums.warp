@@ -1,4 +1,4 @@
-# Plain enums (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` (Swift's
+# Plain enums (card pure-enums; Rust twin: rust-harness:src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` (Swift's
 # `{ case north, south }`) declares the type Color whose variants are its bare cases, `type @variants(Red Green) Color
 # {}`; a case of node.warp's spelled enums converts to its spelling (`op as text`) and equals it. `Color.Red` as the case
 # Red, `c is Coin`, a case's number `Coin.Dime as int` and the case at an index `2 as Coin` are rewrite rules

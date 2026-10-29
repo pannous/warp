@@ -15,7 +15,7 @@
 
 # holes_take_parameters_lists_and_exact_numbers
 'f(n):="n is \\(n)"; f(4)'	'n is 4'
-'xs=[1 2]; "xs=\\(xs)"'	'xs=[1 2]'
+'xs=[1 2]; "xs=\\(xs)"'	'xs=[1, 2]'
 'y=2.5; "v=\\(y)"'	'v=2.5'
 '"a \\("b") c"'	'a b c'
 

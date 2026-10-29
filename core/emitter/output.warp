@@ -15,6 +15,7 @@ import_index(entry: list): int := {
 }
 # the dispatcher of the program's classes showing their instances by text() (class_methods.warp showing_dispatcher)
 instance_text_word = HiddenWord.TextShown as text
+instance_show_word = HiddenWord.ShowShown as text
 # a value as the text `+` joins it with and print writes
 def shown_text(value: TypedCode): TypedCode {
 	kind = value.kind
@@ -29,6 +30,15 @@ def shown_text(value: TypedCode): TypedCode {
 	if kind == ValueKind.Node or kind == ValueKind.Time { return runtime_call("node_text", [value]) }
 	if kind != ValueKind.Bool { return refuse("the text of a " + kind_spelling(kind)) }
 	TypedCode(ValueKind.Text, value.code + [op.if] + gc_bytes(references.text) + text_value("yes").code + [op.else] + text_value("no").code + [op.end])
+}
+# a shown result as warp code that reads back (decision shown-warp-notation): a text quoted, a character in single
+# quotes, an instance by its class's show(), else as its class and fields, `P{n: 3}` (runtime show.warp key_text);
+# `print` writes texts (shown_text)
+def shown_code(value: TypedCode): TypedCode {
+	kind = value.kind
+	if kind == ValueKind.Text { return runtime_call("text_code", [value]) }
+	if kind == ValueKind.Node or kind == ValueKind.Char or kind == ValueKind.Time { return runtime_call("value_code", [TypedCode(ValueKind.Node, boxed(value))]) }
+	shown_text(value)
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
@@ -66,7 +76,7 @@ def printed(value: TypedCode): TypedCode { TypedCode(no_kind, dropped(runtime_ca
 def shown_result(result: ValueKind): any {
 	kind = if result == ValueKind.Int or result == ValueKind.Float then result else ValueKind.Node
 	f = exported_function("show", [kind], ValueKind.Text)
-	f.code = shown_text(unboxed_to_show(TypedCode(kind, [op.local_get, 0]), result)).code
+	f.code = shown_code(unboxed_to_show(TypedCode(kind, [op.local_get, 0]), result)).code
 }
 # main's value as given, unboxed when main knows its kind to be one shown by that kind's own word
 def unboxed_to_show(given: TypedCode, result: ValueKind): TypedCode {

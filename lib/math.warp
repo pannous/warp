@@ -30,7 +30,7 @@ prefix operator ∛ := cbrt
 circumfix operator ‖ ‖ := abs
 circumfix operator ⌊ ⌋ := floor
 circumfix operator ⌈ ⌉ := ceil
-// The arrows of src/operators/spellings.rs's list that spell an operator (card user-listed); the rest stay unread
+// The arrows of rust-harness:src/operators/spellings.rs's list that spell an operator (card user-listed); the rest stay unread
 operator → := ->
 operator ⟶ := ->
 operator ➔ := ->
@@ -51,7 +51,7 @@ operator ⭡ := ↑
 operator ⬇ := ↓
 operator ⇩ := ↓
 operator ⭣ := ↓
-// membership (card parse-free); ∉ is `not in`, a negated spelling (src/operators/spellings.rs)
+// membership (card parse-free); ∉ is `not in`, a negated spelling (rust-harness:src/operators/spellings.rs)
 operator ∈ := in
 operator ∋ := contains
 
@@ -64,7 +64,7 @@ floor(x: number): int from warp
 ceil(x: number): int from warp
 round(x: number): int from warp
 trunc(x: float): float from warp
-// the real functions, exact on exact values (src/numbers/real.rs), else libm's
+// the real functions, exact on exact values (rust-harness:src/numbers/real.rs), else libm's
 sin(x: float): float from warp
 cos(x: float): float from warp
 tan(x: float): float from warp
@@ -73,7 +73,7 @@ ln(x: float): float from warp
 min(a: number, b: number, more...): number from warp
 max(a: number, b: number, more...): number from warp
 
-// The C library's math functions (libm), f64 each: the host links them (src/ffi reads these lines, decision
+// The C library's math functions (libm), f64 each: the host links them (rust-harness:src/ffi reads these lines, decision
 // foreign-signature), the browser takes them from Math. Every program calls them without `use math`
 fmin(a: float, b: float): float from 'm'
 fmax(a: float, b: float): float from 'm'
@@ -222,7 +222,7 @@ whole_part(x) := each_any(x, e -> trunc(e))
 alias fmod = remainder
 remainder(a, b) := fmod(a, b)
 
-// The exact arithmetic the runtime emits in Rust (src/wasm_emitter/numbers/exact.rs int_gcd, ratio_new, exact_div,
+// The exact arithmetic the runtime emits in Rust (rust-harness:src/wasm_emitter/numbers/exact.rs int_gcd, ratio_new, exact_div,
 // int_mod, int_euclid_div) written in warp (card ratio-gcd-warp); gcd above is int_gcd's twin, never below 0. The
 // builtins stay until a measured step calls these late (notes/ratio_gcd_warp.md);
 // tests/numbers/test_ratio_gcd_warp.rs compares them with `/`, `%`, `/!` and `rem`.

@@ -23,7 +23,7 @@ def entries_code(body: Body, entry_names: list, entry_values: list): list {
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
 # an instance's key has no operator (Op::None), as Rust's has
-# Rust checks each typed field's value (src/declared_values.rs): an instance is built here only when every value has
+# Rust checks each typed field's value (rust-harness:src/declared_values.rs): an instance is built here only when every value has
 # its field's kind already or is checked at run time; a class not declared in the program (a markup tag, a module's)
 # is refused
 def instance_value(body: Body, class_name: text, fields: list): TypedCode {
@@ -180,6 +180,7 @@ instance_entries_name = "instance_entries"
 instance_field_at_name = "instance_field_at"
 instance_place_name = "instance_place"
 is_class_instance_name = "is_class_instance"
+instance_show_name = "instance_show"
 def class_depth(class_name: text): int { if class_name in module.parents then 1 + class_depth(module.parents[class_name]) else 0 }
 def made_classes(): list {
 	made = module.classes.keys.filter(class_name => instance_struct_prefix + class_name in module.class_structs)
@@ -293,12 +294,18 @@ def instance_place_code(f: Function) {
 def is_class_instance_code(f: Function) {
 	f.code = if #made_classes() == 0 then [op.i32_const, 0] else [op.local_get, 0] + gc_code(gc_ops.ref_test, [gc_type(instance_struct())])
 }
+# instance_show(m): the text m's class shows it as by its show() (decision show-hook), ø when the program's classes
+# give none (class_methods.warp show·shown)
+def instance_show_code(f: Function) {
+	shown = module.functions.get(instance_show_word)
+	f.code = if shown == ø then [ref_null, gc_type(gc.node)] else boxed(call_values(shown, [TypedCode(ValueKind.Node, [op.local_get, 0])]))
+}
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }
 def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c in "xyzw") }
 # a value of the kind given that ends the run in the error function named
 def ended_in(kind: ValueKind, error: text): TypedCode { TypedCode(kind, call_code(error_function(error)) + [op.drop, op.unreachable]) }
-# the index of a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
+# the index of a function that only traps, named so the run's error reads as Rust's does (rust-harness:src/wasm_emitter/control/traps.rs)
 def error_function(name: text): int {
 	if name in module.errors { return module.errors[name].index }
 	f = added_function(name, [], ValueKind.Int, [])
@@ -448,7 +455,7 @@ field_defaults(body: any): map := {
 }
 
 # a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
-# (src/wasm_emitter/declared_values.rs), a float field keeping an int
+# (rust-harness:src/wasm_emitter/declared_values.rs), a float field keeping an int
 field_check(kind: ValueKind): text? := match kind {
 	ValueKind.Int: "int_admitted"
 	ValueKind.List: "list_admitted"
