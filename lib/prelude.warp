@@ -713,8 +713,6 @@ text_part(t: text): any := t
 // the name without its mark: `$a` → a, `*rest` → rest
 unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
 
-// `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
-json_text(value: any): any := if is_type(value, "map") and "json" in value then value["json"] else std_pure("json", "to_json", [value])
 
 // Named events (lib/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
 // from 1) and whether they listen once, as three lists of the same length
