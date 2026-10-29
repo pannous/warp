@@ -11,6 +11,7 @@ lints_of(n: Node): any := {
 	negative_modulo(n)
 	float_equality(n)
 	arithmetic_conversion(n)
+	big_decimal_in_loop(n)
 	ø
 }
 
@@ -64,6 +65,24 @@ arithmetic_conversion(n: Node): any := {
 	tight = if last is number then as_written(last) + ":" + target else "(" + as_written(last) + " as " + target + ")"
 	diagnose(call_of("arithmetic_conversion", [as_written(whole), target, as_written(key_of(whole)) + " " + op_of(whole) + " " + tight]), n)
 }
+
+# a decimal past 18 places is exact, a ratio of a big denominator, each operation on it a long division: inside a
+# loop that cost is named once for each such literal (decision exact-decimal-big)
+looping_words = ["for", "each", "while", "until", "repeat", "loop"]
+global big_decimals_warned = []
+big_decimal_in_loop(n: Node): any := {
+	if not is_loop_statement(n) { return ø }
+	for literal in nodes_in(n).filter(is_big_decimal) {
+		place = written_at(literal)
+		if place not in big_decimals_warned {
+			big_decimals_warned += [place]
+			diagnose(call_of("big_decimal_in_loop", [value_of(literal)#2]), literal)
+		}
+	}
+	ø
+}
+is_loop_statement(n: Node): bool := (is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in looping_words) or (is_key(n, Op.Do) and is_key(key_of(n), Op.While))
+is_big_decimal(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "number" and value_of(n)#2.contains(".")
 
 # a node as the warnings quote it
 as_written(n: Node): text := "${n}".trim()

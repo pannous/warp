@@ -3236,6 +3236,15 @@ def whole_number(digits: text): Node := {
 	fits = #significant < #INT_MAX_DIGITS or (#significant == #INT_MAX_DIGITS and significant <= INT_MAX_DIGITS)
 	if fits then int(digits) else opaque(["number", significant])
 }
+// a decimal literal: past 18 places, a denominator beyond int64, the number view of its own digits, which the
+// emitter makes an exact ratio of a big denominator, never a float (decision exact-decimal-big); any other a float,
+// which the emitter reads exact where it can (literals.warp)
+DECIMAL_PLACES_IN_INT = 18
+def decimal_value(written: text): Node := {
+	shown = written
+	while shown.ends_with("0") { shown = shown[0 ..< #shown - 1] }
+	if #shown.split(".")#2 > DECIMAL_PLACES_IN_INT then opaque(["number", shown]) else float(written)
+}
 
 // A number, text, name or bracketed group
 // Rust twin: atoms.rs parse_atom, literals.rs read_number_value
@@ -3276,7 +3285,7 @@ def bare_atom(p: Parser): Node := {
 		// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals; Rust twin:
 		// numbers.rs scientific_float); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
 		if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
-		if written.contains(".") { return with_glued_factor(p, float(written)) }
+		if written.contains(".") { return with_glued_factor(p, decimal_value(written)) }
 		literal = p.code[number_start .. p.at]
 		if not (literal.contains("e") or literal.contains("E")) {
 			duration = with_time_unit(p, int(written))
@@ -3287,7 +3296,7 @@ def bare_atom(p: Parser): Node := {
 	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
 	if opens_text(c) { return quoted(p) }
 	// `.5` is 0.5
-	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
+	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return decimal_value("0" + decimal_number(p)) }
 	// a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
 	if keyword_at(p, "for") {
 		loop = looped(p)
