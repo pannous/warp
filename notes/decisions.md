@@ -580,3 +580,5 @@ the original questions 1–41: test edits and housekeeping done.
 - fixed-time-units (user confirmed): second, minute, hour are fixed quantities; day, week, month, year stay calendar durations (2026-10-29)
 - keys-enum (user, revises keys-module): the keys are one enum Key in lib/keys.warp (`Key.escape`, `Key.up`, `Key.space` …, as in `on Key.escape {}`), the bare words (ESC, ENTER, UP, space …) aliases of its cases; `held_key` gives a Key ("" → none headless); `exit()` is exit(0) (2026-10-29)
 - is-pattern-binds, named-arguments-general, split-whitespace (user confirmed 2026-10-29)
+- show-hook (user, refines shown-warp-notation): a class gives its own shown (pasteable) form by `show() := …`; text() stays what print writes; without show() an instance shows its structure (P{n: 3}); lib/units defines show() := text() so 3.5km and [3.5km] show as written; Color's show gives its name or #RRGGBB (color-show-variants) (2026-10-29)
+- shown-spaced (user): shown results are spaced like `warp format`: `P{n: 3}`, `{a: 1, b: 'x'}`; test expectations in the compact form are upgraded (2026-10-29)
