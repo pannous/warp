@@ -1,0 +1,5 @@
+# a global declared a whole float (0.0, an exact whole number) holds the float or exact value given it later
+'global t = 0.0; t = 1.5; t'	1.5
+'global t = 0.0; s = 3; t = float(s) / 1000; t'	0.003
+'global t = 0.0; def tick() { t = 0.25 }; tick(); t'	0.25
+'global n = 0; def bump() { n += 1 }; bump(); bump(); n'	2
