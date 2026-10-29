@@ -1,16 +1,34 @@
-// The standard library module keys (decision implicit-standard-words, card held-key): the key held now by its name,
-// as a window or the playground's canvas reports it, "" for none (headless always); `held_key == LEFT` moves while
-// the arrow is held, key_held(code) asks for one key among several held. A key's code is its character's, the arrows
-// and modifiers above them (web/playground/canvas.js KEY_CODES)
-ESC = "Escape"
-ENTER = "Enter"
-TAB = "Tab"
-BACKSPACE = "Backspace"
-UP = "ArrowUp"
-DOWN = "ArrowDown"
-LEFT = "ArrowLeft"
-RIGHT = "ArrowRight"
-space = " "
-KEY_NAMES = {27: ESC, 13: ENTER, 9: TAB, 8: BACKSPACE, 63232: UP, 63233: DOWN, 63234: LEFT, 63235: RIGHT, 63312: "Shift", 63313: "Control", 63314: "Alt", 63315: "Meta"}
-key_name(code) := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code)
-held_key() := key_name(system_value("key code held"))
+// The standard library module keys (decision keys-enum, card held-key): the keys are one enum Key, each case spelled
+// as a window or the playground's canvas names the key (`Key.up == "ArrowUp"`), Key.none for no key; `held_key == Key.left`
+// moves while the arrow is held, `on Key.escape {…}` runs as the key goes down. A key's code is its character's, the
+// arrows and modifiers above them (web/playground/canvas.js KEY_CODES)
+use frames
+enum Key {
+	none = "", escape = "Escape", enter = "Enter", tab = "Tab", backspace = "Backspace", delete = "Delete", space = " ",
+	up = "ArrowUp", down = "ArrowDown", left = "ArrowLeft", right = "ArrowRight",
+	shift = "Shift", control = "Control", alt = "Alt", meta = "Meta",
+	a = "a", b = "b", c = "c", d = "d", e = "e", f = "f", g = "g", h = "h", i = "i", j = "j", k = "k", l = "l", m = "m",
+	n = "n", o = "o", p = "p", q = "q", r = "r", s = "s", t = "t", u = "u", v = "v", w = "w", x = "x", y = "y", z = "z",
+	digit0 = "0", digit1 = "1", digit2 = "2", digit3 = "3", digit4 = "4", digit5 = "5", digit6 = "6", digit7 = "7",
+	digit8 = "8", digit9 = "9",
+	f1 = "F1", f2 = "F2", f3 = "F3", f4 = "F4", f5 = "F5", f6 = "F6", f7 = "F7", f8 = "F8", f9 = "F9", f10 = "F10",
+	f11 = "F11", f12 = "F12"
+}
+// the bare words of the keys, aliases of its cases
+ESC = Key.escape
+ESCAPE = Key.escape
+ENTER = Key.enter
+RETURN = Key.enter
+TAB = Key.tab
+BACKSPACE = Key.backspace
+UP = Key.up
+DOWN = Key.down
+LEFT = Key.left
+RIGHT = Key.right
+space = Key.space
+KEY_NAMES = {27: "Escape", 13: "Enter", 9: "Tab", 8: "Backspace", 127: "Delete", 63232: "ArrowUp", 63233: "ArrowDown", 63234: "ArrowLeft", 63235: "ArrowRight", 63312: "Shift", 63313: "Control", 63314: "Alt", 63315: "Meta"}
+key_name(code) := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code).lower()
+// the key held now, Key.none for none (headless always)
+held_key() := key_name(system_value("key code held")) as Key
+// `on Key.escape {…}`: the block runs each frame the key is held
+on(key: Key, body: block) := frame_listened(event => if held_key == key then body() else ø, no)

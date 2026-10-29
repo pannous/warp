@@ -1,0 +1,11 @@
+# a function's own words: its name, its parameters' names, its body as code (card name-params, lib/sugar/reflection.warp)
+'twice(x) := x*2; twice.name'	'twice'
+'use math; gcd.name'	'gcd'
+'f(a:int, b:int) := a+b; f.params'	['a', 'b']
+'def g(x){x*2}; g.parameters'	['x']
+'twice = x => x * 2; twice.params'	['x']
+'use math; lerp.params'	['a', 'b', 't']
+'twice(x) := x*2; string(twice.body)'	'x*2'
+# a word a function has none of but another one means is refused naming that one (decision reflection-words)
+'twice(x) := x*2; twice.description'	error
+'twice(x) := x*2; twice.dump'	error

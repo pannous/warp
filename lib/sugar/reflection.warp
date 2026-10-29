@@ -1,0 +1,11 @@
+# A function's own words (card name-params): `f.name` the text it is named by, `f.params` (also `f.parameters`) the
+# names of its parameters, `f.body` the code it computes (lib/rule_words.warp parameters_named, body_of); a word it has
+# none of but another one means is refused naming that one
+rewrite $f.name => $n where $f is symbol and $f is function and $n = spelled($f)
+rewrite $f.params => [$names...] where $f is symbol and $f is function and $names = parameters_named($f, $program)
+rewrite $f.parameters => [$names...] where $f is symbol and $f is function and $names = parameters_named($f, $program)
+rewrite $f.body => data $b where $f is symbol and $f is function and $b = body_of($f, $program)
+rewrite $f.description => $refused where $f is symbol and $f is function and $refused = misnamed($f, description, doc)
+rewrite $f.returns => $refused where $f is symbol and $f is function and $refused = misnamed($f, returns, return_type)
+rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)
+rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, body)
