@@ -16,8 +16,6 @@ rewrite ($x in $xs) => collection_contains($xs, $x)
 rewrite ($xs contains $x) => collection_contains($xs, $x)
 rewrite ($xs has $x) => collection_contains($xs, $x)
 rewrite ($xs includes $x) => collection_contains($xs, $x)
-# the count of a membership is the count of x in y
-rewrite count(collection_contains($xs, $x)) => count_in($xs, $x)
 # `x.upper!`, `sort xs!` (the parser's unwrap of a marked call): a function's bang assigns its result back to the
 # variable it was called on, as `upper(x)!` does (test/operators/test_mutating_bang.pairs.warp)
 # (a printing word prints the forced value and keeps the variable: `print friends!`, test_print_bang.pairs.warp)

@@ -1,0 +1,6 @@
+# the count of a membership counts a yes/no: refused with did-you-mean y.count(x) (user 2026-10-29)
+'count(2 in [1,2,2])'	error
+'xs=["a" "b" "a"]; count "a" in xs'	error
+'[1, 2, 2].count(2)'	2
+'count([1, 2, 2], 2)'	2
+'count bytes in "äb"'	3

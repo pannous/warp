@@ -65,5 +65,5 @@ arithmetic_conversion(n: Node): any := {
 	diagnose(call_of("arithmetic_conversion", [as_written(whole), target, as_written(key_of(whole)) + " " + op_of(whole) + " " + tight]), n)
 }
 
-# a node as the warnings quote it
-as_written(n: Node): text := "${n}".trim()
+# a node as the warnings quote it, as code: a text in its quotes
+as_written(n: Node): text := if n is text then "\"" + n + "\"" else "${n}".trim()

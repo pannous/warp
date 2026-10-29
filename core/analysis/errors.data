@@ -4,6 +4,8 @@
 kind_change($name, $was, $now)	"{name} was {a was}, is given {a now}: use another name"
 # P71: a charged `z := …` assigned afterwards, `z = 7`, `z += 1` (source_checks.warp)
 charged_assignment($name)	"{name} is defined with `:=`, charged: evaluated at each use, it takes no assignment; define it with `{name} = …` for a variable"	"{name} = …"
+# `count(2 in xs)`: a membership is yes or no, its count no count of x in y (source_checks.warp; user 2026-10-29)
+counted_membership($item, $collection)	"count of a yes/no: `{item} in {collection}` is yes or no; did you mean {collection}.count({item})?"	"{collection}.count({item})"
 # a function changing a main-level variable not declared global (main_globals.warp)
 main_variable_change($name)	"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"	"global {name}"
 # an error the parser leaves in the tree (sugar.warp subscript), the program's value
