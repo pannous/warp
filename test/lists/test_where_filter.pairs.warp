@@ -10,7 +10,8 @@
 
 # where_with_an_assignment_binds
 'x * 2 where x = 3'	6
-# triage-held 2026-10-28: Swift closure arguments $0 $1 plus a trailing where binding :: 'xs.reduce(0) { $0 + $1 } where xs = [1,2,3]'	6
+# triage-held 2026-10-28: Swift closure arguments $0 $1 plus a trailing where binding :: 
+'xs.reduce(0) { $0 + $1 } where xs = [1,2,3]'	6
 
 # an_assigned_filter_may_start_with_not
 'xs = [yes, no, no]; waiting = xs where not it; count(waiting)'	2

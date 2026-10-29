@@ -37,16 +37,29 @@ tests_run(compiler: text, by_self: bool): nothing := {
 	command_output(joined(joined("rm -rf '", work), "'"))
 	mkdir(c_string(work), FOLDER_MODE)
 	file_ran(compiler, test_words(compiler, "test-list", work))
+	required(joined(work, "/runs"), work)
 	runs = read_file(joined(work, "/runs"))
 	setenv(c_string("WARP_NO_WINDOW"), c_string("1"), 1)
 	setenv(c_string("WARP_HINTS"), c_string("0"), 1)
 	setenv(c_string("WARP_VALUE_AS_DATA"), c_string("1"), 1)
+	setenv(c_string("WARP_ONE_THREAD"), c_string("1"), 1)
 	all_ran(work, runs, if by_self then "self" else "run")
 	unsetenv(c_string("WARP_VALUE_AS_DATA"))
+	unsetenv(c_string("WARP_ONE_THREAD"))
+	required(compiler, work)
 	file_ran(compiler, test_words(compiler, "test-verdicts", work))
+	required(joined(work, "/failed"), work)
 	failed = read_file(joined(work, "/failed"))
 	command_output(joined(joined("rm -rf '", work), "'"))
-	if failed.length == 0 or not same_text(failed, "0") { exit(1) }
+	if not same_text(failed, "0") { exit(1) }
+}
+# a file the run needs, said missing on stderr with the work folder (kept to look into), status 1: a compiler an
+# install pruned mid-run, verdicts that never got written
+required(path: text, work: text): nothing := {
+	if access(c_string(path), READABLE) != 0 {
+		complain(joined(joined(joined(joined("warp test: ", path), " is missing (the run's work folder: "), work), ")"))
+		exit(1)
+	}
 }
 # the compiler's arguments for a test command: the command, the work folder, then this warp's words after `test`
 test_words(compiler: text, command: text, work: text): Arguments := {
