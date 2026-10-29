@@ -557,11 +557,12 @@ dropped_rules(path: text, lines: list, rule_lines: list, rules: list, module: te
 # fixed-startup-cost). A compiler built by one that bakes none reads them where it runs
 LIBRARY_RULES = library_rules()
 library_rules(within: text = ""): map := {}
-# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any
+# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any, read off its fresh parse, never the building
+# compiler's baked one (uses.warp baked_tables)
 packed_rules(files: map): map := {
 	packed = {}
 	for path in files.keys {
-		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(written_rules(run_library() + "/" + path, files[path], "").map(rule_node), Bracket.Square, Separator.Comma)) }
+		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(rules_parsed(plain_node(parsed(rules_ended(files[path]))), "", files[path]).map(rule_node), Bracket.Square, Separator.Comma)) }
 	}
 	packed
 }
@@ -644,9 +645,15 @@ needed_words(rule: Rule): list := {
 # start the pattern (`rewrite channel $name => …` reads as `rewrite channel ($name => …)`), the words after it continue
 # the template up to `where`, whose `=` holds only the shape's first word (`where $c = channel $name`); `source` is the
 # text the statement was parsed from
+# a pattern ending in a typed hole, `rewrite whenever $c $body: block => …`, which the parser reads as
+# `$body: (block => …)`: the arrow after the typed hole
+typed_hole_arrow(item: Node): Node := match item {
+	Key(hole, Op.Colon, Key(kind, Op.Arrow, template)): if rule_hole(hole) != ø and kind is symbol and name_of(kind) in hole_kinds then Key(Key(hole, Op.Colon, kind), Op.Arrow, template) else item
+	_: item
+}
 rule_of(statement: Node, module: text, source: text): Rule? := {
 	if not is_group(statement) or bracket_of(statement) != "" or separator_of(statement) != " " { return ø }
-	items = items_of(statement)
+	items = items_of(statement).map(typed_hole_arrow)
 	if #items < 2 or items#1 != symbol(rewrite_word) { return ø }
 	arrow_at = 0
 	for index in 1 ..< #items { if arrow_at == 0 and is_key(items[index], Op.Arrow) { arrow_at = index } }

@@ -239,11 +239,15 @@ converted_value = HiddenWord.ConvertedValue as text
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
 names_type(n: Node, scope: map): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
 
-# [source, target, body, the body's name of the value] of `A as B := body` with A and B types, also of
-# `text(p: A) := body`, else ø
+# [source, target, body, the body's name of the value] of `A as B := body` with A and B types, of `n: A as B := body`
+# naming the value, also of `text(p: A) := body`, else ø
 conversion_of(n: Node, scope: map): list? := {
 	if not is_key(n, Op.Define) { return ø }
 	head = key_of(n)
+	if is_key(head, Op.Colon) and key_of(head) is symbol and is_key(value_of(head), Op.As) {
+		types = value_of(head)
+		return if names_type(key_of(types), scope) and names_type(value_of(types), scope) then [name_of(key_of(types)), name_of(value_of(types)), value_of(n), name_of(key_of(head))] else ø
+	}
 	if is_call(head) and #head == 2 and head#1 == symbol("text") and is_key(head#2, Op.Colon) and key_of(head#2) is symbol {
 		return if names_type(value_of(head#2), scope) then [name_of(value_of(head#2)), "text", value_of(n), name_of(key_of(head#2))] else ø
 	}
@@ -277,9 +281,11 @@ converting_uses(n: Node, targets: map): Node := {
 
 # the conversion to `target`: a typed function of each source type, `as·text·Person(p: Person) := body`, and the one
 # trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
-conversion_functions(target: text, written: list, targets: map): list := {
+conversion_functions(target: text, written: list, targets: map, scope: map): list := {
 	it = symbol(converted_value)
-	tried = Key(it, Op.As, symbol(target))
+	# a class's own instance stays itself, a value of no source type is refused: no built-in conversion makes one
+	refused = call_of(raise_word, ["no conversion to " + target + " of that value"])
+	tried = if not binds_as(scope, target, Meaning.Type) then Key(it, Op.As, symbol(target)) else Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(target))), Op.Then, it), Op.Else, refused)
 	functions = []
 	for conversion in written.reverse() {
 		name = conversion_name(target) + "·" + conversion#1
@@ -312,6 +318,6 @@ conversions(program: Node): Node := {
 		}
 	}
 	if not order { return if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline) }
-	functions = order.map(target => conversion_functions(target, targets[target], targets)).flatten()
+	functions = order.map(target => conversion_functions(target, targets[target], targets, scope)).flatten()
 	List(functions + kept.map(statement => converting_uses(statement, targets)), Bracket.None, Separator.Newline)
 }

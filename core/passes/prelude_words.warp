@@ -90,9 +90,20 @@ name_defined_in(line: text): text := {
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if leading is empty { return "" }
 	following = line[#leading ..].trim()
+	converted = conversion_target(following)
+	if converted != "" { return converted }
 	is_function = following.starts_with("(") and line.contains(":=")
 	is_value = following.starts_with(":=") or (following.starts_with("=") and not following.starts_with("=="))
 	if is_function or is_value then leading else ""
+}
+# the type a conversion converts to, of the line's rest after its first name: `n: number as Real := …` and
+# `int as Real := …` are Real's slices, reached with the class; "" of any other line
+conversion_target(following: text): text := {
+	if not following.contains(":=") or not (following.starts_with(":") or following.starts_with("as ")) { return "" }
+	parts = (" " + following.split(":=")#1).split(" as ")
+	if #parts != 2 { return "" }
+	target = parts#2.trim()
+	if target != "" and leading_name(target) == target then target else ""
 }
 # the name a line starts with, "" when it starts with another character; one beyond ASCII is a name's, `π() := …`
 leading_name(line: text): text := {
@@ -183,8 +194,8 @@ lowering_words(program: Node): list := {
 	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
 }
 # the words the emitter calls itself, kept though no statement does: a time's fields (emitter/times.warp time_field) of
-# a program writing a time literal, the parser's data view
-emitted_words(program: Node): list := if nodes_in(program).any(is_time_view) then [time_field_word] else []
+# a program writing a time literal, the parser's data view; the exact root of a program taking one (root_words)
+emitted_words(program: Node): list := (if nodes_in(program).any(is_time_view) then [time_field_word] else []) + root_words(program)
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}
@@ -404,7 +415,7 @@ with_type_module_uses(program: Node): Node := {
 	providers = type_module_providers()
 	wanted = {}
 	# a function taking nothing is called bare too: `now` as `now()`
-	for word in called_words(program) + bare_calls(program, providers) {
+	for word in called_words(program) + bare_calls(program, providers) + converted_types(program) + root_words(program) {
 		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, Rust's sorted one
@@ -692,6 +703,13 @@ type_module_providers(): map := {
 	}
 	providers
 }
+# the word of a root, `√2`, which lib/reals.warp keeps exact (emitter.warp exact_root_word)
+root_words(program: Node): list := if nodes_in(program).any(n => is_key(n, Op.Sqrt) and is_empty(key_of(n)) and not surely_float(value_of(n))) then [exact_root_word] else []
+# `2.5`, `x as f64`, `(n as float)`: a value written a float, whose root is the float's (a primitive program's too)
+surely_float(n: Node): bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
+# the classes the program converts to, `3 as Real`: a type module's class comes with its conversions (`x as text`
+# brings no text module)
+converted_types(program: Node): list := nodes_in(program).filter(n => is_key(n, Op.As) and value_of(n) is symbol and (is_capitalized(name_of(value_of(n))) or not is_tested_type_word(name_of(value_of(n))))).map(n => name_of(value_of(n)))
 # the words the program calls, `f(x)` and `x.f(y)`, each once
 called_words(n: Node): list := {
 	found = {}

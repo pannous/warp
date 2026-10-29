@@ -118,6 +118,7 @@ methods_lifted(program: Node): Node := {
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
 	for name in classes.keys { classes[name].methods = positions_derived(classes[name].methods, operator_table) }
+	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 and not respelled { return program }
 	rewritten = []
@@ -150,7 +151,7 @@ methods_lifted(program: Node): Node := {
 		# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 		# call (list.warp's tally(xs) beside a class's tally(x))
 		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(rewritten, name, taken_count(classes, liftable, name) + 1)
-		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name))]
+		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions)]
 	}
 	for word in entry_words {
 		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
@@ -163,10 +164,10 @@ methods_lifted(program: Node): Node := {
 			}
 		}
 		operator = spelled_operator(operator_table, spellings#1)
-		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator)]
+		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, name, routes) }
-	rewritten += derived_dispatchers(classes, liftable, routes)
+	rewritten += derived_dispatchers(classes, liftable, routes, promotions)
 	group_like(program, rewritten)
 }
 # `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
@@ -214,7 +215,7 @@ constructor_functions(classes: map, owning_class: text, routes: list): list := {
 }
 # the dispatchers a class's compare(o), text() and float() give: its instances ordered by <, <=, >, >=, shown by their
 # text, converted to a float
-derived_dispatchers(classes: map, names: list, routes: list): list := {
+derived_dispatchers(classes: map, names: list, routes: list, promotions: list): list := {
 	made = []
 	other = symbol("other")
 	orderers = owners_of(classes, names, ordering_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], ordering_method)) == 1)
@@ -225,7 +226,7 @@ derived_dispatchers(classes: map, names: list, routes: list): list := {
 			ordered = {}
 			for owning_class in orderers { ordered[owning_class] = Key(call_of(called[owning_class], [self_node, other]), glyph as Op, 0) }
 			head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
-			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, orderers), ordered, Key(self_node, glyph as Op, other)))]
+			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, orderers), ordered, promoted(Key(self_node, glyph as Op, other), promotions, glyph + "·operator")))]
 		}
 	}
 	for method in conversion_methods.keys {
@@ -239,6 +240,21 @@ derived_dispatchers(classes: map, names: list, routes: list): list := {
 		}
 	}
 	made
+}
+# [class, source type] of each declared conversion to a class, `n: number as Real := …` (definitions.warp
+# conversion_of): an operator meeting a value of the source type and an instance converts the value first (decision
+# as-promotes), so `3 / π` is `(3 as Real) / π`, exact, for every operator and class alike
+promotions_of(statements: list, classes: map, scope: map): list := statements.map(statement => conversion_of(statement, scope)).filter(conversion => conversion != ø and classes.has(conversion#2)).map(conversion => [conversion#2, conversion#1])
+# the operator on two values, `a / b`, with the left converted where a promotion takes it (an instance on the right, a
+# value of the conversion's source type on the left), through the dispatcher again: its own `a / b` is the builtin
+promoted(operation: Node, promotions: list, dispatcher: text): Node := {
+	left = key_of(operation)
+	right = value_of(operation)
+	for promotion in promotions.reverse() {
+		test = Key(ø, Op.If, Key(Key(right, Op.Is, symbol(promotion#1)), Op.And, Key(left, Op.Is, symbol(promotion#2))))
+		operation = Key(Key(test, Op.Then, call_of(dispatcher, [call_of(conversion_name(promotion#1), [left]), right])), Op.Else, operation)
+	}
+	operation
 }
 # the value of the first owner's on an instance of it, else of the next owner's…, the fallback on any other value
 value_dispatch(owners: list, values: map, fallback: Node): Node := {
@@ -444,13 +460,13 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
 # instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
 # `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
-method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: list?): Node := {
+method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: list?, promotions: list): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
 	for i in 0..<#owners { called[owners[i]] = owned_name(spellings[i], owners[i]) }
 	operated = falls_back and operator != ø and #call_arguments == 2
-	builtin = if operated then Key(call_arguments#1, operator#2 as Op, call_arguments#2) else ø
+	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
 	fallback = if not falls_back then ø else if operated then reflected else builtin_call(spellings#1, call_arguments)
