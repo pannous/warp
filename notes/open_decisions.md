@@ -8,19 +8,15 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
 - sample-spellings (supervisor, warp-native-harness; user 2026-10-29: ask later): samples rewritten to the spec instead of new syntax — `height * width int` → `int[height * width]` (circle, filled_circle, mandelbrot_canvas), `(y-center)^2` → `(y - center)^2` (circle; hyphenated names stay names), `moved all particles` → `particles.map(moved)` (particles), and a stray tab before viewer's `def triangles` removed (an indented line continues the one above); keep the originals as language wishes?
-- sound-system-player (supervisor): sound plays through the system player, afplay/paplay, configurable by WARP_SOUND_PLAYER; under WARP_NO_WINDOW or CI only an explicit WARP_SOUND_PLAYER plays (warp-native-harness)
-- implicit-standard-words, hint part (interviewer): a word used without `use` gets a hint naming its module, so `warp beautify` writes the `use`.
 - implicit-standard-words, index scope (worker samples-implicit-use): the word index (lib/modules/words.tsv) covers every standard module's definitions but the prelude, the dialects R, PHP and english too, read from their sources at rebuild, not only from modules that prebuild; a program's own class names never pull a module in (`class C` is not sound's note C).
 - program-match lowering (supervisor): "merge all existing branches" taken as the OK for its run-time matcher in lib/prelude.warp + core/node_matches.warp (landed 9f9ef1ce43).
 - test path edit (supervisor): test/node/test_parsed_node_walks.pairs.warp:34 reads core/parsing/parser.warp instead of core/parser.warp after the core/ grouping; the only test edit of the reshuffle.
 - warp test handoff (supervisor): until the native test runner lands, `warp test` on the native warp hands off to warp-rust with one stderr line.
 - build stamp without inputs hash (supervisor): warp.build records lib/, builder, commit and time; the inputs-hash slot stays empty for now (the native warp has no sha256/directory host words yet); nothing compares it.
 - round(2.5) = 3 (supervisor; user 2026-10-29: ask later): the decision round-halves (away from zero) beats the Footguns note; the note gets corrected, not the test.
-- triage holds (reviewer): the lines marked `# triage-held 2026-10-28` (list in notes/test_triage.md "Held (esoteric)") are commented out as forms warp doesn't carry over; restore any you want back.
 - unit tests without `use units` (supervisor): the 83 lines the triage listed as wrong are gaps under implicit-standard-words, not wrong expectations.
 - release workflow quiet (supervisor): Release re-enabled with one summary at the end, no per-job notifications; the other workflows stay off.
 - no extra workers tonight (supervisor): the ten triage gap groups wait on the board (Next) for the four feature workers instead of new sessions (rule: at most two feature workers, already exceeded by the runtime-linking team).
-- length-all-held (interviewer): `length all xs` is triage-held; the forms are `xs.map length` and, per julia-compat, the broadcast `length.(xs)`. A general `all`/`each` broadcast word is for you to revisit.
 - server-routes-pass (fixer, 3866446f18): `get/post/put/delete/patch "/path" { … }` at the main level is a core pass (core/passes/routes.warp, ~50 lines) onto lib/router.warp's route_add, the path's `:name`s bound in the body; a rule can't bind names read from a path text (computed-hole would let lib/sugar do it). A plain `warp app.warp` serves the routes over HTTP through lib/web.warp (native-server, a25e56f5aa).
 
 ## To present
