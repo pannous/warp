@@ -55,6 +55,7 @@ RANDOM_SEED_WORD = 7
 SYSTEM_VALUE_WORD = 8
 STD_PURE_WORD = 9
 PAINT_WORD = 10
+KEY_HELD_WORD = 11
 
 wasm_config_new(): handle from "warp_wasmtime"
 wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -452,6 +453,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "system_value") { return SYSTEM_VALUE_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
+	if same_text(name, "key_held") { return KEY_HELD_WORD }
 	unanswered_word(name)
 }
 # a host word the driver doesn't answer (a library's: draw_shape, gpu_compute, …), as a word that names it when called:
@@ -676,6 +678,8 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == RANDOM_WORD { return float_result(drand48(), results) }
 	if word == RANDOM_BELOW_WORD { return int_result((drand48() * (number as f64)) as i64, results) }
 	if word == RANDOM_SEED_WORD { return srand48(number) }
+	# no window, no key held
+	if word == KEY_HELD_WORD { return int_result(0, results) }
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
@@ -765,10 +769,13 @@ system_value(name: text): i64 := {
 	if same_text(name, "time of day") { return time_of_day() }
 	if same_text(name, "view_width") { return terminal_extent(0, "COLUMNS", 80) }
 	if same_text(name, "view_height") { return terminal_extent(1, "LINES", 24) }
+	if windowless(name) { return 0 }
 	complain(joined(joined("the system value ", name), " is not in the native warp yet (warp-rust has it)"))
 	exit(1)
 	0
 }
+# what a window would tell, without one: no window open, no pointer, no key, no GPU drawing
+windowless(name: text): bool := same_text(name, "window_open") or same_text(name, "gpu_drawing") or same_text(name, "gpu_paints") or same_text(name, "key_down") or same_text(name, "key code held") or same_text(name, "mouse_x") or same_text(name, "mouse_y") or same_text(name, "mouse_down") or same_text(name, "mouse_wheel")
 # outside a window the view is the terminal: its columns (rows), else the variable's, else the default
 terminal_extent(rows: i32, variable: text, default: i64): i64 := {
 	measured = terminal_size(rows)
