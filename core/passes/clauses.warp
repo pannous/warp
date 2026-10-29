@@ -1,4 +1,4 @@
-# A function written as several clauses (card pure-runs; Rust: src/lowering/definitions pattern clauses):
+# A function written as several clauses (card pure-runs; Rust: rust-harness:src/lowering/definitions pattern clauses):
 #   fib(0) := 0
 #   fib(1) := 1
 #   fib(n) := fib(n - 1) + fib(n - 2)

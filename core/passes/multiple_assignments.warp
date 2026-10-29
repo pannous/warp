@@ -1,4 +1,4 @@
-# `a, b = b, a + b` (card pure-runs; Rust twin: src/lowering/types/tuples.rs): the parser reads the comma loosest, so
+# `a, b = b, a + b` (card pure-runs; Rust twin: rust-harness:src/lowering/types/tuples.rs): the parser reads the comma loosest, so
 # the statement arrives as the list `a, (b = b), a + b`. Every value is evaluated before any name is assigned:
 # `a·value = b; b·value = a + b; a = a·value; b = b·value`. One value for several names, `x, y = [1, 2]`, gives its
 # elements in order: `x·values = [1, 2]; x = x·values#1; y = x·values#2`. Tuple returns (`return 1, 2`) are not here yet.

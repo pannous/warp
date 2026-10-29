@@ -28,7 +28,7 @@ library beside `lib/units.warp`, over plain integers (form and position, month/d
 never loads it: its Span's plus would send every `+` the compiler compiles through operator dispatch, and some of its
 names (time_form, day_nanos, hour_nanos, sign_of) clash with times' and durations'. Nothing in the compiler uses it.
 
-Both roots are loaded, core first: by `compiler.warp` (`RUNTIME_ROOTS`) and by `src/compiler/self_hosted.rs`
+Both roots are loaded, core first: by `compiler.warp` (`RUNTIME_ROOTS`) and by `rust-harness:src/compiler/self_hosted.rs`
 (`EXTENDED_RUNTIME_WORDS`), each `use` path from the folder of the file it is in (compiler.warp `root_text` prefixes
 `runtime/` to the extended root's, as it lowers both roots in core). Loading only joins the source; the emitter still compiles a word only on its first call.
 

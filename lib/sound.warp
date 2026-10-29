@@ -2,7 +2,7 @@
 // in Sonic Pi), `play note("C#4")` (a Note), `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers. The samples are made
 // here and become a WAV file here (sounded; silent under tests and WARP_NO_WINDOW), in the browser WebAudio. Loaded when
-// a program calls one of its words (src/modules.rs SOUND_WORDS)
+// a program calls one of its words (rust-harness:src/modules.rs SOUND_WORDS)
 use units
 use reals
 use os
@@ -30,7 +30,7 @@ beats(n) := beat_seconds(n)
 bar(n) := bar_seconds(n)
 bars(n) := bar_seconds(n)
 dB(level) := decibels(level)
-// the samples cross to the host as whole numbers ≥ 0: amplitude + 32768 (src/sound/mod.rs SAMPLE_OFFSET), a stereo sound's
+// the samples cross to the host as whole numbers ≥ 0: amplitude + 32768 (rust-harness:src/sound/mod.rs SAMPLE_OFFSET), a stereo sound's
 // interleaved left, right
 sample_offset = 32768
 loudest_sample = 32767
@@ -416,7 +416,7 @@ phase(f, i) := {
 // the gain of the tremolo at sample i: 1 at the start, 1 - tremolo at its lowest
 tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * sample_time(i)))
 voices_of(pitches) := if unison <= 1 then pitches else [frequency * 2^(detune * (k / (unison - 1) - 0.5) / 12) for frequency in pitches for k in 0..unison]
-// the amplitudes through one effect, mono, in warp so every host has it (as Rust's src/sound/effects.rs on_signal):
+// the amplitudes through one effect, mono, in warp so every host has it (as Rust's rust-harness:src/sound/effects.rs on_signal):
 // ["gain", g]; ["lowpass", hertz, q], also highpass and bandpass, and ["peak", hertz, dB, q], low_shelf, high_shelf
 // (biquads of the Audio EQ Cookbook); ["delay", seconds, feedback, mix] and ["reverb", mix] with their tail until it
 // rings out; ["distort", drive] a soft clipper; ["compress", threshold dB, ratio, attack, release]. The effects work on
@@ -572,7 +572,7 @@ mix(a, b) := added(a, b)
 mix(a, b, c) := added(added(a, b), c)
 mix(a, b, c, d) := added(added(a, b), added(c, d))
 // a bus (card shared-buses): one effect chain that every sound sent to it goes through together, from the program and
-// its tasks, processed once on their mix as they play (src/sound/effects.rs), so a reverb rings on after the last:
+// its tasks, processed once on their mix as they play (rust-harness:src/sound/effects.rs), so a reverb rings on after the last:
 // room = bus() |> reverb(0.4) |> delay(0.25), then osc(C4, 1s) |> room (call(b: Bus, signal): out(osc(C4, 1s), room)) or
 // play(C4, 1s, bus: room)
 class Bus {
@@ -1108,7 +1108,7 @@ read_midi(path) := {
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
 // audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
 // band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
-// Goertzel's recurrence, in Rust for both (src/sound/spectrum.rs, decision sound-dsp)
+// Goertzel's recurrence, in Rust for both (rust-harness:src/sound/spectrum.rs, decision sound-dsp)
 global band_low = 60
 global band_high = 5000
 // the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart

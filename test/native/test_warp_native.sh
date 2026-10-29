@@ -39,7 +39,7 @@ if [ -x "$stage/warp" ]; then
 	printf 'x  =  1\n' >"$stage/spaced.warp"
 	check "format check" "$(native format check spaced.warp | head -1)" "spaced.warp:1: layout: spaces"
 	check "eval, code" "$(native eval '3 * 4')" 12
-	check "a command the native warp lacks yet" "$(native verify 1)" "warp verify is not in the native warp yet: warp-rust verify runs it"
+	check "a command the native warp lacks yet" "$(native verify 1)" "warp verify is not in warp yet"
 	mkdir "$stage/below"
 	check "a file above the current folder" "$(cd "$stage/below" && ../warp ../hello.warp 2>&1)" "Hello 🌍2026"
 	check "a command's path above the current folder" "$(cd "$stage/below" && ../warp compile ../hello.warp ../above.wasm >/dev/null 2>&1; ls "$stage/above.wasm" 2>&1)" "$stage/above.wasm"
@@ -52,7 +52,7 @@ if [ -x "$stage/warp" ]; then
 	check "regex all" "$(native 'use regex; find_all("x12y345", "[0-9]+")')" '["12" "345"]'
 	check "sha256" "$(native 'use hash; sha256("abc")')" ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 	check "crc32" "$(native 'use hash; crc32("abc")')" 891568578
-	check "a system value of a library's" "$(native 'battery()')" "the system value battery is not in the native warp yet (warp-rust has it)"
+	check "a system value of a library's" "$(native 'battery()')" "the system value battery is not in warp yet"
 	# an install as ~/dev/bin has it: bin/warp and bin/lib links to a build; what that warp builds keeps running after
 	# the next install moves bin/lib to another build and removes the old one
 	library=$(cd "${WARP_LIB:-$(dirname "$(command -v "$warp")")}" && pwd -P)
@@ -80,7 +80,7 @@ if [ -x "$stage/warp" ]; then
 	check "the view of a terminal" "$(script -q /dev/null sh -c 'stty cols 101 rows 31; cd "$1" && ./warp "[view_width(), view_height()]"' sh "$stage" </dev/null | grep -o '\[[0-9]* [0-9]*\]')" "[101 31]"
 	painting=$(native 'paint([0, 1, 0xFF00FF00, 0], 2, 2)')
 	check "paint, a PNG" "${painting%%:*} $(file -b "${painting#*: }")" "painted 2×2 PNG image data, 2 x 2, 8-bit/color RGB, non-interlaced"
-	check "paint of a shader" "$(native 'paint("fn x", 2, 2, ø)')" "paint of a shader: the native warp has no GPU yet (warp-rust renders it)"
+	check "paint of a shader" "$(native 'paint("fn x", 2, 2, ø)')" "paint of a shader: warp has no GPU yet"
 	check "exit() ends the run well" "$(native $'print 1\nexit()\nprint 2'; echo $?)" "1
 0"
 	# never called, so no window even if the refusal failed

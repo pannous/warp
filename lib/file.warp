@@ -11,6 +11,6 @@ save(content: text, as file) := write(file, content)
 global append_file(path: any, text: any) := std_io("file", "append", [path, text])
 global exists(path: any) := std_io("file", "exists", [path])
 list_files(folder: any) := std_io("file", "list", [folder])
-// `glob("src/*.rs")`: the paths matching the pattern, sorted; its wildcards * and ? are in its last part
+// `glob("rust-harness:src/*.rs")`: the paths matching the pattern, sorted; its wildcards * and ? are in its last part
 glob(pattern: any) := std_io("file", "glob", [pattern])
 lines(path) := split(read(path), "\n")
