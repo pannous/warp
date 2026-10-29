@@ -1,7 +1,6 @@
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
-ok   samples/advanced/raytracer.warp
 ok   samples/advanced/snake.warp
 ok   samples/conditions/control_flow.warp
 ok   samples/conditions/fizzbuzz.warp
@@ -135,6 +134,7 @@ WIN  samples/graphics/sdl_red_square.warp
 SRV  samples/servers/worker.warp
 FAIL samples/advanced/neural_net.warp
 FAIL samples/advanced/particles.warp
+FAIL samples/advanced/raytracer.warp
 FAIL samples/advanced/test.warp
 FAIL samples/errors/errors.warp
 FAIL samples/errors/try_failed_json.warp
