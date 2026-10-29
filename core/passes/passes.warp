@@ -54,6 +54,7 @@ passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 #   data_items library_calls sugar         data items, library calls, lib/sugar's main rules (fallbacks, places)
 #   lambdas loop_heads iteration_sugar     lambdas, `for` heads, the `for` loops lowered onto `while`
 #   late_sugar list_methods number_keys    late rules, `xs.add(x)`-style methods, number keys
+#   reached_only                           the brought functions nothing calls dropped
 
 # the pass that owns each form the emitter may refuse: a refusal of that form names it, so a form that reaches the
 # emitter unlowered says which pass did not claim it
@@ -69,7 +70,7 @@ owned_refusal(refusal: text, form: text?): text := {
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside rust-harness:src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
+pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys, reached_only]
 
 # a node after every pure pass, in order
 lowered_node(n: Node): Node := {
@@ -98,6 +99,7 @@ global kept_comprehension_sugar = []
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
+	brought_names = {}
 	own = early_sugared(interpolation(with_uses(program, folder)))
 	bindings = rule_bindings(own)
 	kept_first_sugar = sugar_rules(bindings, first_sugar_module_names)

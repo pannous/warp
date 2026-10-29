@@ -235,6 +235,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(is_value_definition)
 	functions = brought.filter(statement => not is_value_definition(statement))
+	for statement in functions {
+		name = declared_name(statement)
+		if name != ø { brought_names[name] = yes }
+	}
 	own_statements = statements_in(program)
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
@@ -381,6 +385,30 @@ with_type_module_uses(program: Node): Node := {
 	modules = type_modules.filter(module => module in wanted and module not in used)
 	with_module_uses(program, modules + global_word_modules(program, own, used))
 }
+# the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
+global brought_names = {}
+# the program without the brought functions nothing calls once all the passes ran (card measure): what a sugar rule
+# might write is brought before it fires (sugar_words_of: `each_any` for any call, `count_in` for any count), and
+# typing and emitting the unused ones cost each compile. A module being built keeps all of its words
+reached_only(program: Node): Node := {
+	if module.relocating or #brought_names == 0 { return program }
+	statements = statements_in(program)
+	is_brought = statement => brought_names.has(declared_name(statement) ?? "")
+	called = {}
+	pending = statements.filter(statement => not is_brought(statement)).flat_map(words_within) + always_reached
+	while #pending > 0 {
+		word = pending#1
+		pending = pending[1 ..]
+		if not called.has(word) {
+			called[word] = yes
+			for statement in statements { if declared_name(statement) == word and is_brought(statement) { pending += words_within(statement) } }
+		}
+	}
+	separated(bracketed(statements.filter(statement => not is_brought(statement) or called.has(declared_name(statement))), ""), ";")
+}
+# the words the emitter calls of the prelude without the program naming them
+always_reached = ["Cell", matcher_word, showing_word]
+
 # the modules of the global words a program names, or a sugar rule reaching it writes (`x.json` json_text), and binds
 # nothing to, each once
 global_word_modules(program: Node, own: any, used: list): list := {
