@@ -1103,6 +1103,12 @@ def key_expression(body: Body, n: Node): TypedCode {
 			called = module.functions[name_of(right)]
 			return field_or_word(body, value, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
 		}
+		# `t.split`: a member naming a library word that takes the value alone, its other parameters defaulted
+		word = library_words.get(name_of(right))
+		if word != ø and takes_arguments(module.runtime[word], [left]) {
+			runtime_word = module.runtime[word]
+			return field_or_word(body, value, name_of(right), receiver => call_values(runtime_word, defaulted(body, runtime_word, [receiver], 1)))
+		}
 		return field_of(body, value, name_of(right), receiver_class(body, left))
 	}
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)

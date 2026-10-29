@@ -11,7 +11,7 @@ reverse(xs: list): list from warp
 reverse(t: text): text from warp
 sort(xs: list): list from warp
 sort(t: text): text from warp
-split(t: text, separator: text = " "): list of text from warp
+split(t: text, separator: text = ø): list of text from warp
 join(xs: list, separator: text): text from warp
 chars(t: text): list of text from warp
 code_point_list(t: text): list of int from warp
