@@ -113,7 +113,7 @@ write_baked_current(file: text) := {
 }
 # [name, baked in, as this compiler makes it] of each table module_text bakes from the library: a new baked table
 # joins here
-baked_tables(): list := [["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(LIBRARY_FILES)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(LIBRARY_FILES)], ["SLICE_PARSES", SLICE_PARSES, packed_slice_parses(LIBRARY_FILES)], ["LIBRARY_RULES", LIBRARY_RULES, packed_rules(LIBRARY_FILES)]]
+baked_tables(): list := [["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(LIBRARY_FILES)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(LIBRARY_FILES)], ["SLICE_PARSES", SLICE_PARSES, packed_slice_parses(LIBRARY_FILES)], ["LIBRARY_RULES", LIBRARY_RULES, packed_rules(LIBRARY_FILES)], ["STD_RULE_NEEDS", STD_RULE_NEEDS, scanned_rule_needs()]]
 same_texts(a: map, b: map): bool := #a == #b and a.keys.all(key => b.get(key) == a[key])
 # a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
 library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
