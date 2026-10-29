@@ -39,8 +39,7 @@ assigned_variable(target: Node): Node := match target {
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
 attribute_word = HiddenWord.ViewAttribute as text
-# `x!` of a name no mutation takes: run as Rust runs what blocks.rs inlines no block for, `unwrap(x)`
-mutated_mark = "mutated"
+# `x!` of a name no mutation takes: run as Rust runs what blocks.rs inlines no block for, `unwrap(x)` (parser.warp forced)
 unwrap_word = "unwrap"
 # the number a subscript was written with, `1` of `d[1]` on its shifted index `d#2` (Rust: warp_parser WrittenIndex)
 written_index_mark = "written_index"
@@ -104,7 +103,6 @@ marked(attribute: any, n: Node): Node := {
 }
 plain_parts(n: Node): Node := match n {
 	Key(left, op, right): {
-		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
 		if left == symbol(attribute_word) { return marked(right#1, plain_node(right#3)) }
 		if left == opaque_symbol { return if is_empty_group(right) and right#2 not in ["{", "["] then ø else n }
 		Key(plain_node(left), op, plain_node(right))
