@@ -52,8 +52,15 @@ regrouped(parts: list): any := {
 	ø
 }
 
+# `x = 1, 2` (the list `(x = 1), 2`): one name before several values is their list, `x = [1, 2]`, as `xs = 1 2 3` is
+# (decision reconsider-spaced); ø for another comma list
+one_name_list(parts: list): any := match parts#1 {
+	Key(target, Op.Assign, first): { if is_name(target) and not parts[1..].any(part => is_key(part, Op.Assign)) then Key(target, Op.Assign, List([first] + parts[1..], Bracket.Square, Separator.Comma)) else ø }
+	_: ø
+}
+
 multiple_assignment(n: Node): Node := match n {
-	List(parts, Bracket.None, Separator.Comma): regrouped(parts) ?? n
+	List(parts, Bracket.None, Separator.Comma): one_name_list(parts) ?? regrouped(parts) ?? n
 	# `{a, b = b, a + b}`: the braces hold the comma list, a block of the regrouped statements
 	List(parts, Bracket.Curly, Separator.Comma): {
 		statements = regrouped(parts)

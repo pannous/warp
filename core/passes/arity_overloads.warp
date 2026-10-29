@@ -228,19 +228,36 @@ overloaded_types(program: Node): map := {
 	overloaded
 }
 
-# name → the parameter types of each of the program's definitions of it
-defined_types(program: Node): map := {
-	signatures = {}
+# name → the calls its definitions name, `f(a, b)` of `f(a, b) := …`, in declaration order
+definitions_named(program: Node): map := {
+	named = {}
 	# nodes_in walks the last part first: reversed, the definitions come in declaration order
 	for n in nodes_in(program).reverse() {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
-			if name not in signatures { signatures[name] = [] }
-			signatures[name] = signatures[name] + [parameter_types(call)]
+			if name not in named { named[name] = [] }
+			named[name] = named[name] + [call]
 		}
 	}
+	named
+}
+# name → the parameter types of each of the program's definitions of it
+defined_types(program: Node): map := {
+	named = definitions_named(program)
+	signatures = {}
+	for name in named.keys { signatures[name] = named[name].map(call => parameter_types(call)) }
 	signatures
+}
+# name → how many arguments each variant must be given, its parameters without a default (a library line's all)
+variant_least(program: Node, overloaded: map): map := {
+	named = definitions_named(program)
+	least = {}
+	for name in overloaded.keys {
+		own = named[name].map(call => arity_of(call)#1)
+		least[name] = own + overloaded[name][#own ..].map(types => #types)
+	}
+	least
 }
 
 # a library word the program defines for other types, `sin(x: Real) := …` beside math's `sin(x: float)`: the library's
@@ -299,7 +316,8 @@ assigned_kinds(program: Node): map := {
 
 # what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
 # values', the result a builtin declares (`floor(x)` a float), `-x`, `√x` and `a + b`, `a - b`, `a * b` of known numbers
-class ArgumentJudge { variables: map; own: map }
+# least: each overloaded name's variants' least argument counts (variant_least)
+class ArgumentJudge { variables: map; own: map; least: map = {} }
 keeps_numbers(op: Op): bool := match op {
 	Op.Add: yes
 	Op.Sub: yes
@@ -405,7 +423,7 @@ function_type_arity(type: text): int? := {
 # the sum of the arguments' fits, ø when one does not fit
 variant_fit(kinds: list, types: list): int? := {
 	total = 0
-	for at in 1 to #types {
+	for at in 1 to #kinds {
 		one = argument_fit(kinds#at, types#at)
 		if one == ø { return ø }
 		total += one
@@ -428,7 +446,7 @@ run_time_test(argument: Node, type: text): Node := {
 }
 
 # the places of the arguments a variant tests at run time: those of untold kind it takes no `any` for
-tested_places(kinds: list, types: list): list := (1 to #types).filter(at => kinds#at == ø and types#at != any_word)
+tested_places(kinds: list, types: list): list := (1 to #kinds).filter(at => kinds#at == ø and types#at != any_word)
 
 # the candidates testing more arguments first, of those the one widening fewer first, else in declaration order
 in_test_order(candidates: list, kinds: list): list := {
@@ -485,11 +503,13 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	arguments = items_of(n)[1 ..]
-	variants = overloaded[name].filter(types => #types == #arguments)
+	# a call may leave out the defaulted parameters at the end, `lowpass(sig, 800)` of `lowpass(signal, frequency, q = 0.707)`
+	least = judge.least[name]
+	variants = (1 to #overloaded[name]).filter(at => least#at <= #arguments and #arguments <= #overloaded[name]#at).map(at => overloaded[name]#at)
 	kinds = arguments.map(argument => known_kind(argument, judge))
 	fitting = variants.filter(types => variant_fit(kinds, types) != ø)
 	written = "${n}"
-	listed = variants.map(types => name + "(" + types.join(", ") + ")").join(", ")
+	listed = overloaded[name].map(types => name + "(" + types.join(", ") + ")").join(", ")
 	if not kinds.all(kind => kind != ø) and #fitting > 1 {
 		return dispatched(name, best_first(fitting, kinds), kinds, arguments, "`" + written + "` fits no single variant of " + listed)
 	}
@@ -517,7 +537,7 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
-	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program)))
+	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
