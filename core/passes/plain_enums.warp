@@ -137,9 +137,11 @@ type_of(value: Node, enums: map, subjects: map): text? := {
 	if name in subjects and subjects[name] then subjects[name] else ø
 }
 
-# the declaration as the sum type of its cases, the view Rust's sum_type gives
+# the declaration as the sum type of its cases, the view Rust's sum_type gives; a case spelled otherwise than its name
+# `A = "a"`, so the case made carries its spelling (emitter.warp case_value)
 enum_type(name: text, cases: list): Node := {
-	variants = ["list", "", " "] + cases.map(case => ["symbol", case])
+	spelled = spellings.get(name) ?? {}
+	variants = ["list", "", " "] + cases.map(case => if spelled.has(case) and spelled[case] != case then ["key", Op.Assign, ["symbol", case], ["text", spelled[case]]] else ["symbol", case])
 	node_of(["type", ["attribute", variants_word, variants, ["symbol", name]], ["list", "{", ""]])
 }
 

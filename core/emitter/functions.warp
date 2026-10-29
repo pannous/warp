@@ -78,16 +78,22 @@ def passed(f: Function, i: int, value: TypedCode): list {
 		converted(value, f.kinds[i])
 	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value.kind)
-		if slot not in module.unannotated or not (is_held_kind(joint)) { throw refusal }
-		known = module.later_kinds.get(slot) == joint
-		if known and slot not in module.widened_now { throw refusal }
-		if not known {
-			module.later_kinds[slot] = joint
-			module.widened_now[slot] = yes
-			module.widenings += 1
-		}
+		if slot not in module.unannotated or not widens_later(slot, joint) { throw refusal }
 		value.code
 	}
+}
+# whether a slot (an unannotated parameter, a global) takes the joint kind of its own and a value it cannot hold from
+# the module's next reading on: no when the joint kind is no value's, or this reading already holds it so
+def widens_later(slot: text, joint: ValueKind): bool {
+	if not (is_held_kind(joint)) { return no }
+	known = module.later_kinds.get(slot) == joint
+	if known and slot not in module.widened_now { return no }
+	if not known {
+		module.later_kinds[slot] = joint
+		module.widened_now[slot] = yes
+		module.widenings += 1
+	}
+	yes
 }
 # a call of a function still compiling (its own body, a cycle) passing an argument its unannotated parameter does not
 # hold, `f(xs#1)` inside `f(n)` first called with a list: the parameter takes their joint kind from f's next reading on
