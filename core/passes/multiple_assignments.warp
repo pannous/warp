@@ -53,11 +53,13 @@ regrouped(parts: list): any := {
 }
 
 # `x = 1, 2` (the list `(x = 1), 2`): one name before several values is their list, `x = [1, 2]`, as `xs = 1 2 3` is
-# (decision reconsider-spaced); ø for another comma list
+# (decision reconsider-spaced); ø for another comma list, and for a phrase first, `x = add 1, 2`, whose function word
+# takes the values after it (lambdas.warp comma_call, decision function-words-consume)
 one_name_list(parts: list): any := match parts#1 {
-	Key(target, Op.Assign, first): { if is_name(target) and not parts[1..].any(part => is_key(part, Op.Assign)) then Key(target, Op.Assign, List([first] + parts[1..], Bracket.Square, Separator.Comma)) else ø }
+	Key(target, Op.Assign, first): { if is_name(target) and not starts_with_name(first) and not parts[1..].any(part => is_key(part, Op.Assign)) then Key(target, Op.Assign, List([first] + parts[1..], Bracket.Square, Separator.Comma)) else ø }
 	_: ø
 }
+starts_with_name(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n > 1 and n#1 is symbol
 
 multiple_assignment(n: Node): Node := match n {
 	List(parts, Bracket.None, Separator.Comma): one_name_list(parts) ?? regrouped(parts) ?? n
