@@ -233,6 +233,19 @@ watch() {
 	disown
 }
 
+# the samples that run, the gap to 2.0 (decision night-samples-modules): test/samples.txt committed on main when it
+# changed, so its git log is the history and git diff names the samples that changed (user 2026-10-29)
+samples_committed() {
+	local count report=test/samples.txt
+	count=$("$scripts/samples.sh" "$TREE" | head -1 | sed -n 's/^samples: \([0-9]* of [0-9]*\) run.*/\1/p')
+	cp "$TREE/$report" "$MAIN_CHECKOUT/$report" || return
+	# the slow tree stays clean for its next checkout
+	git -C "$TREE" checkout -q HEAD -- "$report" 2>/dev/null || rm -f "$TREE/$report"
+	git -C "$MAIN_CHECKOUT" add -- "$report" && git -C "$MAIN_CHECKOUT" diff --cached --quiet -- "$report" && return
+	git -C "$MAIN_CHECKOUT" commit -q -m "chore: samples $count at ${1:0:10}" -- "$report" &&
+		git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash && git -C "$MAIN_CHECKOUT" push -q ||
+		say "samples of ${1:0:10} not committed: look at the user's checkout"
+}
 # slow_tiers <commit>: promote-self.sh and tiers 1-2 of what changed since the last commit they ran on
 slow_tiers() {
 	tip=$1
@@ -246,8 +259,7 @@ slow_tiers() {
 	install_compilers
 	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
 		red "tiers 1-2: $(grep -a '^FAIL' "$state/gate-${tip:0:10}.log" | head -3 | paste -sd ';' -)"
-	# the samples that run, the gap to 2.0 (decision night-samples-modules): one line per tip in the user's checkout
-	"$scripts/samples.sh" "$TREE" | head -1 | sed "s/^/$(date '+%F %H:%M') /" >>"$MAIN_CHECKOUT/data/samples/history.txt"
+	samples_committed "$tip"
 	echo "$tip" >"$state/tested"
 	say "slow tiers of ${tip:0:10} done"
 }
