@@ -671,7 +671,19 @@ sounded(speakers, rate, channels) := {
 // Playing (decision sound-system-player): the WAV through the system's player, started when its voice reaches it (the
 // clock paces the program till then): WARP_SOUND_PLAYER, else the first of afplay (macOS), paplay, aplay (Linux) that
 // starts. Under WARP_NO_WINDOW or CI only an explicit WARP_SOUND_PLAYER plays
+// Before them libwarp_sound beside warp plays it in the process (decision sound-plays: miniaudio,
+// crates/warp-sound), the run waiting at its end till its sounds are heard out; under WARP_NO_WINDOW or CI on a silent device
 posix_spawnp(process: out, file: text, actions: handle, attributes: handle, arguments: texts, environment: texts): i32 from 'c'
+warp_sound_play(path: text): i32 from 'warp_sound'
+dlopen(path: text, mode: i32): handle from 'c'
+// where lib/native/foreign.c finds warp's own libraries, beside the executable
+SOUND_LIBRARY_FILES = ["@executable_path/libwarp_sound.dylib", "$ORIGIN/libwarp_sound.so"]
+RTLD_NOW = 2
+global sound_library_state = ø
+sound_library_loads() := {
+	if sound_library_state == ø { sound_library_state = SOUND_LIBRARY_FILES.any(file => dlopen(file, RTLD_NOW) != 0) }
+	sound_library_state
+}
 SYSTEM_PLAYERS = ["afplay", "paplay", "aplay"]
 sound_players() := {
 	chosen = env("WARP_SOUND_PLAYER")
@@ -680,9 +692,10 @@ sound_players() := {
 	SYSTEM_PLAYERS
 }
 played(file, start) := {
+	if start > clock() { sleep_ms(start - clock()) }
+	if env("WARP_SOUND_PLAYER") == ø and sound_library_loads() and warp_sound_play(file) == 0 { return ø }
 	players = sound_players()
 	if count(players) == 0 { return ø }
-	if start > clock() { sleep_ms(start - clock()) }
 	environment = wasi_environment().split(chr(0)).filter(line => line != "")
 	for player in players { if posix_spawnp(player, 0, 0, [player, file], environment) == 0 { return ø } }
 	said("no sound player started: set WARP_SOUND_PLAYER")
