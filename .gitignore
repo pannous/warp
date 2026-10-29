@@ -30,8 +30,9 @@ data/
 /lib/warp.wasm*
 /lib/warp-self.wasm*
 /lib/runtime.wasm.cwasm
-# warp's wasmtime C API, copied in by scripts/wasmtime-c-api.sh (card wasmtime-bundled)
+# warp's wasmtime C API and sound library, copied in by scripts/wasmtime-c-api.sh (cards wasmtime-bundled, sound-plays)
 /lib/libwarp_wasmtime.*
+/lib/libwarp_sound.*
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*
 
