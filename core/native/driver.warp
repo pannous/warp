@@ -22,8 +22,9 @@ COMMAND_COUNT_AT = 16
 CODE_SIGNATURE = 29
 SIGNATURE_OFFSET_AT = 8
 STDERR = 2
-# access()'s R_OK and X_OK
+# access()'s R_OK, W_OK and X_OK
 READABLE = 4
+WRITABLE = 2
 EXECUTABLE = 1
 COLON = 58
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
@@ -591,7 +592,7 @@ file_ran(path: text, given: Arguments): nothing := {
 		complain(joined("no module at ", path))
 		exit(1)
 	}
-	run(module, given, joined(path, ".driver.cwasm"))
+	run(module, given, machine_code_file(path))
 }
 # the module warp.wasm wrote to `output` run, named `name`, with this executable's arguments from `first` on
 written_run(output: text, name: text, first: int): nothing := {
@@ -629,7 +630,33 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 machine_code_kept(path: text): nothing := {
 	trap = allocate(8)
 	long_at(trap).value = 0
-	compiled_module(wasm_engine_new_with_config(warp_config(no)), read_file(path), joined(path, ".driver.cwasm"), trap)
+	compiled_module(wasm_engine_new_with_config(warp_config(no)), read_file(path), machine_code_file(path), trap)
+}
+# where a module's machine code is kept: beside it, else (an installed lib/ this user can't write) in the user's cache
+# folder under the module's whole path; "" when neither can be written: compiled anew each run, never failing
+machine_code_file(path: text): text := {
+	if access(c_string(folder_of(path)), WRITABLE) == 0 { return joined(path, ".driver.cwasm") }
+	cache = cache_folder()
+	if cache.length == 0 { return "" }
+	joined(joined(cache, flattened(resolved_path(path))), ".driver.cwasm")
+}
+# $XDG_CACHE_HOME/warp, else ~/Library/Caches/warp (macOS), else ~/.cache/warp, made when missing, ending in a slash;
+# "" when it can't be written
+cache_folder(): text := {
+	base = getenv("XDG_CACHE_HOME")
+	home = getenv("HOME")
+	if base.length == 0 and access(c_string(joined(home, "/Library/Caches")), WRITABLE) == 0 { base = joined(home, "/Library/Caches") }
+	if base.length == 0 { base = joined(home, "/.cache") }
+	mkdir(c_string(base), FOLDER_MODE)
+	folder = joined(base, "/warp")
+	mkdir(c_string(folder), FOLDER_MODE)
+	if access(c_string(folder), WRITABLE) == 0 then joined(folder, "/") else ""
+}
+# the path as one file name, its slashes underscores
+flattened(path: text): text := {
+	name = joined(path, "")
+	for i in 0..name.length { if byte_at(name.address + i).value == SLASH { byte_at(name.address + i).value = UNDERSCORE } }
+	name
 }
 # the text without its trailing newlines
 trimmed_end(t: text): text := {
