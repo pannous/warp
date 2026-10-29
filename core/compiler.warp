@@ -77,7 +77,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
 	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
 	# the warnings once the module is made, as Rust's pure lane says them
-	for warning in warnings_said(found, module.program_file) { warn warning }
+	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
 	made
 }
 
