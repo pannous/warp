@@ -26,7 +26,7 @@ enum Op {
 	AddAssign, SubAssign, MulAssign, DivAssign, FloorDivAssign, ModAssign, PowAssign, AndAssign, OrAssign, XorAssign
 	Lt, Gt, Le, Ge, Eq, Is, Ne, Identical, NotIdentical, Similar, Rough
 	And, Or, Xor, Not, BitAnd, BitOr
-	Neg, Sqrt, Cbrt, Abs, Inc, Dec, Question
+	Neg, Sqrt, Cbrt, Abs /*unused: √ ∛ ‖ ‖ call functions; kept while the seed's op codes have them, card remove-unused*/, Inc, Dec, Question
 	If, Then, Else, While, Do
 	Hash, Range, To, As, PlusMinus
 	None

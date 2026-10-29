@@ -24,6 +24,7 @@ operator ∨ := or
 operator ⋁ := or
 operator ⊻ := xor
 operator ± := +-
+// A prefix glyph spelling a function calls it: √9 is sqrt(9), the plain function (decision prefix-symbols-alias-functions)
 prefix operator √ := sqrt
 prefix operator ∛ := cbrt
 // A glyph pair bracketing an expression like parentheses applies the function to it: ⌊3.7⌋ is floor(3.7)
