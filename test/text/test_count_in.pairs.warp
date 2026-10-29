@@ -1,12 +1,12 @@
 # from test_count_in.rs: edit the Rust test, then run the script again
 
 # count_occurrences
-«count 'a' in "banana"»	3
-'count "an" in "banana"'	2
-«s="banana"; count 'a' in s»	3
-'count 2 in [1 2 2 3]'	2
-'count 5 in [1 2 3]'	0
-'xs=["a" "b" "a"]; count "a" in xs'	2
+# triage-held 2026-10-29: count x in y counts a yes/no, refused with did-you-mean y.count(x) (user 2026-10-29: esoteric, not revived) :: «count 'a' in "banana"»	3
+# triage-held 2026-10-29: count x in y counts a yes/no, refused with did-you-mean y.count(x) (user 2026-10-29: esoteric, not revived) :: 'count "an" in "banana"'	2
+# triage-held 2026-10-29: count x in y counts a yes/no, refused with did-you-mean y.count(x) (user 2026-10-29: esoteric, not revived) :: «s="banana"; count 'a' in s»	3
+# triage-held 2026-10-29: count x in y counts a yes/no, refused with did-you-mean y.count(x) (user 2026-10-29: esoteric, not revived) :: 'count 2 in [1 2 2 3]'	2
+# triage-held 2026-10-29: count x in y counts a yes/no, refused with did-you-mean y.count(x) (user 2026-10-29: esoteric, not revived) :: 'count 5 in [1 2 3]'	0
+# triage-held 2026-10-29: count x in y counts a yes/no, refused with did-you-mean y.count(x) (user 2026-10-29: esoteric, not revived) :: 'xs=["a" "b" "a"]; count "a" in xs'	2
 'count bytes in "äb"'	3
 # one value, the emitter's count beside the prelude's count_in (card triage-count-in)
 'xs = [1, 2, 3]; count xs'	3
