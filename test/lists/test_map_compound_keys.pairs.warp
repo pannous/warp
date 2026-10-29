@@ -1,0 +1,6 @@
+# a map indexed by a variable key in a compound assignment stays a map index (card sugar-word-modules-overreach)
+'f(key: text) := { m = {}; m[key] = 1; m[key] += 1; m }; f("a")["a"]'	2
+'f(k: text) := { m = {}; m[k] = 1; m[k] += 1; m }; f("a")["a"]'	2
+# card time-index-range: a module's words found again once global_words is back
+'use time; 1'	1
+'text(2024-01-31 + 2 days)'	'2024-02-02'

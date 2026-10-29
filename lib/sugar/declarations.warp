@@ -35,6 +35,6 @@ rewrite (constant $d) => $d
 rewrite (final $d) => $d
 rewrite (val $d) => $d
 
-# `global play(tone) := …`: the definition itself; a standard module's word works without its `use` unmarked
-# (decision global-word-marker-not-needed: the word index finds its module)
+# `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which parser.warp
+# bundled_declarations reads off the module's text); as code, the definition itself
 rewrite global: $d => $d where $d is definition
