@@ -71,3 +71,4 @@ samples/**/*.stored.json
 notes/OLD/
 *.bak
 **/*.bak
+test/web/task.txt
