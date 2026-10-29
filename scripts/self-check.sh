@@ -1,5 +1,5 @@
 #!/bin/zsh
-# The warp-only acceptance check (decision warp-only-acceptance): the Rust-compiled compiler.warp compiles itself and
+# The warp-only acceptance check (decision warp-only-acceptance): warp.wasm, compiler.warp built by the seed, compiles itself and
 # that self build runs hello world.
 # The pair checked is the one for the branch's compiler inputs (scripts/rebuild.sh, notes/compiler_rebuilds.md): lib/'s
 # or the shared store's. A miss is said ("REBUILD NEEDED") and the existing pair is checked: the check builds only when
@@ -8,9 +8,8 @@
 rebuild=
 [[ ${1-} == --rebuild ]] && { rebuild=1; shift; }
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
-# main's Rust binary, warp-rust beside the launcher warp (notes/pure_wrapper.md); plain warp until warp-rust is installed
-main_warp=/Users/me/dev/bin/warp-rust
-[[ -x $main_warp ]] || main_warp=/Users/me/dev/bin/warp
+# main's native warp
+main_warp=/Users/me/dev/bin/warp
 main_checkout=/Users/me/dev/angles/warp
 expected="Hello"
 
@@ -51,21 +50,14 @@ check_lane() {
 scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT
 warp=$scratch/warp
 cp $main_warp $warp || exit 1
-# the copy links its wasmtime beside itself (rpath @executable_path), as the binary does in its build folder
-cp ${main_warp:A:h}/libwarp_wasmtime.dylib $scratch/ || exit 1
+# its wasmtime beside the copy, where its rpath looks
+cp ${main_warp:A:h}/libwarp_wasmtime.* $scratch/ || exit 1
 # the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>)
 # with its runtime (warp-seed.runtime.wasm), the one it compiles compiler.warp behind
 for seed_file in warp-seed.wasm warp-seed.runtime.wasm; do
   cp ${main_warp:h}/$seed_file $scratch/ 2>/dev/null || cp ${main_warp:A:h}/$seed_file $scratch/ || exit 1
 done
-# main's warp.wasm beside the copy too: the binary takes an empty folder as holding the worktree's pair, and would look
-# for it there instead of in the worktree's lib/ (standalone.rs build_path)
-cp ${main_warp:A:h}/warp.wasm $scratch/ || exit 1
-# the pair for these inputs: lib/'s, else the store's; built by the copy only with --rebuild. The Rust fingerprint is
-# that of main's binary, read from the pair beside it (the copy has none beside it)
-beside=${main_warp:A:h}/warp.wasm
-[[ -f $beside ]] || beside=${main_warp:h}/compiler.wasm  # the old name (transition)
-export WARP_RUST_FINGERPRINT=$(LC_ALL=C tr '\0' '\n' <$beside 2>/dev/null | LC_ALL=C sed -n '/warp\.build/{n;n;p;q;}' | LC_ALL=C grep -ao '^[0-9a-f]\{16\}' | head -1)
+# the pair for these inputs: lib/'s, else the store's; built by the copy only with --rebuild
 if [[ -n $rebuild ]]; then
   pair=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh both $worktree 2>&1)
 else
@@ -77,14 +69,6 @@ case $? in
   *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree: $(print -r -- $pair | tail -3)"; exit 1 ;;
 esac
 print -r -- $pair
-# warp-host's lanes too, when there is one: WARP_HOST_BINARY, else warp-host beside main's binary (no per-tree cargo
-# build, card scripts-off-cargo)
-host=${WARP_HOST_BINARY:-${main_warp:h}/warp-host}
-check_host() {
-  said=$($host $@ samples/hello/hello.warp 2>&1 | tail -1)
-  [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp-host $* hello said: $said"; return 1; }
-  verdict="SELF CHECK ok: $said"
-}
 # the self test itself (AGENTS.md "Testing"): warp.wasm compiles compiler.warp and that build, promoted to warp-self.wasm,
 # runs hello; a warp-self.wasm of these inputs in lib/ or the store is taken as it is (scripts/rebuild.sh self). Red
 # when the compile fails: the self lane was red unnoticed for hours while it was skipped here (card self-check-compile)
@@ -110,7 +94,7 @@ stage_two() {
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: stage 2's hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said (stage 2 built runtime.wasm and ran hello)"
 }
-check_lane pure && self_lane && { [[ ! -x $host ]] || { check_host --compiler full run && check_host run; }; }
+check_lane pure && self_lane
 passed=$?
 echo $verdict
 exit $passed

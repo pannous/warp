@@ -1,4 +1,4 @@
-# A match over a node's cases (card pure-runs; Rust twin: src/lowering/types/node_cases.rs and destructuring.rs):
+# A match over a node's cases (card pure-runs; Rust twin: rust-harness:src/lowering/types/node_cases.rs and destructuring.rs):
 # each arm tests the subject's kind and spelled parts, binds its named parts, then gives its result; an arm of a value,
 # `1: e`, `Color.Red: e`, `Red: e` of a declared variant, tests the subject equals it:
 #   match n { Key(left, Op.Colon, right): e; _: d }

@@ -2,7 +2,7 @@
 # until the Rust table is gone (card library-word-tables).
 
 # the words naming a type a value is held as, lowercase (Rust twin: analyzer type_word_kind, from BUILTIN_TYPES in
-# src/lowering/types/type_tests.rs and FIXED_WIDTHS in src/numbers/fixed_width.rs)
+# rust-harness:src/lowering/types/type_tests.rs and FIXED_WIDTHS in rust-harness:src/numbers/fixed_width.rs)
 type_words = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32",
 	"float32", "float64", "fast", "number", "text", "str", "string", "codepoint", "char", "character", "bool", "boolean", "symbol",
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
@@ -33,7 +33,7 @@ foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
 is_type_word(word: text): bool := type_words contains word.lower()
 # `Color`, `Ω`: a name whose first character is an upper case letter
 is_capitalized(name: text): bool := name#1.upper() == name#1 and name#1.lower() != name#1
-# the type words a type test takes besides those (no twin: Rust's BUILTIN_TYPES in src/lowering/types/type_tests.rs)
+# the type words a type test takes besides those (no twin: Rust's BUILTIN_TYPES in rust-harness:src/lowering/types/type_tests.rs)
 test_type_words = ["key", "pair", "operation", "expression", "code", "callable", "invocable", "runnable", "error", "empty",
 	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
 is_tested_type_word(word: text): bool := is_type_word(word) or collection_words contains word or test_type_words contains word

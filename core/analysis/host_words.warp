@@ -1,5 +1,5 @@
 # The host words a compiled program may import from the module "host": name → [parameter kinds, result kinds], the kinds
-# int, float, i32 and node (a $Node reference); a third item names the module when it is another (WASI's). The table src/host.rs HOST_WORD_SIGNATURES gives the Rust host (card
+# int, float, i32 and node (a $Node reference); a third item names the module when it is another (WASI's). The table rust-harness:src/host.rs HOST_WORD_SIGNATURES gives the Rust host (card
 # standalone: build.rs makes it from here next)
 host_words = {
 	draw_shape: [[ValueKind.Int, ValueKind.Float, ValueKind.Float, ValueKind.Float, ValueKind.Float, ValueKind.Int], []]

@@ -1,6 +1,6 @@
 # `x is int`, `n is symbol` (card pure-type-tests): `x is T` of a type word T no variable, parameter or loop variable
 # in reach names (a field `{symbol: …}` does not), or of a type the program declares, is the type test
-# is_type(x, "T"), as Rust's src/lowering/types/type_tests.rs lowers it (plain_enums.warp answers it for an enum);
+# is_type(x, "T"), as Rust's rust-harness:src/lowering/types/type_tests.rs lowers it (plain_enums.warp answers it for an enum);
 # every other `x is v` is `x == v`. Only `is` tests a type: `3 == int` compares 3 with the type (no)
 use "../passes/walk.warp"
 use "words.warp"

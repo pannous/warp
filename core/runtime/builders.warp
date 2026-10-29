@@ -1,5 +1,5 @@
-## The constructors a host word builds the program's values with (Rust twin: src/wasm_emitter/constructors.rs
-## emit_all_constructors, called by src/host/tasks/values.rs Builders): emitter.warp exports each under Rust's name with
+## The constructors a host word builds the program's values with (Rust twin: rust-harness:src/wasm_emitter/constructors.rs
+## emit_all_constructors, called by rust-harness:src/host/tasks/values.rs Builders): emitter.warp exports each under Rust's name with
 ## Rust's signature (host_builders), a host word taking or giving nodes then reads and builds them as Rust's modules do
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
@@ -19,10 +19,10 @@ text_from_memory(address: int, length: int): text := {
 }
 built_text(address: int, length: int): Node := held(text_from_memory(address, length))
 built_symbol(address: int, length: int): Node := symbol_of(text_from_memory(address, length))
-# `operator`: the operator's code (src/operators/codes.rs), above the kind bits as key_node puts it
+# `operator`: the operator's code (rust-harness:src/operators/codes.rs), above the kind bits as key_node puts it
 built_key(left: Node, right: Node, operator: int): Node := keyed(operator * KindUnit.Info + Kind.Key, left, right)
 # the host builds a list from its last item, a cell at a time: first ahead of the items of rest (ø for none); `info`
-# the list's bracket and separator above the kind bits (src/wasm_emitter/mod.rs list_info)
+# the list's bracket and separator above the kind bits (rust-harness:src/wasm_emitter/mod.rs list_info)
 built_list(first: Node, rest: Node, info: int): Node := {
 	items = if is_null(rest) then [] else unboxed_list(rest)
 	list_node(info * KindUnit.Info + Kind.List, list_join([first], items))

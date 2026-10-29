@@ -1,4 +1,4 @@
-# Interpolated text (card sugar-twins; Rust twin: src/text/interpolation.rs): the parser keeps `"a \(x) b"` as its
+# Interpolated text (card sugar-twins; Rust twin: rust-harness:src/text/interpolation.rs): the parser keeps `"a \(x) b"` as its
 # template ["template", "a ${x} b"] (holes `${expr}`, a literal dollar `$$`); here it becomes text building,
 # `"a " + text_form(x) + " b"`, so every later pass reads the holes as code. The first pass: a template inside a type
 # or an error, which stay opaque views, is rewritten there too; sql and sh templates first become their typed values

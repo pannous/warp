@@ -4,10 +4,8 @@
 #   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
 #           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm once it compiles itself, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
-#   tier 3  Rust harness: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
-#           (`cargo check`)
 # usage: scripts/gate.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
-#                               [<tree>, default this checkout] [<binary>, default /workspace/cow/warp-rust-latest]
+#                               [<tree>, default this checkout] [<binary>, default the native warp: ~/dev/bin/warp]
 #   --no-rebuild  the probes run with the tree's built compilers (lib/warp.wasm, lib/warp-self.wasm if there)
 #   --base        what tier 2 diffs against (default origin/main; a batch merged on main: the main it started from)
 #   --folders     tier 2 runs the whole folders of the changed test files (many fail today: compare with the base's run)
@@ -23,13 +21,13 @@ while (($#)); do
 		--base) base=$2; shift 2 ;;
 		--folders) folders=1; shift ;;
 		--tag-good) tag=1; shift ;;
-		-h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+		-h|--help) sed -n '2,16p' "$0"; exit 0 ;;
 		-*) echo "gate: unknown flag $1" >&2; exit 2 ;;
 		*) args+=("$1"); shift ;;
 	esac
 done
 tree=$(cd "${args[0]:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
-binary=${args[1]:-${WARP_GATE_BINARY:-/workspace/cow/warp-rust-latest}}
+binary=${args[1]:-${WARP_GATE_BINARY:-$HOME/dev/bin/warp}}
 wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 	local t
 	for t in ${tiers//,/ }; do
@@ -97,7 +95,7 @@ fi
 from=$(git merge-base "$base" HEAD 2>/dev/null)
 if wants 2; then
 	t2=$(date +%s)
-	files=$(git diff --name-only --diff-filter=AMR "$from" HEAD -- 'tests/*.warp' 2>/dev/null)
+	files=$(git diff --name-only --diff-filter=AMR "$from" HEAD -- 'test/*.warp' 2>/dev/null)
 	if [[ -z $files ]]; then echo "tier 2 (pure warp test of the changed tests): none changed since $base"
 	else
 		targets=$files; ((folders)) && targets=$(dirname $files | sort -u)
@@ -109,8 +107,6 @@ if wants 2; then
 	fi
 fi
 
-rust=$(git diff --name-only "$from" HEAD -- src crates Cargo.toml Cargo.lock '*.rs' '*build.rs' 2>/dev/null | head -3)
-[[ -n $rust ]] && echo "tier 3 (Rust harness): needed, not run here: the change touches ${rust//$'\n'/ } … (run cargo check)"
 echo "gate: green ($(git rev-parse --short HEAD), $(since $started) in all)"
 
 if ((tag)); then

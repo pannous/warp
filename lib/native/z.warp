@@ -1,5 +1,5 @@
 // zlib through its C library (card pure-c-imports): `use z` (or `use zlib`), or `import compressBound from "z"`;
-// warp-host loads libz (libz.so.1, libz.dylib). A text crosses as its bytes, NUL-terminated.
+// the native warp loads libz (libz.so.1, libz.dylib). A text crosses as its bytes, NUL-terminated.
 zlibVersion(): text from 'z'
 compressBound(length: i64): i64 from 'z'
 adler32(start: i64, data: text, length: i32): i64 from 'z'

@@ -380,7 +380,8 @@
 '(1/10+2/10)+3/10 == 1/10+(2/10+3/10)'	true
 
 # test_fast_floats_are_not_associative
-# triage-held 2026-10-28: fast floats (`fast` keyword reassociating float math) :: 'fast a=0.1; fast b=0.2; fast c=0.3; (a+b)+c == a+(b+c)'	false
+# triage-held 2026-10-28: fast floats (`fast` keyword reassociating float math) :: 
+# 'fast a=0.1; fast b=0.2; fast c=0.3; (a+b)+c == a+(b+c)'	false # DON'T PIN 'bad behavior'
 'a=0.1 as float; b=0.2 as float; c=0.3 as float; (a+b)+c == a+(b+c)'	false
 
 # test_as_converts_the_whole_expression

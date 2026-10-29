@@ -1,5 +1,5 @@
 // The fixed runtime of every crate shim warp-crate generates (notes/crate_adapter.md): how a Rust value crosses the C
-// ABI that warp-host's FFI speaks. Nothing here knows a crate; the generated wrappers below it call these.
+// ABI that the native warp's FFI speaks. Nothing here knows a crate; the generated wrappers below it call these.
 #![allow(dead_code, clippy::missing_safety_doc, non_snake_case)]
 use std::cell::RefCell;
 use std::ffi::{c_char, CStr, CString};
@@ -40,7 +40,7 @@ pub fn keep_text(text: &str) -> *const c_char {
 	})
 }
 
-/// A text parameter: warp-host passes a NUL-terminated copy; NULL is ""
+/// A text parameter: the native warp passes a NUL-terminated copy; NULL is ""
 pub unsafe fn text_in<'a>(pointer: *const c_char) -> &'a str {
 	if pointer.is_null() {
 		return "";
@@ -50,7 +50,7 @@ pub unsafe fn text_in<'a>(pointer: *const c_char) -> &'a str {
 		Err(_) => "",
 	}
 }
-/// A bytes parameter: warp-host passes the bytes of a text or a list of 0 to 255, NULs and all, and their count
+/// A bytes parameter: the native warp passes the bytes of a text or a list of 0 to 255, NULs and all, and their count
 pub unsafe fn bytes_in<'a>(pointer: *const u8, size: usize) -> &'a [u8] {
 	if pointer.is_null() || size == 0 {
 		return &[];
@@ -222,7 +222,7 @@ impl From<std::borrow::Cow<'_, str>> for ListItem {
 macro_rules! number_items { ($($t:ty),*) => { $(impl From<$t> for ListItem { fn from(n: $t) -> Self { ListItem(n.to_string()) } })* } }
 number_items!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, char, bool);
 
-/// The call `body`, its panic caught and recorded (unwinding into C would abort warp-host)
+/// The call `body`, its panic caught and recorded (unwinding into C would abort the native warp)
 pub fn guarded<C: Null>(body: impl FnOnce() -> Option<C>) -> C {
 	clear_error();
 	match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {

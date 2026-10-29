@@ -15,7 +15,7 @@ global runtime_spelling_lists = []
 spellings_of(table: int): list := {
 	if not runtime_spelling_lists {
 		runtime_spelling_lists = [
-			# a key's operator is its code above the kind bits, the position of its spelling here (src/operators/codes.rs OP_CODES)
+			# a key's operator is its code above the kind bits, the position of its spelling here (rust-harness:src/operators/codes.rs OP_CODES)
 			["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 				"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
 				"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
@@ -58,7 +58,7 @@ info_byte(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.I
 key_operator(n: Node): text := node_text(operator_spellings()#(info_byte(n) + 1))
 symbol_node(name: Node): Node := symbol_of(node_text(name))
 # a list's bracket and separator in its kind field: the bracket's info in the byte above the kind, the separator's
-# code at bit 48 (src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
+# code at bit 48 (rust-harness:src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
 bracket_spellings(): list := spellings_of(2)
 separator_spellings(): list := spellings_of(3)
 bracket_info(n: Node): int := info_byte(n)

@@ -33,7 +33,7 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 	if result == ValueKind.F32 { return TypedCode(ValueKind.Float, code + [f64_promote]) }
 	TypedCode(result, code)
 }
-# the constructors a host word builds nodes with, as Rust's module exports them (src/host/tasks/values.rs
+# the constructors a host word builds nodes with, as Rust's module exports them (rust-harness:src/host/tasks/values.rs
 # CONSTRUCTORS): [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
 host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
 	["new_float", [ValueKind.Float], "built_float"], ["new_codepoint", [ValueKind.Char], "built_codepoint"], ["new_text", [ValueKind.Char, ValueKind.Char], "built_text"],
@@ -42,7 +42,7 @@ host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], 
 	["new_bytes", [ValueKind.Char, ValueKind.Char, ValueKind.Int], "built_bytes"], ["new_spelled_key", [ValueKind.Node, ValueKind.Node, ValueKind.Node], "key_node"],
 	["new_spelled_list", [ValueKind.Node, ValueKind.Node, ValueKind.Node], "built_spelled_list"]]
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
-# the trap detail the host left (src/host/native.rs raised)
+# the trap detail the host left (rust-harness:src/host/native.rs raised)
 def exported_builders(): any {
 	if module.builders.any(f => f.name == host_builders#1#1) { return ø }
 	for builder in host_builders {

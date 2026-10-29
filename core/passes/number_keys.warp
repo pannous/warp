@@ -1,4 +1,4 @@
-# Number keys of a map (card integer-key, user decision P34; Rust twin: src/lowering/collections/number_keys.rs): a
+# Number keys of a map (card integer-key, user decision P34; Rust twin: rust-harness:src/lowering/collections/number_keys.rs): a
 # variable that starts as the empty map `{}`, or as a literal with number keys `{1: 5}`, is keyed by texts: `d[1] = "a"`
 # sets the entry "1", `d[1]` reads it, `d[k]` of a k known only at run time is `d[string(k)]`, and so is the key of
 # `k in d`, `d.remove(k)` and the other key words. On any other value `d[1]` stays a position. A function definition

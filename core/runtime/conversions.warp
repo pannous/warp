@@ -57,7 +57,7 @@ list_admitted(n: Node): Node := {
 	n
 }
 # … given to a typed field: kept when the type admits it, else "not a text", as Rust's
-# (src/wasm_emitter/declared_values.rs): a text or character for text, yes/no (or 0 and 1) for bool, a number for float
+# (rust-harness:src/wasm_emitter/declared_values.rs): a text or character for text, yes/no (or 0 and 1) for bool, a number for float
 text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
@@ -73,7 +73,7 @@ float_checked(n: Node): Node := {
 	n
 }
 # `x: T = v` of a class or enum T and a value known only at run time: v when it is an object (a symbol, key, block,
-# list or data: Rust's OBJECT_KINDS, src/wasm_emitter/declared_values.rs) or an error (of every type), else the run
+# list or data: Rust's OBJECT_KINDS, rust-harness:src/wasm_emitter/declared_values.rs) or an error (of every type), else the run
 # fails with the message ("not a T")
 object_checked(value: Node, message: text): Node := {
 	if is_null(value) or kind_code(value) < Kind.Symbol or kind_code(value) == Kind.Meta or kind_code(value) > Kind.Error { returned_error(message) }
@@ -101,7 +101,7 @@ list_of_node(n: Node): list := {
 	unboxed_list(n)
 }
 # `x as bool` of a value known only at run time, as Rust's cast: a text spelling a falsy word in any case ("No",
-# "false"; FALSY_TEXTS of src/wasm_emitter/mod.rs) is no, another value as a condition (card yes-print)
+# "false"; FALSY_TEXTS of rust-harness:src/wasm_emitter/mod.rs) is no, another value as a condition (card yes-print)
 bool_cast(n: Node): bool := {
 	if is_null(n) or kind_code(n) != Kind.Text { return node_truthy(n) }
 	t = unboxed_text(n)

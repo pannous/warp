@@ -1,0 +1,8 @@
+# `length each xs`, `length all xs`: the function applied to every element; `all xs > 0` whether every element is (decision each-all-broadcast, card length-each-apply)
+'length each ["ab", "c"]'	[2, 1]
+'xs = ["ab", "c"]; length all xs'	[2, 1]
+'length all "the quick brown fox".split(" ")'	[3, 5, 5, 3]
+'xs = [1, 2]; all xs > 0'	yes
+'xs = [1, -2]; all xs > 0'	no
+'xs = [1, 2]; any xs > 1'	yes
+'xs = [1, 2]; if (all xs >= 1) { "all" } else { "not" }'	"all"
