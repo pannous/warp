@@ -58,6 +58,9 @@ STD_PURE_WORD = 9
 PAINT_WORD = 10
 KEY_HELD_WORD = 11
 SET_SYSTEM_VALUE_WORD = 12
+PARSE_CODE_WORD = 13
+# the end of a field in warp.wasm's parse-code encoding (core/parsing/parse_words.warp FIELD_END)
+FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
 # at and the dots per inch of one CSS pixel per CSS inch, as warp-rust's system_values.rs
 WINDOW_WIDTH_SLOT = 0
@@ -124,6 +127,7 @@ display_extent(height: i32): i64 from "c"
 next_painting(): i32 from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
+atof(digits: pointer): f64 from "c"
 handle_known(id: i32): bool from "c"
 handle_pointer(id: i32): handle from "c"
 strlen(text: handle): i64 from "c"
@@ -466,6 +470,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "random_seed") { return RANDOM_SEED_WORD }
 	if same_text(name, "system_value") { return SYSTEM_VALUE_WORD }
 	if same_text(name, "set_system_value") { return SET_SYSTEM_VALUE_WORD }
+	if same_text(name, "parse_code") { return PARSE_CODE_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
 	if same_text(name, "key_held") { return KEY_HELD_WORD }
@@ -499,7 +504,8 @@ run(module: text, given: Arguments, machine_code: text): nothing := {
 	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
 	linker = wasmtime_linker_new(engine)
-	trap = allocate(8)
+	# wasmtime writes it only on a trap; a run inside a host word (parse_code) gets arena bytes an earlier one used
+	trap = zeroed(8)
 	checked(wasmtime_linker_define_wasi(linker), trap)
 	config = wasi_config_new()
 	wasi_config_set_argv(config, given.count, given.pointers)
@@ -724,6 +730,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
+	if word == PARSE_CODE_WORD { return code_parsed(caller, wasmtime_caller_context(caller), given, results) }
 	if word == SET_SYSTEM_VALUE_WORD { return system_value_set(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64), long_at(given + VALUE_BYTES + VALUE_OFFSET).value) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
@@ -824,6 +831,86 @@ system_value(name: text): i64 := {
 	complain(joined(joined("the system value ", name), " is not in the native warp yet (warp-rust has it)"))
 	exit(1)
 	0
+}
+# parse_code(t): warp.wasm parses t (its parse-code command, the compiler's own parser) and the tree is built again in
+# the module, node by node through its builders
+code_parsed(caller: handle, context: handle, given: pointer, result: pointer): nothing := {
+	output = joined(compiled_path(), ".code")
+	parsing = compiler_arguments(compiler_path())
+	added(parsing, "parse-code")
+	added(parsing, shown(caller, context, given))
+	added(parsing, output)
+	file_ran(compiler_path(), parsing)
+	encoding = read_file(output)
+	unlink(output)
+	at = allocate(8)
+	long_at(at).value = 0
+	code_built(caller, context, encoding, at, result)
+}
+# the node encoded at `at` (advanced past it) built in the module into `result`
+code_built(caller: handle, context: handle, encoding: text, at: pointer, result: pointer): nothing := {
+	tag = byte_at(encoding.address + long_at(at).value as i32).value
+	long_at(at).value = long_at(at).value + 1
+	if tag == 101 { return guest_call(caller, context, "new_empty", 0, 0, result) }
+	if tag == 84 or tag == 70 {
+		int_result(if tag == 84 then 1 else 0, result)
+		return guest_call(caller, context, "new_bool", result, 1, result)
+	}
+	field = encoded_field(encoding, at)
+	if tag == 105 { return guest_int(caller, context, "new_int", atoll(field), result) }
+	if tag == 102 {
+		float_result(atof(c_string(field)), result)
+		return guest_call(caller, context, "new_float", result, 1, result)
+	}
+	if tag == 99 {
+		byte_at(result).value = KIND_I32
+		word_at(result + VALUE_OFFSET).value = atoll(field) as u32
+		return guest_call(caller, context, "new_codepoint", result, 1, result)
+	}
+	if tag == 115 { return guest_bytes_built(caller, context, native_pointer(field.address), field.length as i64, "new_symbol", result) }
+	if tag == 120 {
+		guest_text_of(caller, context, field, result)
+		return guest_call(caller, context, "error_of", result, 1, result)
+	}
+	if tag == 107 {
+		parts = allocate(3 * VALUE_BYTES)
+		code_built(caller, context, encoding, at, parts)
+		guest_text_of(caller, context, field, parts + VALUE_BYTES)
+		code_built(caller, context, encoding, at, parts + 2 * VALUE_BYTES)
+		return guest_call(caller, context, "new_spelled_key", parts, 3, result)
+	}
+	if tag == 108 { return code_list_built(caller, context, encoding, at, atoll(field), result) }
+	guest_text_of(caller, context, field, result)
+}
+# a list of `count` items encoded after its bracket and separator: its items a square list built from the last one
+# on, a cell at a time (new_list), then given the bracket and separator their spellings name
+code_list_built(caller: handle, context: handle, encoding: text, at: pointer, count: i64, result: pointer): nothing := {
+	parts = allocate(3 * VALUE_BYTES)
+	guest_text_of(caller, context, encoded_field(encoding, at), parts + VALUE_BYTES)
+	guest_text_of(caller, context, encoded_field(encoding, at), parts + 2 * VALUE_BYTES)
+	items = allocate((count as i32 + 1) * VALUE_BYTES)
+	for i in 0..count { code_built(caller, context, encoding, at, items + (i as i32) * VALUE_BYTES) }
+	cell = allocate(3 * VALUE_BYTES)
+	byte_at(cell + VALUE_BYTES).value = ANYREF
+	long_at(cell + VALUE_BYTES + VALUE_OFFSET).value = 0
+	byte_at(cell + 2 * VALUE_BYTES).value = KIND_I64
+	long_at(cell + 2 * VALUE_BYTES + VALUE_OFFSET).value = SQUARE_LIST
+	i = count - 1
+	while i >= 0 {
+		memcpy(cell, native_pointer(items + (i as i32) * VALUE_BYTES), VALUE_BYTES)
+		guest_call(caller, context, "new_list", cell, 3, cell + VALUE_BYTES)
+		i = i - 1
+	}
+	memcpy(parts, native_pointer(cell + VALUE_BYTES), VALUE_BYTES)
+	guest_call(caller, context, "new_spelled_list", parts, 3, result)
+}
+# the field at `at`, up to its FIELD_END, `at` advanced past that
+encoded_field(encoding: text, at: pointer): text := {
+	start = long_at(at).value
+	end = start
+	while byte_at(encoding.address + end as i32).value != FIELD_END { end = end + 1 }
+	long_at(at).value = end + 1
+	text_from(encoding.address + start as i32, (end - start) as u32)
 }
 # the value a program set in that slot, else the default
 kept_or(slot: i64, default: i64): i64 := if kept_value(slot) != 0 then kept_value(slot) else default
@@ -1583,7 +1670,9 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 else if register == REGISTER_F64 then KIND_F64 else if register == REGISTER_F32 then KIND_F32 else KIND_I32
 # the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says (a module
 # calling C exports it), else at the end of its memory, grown for them (crates/warp-runtime gc_values.rs write_to_heap)
-guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := {
+guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := guest_bytes_built(caller, context, bytes, length, "new_text", result)
+# the bytes in the module's memory, built into a node by its builder of an (address, length): new_text, new_symbol
+guest_bytes_built(caller: handle, context: handle, bytes: handle, length: i64, builder: text, result: pointer): nothing := {
 	heap = allocate(EXTERN_BYTES)
 	has_heap = wasmtime_caller_export_get(caller, "text_heap", 9, heap)
 	memory = allocate(EXTERN_BYTES)
@@ -1609,7 +1698,7 @@ guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: 
 	word_at(values + VALUE_OFFSET).value = place as u32
 	byte_at(values + VALUE_BYTES).value = KIND_I32
 	word_at(values + VALUE_BYTES + VALUE_OFFSET).value = length as u32
-	guest_call(caller, context, "new_text", values, 2, result)
+	guest_call(caller, context, builder, values, 2, result)
 }
 
 appended = appended_module()

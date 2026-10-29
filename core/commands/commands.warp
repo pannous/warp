@@ -18,6 +18,7 @@ command_help = [
 	["repl", "Start interactive console: definitions stay for the next lines"],
 	["parse <code|file>", "Show the parsed program"],
 	["data <file>", "Read untrusted data without evaluating it"],
+	["parse-code <code> <file>", "The parsed code into the file, encoded for the native warp to rebuild (its parse_code)"],
 	["lower <code|file>", "Show the program after the lowering passes"],
 	["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],
 	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
