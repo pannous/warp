@@ -1562,9 +1562,29 @@ run_at(items: list, rules: list, origins: list): list? := {
 			if result != ø {
 				return [#rule.pattern, if target == ø then result else placed(Key(key_of(target), op_of(target), as_value(result)), target)]
 			}
+			split = operand_run(rule, origins[index], run + items[#rule.pattern ..])
+			if split != ø { return [split#1, if target == ø then split#2 else placed(Key(key_of(target), op_of(target), as_value(split#2)), target)] }
 		}
 	}
 	ø
+}
+# `2 km + 500 m`, which the parser keeps as `2 (km + 500) m`: a run whose last word stands as the leftmost operand of
+# an arithmetic or ordering operation; the run's rewrite takes that operand's place, and the words after the operation
+# join its rightmost operand: `(2 * km) + (500 m)` (card int-text)
+operand_run(rule: Rule, origin: map, items: list): list? := {
+	last = items[#rule.pattern - 1]
+	if not is_infix_operation(last) { return ø }
+	result = rule_applied(rule, origin, rule_phrase(items[0 ..< #rule.pattern - 1] + [leftmost_operand(last)]))
+	if result == ø { return ø }
+	[#items, with_rightmost(with_leftmost(last, as_value(result)), items[#rule.pattern ..])]
+}
+is_infix_operation(n: Node): bool := n is key and key_of(n) != ø and (op_of(n) in arithmetic_operators or op_of(n) in ordering_operators)
+leftmost_operand(n: Node): Node := if is_infix_operation(n) then leftmost_operand(key_of(n)) else n
+with_leftmost(n: Node, operand: Node): Node := if is_infix_operation(n) then placed(Key(with_leftmost(key_of(n), operand), op_of(n), value_of(n)), n) else operand
+with_rightmost(n: Node, words: list): Node := {
+	if #words == 0 { return n }
+	if is_infix_operation(n) { return placed(Key(key_of(n), op_of(n), with_rightmost(value_of(n), words)), n) }
+	rule_phrase([n] + words)
 }
 
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
