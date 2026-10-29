@@ -157,14 +157,20 @@ member_name(statement: Node): any := match statement {
 
 # the words a slice mentions, those inside a class's methods too (the opaque view of `class Instant { … text() :=
 # format_date(ms) }` holds its body as nodes, parts_within): a module's class brings the functions its methods call
-words_within(n: Node): list := {
+words_within(n: Node): list := names_within(n, no)
+# its words and the heads of its keys ("key =="), what a rule needs and gives (rewrites.warp rules_reaching)
+tokens_within(n: Node): list := names_within(n, yes)
+names_within(n: Node, with_keys: bool): list := {
 	found = {}
 	waiting = [n]
 	at = 1
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is symbol { found[name_of(part)] = yes } else { waiting += parts_within(part) }
+		if part is symbol { found[name_of(part)] = yes } else {
+			if with_keys and part is key { found[key_head(part)] = yes }
+			waiting += parts_within(part)
+		}
 	}
 	found.keys
 }
