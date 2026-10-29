@@ -317,9 +317,12 @@ def code_statements_of(name: text): list {
 	if not library_code_statements.has(name) { library_code_statements[name] = code_statements(join(module_sources([name]), "")) }
 	library_code_statements[name]
 }
+// `x ← v` (also `<-`), the plain store: the hidden call store·value(x, v), an assignment no rewrite rule takes for one
+// (rewrites.warp stored), so a rule's template writes it without matching itself again; `x = v` once the rules ran
+STORE_OPERATOR = "←"
 // The canonical names of the alias targets parser.warp's operator lists spell otherwise
 // Rust twin: spellings.rs OPERATOR_SPELLINGS ("approximately", "+-", "<-")
-ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": "="}
+ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": STORE_OPERATOR}
 
 // The parser's spellings: its own operators and keyword forms, with lib/aliases.warp's (card alias-mechanism,
 // notes/aliases.md: one entry per canonical word, `add { operator: "+", aliases: [plus] }`), made the first time a
@@ -1090,6 +1093,8 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
+			} else if op#2 == STORE_OPERATOR {
+				left = call_of([symbol(HiddenWord.StoredValue as text), left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
 				left = piped(left, expression(p, powers#2))
 			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at, p.n) or ",;)]}".contains(peek(p.code, p.at, p.n)) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
@@ -1591,7 +1596,7 @@ INDEX_POWER = 170
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
 // spellings (lib/aliases.warp)
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
+SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
 // does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]

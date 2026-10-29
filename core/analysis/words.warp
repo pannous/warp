@@ -13,13 +13,13 @@ required_type(word: text): text := if word.ends_with("?") then word[0..<(#word -
 # the hidden words the passes write for the emitter and analyzer, a `·` in each so no program can name them:
 # `ran·without·error{statement}` (what `try` lowers to), `loop·step: i++` (a loop's step, after its body),
 # the guard markers, data items and fields, the shown text of an instance
-# and the missing part of an `of` lookup
+# and the missing part of an `of` lookup, the plain store `x ← v` (`store·value(x, v)`)
 enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·step", TryElse = "try·else",
 	AssertElse = "assert·else", DataItem = "data·item", DataField = "data·field", TextShown = "text·shown", FloatConverted = "float·converted", FloatCast = "float·cast", OfNone = "of·none",
 	ViewOpaque = "view·opaque", ViewAttribute = "view·attribute", DataSpliced = "data·spliced", GlueName = "glue·name",
 	GlueHidden = "glue·hidden", MatchSubject = "match·subject", MatchBound = "match·bound", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",
-	UncaughtError = "uncaught·error", CaughtError = "caught·error" }
+	UncaughtError = "uncaught·error", CaughtError = "caught·error", StoredValue = "store·value" }
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
 implicit_parameter = "it"
 # the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
