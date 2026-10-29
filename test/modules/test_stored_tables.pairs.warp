@@ -6,3 +6,5 @@
 'use storage; class U{n: int; tall: bool; h: float}; stored_table("u", U); stored_add("u", U(1, yes, 1.5)); stored_table("u", U)#1'	U{n: 1, tall: yes, h: 1.5}
 'use storage; class U{n: int}; stored_table("u", U); stored_add("u", U(1)); stored_add("u", U(2)); stored_save("u", [U(7)]); stored_table("u", U)'	[U{n: 7}]
 «use storage; class U{name: text}; stored_table("u", U); stored_add("u", U("it's'); drop table u")); stored_table("u", U)#1.name»	"it's'); drop table u"
+'use storage; class U{n: int}; stored_add("u", U(5)); stored_table("u", U)#1.n'	5
+'use storage; class U{n: int}; stored_save("u", []); stored_save("u", [U(3)]); count(stored_table("u", U))'	1
