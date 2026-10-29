@@ -189,9 +189,6 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 	# definition replaces the module's
 	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
 	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
-	# the program's values, `global hue = 10`, are not a module's: its own `hue` in hsv stays its local
-	module_names = definition_slices(module).map(slice => slice#1)
-	program_values = statements_in(program).filter(is_value_definition).map(declared_name).filter(name => name not in module_names)
 	# [name, text, the name written] of each slice: a replaced one under its library_word, for an alias's call
 	slices = definition_slices(module).map(slice => if kept(slice) then slice + [slice#1] else [library_word(slice#1), slice#2, slice#1])
 	# the statements of each reached slice, by its text
@@ -213,7 +210,6 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
 				else if slice#2 in declared { slice_node = declared_only(slice_node) }
-				slice_node = with_own_locals(slice_node, program_values)
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
@@ -301,12 +297,6 @@ aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
 	word = if called in aliases then aliases[called] else arity_variant(called, count)
 	if word == ø or shadows(own, called, count) { return n }
 	group_like(n, [symbol(if word in own then library_word(word) else word)] + items_of(n)[1 ..])
-}
-# a module's definition with each of the program's value names it says renamed apart (card module-hygiene)
-with_own_locals(definition: Node, program_values: list): Node := {
-	said = words_within(definition)
-	for name in program_values.filter(name => name in said) { definition = renamed(definition, name, symbol(name + name_joiner + "local")) }
-	definition
 }
 # the module's own definition of a word the program defines too, which an alias or variant means: `round(x, 2)` calls
 # the prelude's round_to beside a program's round_to (card module-hygiene)
