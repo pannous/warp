@@ -73,6 +73,9 @@ if [ -x "$stage/warp" ]; then
 	paced=$(WARP_SOUND_PLAYER="$stage/recorder.sh" native $'use sound\nc = clock()\ntone(440Hz, 0.5s)\ntone(880Hz, 0.5s)\nwait_sound()\nclock() - c >= 1000' | tail -1)
 	sleep 0.2
 	check "sounds through the player, each when its voice reaches it" "$paced $(wc -l <"$stage/played.log" | tr -d ' ') $(sed -n 2p "$stage/played.log")" "yes 2 $stage/recorder.sh 2.wav"
+	check "a signal, sample by sample" "$(native $'use sound\nhum(t: float) := 0.5 * sin(2 * pi * 220 * t)\nplay(hum, 0.5s)' 2>&1 | head -1 | cut -d: -f1)" "sound 0.50 s"
+	check "a signal in blocks" "$(native $'use sound\nhum(block: samples, t) := for i in 1 to #block { block#i = 0.3 }\nplay(hum, 0.1s)' 2>&1 | head -1 | cut -d: -f1)" "sound 0.10 s"
+	check "a sound file" "$(cd "$stage" && ./warp $'use sound\nplay "a.wav"' 2>&1 | head -1)" "sound file: a.wav"
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
 	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
