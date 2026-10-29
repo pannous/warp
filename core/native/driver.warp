@@ -76,6 +76,7 @@ wasmtime_config_wasm_function_references_set(config: handle, enabled: bool) from
 wasmtime_config_wasm_exceptions_set(config: handle, enabled: bool) from "warp_wasmtime"
 warp_config_gc_heap_initial_size_set(config: handle, bytes: i64) from "warp_wasmtime"
 wasmtime_config_consume_fuel_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_config_parallel_compilation_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
 wasmtime_trap_code(trap: handle, code: pointer): bool from "warp_wasmtime"
 wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
@@ -422,10 +423,12 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 # what warp's modules use beside the MVP: GC, typed function references, exceptions (rust-harness:crates/warp-runtime engine.rs),
 # fuel metering when the run counts steps,
 # warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
-# warp.wasm's beside it (compiled_module)
+# warp.wasm's beside it (compiled_module); compiled on one thread with WARP_ONE_THREAD (a `warp test` case: its slot
+# is one core, else every case compiles on all of them, a load of 200 on 16 cores)
 warp_config(fuel: bool): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
+	wasmtime_config_parallel_compilation_set(config, getenv("WARP_ONE_THREAD").length == 0)
 	warp_config_gc_heap_initial_size_set(config, GC_HEAP_INITIAL_BYTES)
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)

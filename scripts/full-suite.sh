@@ -6,6 +6,7 @@
 # One at a time on this machine: a second call while one runs says so and exits 0 (two full suites at once doubled the
 # load to 200 and wrote one results file, 2026-10-29). The results land only when the run ended with its summary; a run
 # that died leaves test/results.txt as it was, says why (its last error lines) and keeps its output in data/full-suite/.
+# It runs on a snapshot of HEAD (/Volumes/Worktrees/full-suite, removed after), so pulls and edits in the tree never reach it.
 # Run it in the background: it takes about an hour.
 set -uo pipefail
 WARP=${WARP:-/Users/me/dev/bin/warp}
@@ -35,7 +36,13 @@ trap 'rm -rf "$LOCK"' EXIT
 
 cd "$tree" || exit 1
 tip=$(git rev-parse --short=10 HEAD)
-WARP_NO_WINDOW=1 WARP_HINTS=0 "$WARP" test --each test >"$scratch/results.txt" 2>"$scratch/errors.txt"
+# a snapshot of HEAD that holds still for the hour (a pull in the tree mid-run gave each case another's verdict, 3980
+# instead of ~7400 passing, 2026-10-29)
+snapshot=${FULL_SUITE_SNAPSHOT:-/Volumes/Worktrees/full-suite}
+git worktree remove --force "$snapshot" 2>/dev/null
+cowtree add "$snapshot" --detach HEAD >/dev/null 2>&1 || { echo "full-suite: no snapshot of $tip at $snapshot" >&2; exit 1; }
+trap 'git -C "$tree" worktree remove --force "$snapshot"; rm -rf "$LOCK"' EXIT
+(cd "$snapshot" && WARP_NO_WINDOW=1 WARP_HINTS=0 "$WARP" test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
 summary=$(tail -1 "$scratch/results.txt" | grep "$SUMMARY")
 if [ -z "$summary" ]; then
 	echo "full-suite: the run at $tip died without its summary; test/results.txt kept. Last errors:" >&2
