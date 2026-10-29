@@ -7,6 +7,7 @@ use "../analysis/words.warp"
 use "../parsing/phrase_blocks.warp"
 use "../analysis/diagnostics.warp"
 use "class_methods.warp"
+use "class_statics.warp"
 use "scope.warp"
 use "lambdas.warp"
 use "data_blocks.warp"
@@ -211,7 +212,7 @@ is_call(n: Node): bool := match n {
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
 	# then data written as data (data_blocks.warp), once the definitions say which functions take it
-	data_blocks(bottom_up(conversions(methods_lifted(program)), definition))
+	data_blocks(bottom_up(conversions(methods_lifted(statics_hoisted(program))), definition))
 }
 
 # A program's conversions (decision general-conversions; Rust twin: src/lowering/types/conversions.rs): `Person as
