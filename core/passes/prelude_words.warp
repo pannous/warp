@@ -375,12 +375,13 @@ with_type_module_uses(program: Node): Node := {
 	modules = type_modules.filter(module => module in wanted and module not in used)
 	with_module_uses(program, modules + global_word_modules(program, own, used))
 }
-# the modules of the global words a program names and binds nothing to, each once
+# the modules of the global words a program names, or a sugar rule reaching it writes (`x.json` json_text), and binds
+# nothing to, each once
 global_word_modules(program: Node, own: any, used: list): list := {
 	bound = names_bound_in(program)
 	words = global_words()
 	modules = []
-	for word in symbol_words(program) {
+	for word in symbol_words(program) + sugar_words_of(program) {
 		module = words.get(word)
 		if module != ø and word not in own and word not in bound and module not in used and module not in modules { modules += [module] }
 	}
@@ -400,7 +401,7 @@ implicit_modules(source: text, index_file: text): list := {
 	program = plain_node(parsed(source))
 	own = own_heads(program)
 	bound = names_bound_in(program)
-	prelude_names = definition_slices(module_source("prelude")).map(slice => slice#1)
+	prelude_names = prelude_definitions()
 	used = used_module_sources(statements_in(program), ".", [])#2
 	known = {}
 	for module in used { for slice in definition_slices(used_module_text(module)) { known[slice#1] = yes } }
@@ -440,6 +441,12 @@ runtime_words_of_math = module_source("math").split("\n").map(line => typed_line
 used_module_text(module: text): text := {
 	native = native_path(run_library(), module)
 	file_text(std_module_path(module)) ?? (if native == ø then "" else file_text(native) ?? "")
+}
+# the names the prelude defines, read once
+global prelude_definition_names = ø
+prelude_definitions(): list := {
+	if prelude_definition_names == ø { prelude_definition_names = definition_slices(module_source("prelude")).map(slice => slice#1) }
+	prelude_definition_names
 }
 with_implicit_uses(source: text, index_file: text): text := source + implicit_modules(source, index_file).map(module => "\nuse " + module).join("")
 # word → the standard modules defining it, read from the index `warp rebuild` writes (a line `word<TAB>module …`

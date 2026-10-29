@@ -59,7 +59,8 @@ find(xs: list, f: function): element of xs from emitter
 find(t: text, f: function): element of t from emitter
 each(xs: list, f: function) from emitter
 each(t: text, f: function) from emitter
-add(xs: list, x): same as xs from emitter
+// the call form of xs.add(x), which lib/sugar/methods.warp appends in place (the emitter has no call add)
+add(xs, x) := { xs.add(x); xs }
 insert(xs: list, x, at: int): same as xs from emitter
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
@@ -712,8 +713,6 @@ text_part(t: text): any := t
 // the name without its mark: `$a` → a, `*rest` → rest
 unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
 
-// `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
-json_text(value: any): any := if is_type(value, "map") and "json" in value then value["json"] else std_pure("json", "to_json", [value])
 
 // Named events (lib/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
 // from 1) and whether they listen once, as three lists of the same length

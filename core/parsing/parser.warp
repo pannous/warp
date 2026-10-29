@@ -973,9 +973,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			left = keyed(op, left, ø)
 		} else if c == '!' and SUFFIX_POWER >= min_power and bang_suffix_at(p) {
 			p.at = p.at + 1
-			fully = is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n)
-			if fully { p.at = p.at + 1 }
-			left = forced(left, fully)
+			# `x!!` is `x!`
+			if is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n) { p.at = p.at + 1 }
+			left = forced(left)
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
@@ -1526,15 +1526,16 @@ def bang_suffix_at(p: Parser): bool {
 	glued or not operand_follows(p, 1)
 }
 
-// `left!` (`left!!` when fully): `x.upper!` and `upper x!` mark their name for mutation.rs, `upper(x)!` assigns the
-// result back to x, `{…}!` runs the block anyway, `ø!` unwraps
+// `left!` (or `left!!`): `upper(x)!` assigns the result back to x, `{…}!` runs the block anyway, anything else
+// is `unwrap(left)`, which lib/sugar/methods.warp turns into an assignment back where a function's call is marked
+// (`x.upper!`, `upper x!`), and which runs a lone `x!` as it is
 // Rust twin: suffixes.rs try_parse_evaluate_bang
-def forced(left: Node, fully: bool): Node := {
+def forced(left: Node): Node := {
 	if left == ø { return call_of([symbol("unwrap"), ø]) }
 	variable = mutated_variable(left)
 	if variable != ø and not is_member(left) { return Key(variable, Op.Assign, left) }
 	if is_block(left) { return left }
-	attributed("mutated", if fully then 2 else true, left)
+	call_of([symbol("unwrap"), left])
 }
 
 def is_member(node: Node): bool := match node {

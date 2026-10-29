@@ -522,8 +522,13 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)
-	if call != ø and name_of(call#1) in overloaded {
-		return Key(renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))), Op.Define, typed_resolved(value_of(n), overloaded, judge))
+	if call != ø {
+		# a parameter named like an overloaded function is the definition's own: the prelude's `f(item)` of map(xs, f)
+		# calls its f, never the program's f(n: int, t: text)
+		parameters = items_of(call)[1 ..].map(parameter_name)
+		inner = if parameters.any(name => name in overloaded) then without_keys(overloaded, parameters) else overloaded
+		head = if name_of(call#1) in overloaded then renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))) else key_of(n)
+		return Key(head, Op.Define, typed_resolved(value_of(n), inner, judge))
 	}
 	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument
 	method = if is_key(n, Op.Dot) then value_of(n) else ø
@@ -534,6 +539,11 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
 }
 
+without_keys(m: map, names: list): map := {
+	kept = {}
+	for key in m.keys { if key not in names { kept[key] = m[key] } }
+	kept
+}
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
