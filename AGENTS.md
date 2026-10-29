@@ -18,17 +18,14 @@ The specification is not fully implemented yet
 
 # self hosted
 
-warp began as a Rust implementation; since 2026-10-26 the compiler is written in warp (core/*.warp,
-notes/self_hosting.md) and compiles itself. The old Rust compiler is the snapshot on branch `rust-bootstrap`; nothing
-of it is on main. What stays Rust is the harness in src/ and crates/warp-runtime: the native host (wasmtime, host
-words, FFI), the runtime that reads results back, and the CLI. Most things are implemented as libraries (lib/) or
-compiler extensions (core/extensions/). If the core compiler (core/*.warp) or the Rust harness needs changes, this needs
-to go through the interviewer. Ignore all old tasks about Rust features or  'both lanes'. 
-
+warp began as a Rust implementation; Since 2026-10-29 the compiler is COMPLETELY written in warp (core/*.warp,
+notes/self_hosting.md) and compiles itself. 
+The old Rust compiler is the snapshot on branch `rust-bootstrap`; nothing of it is on main.
+Most things are implemented as libraries (lib/) or compiler extensions (core/extensions/). If the core compiler (core/*.warp). Ignore all old tasks about Rust features or  'both lanes'. 
 The seed, warp-seed.wasm beside the binary (~/dev/bin; no file of git, published on GitHub pre-releases seed-<date>), is
 the seed compiler; it compiles compiler.warp to
 warp.wasm, which promotes itself to warp-self.wasm when it compiles itself once more (no fixed point needed, user
-2026-10-26).
+
 
 ## Core Architecture
 
@@ -86,13 +83,6 @@ Recursive descent parser that converts text input to Node AST:
 
 Generates the WASM GC bytecode and its runtime words (texts, lists, maps, unbounded ints, exact numbers, equality,
 WASI, FFI) in warp; the value layout and the `Kind` enum are in notes/self_hosting.md "Value layout".
-
-### Rust harness (`src/`, `crates/warp-runtime`)
-
-Runs the compiled modules and nothing else: `src/run/` (wasmtime), `src/host/` and `src/host.rs` (host words, sandbox,
-channels, database), `src/ffi/`, `src/gc_traits/` (reads GC objects back into Nodes), `src/node/` (printing results),
-`src/cli/`, `src/compiler/standalone.rs` and `pure_tests.rs` (run warp.wasm, `warp test`).
-This harness should barely ever be rebuilt, and if so, independent of the warp files, and all tests should be completely parallel and non-blocking.
 
 ## Build and Test Commands
 
@@ -179,8 +169,7 @@ look and build that (notes/agents/common.md Principles).
 ## Serialization
 
 === Node Serialization Workflow (Current Spec) ===
-node.warp via
-emitter.warp in notes/self_hosting.md "Value layout".
+node.warp via emitter.warp in notes/self_hosting.md "Value layout"
 
 1. Core GC types emitted to WASM:
 
@@ -246,8 +235,9 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 
 A test gives warp code and checks what it produces: the value, printed output, error, effect or CLI output.
 
-No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC
-layouts, internal APIs. 
+A test pins only behavior we want. Never write an expectation for a known flaw (eg .1+.2!=.3)
+
+No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC layouts, internal APIs.
 
 
 ## Commit everything
