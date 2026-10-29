@@ -593,7 +593,14 @@ unpacked_rule(n: Node, module: text): Rule := {
 	fields = items_of(n)
 	hole = if fields#3 == ø then ø else fields#3
 	shape = if fields#4 == ø then ø else fields#4
-	Rule(fields#1, fields#2, hole, shape, items_of(fields#5), PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
+	conditions = items_of(fields#5)
+	# an origin the baking compiler (an older seed) took a call of a rule word it did not know yet for: a computed binding
+	if hole != ø and is_computed_binding(Key(hole, Op.Assign, shape)) {
+		conditions += [Key(hole, Op.Assign, shape)]
+		hole = ø
+		shape = ø
+	}
+	Rule(fields#1, fields#2, hole, shape, conditions, PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
 }
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
@@ -1029,6 +1036,10 @@ may_be_list(code: Node, scope: text, vectors: list): bool := {
 }
 # `v .* 2` as the parser leaves it, before lib/sugar/arithmetic.warp spells it element_wise_any
 is_element_wise_phrase(code: Node): bool := is_spaced(code) and #code == 3 and code#2 is symbol and name_of(code#2) in PHRASE_OPERATORS and name_of(code#2).starts_with(".")
+# a phrase operator glued to the operand on its left, the `.(` of `abs.(-3)`, the `.*` of `v .* 2`: no hole binds code
+# beginning with one, so the prefix rule `abs $x` never takes the dot call's `.( (-3)` as its operand
+starts_glued(code: Node): bool := is_glued_operator(code) or (is_spaced(code) and #code > 0 and is_glued_operator(code#1))
+is_glued_operator(n: Node): bool := n is symbol and (name_of(n) == DOT_CALL or name_of(n) in PHRASE_OPERATORS)
 is_swizzle_word(name: text): bool := #name >= 2 and #name <= 4 and name.all(c => c in "xyzw")
 
 # the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)
@@ -1260,8 +1271,8 @@ typed_hole(n: Node): TypedHole? := match n {
 
 is_hole_kind(code: Node, kind: text): bool := {
 	if kind == "text" { return code is text }
-	if kind == "number" { return code is number }
-	if kind == "int" { return code is int }
+	if kind == "number" { return code is number or is_big_number_view(code) }
+	if kind == "int" { return code is int or (is_big_number_view(code) and not value_of(code)#2.contains(".")) }
 	if kind == "list" { return is_group(code) and bracket_of(code) == "[" }
 	if kind == "block" { return is_curly_group(code) and not is_braced_map(code) }
 	if kind == "map" { return (is_curly_group(code) and is_braced_map(code)) or (code is symbol and rule_maps.has(name_of(code))) }
@@ -1561,7 +1572,7 @@ run_at(items: list, rules: list, origins: list): list? := {
 			run = items[0 ..< #rule.pattern]
 			first = run#1
 			target = ø
-			if is_key(first, Op.Assign) or is_key(first, Op.Colon) {
+			if is_key(first, Op.Assign) or (is_key(first, Op.Colon) and not is_big_number_view(first)) {
 				target = first
 				run = [value_of(first)] + run[1 ..]
 			}
@@ -1675,6 +1686,7 @@ one_statement_kept(pattern: Node, code: Node, bound: map): bool := {
 is_one_statement(binding: Node): bool := is_curly_group(binding) and separator_of(binding) == " "
 
 hole_binding(name: text, code: Node, bound: map): bool := {
+	if starts_glued(code) { return no }
 	if bound.has(name) { return bound[name] == code }
 	bound[name] = code
 	yes
@@ -1713,8 +1725,11 @@ rule_spliced(template: Node, bound: map, at: Node): Node := {
 	}
 	if is_phrase(template) { return placed(as_phrase(items), at) }
 	if is_block_of_rest(template) and bound.has(rest_hole_name(template#1)) and is_one_statement(bound[rest_hole_name(template#1)]) { return bound[rest_hole_name(template#1)] }
-	placed(if is_block_of_rest(template) and #items > 1 then List(items, Bracket.Curly, Separator.Semicolon) else group_like(template, items), at)
+	placed(if is_block_of_rest(template) and #items > 1 then List(items, Bracket.Curly, Separator.Semicolon) else prefix_word_call(group_like(template, items)), at)
 }
+# a call a template builds of a word the parser reads as a prefix operator, `abs($e)` of `$f($e)` binding abs: that
+# operator, as the parser reads `abs(x)`
+prefix_word_call(n: Node): Node := if is_round(n) and #n == 2 and n#1 is symbol and keyword_form(name_of(n#1)) in PREFIX_OPERATORS then keyed(keyword_form(name_of(n#1)), ø, n#2) else n
 
 # `{$b...}`: a block of a rest hole, whose statements a template gives back as statements
 is_block_of_rest(n: Node): bool := is_curly_group(n) and #n == 1 and rest_hole_name(n#1) != ø

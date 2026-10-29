@@ -35,31 +35,44 @@ exact_denominator(n: Node): int := if is_ratio(n) then ratio_denominator(n) else
 # one to big_ratios.warp by the intrinsic made_case(Made.BigInt, big_exact_sum(a, b)) …: `if holds_big_int(a) or
 # holds_big_int(b) { return big_exact_sum(a, b) }`, compiled only into a program that makes big ints (emitter made_case), so a plain-int
 # program carries none of it
-holds_big_int(n: Node): bool := if is_ratio(n) then not is_plain_int(numerator_part(n)) or not is_plain_int(denominator_part(n)) else not is_plain_int(n)
+holds_big_int(n: Node): bool := if is_ratio(n) then not has_plain_parts(n) else not is_plain_int(n)
 # what made_case(Made.Ratio, …) tests
 holds_ratio(n: Node): bool := is_ratio(n)
-# a's numerator times b's denominator; past 64 bits these words trap as int arithmetic does, loud rather than wrapped
-# (a program making big ints goes on in big_ratios.warp instead)
-cross_product(a: Node, b: Node): int := checked_multiply(exact_numerator(a), exact_denominator(b))
+# whether an exact number's parts are below 2^31, so that a sum of two products of them stays within 64 bits; the
+# words below go on in big_ratios.warp past that, an Int being unbounded (D16): twelve divisions by 1.18 are 59^12
+# over 50^12
+small_parts(n: Node): bool := {
+	numerator = exact_numerator(n)
+	numerator < 2147483648 and numerator > -2147483648 and exact_denominator(n) < 2147483648
+}
+fit_together(a: Node, b: Node): bool := small_parts(a) and small_parts(b)
+# a's numerator times b's denominator
+cross_product(a: Node, b: Node): int := exact_numerator(a) * exact_denominator(b)
+common_product(a: Node, b: Node): int := exact_denominator(a) * exact_denominator(b)
 exact_add(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_sum(a, b))
-	exact_ratio(checked_add(cross_product(a, b), cross_product(b, a)), checked_multiply(exact_denominator(a), exact_denominator(b)))
+	if not fit_together(a, b) { return big_exact_sum(a, b) }
+	exact_ratio(cross_product(a, b) + cross_product(b, a), common_product(a, b))
 }
 exact_sub(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_difference(a, b))
-	exact_ratio(checked_subtract(cross_product(a, b), cross_product(b, a)), checked_multiply(exact_denominator(a), exact_denominator(b)))
+	if not fit_together(a, b) { return big_exact_difference(a, b) }
+	exact_ratio(cross_product(a, b) - cross_product(b, a), common_product(a, b))
 }
 exact_mul(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_product(a, b))
-	exact_ratio(checked_multiply(exact_numerator(a), exact_numerator(b)), checked_multiply(exact_denominator(a), exact_denominator(b)))
+	if not fit_together(a, b) { return big_exact_product(a, b) }
+	exact_ratio(exact_numerator(a) * exact_numerator(b), common_product(a, b))
 }
 exact_div(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_quotient(a, b))
-	exact_ratio(cross_product(a, b), checked_multiply(exact_denominator(a), exact_numerator(b)))
+	if not fit_together(a, b) { return big_exact_quotient(a, b) }
+	exact_ratio(cross_product(a, b), exact_denominator(a) * exact_numerator(b))
 }
 # -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
 exact_order(a: Node, b: Node): int := {
 	made_case(Made.BigInt, big_exact_order(a, b))
+	if not fit_together(a, b) { return big_exact_order(a, b) }
 	left = cross_product(a, b)
 	right = cross_product(b, a)
 	if left < right then -1 else if left > right then 1 else 0

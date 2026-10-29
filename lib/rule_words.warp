@@ -125,5 +125,31 @@ counted_question(items: Node, item: Node): Node := {
 # a value as code to paste: a text in its quotes
 as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
+# --- a function's own words (lib/sugar/reflection.warp's rules, card name-params) ---
+
+# the program's definition of the function named, `f(a, b) := …` or `f = x => …`; ø for none
+function_definition(name: Node, program: Node): any := {
+	found = program_statements(program).filter(statement => defines(statement, "${name}"))
+	if #found == 0 then ø else found#1
+}
+defines(statement: Node, name: text): bool := defined_name(statement) == name or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
+# `["a", "b"]`: the names of the function's parameters as a list; ø when the program defines no such function
+parameters_named(name: Node, program: Node): any := {
+	definition = function_definition(name, program)
+	if definition == ø { return ø }
+	List(definition_parameters(definition), Bracket.Square, Separator.Comma)
+}
+definition_parameters(definition: Node): list := if is_definition(definition) then defined_parameters(definition).map(parameter_name) else lambda_parameters(key_of(value_of(definition)))
+# the code the function computes, `x*2` of `twice(x) := x*2`; ø when the program defines no such function
+body_of(name: Node, program: Node): any := {
+	definition = function_definition(name, program)
+	if definition == ø { return ø }
+	if is_definition(definition) then value_of(definition) else value_of(value_of(definition))
+}
+# `twice.description`: a word a function has none of, the compile refused with the word it means
+misnamed(function: Node, word: Node, meant: Node): Node := {
+	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
+}
+
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, misnamed: misnamed}

@@ -1,0 +1,8 @@
+# the dot call of a word the parser makes a prefix operator broadcasts as any function's (card abs-abs); of a value
+# not known as a list it applies once
+'abs.([-3, 2])'	[3 2]
+'abs.(-3)'	3
+'x = -3; abs.(x)'	3
+'sqrt.([4, 9])'	[2 3]
+'cbrt.([8, 27])'	[2 3]
+'floor.(2.5)'	2

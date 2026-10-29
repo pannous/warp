@@ -1,0 +1,10 @@
+# the keys are one enum Key (decision keys-enum): each case spelled as a window names the key, the bare words aliases
+# of its cases, held_key a Key, none without a window
+'Key.up == "ArrowUp"'	true
+'UP == Key.up'	true
+'ESC == Key.escape and ESCAPE == ESC'	true
+'RETURN == ENTER'	true
+'space == Key.space'	true
+'held_key == Key.none'	true
+'held_key == ""'	true
+'held_key != Key.w'	true

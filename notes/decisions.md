@@ -488,7 +488,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P88 every host grants every capability for now; the checks stay. P89 foreign runtimes get their own capability. #8 print's IO capability is granted implicitly. P26 libm counts as pure.
 - P94 WIT `char` is a Codepoint. exe-foreign: an executable using python/js starts them from PATH and fails loudly when missing.
 - P228 programs using tables or JSON don't build stand-alone; the runtime stays ~1 MB.
-- bizarre-global: play, beep, stop_sound, wait_sound are global; other sound words need `use sound`. #14e `download <url>` is an alias of `fetch`.
+- bizarre-global (superseded by global-word-marker-not-needed and implicit-standard-words: every unambiguous sound word works without `use`): play, beep, stop_sound, wait_sound are global; other sound words need `use sound`. #14e `download <url>` is an alias of `fetch`.
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
