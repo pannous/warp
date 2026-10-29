@@ -60,3 +60,66 @@ def time_intrinsic(body: Body, name: text, arguments: list): TypedCode {
 	offset = kind_word_shifted(t, kind_bits + offset_shift, yes)
 	TypedCode(ValueKind.Int, offset + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul])
 }
+
+## time literals (card triage-time-values; rust-harness:src/time/mod.rs time_info): the parser's data view of a time,
+## `2024-02-29`, `2024-01-31T10:30:15.5Z`, `1 month 2 days`, as the time node it is
+second_nanos = 1000000000
+day_nanos = 86400 * second_nanos
+unit_nanos = {hour: 3600 * second_nanos, minute: 60 * second_nanos, second: second_nanos}
+# a time literal's [info, position], [] for a zoned one (its zone's rules are Rust's) or a text that is no time
+def time_parts(written: text): list := if is_digit(written[0]) and #written >= 10 and written[4] == '-' then moment_parts(written) else duration_parts(written)
+def is_time_literal(written: text): bool := #time_parts(written) > 0
+def time_literal(written: text): TypedCode {
+	parts = time_parts(written)
+	TypedCode(ValueKind.Time, time_node([op.i64_const] + sleb(parts#1), [op.i64_const] + sleb(parts#2)))
+}
+# `2024-02-29` a date (days since 1970), `2024-01-31T10:30` a local time, `…Z` or `…+01:00` an instant (nanoseconds); [] for a zoned time
+def moment_parts(written: text): list {
+	day = days_from_civil(int(written[0 ..< 4]), int(written[5 ..< 7]), int(written[8 ..< 10]))
+	if #written == 10 { return [TimeFormCode.Date, day] }
+	at = 16
+	nanos = int(written[11 ..< 13]) * unit_nanos.hour + int(written[14 ..< 16]) * unit_nanos.minute
+	if at < #written and written[at] == ':' {
+		nanos += int(written[at + 1 ..< at + 3]) * second_nanos
+		at += 3
+		if at < #written and written[at] == '.' {
+			start = at + 1
+			at = start
+			while at < #written and is_digit(written[at]) { at += 1 }
+			fraction = written[start ..< at]
+			while #fraction < 9 { fraction += "0" }
+			nanos += int(fraction[0 ..< 9])
+		}
+	}
+	position = day * day_nanos + nanos
+	if at == #written { return [TimeFormCode.Local, position] }
+	if written[at] == 'Z' or written[at] == 'z' { return [TimeFormCode.Instant, position] }
+	if written[at] == '+' or written[at] == '-' {
+		offset = int(written[at + 1 ..< at + 3]) * unit_nanos.hour + int(written[at + 4 ..< at + 6]) * unit_nanos.minute
+		return [TimeFormCode.Instant, if written[at] == '+' then position - offset else position + offset]
+	}
+	[]
+}
+# `1 month 2 days 3 hours`: the months and days in the info above the form, the rest as nanoseconds
+def duration_parts(written: text): list {
+	words = written.split(" ")
+	if #words % 2 != 0 { return [] }
+	months = 0
+	days = 0
+	nanos = 0
+	for at in 0 ..< #words /! 2 {
+		amount = int(words[2 * at])
+		unit = words[2 * at + 1]
+		if unit.ends_with("s") { unit = unit[0 ..< #unit - 1] }
+		if unit == "month" { months += amount } else if unit == "day" { days += amount } else if unit_nanos.has(unit) { nanos += amount * unit_nanos[unit] } else { return [] }
+	}
+	[TimeFormCode.Duration + (days % TimeInfoUnit.DayRange) * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos]
+}
+# the day since 1970 of a proleptic Gregorian date (Howard Hinnant's days_from_civil)
+def days_from_civil(year: int, month: int, day: int): int {
+	shifted = if month <= 2 then year - 1 else year
+	era = shifted /! 400
+	year_of_era = shifted - era * 400
+	day_of_year = (153 * ((month + 9) % 12) + 2) /! 5 + day - 1
+	era * 146097 + year_of_era * 365 + year_of_era /! 4 - year_of_era /! 100 + day_of_year - 719468
+}

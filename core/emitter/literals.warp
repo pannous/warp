@@ -2,7 +2,8 @@
 # a decimal literal as Rust reads it: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
 # 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float (Number::is_exact_decimal)
 exact_decimal_digits = 15
-# a decimal stays exact while its denominator, 10 to its fraction digits, fits an int64 (10^18), else it is a float
+# a decimal stays a ratio of ints while its denominator, 10 to its fraction digits, fits an int64 (10^18); past that the
+# parser keeps its digits and big_decimal makes it exact all the same
 exact_fraction_digits = 18
 exact_decimal(n: float): any := {
 	shown = "" + n
@@ -24,6 +25,13 @@ exact_decimal(n: float): any := {
 	if divisor < 0 { divisor = -divisor }
 	if divisor == denominator { return number_value(numerator / divisor) }
 	ratio_node([op.i64_const] + sleb(numerator / divisor), [op.i64_const] + sleb(denominator / divisor))
+}
+
+# a decimal past 18 places as the parser keeps it, its own digits (decision exact-decimal-big): those digits over
+# 10^places, a ratio of a big denominator
+big_decimal(written: text): TypedCode := {
+	parts = written.split(".")
+	runtime_call("decimal_ratio", [text_value(parts#1 + parts#2), number_value(#parts#2)])
 }
 
 # the passive data segment of a text's bytes, each text stored once in a segment of its own, so a trimmer drops the

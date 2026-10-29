@@ -8,6 +8,7 @@
 # `use` lines name in their order.
 use "extended/big_ints.warp"
 use "extended/exact.warp"
+use "extended/big_ratios.warp"
 use "durations.warp"
 use "extended/times.warp"
 use "extended/pow_tables.warp"
@@ -29,10 +30,13 @@ extended_text(n: Node): text := {
 extended_order(a: Node, b: Node): int := exact_order(a, b)
 extended_sum(a: Node, b: Node): Node := exact_add(a, b)
 extended_float(n: Node): float := {
-	made_case(Made.BigInt, big_int_float(n))
+	made_case(Made.BigInt, big_exact_float(n))
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
-extended_truncated(n: Node): int := int_quotient(exact_numerator(n), exact_denominator(n))
+extended_truncated(n: Node): int := {
+	made_case(Made.BigInt, big_exact_truncated(n))
+	int_quotient(exact_numerator(n), exact_denominator(n))
+}
 extended_ratio(n: int, d: int): Node := exact_ratio(n, d)
 extended_zeros(count: int): text := zeros(count)
 extended_warned(message: text): Node := warned(message)
