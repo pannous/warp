@@ -76,8 +76,9 @@ repeated_text(n: int, t: Node): text := {
 	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
 	out
 }
-# `t.split(separator)`: the texts between separator's places in t
-split_text(t: text, separator: Node): list := {
+# `t.split(separator)`: the texts between separator's places in t; `t.split` the words between runs of whitespace
+split_text(t: text, separator: Node = ø): list := {
+	if is_null(separator) { return text_words(t) }
 	between = node_text(separator)
 	out = new_list(0)
 	start = 0
@@ -92,6 +93,18 @@ split_text(t: text, separator: Node): list := {
 		}
 	}
 	out += [bytes_between(t, start, byte_count(t))]
+	out
+}
+# the parts of t between runs of whitespace, none empty (decision sample-word-functions)
+text_words(t: text): list := {
+	out = new_list(0)
+	start = 0
+	for at in 0 ..< byte_count(t) + 1 {
+		if at == byte_count(t) or is_space_byte(byte_at(t, at)) {
+			if at > start { out += [bytes_between(t, start, at)] }
+			start = at + 1
+		}
+	}
 	out
 }
 # `t.chars`: t's characters (grapheme clusters)
