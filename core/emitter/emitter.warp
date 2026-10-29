@@ -473,8 +473,15 @@ text_words = ["text", "string"]
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
 # the words casting to a number, `int(x)`, `float(x)`
 cast_words = ["int", "float"]
+float_converting_word = HiddenWord.FloatConverted as text
 text_reader(kind: ValueKind): text? := match kind { ValueKind.Int: "text_as_int"; ValueKind.Float: "text_as_float"; _: ø }
 node_cast(kind: ValueKind): text? := match kind { ValueKind.Int: "truncated_int"; ValueKind.Float: "float_cast"; _: ø }
+# `π as float`, `float(x)`: the value of code `n` other than a number literal may be an instance of a class converting
+# by its float() (class_methods.warp conversion_methods)
+def instance_cast(n: Node, value: TypedCode, to: ValueKind): TypedCode {
+	if not (n is number) and value.kind == ValueKind.Node and to == ValueKind.Float and float_converting_word in module.functions { return TypedCode(to, converted(call_values(module.functions[float_converting_word], [value]), to)) }
+	cast(value, to)
+}
 def cast(value: TypedCode, to: ValueKind): TypedCode {
 	if value.kind == ValueKind.Text { return runtime_call(text_reader(to), [value]) }
 	# '7' as int is 7, the text it is
@@ -957,7 +964,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in bit_casts { return bit_cast(expression_code(body, n#2), bit_casts[name_of(n#1)]) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("unwrap") { return unwrapped(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in cast_words { return cast(expression_code(body, n#2), name_of(n#1)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in cast_words { return instance_cast(n#2, expression_code(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("number") { return as_number(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression_code(body, n#2)) }
@@ -1133,7 +1140,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
 	if operator == Op.As and (is_held_kind(target)) {
 		value = expression_code(body, left)
-		if text_reader(target) != ø { return cast(value, target) }
+		if text_reader(target) != ø { return instance_cast(left, value, target) }
 		if target == ValueKind.Text { return if value.kind == ValueKind.Node then shown_text(runtime_call("spelled_case", [value])) else shown_text(value) }
 		# `"ab" as list` is its characters, as Rust's emit_cast
 		if target == ValueKind.List and value.kind == ValueKind.Text { return runtime_call("text_chars", [value]) }
