@@ -11,11 +11,18 @@ f32_demote = 182
 f64_promote = 187
 def host_type(kind: ValueKind): list { if kind == ValueKind.I32 or kind == ValueKind.CText then [type_bytes.char] else if kind == ValueKind.F32 then [f32_type] else value_type(kind) }
 
+# a host word's last parameters a call may leave out, their values: `exit()` is exit(0)
+host_defaults = {exit: [0]}
+left_out(name: text, missing: int): list := {
+	defaults = host_defaults.get(name) ?? []
+	if missing > 0 and missing <= #defaults then defaults[(#defaults - missing)..] else []
+}
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: list): TypedCode {
 	signature = module.host[name]
 	if ValueKind.Node in signature#1 or ValueKind.Node in signature#2 { exported_builders() }
+	arguments = arguments + left_out(name, #signature#1 - #arguments)
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []
 	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }

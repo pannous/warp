@@ -1,0 +1,16 @@
+// The standard library module keys (decision implicit-standard-words, card held-key): the key held now by its name,
+// as a window or the playground's canvas reports it, "" for none (headless always); `held_key == LEFT` moves while
+// the arrow is held, key_held(code) asks for one key among several held. A key's code is its character's, the arrows
+// and modifiers above them (web/playground/canvas.js KEY_CODES)
+ESC = "Escape"
+ENTER = "Enter"
+TAB = "Tab"
+BACKSPACE = "Backspace"
+UP = "ArrowUp"
+DOWN = "ArrowDown"
+LEFT = "ArrowLeft"
+RIGHT = "ArrowRight"
+space = " "
+KEY_NAMES = {27: ESC, 13: ENTER, 9: TAB, 8: BACKSPACE, 63232: UP, 63233: DOWN, 63234: LEFT, 63235: RIGHT, 63312: "Shift", 63313: "Control", 63314: "Alt", 63315: "Meta"}
+key_name(code) := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code)
+held_key() := key_name(system_value("key code held"))

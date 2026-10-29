@@ -18,7 +18,7 @@ def escape_time(cx, cy) {
 	return iter
 }
 
-pixels = width * height int
+pixels = int[width * height]
 for row in 0..height {
 	for col in 0..width {
 		steps = escape_time(-2.2 + col * 3.2 / width, -1.1 + row * 2.2 / height)
