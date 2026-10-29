@@ -576,3 +576,6 @@ the original questions 1–41: test edits and housekeeping done.
 - global-word-marker-not-needed (user): no marker; implicit-standard-words covers unambiguous words, a word two modules define needs `use`; core's global_words table goes (2026-10-29)
 - of-binds-tighter (user confirmed): `a of b = e` is `(a of b) = e` (2026-10-29)
 - color-show-variants (user, refines color-prints): Color works by its own `show` in lib (the marked-int mechanism only routes show to the type's own word; nothing color-specific elsewhere). Besides the default (a name, else #RRGGBB), a color can be shown as hexadecimal (`red.hex` → 0xFFFF0000) or as the hash form (`red.hash` → "#FF0000"), plain lib words on Color (2026-10-29)
+- one-name-list (user confirmed): `x = 1, 2` makes x the list [1, 2] (2026-10-29)
+- fixed-time-units (user confirmed): second, minute, hour are fixed quantities; day, week, month, year stay calendar durations (2026-10-29)
+- keys-enum (user, revises keys-module): the keys are one enum Key in lib/keys.warp (`Key.escape`, `Key.up`, `Key.space` …, as in `on Key.escape {}`), the bare words (ESC, ENTER, UP, space …) aliases of its cases; `held_key` gives a Key ("" → none headless); `exit()` is exit(0) (2026-10-29)
