@@ -5,6 +5,7 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+- core-audit-30h (user 2026-10-29: "a stark violation of the intent to not touch the core without going through the interviewer … revisit all the changes of the last 30 hours"): core commits without the user's OK: 1abec60c4b time literals as values (+80, emitter), d5c57b0666 duration bounds (+31 −24, runtime), 4ec7932865 time + - * wiring (+39), 8f294df454 class_statics new pass (+60), c70042ab69 overloads by result type (+113), 948b3582e5 runtime-shaking own linker (+141 −32, was Later). Small, reported: 39a568eb43 rewrites.warp unpacked_rule 7 lines (rebuild fix). Options: revert all / one by one. Core changes stopped until OK.
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
 - one-duration (interviewer): `2 hours` and time literals are one duration type; day/week/month/year calendar, compared on bounds, undecidable comparisons an error.
