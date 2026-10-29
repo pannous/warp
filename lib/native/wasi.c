@@ -3,9 +3,12 @@
 // "program" and the definitions of instantiate, which hands wasm2c the instance of each module the program imports, and
 // run_main, which calls the program's main and prints what it gives (core/extensions/primitive.warp native_main).
 #include <fcntl.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "wasm-rt-impl.h"
 
 // WASI's numbers: open flags, rights, seek origins, the error of a failed call
 enum { OPEN_CREATE = 1, OPEN_DIRECTORY = 2, OPEN_EXCLUSIVE = 4, OPEN_TRUNCATE = 8 };
@@ -100,13 +103,55 @@ void w2c_wasi__snapshot__preview1_proc_exit(struct w2c_wasi__snapshot__preview1*
 	exit((int)code);
 }
 
+// A run that crashes says so in one line, never a bare "abort": what crashed it (a trap of the program, which wasm2c's
+// handler also makes of a fault in C code under it: a library's memory unmapped beneath the run), what the executable
+// was running (its own arguments, or those of the module the native warp's driver runs), then the process ends with
+// that signal's status
+static const int CRASH_SIGNALS[] = {SIGABRT, SIGTRAP, SIGILL};
+static char activity[1024];
+static void running_with(char** arguments, int count) {
+	size_t used = (size_t)snprintf(activity, sizeof activity, "running");
+	for (int i = 0; i < count && used < sizeof activity; i++) used += (size_t)snprintf(activity + used, sizeof activity - used, " %s", arguments[i]);
+}
+// a module's run beginning (core/native/driver.warp run), named by its WASI arguments for the line a crash prints: what
+// ran before it, which crash_context_restored gives back once a nested run (a host word's: parse_code) is over
+char* crash_context_running(char** arguments, int32_t count) {
+	char* outer = strdup(activity);
+	running_with(arguments, count);
+	return outer;
+}
+void crash_context_restored(char* outer) {
+	snprintf(activity, sizeof activity, "%s", outer);
+	free(outer);
+}
+static void crash_said(const char* what) {
+	const char* parts[] = {"warp: ", what, " while ", activity, "\n"};
+	for (size_t i = 0; i < sizeof parts / sizeof *parts; i++) (void)!write(STDERR_FILENO, parts[i], strlen(parts[i]));
+}
+static void crashed_by(int signal_number) {
+	crash_said(strsignal(signal_number));
+	signal(signal_number, SIG_DFL);
+	raise(signal_number);
+}
+static void crash_reported(void) {
+	for (size_t i = 0; i < sizeof CRASH_SIGNALS / sizeof *CRASH_SIGNALS; i++) signal(CRASH_SIGNALS[i], crashed_by);
+}
+
 int main(int argc, char** argv) {
 	wasm_rt_init();
+	crash_reported();
+	running_with(argv, argc);
 	w2c_program program;
 	struct w2c_wasi__snapshot__preview1 wasi = {&program, 0, argc, argv};
 	instantiate(&program, &wasi);
 	wasi.memory = w2c_program_memory(&program);
 	running_wasi = &wasi;
+	wasm_rt_trap_t trapped = (wasm_rt_trap_t)WASM_RT_SETJMP(g_wasm_rt_jmp_buf);
+	if (trapped != WASM_RT_TRAP_NONE) {
+		crash_said(wasm_rt_strerror(trapped));
+		signal(SIGABRT, SIG_DFL);
+		abort();
+	}
 	run_main(&program);
 	wasm2c_program_free(&program);
 	wasm_rt_free();
