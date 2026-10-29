@@ -1,0 +1,29 @@
+# The int types' declarations and show hooks, as int_types.warp marks and renames them: class_methods.warp reads them
+# too, so a class's routed show() never falls back to a hook that int_types.warp renames away (card
+# module-arity-overloads)
+use "walk.warp"
+use "../analysis/kinds.warp"
+
+showing_word = "show"
+
+# `type Color = int`: Color; ø for any other statement
+int_type_name(statement: Node): text? := {
+	if not is_key(statement, Op.Assign) or value_of(statement) != symbol("int") { return ø }
+	declared = key_of(statement)
+	if not (is_key(declared, Op.Colon) and key_of(declared) == opaque_symbol) { return ø }
+	view = value_of(declared)
+	if kind_of(view) == "type" and view#3 == ø then declared_type_name(view#2) else ø
+}
+# `show(c: Color) := …`: Color; ø for any other statement
+shower_of(statement: Node): text? := {
+	if not is_key(statement, Op.Define) { return ø }
+	head = key_of(statement)
+	if not (is_group(head) and #head == 2 and head#1 == symbol(showing_word) and is_key(head#2, Op.Colon)) { return ø }
+	typed = value_of(head#2)
+	if typed is symbol then name_of(typed) else ø
+}
+# the statements showing a value of one of the program's int types
+int_type_showers(statements: list): list := {
+	types = statements.map(int_type_name).filter(name => name != ø)
+	statements.filter(statement => shower_of(statement) in types)
+}
