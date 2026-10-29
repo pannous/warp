@@ -2,6 +2,7 @@
 // process's C sockets, as a plain `warp app.warp` asks (the native warp sets WARP_SERVE; `warp run` runs once), on
 // WARP_PORT, else 8080. One request at a time, each connection closed after its answer; a route answers as in a WAGI
 // build (lib/wagi.warp): a text as text, anything else as JSON, with the status and headers it set.
+use os
 use router
 use wagi
 
@@ -31,7 +32,6 @@ calloc(count: i64, size: i64): handle from 'c'
 free(pointer: handle): void from 'c'
 strndup(buffer: handle, size: i64): owned_text from 'c'
 uname(name: handle): i32 from 'c'
-getenv(name: text): text from 'c'
 
 // the system's name, Darwin or Linux
 system_name() := {
@@ -128,9 +128,10 @@ serve(port: int) := {
 	}
 }
 
-// the end of a program with routes: served when the native warp runs it as a program (WARP_SERVE), else nothing
-routes_end() := {
-	if getenv("WARP_SERVE") == ø { return ø }
-	port = getenv("WARP_PORT")
+// the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
+// else that value, the program's result; read by env, so a program not serving calls no C (none in a browser)
+routes_end(value: any = ø) := {
+	if env("WARP_SERVE") == ø { return value }
+	port = env("WARP_PORT")
 	serve(if port == ø then DEFAULT_PORT else int(port))
 }
