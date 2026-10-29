@@ -35,7 +35,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - split-whitespace (interviewer, card sample-word-functions): `t.split` with no argument splits on runs of whitespace (Python's split()).
 - named-arguments-general (interviewer): any parameter can be named at the call, so `t.replace "tea" with: "coffee"` works because replace's second parameter is named `with`; no special case for replace.
 - length-all-held (interviewer): `length all xs` is triage-held; the forms are `xs.map length` and, per julia-compat, the broadcast `length.(xs)`. A general `all`/`each` broadcast word is for you to revisit.
-- server-routes-pass (fixer, 3866446f18): `get/post/put/delete/patch "/path" { … }` at the main level is a core pass (core/passes/routes.warp, ~50 lines) onto lib/router.warp's route_add, the path's `:name`s bound in the body; a rule can't bind names read from a path text. Until the native warp serves (card native-server) a program with routes says so on stderr.
+- server-routes-pass (fixer, 3866446f18): `get/post/put/delete/patch "/path" { … }` at the main level is a core pass (core/passes/routes.warp, ~50 lines) onto lib/router.warp's route_add, the path's `:name`s bound in the body; a rule can't bind names read from a path text (computed-hole would let lib/sugar do it). A plain `warp app.warp` serves the routes over HTTP through lib/web.warp (native-server, a25e56f5aa).
 
 ## To present
 - of-binds-tighter (parser OK, user away, card foo-of-any): `a of b = e` is `(a of b) = e`, so `square of int = it * it` defines square(it: int) and `name of p = "Al"` stays an assignment to p.name.
