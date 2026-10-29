@@ -12,3 +12,7 @@
 '[c * 2 for c in [1, 2]]'	[2, 4]
 'f = (red) => red + 1; f(1)'	2
 'p = Person{red: 2}; p.red'	2
+# a tag's {…} is markup: its words are data, no module's (samples/web/html: label(for: pwd), id: pwd)
+'div{ id: pwd }'	div:{id:pwd}
+'form{ label{ for: email } }; 1'	1
+'form{ guests: 2 }'	form:{guests:2}

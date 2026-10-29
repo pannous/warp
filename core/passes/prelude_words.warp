@@ -443,11 +443,13 @@ free_words(n: Node): map := {
 		if part is symbol { found[name_of(part)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
 		else if is_key(part, Op.Dot) { waiting += [key_of(part)] + member_arguments(value_of(part)) }
-		else if part is key { waiting += [key_of(part), value_of(part)] }
+		else if part is key and not is_tag(part) { waiting += [key_of(part), value_of(part)] }
 		else if is_group(part) { for item in part { waiting += [item] } }
 	}
 	found
 }
+# a tag `div{ id: pwd }`, whose {…} is markup, data: its pwd is no shell word, `style{ color: white }` no color's
+is_tag(n: Node): bool := is_key(n, Op.Colon) and key_of(n) is symbol and is_curly_group(value_of(n))
 # the arguments of a method called on a receiver, `f(a)` of `xs.f(a)`; none of a field `c.pi`
 member_arguments(member: Node): list := if is_group(member) and bracket_of(member) == "(" and #member > 0 then items_of(member)[1 ..] else []
 # the program with a `use` of each module in front of it
