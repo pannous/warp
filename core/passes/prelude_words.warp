@@ -179,9 +179,9 @@ lowering_words(program: Node): list := {
 
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
-# loader places them: a used module's in front of the program, the prelude's after it. `also` are words the program
-# will say once the sugar rewrote it (passes.warp with_used: `twice {…}` says the prelude's times)
-with_reached(program: Node, module: text, in_front: bool, also: list, files: list = []): Node := {
+# loader places them: a used module's in front of the program, the prelude's after it. The words the program (a used
+# module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of)
+with_reached(program: Node, module: text, in_front: bool, files: list = []): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
 	aliases = with_call_forms(module_aliases(module), definition_slices(module).map(slice => slice#1) + own.keys)
@@ -202,7 +202,7 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 	declared = if in_front then linked_slices() else {}
 	if in_front { own_words_unlinked(own_names) }
 	# (a linked module's classes and globals, the prelude's Cell of its closures too)
-	wanted = symbol_words(program) + lowering_words(program) + also + linked_needs()
+	wanted = symbol_words(program) + lowering_words(program) + sugar_words_of(program) + linked_needs()
 	uses = ø
 	keys = slice_keys(files)
 	while #wanted > 0 {
@@ -643,7 +643,7 @@ called_words(n: Node): list := {
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
 	for source in sources#1 { for d in c_declarations_in(source) { used_c_functions[d#1] = d } }
-	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [], sources#2.map(std_module_path))
+	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(std_module_path))
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen]
 used_module_sources(statements: any, folder: text, seen: any): list := {

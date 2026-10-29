@@ -6,10 +6,16 @@ rewrite ($a /!= $b) => $a = floor_quotient($a, $b)
 rewrite ($a &&= $b) => $a = $a and $b
 rewrite ($a ||= $b) => $a = $a or $b
 rewrite ($a ^^= $b) => $a = $a xor $b
-# The element-wise operators (notes/layers.md, sugar): `xs .* 2` applies `*` to each element, `xs.map(e -> e * 2)`;
-# the parser keeps the phrase [xs .* 2]. Rust twin: broadcasting.rs lower_element_wise_operators
-rewrite $xs .+ $y => $xs.map($e -> $e + $y)
-rewrite $xs .- $y => $xs.map($e -> $e - $y)
-rewrite $xs .* $y => $xs.map($e -> $e * $y)
-rewrite $xs ./ $y => $xs.map($e -> $e / $y)
-rewrite $xs .^ $y => $xs.map($e -> $e ^ $y)
+# The element-wise operators (notes/layers.md, sugar; notes/broadcasting.md): `[1, 2] .* 2` applies `*` to each element,
+# a map that fuses with sum; a side that may be a list or a number decides at run time (prelude element_wise_any): two
+# lists pair their elements, a list and a number pair each element with it, two numbers are the plain operator
+rewrite $xs: list .+ $y: number => $xs.map($e -> $e + $y)
+rewrite $xs: list .- $y: number => $xs.map($e -> $e - $y)
+rewrite $xs: list .* $y: number => $xs.map($e -> $e * $y)
+rewrite $xs: list ./ $y: number => $xs.map($e -> $e / $y)
+rewrite $xs: list .^ $y: number => $xs.map($e -> $e ^ $y)
+rewrite $a .+ $b => element_wise_any($a, $b, ($l, $r) -> $l + $r)
+rewrite $a .- $b => element_wise_any($a, $b, ($l, $r) -> $l - $r)
+rewrite $a .* $b => element_wise_any($a, $b, ($l, $r) -> $l * $r)
+rewrite $a ./ $b => element_wise_any($a, $b, ($l, $r) -> $l / $r)
+rewrite $a .^ $b => element_wise_any($a, $b, ($l, $r) -> $l ^ $r)
