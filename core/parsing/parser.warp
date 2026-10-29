@@ -840,6 +840,10 @@ def prints(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 ==
 def skip_blanks(p: Parser): bool {
 	newline = line_breaks_after(p, p.at)
 	p.at = p.resumes[p.at]
+	if peek(p.code, p.at, p.n) == '\\' and line_continuation_length(p) > 0 {
+		p.at = p.at + line_continuation_length(p)
+		return skip_blanks(p)
+	}
 	newline
 }
 
@@ -865,6 +869,14 @@ def skip_spaces(p: Parser) {
 // Rust twin: scanning.rs line_continuation_length
 def line_continuation_length(p: Parser): int {
 	c = peek(p.code, p.at, p.n)
+	// `1 + \` at a line's end continues the statement on the next line (was the symbol `\`, the line its own statement)
+	if c == '\\' {
+		at = p.at + 1
+		while at < p.n and (p.code[at] == ' ' or p.code[at] == '\t' or p.code[at] == '\r') { at = at + 1 }
+		if at >= p.n or p.code[at] != '\n' { return 0 }
+		while at < p.n and is_blank(p.code[at]) { at = at + 1 }
+		return at - p.at
+	}
 	if c == '\n' or c == '\r' {
 		at = p.at
 		while at < p.n and is_blank(p.code[at]) { at = at + 1 }
@@ -2365,6 +2377,11 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		// 9223372036854775808 reads as the int -2^63 where ints are 64 bits: `-9223372036854775808` is that int itself
 		if operand is number { return placed_at(p, if operand is int and operand == -9223372036854775807 - 1 then operand else 0 - operand, sign) }
 		return keyed("-", ø, operand)
+	}
+	// `+5` is 5, `+x` x: a glued plus is the sign of its operand (it was the symbol '+' beside it)
+	if c == '+' and next != '+' and next != '=' and not is_blank(next) and operand_follows(p, 1) {
+		p.at = p.at + 1
+		return expression(p, 155)
 	}
 	if c == '!' or c == '¬' {
 		p.at = p.at + 1

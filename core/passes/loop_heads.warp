@@ -12,7 +12,7 @@ use "../analysis/words.warp"
 loop_word = "for"
 loop_in_word = "in"
 # the type words whose loop over a text walks a unit instead of filtering (Rust: for_loop/headers.rs bytes_of)
-unit_type_words = ["byte", "codepoint"]
+unit_type_words = ["byte", "codepoint", "char", "character"]
 
 # `k, v` or `(k, v)`: the two names a loop over a map binds
 is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
