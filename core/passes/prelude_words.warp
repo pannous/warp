@@ -403,7 +403,7 @@ implicit_modules(source: text, index_file: text): list := {
 	prelude_names = definition_slices(module_source("prelude")).map(slice => slice#1)
 	used = used_module_sources(statements_in(program), ".", [])#2
 	known = {}
-	for module in used { for slice in definition_slices(file_text(std_module_path(module)) ?? "") { known[slice#1] = yes } }
+	for module in used { for slice in definition_slices(used_module_text(module)) { known[slice#1] = yes } }
 	globals = global_words()
 	providers = type_module_providers()
 	free = free_words(program)
@@ -421,6 +421,11 @@ implicit_modules(source: text, index_file: text): list := {
 # the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
 runtime_words_of_math = module_source("math").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
+# a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
+used_module_text(module: text): text := {
+	native = native_path(run_library(), module)
+	file_text(std_module_path(module)) ?? (if native == ø then "" else file_text(native) ?? "")
+}
 with_implicit_uses(source: text, index_file: text): text := source + implicit_modules(source, index_file).map(module => "\nuse " + module).join("")
 # word → the standard modules defining it, read from the index `warp rebuild` writes (a line `word<TAB>module …`
 # each); none before the first rebuild
