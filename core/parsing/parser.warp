@@ -56,6 +56,9 @@ def use_library(folder: text) { given_library = folder }
 // older seed) calls library_sources below and reads them where it runs
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
+// core's folders bundled all the same: the extensions' rules, which every compile reads (rewrites.warp
+// extension_module_names), baked with the rest instead of parsed at each run (~25 ms of a small program's 0.15 s)
+BUNDLED_CORE_FOLDERS = ["compiler/extensions"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
@@ -71,6 +74,12 @@ def library_texts(library: text, within: text): map {
 			found[path] = try read(library + "/" + path) else ""
 		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
+			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
+		}
+	}
+	if within == "" {
+		for folder in BUNDLED_CORE_FOLDERS {
+			inner = library_texts(library, folder + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
 		}
 	}
@@ -964,9 +973,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			left = keyed(op, left, ø)
 		} else if c == '!' and SUFFIX_POWER >= min_power and bang_suffix_at(p) {
 			p.at = p.at + 1
-			fully = is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n)
-			if fully { p.at = p.at + 1 }
-			left = forced(left, fully)
+			# `x!!` is `x!`
+			if is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n) { p.at = p.at + 1 }
+			left = forced(left)
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
@@ -1517,15 +1526,16 @@ def bang_suffix_at(p: Parser): bool {
 	glued or not operand_follows(p, 1)
 }
 
-// `left!` (`left!!` when fully): `x.upper!` and `upper x!` mark their name for mutation.rs, `upper(x)!` assigns the
-// result back to x, `{…}!` runs the block anyway, `ø!` unwraps
+// `left!` (or `left!!`): `upper(x)!` assigns the result back to x, `{…}!` runs the block anyway, anything else
+// is `unwrap(left)`, which lib/sugar/methods.warp turns into an assignment back where a function's call is marked
+// (`x.upper!`, `upper x!`), and which runs a lone `x!` as it is
 // Rust twin: suffixes.rs try_parse_evaluate_bang
-def forced(left: Node, fully: bool): Node := {
+def forced(left: Node): Node := {
 	if left == ø { return call_of([symbol("unwrap"), ø]) }
 	variable = mutated_variable(left)
 	if variable != ø and not is_member(left) { return Key(variable, Op.Assign, left) }
 	if is_block(left) { return left }
-	attributed("mutated", if fully then 2 else true, left)
+	call_of([symbol("unwrap"), left])
 }
 
 def is_member(node: Node): bool := match node {
@@ -2729,7 +2739,8 @@ def shaped(parameter: Node, shapes: list): Node := {
 // - a preposition (`to of from …`) separates the slots and labels the one after it: `to add a to b` → `a`, `to b`
 // - an article starts a noun slot when a known type follows it or the body never names the article: `a number` →
 //   `number: number`, `a photo` → `photo` (typed once `class photo` is declared); `to add a b: a+b` keeps `a`
-// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`
+// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`;
+//   when together they name a declared type, by all of them: `a full name` → `full-name: full-name`
 // - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
 // Rust twin: type_name_matching.rs parameter_slots (labelled)
 def phrase_slots(words: list, body: Node, types: list): list {
@@ -2752,7 +2763,8 @@ def phrase_slots(words: list, body: Node, types: list): list {
 			}
 		}
 		at = at + 1
-		head = noun#(#noun)
+		// `a full name` of `class full name`: the nouns together are the type, and the slot's name
+		head = if #noun > 1 and known_type(noun.join("-"), types) then noun.join("-") else noun#(#noun)
 		slot = if known_type(head, types) then Key(symbol(head), Op.Colon, symbol(head)) else symbol(head)
 		parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
 		preposition = ""
