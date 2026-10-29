@@ -1,0 +1,5 @@
+# a phrase before commas takes the items its function words still miss (decision function-words-consume)
+'def show(a, b) = a + b; show 1, 2'	3
+'def add(a, b){ a+b }; x = add 1, 2; x'	3
+'add(a, b) := a + b; twice(x) := 2 * x; twice add 1, 2'	6
+'def twice(x: int) = 2*x; [twice 1, twice 2]'	[2, 4]

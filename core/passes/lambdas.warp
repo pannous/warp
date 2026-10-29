@@ -214,6 +214,7 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
+		List(items, Bracket.None, Separator.Comma): comma_call(n, locals, lowering)
 		List(items, bracket, separator): List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
 		_: n
 	}
@@ -252,6 +253,27 @@ lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := 
 	nested = if name_of(words#1) in locals then ø else nested_phrase(words, lowering)
 	if nested != ø { return lowered_phrase(nested, n, locals, lowering) }
 	group_like(n, [words#1] + arguments_of(words).map(word => lowered_lambdas(word, locals, lowering)))
+}
+# `show a, b`, `puts add 1, 2` (decision function-words-consume): a phrase before commas takes the items after them
+# its function words still miss, show(a, b); the items left stay the comma list's
+comma_call(n: Node, locals: list, lowering: Lowering): Node := {
+	items = items_of(n)
+	# `x = add 1, 2` parses as `(x = add 1), 2`: the assigned phrase takes them
+	assigned = is_key(items#1, Op.Assign)
+	first = if assigned then value_of(items#1) else items#1
+	missing = if is_phrase(first) and #first > 1 and first#1 is symbol and name_of(first#1) not in locals then missing_arguments(items_of(first), lowering) else 0
+	taken = min(missing, #items - 1)
+	if taken == 0 { return List(items.map(item => lowered_lambdas(item, locals, lowering)), Bracket.None, Separator.Comma) }
+	phrase = List(items_of(first) + items[1 .. taken + 1], Bracket.None, Separator.Space)
+	call = if assigned then Key(key_of(items#1), Op.Assign, phrase) else phrase
+	lowered_lambdas(if taken == #items - 1 then call else List([call] + items[taken + 1 ..], Bracket.None, Separator.Comma), locals, lowering)
+}
+# the arguments a phrase's function words still miss: `add 1` 1, `puts add 1` 1 (puts takes the phrase add 1)
+missing_arguments(words: list, lowering: Lowering): int := {
+	nested = nested_phrase(words, lowering)
+	if nested != ø { return missing_arguments(items_of(nested.last), lowering) }
+	wanted = (lowering.arities.get(name_of(words#1)) ?? 0) - (#words - 1)
+	if wanted > 0 then wanted else 0
 }
 # `f g 1`, `first add 1 2`: more words than the function takes, a function word where its last argument goes: that
 # word's phrase is the argument, f(g(1)), as Rust's words take their arguments by their parameters (card
