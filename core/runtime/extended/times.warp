@@ -23,6 +23,18 @@ duration_of(months: int, days: int, nanos: int): Node := {
 	unsigned_days = if days < 0 then days + TimeInfoUnit.DayRange else days
 	time_of(TimeFormCode.Duration + unsigned_days * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos)
 }
+# -1, 0 or 1 as a comes before, with or after b: two durations by duration_order, two times of one form by their
+# positions; times of different forms have no order
+time_order(a: Node, b: Node): int := {
+	if is_duration(a) and is_duration(b) { return duration_order(a, b) }
+	if time_form(a) != time_form(b) { return times_of_different_kinds_have_no_order() }
+	sign_of(time_position(a) - time_position(b))
+}
+# the runtime error of time_order, named to read off the trace as duration_parts_order's
+times_of_different_kinds_have_no_order() := {
+	fail()
+	0
+}
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
 local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 
