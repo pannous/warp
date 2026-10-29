@@ -172,12 +172,18 @@ linked() {
 }
 
 # the build folders neither ~/dev/bin/warp nor warp-rust links into removed, only once the links are in place: a link
-# never dangles (2026-10-28: warp pointed into a folder the Rust install had pruned)
+# never dangles (2026-10-28: warp pointed into a folder the Rust install had pruned). The newest KEPT_BUILDS folders stay
+# too, and any folder a process still has open: a run started on the previous build reads its warp.wasm and modules
+# until it ends (a full suite wrote an empty results.txt, "No module at …/native-fb9bda25b/warp.wasm", 2026-10-29)
+KEPT_BUILDS=3
 pruned() {
-	local kept=() link
+	local kept=() link folder
 	for link in "$MAIN_WARP" "$RUST_WARP"; do kept+=("$(basename "$(dirname "$(readlink "$link")")")"); done
-	for folder in "$BUILDS"/*; do
-		[[ " ${kept[*]} " == *" $(basename "$folder") "* ]] || rm -rf "$folder"
+	for folder in $(ls -dt "$BUILDS"/*/ | tail -n +$((KEPT_BUILDS + 1))); do
+		folder=${folder%/}
+		[[ " ${kept[*]} " == *" $(basename "$folder") "* ]] && continue
+		lsof +D "$folder" >/dev/null 2>&1 && continue
+		rm -rf "$folder"
 	done
 }
 

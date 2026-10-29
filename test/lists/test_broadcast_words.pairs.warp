@@ -1,0 +1,15 @@
+# the words the parser makes prefix operators broadcast over a list, called spaced or in parentheses (card p50-scalar)
+'sqrt [4, 9]'	[2 3]
+'sqrt([4, 9])'	[2 3]
+'cbrt [8, 27]'	[2 3]
+'abs [-1, 2]'	[1 2]
+'xs = [1.0, 4.0]; sqrt xs'	[1 2]
+'sqrt 9'	3
+# the dot call of Julia applies any function to each item, one list or two paired
+'length.(["ab", "c"])'	[2 1]
+'xs = ["ab", "c"]; length.(xs)'	[2 1]
+'f(x) := x + 1; f.([1, 2])'	[2 3]
+'f(a, b) := a * b; f.([1, 2], [3, 4])'	[3 8]
+'max.([1, 5], 3)'	[3 5]
+# a method call without arguments stays one
+'t = "ab"; t.chars()'	['a' 'b']

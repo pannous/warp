@@ -4,3 +4,8 @@
 rewrite $f($x) => each_any($x, $e -> $f($e)) where $x is vector and $f takes number
 rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $a is vector and $f takes number
 rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $b is vector and $f takes number
+# the words the parser makes prefix operators (√ ∛ ‖) broadcast alike: sqrt [4, 9] is [2 3]; spelled as words, as a
+# lone ‖ opens an absolute value ‖x‖
+rewrite sqrt $x => each_any($x, $e -> sqrt $e) where $x is vector
+rewrite cbrt $x => each_any($x, $e -> cbrt $e) where $x is vector
+rewrite abs $x => each_any($x, $e -> abs $e) where $x is vector
