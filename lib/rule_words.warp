@@ -89,16 +89,32 @@ derived_inputs(statements: list): map := {
 # write changed it: `a = 2` as `(signal·old = a; signal·total = total; a = 2; if a != signal·old {
 # signal_notify("total", total, signal·total) })`; any other node as it is
 notifying(n: Node, names: list, derived: map): Node := {
-	if not (n is key and key_of(n) is symbol and op_of(n) in writing_ops) { return n }
-	name = key_of(n)
+	if not writes(n) { return n }
+	name = written_target(key_of(n))
+	if not (name is symbol) { return n }
 	old = symbol(signal_old)
 	dependents = names.filter(d => derived.has(d) and name_of(name) in derived[d])
 	own = name_of(name) in names
 	if not own and #dependents == 0 { return n }
-	before = [Key(old, Op.Assign, name)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d)))
+	# an item's write changes the list itself: the old one a copy, `[] + xs`
+	kept = if key_of(n) is symbol then name else Key(List([], Bracket.Square, Separator.Comma), Op.Add, name)
+	before = [Key(old, Op.Assign, kept)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d)))
 	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
-	separated(bracketed(before + [n] + notified, "("), ";")
+	# `x--` gives the value before the step
+	result = if op_of(n) in stepping_ops then [old] else []
+	separated(bracketed(before + [n] + notified + result, "("), ";")
 }
+# a write: `x = 3`, `x += 1`, `x--`
+writes(n: Node): bool := {
+	if not (n is key) { return no }
+	op_of(n) in writing_ops or op_of(n) in stepping_ops
+}
+# the variable a write changes: `x`, that of an item's `xs#1` or a field's `p.n`; else the target itself
+written_target(target: Node): Node := {
+	if target is key and (op_of(target) == Op.Hash or op_of(target) == Op.Dot) { return written_target(key_of(target)) }
+	target
+}
+stepping_ops = [Op.Inc, Op.Dec]
 signal_old_of(name: text): text := "signal·" + name
 writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
 
