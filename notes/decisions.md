@@ -575,3 +575,4 @@ the original questions 1–41: test edits and housekeeping done.
 - shown-warp-notation (user): every shown result is warp code that can be pasted back: texts quoted, an instance as `P{n: 3}`, a quantity as 3.5km; one rule for the REPL, tests and print-back; `print` of a text still writes it bare (2026-10-29)
 - global-word-marker-not-needed (user): no marker; implicit-standard-words covers unambiguous words, a word two modules define needs `use`; core's global_words table goes (2026-10-29)
 - of-binds-tighter (user confirmed): `a of b = e` is `(a of b) = e` (2026-10-29)
+- color-show-variants (user, refines color-prints): Color works by its own `show` in lib (the marked-int mechanism only routes show to the type's own word; nothing color-specific elsewhere). Besides the default (a name, else #RRGGBB), a color can be shown as hexadecimal (`red.hex` → 0xFFFF0000) or as the hash form (`red.hash` → "#FF0000"), plain lib words on Color (2026-10-29)
