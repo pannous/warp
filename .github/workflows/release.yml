@@ -122,12 +122,12 @@ jobs:
         gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-${{ matrix.wabt }}.tar.gz"
         tar -xzf "wabt-$WABT-${{ matrix.wabt }}.tar.gz" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/wabt-$WABT/bin" >>"$GITHUB_PATH"
-    - name: our wasmtime C API
-      # the copying collector and the GC setters wasmtime's own lacks (card wasmtime-bundled), in lib/, where
-      # `warp build native` links it from and the native warp finds it beside itself
+    - name: our wasmtime C API and sound library
+      # the copying collector and the GC setters wasmtime's own lacks (card wasmtime-bundled), and libwarp_sound
+      # (miniaudio, decision sound-plays), in lib/, where `warp build native` links from and the native warp finds
+      # them beside itself
       run: |
-        cargo build --release --locked --manifest-path crates/wasmtime-capi/Cargo.toml
-        cp crates/wasmtime-capi/target/release/${{ matrix.library }} lib/
+        WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_SOUND_TARGET="$RUNNER_TEMP/warp-sound" scripts/wasmtime-c-api.sh lib
     - name: the previous release's native warp
       run: scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap"
     - name: the native warp

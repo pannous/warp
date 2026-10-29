@@ -246,7 +246,7 @@ c_functions_of(source: text, library_folder: text): list := {
 }
 # the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)
 reached_within(source: text): list := {
-	reached = used_modules(source)
+	reached = reached_modules(source)
 	at = 1
 	while at <= #reached {
 		for module in used_modules(file_source(run_library() + "/" + reached#at + ".warp") ?? "") { if module not in reached { reached += [module] } }

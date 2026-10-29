@@ -671,7 +671,19 @@ sounded(speakers, rate, channels) := {
 // Playing (decision sound-system-player): the WAV through the system's player, started when its voice reaches it (the
 // clock paces the program till then): WARP_SOUND_PLAYER, else the first of afplay (macOS), paplay, aplay (Linux) that
 // starts. Under WARP_NO_WINDOW or CI only an explicit WARP_SOUND_PLAYER plays
+// Before them libwarp_sound beside warp plays it in the process (decision sound-plays: miniaudio,
+// crates/warp-sound), the run waiting at its end till its sounds are heard out; under WARP_NO_WINDOW or CI on a silent device
 posix_spawnp(process: out, file: text, actions: handle, attributes: handle, arguments: texts, environment: texts): i32 from 'c'
+warp_sound_play(path: text): i32 from 'warp_sound'
+dlopen(path: text, mode: i32): handle from 'c'
+// where lib/native/foreign.c finds warp's own libraries, beside the executable
+SOUND_LIBRARY_FILES = ["@executable_path/libwarp_sound.dylib", "$ORIGIN/libwarp_sound.so"]
+RTLD_NOW = 2
+global sound_library_state = ø
+sound_library_loads() := {
+	if sound_library_state == ø { sound_library_state = SOUND_LIBRARY_FILES.any(file => dlopen(file, RTLD_NOW) != 0) }
+	sound_library_state
+}
 SYSTEM_PLAYERS = ["afplay", "paplay", "aplay"]
 sound_players() := {
 	chosen = env("WARP_SOUND_PLAYER")
@@ -680,9 +692,10 @@ sound_players() := {
 	SYSTEM_PLAYERS
 }
 played(file, start) := {
+	if start > clock() { sleep_ms(start - clock()) }
+	if env("WARP_SOUND_PLAYER") == ø and sound_library_loads() and warp_sound_play(file) == 0 { return ø }
 	players = sound_players()
 	if count(players) == 0 { return ø }
-	if start > clock() { sleep_ms(start - clock()) }
 	environment = wasi_environment().split(chr(0)).filter(line => line != "")
 	for player in players { if posix_spawnp(player, 0, 0, [player, file], environment) == 0 { return ø } }
 	said("no sound player started: set WARP_SOUND_PLAYER")
@@ -785,7 +798,7 @@ said(line) := {
 // one wave shape: tone(440Hz, 0.5s) (a sine), tone(220Hz, 100ms, "square")
 tone(pitch, duration, shape) := sound(chord_samples([si_amount(pitch)], si_amount(duration), shape))
 tone(pitch, duration) := tone(pitch, duration, wave_shape)
-beep() := tone(880, 0.15, "square")
+global beep() := tone(880, 0.15, "square")
 // a frequency, or a list of them sounding together (a chord)
 pitches_of(x) := if x is list then [hertz_of(pitch) for pitch in x] else [hertz_of(x)]
 // a frequency, a Note or a note name ("C#4") as its frequency; the units go first (si_amount): a quantity tested
@@ -851,7 +864,7 @@ play_file(path) := {
 	played(path, clock())
 }
 // play gives the sound's handle: h = play(C4, 2s); stop_sound(h) stops that one alone, stop_sound (handle 0) all
-stop_sound(handle = 0) := std_io("sound", "stop", [handle])
+global stop_sound(handle = 0) := std_io("sound", "stop", [handle])
 // a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play(C4, 4s);
 // fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. save sound writes the fade too
 fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
@@ -874,7 +887,7 @@ play_blocks(fill: (float) -> float, blocks, seconds) := std_io("sound", "blocks"
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
 sound_queued() := max(0, voice_end - clock()) / 1000
-wait_sound() := if count(sound_players()) > 0 and voice_end > clock() then sleep_ms(voice_end - clock())
+global wait_sound() := if count(sound_players()) > 0 and voice_end > clock() then sleep_ms(voice_end - clock())
 // the sounds since the last save (or the start), which `save sound as: "song.wav"` (or `save(sound, "song.wav")`)
 // writes one after another in one WAV file, offline (also without speakers), giving its seconds (card save-sound)
 class Recording {}
@@ -949,7 +962,7 @@ sample_looped(clip: Sample, seconds, from, to) := sample_repeated(clip, si_amoun
 play_sample(clip: Sample, rate) := {
 	sounded(clip.frames, round(clip.rate * rate) as int, clip.channels)
 }
-play(tone) := if tone is text then play_file(tone) else if tone is Sample then play_sample(tone, 1) else sound(chord_samples(pitches_of(tone), note_seconds, wave_shape))
+global play(tone) := if tone is text then play_file(tone) else if tone is Sample then play_sample(tone, 1) else sound(chord_samples(pitches_of(tone), note_seconds, wave_shape))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {
 	samples = []

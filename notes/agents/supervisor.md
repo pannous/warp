@@ -18,6 +18,7 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 - Procedure changes are persisted before they are announced (common.md "Talking").
 - User decisions you hear go into notes/decisions.md in the user's words: write them yourself, never route them through the Interviewer (user 2026-10-27). Grep it before forwarding a question.
 - Anything needed from the user goes to warp-interviewer once, never repeated in your replies.
+- Never mirror to the user the decisions they made with the Interviewer (rulings, audits, OKs) nor the questions you forward there (user 2026-10-29).
 
 ## Team
 - Start of day: `tmux ls | grep warp-` and ListAgents; missing services: `notes/agents/start.sh` (integrator,
