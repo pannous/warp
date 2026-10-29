@@ -200,8 +200,7 @@ def with_entries(content: list, more: list): list {
 def rebased_runtime_code(): list {
 	content = runtime_part(section_ids.code)
 	if runtime_shift() == 0 { return content }
-	calls = relocations_of(module.runtime_image.wasm).filter(entry => entry#2 == relocated.calls and entry#3 == runtime_space and uleb_read(content, entry#1)#1 >= module.runtime_image.imports)
-	rebased(content, calls, [[shifted(runtime_shift())]])
+	rebased(content, runtime_call_sites().map(site => site#1), [[shifted(runtime_shift())]])
 }
 # the code section's content: the runtime's functions, a hook's the program's code, then the program's functions, each
 # body knowing where it starts (its relocations' offsets)
@@ -680,9 +679,37 @@ def runtime_call_graph(): map {
 	graph
 }
 # [relocation, caller position, callee position] of each call of a runtime function in runtime.wasm's code, read once
-# (module.runtime_sites)
+# (module.runtime_sites) from its warp.calls section, which write_runtime bakes in (card measure: worked out from the
+# relocations on each compile it took ~20 ms)
 def runtime_call_sites(): list {
 	if module.runtime_sites != ø { return module.runtime_sites }
+	place = section_place(module.runtime_image.wasm, section_ids.custom, call_sites_section)
+	if place == ø { throw "runtime.wasm without its " + call_sites_section + " section: warp rebuild writes it anew" }
+	sites = []
+	at = place#1
+	count = uleb_read(module.runtime_image.wasm, at)
+	at = count#2
+	for i in 0..<count#1 {
+		site = []
+		for part in 0..<3 {
+			read = uleb_read(module.runtime_image.wasm, at)
+			site += [read#1]
+			at = read#2
+		}
+		sites += [[[site#1, relocated.calls, runtime_space], site#2, site#3]]
+	}
+	module.runtime_sites = sites
+	sites
+}
+# runtime.wasm with its call sites baked in, a warp.calls section of each one's [offset, caller, callee]
+call_sites_section = "warp.calls"
+def with_call_sites(wasm: list): list {
+	prepend_runtime(wasm)
+	sites = worked_out_call_sites().map(site => concatenated([site#1#1, site#2, site#3].map(uleb)))
+	wasm + section(section_ids.custom, name_bytes(call_sites_section) + vector(sites))
+}
+# the call sites read off runtime.wasm's relocations and code
+def worked_out_call_sites(): list {
 	content = runtime_part(section_ids.code)
 	ends = body_ranges(content).map(range => range#2)
 	sites = []
@@ -694,7 +721,6 @@ def runtime_call_sites(): list {
 		while ends[caller] <= entry#1 { caller += 1 }
 		if callee >= module.runtime_image.imports { sites += [[entry, caller, callee - module.runtime_image.imports]] }
 	}
-	module.runtime_sites = sites
 	sites
 }
 # [start, end] of each function's entry in a code section's content, its size included

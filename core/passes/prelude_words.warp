@@ -168,14 +168,20 @@ member_name(statement: Node): any := match statement {
 
 # the words a slice mentions, those inside a class's methods too (the opaque view of `class Instant { … text() :=
 # format_date(ms) }` holds its body as nodes, parts_within): a module's class brings the functions its methods call
-words_within(n: Node): list := {
+words_within(n: Node): list := names_within(n, no)
+# its words and the heads of its keys ("key =="), what a rule needs and gives (rewrites.warp rules_reaching)
+tokens_within(n: Node): list := names_within(n, yes)
+names_within(n: Node, with_keys: bool): list := {
 	found = {}
 	waiting = [n]
 	at = 1
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is symbol { found[name_of(part)] = yes } else { waiting += parts_within(part) }
+		if part is symbol { found[name_of(part)] = yes } else {
+			if with_keys and part is key { found[key_head(part)] = yes }
+			waiting += parts_within(part)
+		}
 	}
 	found.keys
 }
@@ -502,11 +508,17 @@ free_words(n: Node): map := {
 		if part is symbol { found[name_of(part)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
 		else if is_key(part, Op.Dot) { waiting += [key_of(part)] + member_arguments(value_of(part)) }
-		else if part is key and not is_tag(part) { waiting += [key_of(part), value_of(part)] }
-		else if is_group(part) { for item in part { waiting += [item] } }
+		else if part is key and not is_tag(part) { waiting += [key_of(part), value_of(part)].filter(side => not is_definition_keyword(side)) }
+		else if is_group(part) { for item in (if leads_declaration(part) then items_of(part)[1 ..] else items_of(part)) { waiting += [item] } }
 	}
 	found
 }
+# the words that lead a declaration, `pattern Pair = [_, _]`, `def f(x) …`, `global n = 0`, `use hash`: keywords there,
+# no word of the program, so they never pull in the module defining a word of that name (sound's pattern)
+definition_keywords = import_keywords + declaration_keywords + function_keywords + ["pattern", "class", "enum", "type", "alias"]
+is_definition_keyword(n: Node): bool := n is symbol and name_of(n) in definition_keywords
+# a declaration's words, its keyword first; `pattern("bd sd")` and `pattern "bd sd"` are calls, of a text
+leads_declaration(n: Node): bool := is_group(n) and #n > 1 and is_definition_keyword(n#1) and not is_literal(n#2)
 # a tag `div{ id: pwd }`, whose {…} is markup, data: its pwd is no shell word, `style{ color: white }` no color's
 is_tag(n: Node): bool := is_key(n, Op.Colon) and key_of(n) is symbol and is_curly_group(value_of(n))
 # the arguments of a method called on a receiver, `f(a)` of `xs.f(a)`; none of a field `c.pi`

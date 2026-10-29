@@ -32,7 +32,7 @@
 '"a\\$b"'	'a$b'
 
 # dollar_arguments_and_templates_keep_working
-# triage-held 2026-10-28: shell-style positional parameter $0 in a function body :: 'add1(x):=$0+1; add1(3)'	4
+'add1(x):=$0+1; add1(3)'	4
 'file="a b";c=sh "rm -f \\(file)";c#3'	'a b'
 'a="x";b="y";q=sql "SELECT * FROM t WHERE a = $a AND b = ${b}";q#3'	'y'
 

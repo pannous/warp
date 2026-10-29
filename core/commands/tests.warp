@@ -14,6 +14,8 @@ EXPECTED_ERROR = "error"
 EACH_FLAG = "--each"
 # the run of a case's expected value, beside the case's own run <n>
 EXPECTED_RUN = "e"
+# the work folder's file of the listed cases' places
+LISTED = "cases"
 TIMED_OUT = "timeout"
 CASE_SECONDS = 30
 use "../emitter/serializer.warp"
@@ -38,13 +40,19 @@ test_listed(work: text, words: list) := {
 		}
 	}
 	write(work + "/runs", runs.join("\n"))
+	write(work + "/" + LISTED, places_of(cases))
 }
+# where each case stands, one a line: the verdicts judge the cases of the run's own list, never a tree changed meanwhile
+places_of(cases: list): text := cases.map(case => case.file + ":" + case.line + " " + case.code).join("\n")
 
 # `warp test-verdicts <work folder> [--each] [folder or file…]`: a ✗ line for each failed case (`--each`: a ✓ line
 # for each passed one too) and the total; `<work folder>/failed` the count failed
 test_verdicts(work: text, words: list) := {
 	each = EACH_FLAG in words
 	cases = test_cases_of(words)
+	if places_of(cases) != read(work + "/" + LISTED) {
+		raise "the test files changed since this run listed its cases (a pull, an edit): its results would be another case's; run it again on a tree that holds still"
+	}
 	failed = 0
 	for n in 0 ..< #cases {
 		case = cases[n]

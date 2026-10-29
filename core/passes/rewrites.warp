@@ -118,7 +118,7 @@ comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage", "frames"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage", "frames", "signals"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
@@ -169,9 +169,10 @@ global rule_binding = []
 # the code the rule being tried matched, for the context conditions; ø for a run of statements
 global rule_matched = ø
 
-# the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out;
-# `source` is the text the program was parsed from, which tells a template's `·` from `*`
-rewritten_program(program: Node, source: text): Node := {
+# the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out, its
+# stores assignments; `source` is the text the program was parsed from, which tells a template's `·` from `*`
+rewritten_program(program: Node, source: text): Node := stored(own_rules_applied(program, source))
+own_rules_applied(program: Node, source: text): Node := {
 	rules = []
 	kept = []
 	for statement in statements_in(program) {
@@ -208,6 +209,12 @@ rewritten_program(program: Node, source: text): Node := {
 	}
 	if #uses == 0 then program else separated(bracketed(uses + statements_in(program), ""), ";")
 }
+
+# each plain store `x ← v` (the parser's store·value(x, v)) the assignment `x = v`, once the rules of a step ran: a
+# rule's template stores without its own pattern taking the store for an assignment again (notify in lib/sugar/signals)
+store_word = HiddenWord.StoredValue as text
+stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if is_store(part) then Key(part#2, Op.Assign, part#3) else part) else n
+is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
 
 # the program rewritten by the rules of its whole, `where program`, each once, after the rules inside it fired
 # (`$program` their program): lib/web.warp's ending of a program with routes
@@ -249,9 +256,10 @@ enums_declared(program: Node): Node := {
 	program
 }
 
-# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too;
-# the rules of a place apply only there
-sugared(program: Node, rules: list): Node := {
+# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too,
+# its stores assignments; the rules of a place apply only there
+sugared(program: Node, rules: list): Node := stored(sugar_applied(program, rules))
+sugar_applied(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
@@ -265,8 +273,8 @@ sugared(program: Node, rules: list): Node := {
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
 	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
-	needs = rules.map(rule => required_words(rule.pattern))
-	results = rules.map(rule => words_within(rule.template))
+	needs = rules.map(needed_tokens)
+	results = rules.map(rule => tokens_within(rule.template))
 	walked = children(program, statement => sugared_statement(statement, rules_reaching(rules, needs, results, statement), maps))
 	rule_maps = maps
 	sugared_node(walked, rules)
@@ -279,13 +287,13 @@ sugared_statement(statement: Node, rules: list, maps: map): Node := {
 }
 
 # the words of the templates of the rules that can fire in the program
-reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(rule => required_words(rule.pattern)), rules.map(rule => words_within(rule.template)), program).flat_map(rule => words_within(rule.template))
+reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(needed_tokens), rules.map(rule => tokens_within(rule.template)), program).flat_map(rule => words_within(rule.template))
 
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
 # with these alone gives what all the rules give, without trying the others at each node
 rules_reaching(rules: list, needs: list, results: list, statement: Node): list := {
-	mentioned = word_set(words_within(statement))
+	mentioned = word_set(tokens_within(statement))
 	picked = []
 	grew = yes
 	while grew {
@@ -303,6 +311,9 @@ rules_reaching(rules: list, needs: list, results: list, statement: Node): list :
 	reaching
 }
 
+# what code must hold for the rule to fire in it (tokens_within): its pattern's words outside holes, and the operator
+# of the key its pattern is (`$a ?? $b` fires only where code has a `??`)
+needed_tokens(rule: Rule): list := required_words(rule.pattern) + (if rule.pattern is key and rule.head != "" then [rule.head] else [])
 # the words code must hold for the pattern to match it (rule_matches): its words outside holes
 required_words(pattern: Node): list := {
 	if rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø { return [] }
