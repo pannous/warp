@@ -1,0 +1,3 @@
+# a type word's subscript is the typed array even where the program's classes define position(p) (card use-sound)
+'class B { xs: list; position(p) := xs#p }; f(x: list) := { z = float[#x]; z }; f([1, 2])'	[0.0, 0.0]
+'class B { xs: list; position(p) := xs#p }; b = B([5, 6]); b#2'	6
