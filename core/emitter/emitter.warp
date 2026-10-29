@@ -1469,7 +1469,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		result = TypedCode(main.result, [op.local_get, 0])
 		absent = if main.result == ValueKind.Node then [op.local_get, 0, op.ref_is_null] else [op.i32_const, 0]
 		start.code = call_code(main.index) + [op.drop]
-		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(unboxed_to_show(result, shown_kind)).code + [op.end] }
+		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(shown_code(unboxed_to_show(result, shown_kind))).code + [op.end] }
 		if not main.gives_nothing and value_as_data { start.code = call_code(main.index) + [op.local_set, 0] + value_printed_as_data(result) }
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
