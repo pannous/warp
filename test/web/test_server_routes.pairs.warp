@@ -1,0 +1,8 @@
+# a main-level `get "/path" { … }` joins lib/router.warp's route table; route_answer answers a request by it, each
+# `:name` of the path a variable of the body (card sample-gaps-server)
+'get "/" { "hi" }; route_answer({method: "GET", path: "/"})'	'hi'
+'get "/sq/:n:int" { n * n }; route_answer({method: "GET", path: "/sq/7"})'	49
+'get "/u/:id/:tab" { id + tab }; route_answer({method: "GET", path: "/u/a/b"})'	'ab'
+'post "/echo" { request.body }; route_answer({method: "POST", path: "/echo", body: "x"})'	'x'
+'get "/a" { 1 }; get "/b" { 2 }; route_answer({method: "GET", path: "/b"})'	2
+'get "/a" { 1 }; route_answer({method: "GET", path: "/missing"})'	error

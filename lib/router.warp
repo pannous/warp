@@ -105,7 +105,15 @@ header(name: text, value: any) := response_header(name, value)
 // exactly the request's path answers it, else the first whose pattern matches (as the host's route_at picks)
 global route_table = []
 // `+=`, not route_table.add: a program's own function add (`server def add(a, b)`) would take that call
-route_add(method: text, path: any, answer: function) := { route_table += [{method: method, path: path, answer: answer}] }
+route_add(method: text, path: any, answer: function) := {
+	route_table += [{method: method, path: path, answer: answer}]
+	ø
+}
+// the end of a program with routes: said on stderr until the native warp serves them (card native-server)
+routes_unserved() := {
+	warning("" + count(route_table) + " routes found: the native warp serves none of them yet (card native-server)")
+	ø
+}
 route_answer(request: any) := {
 	for route in route_table {
 		if route.method == request.method and route.path == request.path { return route.answer(request) }
