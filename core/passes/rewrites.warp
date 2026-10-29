@@ -784,7 +784,8 @@ has_property(code: Node, property: text): bool := {
 	if property == "instance" { return rule_instances.has(word) }
 	if property == "type" { return word == any_word or is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
-	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) and not locally_bound(code) }
+	# the program's function, else a builtin or the prelude's where the program binds nothing of the name (`x.upper!`'s upper)
+	if property == "function" { return (binds_as(rule_scope, word, Meaning.Function) or (not rule_scope.has(word) and (is_declared_word(word) or word in prelude_definitions()))) and not locally_bound(code) }
 	not rule_scope.has(word)
 }
 
