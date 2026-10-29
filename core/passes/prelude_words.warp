@@ -189,7 +189,8 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 	# definition replaces the module's
 	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
 	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
-	slices = definition_slices(module).filter(kept)
+	# [name, text, the name written] of each slice: a replaced one under its library_word, for an alias's call
+	slices = definition_slices(module).map(slice => if kept(slice) then slice + [slice#1] else [library_word(slice#1), slice#2, slice#1])
 	# the statements of each reached slice, by its text
 	reached = {}
 	declared = if in_front then linked_slices() else {}
@@ -206,7 +207,9 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 				baked = SLICE_PARSES.get(keys.get(slice#2) ?? "")
 				if baked == ø and uses == ø { uses = use_lines(module) }
 				slice_node = early_sugared(if baked != ø then unpack(baked) else plain_node(parsed(slice#2, uses)))
-				if slice#2 in declared { slice_node = declared_only(slice_node) }
+				# (a linked module's word under its library_word is compiled here: the module exports its written name)
+				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
+				else if slice#2 in declared { slice_node = declared_only(slice_node) }
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
@@ -293,8 +296,12 @@ aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
 	count = #n - 1 + receivers
 	word = if called in aliases then aliases[called] else arity_variant(called, count)
 	if word == ø or shadows(own, called, count) { return n }
-	group_like(n, [symbol(word)] + items_of(n)[1 ..])
+	group_like(n, [symbol(if word in own then library_word(word) else word)] + items_of(n)[1 ..])
 }
+# the module's own definition of a word the program defines too, which an alias or variant means: `round(x, 2)` calls
+# the prelude's round_to beside a program's round_to (card module-hygiene)
+library_word(word: text): text := word + name_joiner + "library"
+
 # words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
 # `xs.first(3)` first_items (Rust twin: library_words.rs ARITY_VARIANTS)
 arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]

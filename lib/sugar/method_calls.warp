@@ -7,5 +7,7 @@
 # first element equal to k removed. Rust twin: list_mutations.rs removed_key
 # The method word is a hole: a rule naming `remove` would give way to a program's own remove(a, b), which the pass
 # never did
-rewrite $m.$f($k) => ($r = removed_value($m, $k); $m = map_without($m, $k); $r) where $m is symbol and $f in [remove, delete]
+rewrite $m.$f($k) => ($r = removed_value($m, $k); $m = map_without($m, $k); $r) where $m is symbol and $m is not instance and $f in [remove, delete]
 rewrite $x.$f($a...) => $f($x, $a...) where $f is symbol and $f not in [add, append, push, insert, pop, remove, delete, clear]
+# an instance's own methods of those names are its class's: `s.push(1)` of a Stack s
+rewrite $x.$f($a...) => $f($x, $a...) where $f is symbol and $x is instance

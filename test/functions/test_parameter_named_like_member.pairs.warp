@@ -1,0 +1,4 @@
+# a parameter named like a list's member never hides the member (card compiler-built: the self build trapped on it)
+'f(length: int) := length + 1; f(2)'	3
+'x = {length: 3, a: 1}; x.length'	3
+'Person{name: "A"}.name'	"A"

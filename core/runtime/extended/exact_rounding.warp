@@ -25,7 +25,10 @@ exact_trunc(x: Node): Node := {
 	int_quotient(ratio_numerator(x), ratio_denominator(x))
 }
 # a - b * trunc(a / b), the sign of a as i64.rem_s
-exact_rem(a: Node, b: Node): Node := exact_sub(a, exact_mul(b, exact_trunc(exact_div(a, b))))
+exact_rem(a: Node, b: Node): Node := {
+	made_case(Made.BigInt, big_int_remainder(a, b))
+	exact_sub(a, exact_mul(b, exact_trunc(exact_div(a, b))))
+}
 # the Euclidean remainder, 0 <= r < |b|: the truncated one plus |b| when negative
 exact_mod(a: Node, b: Node): Node := {
 	rest = exact_rem(a, b)

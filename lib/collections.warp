@@ -1,17 +1,23 @@
 // The standard library module collections (notes/stdlib.md): `use collections`, classes over a list field
-// Java's, Python's, Rust's and C#'s names of the classes are alias lines, read as warp's with a note
+// Java's, Python's, Rust's and C#'s names of the classes are alias lines, read as warp's with a note; their names of
+// the methods are methods calling warp's
 
 class Stack { items = []
 	push(x) := items.add(x)
 	pop() := items.pop()
 	peek() := items#count(items)
 	size() := count(items)
+	append(x) := push(x)
 }
 class Queue { items = []
+	init(xs = []) := { items = xs }
 	enqueue(x) := items.add(x)
 	dequeue() := { first = items#1; items = items[1:]; first }
 	peek() := items#1
 	size() := count(items)
+	offer(x) := enqueue(x)
+	poll() := dequeue()
+	shift() := dequeue()
 }
 alias ArrayDeque = Deque
 alias VecDeque = Deque
@@ -22,20 +28,30 @@ class Deque { items = []
 	pop_back() := items.pop()
 	pop_front() := { first = items#1; items = items[1:]; first }
 	size() := count(items)
+	append(x) := push_back(x)
+	appendleft(x) := push_front(x)
+	pop() := pop_back()
+	popleft() := pop_front()
+	addLast(x) := push_back(x)
+	addFirst(x) := push_front(x)
+	pollLast() := pop_back()
+	pollFirst() := pop_front()
 }
 alias HashSet = Set
 alias TreeSet = Set
 alias LinkedHashSet = Set
 alias frozenset = Set
 class Set { items = []
-	init(xs) := { for x in xs { if not (x in items) { items.add(x) } } }
+	init(xs = []) := { for x in xs { if not (x in items) { items.add(x) } } }
 	add(x) := { if not (x in items) { items.add(x) } }
 	has(x) := x in items
 	remove(x) := { kept = []; for y in items { if y != x { kept.add(y) } }; items = kept }
 	size() := count(items)
+	contains(x) := x in items
+	delete(x) := remove(x)
 }
 class Counter { keys = []; counts = []
-	init(xs) := { for x in xs { add(x) } }
+	init(xs = []) := { for x in xs { add(x) } }
 	add(x) := { i = keys.index_of(x); if i { counts#i += 1 } else { keys.add(x); counts.add(1) } }
 	get(x) := { i = keys.index_of(x); if i { counts#i } else { 0 } }
 	most_common() := { best = 1; for i in 1 to count(counts) { if counts#i > counts#best { best = i } }; keys#best }
