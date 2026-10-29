@@ -423,7 +423,7 @@ word_index_text(): text := {
 	}
 	definers.keys.map(word => word + "\t" + definers[word].join(" ")).join("\n")
 }
-# the names a program says free, as a value or a call: never a member's, `c.pi` names c, `xs.f(a)` xs and a
+# the names a program says free, as a value or a call: never a member's or a field's (`{g: 5}`), `c.pi` names c, `xs.f(a)` xs and a
 free_words(n: Node): map := {
 	found = {}
 	waiting = [n]
@@ -434,6 +434,7 @@ free_words(n: Node): map := {
 		if part is symbol { found[name_of(part)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
 		else if is_key(part, Op.Dot) { waiting += [key_of(part)] + member_arguments(value_of(part)) }
+		else if is_key(part, Op.Colon) and key_of(part) is symbol { waiting += [value_of(part)] }
 		else if part is key { waiting += [key_of(part), value_of(part)] }
 		else if is_group(part) { for item in part { waiting += [item] } }
 	}
@@ -516,8 +517,8 @@ bare_calls(program: Node, providers: map): list := {
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
-# the names the program binds anywhere, a variable `now = …` or a parameter `f(was, now)`: such a word names its own
-# value, no module's function
+# the names the program binds anywhere, a variable `now = …`, a parameter `f(was, now)` or `for now in …`: such a
+# word names its own value, no module's function
 names_bound_in(n: Node): any := {
 	found = {}
 	waiting = [n]
@@ -533,8 +534,17 @@ names_bound_in(n: Node): any := {
 				if is_group(left) { for item in left { found[name_of(leftmost_symbol(item))] = yes } }
 			}
 			waiting += [key_of(part), value_of(part)]
-		} else if is_group(part) { for item in part { waiting += [item] } }
+		} else if is_group(part) {
+			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			for item in part { waiting += [item] }
+		}
 	}
+	found
+}
+# the variables a `for x in …` among the items binds, also inside a comprehension `[x * 2 for x in xs]`
+iteration_variables(items: list): list := {
+	found = []
+	for i in 1 .. #items - 2 { if items#i == symbol("for") and items#(i + 2) == symbol("in") { found = bound_target(items#(i + 1), found) } }
 	found
 }
 # `x` of a parameter `x`, `x: int`, `x = 1`
