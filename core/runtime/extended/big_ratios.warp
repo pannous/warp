@@ -1,0 +1,97 @@
+## exact numbers of big parts (decision exact-decimal-big): a decimal literal past 10^18, 1e-19 written out as
+## 0.0000000000000000001, is 1/10^19, and arithmetic of one or of a big int with a ratio stays exact. A $Ratio holds
+## its parts as Int nodes' payloads, plain or big (intrinsics ratio_of_parts, numerator_part, denominator_part).
+## exact.warp hands an exact number holding a big int here by made_case(Made.BigInt, …), compiled only into a program
+## that makes big ints; each word takes plain ints and plain ratios too
+use "../intrinsics.warp"
+use "../arithmetic.warp"
+use "../conversions.warp"
+use "../errors.warp"
+use "../instructions.warp"
+use "big_ints.warp"
+use "exact.warp"
+# the numerator and denominator of an exact number as Int nodes, an int its own numerator over 1
+numerator_of(n: Node): Node := if is_ratio(n) then numerator_part(n) else n
+denominator_of(n: Node): Node := if is_ratio(n) then denominator_part(n) else 1
+plain_denominator_limit(): int := 1000000000000000000
+# n/d in lowest terms of plain or big ints, an int when d divides n
+big_ratio(n: Node, d: Node): Node := {
+	if big_int_order(d, 0) == 0 { divide_by_zero() }
+	divisor = big_int_gcd(n, d)
+	if big_int_order(d, 0) < 0 { divisor = big_int_difference(0, divisor) }
+	n = big_int_quotient(n, divisor)
+	d = big_int_quotient(d, divisor)
+	if big_int_order(d, 1) == 0 { return n }
+	# a denominator past 10^18 stays big even where it fits 64 bits, so that every word on the ratio takes the big
+	# words: exact_text's and the plain operations' products of it would leave 64 bits (1 - 0.00000000000000000025)
+	if big_int_order(d, plain_denominator_limit()) > 0 { return ratio_of_parts(as_big_int(n), as_big_int(d)) }
+	ratio_of_parts(n, d)
+}
+# the digits of a decimal past 18 places over 10^places (emitter literals.warp big_decimal)
+decimal_ratio(digits: text, places: int): Node := big_ratio(big_int_of_digits(digits), big_int_power(10, places))
+either_ratio(a: Node, b: Node): bool := is_ratio(a) or is_ratio(b)
+# a·d of one exact number's numerator by the other's denominator, the cross products of a sum and an order
+cross(a: Node, b: Node): Node := big_int_product(numerator_of(a), denominator_of(b))
+common_denominator(a: Node, b: Node): Node := big_int_product(denominator_of(a), denominator_of(b))
+big_exact_sum(a: Node, b: Node): Node := {
+	if not either_ratio(a, b) { return big_int_sum(a, b) }
+	big_ratio(big_int_sum(cross(a, b), cross(b, a)), common_denominator(a, b))
+}
+big_exact_difference(a: Node, b: Node): Node := {
+	if not either_ratio(a, b) { return big_int_difference(a, b) }
+	big_ratio(big_int_difference(cross(a, b), cross(b, a)), common_denominator(a, b))
+}
+big_exact_product(a: Node, b: Node): Node := {
+	if not either_ratio(a, b) { return big_int_product(a, b) }
+	big_ratio(big_int_product(numerator_of(a), numerator_of(b)), common_denominator(a, b))
+}
+big_exact_quotient(a: Node, b: Node): Node := big_ratio(cross(a, b), big_int_product(denominator_of(a), numerator_of(b)))
+big_exact_order(a: Node, b: Node): int := {
+	if not either_ratio(a, b) { return big_int_order(a, b) }
+	big_int_order(cross(a, b), cross(b, a))
+}
+big_exact_negated(x: Node): Node := big_exact_difference(0, x)
+# -1, 0 or 1 as x is below, equal to or above 0 (a denominator is positive)
+big_exact_sign(x: Node): int := big_int_order(numerator_of(x), 0)
+# the integer part, rounded toward 0
+big_exact_trunc(x: Node): Node := big_int_quotient(numerator_of(x), denominator_of(x))
+big_exact_truncated(x: Node): int := {
+	whole = big_exact_trunc(x)
+	if not is_plain_int(whole) { overflow_of_int64() }
+	unboxed_int(whole)
+}
+# the largest integer ≤ x: a negative ratio truncates up, so one less
+big_exact_floor(x: Node): Node := {
+	whole = big_exact_trunc(x)
+	if is_ratio(x) and big_exact_sign(x) < 0 { return big_int_difference(whole, 1) }
+	whole
+}
+# a - b · trunc(a / b), the sign of a as i64.rem_s
+big_exact_remainder(a: Node, b: Node): Node := {
+	if not either_ratio(a, b) { return big_int_remainder(a, b) }
+	big_exact_difference(a, big_exact_product(b, big_exact_trunc(big_exact_quotient(a, b))))
+}
+big_exact_float(x: Node): float := big_int_float(numerator_of(x)) / big_int_float(denominator_of(x))
+# as exact_text shows a ratio: one whose denominator is 2^a·5^b as its decimal digits, any other as n/d
+big_exact_text(x: Node): text := {
+	if not is_ratio(x) { return big_int_text(x) }
+	numerator = numerator_part(x)
+	denominator = denominator_part(x)
+	twos = big_factor_count(denominator, 2)
+	fives = big_factor_count(denominator, 5)
+	if big_int_order(denominator, big_int_product(big_int_power(2, twos), big_int_power(5, fives))) != 0 { return any_int_text(numerator) + "/" + any_int_text(denominator) }
+	digits = max_int(twos, fives)
+	scaled = big_int_product(numerator, big_int_product(big_int_power(2, digits - twos), big_int_power(5, digits - fives)))
+	negative = big_int_order(scaled, 0) < 0
+	decimal_text(any_int_text(if negative then big_int_difference(0, scaled) else scaled), digits, negative)
+}
+any_int_text(n: Node): text := if is_plain_int(n) then int_text(unboxed_int(n)) else big_int_text(n)
+# how often factor divides n, a plain or big int
+big_factor_count(n: Node, factor: int): int := {
+	count = 0
+	while big_int_order(n, 0) != 0 and big_int_order(big_int_remainder(n, factor), 0) == 0 {
+		n = big_int_quotient(n, factor)
+		count += 1
+	}
+	count
+}

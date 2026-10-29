@@ -10,41 +10,52 @@ exact_is_nan(x: Node): bool := exact_numerator(x) == 0 and exact_denominator(x) 
 int_order(a: int, b: int): int := if a < b then -1 else if a > b then 1 else 0
 # -1, 0 or 1 as a is below, equal to or above b; 2 (unequal) when exactly one of them is NaN
 exact_cmp(a: Node, b: Node): int := {
+	made_case(Made.BigInt, big_exact_order(a, b))
 	if exact_is_nan(a) or exact_is_nan(b) { return if exact_is_nan(a) and exact_is_nan(b) then 0 else 2 }
 	if exact_denominator(a) == 0 or exact_denominator(b) == 0 { return int_order(exact_infinity_rank(a), exact_infinity_rank(b)) }
 	exact_order(a, b)
 }
-exact_neg(x: Node): Node := exact_ratio(-exact_numerator(x), exact_denominator(x))
+exact_neg(x: Node): Node := {
+	made_case(Made.BigInt, big_exact_negated(x))
+	exact_ratio(-exact_numerator(x), exact_denominator(x))
+}
+# -1, 0 or 1 as x is below, equal to or above 0 (a denominator is positive)
+exact_sign(x: Node): int := {
+	made_case(Made.BigInt, big_exact_sign(x))
+	n = exact_numerator(x)
+	if n < 0 then -1 else if n > 0 then 1 else 0
+}
 exact_abs(x: Node): Node := {
-	if exact_numerator(x) < 0 { return exact_neg(x) }
+	if exact_sign(x) < 0 { return exact_neg(x) }
 	x
 }
 # the integer part, rounded toward 0
 exact_trunc(x: Node): Node := {
 	if not is_ratio(x) { return x }
+	made_case(Made.BigInt, big_exact_trunc(x))
 	int_quotient(ratio_numerator(x), ratio_denominator(x))
 }
 # a - b * trunc(a / b), the sign of a as i64.rem_s
 exact_rem(a: Node, b: Node): Node := {
-	made_case(Made.BigInt, big_int_remainder(a, b))
+	made_case(Made.BigInt, big_exact_remainder(a, b))
 	exact_sub(a, exact_mul(b, exact_trunc(exact_div(a, b))))
 }
 # the Euclidean remainder, 0 <= r < |b|: the truncated one plus |b| when negative
 exact_mod(a: Node, b: Node): Node := {
 	rest = exact_rem(a, b)
-	if exact_numerator(rest) < 0 { return exact_add(rest, exact_abs(b)) }
+	if exact_sign(rest) < 0 { return exact_add(rest, exact_abs(b)) }
 	rest
 }
 # the largest integer <= x, exact beyond the float range: a negative ratio truncates up, so one less
 exact_floor(x: Node): Node := {
 	if not is_ratio(x) { return x }
 	whole = exact_trunc(x)
-	if ratio_numerator(x) < 0 { return exact_sub(whole, 1) }
+	if exact_sign(x) < 0 { return exact_sub(whole, 1) }
 	whole
 }
 # the quotient of a // b that goes with a % b: floor(a / b) for b > 0, -floor(-a / b) for b < 0
 exact_euclid_div(a: Node, b: Node): Node := {
-	if exact_numerator(b) < 0 { return exact_neg(exact_floor(exact_neg(exact_div(a, b)))) }
+	if exact_sign(b) < 0 { return exact_neg(exact_floor(exact_neg(exact_div(a, b)))) }
 	exact_floor(exact_div(a, b))
 }
 # x /= y: an int x stays an int, the Euclidean quotient (x - x % y) / y; a ratio x divides exactly
