@@ -43,7 +43,22 @@ lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
 # runtime.wasm, a library module behind it, its operands relocatable (write_module)
+global phase_started = 0
+phase_clock(): int := {
+	clock_time_get(1, 1000, 0)
+	nanos = 0
+	for i in 0..<8 { nanos = nanos * 256 + memory_byte(7 - i) }
+	nanos
+}
+phase(label: text) := {
+	clock_time_get(1, 1000, 0)
+	nanos = 0
+	for i in 0..<8 { nanos = nanos * 256 + memory_byte(7 - i) }
+	if phase_started > 0 and env("WARP_PHASES") != ø { warn "phase " + label + " " + ((nanos - phase_started) / 1000000) + " ms" }
+	phase_started = nanos
+}
 compile(source: text, folder: text, library_runtime: any = ø): any := {
+	phase("start")
 	fresh_module()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }

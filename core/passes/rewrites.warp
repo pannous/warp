@@ -531,8 +531,27 @@ first_alphabetic_word(written: text): text := {
 # the rules of the module at `path`, of its baked parse when it is the bundled one
 module_rules_of(path: text, module: text): list := {
 	source = file_text(path) ?? ""
-	statements_in(source_parse(path, source)).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+	t0 = phase_clock()
+	parsed_statements = statements_in(source_parse(path, source))
+	t1 = phase_clock()
+	rules = parsed_statements.map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+	t2 = phase_clock()
+	parse_nanos = parse_nanos + t1 - t0
+	rule_nanos = rule_nanos + t2 - t1
+	if env("WARP_PHASES") != ø { warn "mr " + path + " parse " + ((t1 - t0) / 1000) + " us rules " + ((t2 - t1) / 1000) + " us (" + #rules + ")" }
+	if env("WARP_PHASES") != ø and path.ends_with("comprehensions.warp") { lap_report() }
+	rules
 }
+global parse_nanos = 0
+global laps = {}
+global lap_at = 0
+lap(label: text) := {
+	now = phase_clock()
+	if lap_at > 0 { laps[label] = (laps.get(label) ?? 0) + now - lap_at }
+	lap_at = now
+}
+lap_report() := { for label in laps.keys.sort() { warn "lap " + label + " " + (laps[label] / 1000) + " us" } }
+global rule_nanos = 0
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
 # parser reads it as the hole and a group, `$t ($a...)` (card engine-guarded-call-phrase)
@@ -593,11 +612,13 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	arrow = items[arrow_at]
 	words = items[1 ..< arrow_at]
 	whole = #words == 0 and is_parenthesized(key_of(arrow))
+	lap("a head")
 	pattern = if whole then key_of(arrow)#1 else if #words == 0 then statement_pattern(key_of(arrow)) else rule_phrase(words_of_all(words + [key_of(arrow)]))
 	after = items[arrow_at + 1 ..]
 	written = value_of(arrow)
 	where_at = #after
 	for index in 0 ..< #after { if where_at == #after and after[index] == symbol(where_word) { where_at = index } }
+	lap("b pattern")
 	cut = split_at_where(written)
 	if cut != ø {
 		written = cut.template
@@ -605,21 +626,32 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 		where_at = -1
 	}
 	continued = after[0 ..< max(where_at, 0)]
-	template = statements_template(each_clauses(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source)))
+	lap("c where")
+	template_phrase = if #continued == 0 then written else rule_phrase(words_of_all([written] + continued))
+	lap("d phrase")
+	glued_template = glued(template_phrase, source)
+	lap("e glued")
+	template = statements_template(each_clauses(glued_template))
+	lap("f template")
 	lines = if source.contains(rule_hole_mark) then source.split("\n") else []
+	lap("g lines")
 	pattern = with_called_holes(pattern, lines)
 	template = with_called_holes(template, lines)
-	if where_at == #after { return Rule(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
+	lap("h called holes")
+	if where_at == #after { lap_at = 0; return Rule(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
+	lap("i conditions")
 	aliased = conditions.any(condition => condition == symbol(alias_mark))
 	conditions = conditions.filter(condition => condition != symbol(alias_mark))
 	places = conditions.filter(is_place_word)
 	conditions = conditions.filter(condition => not is_place_word(condition))
 	if #places > 1 or not conditions.all(is_condition) { return ø }
+	lap("j is_condition")
 	place = if #places == 0 then Place.Anywhere else PLACE_WORDS[name_of(places#1)]
 	origins = conditions.filter(condition => is_key(condition, Op.Assign) and not is_computed_binding(condition))
 	if #origins > 1 { return ø }
+	lap_at = 0
 	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
 	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
 }
