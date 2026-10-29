@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- float-int-power (interviewer, core runtime pow, samples-gpu): float ^ int uses square-and-multiply instead of the generic pow, as Julia does, keeping the error within about 1 ulp (Julia's compensated power_by_squaring); if that stays inaccurate, only for |exponent| ≤ 16. Exact values untouched. A last-digit difference from libm pow is accepted.
 - hello-size-exports (interviewer, core ~20 lines, card hello-wasm-size): core/emitter/host.warp exports shown_at and trap_message only from a program that reaches raise/throw, a raising runtime word or a host word with arguments (the reachability rule of runtime-shaking); hello 25.8 KB → ~1.5 KB. Cost: in other programs an engine trap (cast failure, stack overflow) prints as wasmtime names it, without `at 1:15`. Alternative: a light trap_message always (~6–7 KB, bigger change).
 - signals-test-15 (interviewer): test/control/test_variable_signals.pairs.warp:15 `x=3; n=0; on set x : n+=1; while x-->0 : x; n` upgraded 3 → 4: the failing loop test's x-- (0 → -1) is a write too, no special case.
 - after-participle-held (interviewer): :18 `after tested: n+=10` (a hook named by a function's past participle) triage-held as esoteric; a lib wrapper/decorator can do it later.
