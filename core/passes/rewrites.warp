@@ -633,7 +633,7 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	lap("e glued")
 	template = statements_template(each_clauses(glued_template))
 	lap("f template")
-	lines = if source.contains(rule_hole_mark) then source.split("\n") else []
+	lines = if source.contains(rule_hole_mark) then lines_of(source) else []
 	lap("g lines")
 	pattern = with_called_holes(pattern, lines)
 	template = with_called_holes(template, lines)
@@ -654,6 +654,17 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	lap_at = 0
 	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
 	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
+}
+
+# a rule source's lines, split once for all its rules (rule_of and glued ask at each rule)
+global split_source = ""
+global split_lines = []
+lines_of(source: text): list := {
+	if source != split_source {
+		split_lines = source.split("\n")
+		split_source = source
+	}
+	split_lines
 }
 
 # a template cut at a `where` its last words swallowed (`$c + $n where`, `$s where statement`): the template before it
@@ -1656,7 +1667,7 @@ as_phrase(words: list): Node := if #words == 1 then words#1 else rule_phrase(wor
 # `$i·end`, `km·per·hour`, also the head of a call or definition `twice·$f(x)`; `·` beside anything else (`2·$x`) stays
 # the product. The parser reads `·` as `*`, so the source text the rule was parsed from tells them apart
 glued(template: Node, source: text): Node := {
-	lines = if source.contains(glue_mark) then source.split("\n") else []
+	lines = if source.contains(glue_mark) then lines_of(source) else []
 	bottom_up(template, n => headed_definition(if #lines == 0 then n else glued_key(hidden_glued(n), lines)))
 }
 
