@@ -8,7 +8,8 @@
 # function's, `f(x) := …`), `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
 # also an operand not written: `rest...`), `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
-# program or a typed library word), `$f takes int` (typed int) and `$f takes one` (a library word the program leaves
+# program or a typed library word), `$f takes int` (typed int), `$f takes number` (typed a number: int, float…), `$x is
+# vector` (code that may give a list: lib/sugar/broadcasting.warp) and `$f takes one` (a library word the program leaves
 # free, of exactly one typed value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
 # case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound, the condition binds it
 # to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
@@ -45,7 +46,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block", "instance"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block", "instance", "vector"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed"]
@@ -82,6 +83,9 @@ takes_word = "takes"
 # `where $f takes value`: any first parameter typed, except these
 yes_no_types = ["bool"]
 value_word = "value"
+# `where $f takes number`: a first parameter typed one of these
+number_word = "number"
+numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real"]
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
@@ -150,6 +154,11 @@ global rule_instances = {}
 global rule_program = Node.Empty
 global rule_varying = {}
 global rule_varying_known = no
+# the program's names and functions that may give a list (`where $x is vector`), worked out when a rule first asks
+global rule_vectors = []
+global rule_vectors_known = no
+# the definition whose statement the rules walk, "" at the main level: whose names `where $x is vector` asks of
+global rule_vector_scope = ""
 # where the node the rules try stands, for `where not method` and `where not shadowed`: the method part of the `.`
 # being walked (the right of `x.f(…)`), else ø; the names the definitions around it bind
 global rule_method_part = ø
@@ -230,6 +239,7 @@ sugared(program: Node, rules: list): Node := {
 	rule_instances = instance_names_of(program)
 	rule_program = program
 	rule_varying_known = no
+	rule_vectors_known = no
 	maps = map_names_of(program)
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
@@ -240,7 +250,12 @@ sugared(program: Node, rules: list): Node := {
 	rule_maps = maps
 	sugared_node(walked, rules)
 }
-sugared_statement(statement: Node, rules: list, maps: map): Node := placed_map_scoped(statement, n => sugared_node(n, rules), maps)
+sugared_statement(statement: Node, rules: list, maps: map): Node := {
+	rule_vector_scope = function_defined(statement)
+	walked = placed_map_scoped(statement, n => sugared_node(n, rules), maps)
+	rule_vector_scope = ""
+	walked
+}
 
 # the words of the templates of the rules that can fire in the program
 reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(rule => required_words(rule.pattern)), rules.map(rule => words_within(rule.template)), program).flat_map(rule => words_within(rule.template))
@@ -657,7 +672,8 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
 	if typed == ø or typed == "" { typed = conversion_type(word) }
 	if typed == ø { return no }
-	if wanted == value_word then not (typed in yes_no_types) else typed == wanted
+	if wanted == value_word { return not (typed in yes_no_types) }
+	if wanted == number_word then typed in numeric_parameter_types else typed == wanted
 }
 
 # what a type word converts, unless the program binds it: a value of another type (`int 3.7 == 3` is int(3.7) == 3),
@@ -755,6 +771,7 @@ has_property(code: Node, property: text): bool := {
 	if property == "enum" { return named_enum(code) != "" }
 	if property == "missing" { return code == ø }
 	if property == "definition" { return definition_of(code) != ø }
+	if property == "vector" { return may_be_list(code, rule_vector_scope, vector_names()) }
 	# `{it*2}`: a block reading `it`, a function of it (definitions.warp is_function_block)
 	if property == "function_block" { return bracket_of(code) == "{" and mentions(code, implicit_parameter) }
 	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
@@ -769,6 +786,73 @@ has_property(code: Node, property: text): bool := {
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) and not locally_bound(code) }
 	not rule_scope.has(word)
 }
+
+# The program's names and functions that may give a list (notes/broadcasting.md "Vector parameters"): a name assigned
+# a value that may be one, a parameter some call passes one, a function whose result may be one; worked out to a
+# fixpoint, [names, functions]. A name is its definition's (scoped_name: a function's own and its parameters, the main
+# level's apart), so `xs = [1]` in one function marks no `xs` of another
+vector_names(): list := {
+	if not rule_vectors_known {
+		rule_vectors = vectors_of(statements_in(rule_program))
+		rule_vectors_known = yes
+	}
+	rule_vectors
+}
+# the name of the function a statement defines, "" of any other statement
+function_defined(statement: Node): text := if is_key(statement, Op.Define) and is_round(key_of(statement)) and #key_of(statement) >= 1 and key_of(statement)#1 is symbol then name_of(key_of(statement)#1) else ""
+scoped_name(scope: text, name: text): text := scope + name_joiner + name
+vectors_of(statements: list): list := {
+	parameters = {}
+	for statement in statements { if function_defined(statement) != "" { parameters[function_defined(statement)] = key_of(statement)[1 ..].map(parameter_name) } }
+	names = {}
+	functions = {}
+	vectors = [names, functions]
+	scoped = statements.map(statement => [function_defined(statement), nodes_in(statement), statement])
+	grown = yes
+	while grown {
+		grown = no
+		for entry in scoped {
+			scope = entry#1
+			for n in entry#2 {
+				if is_key(n, Op.Assign) and key_of(n) is symbol and not names.has(scoped_name(scope, name_of(key_of(n)))) and may_be_list(value_of(n), scope, vectors) {
+					names[scoped_name(scope, name_of(key_of(n)))] = yes
+					grown = yes
+				}
+				callee = if is_round(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
+				taken = parameters.get(callee)
+				if taken != ø and scope != callee {
+					for i in 1 ..< min(#n, #taken + 1) {
+						name = taken[i - 1]
+						if name != "" and not names.has(scoped_name(callee, name)) and may_be_list(n[i], scope, vectors) {
+							names[scoped_name(callee, name)] = yes
+							grown = yes
+						}
+					}
+				}
+			}
+			if scope != "" and not functions.has(scope) {
+				if may_be_list(result_of(value_of(entry#3)), scope, vectors) {
+					functions[scope] = yes
+					grown = yes
+				}
+			}
+		}
+	}
+	vectors
+}
+# the value a body gives: a block's last statement
+result_of(body: Node): Node := if is_curly_group(body) and #body > 0 then result_of(body[#body - 1]) else body
+# whether the code, in the scope's definition, may give a list: a list written out, a word giving one (an element-wise
+# operator, a map), a swizzle of two or more components `p.xy`, or one of the vectors' names or functions
+list_giving_words = ["element_wise_any", "each_any", "map"]
+may_be_list(code: Node, scope: text, vectors: list): bool := {
+	if code is symbol { return vectors#1.has(scoped_name(scope, name_of(code))) }
+	if is_group(code) and bracket_of(code) == "[" { return yes }
+	if is_key(code, Op.Dot) and value_of(code) is symbol { return is_swizzle_word(name_of(value_of(code))) }
+	if not (is_round(code) and #code > 0 and code#1 is symbol) { return no }
+	name_of(code#1) in list_giving_words or vectors#2.has(name_of(code#1))
+}
+is_swizzle_word(name: text): bool := #name >= 2 and #name <= 4 and name.all(c => c in "xyzw")
 
 # the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)
 instance_names_of(program: Node): map := {
