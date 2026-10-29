@@ -45,7 +45,17 @@ ENTITY_TABLE = module_source("compiler/entities.tsv")
 // from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic): that
 // folder, a build machine's, is only the last resort
 global given_library = ""
-def run_library(): text := if given_library != "" then given_library else (env("WARP_LIB") ?? library_of_core(folder_of(module_directory)))
+def run_library(): text := if given_library != "" then given_library else (warp_lib() ?? library_of_core(folder_of(module_directory)))
+// WARP_LIB, asked of the host once a compile: file_source asks for every file it gives, ~50 µs a host call
+global warp_lib_asked = no
+global warp_lib_given = ø
+def warp_lib(): text? {
+	if not warp_lib_asked {
+		warp_lib_given = env("WARP_LIB")
+		warp_lib_asked = yes
+	}
+	warp_lib_given
+}
 // this file lies in core/parsing/, reached as core/ or as lib/'s link compiler/
 def library_of_core(core: text): text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
 // The lib/ the run was given, which run_library answers from now on
@@ -90,7 +100,7 @@ def library_texts(library: text, within: text): map {
 // ø for none
 def file_source(path: text): text? {
 	bundled = LIBRARY_FILES.get(library_path(path))
-	if bundled != ø and env("WARP_LIB") == ø { return bundled }
+	if bundled != ø and warp_lib() == ø { return bundled }
 	(try read(path) else ø) ?? bundled
 }
 // a path's place within lib/ ("sugar/lists.warp"), "" outside it
