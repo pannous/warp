@@ -1,0 +1,5 @@
+# a comprehension's where filters as its if (card pair-count-filter)
+'[x for x in [1 2 3] where x > 1]'	[2, 3]
+'[x * 2 for x in [1 2 3] where x > 1]'	[4, 6]
+'[a + b for a in [1 2] where a > 1 for b in [10 20]]'	[12, 22]
+'xs=[1 2 3 4]; count(xs where it > 2)'	2
