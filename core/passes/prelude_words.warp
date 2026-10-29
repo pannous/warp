@@ -196,14 +196,14 @@ lowering_words(program: Node): list := {
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
 # data view) a time's fields (emitter/times.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words)
-emitted_words(program: Node): list := time_words(program) + root_words(program)
-time_words(program: Node): list := {
+emitted_words(program: Node): list := time_literal_words(program) + root_words(program)
+time_literal_words(program: Node): list := {
 	nodes = nodes_in(program)
 	if not nodes.any(is_time_view) { return [] }
 	[time_field_word] + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word] else [])
 }
 # the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *
-emitted_modules(program: Node): list := if time_operation_word in time_words(program) then [time_arithmetic_module] else []
+emitted_modules(program: Node): list := if time_operation_word in time_literal_words(program) then [time_arithmetic_module] else []
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}
