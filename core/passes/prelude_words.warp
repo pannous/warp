@@ -301,10 +301,11 @@ aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
 	count = #n - 1 + receivers
 	word = if called in aliases then aliases[called] else arity_variant(called, count)
 	if word == ø or shadows(own, called, count) { return n }
-	group_like(n, [symbol(if word in own then library_word(word) else word)] + items_of(n)[1 ..])
+	group_like(n, [symbol(if word in own and not word.starts_with(OPERATOR_FUNCTION_PREFIX) then library_word(word) else word)] + items_of(n)[1 ..])
 }
 # the module's own definition of a word the program defines too, which an alias or variant means: `round(x, 2)` calls
-# the prelude's round_to beside a program's round_to (card module-hygiene)
+# the prelude's round_to beside a program's round_to (card module-hygiene); an operator's function is overloaded
+# beside the module's, never replaced (with_reached's kept), so its alias calls it as it is (shell's matches)
 library_word(word: text): text := word + name_joiner + "library"
 
 # words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,

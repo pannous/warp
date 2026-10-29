@@ -7,16 +7,18 @@
 //   exp          8e-14 relative, from x = -700 to 700
 //   pow          1e-14 relative, base > 0; a negative base takes whole exponents only (others give nan)
 //   atan2        3e-12 radians
-use reals
+// π and τ as floats, as the rest is plain float arithmetic: the exact reals' π makes a sum with it a Real
+half_turn = 3.141592653589793
+full_turn = 6.283185307179586
 
 // sin of x reduced to [-π/2, π/2]: its Taylor series to x^15, whose next term is below 1e-11 there
 sin(x: float) := {
-	r = x - round(x / tau) * tau
-	if r > pi / 2 { r = pi - r } else if r < -pi / 2 { r = -pi - r }
+	r = x - round(x / full_turn) * full_turn
+	if r > half_turn / 2 { r = half_turn - r } else if r < -half_turn / 2 { r = -half_turn - r }
 	s = r * r
 	r * (1.0 + s * (-0.16666666666666666 + s * (0.008333333333333333 + s * (-0.0001984126984126984 + s * (2.7557319223985893e-06 + s * (-2.505210838544172e-08 + s * (1.6059043836821613e-10 + s * -7.647163731819816e-13)))))))
 }
-cos(x: float) := sin(x + pi / 2)
+cos(x: float) := sin(x + half_turn / 2)
 // e^x = 2^k · e^r with r in [-ln 2 / 2, ln 2 / 2]: the Taylor series of e^r to r^13, then 2^k by squaring halves
 exp(x: float) := {
 	if x > 709.78 { return 1.0 / 0.0 }
@@ -62,14 +64,14 @@ small_atan(t: float) := {
 	u = if shifted then (t * 1.7320508075688772 - 1) / (t + 1.7320508075688772) else t
 	s = u * u
 	a = u * (1.0 + s * (-0.3333333333333333 + s * (0.2 + s * (-0.14285714285714285 + s * (0.1111111111111111 + s * (-0.09090909090909091 + s * (0.07692307692307693 + s * (-0.06666666666666667 + s * 0.058823529411764705))))))))
-	if shifted then a + pi / 6 else a
+	if shifted then a + half_turn / 6 else a
 }
 // the angle of the point (x, y) from the x axis in (-π, π], y first as C's atan2
 atan2(y: float, x: float) := {
 	if x == 0 and y == 0 { return 0.0 }
 	ay = abs(y)
 	ax = abs(x)
-	a = if ay <= ax then small_atan(ay / ax) else pi / 2 - small_atan(ax / ay)
-	if x < 0 { a = pi - a }
+	a = if ay <= ax then small_atan(ay / ax) else half_turn / 2 - small_atan(ax / ay)
+	if x < 0 { a = half_turn - a }
 	if y < 0 then -a else a
 }

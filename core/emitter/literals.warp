@@ -2,6 +2,8 @@
 # a decimal literal as Rust reads it: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
 # 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float (Number::is_exact_decimal)
 exact_decimal_digits = 15
+# a decimal stays exact while its denominator, 10 to its fraction digits, fits an int64 (10^18), else it is a float
+exact_fraction_digits = 18
 exact_decimal(n: float): any := {
 	shown = "" + n
 	if shown.contains("e") { return ø }
@@ -13,7 +15,7 @@ exact_decimal(n: float): any := {
 	digits = parts#1 + parts#2
 	significant = digits
 	while #significant > 1 and significant.starts_with("0") { significant = significant[1..] }
-	if #significant > exact_decimal_digits { return ø }
+	if #significant > exact_decimal_digits or #parts#2 > exact_fraction_digits { return ø }
 	numerator = int(digits)
 	if negative { numerator = -numerator }
 	denominator = 1
