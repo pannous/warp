@@ -82,6 +82,9 @@ trim(t: text): text from emitter
 starts_with(t: text, part): bool from emitter
 ends_with(t: text, part): bool from emitter
 byte_slice(t: text, start, end): text from emitter
+// a program's int type (core/passes/int_types.warp): `x as Color` marks x, `x is Color` reads its mark
+int_marked(x, kind: int): any from emitter
+int_mark_of(x): int from emitter
 chr(code): codepoint from emitter
 read(path): text from emitter
 warning(message): text from emitter

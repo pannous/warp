@@ -34,6 +34,9 @@ built_bytes(address: int, length: int, info: int): Node := {
 	for i in 0..<length { items += [held(memory_byte(address + i))] }
 	list_node(info * KindUnit.Info + Kind.List, items)
 }
+# code's lists the native warp's parse_code rebuilds (core/native/driver.warp code_built): the items, a square list
+# (ø for none), with the bracket and separator their spellings name; its keys take the operator so too, key_node
+built_spelled_list(items: Node, bracket: Node, separator: Node): Node := separated_node(bracketed_node(items, bracket), separator)
 # a type declaration as written, `class P { x: int }`: its name and body
 built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
 # a parse failure the program's `try` catches: the Error of the host's message
