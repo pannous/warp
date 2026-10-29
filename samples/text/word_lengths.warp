@@ -2,5 +2,4 @@
 # the length of each word
 length "the quick brown fox".split(" ")
 # Very good example to show when broadcasting does not apply and we need the special extra keyword :
-# triage-held 2026-10-28: `length all xs`, a keyword to broadcast; `xs.map length` is the form :: length all "the quick brown fox".split(" ")
-"the quick brown fox".split.map length
+length all "the quick brown fox".split(" ")
