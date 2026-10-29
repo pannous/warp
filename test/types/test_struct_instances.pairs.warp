@@ -2,7 +2,7 @@
 
 # a_struct_instance_gives_the_same_values
 'class Point{x:int; y:int}; p = Point(3, 4); p.x * p.y'	12
-'class Point{x:int; y:int}; p = Point(3, 4); string(p)'	'Point{x:3 y:4}'
+'class Point{x:int; y:int}; p = Point(3, 4); string(p)'	'Point{x: 3, y: 4}'
 
 # a_method_of_a_struct_variable_takes_the_struct
 'class Point{x:int; y:int; sum() := x + y}; p = Point(3, 4); p.sum()'	7

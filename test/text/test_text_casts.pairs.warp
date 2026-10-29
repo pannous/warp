@@ -1,7 +1,7 @@
 # from test_text_casts.rs: edit the Rust test, then run the script again
 
 # an_int_list_variable_as_string_is_its_text
-'x=[1 2 3]; y = x as string; y'	'[1 2 3]'
+'x=[1 2 3]; y = x as string; y'	'[1, 2, 3]'
 'x=[7]; x as string'	'[7]'
 
 # a_double_quoted_text_as_float_is_loud

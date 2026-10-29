@@ -15,7 +15,7 @@
 
 # a_module_word_inside_an_interpolation_comes_along
 'o = 2.71828; "a \\(o.round(1)) b"'	'a 2.7 b'
-'use list; "\\(zip([1], [2]))"'	'[[1 2]]'
+'use list; "\\(zip([1], [2]))"'	'[[1, 2]]'
 
 # a_prelude_word_keeps_its_types
 'first(x) := 7; first([1])'	1

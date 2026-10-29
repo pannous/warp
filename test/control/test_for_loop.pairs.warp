@@ -28,7 +28,7 @@
 'def f() { return [1] }; t=0; while t < 2 { f(); t++ }; t'	2
 
 # test_for_range_end_is_evaluated_once
-'xs=[1,2,3]; for i in 0..count(xs) { xs += [i] }; string(xs)'	'[1 2 3 0 1 2]'
+'xs=[1,2,3]; for i in 0..count(xs) { xs += [i] }; string(xs)'	'[1, 2, 3, 0, 1, 2]'
 
 # test_for_range_variable_end_is_read_once
 'n=3; rounds=0; for i in 0..n { n = 10; rounds += 1 }; rounds'	3

@@ -34,6 +34,6 @@
 'class Circle{r:int; static k = 3; area() := k * r}; Circle(2).area()'	6
 
 # an_object_has_one_text_form
-'class Point{x:int; y:int}; p = Point(1, 2); string(p)'	'Point{x:1 y:2}'
-'class Point{x:int; y:int}; p = Point(1, 2); p as text'	'Point{x:1 y:2}'
-'class Point{x:int; y:int}; string(Point(1, 2))'	'Point{x:1 y:2}'
+'class Point{x:int; y:int}; p = Point(1, 2); string(p)'	'Point{x: 1, y: 2}'
+'class Point{x:int; y:int}; p = Point(1, 2); p as text'	'Point{x: 1, y: 2}'
+'class Point{x:int; y:int}; string(Point(1, 2))'	'Point{x: 1, y: 2}'
