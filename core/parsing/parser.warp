@@ -2738,7 +2738,8 @@ def shaped(parameter: Node, shapes: list): Node := {
 // - a preposition (`to of from …`) separates the slots and labels the one after it: `to add a to b` → `a`, `to b`
 // - an article starts a noun slot when a known type follows it or the body never names the article: `a number` →
 //   `number: number`, `a photo` → `photo` (typed once `class photo` is declared); `to add a b: a+b` keeps `a`
-// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`
+// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`;
+//   when together they name a declared type, by all of them: `a full name` → `full-name: full-name`
 // - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
 // Rust twin: type_name_matching.rs parameter_slots (labelled)
 def phrase_slots(words: list, body: Node, types: list): list {
@@ -2761,7 +2762,8 @@ def phrase_slots(words: list, body: Node, types: list): list {
 			}
 		}
 		at = at + 1
-		head = noun#(#noun)
+		// `a full name` of `class full name`: the nouns together are the type, and the slot's name
+		head = if #noun > 1 and known_type(noun.join("-"), types) then noun.join("-") else noun#(#noun)
 		slot = if known_type(head, types) then Key(symbol(head), Op.Colon, symbol(head)) else symbol(head)
 		parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
 		preposition = ""
