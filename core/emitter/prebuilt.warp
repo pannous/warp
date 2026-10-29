@@ -317,15 +317,18 @@ def runtime_counts(): list := [module.runtime_image.imports + module.runtime_ima
 ## module's, at its index, of its kinds: never compiled again
 # a module's warp.module read back: its own functions (index, kinds, result, signature), globals [name, kind], text
 # segments, what it was built behind, and where each kind of its items lands here (base: placed, type, text)
-class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; closures: list; classes: list; builds: bool; c_functions: list; base: list }
+class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; closures: list; classes: list; builders: list; c_functions: list; base: list }
 def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
 	module.linked_own_names = own_names
 	module.linked_words = {}
 	module.linked_closures_shown = {}
 	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
-	for image in images { for word in image.functions { if word.name not in own_names and not is_lifted_lambda(word.name) { module.linked_words[word.name] = word } } }
+	for image in images { for word in image.functions { if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) { module.linked_words[word.name] = word } } }
 }
+# a module's word a program may call: not one of the builders it exports for the host (its `show` is the host's, not
+# draw's), which a program linking it exports its own of
+linkable(image: LibraryImage, word: Function): bool := word.name not in image.builders
 # the program's own definitions, as parsed (a line holding several, `use units; m(x) := 7; m(1)`, the source's slices
 # miss): never a linked module's word
 def own_words_unlinked(names: list) {
@@ -380,14 +383,14 @@ def library_image_of(name: text, wasm: list): any {
 	for i in 0..<read_number(layout) { closures += [[read_name(layout), read_number(layout), read_name(layout)]] }
 	classes = []
 	for i in 0..<read_number(layout) { classes += [[read_name(layout), read_name(layout)]] }
-	builds = read_number(layout) == 1
+	builders = read_names(layout)
 	# the C functions it imports behind the runtime's imports, which its runtime functions follow
 	c_functions = read_names(layout)
 	runtime_behind = [behind#1 - #c_functions] + behind[1 ..]
 	if types != #gc_names + #classes { return "other canonical or class types than this runtime's" }
 	if imports != module.runtime_image.imports + #c_functions { return "other host imports than this runtime's" }
 	if runtime_behind != runtime_counts() { return "built behind another runtime.wasm (warp rebuild writes it anew)" }
-	LibraryImage(name, wasm, functions, globals, texts, behind, closures, classes, builds, c_functions, [])
+	LibraryImage(name, wasm, functions, globals, texts, behind, closures, classes, builders, c_functions, [])
 }
 # each linked module's place: its functions behind those placed so far, its types (one per function) and texts too,
 # its globals declared by name (one the runtime or a module before it declares is theirs)
@@ -420,7 +423,7 @@ def bind_library_words() {
 			word = image.functions[k]
 			if image.closures.any(made => made#1 == word.name) { module.functions[linked_closure_name(image, word.name)] = linked_function(word, linked_index(image, k)) }
 			f = module.functions.get(word.name)
-			if f != ø and f.kinds == ø and word.name in module.linked_words {
+			if f != ø and f.kinds == ø and linkable(image, word) and word.name in module.linked_words {
 				f.index = linked_index(image, k)
 				f.kinds = word.kinds
 				f.result = word.result
@@ -441,7 +444,7 @@ def linked_function(word: Function, index: int): Function {
 }
 # the host's builders, exported once main is placed (the first function, which a program's exports name), for a
 # linked module that calls them
-def linked_builders() { if module.linked_images.any(image => image.builds) { exported_builders() } }
+def linked_builders() { if module.linked_images.any(image => #image.builders > 0) { exported_builders() } }
 def linked_function_count(): int {
 	count = 0
 	for image in module.linked_images { count += #image.functions }
