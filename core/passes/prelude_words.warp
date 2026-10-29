@@ -182,9 +182,15 @@ lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
 	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
 }
-# the words the emitter calls itself, kept though no statement does: a time's fields (emitter/times.warp time_field) of
-# a program writing a time literal, the parser's data view
-emitted_words(program: Node): list := if nodes_in(program).any(is_time_view) then [time_field_word] else []
+# the words the emitter calls itself, kept though no statement does, of a program writing a time literal (the parser's
+# data view): a time's fields (emitter/times.warp time_field), its + - * where the program writes one (time_operation_call)
+emitted_words(program: Node): list := {
+	nodes = nodes_in(program)
+	if not nodes.any(is_time_view) { return [] }
+	[time_field_word] + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word] else [])
+}
+# the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *
+emitted_modules(program: Node): list := if time_operation_word in emitted_words(program) then [time_arithmetic_module] else []
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}
@@ -409,7 +415,7 @@ with_type_module_uses(program: Node): Node := {
 	}
 	# in the order of type_modules, Rust's sorted one
 	modules = type_modules.filter(module => module in wanted and module not in used)
-	with_module_uses(program, modules + global_word_modules(program, own, used))
+	with_module_uses(program, modules + global_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used))
 }
 # the modules of the global words a program names, or a sugar rule reaching it writes (`x.json` json_text), and binds
 # nothing to, each once
