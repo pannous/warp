@@ -92,6 +92,7 @@ wasmtime_caller_export_get(caller: handle, name: text, size: i64, item: pointer)
 wasmtime_memory_data(context: handle, memory: pointer): handle from "warp_wasmtime"
 wasmtime_func_type(context: handle, function: pointer): handle from "warp_wasmtime"
 wasm_functype_results(type: handle): handle from "warp_wasmtime"
+wasm_functype_params(type: handle): handle from "warp_wasmtime"
 wasmtime_func_call(context: handle, function: pointer, arguments: pointer, count: i64, results: pointer, results_count: i64, trap: pointer): handle from "warp_wasmtime"
 wasmtime_error_message(error: handle, message: pointer) from "warp_wasmtime"
 wasmtime_error_exit_status(error: handle, status: pointer): bool from "warp_wasmtime"
@@ -520,7 +521,9 @@ raised_message(context: handle, instance: pointer, failed: pointer): text := {
 	trap = allocate(8)
 	long_at(trap).value = 0
 	if not wasmtime_instance_export_get(context, instance, "trap_message", 12, function) or not wasmtime_instance_export_get(context, instance, "memory", 6, memory) { "" } else {
-		checked(wasmtime_func_call(context, function + 8, argument, 1, result, 1, trap), trap)
+		# a compiler the seed built before trap_message took the code exports it without one
+		taken = native_long(wasm_functype_params(wasmtime_func_type(context, function + 8)))
+		checked(wasmtime_func_call(context, function + 8, argument, taken, result, 1, trap), trap)
 		text_in(wasmtime_memory_data(context, memory + 8), long_at(result + VALUE_OFFSET).value)
 	}
 }
@@ -1183,6 +1186,7 @@ PARAMETER_F64 = 4
 PARAMETER_TEXT = 5
 PARAMETER_HANDLE = 6
 PARAMETER_OUT = 7
+PARAMETER_TEXTS = 8
 REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
@@ -1204,6 +1208,7 @@ parameter_kind(name: text): i32 := {
 	if same_text(name, "ptr") { return PARAMETER_TEXT }
 	if same_text(name, "handle") { return PARAMETER_HANDLE }
 	if same_text(name, "out") { return PARAMETER_OUT }
+	if same_text(name, "texts") { return PARAMETER_TEXTS }
 	0
 }
 register_of(name: text): i32 := {
@@ -1301,9 +1306,19 @@ c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointe
 	if kind == PARAMETER_I64 { return long_at(value).value }
 	if kind == PARAMETER_TEXT { return native_pointer(c_string(shown(caller, context, value - VALUE_OFFSET))) }
 	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
+	if kind == PARAMETER_TEXTS { return native_pointer(c_strings(caller, context, value - VALUE_OFFSET)) }
 	id = word_at(value).value as i32
 	if not handle_known(id) { failed_call(joined(joined(name, ": no handle "), text_of(id))) }
 	handle_pointer(id)
+}
+# a list of texts of the module as a NULL-terminated array of C strings (argv), the strings and it in the arena
+c_strings(caller: handle, context: handle, list: pointer): pointer := {
+	counted = allocate(VALUE_BYTES)
+	guest_call(caller, context, "item_count", list, 1, counted)
+	count = long_at(counted + VALUE_OFFSET).value
+	array = zeroed(((count + 1) * 8) as i32)
+	for i in 0..count { long_at(array + i * 8).value = native_pointer(c_string(shown(caller, context, item_of(caller, context, list, i + 1)))) }
+	array
 }
 # the C result as the module's value: a text, a handle id, else the number in its register
 c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: pointer): nothing := {

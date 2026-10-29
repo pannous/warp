@@ -7,11 +7,15 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 - resident-compiler (warp-fixer, card program-fixed): a resident compiler instance `warp` reuses over a socket, all state live, so a program costs only its own parse + emit (~20 ms instead of 0.10 s for `"hi"`). Concerns: process lifetime, concurrency, staleness after a rebuild. Options: build it (auto-started, restarts when warp.wasm changes) / not now (keep cutting fixed cost) / opt-in flag.
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
+- range-dots (warp-fixer, silent-wrong-results; test expects `for i in (1..3)` to sum 6): is `..` inclusive or exclusive? Today exclusive everywhere (`sum(1..3)` 3). Related: to-inclusive (`a to b` includes b, its exclusive twin written `1 ..< #a`), wiki keyword.md `upto` exclusive, julia-compat (Julia `1:3` includes 3), random-forms `random 1..10` (a die reads inclusive). Options: `..` inclusive like `to`, `..<` exclusive (Recommended: one meaning for both range spellings, matches math, Ruby, Kotlin, Swift's `...`) / `..` exclusive as Rust (the test is wrong, triage) / leave as is.
+- glued-negative (warp-fixer): `[a -1]` with a=5 gives [4] today; is a minus spaced before and glued after a negative number starting a new item (`[a -1]` = [5, -1], `f it -1` = f(it, -1) vs `f it-1`)? Options: yes inside brackets and argument positions, a hint on a bare `x -1` statement (Supervisor's recommendation) / always subtraction, a warning naming both readings / yes everywhere.
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- sound-system-player (supervisor): sound plays through the system player, afplay/paplay, configurable by WARP_SOUND_PLAYER; under WARP_NO_WINDOW or CI only an explicit WARP_SOUND_PLAYER plays (warp-native-harness)
 - fixed-time-units (supervisor's call, separate-modules): `1 minute`, `2 hours`, `90 seconds` are fixed quantities of lib/units.warp (a minute is 60 s, `sleep 1 minute` sleeps); day, week, month and year stay calendar durations (a day can be 23 or 25 h across DST)
 - is-pattern-binds (interviewer): `if p is Point{x, ..}: print x` binds x where the test is known true (then-branch, rest of an `and` chain, match arm); one rule for `is` and `match`.
 - implicit-standard-words, hint part (interviewer): a word used without `use` gets a hint naming its module, so `warp beautify` writes the `use`.
+- implicit-standard-words, index scope (worker samples-implicit-use): the word index (lib/modules/words.tsv) covers every standard module's definitions but the prelude, the dialects R, PHP and english too, read from their sources at rebuild, not only from modules that prebuild; a program's own class names never pull a module in (`class C` is not sound's note C).
 - program-match lowering (supervisor): "merge all existing branches" taken as the OK for its run-time matcher in lib/prelude.warp + core/node_matches.warp (landed 9f9ef1ce43).
 - test path edit (supervisor): test/node/test_parsed_node_walks.pairs.warp:34 reads core/parsing/parser.warp instead of core/parser.warp after the core/ grouping; the only test edit of the reshuffle.
 - warp test handoff (supervisor): until the native test runner lands, `warp test` on the native warp hands off to warp-rust with one stderr line.
@@ -21,6 +25,9 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - unit tests without `use units` (supervisor): the 83 lines the triage listed as wrong are gaps under implicit-standard-words, not wrong expectations.
 - release workflow quiet (supervisor): Release re-enabled with one summary at the end, no per-job notifications; the other workflows stay off.
 - no extra workers tonight (supervisor): the ten triage gap groups wait on the board (Next) for the four feature workers instead of new sessions (rule: at most two feature workers, already exceeded by the runtime-linking team).
+- split-whitespace (interviewer, card sample-word-functions): `t.split` with no argument splits on runs of whitespace (Python's split()).
+- named-arguments-general (interviewer): any parameter can be named at the call, so `t.replace "tea" with: "coffee"` works because replace's second parameter is named `with`; no special case for replace.
+- length-all-held (interviewer): `length all xs` is triage-held; the forms are `xs.map length` and, per julia-compat, the broadcast `length.(xs)`. A general `all`/`each` broadcast word is for you to revisit.
 
 ## To present
 - of-binds-tighter (parser OK, user away, card foo-of-any): `a of b = e` is `(a of b) = e`, so `square of int = it * it` defines square(it: int) and `name of p = "Al"` stays an assignment to p.name.

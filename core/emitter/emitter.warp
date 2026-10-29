@@ -160,7 +160,7 @@ i31_type = 108
 ref_null = 208
 int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>": 135, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
-checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
+checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply", "<<": "checked_shift_left", ">>": "checked_shift_right"}
 bit_operators = ["xor", "<<", ">>"]
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
 # yes/no held as i32: only equal or not
@@ -1001,7 +1001,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `[]`, held behind the opaque word as Rust's parser builds it: a list of no items
 	if is_empty_list(n) { return list_value(body, []) }
 	if operator == Op.Colon and left is symbol and data_item_check(name_of(left)) != "" { return data_item(body, name_of(left), right) }
-	if operator == Op.Else and is_key(left, Op.Then) { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
+	if operator == Op.Else and is_key(left, Op.Then) { return conditional(body, right_of_if(key_of(left)), value_of(left), right, yes) }
 	if operator == Op.Then and is_key(left, Op.If) { return conditional(body, right_of_if(left), right, ø, no) }
 	# `c ? a : b`: the keys ?(c, :(a, b))
 	if operator == Op.Question and is_key(right, Op.Colon) { return conditional(body, left, key_of(right), value_of(right), yes) }
@@ -1147,7 +1147,8 @@ def analyzed_element(body: Body, list: Node, index: Node): TypedCode {
 	if kind == ø or value.kind != ValueKind.Node { return value }
 	TypedCode(kind, converted(value, kind))
 }
-right_of_if(n: Node): any := value_of(n)
+# the condition of `if c then …`, and of `c then … else …` written without the if (Rust then_without_if_is_the_condition)
+right_of_if(n: Node): any := if is_key(n, Op.If) then value_of(n) else n
 is_type_call(n: Node): bool := is_group(n) and #n == 2 and n#1 == symbol("type")
 # the fixed-width ints and the ways to write an int, each an int as the core holds it (Rust's FIXED_WIDTHS, `5 as hex`)
 int_spellings = ["byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32", "uint64", "hex", "binary", "octal"]
@@ -1186,7 +1187,9 @@ bit_codes = {"&": 131, "|": 132}
 def bitwise(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	a = expression_code(body, left)
 	b = nested(body, right, 1)
-	if a.kind == ValueKind.Int and b.kind == ValueKind.Int { return TypedCode(ValueKind.Int, a.code + [op.block] + value_type(ValueKind.Int) + b.code + [op.end, bit_codes[symbol]]) }
+	whole = kind => kind == ValueKind.Int or kind == ValueKind.Node
+	# a number known only at run time (2^62 is exact) is read as an int, a big one trapping: its truth was taken before
+	if whole(a.kind) and whole(b.kind) { return TypedCode(ValueKind.Int, converted(a, ValueKind.Int) + [op.block] + value_type(ValueKind.Int) + converted(b, ValueKind.Int) + [op.end, bit_codes[symbol]]) }
 	logical_code(body, bit_words[symbol], a, b)
 }
 def logical_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {

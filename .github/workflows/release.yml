@@ -48,7 +48,7 @@ jobs:
     - name: create the release (once)
       env:
         GH_TOKEN: ${{ github.token }}
-      run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --notes-file "notes/releases/$TAG.md" --title "warp $TAG"
+      run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --verify-tag --notes-file "notes/releases/$TAG.md" --title "warp $TAG"
 
   compilers:
     # warp.wasm built from the tag's lib/ by the seed (the newest seed-* release's asset, scripts/refresh-seed.sh),
@@ -65,7 +65,11 @@ jobs:
         ref: ${{ env.TAG }}
     - uses: dtolnay/rust-toolchain@stable
     - name: build
+      # the rebuild optimizes warp.wasm with the wasm-opt on the PATH, as every local build does
       run: |
+        gh release download "version_$BINARYEN" --repo WebAssembly/binaryen --pattern "binaryen-version_$BINARYEN-x86_64-linux.tar.gz"
+        tar -xzf "binaryen-version_$BINARYEN-x86_64-linux.tar.gz" -C "$RUNNER_TEMP"
+        export PATH=$RUNNER_TEMP/binaryen-version_$BINARYEN/bin:$PATH
         cargo build --release --locked --bin warp
         seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
         gh release download "$seed" --repo pannous/warp --pattern warp-seed.wasm --dir target/release
