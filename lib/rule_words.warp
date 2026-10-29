@@ -86,5 +86,10 @@ notifying(n: Node, names: list): Node := {
 }
 writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
 
+# `count(2 in xs)`: a yes/no question is no count, the compile refused with the count it means
+counted_question(items: Node, item: Node): Node := {
+	throw "count(${item} in ${items}) counts a yes/no question: did you mean ${items}.count(${item})?"
+}
+
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, signaled: signaled}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled}
