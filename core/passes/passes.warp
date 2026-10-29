@@ -82,8 +82,10 @@ lowered_node(n: Node): Node := {
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
-	lowered_node(with_used(plain_node(parsed(rules_ended(source))), source, folder, prelude))
+	lowered_reached(plain_node(parsed(rules_ended(source))), source, folder, prelude)
 }
+# the program with the definitions it reaches, after every pure pass, those it doesn't call after all dropped
+lowered_reached(program: Node, source: text, folder: text, prelude: text): Node := called_only(lowered_node(with_used(program, source, folder, prelude)))
 # the sugar rules the program at hand keeps (with_used), of each sugar step
 global kept_first_sugar = []
 global kept_sugar = []
@@ -98,6 +100,7 @@ global kept_comprehension_sugar = []
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
+	brought_names = {}
 	own = early_sugared(interpolation(with_uses(program, folder)))
 	bindings = rule_bindings(own)
 	kept_first_sugar = sugar_rules(bindings, first_sugar_module_names)
@@ -134,7 +137,7 @@ checked_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
 	program = plain_node(source_checks(parsed(rules_ended(source)), prelude))
 	own_names = statements_in(program).map(declared_name)
-	main_globals(kind_changes(lowered_node(with_used(program, source, folder, prelude))), own_names)
+	main_globals(kind_changes(lowered_reached(program, source, folder, prelude)), own_names)
 }
 
 # [the view of the checked program, what its checks diagnosed: [level, message, fix] each]
