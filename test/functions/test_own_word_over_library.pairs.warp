@@ -1,0 +1,4 @@
+# a program's own typed function named like a library word is the program's, and the library's call form still works (card int-add)
+'add(a: int, b: int) := a + b; add(1, 2)'	3
+'xs = [1]; add(xs, 2); xs'	[1, 2]
+'f(n: int, t: text) := 1; f(n: int, x: list) := 2; f(3, "ab")'	1
