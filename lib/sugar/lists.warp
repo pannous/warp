@@ -8,7 +8,7 @@ rewrite text#$n => zero_fill($n - 1, "")
 # A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
 rewrite $v as list of $t => $v.map($x => $x as $t)
 
-# `count bytes in t`: the text's byte size, ahead of the `in` of a membership (sugar/methods.warp counts x in y)
+# `count bytes in t`: the text's byte size, ahead of the `in` of a membership
 rewrite (count bytes in $t) => byte_size($t)
 
 # A filter (card pair-count-filter): `xs where it > 2` is the items the condition holds for, `it` each item, also as a
