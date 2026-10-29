@@ -49,5 +49,42 @@ ended_by(program: Node, starting: text, ending_word: text): any := {
 program_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then program_statements(s) else [s])
 is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
 
+# --- variable signals (lib/signals.warp's rules, card signals-lib) ---
+
+signal_listen_word = "signal_listen"
+signal_old = "signal·old"
+# `whenever x > y {…}`: a listener of each name the condition reads, running the block when the write made the
+# condition hold, it holding not with the name's old value: `if value > y and not old > y {…}` for x
+whenever_listens(condition: Node, body: Node): Node := separated(bracketed(symbol_words(condition).map(name => call_of(signal_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(renamed(condition, name, symbol("value")), renamed(condition, name, symbol("old")), body))])), "("), ";")
+became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
+# the program with each write of a watched name notifying its listeners (signal_notify), `x = 3` as
+# `(signal·old = x; x = 3; signal_notify("x", x, signal·old))`; a main statement's only once a listener of the name came
+# before it (the first write declares the name), that of a definition or a listener always, as they run later. ø for a
+# program without listeners
+signaled(program: Node): any := {
+	statements = program_statements(program)
+	watched = statements.flat_map(names_listened)
+	if #watched == 0 { return ø }
+	live = []
+	written = []
+	for statement in statements {
+		later = is_key(statement, Op.Define) or nodes_in(statement).any(is_lambda)
+		names = if later then watched else live
+		written += [if #names == 0 then statement else bottom_up(statement, part => notifying(part, names))]
+		live += names_listened(statement)
+	}
+	separated(bracketed(written, ""), ";")
+}
+# the names the statement's signal_listen calls listen to
+names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, signal_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
+# the write of a watched name, notifying its listeners; any other node as it is
+notifying(n: Node, names: list): Node := {
+	if not (n is key and key_of(n) is symbol and op_of(n) in writing_ops and name_of(key_of(n)) in names) { return n }
+	name = key_of(n)
+	old = symbol(signal_old)
+	separated(bracketed([Key(old, Op.Assign, name), n, call_of("signal_notify", [name_of(name), name, old])], "("), ";")
+}
+writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
+
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, signaled: signaled}

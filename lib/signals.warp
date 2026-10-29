@@ -1,0 +1,36 @@
+// The standard module signals (card signals-lib): a variable's listeners. `on set x {…}` runs its block after each
+// later write of x, the block reading the written value as `value` and the one before as `old`; `on change x {…}`
+// only when the write changed it; `whenever x > 1 {…}` each time the condition comes to hold after a write of a name it
+// reads. The program rule (lib/rule_words.warp signaled) makes each watched write notify the listeners
+rewrite on set $x $body => signal_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite on set $x: $body => signal_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite on change $x $body => signal_listen([$n], yes, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite on change $x: $body => signal_listen([$n], yes, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite whenever $c $body => $listens where $listens = whenever_listens($c, $body)
+rewrite $p => $q where program and $q = signaled($p)
+
+// each watched name's listeners in order, and whether each runs only on a change, as two lists of the same length
+global signal_listeners = {}
+global signal_changes_only = {}
+signal_listen(names: list, changes_only: bool, listener: function): any := {
+	for name in names {
+		if not (name in signal_listeners) {
+			signal_listeners[name] = []
+			signal_changes_only[name] = []
+		}
+		signal_listeners[name] += [listener]
+		signal_changes_only[name] += [changes_only]
+	}
+	ø
+}
+// the listeners of the name told of its write, from old to value; the value
+signal_notify(name: text, value: any, old: any): any := {
+	if name in signal_listeners {
+		listeners = signal_listeners[name]
+		for i in 1 ..< #listeners + 1 {
+			listener = listeners#i
+			if not signal_changes_only[name]#i or value != old { listener(value, old) }
+		}
+	}
+	value
+}
