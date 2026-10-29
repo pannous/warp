@@ -15,7 +15,8 @@ has_field(m: Node, name: text): bool := {
 	if kind_code(m) == Kind.Symbol { return same_bytes(name, "name") }
 	if node_is_error(m) { return is_error_message(m, name) }
 	if is_entry(m) { return same_bytes(key_name(m), name) or is_tagged_field(m, name) or same_bytes(name, "key") or same_bytes(name, "value") or same_bytes(name, "name") or same_bytes(name, "op") }
-	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance and kind_code(m) != Kind.List { return no }
+	# (only a tag's `{…}`: the entries of `f(length: int)`'s parameters never hide its .length, card compiler-built)
+	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance and not is_entry_block(m) { return no }
 	map_index(m, name) > 0
 }
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
@@ -45,6 +46,8 @@ list_part(m: Node, name: text): Node := {
 	if not is_plain_list(m) { return ø }
 	if same_bytes(name, "bracket") then list_bracket(m) else list_separator(m)
 }
+# a tag's `{…}` of entries, `Person{name: "A"}`'s, which answers its fields
+is_entry_block(n: Node): bool := kind_code(n) == Kind.List and bracket_info(n) == BracketCode.Curly
 # a list that is no map
 is_plain_list(n: Node): bool := kind_code(n) == Kind.List and marked_kind(n) != Marked.Map
 # a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
