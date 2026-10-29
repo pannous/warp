@@ -23,3 +23,5 @@
 'enum K { B, D }; B == D'	false
 'enum Note { B, D }; "" + B'	"B"
 'type D = A | E(n); x = E(2); x.n'	2
+# the module a use names is no word of the program: use hash beside color's hash (card hash-sha256-owner)
+'use hash; sha256("abc")'	"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"

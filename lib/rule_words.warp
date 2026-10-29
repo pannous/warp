@@ -17,6 +17,9 @@ path_parameter(part: text): text := {
 	name
 }
 
+# `users` → "users": a name as the text it is spelled by
+spelled(name: Node): text := "${name}"
+
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
 # `get` → "GET": a route's method as HTTP spells it
@@ -41,4 +44,4 @@ program_statements(program: Node): list := statements_in(program).flat_map(s => 
 is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
 
 # the words by name, as a rule's `where` calls them
-rule_words = {path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served}
