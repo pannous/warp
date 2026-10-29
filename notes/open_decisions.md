@@ -7,6 +7,8 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- signals-test-15 (interviewer): test/control/test_variable_signals.pairs.warp:15 `x=3; n=0; on set x : n+=1; while x-->0 : x; n` upgraded 3 → 4: the failing loop test's x-- (0 → -1) is a write too, no special case.
+- after-participle-held (interviewer): :18 `after tested: n+=10` (a hook named by a function's past participle) triage-held as esoteric; a lib wrapper/decorator can do it later.
 - one-duration (interviewer): `2 hours` and time literals are one duration type; day/week/month/year calendar, compared on bounds, undecidable comparisons an error.
 - sample-spellings (supervisor, warp-native-harness; user 2026-10-29: ask later): samples rewritten to the spec instead of new syntax — `height * width int` → `int[height * width]` (circle, filled_circle, mandelbrot_canvas), `(y-center)^2` → `(y - center)^2` (circle; hyphenated names stay names), `moved all particles` → `particles.map(moved)` (particles), and a stray tab before viewer's `def triangles` removed (an indented line continues the one above); keep the originals as language wishes?
 - implicit-standard-words, index scope (worker samples-implicit-use): the word index (lib/modules/words.tsv) covers every standard module's definitions but the prelude, the dialects R, PHP and english too, read from their sources at rebuild, not only from modules that prebuild; a program's own class names never pull a module in (`class C` is not sound's note C).
