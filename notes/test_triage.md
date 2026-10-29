@@ -37,6 +37,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | delete? |
 |---|---|---|
+| test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` (user 2026-10-29) | |
 | test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | delete? |
 | test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | delete? |
 | test/welcoming/test_footguns.pairs.warp:403, 404, 425 | symbolic surds (√2·√2 exactly 2) | |

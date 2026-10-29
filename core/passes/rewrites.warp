@@ -182,9 +182,9 @@ own_rules_applied(program: Node, source: text): Node := {
 	if #rules > 0 { program = separated(bracketed(kept, ""), ";") }
 	mentioned = word_set(symbol_words(program))
 	module_rules = []
-	for module in std_module_names {
-		module_source = file_text(std_module_path(module))
-		if module_source != ø and rule_needs(module_source).any(word => mentioned.has(word)) {
+	needs = rule_needs_by_module()
+	for module in std_module_names.filter(module => needs.has(module)) {
+		if needs[module].split(" ").any(word => mentioned.has(word)) {
 			# (a rule of the whole program, `where program`, comes with the module's others)
 			module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program or needed_words(rule).any(word => mentioned.has(word)))
 		}
@@ -531,7 +531,53 @@ first_alphabetic_word(written: text): text := {
 # the rules of the module at `path`, of its baked parse when it is the bundled one
 module_rules_of(path: text, module: text): list := {
 	source = file_text(path) ?? ""
-	statements_in(source_parse(path, source)).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+	within = library_path(path)
+	baked = if LIBRARY_FILES.get(within) == source then LIBRARY_RULES.get(within) else ø
+	if baked != ø { return items_of(unpack(baked)).map(packed => unpacked_rule(packed, module)) }
+	written_rules(path, source, module)
+}
+written_rules(path: text, source: text, module: text): list := statements_in(source_parse(path, source)).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+# every bundled module's rules, packed (rule_node), baked in beside its parse: uses.warp module_text writes them in where
+# library_rules() stands; reading them off each parse at every compile was a tenth of a small program's (card
+# fixed-startup-cost). A compiler built by one that bakes none reads them where it runs
+LIBRARY_RULES = library_rules()
+library_rules(within: text = ""): map := {}
+# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any
+packed_rules(files: map): map := {
+	packed = {}
+	for path in files.keys {
+		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(written_rules(run_library() + "/" + path, files[path], "").map(rule_node), Bracket.Square, Separator.Comma)) }
+	}
+	packed
+}
+# each standard module with rules, the words they need (rule_needs) joined by spaces, baked in: module_text writes
+# std_rule_needs() in, so a compile reads no other module's text (38 of them at every compile were ~5 ms of a small one).
+# With WARP_LIB (a module edited after the build) and in a compiler built by one that bakes none: read off the texts
+STD_RULE_NEEDS = std_rule_needs()
+std_rule_needs(within: text = ""): map := {}
+rule_needs_by_module(): map := if #STD_RULE_NEEDS > 0 and warp_lib() == ø then STD_RULE_NEEDS else scanned_rule_needs()
+scanned_rule_needs(): map := {
+	found = {}
+	for module in std_module_names {
+		source = file_text(std_module_path(module))
+		needs = if source == ø then [] else rule_needs(source)
+		if #needs > 0 { found[module] = needs.join(" ") }
+	}
+	found
+}
+# a rule as one node, its fields in order, and back: its place, head, whole and alias as words (a place's word, "·"
+# anywhere; yes/no)
+rule_node(rule: Rule): Node := {
+	place_word = "·"
+	for word in PLACE_WORDS.keys { if PLACE_WORDS[word] == rule.place { place_word = word } }
+	flags = [symbol(place_word), symbol(if rule.whole then "yes" else "no"), symbol(if rule.alias then "yes" else "no"), symbol(rule.head ?? "")]
+	List([rule.pattern, rule.template, rule.hole ?? Node.Empty, rule.shape ?? Node.Empty, List(rule.conditions, Bracket.Square, Separator.Comma)] + flags, Bracket.Square, Separator.Comma)
+}
+unpacked_rule(n: Node, module: text): Rule := {
+	fields = items_of(n)
+	hole = if fields#3 == ø then ø else fields#3
+	shape = if fields#4 == ø then ø else fields#4
+	Rule(fields#1, fields#2, hole, shape, items_of(fields#5), PLACE_WORDS.get(name_of(fields#6)) ?? Place.Anywhere, module, name_of(fields#7) == "yes", name_of(fields#8) == "yes", name_of(fields#9))
 }
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
@@ -606,7 +652,7 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	}
 	continued = after[0 ..< max(where_at, 0)]
 	template = statements_template(each_clauses(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source)))
-	lines = if source.contains(rule_hole_mark) then source.split("\n") else []
+	lines = if source.contains(rule_hole_mark) then lines_of(source) else []
 	pattern = with_called_holes(pattern, lines)
 	template = with_called_holes(template, lines)
 	if where_at == #after { return Rule(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
@@ -622,6 +668,17 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	if #origins > 1 { return ø }
 	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
 	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
+}
+
+# a rule source's lines, split once for all its rules (rule_of and glued ask at each rule)
+global split_source = ""
+global split_lines = []
+lines_of(source: text): list := {
+	if source != split_source {
+		split_lines = source.split("\n")
+		split_source = source
+	}
+	split_lines
 }
 
 # a template cut at a `where` its last words swallowed (`$c + $n where`, `$s where statement`): the template before it
@@ -1624,7 +1681,7 @@ as_phrase(words: list): Node := if #words == 1 then words#1 else rule_phrase(wor
 # `$i·end`, `km·per·hour`, also the head of a call or definition `twice·$f(x)`; `·` beside anything else (`2·$x`) stays
 # the product. The parser reads `·` as `*`, so the source text the rule was parsed from tells them apart
 glued(template: Node, source: text): Node := {
-	lines = if source.contains(glue_mark) then source.split("\n") else []
+	lines = if source.contains(glue_mark) then lines_of(source) else []
 	bottom_up(template, n => headed_definition(if #lines == 0 then n else glued_key(hidden_glued(n), lines)))
 }
 

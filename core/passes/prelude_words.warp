@@ -183,10 +183,33 @@ lowering_words(program: Node): list := {
 	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else [])
 }
 
+# the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
+global brought_names = {}
+# the reach's last step, once the passes ran (passes.warp lowered_reached): the program without the brought functions
+# nothing calls. What a sugar rule might write is brought before it fires (sugar_words_of: `each_any` for any call,
+# `count_in` for any count), and typing and emitting the unused ones cost each compile (card measure). A module being
+# built keeps all of its words
+called_only(program: Node): Node := {
+	if module.relocating or #brought_names == 0 { return program }
+	statements = statements_in(program)
+	is_brought = statement => brought_names.has(declared_name(statement) ?? "")
+	called = {}
+	pending = statements.filter(statement => not is_brought(statement)).flat_map(words_within)
+	while #pending > 0 {
+		word = pending#1
+		pending = pending[1 ..]
+		if not called.has(word) {
+			called[word] = yes
+			for statement in statements { if declared_name(statement) == word and is_brought(statement) { pending += words_within(statement) } }
+		}
+	}
+	separated(bracketed(statements.filter(statement => not is_brought(statement) or called.has(declared_name(statement))), ""), ";")
+}
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
 # loader places them: a used module's in front of the program, the prelude's after it. The words the program (a used
-# module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of)
+# module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of), and
+# those the program doesn't call after all dropped once the passes ran (called_only)
 with_reached(program: Node, module: text, in_front: bool, files: list = []): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
@@ -235,6 +258,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(is_value_definition)
 	functions = brought.filter(statement => not is_value_definition(statement))
+	for statement in functions {
+		name = declared_name(statement)
+		if name != ø { brought_names[name] = yes }
+	}
 	own_statements = statements_in(program)
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")

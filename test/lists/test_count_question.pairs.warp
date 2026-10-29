@@ -1,0 +1,3 @@
+# count of a yes/no question (card count-xs): `count(2 in xs)` is refused, naming the count it means; `xs.count(2)` counts
+'count(2 in [1, 2, 2])'	error
+'[1, 2, 2].count(2)'	2

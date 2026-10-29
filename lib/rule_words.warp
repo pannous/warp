@@ -65,26 +65,49 @@ signaled(program: Node): any := {
 	statements = program_statements(program)
 	watched = statements.flat_map(names_listened)
 	if #watched == 0 { return ø }
+	derived = derived_inputs(statements)
 	live = []
 	written = []
 	for statement in statements {
 		later = is_key(statement, Op.Define) or nodes_in(statement).any(is_lambda)
 		names = if later then watched else live
-		written += [if #names == 0 then statement else bottom_up(statement, part => notifying(part, names))]
+		written += [if #names == 0 then statement else bottom_up(statement, part => notifying(part, names, derived))]
 		live += names_listened(statement)
 	}
 	separated(bracketed(written, ""), ";")
 }
 # the names the statement's signal_listen calls listen to
 names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, signal_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
-# the write of a watched name, notifying its listeners; any other node as it is
-notifying(n: Node, names: list): Node := {
-	if not (n is key and key_of(n) is symbol and op_of(n) in writing_ops and name_of(key_of(n)) in names) { return n }
+# each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
+# changes
+derived_inputs(statements: list): map := {
+	found = {}
+	for statement in statements { if is_key(statement, Op.Define) and key_of(statement) is symbol { found[name_of(key_of(statement))] = symbol_words(value_of(statement)) } }
+	found
+}
+# the write of a watched name, notifying its listeners, and those of each watched derived value reading it once the
+# write changed it: `a = 2` as `(signal·old = a; signal·total = total; a = 2; if a != signal·old {
+# signal_notify("total", total, signal·total) })`; any other node as it is
+notifying(n: Node, names: list, derived: map): Node := {
+	if not (n is key and key_of(n) is symbol and op_of(n) in writing_ops) { return n }
 	name = key_of(n)
 	old = symbol(signal_old)
-	separated(bracketed([Key(old, Op.Assign, name), n, call_of("signal_notify", [name_of(name), name, old])], "("), ";")
+	dependents = names.filter(d => derived.has(d) and name_of(name) in derived[d])
+	own = name_of(name) in names
+	if not own and #dependents == 0 { return n }
+	before = [Key(old, Op.Assign, name)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d)))
+	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
+	separated(bracketed(before + [n] + notified, "("), ";")
 }
+signal_old_of(name: text): text := "signal·" + name
 writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
 
+# `count(2 in xs)`: a yes/no question is no count, the compile refused with the count it means
+counted_question(items: Node, item: Node): Node := {
+	throw "count(${as_code(item)} in ${as_code(items)}) counts a yes/no question: did you mean ${as_code(items)}.count(${as_code(item)})?"
+}
+# a value as code to paste: a text in its quotes
+as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
+
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, signaled: signaled}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled}
