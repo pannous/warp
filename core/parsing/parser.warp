@@ -56,6 +56,9 @@ def use_library(folder: text) { given_library = folder }
 // older seed) calls library_sources below and reads them where it runs
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
+// core's folders bundled all the same: the extensions' rules, which every compile reads (rewrites.warp
+// extension_module_names), baked with the rest instead of parsed at each run (~25 ms of a small program's 0.15 s)
+BUNDLED_CORE_FOLDERS = ["compiler/extensions"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
@@ -71,6 +74,12 @@ def library_texts(library: text, within: text): map {
 			found[path] = try read(library + "/" + path) else ""
 		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
+			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
+		}
+	}
+	if within == "" {
+		for folder in BUNDLED_CORE_FOLDERS {
+			inner = library_texts(library, folder + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
 		}
 	}
