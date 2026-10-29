@@ -14,16 +14,16 @@ JSON_ENTRY_OPERATORS = ["", ":", "=", ":="]
 HEX_DIGITS = "0123456789abcdef"
 JSON_WORD_ENDS = ":,]}/"
 
-parse_json(source: any) := {
+global parse_json(source: any) := {
 	read = json_read(source, json_skipped(source, 1))
 	if json_skipped(source, read#2) <= #source { raise json_refusal(source, "more after the value") }
 	read#1
 }
 // json of warp data, `json{ 'a':1 }`, is that data
-json(source: any) := if source is text then parse_json(source) else source
-to_json(value: any) := json_written(value, no)
+global json(source: any) := if source is text then parse_json(source) else source
+global to_json(value: any) := json_written(value, no)
 // `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
-json_text(value: any): any := if value is map and "json" in value then value["json"] else to_json(value)
+global json_text(value: any): any := if value is map and "json" in value then value["json"] else to_json(value)
 // the old form naming the classes whose instances are their fields: every instance is
 to_json_of_classes(value: any, classes: any) := to_json(value)
 // to_json under `use strict`: a fraction JSON writes only approximately is an error

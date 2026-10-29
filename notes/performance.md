@@ -132,3 +132,18 @@ page cache apart) of the scope holding Chrome, the examples that grew it most, a
 (test_in_browser.py MemoryWatch). One example alone gives its growth; across the whole tour the steps vary with GC
 timing (peak 0.8–1.1 GB before 5b0b7f1bdb). A binary read must not go through `Uint8Array.from(text, …)`: it lists every
 character as a string first (uniscript's 10 MB index cost 550 MB, now 195).
+
+## samples/gpu/ocean.warp on the CPU (card samples-gpu, 2026-10-29)
+Measured with micro-benches in data/ocean-speed/ (main at c963a0387a, `clock()` over 50–2000 calls):
+- a pixel ≈ 6 ms (40 pixels 237 ms), so the 240×135 headless frame ≈ 190 s; water pixels dominate
+- hit_distance ≈ 3.2 ms: ~18 marches × waves(p, 12) ≈ 180 µs, ≈ 15 µs a wave
+- per wave: heading ≈ 8 µs (two to_radians), wave_at ≈ 8 µs (tau / length, sqrt)
+- the cause: a float meeting a Real (`degrees * pi / 180`, `tau / length`) costs ≈ 4.5 µs against 0.5 µs for
+  float · float. The operator dispatcher promotes the float (`d as Real`), makes a Real, calls Real's `*`, then
+  real_of; a method named `float` alone costs ≈ 2.5 µs more than the same method under another name (the
+  conversion dispatcher). Making real_of/Real.float() cheap in lib/reals.warp changed nothing measurable: the
+  cost is the dispatch, in core (class_methods.warp promoted / value_dispatch, conversion_methods)
+- not the cause: film/agx (20 µs with float colours; ≈ 1 ms only when fed exact decimals, which a real pixel never is),
+  sky ≈ 0.4 ms, water ≈ 0.8 ms
+Proposed general win (core, needs the user's OK): a float meeting an instance under an operator takes the float
+path at once (the instance's float, by a direct call), instead of promoting the float into the class.
