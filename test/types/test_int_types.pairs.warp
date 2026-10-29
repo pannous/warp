@@ -1,0 +1,9 @@
+# an int type `type T = int` marks its values, shown by its show(t: T), the plain int to arithmetic (card color-prints)
+'"" + red'	"red"
+'"" + rgb(1, 2, 3)'	"#010203"
+'"" + with_alpha(red, 0.5)'	"#80FF0000"
+'red + 0'	4294901760
+'red == 0xFFFF0000'	true
+'red is Color'	true
+'5 is Color'	false
+'type Flag = int; show(f: Flag) := "flag " + (f as int); "" + (3 as Flag)'	"flag 3"

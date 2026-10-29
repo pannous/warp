@@ -37,6 +37,10 @@ number_node(n: Node): Node := {
 	n
 }
 # a boxed int where an int is needed; any other value traps, as Rust fails on it
+# an int of a program's int type, `x as Color` (passes/int_types.warp): the int marked with its type's kind field
+marked_int(value: Node, kind: int): Node := with_kind(value, kind)
+# the kind field telling a value's int type, `x is Color`; 0 for ø
+int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
 int_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
 	unboxed_int(n)
