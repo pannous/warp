@@ -67,6 +67,7 @@ error_sentence(name: text): text := {
 	}
 	if name == "a_list_item_holds_no_error" or name == "a_field_holds_no_error" { return detail_text(trap_detail) + ": " + error_words(name) }
 	if text_starts_with(name, "no_case_") { return error_words(name) + " = " + node_text(trap_detail) }
+	if name == "no_length" { return "no length of " + held_kind_word(trap_detail) + " " + node_text(trap_detail) + ": only a list, a text or a character has one" }
 	error_words(name)
 }
 # the words of the engine's own trap of that code (wasmtime's trap codes and words, wasmtime/trap.h), a trap no
