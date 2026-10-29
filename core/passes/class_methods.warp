@@ -149,12 +149,13 @@ methods_lifted(program: Node): Node := {
 		program_types = assigned_types(rewritten, classes)
 		rewritten = rewritten.map(top_statement => routed(top_statement, Routing(classes, liftable, routes, statement_types(top_statement, program_types, self_types, classes))))
 	}
+	floaters = float_converters(classes, liftable, routes)
 	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
 		owners = owners_of(classes, liftable, name)
 		# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 		# call (list.warp's tally(xs) beside a class's tally(x))
 		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, taken_count(classes, liftable, name) + 1)
-		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions)]
+		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
 	}
 	for word in entry_words {
 		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
@@ -167,7 +168,7 @@ methods_lifted(program: Node): Node := {
 			}
 		}
 		operator = spelled_operator(operator_table, spellings#1)
-		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions)]
+		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions, floaters)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, name, routes) }
 	rewritten += derived_dispatchers(classes, liftable, routes, promotions)
@@ -463,7 +464,7 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
 # instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
 # `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
-method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: list?, promotions: list): Node := {
+method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: list?, promotions: list, floaters: list): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
@@ -476,7 +477,28 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# an operator's operands are any values: a number reaches the builtin, an instance its class's method; a routed
 	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
 	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters
-	Key(call_of(name, head), Op.Define, class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback))
+	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback)
+	Key(call_of(name, head), Op.Define, if operated then float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), floaters, dispatched) else dispatched)
+}
+# [class, its lifted float()] of each class converting itself to a float, a float() taking nothing
+float_converters(classes: map, names: list, routes: list): list := owners_of(classes, names, float_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], float_method)) == 0).map(owning_class => [owning_class, lifted_name(classes, names, float_method, owning_class, routes)])
+float_method = "float"
+# float contagion (decision float-contagion): an operation of a float (1.0f, `x as float`, a float's result, never an
+# exact decimal) and an instance of a class with a float() is the floats' at once, `1.0f * π` the float times π's
+# float, every class alike; else the operation as dispatched
+float_contagion(operation: Node, floaters: list, dispatched: Node): Node := {
+	left = key_of(operation)
+	right = value_of(operation)
+	op = op_of(operation)
+	for floater in floaters.reverse() {
+		owner = symbol(floater#1)
+		converted = floater#2
+		instance_right = Key(ø, Op.If, Key(Key(left, Op.Is, symbol(float_method)), Op.And, Key(right, Op.Is, owner)))
+		instance_left = Key(ø, Op.If, Key(Key(right, Op.Is, symbol(float_method)), Op.And, Key(left, Op.Is, owner)))
+		dispatched = Key(Key(instance_left, Op.Then, Key(call_of(converted, [left]), op, right)), Op.Else, dispatched)
+		dispatched = Key(Key(instance_right, Op.Then, Key(left, op, call_of(converted, [right]))), Op.Else, dispatched)
+	}
+	dispatched
 }
 # the call of the first owner's method on an instance of it, else of the next owner's…, the last owner's on any other;
 # with a fallback (a routed method's function itself, an operator's builtin), that on any value not an instance of
