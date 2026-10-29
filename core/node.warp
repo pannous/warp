@@ -1,6 +1,6 @@
-# The built-in node: the value Rust hands over and the $Node struct in wasm, declared case for case as src/node/mod.rs
+# The built-in node: the value Rust hands over and the $Node struct in wasm, declared case for case as rust-harness:src/node/mod.rs
 # Node has them (decision compiler-node-enum). No class is made of it: a case is a kind of node and its fields are the
-# node's parts (src/lowering/types/node_cases.rs), so `f(n: Node): Node` takes any node, `Key(a, Op.Add, b)` builds
+# node's parts (rust-harness:src/lowering/types/node_cases.rs), so `f(n: Node): Node` takes any node, `Key(a, Op.Add, b)` builds
 # `a+b`, and `match n { Key(left, op, right): … }` tests the kind and reads the parts of the node itself.
 enum Node {
 	True
@@ -18,7 +18,7 @@ enum Node {
 	Type(name: Node, body: Node)
 }
 
-# The operators a node carries (src/operators/mod.rs Op, those of src/operators/codes.rs OP_CODES), each its own value:
+# The operators a node carries (rust-harness:src/operators/mod.rs Op, those of rust-harness:src/operators/codes.rs OP_CODES), each its own value:
 # `Op.Add as text` is "+", `"+" as Op` is Add
 enum Op {
 	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, ArrowUp, ArrowDown
@@ -32,8 +32,8 @@ enum Op {
 	None
 }
 
-# A list's bracket (src/node/mod.rs Bracket): `Bracket.Square as text` is "[", an unbracketed list's None is ""
+# A list's bracket (rust-harness:src/node/mod.rs Bracket): `Bracket.Square as text` is "[", an unbracketed list's None is ""
 enum Bracket { Curly, Square, Round, Less, None }
 
-# A list's separator (src/node/mod.rs Separator): `Separator.Comma as text` is ","
+# A list's separator (rust-harness:src/node/mod.rs Separator): `Separator.Comma as text` is ","
 enum Separator { Space, Comma, Semicolon, Newline, Tab, None }

@@ -1,5 +1,5 @@
 # Warnings of well-defined code that likely does not mean what it says (card port-remaining; Rust twin:
-# src/analyzer/checks/lints.rs lint_into): `x and y or z` with a falsy y, `%` of a negative number, `==` of floats,
+# rust-harness:src/analyzer/checks/lints.rs lint_into): `x and y or z` with a falsy y, `%` of a negative number, `==` of floats,
 # `a * b as T`. Their messages are in warnings.data; the ones "got it" silences name their topic there.
 use "../passes/walk.warp"
 use "../passes/kind_changes.warp"

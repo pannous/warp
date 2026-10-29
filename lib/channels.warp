@@ -1,5 +1,5 @@
 // Channels (P155, notes/channels.md): a channel inside one run, written in warp, and `channel "chat"`, the
-// machine-wide channel (src/host/channels.rs). The words are rewrite rules (card compiler-modules): every program
+// machine-wide channel (rust-harness:src/host/channels.rs). The words are rewrite rules (card compiler-modules): every program
 // mentioning them gets them, no `use` needed. A task `go {…}` runs to its end where it is started
 // (lib/sugar/tasks.warp), so what it sends waits in the channel: `ch.receive()` takes the oldest value, `for v in ch {…}`
 // receives until none is left.

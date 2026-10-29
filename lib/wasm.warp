@@ -1,6 +1,6 @@
 // The standard library module wasm (card warp-host-wasm-load, notes/warp_host.md): `use wasm`, other WebAssembly
-// modules and components loaded into the running program, through the adapter std_io. warp-host serves it; the browser
-// and warp-rust don't yet.
+// modules and components loaded into the running program, through the adapter std_io. The native warp serves it; the browser
+// doesn't yet.
 // `m = load_wasm("lib.wasm")`: a core module (instantiated beside the program, with the same imports) or a component
 // (by its header, WIT types), its handle {wasm: 1, path: "lib.wasm", kind: "module"}; a path is loaded once per run,
 // bytes (read_bytes, compile_wasm) each time anew

@@ -188,7 +188,7 @@ binds_as(scope: map, name: text, meaning: Meaning): bool := scope.has(name) and 
 value_meanings = [Meaning.Variable, Meaning.Parameter, Meaning.Loop]
 binds_value(scope: map, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))
 
-# Keyword-triggered local rewrites (decision pass-triggers; Rust twin: src/lowering/words/keyword_rewrites.rs): each
+# Keyword-triggered local rewrites (decision pass-triggers; Rust twin: rust-harness:src/lowering/words/keyword_rewrites.rs): each
 # entry [accepts, rewritten] of a table rewrites a node one of whose own words (has_own_word) it accepts,
 # children first, in table order, all in one walk. What an entry reads besides its node: rewritten_bindings(), the
 # scope of the program as it was before the walk, made once

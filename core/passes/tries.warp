@@ -1,4 +1,4 @@
-# `try x else y` and `try x catch e { y }` (card pure-runs; Rust twin: src/lowering/words/library_words/guards.rs):
+# `try x else y` and `try x catch e { y }` (card pure-runs; Rust twin: rust-harness:src/lowering/words/library_words/guards.rs):
 # x runs inside ran·without·error, which says whether it finished (a runtime error deep inside throws the wasm tag
 # try_guard.rs catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch are checked
 # before they happen: a division by 0 directly under `try`, an index out of a list written in place.

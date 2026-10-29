@@ -6,11 +6,11 @@ use color
 // natively 640×480 
 global canvas_width = view_width
 global canvas_height = view_height
-// natively in a window the shapes are drawn on the GPU (src/graphics/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels
+// natively in a window the shapes are drawn on the GPU (rust-harness:src/graphics/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels
 // here then, show() sends the shapes drawn since the last one
 global drawing_on_gpu = gpu_drawing
 global canvas_pixels = int[pixels_for(view_width, view_height)]
-// paper: the canvas before anything is drawn, as paint shows 0 (src/graphics/pixels.rs PAPER; test_paint_shades)
+// paper: the canvas before anything is drawn, as paint shows 0 (rust-harness:src/graphics/pixels.rs PAPER; test_paint_shades)
 paper = 0xFFFAFAFA
 // the pixel a coordinate falls in
 cell(v) := floor(v) as int
@@ -19,7 +19,7 @@ cell(v) := floor(v) as int
 clear_shape = 0
 rect_shape = 1
 circle_shape = 2
-// the shader drawing the shapes on the GPU (src/graphics/gpu_canvas.rs), one instance of a box of two triangles each: a
+// the shader drawing the shapes on the GPU (rust-harness:src/graphics/gpu_canvas.rs), one instance of a box of two triangles each: a
 // shape covers the pixels whose centers the CPU draw colors, so both give the same picture. show() and save give it
 shape_shader = shader {
 	struct Shape { @location(0) kind_color: vec2u, @location(1) place: vec4f }
@@ -140,7 +140,7 @@ save(file: text) := save(Picture(), file)
 
 // label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth
 // edges mixed with what is below (card paint-text): the host sets them, the playground with the browser's canvas,
-// natively a system font (src/graphics/text_raster.rs), so they look as text does on that system
+// natively a system font (rust-harness:src/graphics/text_raster.rs), so they look as text does on that system
 def label(x, y, words, color, size = 12) {
 	covered = text_coverage(words, size)
 	width = covered[0]

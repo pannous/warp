@@ -73,7 +73,7 @@ format_duration(ms) := {
 is_leap_year(year) := year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 days_in_month(year, month) := if month == 2 then (if is_leap_year(year) then 29 else 28) else if month == 4 or month == 6 or month == 9 or month == 11 then 30 else 31
 
-// Time zones (card time-zones-warp; Rust twin: src/time/calendar.rs Zone, src/wasm_emitter/time/time_zones.rs): the
+// Time zones (card time-zones-warp; Rust twin: rust-harness:src/time/calendar.rs Zone, rust-harness:src/wasm_emitter/time/time_zones.rs): the
 // offset a zone has at an instant under the Europe and United States daylight saving rules, and the instant a wall
 // time means there. Times here are whole seconds since 1970; offsets are seconds east of UTC.
 hour_seconds = 3600

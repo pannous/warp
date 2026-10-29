@@ -1,4 +1,4 @@
-# What each character of a line of warp source is, for the fix rules (as src/formatting/lines.rs scans it): code, a
+# What each character of a line of warp source is, for the fix rules (as rust-harness:src/formatting/lines.rs scans it): code, a
 # text's or a comment's. A text or a block comment that is still open carries over to the next line.
 code_mark = "c"
 text_mark = "t"

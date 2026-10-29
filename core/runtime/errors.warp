@@ -1,4 +1,4 @@
-## runtime errors: each fails inside a function of its name, which src/wasm_emitter/control/traps.rs reads off the
+## runtime errors: each fails inside a function of its name, which rust-harness:src/wasm_emitter/control/traps.rs reads off the
 ## trace as the error's message; the global trap_detail holds the value the message names
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
@@ -34,7 +34,7 @@ a_field_holds_no_error(error: Node): int := {
 	0
 }
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
-# the runtime errors of the library words, named for src/wasm_emitter/control/traps.rs to read off the trace
+# the runtime errors of the library words, named for rust-harness:src/wasm_emitter/control/traps.rs to read off the trace
 index_out_of_range(): int := {
 	fail()
 	0
@@ -77,7 +77,7 @@ index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
 	index_out_of_range()
 }
-# `raise X`: the run fails with X as its message (Rust's returned_error, src/wasm_emitter/control/traps.rs)
+# `raise X`: the run fails with X as its message (Rust's returned_error, rust-harness:src/wasm_emitter/control/traps.rs)
 returned_error(): int := {
 	fail()
 	0
@@ -123,7 +123,7 @@ not_a_finite_number() := {
 	fail()
 	0
 }
-# an int result beyond 64 bits where the runtime has no big ints: "int64 overflow" (src/numbers/fixed_width.rs)
+# an int result beyond 64 bits where the runtime has no big ints: "int64 overflow" (rust-harness:src/numbers/fixed_width.rs)
 overflow_of_int64() := {
 	fail()
 	0
@@ -137,7 +137,7 @@ wrong_number_of_arguments() := {
 	fail()
 	0
 }
-# the runtime errors Rust's run names by the function trapping (src/wasm_emitter/lists/list_ops/runtime_errors.rs)
+# the runtime errors Rust's run names by the function trapping (rust-harness:src/wasm_emitter/lists/list_ops/runtime_errors.rs)
 not_a_map(): int := {
 	fail()
 	0

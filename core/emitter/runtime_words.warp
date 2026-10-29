@@ -163,7 +163,7 @@ sort_words = ["sorted_node", "sorted_node_by"]
 # a `compare(a: T, b: T)` of the program (its witness compare·T once Rust's traits.rs named it): the order of T's
 # instances
 def orders_instances(): bool { module.functions.keys.any(name => name == "compare" or name.starts_with("compare·")) }
-# `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
+# `x is spec`: the type words of Rust's BUILTIN_TYPES (rust-harness:src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
