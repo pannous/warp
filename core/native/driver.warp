@@ -717,6 +717,9 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
+	# a live loop's cycle starts: only the playground hands loops over between runs
+	# a live loop's cycle starts: only the playground hands loops over between runs
+	if same_text(module, "sound") and same_text(member, "live_cycle") { return guest_call(caller, context, "new_empty", 0, 0, results) }
 	guest_error(caller, context, lacking(module, member), results)
 }
 # the Error message of a std_io or std_pure member the driver lacks

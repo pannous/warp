@@ -1,0 +1,3 @@
+# a phrase parameter named by a class of several words is that whole name, typed by the class (card greet-full)
+'class full name { given: text }; to greet a full name: "hi " + full name.given; greet full name{given: "Ann"}'	"hi Ann"
+'to call a phone number: number * 2; call 21'	42

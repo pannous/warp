@@ -475,8 +475,8 @@ routed(n: Node, routing: Routing): Node := {
 	method_routed(n, routing)
 }
 counts(word: text): bool := word == counting_method or canonical_word(word) == counting_method
-# `b#p` of a value, no field read `m#("x"+1)`
-is_position(n: Node): bool := is_key(n, Op.Hash) and key_of(n) != ø and not (is_key(value_of(n), Op.Add) and key_of(value_of(n)) is text)
+# `b#p` of a value, no field read `m#("x"+1)` nor typed array `float[n]` (the parser's float#(n+1), lib/sugar/lists.warp)
+is_position(n: Node): bool := is_key(n, Op.Hash) and key_of(n) != ø and not (is_key(value_of(n), Op.Add) and key_of(value_of(n)) is text) and not (key_of(n) is symbol and is_type_word(name_of(key_of(n))))
 # `b#(i+1)`, the parser's b[i], is the class's index(i); another b#p its position(p)
 is_shifted(at: Node): bool := is_key(at, Op.Add) and value_of(at) == 1
 element_word(element: Node): text := if is_shifted(value_of(element)) then index_method else position_method

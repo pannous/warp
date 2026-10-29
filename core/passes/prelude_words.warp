@@ -410,13 +410,28 @@ implicit_modules(source: text, index_file: text): list := {
 	modules = []
 	for word in candidates.filter(word => word in free and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
+		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
+		if #definers == 0 { raise word + " is defined by " + index[word].join(" and ") + ", none taking these arguments: say which, " + index[word].map(module => "`use " + module + "`").join(" or ") }
 		if definers#1 not in modules and definers#1 not in used {
 			modules += definers
 			diagnose(call_of("implicit_use", [symbol(word), symbol(definers#1)]), program)
 		}
 	}
 	modules
+}
+# A word several modules define is the one module's whose definitions take every call the program makes of it, by
+# the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition)
+definers_taking(word: text, definers: list, program: Node): list := {
+	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
+	if not counts { return definers }
+	definers.filter(module => definition_arities(module, word).any(span => counts.all(count => span#1 <= count and count <= span#2)))
+}
+# [least, most] arguments of each of module's definitions of word, read off its head `word(a, b = 1)`
+definition_arities(module: text, word: text): list := {
+	slices = definition_slices(used_module_text(module)).filter(slice => slice#1 == word)
+	heads = slices.map(slice => nodes_in(plain_node(parsed(slice#2))).reverse().filter(n => is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)))
+	heads.filter(found => #found > 0).map(found => arity(signature_of(items_of(found#1))))
 }
 # the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
 runtime_words_of_math = module_source("math").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)

@@ -1,0 +1,3 @@
+# a unit word the program binds as a value is its own, never the unit (card named-pattern-holes)
+'g = "ab"; 3 times g'	"ababab"
+'m = 2; mul(a, b) := a * b; mul(3, m)'	6

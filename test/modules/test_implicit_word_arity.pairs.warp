@@ -1,0 +1,3 @@
+# a word several standard modules define is the one module's that takes the call's arguments: math's dot(u, v), draw's dot(x, y, color) (card dot-product-definition)
+'dot([1, 2], [3, 4])'	11
+'dot(1)'	error
