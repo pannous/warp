@@ -1,0 +1,7 @@
+# variable signals of lib/signals.warp (cards signals-lib, derived-signal-total): a listener runs after each later write
+'x=10; total=0; on set x {total+=value}; x=3; x=4; total'	7
+'x=1; n=0; on change x {n+=1}; x=1; x=2; x=2; x=3; n'	2
+'x=0; hits=0; whenever x>1 {hits+=1}; x=1; x=2; x=3; x=0; hits'	1
+# a derived value is set anew when a name it reads changes
+'a=1; total := a*2; n=0; on set total {n+=1}; a=2; a=2; a=3; n'	2
+'a=1; total := a*2; s=0; on set total {s+=value}; a=2; a=3; s'	10

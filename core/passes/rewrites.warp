@@ -182,9 +182,9 @@ own_rules_applied(program: Node, source: text): Node := {
 	if #rules > 0 { program = separated(bracketed(kept, ""), ";") }
 	mentioned = word_set(symbol_words(program))
 	module_rules = []
-	for module in std_module_names {
-		module_source = file_text(std_module_path(module))
-		if module_source != ø and rule_needs(module_source).any(word => mentioned.has(word)) {
+	needs = rule_needs_by_module()
+	for module in std_module_names.filter(module => needs.has(module)) {
+		if needs[module].split(" ").any(word => mentioned.has(word)) {
 			# (a rule of the whole program, `where program`, comes with the module's others)
 			module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program or needed_words(rule).any(word => mentioned.has(word)))
 		}
@@ -551,6 +551,21 @@ packed_rules(files: map): map := {
 		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(rules_parsed(plain_node(parsed(rules_ended(files[path]))), files[path], "").map(rule_node), Bracket.Square, Separator.Comma)) }
 	}
 	packed
+}
+# each standard module with rules, the words they need (rule_needs) joined by spaces, baked in: module_text writes
+# std_rule_needs() in, so a compile reads no other module's text (38 of them at every compile were ~5 ms of a small one).
+# With WARP_LIB (a module edited after the build) and in a compiler built by one that bakes none: read off the texts
+STD_RULE_NEEDS = std_rule_needs()
+std_rule_needs(within: text = ""): map := {}
+rule_needs_by_module(): map := if #STD_RULE_NEEDS > 0 and warp_lib() == ø then STD_RULE_NEEDS else scanned_rule_needs()
+scanned_rule_needs(): map := {
+	found = {}
+	for module in std_module_names {
+		source = file_text(std_module_path(module))
+		needs = if source == ø then [] else rule_needs(source)
+		if #needs > 0 { found[module] = needs.join(" ") }
+	}
+	found
 }
 # a rule as one node, its fields in order, and back: its place, head, whole and alias as words (a place's word, "·"
 # anywhere; yes/no)
