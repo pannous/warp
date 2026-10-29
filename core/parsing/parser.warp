@@ -261,10 +261,10 @@ def operator_alias(words: list): list {
 }
 // [spelling, target] of each operator alias a source declares
 // Rust twin: aliases.rs source_aliases
-def operator_aliases(source: text): list {
+def operator_aliases(source: text): list := if source.contains(":=") then operator_aliases_in(code_statements(source)) else []
+def operator_aliases_in(statements: list): list {
 	found = []
-	if not source.contains(":=") { return found }
-	for statement in code_statements(source) {
+	for statement in statements {
 		alias = operator_alias(blank_words(statement))
 		if alias.length > 0 { found += [alias] }
 	}
@@ -274,7 +274,7 @@ def operator_aliases(source: text): list {
 // Rust twin: aliases.rs math_aliases
 global math_aliases = ø
 def math_operator_aliases(): list {
-	if math_aliases == ø { math_aliases = operator_aliases(module_source("math")) }
+	if math_aliases == ø { math_aliases = operator_aliases_in(code_statements_of("math")) }
 	math_aliases
 }
 // `circumfix operator ⌊ ⌋ := floor`: [opening, closing, function] of a circumfix statement's words, else []
@@ -284,10 +284,10 @@ def circumfix_alias(words: list): list {
 }
 // [opening, closing, function] of each circumfix operator a source declares
 // Rust twin: aliases.rs source_circumfixes
-def circumfix_aliases(source: text): list {
+def circumfix_aliases(source: text): list := if source.contains("circumfix") then circumfix_aliases_in(code_statements(source)) else []
+def circumfix_aliases_in(statements: list): list {
 	found = []
-	if not source.contains("circumfix") { return found }
-	for statement in code_statements(source) {
+	for statement in statements {
 		pair = circumfix_alias(blank_words(statement))
 		if pair.length > 0 { found += [pair] }
 	}
@@ -297,8 +297,15 @@ def circumfix_aliases(source: text): list {
 // Rust twin: aliases.rs math_circumfixes
 global math_circumfixes = ø
 def math_circumfix_aliases(): list {
-	if math_circumfixes == ø { math_circumfixes = circumfix_aliases(module_source("math")) }
+	if math_circumfixes == ø { math_circumfixes = circumfix_aliases_in(code_statements_of("math")) }
 	math_circumfixes
+}
+// A library's code statements by its name ("math"), split once a compile for every scanner of them: splitting math's
+// text for its operators, its aliases and its circumfixes each was a tenth of a small program's compile
+global library_code_statements = {}
+def code_statements_of(name: text): list {
+	if not library_code_statements.has(name) { library_code_statements[name] = code_statements(join(module_sources([name]), "")) }
+	library_code_statements[name]
 }
 // The canonical names of the alias targets parser.warp's operator lists spell otherwise
 // Rust twin: spellings.rs OPERATOR_SPELLINGS ("approximately", "+-", "<-")
@@ -1707,10 +1714,9 @@ def blank_words(statement: text): list := statement.replace("\t", " ").split(" "
 // Each operator a source declares: `[prefix|suffix|infix]
 // operator ⊕ := …` and the pattern `a ⊕ b := …` (infix), at the level a precedence declaration gives it
 // Rust twin: operators.rs declared_operators
-def declared_operators(source: text): list {
+def declared_operators(source: text): list := if source.contains(":=") then operators_declared_in(code_statements(source)) else []
+def operators_declared_in(statements: list): list {
 	found = []
-	if not source.contains(":=") { return found }
-	statements = code_statements(source)
 	for statement in statements {
 		if not statement.contains(":=") { continue }
 		found += operator_declared(blank_words(statement))
@@ -1742,8 +1748,8 @@ def scanned_operators(source: text): list {
 global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
-		sources = module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")
-		library_operators = declared_operators(sources).filter(operator => not is_name_start(operator.glyph#1))
+		statements = ["math", "list", "regex"].flat_map(name => code_statements_of(name))
+		library_operators = operators_declared_in(statements).filter(operator => not is_name_start(operator.glyph#1))
 	}
 	library_operators
 }

@@ -93,6 +93,9 @@ if [ -x "$stage/warp" ]; then
 	chmod u+w "$stage/readonly"
 	printf hi >"$stage/kept.txt" && chmod a-w "$stage/kept.txt"
 	check "a read-only file read" "$(native "use file; read('$stage/kept.txt')")" hi
+	check "window and display values set and read" "$(native $'window.width = 800\ndisplay.density = 300 dpi\n[window.width, window.height, 1inch * display.density == 300px, online == true or online == false]')" "[800 480 yes yes]"
+	check "a channel's values sent in tasks" "$(native 'ch = channel(); go { for i in 1 to 3 { ch.send(i) }; ch.close() }; total = 0; for v in ch { total += v }; total')" 6
+	check "json written and read" "$(native $'class P{x:int y:int}\n[to_json(P(1, 2)), parse_json("[1, null]")]')" '["{\"x\":1,\"y\":2}" [1 ø]]'
 	check "a built executable after the next install" "$(cd "$stage/install/app" && WARP_LIB="$stage/install/bin/lib" ./warp '6 * 7' 2>&1)" 42
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
