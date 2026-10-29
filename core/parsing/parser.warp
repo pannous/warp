@@ -588,9 +588,10 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		dedent = bracket == Bracket.None and newline and line_indent(p) < p.indent
 		after = if dedent then Separator.None else separator(p, closer, newline)
 		if tabbed and after == Separator.Space { after = Separator.Tab }
-		// `ys = xs.map { |x| x+1 }`: the block belongs to the method call, not to the statement
-		if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) and is_list_of(item, "{") {
-			item = with_trailing_block(found#(found.length)#1, item)
+		// `ys = xs.map { |x| x+1 }`, `n = t.split " "`: what follows an assigned method belongs to its call, not to the
+		// statement
+		if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) {
+			item = with_trailing_item(found#(found.length)#1, item)
 			found = found[0 .. found.length - 1]
 		}
 		found += [[statement, after] for statement in statements_of(item)]
@@ -601,11 +602,17 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 	grouped(found, bracket)
 }
 
-// `ys = xs.map`, `f(xs) := xs.map`: an assignment of a method, which a block after it is given to
+// `ys = xs.map`, `f(xs) := xs.map`, `n = t.replace "a"`: an assignment of a method, which a block or value after it is
+// given to
 // Rust twin: functions.rs assigned_method_call
 def assigned_method_call(n: Node): bool := match n {
-	Key(target, op, value): ["=", ":=", "->"].contains(op as text) and (names_method(value) or assigned_method_call(value))
+	Key(target, op, value): ["=", ":=", "->"].contains(op as text) and (method_phrase(value) or assigned_method_call(value))
 	_: false
+}
+// `t.split`, `t.replace "a"`: a method, alone or with values after it already
+def method_phrase(n: Node): bool {
+	parts = group_parts(n)
+	names_method(n) or (parts != ø and parts#1 == "" and parts#2 == " " and #parts#3 > 0 and names_method(parts#3#1))
 }
 
 def names_method(n: Node): bool := match n {
@@ -613,10 +620,10 @@ def names_method(n: Node): bool := match n {
 	_: false
 }
 
-// The assignment with `block` given to the method call it assigns: `ys = (xs.map {…})`
+// The assignment with `item` given to the method call it assigns: `ys = (xs.map {…})`, `n = (t.split " ")`
 // Rust twin: blocks.rs with_trailing_block
-def with_trailing_block(assignment: Node, block: Node): Node := match assignment {
-	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_block(value, block) else spaced([value, block]))
+def with_trailing_item(assignment: Node, item: Node): Node := match assignment {
+	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_item(value, item) else spaced((if names_method(value) then [value] else group_parts(value)#3) + [item]))
 	_: assignment
 }
 
