@@ -25,3 +25,5 @@ arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts t
 optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`"	"{type} → {type}?"	"optional-result@{function}"
 # main_globals.warp: `n = …` in a function where main has an n, taken as a new local of the function
 local_or_global($name, $function)	"does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}? (taking a new local of {function})"	"let {name} = …"	"local-or-global@{name} = …"
+# a call of a function overloaded by result type whose expected type names no variant: the first declared (arity_overloads.warp)
+result_variant_taken($name, $returning, $taken, $written)	"{name} has variants returning {returning}: which does {written} mean? (taking {taken})"	"({written}) as {taken}"	"return-type@{name}"

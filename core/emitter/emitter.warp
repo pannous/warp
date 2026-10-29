@@ -792,8 +792,16 @@ def declared_global(name: text, kind: ValueKind): list {
 def global_assignment(name: text, value: TypedCode): TypedCode {
 	entry = module.globals[name]
 	index = relocatable(relocated.globals, entry#1)
-	if widening(entry#2, value.kind) and widens_later(global_slot(name), joint_kind(entry#2, value.kind)) { return TypedCode(entry#2, [op.unreachable]) }
+	if global_widens(name, entry#2, value.kind) and widens_later(global_slot(name), joint_kind(entry#2, value.kind)) { return TypedCode(entry#2, [op.unreachable]) }
 	TypedCode(entry#2, converted(value, entry#2) + [op.global_set] + index + [op.global_get] + index)
+}
+# whether a global holding `held` takes the joint kind of a `kind` given it: a float takes an exact number as it is
+# (float_of_node), and a global of the runtime or a linked module never widens, its kind being that module's code's
+# (sound's `global attack = 0.005 as float` given `attack = 0.02`)
+def global_widens(name: text, held: ValueKind, kind: ValueKind): bool {
+	if not widening(held, kind) or (held == ValueKind.Float and kind == ValueKind.Node) { return no }
+	images = module.linked_images.map(image => image.globals) + (if module.runtime_image != ø then [module.runtime_image.globals] else [])
+	not images.any(globals => globals.any(entry => entry#1 == name))
 }
 # `symbol("word")`: one symbol per word and module, made at its first use and kept in the global `symbol·word`, which
 # holds a node of another kind until then (Rust's node_api.rs emit_interned_symbol; card speed-symbol-calls)

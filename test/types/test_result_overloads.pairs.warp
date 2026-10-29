@@ -1,0 +1,9 @@
+# definitions of one name told apart by their result type, picked by the type a call is expected to give (decision cleanup-cuts, notes/dispatch.md; card samples-assign-as)
+'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); ((render "a") as docx).body'	"Da"
+'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); ((render "a") as pdf).body'	"Pa"
+'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); x: docx = render "b"; x.body'	"Db"
+'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); docx x = render "c"; x.body'	"Dc"
+'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); save(d: docx) := d.body; save(render("e"))'	"De"
+'class pdf { body: text }; class docx { body: text }; render(t) as pdf := pdf("P" + t); render(t) as docx := docx("D" + t); y = render "f"; y.body'	"Pf"
+'class pdf { body: text }; f(x) as pdf := pdf(x); f("g").body'	"g"
+'f(x) as int := x * 2; f 4'	8
