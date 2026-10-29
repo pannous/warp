@@ -473,6 +473,7 @@ text_words = ["text", "string"]
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
 # the words casting to a number, `int(x)`, `float(x)`
 cast_words = ["int", "float"]
+float_converting_word = HiddenWord.FloatConverted as text
 text_reader(kind: ValueKind): text? := match kind { ValueKind.Int: "text_as_int"; ValueKind.Float: "text_as_float"; _: ø }
 node_cast(kind: ValueKind): text? := match kind { ValueKind.Int: "truncated_int"; ValueKind.Float: "float_cast"; _: ø }
 def cast(value: TypedCode, to: ValueKind): TypedCode {
@@ -480,6 +481,8 @@ def cast(value: TypedCode, to: ValueKind): TypedCode {
 	# '7' as int is 7, the text it is
 	if value.kind == ValueKind.Char { return cast(TypedCode(ValueKind.Text, converted(value, ValueKind.Text)), to) }
 	if value.kind == ValueKind.Float and to == ValueKind.Int { return TypedCode(ValueKind.Int, value.code + [op.i64_trunc_f64_s]) }
+	# `π as float`: an instance of a class converting by its float() (class_methods.warp conversion_methods)
+	if value.kind == ValueKind.Node and to == ValueKind.Float and float_converting_word in module.functions { return TypedCode(to, converted(call_values(module.functions[float_converting_word], [value]), to)) }
 	# `7/2 as int`: an exact rational truncated toward 0; a text known only at run time spells the number
 	if value.kind == ValueKind.Node { return runtime_call(node_cast(to), [value]) }
 	TypedCode(to, converted(value, to))
