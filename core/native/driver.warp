@@ -104,6 +104,8 @@ wasmtime_memory_grow(context: handle, memory: pointer, delta: i64, previous: poi
 library_function(library: pointer, name: pointer): handle from "c"
 native_call(function: handle, integers: pointer, floats: pointer, float_result: i32): i64 from "c"
 handle_id(pointer: handle): i32 from "c"
+terminal_size(rows: i32): i32 from "c"
+atoll(digits: text): i64 from "c"
 handle_known(id: i32): bool from "c"
 handle_pointer(id: i32): handle from "c"
 strlen(text: handle): i64 from "c"
@@ -744,9 +746,18 @@ milliseconds_now(): i64 := {
 # with the libraries that own them (decision libraries-not-core), a run asking for one ends naming it
 system_value(name: text): i64 := {
 	if same_text(name, "time of day") { return time_of_day() }
+	if same_text(name, "view_width") { return terminal_extent(0, "COLUMNS", 80) }
+	if same_text(name, "view_height") { return terminal_extent(1, "LINES", 24) }
 	complain(joined(joined("the system value ", name), " is not in the native warp yet (warp-rust has it)"))
 	exit(1)
 	0
+}
+# outside a window the view is the terminal: its columns (rows), else the variable's, else the default
+terminal_extent(rows: i32, variable: text, default: i64): i64 := {
+	measured = terminal_size(rows)
+	if measured > 0 { return measured as i64 }
+	given = getenv(variable)
+	if given.length > 0 then atoll(given) else default
 }
 # the local time of day in milliseconds since midnight
 time_of_day(): i64 := {
