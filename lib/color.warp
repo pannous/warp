@@ -15,12 +15,16 @@ purple = 0xFF8000C0 as Color
 opaque = 0xFF000000
 hex_digits = "0123456789ABCDEF"
 
-// red, or #102030, and #80FF0000 when not opaque
+// red, else its hash
 show(c: Color) := {
 	named = [[black, "black"], [white, "white"], [gray, "gray"], [red, "red"], [green, "green"], [blue, "blue"], [yellow, "yellow"], [orange, "orange"], [purple, "purple"]]
 	for pair in named { if pair[0] == c { return pair[1] } }
-	"#" + hex_text(c, if c /! 16777216 == 255 then 6 else 8)
+	hash(c)
 }
+// #FF0000, and #80FF0000 when not opaque
+hash(c: Color) := "#" + hex_text(c, if c /! 16777216 == 255 then 6 else 8)
+// the number 0xAARRGGBB itself
+hex(c: Color) := c as int
 // the low digits of n in upper-case hexadecimal, zeros in front
 hex_text(n, digits) := join([hex_digits[(n /! 16 ^ (digits - 1 - i)) % 16] for i in 0..digits], "")
 // r, g, b from 0 to 255

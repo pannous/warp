@@ -7,3 +7,6 @@
 'red is Color'	true
 '5 is Color'	false
 'type Flag = int; show(f: Flag) := "flag " + (f as int); "" + (3 as Flag)'	"flag 3"
+'red.hex == 0xFFFF0000'	true
+'red.hash'	"#FF0000"
+'with_alpha(red, 0.5).hash'	"#80FF0000"
