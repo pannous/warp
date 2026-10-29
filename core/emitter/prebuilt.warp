@@ -55,7 +55,7 @@ def prepended(): bool { module.runtime_image != ø and not module.prebuilding }
 # whether the code's index operands are emitted relocatable (padded, marked): in a prebuilt module (relocating), and
 # in a program that is also written as a separate module (relocates_program; linked_bytes moves them to its numbering)
 def relocate_program(wanted: bool) { module.relocates_program = wanted }
-def relocates(): bool { module.relocating or module.relocates_program }
+def relocates(): bool { module.relocating or module.relocates_program or module.shakes_runtime }
 # its layout, the binary warp.runtime: the counts, the hooks' and left words' names, each global's name and kind, each
 # word's name, index, parameter kinds and result kind
 def runtime_image_of(wasm: list): any {
@@ -206,6 +206,11 @@ def rebased_runtime_code(): list {
 # the code section's content: the runtime's functions, a hook's the program's code, then the program's functions, each
 # body knowing where it starts (its relocations' offsets)
 def prepended_code(functions: list): list {
+	if shaken() {
+		moves = shaken_moves()
+		bodies = shaken_runtime_code(moves) + library_bodies() + functions.map(f => moved_body(f, moves))
+		return uleb(#bodies) + concatenated(bodies)
+	}
 	runtime = rebased_runtime_code()
 	count = uleb_read(runtime, 0)
 	at = count#2
@@ -236,17 +241,18 @@ def runtime_subsection(id: int): list {
 def runtime_names(id: int, more: list): list { subsection(id, with_entries(runtime_subsection(id), more)) }
 # the runtime's local names, each function's moved by runtime_shift, then more
 def shifted_locals(content: list, more: list): list {
-	if runtime_shift() == 0 { return with_entries(content, more) }
+	if runtime_shift() == 0 and not shaken() { return with_entries(content, more) }
 	count = uleb_read(content, 0)
 	at = count#2
 	entries = []
 	for i in 0..<count#1 {
 		index = uleb_read(content, at)
 		end = name_map_end(content, index#2)
-		entries += [uleb(index#1 + runtime_shift()) + content[index#2 ..< end]]
+		landed = runtime_index(index#1)
+		if landed != ø { entries += [uleb(landed) + content[index#2 ..< end]] }
 		at = end
 	}
-	uleb(count#1 + #more) + concatenated(entries) + concatenated(more)
+	uleb(#entries + #more) + concatenated(entries) + concatenated(more)
 }
 # where a name map (a vector of index and name) that starts at `at` ends
 def name_map_end(content: list, at: int): int {
@@ -261,15 +267,18 @@ def name_map_end(content: list, at: int): int {
 }
 def own_function_type(f: Function): int := module.runtime_image.types + #module.gc_order - #gc_names + f.index - #module.imports - module.runtime_image.functions
 def prepended_bytes(functions: list): list {
+	if module.shakes_runtime and not module.relocating { module.shaking = shaking_of(functions) }
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
 	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), library_types() + class_types + function_types + c_import_types()))
 	c_entries = c_import_entries(module.runtime_image.types + linked_function_count() + #classes + #functions)
-	declared = section(section_ids.function, with_entries(runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f)))))
+	declared = section(section_ids.function, with_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f)))))
 	own_globals = module.global_order[#module.runtime_image.globals ..]
 	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
 	codes = section(section_ids.code, prepended_code(functions))
+	# the exports and names by the shaken numbering
+	for f in functions { f.index -= dropped() }
 	texts = section(section_ids.data, with_entries(runtime_part(section_ids.data), library_segments() + text_segments()))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	parts = [types, section(section_ids.import, with_entries(runtime_part(section_ids.import), c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
@@ -291,7 +300,7 @@ def program_marks(): list {
 # runtime.wasm's names and the program's behind them
 def prepended_names(functions: list, classes: list, own_globals: list): list {
 	imported = range_list(#module.imports).map(i => index_name(i, module.imports#(i + 1)#2))
-	words = module.runtime_image.words.keys.map(name => index_name(module.runtime_image.words[name]#1 + runtime_shift(), name))
+	words = module.runtime_image.words.keys.filter(name => runtime_index(module.runtime_image.words[name]#1) != ø).map(name => index_name(runtime_index(module.runtime_image.words[name]#1), name))
 	content = subsection(names_subsections.functions, vector(imported + words + library_names() + functions.map(f => index_name(f.index, f.name))))
 	content += subsection(names_subsections.locals, shifted_locals(runtime_subsection(names_subsections.locals), functions.map(local_name_map)))
 	content += runtime_names(names_subsections.types, classes.map(name => index_name(module.gc_indices[name], name)))
@@ -433,7 +442,7 @@ def bind_library_words() {
 }
 def linked_closure_name(image: LibraryImage, target: text): text := image.name + name_joiner + target
 # the program's index of a linked module's k-th function
-def linked_index(image: LibraryImage, k: int): int := #module.imports + image.base#1 + k
+def linked_index(image: LibraryImage, k: int): int := #module.imports + image.base#1 + k - dropped()
 # a linked module's function as the program calls it, at its index
 def linked_function(word: Function, index: int): Function {
 	f = Function(word.name, word.signature, ø)
@@ -477,14 +486,14 @@ def library_code(image: LibraryImage): list {
 	# a runtime function behind the program's C imports, not the module's; a C function the program's import of it
 	imported = {}
 	for j in 0..<#image.c_functions { imported[module.runtime_image.imports + j] = program_import(image.c_functions[j]) }
-	runtime_calls = Move(runtime_shift() - #image.c_functions, imported)
+	runtime_calls = if shaken() then kept_calls(module.runtime_image.imports + #image.c_functions, imported) else Move(runtime_shift() - #image.c_functions, imported)
 	relocations = relocations_of(image.wasm).filter(entry => entry#3 == own_space or (entry#3 == runtime_space and entry#2 == relocated.calls and uleb_read(content, entry#1)#1 >= module.runtime_image.imports))
 	globals = {}
 	for j in 0..<#image.globals { globals[image.behind#3 + j] = module.globals[image.globals[j]#1]#1 }
 	# its class structs first among its types, the program's of their names, then a type per function
 	types = {}
 	for c in 0..<#image.classes { types[image.behind#2 + c] = module.gc_indices[image.classes[c]#1] }
-	own = [shifted(#module.imports + image.base#1 - image.behind#1), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4), shifted(image.base#4)]
+	own = [shifted(#module.imports + image.base#1 - image.behind#1 - dropped()), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4), shifted(image.base#4)]
 	entries_after(rebased(content, relocations, [[runtime_calls], own]), module.runtime_image.functions, no)
 }
 # the program's C functions with those the linked modules call (list's sqrt, which a program using text never names),
@@ -509,7 +518,7 @@ def library_types(): list := concatenated(module.linked_images.map(image => imag
 def library_declared(): list := concatenated(module.linked_images.map(image => range_list(#image.functions).map(k => uleb(image.base#2 + k))))
 def library_bodies(): list := concatenated(module.linked_images.map(library_code))
 def library_segments(): list := concatenated(module.linked_images.map(image => entries_after(image.wasm[section_place(image.wasm, section_ids.data)#1 ..< section_place(image.wasm, section_ids.data)#2], module.runtime_image.data, yes)))
-def library_names(): list := concatenated(module.linked_images.map(image => range_list(#image.functions).map(k => index_name(#module.imports + image.base#1 + k, image.functions[k].name))))
+def library_names(): list := concatenated(module.linked_images.map(image => range_list(#image.functions).map(k => index_name(linked_index(image, k), image.functions[k].name))))
 
 ## a program linked to runtime.wasm (card runtime-separate-modules, notes/runtime_linking.md "Separate modules"): numbered
 ## as behind it, but every runtime function, global, the memory, the error tag and the hooks table imported from its
@@ -629,12 +638,16 @@ def own_hooks(): list { module.dispatchers.filter(f => f.name in module.runtime_
 # the hooks the code can reach: one whose stub a runtime function calls that the code calls, directly or through the
 # runtime or another hook it reaches; an unreached hook's slot stays empty (card mod-unused-hooks)
 def reached_hooks(code: list): list {
-	hooks = own_hooks()
+	reached = runtime_reach(runtime_positions_called(code))
+	own_hooks().filter(f => reached.has(f.index - #module.imports))
+}
+# the runtime positions reached from these: the functions they call, through the runtime and the program's hooks
+def runtime_reach(called: list): map {
 	at_position = {}
-	for f in hooks { at_position[f.index - #module.imports] = f }
+	for f in own_hooks() { at_position[f.index - #module.imports] = f }
 	graph = runtime_call_graph()
 	reached = {}
-	pending = runtime_positions_called(code)
+	pending = called
 	i = 0
 	while i < #pending {
 		p = pending[i]
@@ -645,7 +658,7 @@ def reached_hooks(code: list): list {
 			if at_position.has(p) { pending += runtime_positions_called([at_position[p]]) }
 		}
 	}
-	hooks.filter(f => reached.has(f.index - #module.imports))
+	reached
 }
 # the runtime functions these functions call, by their position among the runtime's functions
 def runtime_positions_called(functions: list): list {
@@ -658,29 +671,118 @@ def runtime_positions_called(functions: list): list {
 # (module.runtime_calls)
 def runtime_call_graph(): map {
 	if module.runtime_calls != ø { return module.runtime_calls }
-	content = runtime_part(section_ids.code)
-	ends = []
-	count = uleb_read(content, 0)
-	at = count#2
-	for p in 0..<count#1 {
-		size = uleb_read(content, at)
-		at = size#2 + size#1
-		ends += [at]
-	}
 	graph = {}
+	for site in runtime_call_sites() {
+		if not graph.has(site#2) { graph[site#2] = [] }
+		graph[site#2] = graph[site#2] + [site#3]
+	}
+	module.runtime_calls = graph
+	graph
+}
+# [relocation, caller position, callee position] of each call of a runtime function in runtime.wasm's code
+def runtime_call_sites(): list {
+	content = runtime_part(section_ids.code)
+	ends = body_ranges(content).map(range => range#2)
+	sites = []
 	caller = 0
 	for entry in relocations_of(module.runtime_image.wasm).filter(entry => entry#2 == relocated.calls and entry#3 == runtime_space) {
 		callee = uleb_read(content, entry#1)#1
 		# the entries come in code order; one before the last caller's start is looked up from the first
 		if caller > 0 and ends[caller - 1] > entry#1 { caller = 0 }
 		while ends[caller] <= entry#1 { caller += 1 }
-		if callee >= module.runtime_image.imports {
-			if not graph.has(caller) { graph[caller] = [] }
-			graph[caller] = graph[caller] + [callee - module.runtime_image.imports]
+		if callee >= module.runtime_image.imports { sites += [[entry, caller, callee - module.runtime_image.imports]] }
+	}
+	sites
+}
+# [start, end] of each function's entry in a code section's content, its size included
+def body_ranges(content: list): list {
+	ranges = []
+	count = uleb_read(content, 0)
+	at = count#2
+	for p in 0..<count#1 {
+		size = uleb_read(content, at)
+		ranges += [[at, size#2 + size#1]]
+		at = size#2 + size#1
+	}
+	ranges
+}
+
+## a program carrying only the runtime it reaches (card runtime-shaking, notes/runtime_linking.md "Removing the unused
+## runtime"): the runtime functions its code, its hooks and its linked modules' code reach, kept in their order behind
+## the imports, every function behind them moved down by the count dropped. A call of one dropped fails the compile,
+## never the run (Move's gap)
+# kept: the runtime positions kept, in order; places: each position's new index, -1 of one dropped; dropped: how many go
+class Shaking { kept: list; places: list; dropped: int }
+def shake_runtime(wanted: bool) { module.shakes_runtime = wanted }
+def shaken(): bool := module.shaking != ø
+def dropped(): int := if shaken() then module.shaking.dropped else 0
+def shaking_of(functions: list): any {
+	reached = runtime_reach(runtime_positions_called(functions) + library_positions_called())
+	kept = range_list(module.runtime_image.functions).filter(p => reached.has(p))
+	places = range_list(module.runtime_image.functions).map(p => -1)
+	for k in 0..<#kept { places[kept[k]] = #module.imports + k }
+	Shaking(kept, places, module.runtime_image.functions - #kept)
+}
+# the runtime positions the linked modules' code calls (a module's runtime calls are behind its own C imports)
+def library_positions_called(): list {
+	positions = []
+	for image in module.linked_images {
+		place = section_place(image.wasm, section_ids.code)
+		first = module.runtime_image.imports + #image.c_functions
+		for entry in relocations_of(image.wasm).filter(entry => entry#3 == runtime_space and entry#2 == relocated.calls) {
+			index = uleb_read(image.wasm, place#1 + entry#1)#1
+			if index >= first and index < first + module.runtime_image.functions { positions += [index - first] }
 		}
 	}
-	module.runtime_calls = graph
-	graph
+	positions
+}
+# where a call of runtime function `first + p` goes: a kept one to its place; a dropped one is the gap
+def kept_calls(first: int, more: map): Move {
+	table = {}
+	for i in more.keys { table[i] = more[i] }
+	places: list = module.shaking.places
+	kept: list = module.shaking.kept
+	for p in kept { table[first + p] = places[p] }
+	Move(0, table, [first, first + module.runtime_image.functions])
+}
+# where the program's operands go: its calls by kept_calls, an import's in place, a function behind the runtime's down
+# by the dropped; the other kinds stay
+def shaken_moves(): list {
+	imports = {}
+	for i in 0..<#module.imports { imports[i] = i }
+	calls = kept_calls(#module.imports, imports)
+	[Move(-module.shaking.dropped, calls.table, calls.gap)] + range_list(#relocated.keys - 1).map(k => shifted(0))
+}
+# the kept runtime functions' entries of the code section, their calls moved, a hook's the program's code
+def shaken_runtime_code(moves: list): list {
+	content = runtime_part(section_ids.code)
+	ranges = body_ranges(content)
+	kept = {}
+	for p in module.shaking.kept { kept[p] = yes }
+	calls = runtime_call_sites().filter(site => kept.has(site#2)).map(site => site#1)
+	moved = rebased(content, calls, [[kept_calls(module.runtime_image.imports, {})]])
+	hooks = {}
+	for f in module.dispatchers { hooks[f.index - #module.imports] = f }
+	module.shaking.kept.map(p => if hooks.has(p) then moved_body(hooks[p], moves) else moved[ranges[p]#1 ..< ranges[p]#2])
+}
+# the types runtime.wasm declares its kept functions with
+def shaken_function_types(): list {
+	types = runtime_part(section_ids.function)
+	at = uleb_read(types, 0)#2
+	declared = []
+	for p in 0..<module.runtime_image.functions {
+		read = uleb_read(types, at)
+		declared += [read#1]
+		at = read#2
+	}
+	uleb(#module.shaking.kept) + concatenated(module.shaking.kept.map(p => uleb(declared[p])))
+}
+# where runtime.wasm's function of this index lands: behind the program's C imports; ø when shaken out
+def runtime_index(index: int): int? {
+	if index < module.runtime_image.imports { return index }
+	if not shaken() { return index + runtime_shift() }
+	places: list = module.shaking.places
+	if places[index - module.runtime_image.imports] < 0 then ø else places[index - module.runtime_image.imports]
 }
 def hook_elements(hooks: list, first: int): list {
 	vector(range_list(#hooks).map(i => [0, op.i32_const] + sleb(module.runtime_image.hooks.index_of(hooks[i].name) - 1) + [op.end] + vector([uleb(first + i)])))

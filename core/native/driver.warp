@@ -57,6 +57,15 @@ SYSTEM_VALUE_WORD = 8
 STD_PURE_WORD = 9
 PAINT_WORD = 10
 KEY_HELD_WORD = 11
+SET_SYSTEM_VALUE_WORD = 12
+# the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
+# at and the dots per inch of one CSS pixel per CSS inch, as warp-rust's system_values.rs
+WINDOW_WIDTH_SLOT = 0
+WINDOW_HEIGHT_SLOT = 1
+DISPLAY_DPI_SLOT = 2
+NATIVE_VIEW_WIDTH = 640
+NATIVE_VIEW_HEIGHT = 480
+DEFAULT_DPI = 96
 
 wasm_config_new(): handle from "warp_wasmtime"
 wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -108,6 +117,10 @@ library_function(library: pointer, name: pointer): handle from "c"
 native_call(function: handle, integers: pointer, floats: pointer, float_result: i32): i64 from "c"
 handle_id(pointer: handle): i32 from "c"
 terminal_size(rows: i32): i32 from "c"
+kept_value(slot: i64): i64 from "c"
+keep_value(slot: i64, value: i64) from "c"
+route_online(): i32 from "c"
+display_extent(height: i32): i64 from "c"
 next_painting(): i32 from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
@@ -452,6 +465,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "random_below") { return RANDOM_BELOW_WORD }
 	if same_text(name, "random_seed") { return RANDOM_SEED_WORD }
 	if same_text(name, "system_value") { return SYSTEM_VALUE_WORD }
+	if same_text(name, "set_system_value") { return SET_SYSTEM_VALUE_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
 	if same_text(name, "key_held") { return KEY_HELD_WORD }
@@ -710,6 +724,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
+	if word == SET_SYSTEM_VALUE_WORD { return system_value_set(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64), long_at(given + VALUE_BYTES + VALUE_OFFSET).value) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
 	member = shown(caller, context, given + VALUE_BYTES)
@@ -799,10 +814,40 @@ system_value(name: text): i64 := {
 	if same_text(name, "time of day") { return time_of_day() }
 	if same_text(name, "view_width") { return terminal_extent(0, "COLUMNS", 80) }
 	if same_text(name, "view_height") { return terminal_extent(1, "LINES", 24) }
+	if same_text(name, "window_width") { return kept_or(WINDOW_WIDTH_SLOT, NATIVE_VIEW_WIDTH) }
+	if same_text(name, "window_height") { return kept_or(WINDOW_HEIGHT_SLOT, NATIVE_VIEW_HEIGHT) }
+	if same_text(name, "display_dpi") { return kept_or(DISPLAY_DPI_SLOT, DEFAULT_DPI) }
+	if same_text(name, "display_width") { return display_side(0, "display.width") }
+	if same_text(name, "display_height") { return display_side(1, "display.height") }
+	if same_text(name, "online") { return route_online() as i64 }
 	if windowless(name) { return 0 }
 	complain(joined(joined("the system value ", name), " is not in the native warp yet (warp-rust has it)"))
 	exit(1)
 	0
+}
+# the value a program set in that slot, else the default
+kept_or(slot: i64, default: i64): i64 := if kept_value(slot) != 0 then kept_value(slot) else default
+# the main screen's side in points; a machine showing none stops the run saying so, never a made-up reading
+display_side(height: i32, name: text): i64 := {
+	side = display_extent(height)
+	if side == 0 {
+		complain(joined(name, ": this machine shows no display"))
+		exit(1)
+	}
+	side
+}
+# `window.width = 800` (no window opens: the size one would open at), `display.dpi = 300 dpi`; the others are read only
+system_value_set(name: text, value: i64): nothing := {
+	slot = if same_text(name, "window_width") then WINDOW_WIDTH_SLOT else if same_text(name, "window_height") then WINDOW_HEIGHT_SLOT else if same_text(name, "display_dpi") then DISPLAY_DPI_SLOT else -1
+	if slot < 0 {
+		complain(joined(name, " cannot be set; settable: window_width, window_height, display_dpi"))
+		exit(1)
+	}
+	if value <= 0 {
+		complain(joined(name, ": a size or density is positive"))
+		exit(1)
+	}
+	keep_value(slot, value)
 }
 # what a window would tell, without one: no window open, no pointer, no key, no GPU drawing
 windowless(name: text): bool := same_text(name, "window_open") or same_text(name, "gpu_drawing") or same_text(name, "gpu_paints") or same_text(name, "key_down") or same_text(name, "key code held") or same_text(name, "mouse_x") or same_text(name, "mouse_y") or same_text(name, "mouse_down") or same_text(name, "mouse_wheel")

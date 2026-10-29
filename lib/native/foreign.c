@@ -1,9 +1,12 @@
 // The C functions a primitive program imports (`import getenv from "c"`), in a native build: each import wasm2c calls
 // is written by core/extensions/primitive.warp c_function_glue, which finds the function by name in the process and
 // passes the module's values over with these. Included behind lib/native/wasi.c.
+#include <arpa/inet.h>
 #include <dlfcn.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8, PAGE_BYTES = 65536 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
@@ -32,6 +35,33 @@ int32_t next_painting(void) { static int32_t painted; return ++painted; }
 int32_t terminal_size(int32_t rows) {
 	struct winsize size;
 	return ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 ? (rows ? size.ws_row : size.ws_col) : 0;
+}
+// what the driver keeps between host calls, by slot (driver.warp's *_SLOT: the system values a program set), 0 unset
+static int64_t kept_values[8];
+int64_t kept_value(int64_t slot) { return kept_values[slot]; }
+void keep_value(int64_t slot, int64_t value) { kept_values[slot] = value; }
+// whether a route to the internet exists: a UDP connect, which sends nothing
+int32_t route_online(void) {
+	int udp = socket(AF_INET, SOCK_DGRAM, 0);
+	if (udp < 0) return 0;
+	struct sockaddr_in public_resolver = {.sin_family = AF_INET, .sin_port = htons(53)};
+	inet_pton(AF_INET, "8.8.8.8", &public_resolver.sin_addr);
+	int routed = connect(udp, (struct sockaddr*)&public_resolver, sizeof public_resolver) == 0;
+	close(udp);
+	return routed;
+}
+// the main screen's width, else its height, in points; 0 where none shows (a headless Mac, Linux without CoreGraphics)
+int64_t display_extent(int32_t height) {
+#ifdef __APPLE__
+	void* graphics = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY | RTLD_LOCAL);
+	if (!graphics) return 0;
+	uint32_t (*main_display)(void) = (uint32_t (*)(void))dlsym(graphics, "CGMainDisplayID");
+	size_t (*extent)(uint32_t) = (size_t (*)(uint32_t))dlsym(graphics, height ? "CGDisplayPixelsHigh" : "CGDisplayPixelsWide");
+	return main_display && extent ? (int64_t)extent(main_display()) : 0;
+#else
+	(void)height;
+	return 0;
+#endif
 }
 // a text of the module, the address of its (address, length) pair, as a NUL-terminated copy the caller frees
 static char* native_text(struct w2c_wasi__snapshot__preview1* wasi, uint32_t text) {
