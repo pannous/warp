@@ -536,8 +536,22 @@ module_rules_of(path: text, module: text): list := {
 	if baked != ø { return items_of(unpack(baked)).map(packed => unpacked_rule(packed, module)) }
 	written_rules(path, source, module)
 }
-written_rules(path: text, source: text, module: text): list := rules_parsed(source_parse(path, source), source, module)
-rules_parsed(parse: Node, source: text, module: text): list := statements_in(parse).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+# (a rule line the parse doesn't give a rule of fails loudly, naming it: a line before it left an apostrophe or a
+# bracket open, which took the rules after it in, and they were gone without a word)
+written_rules(path: text, source: text, module: text): list := {
+	rules = rules_parsed(source_parse(path, source), module, source)
+	lines = lines_of(source)
+	rule_lines = (1 to #lines).filter(i => lines#i.trim().starts_with(rewrite_line_start))
+	if #rules < #rule_lines { throw dropped_rules(path, lines, rule_lines, rules, module) }
+	rules
+}
+rules_parsed(parse: Node, module: text, source: text): list := statements_in(parse).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+# the rule lines of a module the parse of the whole lost, each by its file and line
+dropped_rules(path: text, lines: list, rule_lines: list, rules: list, module: text): text := {
+	patterns = rules.map(rule => rule.pattern)
+	dropped = rule_lines.filter(i => rules_parsed(plain_node(parsed(rules_ended(lines#i))), module, lines#i).all(rule => rule.pattern not in patterns))
+	dropped.map(i => path + ":" + i + ": the rule `" + lines#i.trim() + "` was dropped").join("\n") + "\n(a line before it left an apostrophe or a bracket open, even in a comment: `#` starts one only before a blank)"
+}
 # every bundled module's rules, packed (rule_node), baked in beside its parse: uses.warp module_text writes them in where
 # library_rules() stands; reading them off each parse at every compile was a tenth of a small program's (card
 # fixed-startup-cost). A compiler built by one that bakes none reads them where it runs
@@ -548,7 +562,7 @@ library_rules(within: text = ""): map := {}
 packed_rules(files: map): map := {
 	packed = {}
 	for path in files.keys {
-		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(rules_parsed(plain_node(parsed(rules_ended(files[path]))), files[path], "").map(rule_node), Bracket.Square, Separator.Comma)) }
+		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(rules_parsed(plain_node(parsed(rules_ended(files[path]))), "", files[path]).map(rule_node), Bracket.Square, Separator.Comma)) }
 	}
 	packed
 }
