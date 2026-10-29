@@ -6,10 +6,10 @@ use "walk.warp"
 
 route_methods = {get: "GET", post: "POST", put: "PUT", delete: "DELETE", patch: "PATCH"}
 request_word = "request"
-# the module whose route table the entries join
-router_use = "use router"
-# what a program with routes says at their end until the native warp serves them
-unserved_word = "routes_unserved"
+# the module that serves the route table the entries join (lib/web.warp over lib/router.warp)
+router_use = "use web"
+# what a program with routes does at their end: serves them when run as a program (lib/web.warp routes_end)
+routes_end_word = "routes_end"
 # where a parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
 parameter_ends = ":(?*+"
 
@@ -19,7 +19,7 @@ routes(program: Node): Node := {
 	last = (0 ..< #statements).filter(i => is_route(statements[i])).last()
 	entries = statements.map(route_entry)
 	# right after the last route, so that the program's own last value stays its result
-	lowered = entries[0 ..< last + 1] + [call_of(unserved_word, [])] + entries[last + 1 ..< #entries]
+	lowered = entries[0 ..< last + 1] + [call_of(routes_end_word, [])] + entries[last + 1 ..< #entries]
 	separated(bracketed([plain_node(parsed(router_use))] + lowered, ""), ";")
 }
 

@@ -1,0 +1,4 @@
+# a decimal stays exact while its denominator fits an int64, else it is a float (card module-c-lines-prebuild)
+'2.48015873015873e-05'	0.0000248015873015873
+'0.5 + 2.48015873015873e-05 > 0.5'	true
+'0.000000000000000001 * 10 == 0.00000000000000001'	true

@@ -42,10 +42,6 @@ count(m: map): int from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
-puts(t: text): nothing from emitter
-puti(n: int): nothing from emitter
-putl(n: int): nothing from emitter
-putf(x: float): nothing from emitter
 fetch(url: text, options...): text from emitter
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
@@ -142,6 +138,11 @@ alias is_alnum = is_alphanumeric
 alias isalnum = is_alphanumeric
 alias is_whitespace = is_space
 alias isspace = is_space
+// C's put words, as print: puts and putf answer 0 as C's puts does, puti and putl their number
+puts(t) := { print t; 0 }
+puti(n: int) := { print n; n }
+putl(n: int) := { print n; n }
+putf(x: float) := { print x; 0 }
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
 // decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
