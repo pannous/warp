@@ -41,6 +41,9 @@ sin(x: Real) := if x.pi_power == 1 and (2 * x.coefficient) is int then half_turn
 cos(x: Real) := if x.pi_power == 1 and (2 * x.coefficient) is int then half_turns_sine(2 * x.coefficient + 1) else cos(x.float())
 // sin(n·π/2): 0, 1, 0, -1 around the circle
 half_turns_sine(n: int) := [0, 1, 0, -1][((n % 4) + 4) % 4]
+// the other real functions of lib/math.warp the float's: tan(π/6), the camera's field of view in samples/gpu/ocean.warp
+tan(x: Real) := tan(x.float())
+exp(x: Real) := exp(x.float())
 
 π() := Real(1, 1)
 pi() := π
