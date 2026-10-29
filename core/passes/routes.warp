@@ -1,0 +1,49 @@
+# Server routes (card sample-gaps-server, Rust twin lowering/web/serve.rs route_entry): a main-level
+# `get "/fib/:n:int" { … }` is the route table's entry of lib/router.warp, `route_add("GET", "/fib/:n:int", request =>
+# { n = route_parameter("/fib/:n:int", request.path, "n"); … })`: each `:name` of the path a variable of the body, its
+# segment of the request's path (an int where it is digits); post, put, delete and patch alike
+use "walk.warp"
+
+route_methods = {get: "GET", post: "POST", put: "PUT", delete: "DELETE", patch: "PATCH"}
+request_word = "request"
+# the module whose route table the entries join
+router_use = "use router"
+# what a program with routes says at their end until the native warp serves them
+unserved_word = "routes_unserved"
+# where a parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
+parameter_ends = ":(?*+"
+
+routes(program: Node): Node := {
+	statements = main_statements(program)
+	if not statements.any(is_route) { return program }
+	last = (0 ..< #statements).filter(i => is_route(statements[i])).last()
+	entries = statements.map(route_entry)
+	# right after the last route, so that the program's own last value stays its result
+	lowered = entries[0 ..< last + 1] + [call_of(unserved_word, [])] + entries[last + 1 ..< #entries]
+	separated(bracketed([plain_node(parsed(router_use))] + lowered, ""), ";")
+}
+
+# the main level's statements, of lines and of `;` within a line alike
+main_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then main_statements(s) else [s])
+
+# `get "/path" { … }`: a method word, the path's text, the body
+is_route(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#1 is symbol and route_methods.has(name_of(n#1)) and n#2 is text and is_curly_group(n#3)
+
+route_entry(n: Node): Node := {
+	if not is_route(n) { return n }
+	path = n#2
+	request = symbol(request_word)
+	bindings = path_parameters("${path}").map(name => Key(symbol(name), Op.Assign, call_of("route_parameter", [path, Key(request, Op.Dot, symbol("path")), name])))
+	call_of("route_add", [route_methods[name_of(n#1)], path, Key(request, Op.Arrow, block_of(bindings + items_of(n#3)))])
+}
+
+# the names of a path's parameters: "/users/:id:int/posts/:post" → ["id", "post"]
+path_parameters(path: text): list := path.split("/").filter(part => part.starts_with(":")).map(path_parameter)
+path_parameter(part: text): text := {
+	name = ""
+	for letter in part[1 ..< #part] {
+		if parameter_ends.contains(letter) { return name }
+		name += letter
+	}
+	name
+}

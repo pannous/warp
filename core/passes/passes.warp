@@ -29,6 +29,7 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 use "property_accessors.warp"
+use "routes.warp"
 
 # the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES, which also lowers
 # `xs .* 2` and `(p).a`: lib/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
@@ -98,7 +99,7 @@ global kept_comprehension_sugar = []
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
-	own = early_sugared(interpolation(with_uses(program, folder)))
+	own = early_sugared(interpolation(with_uses(routes(program), folder)))
 	bindings = rule_bindings(own)
 	kept_first_sugar = sugar_rules(bindings, first_sugar_module_names)
 	kept_sugar = sugar_rules(bindings, sugar_module_names())
