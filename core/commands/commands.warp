@@ -19,6 +19,7 @@ command_help = [
 	["parse <code|file>", "Show the parsed program"],
 	["data <file>", "Read untrusted data without evaluating it"],
 	["lower <code|file>", "Show the program after the lowering passes"],
+	["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],
 	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
 	["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
 	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
