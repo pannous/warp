@@ -169,10 +169,16 @@ pow_check_int(iy: int): int := {
 }
 # whether i are the bits of 0, ∞ or NaN
 zero_inf_nan(i: int): bool := not unsigned_below(2 * i - 1, 2 * infinity_bits() - 1)
+# int exponents within Julia's power_by_squaring range: squaring beats log and exp there
+least_squared_exponent(): float := -4096.0
+most_squared_exponent(): float := 24576.0
 float_pow(x: float, y: float): float := {
 	sign_bias = 0
 	ix = bits_of_float(x)
 	iy = bits_of_float(y)
+	if y >= least_squared_exponent() and y <= most_squared_exponent() and y != 0.0 and pow_check_int(iy) != 0 and not zero_inf_nan(ix) {
+		return power_by_squaring(x, truncated(y))
+	}
 	topx = top12(x)
 	topy = top12(y)
 	# x < 0x1p-126, ∞ or NaN, or |y| < 0x1p-65, |y| >= 0x1p63 or NaN: if |y| > 1075·ln2·2^53 the power is ∞ or 0, if
@@ -227,6 +233,39 @@ float_pow(x: float, y: float): float := {
 	# |elo| < |ehi|·2^-25
 	elo = ylo * lhi + y * llo
 	pow_exp_inline(ehi, elo, sign_bias)
+}
+# x^n of a finite nonzero x by squaring, each square and product carrying its rounding error along as a tail
+# (Julia's power_by_squaring): within about 1 ULP even for n in the thousands, where plain squaring drifts by n/2
+power_by_squaring(x: float, n: int): float := {
+	base = x
+	base_tail = 0.0
+	if n < 0 {
+		base = 1.0 / x
+		# x · (1/x) - 1, exact
+		product = x * base
+		base_tail = 0.0 - (product - 1.0 + product_error(x, base, product)) * base
+		n = 0 - n
+	}
+	result = 1.0
+	result_tail = 0.0
+	while n > 1 {
+		if bits_and(n, 1) == 1 {
+			tail = result * base_tail + base * result_tail
+			product = base * result
+			result_tail = product_error(base, result, product) + tail
+			result = product
+		}
+		tail = base * 2.0 * base_tail
+		square = base * base
+		base_tail = product_error(base, base, square) + tail
+		base = square
+		n = shifted_right(n, 1)
+	}
+	product = base * result
+	tail = product_error(base, result, product) + result * base_tail + base * result_tail
+	# an overflown product, or a split of a huge factor: the plain product
+	if tail - tail != 0.0 { return product }
+	product + tail
 }
 # `∛x`: the float cube root, of a negative x the negative root; pow's root of |x| refined by one Newton step, so a
 # whole cube's root is whole (∛27 is 3); 0, ∞ and NaN stay themselves
