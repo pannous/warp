@@ -1,0 +1,8 @@
+# a method before its values calls it with them, as a word before its value does (card space-call-refused)
+'t = "a b"; t.split " "'	["a", "b"]
+'t = "tea"; t.replace "tea" "coffee"'	'coffee'
+'xs = [1, 2]; xs.contains 2'	yes
+'t = "abc"; t.byte_index_of "b"'	1
+'t = "abc"; n = t.byte_index_of "b"; n'	1
+'t = "tea"; n = t.replace "tea" "coffee"; n'	'coffee'
+'xs = [1, 2]; xs contains 2'	yes

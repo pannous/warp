@@ -7,3 +7,4 @@
 'f(x, for y) := x - y; f(5, for: 2)'	3
 '[1, 2].map x => x * 2'	[2, 4]
 '"the quick brown fox".split.map length'	[3, 5, 5, 3]
+'"a-b".split "-"'	["a", "b"]

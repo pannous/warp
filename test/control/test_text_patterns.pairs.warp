@@ -29,3 +29,6 @@
 # triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'count(text_holes("0xfg!", ["0x", "!"], ["hex"]))'	0
 # triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'text_holes("my_name", ["", ""], ["word"])#1'	'my_name'
 # triage-held 2026-10-28: internal text_holes helper; text patterns are tested by match lines :: 'count(text_holes("my-name", ["", ""], ["word"]))'	0
+'s = "t-3"; match s { "t" + n: int => n; _ => "no" }'	-3
+'s = "t-2.5"; match s { "t" + x: float => x; _ => "no" }'	-2.5
+'s = "t-"; match s { "t" + n: int => n; _ => "no" }'	"no"
