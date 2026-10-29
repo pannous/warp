@@ -244,7 +244,7 @@ slow_tiers() {
 	echo "$promoted"
 	[[ $promoted == *"NO FIXPOINT"* || $promoted == *FAILED* ]] && red "self lane: ${promoted:0:160}" --urgent
 	install_compilers
-	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$RUST_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
+	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
 		red "tiers 1-2: $(grep -a '^FAIL' "$state/gate-${tip:0:10}.log" | head -3 | paste -sd ';' -)"
 	# the samples that run, the gap to 2.0 (decision night-samples-modules): one line per tip in the user's checkout
 	"$scripts/samples.sh" "$TREE" | head -1 | sed "s/^/$(date '+%F %H:%M') /" >>"$MAIN_CHECKOUT/data/samples/history.txt"
