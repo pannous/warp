@@ -81,6 +81,8 @@ if [ -x "$stage/warp" ]; then
 	painting=$(native 'paint([0, 1, 0xFF00FF00, 0], 2, 2)')
 	check "paint, a PNG" "${painting%%:*} $(file -b "${painting#*: }")" "painted 2×2 PNG image data, 2 x 2, 8-bit/color RGB, non-interlaced"
 	check "paint of a shader" "$(native 'paint("fn x", 2, 2, ø)')" "paint of a shader: the native warp has no GPU yet (warp-rust renders it)"
+	check "exit() ends the run well" "$(native $'print 1\nexit()\nprint 2'; echo $?)" "1
+0"
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
 	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
