@@ -65,9 +65,9 @@ stored_table(name: text, model: any) := {
 	rows(database(), "select " + fields.map(quoted_name).join(", ") + " from " + quoted_name(name)).map(row => instance_of(model, fields, row))
 }
 
-// the instance inserted as a row of the table; the instance
+// the instance inserted as a row of the table, made or widened from its class first; the instance
 stored_add(name: text, instance: any) := {
-	fields = keys(instance)
+	fields = migrated(name, type(instance))
 	marks = fields.map(field => "?").join(", ")
 	run_bound(database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", values(instance))
 	instance
@@ -75,7 +75,9 @@ stored_add(name: text, instance: any) := {
 
 // the table's rows made those of the list, each instance a row in its order; the list
 stored_save(name: text, instances: list) := {
-	run_query(database(), "delete from " + quoted_name(name))
+	if count(instances) > 0 { migrated(name, type(instances#1)) }
+	if table_exists(name) { run_query(database(), "delete from " + quoted_name(name)) }
 	for instance in instances { stored_add(name, instance) }
 	instances
 }
+table_exists(name: text) := rows(database(), "select name from sqlite_master where type = 'table'").any(row => row#1 == name)
