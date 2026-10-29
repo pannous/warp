@@ -10,7 +10,8 @@ class Real {
 	coefficient: number
 	pi_power: number
 	radicand: int
-	float() := coefficient * √(radicand as float) * float_pi ^ pi_power
+	# (a float's operation with it takes this at once, decision float-contagion: no root of 1 nor power of 1 taken)
+	float() := coefficient * (if radicand == 1 then 1.0 else √(radicand as float)) * (if pi_power == 1 then float_pi else float_pi ^ pi_power)
 	*(other) := if other is Real then real_of(coefficient * other.coefficient, pi_power + other.pi_power, radicand * other.radicand) else if other is float then float() * other else real_of(coefficient * other, pi_power, radicand)
 	# a / (c√r) is a√r / (c·r): the root rises above the fraction line
 	/(other) := if other is Real then real_of(coefficient / (other.coefficient * other.radicand), pi_power - other.pi_power, radicand * other.radicand) else if other is float then float() / other else real_of(coefficient / other, pi_power, radicand)
