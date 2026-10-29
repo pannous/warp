@@ -97,6 +97,10 @@ if [ -x "$stage/warp" ]; then
 	check "a channel's values sent in tasks" "$(native 'ch = channel(); go { for i in 1 to 3 { ch.send(i) }; ch.close() }; total = 0; for v in ch { total += v }; total')" 6
 	check "json written and read" "$(native $'class P{x:int y:int}\n[to_json(P(1, 2)), parse_json("[1, null]")]')" '["{\"x\":1,\"y\":2}" [1 ø]]'
 	check "code parsed at run time" "$(native $'[parse_code("[1, 2.5, \\"s\\", {a: x is int}]") == data([1, 2.5, "s", {a: x is int}]), parse_code("[]"), try parse_code("(") else 7]')" "[yes [] 7]"
+	check "a frame without a window: once after the program, at the small size" "$(native $'on frame { print "frame at " + window.width + "x" + window.height }\nprint "main"\n7')" "main
+frame at 240x135
+7"
+	check "a painted function in that frame, sampled down to it" "$(native $'on frame { paint((x, y) => [x / 960, y / 540, 0.5], 960, 540) }' | head -1 | cut -d: -f1)" "painted 240×135"
 	printf 'sleep_ms(5000)\n' >"$stage/slow.warp"
 	(cd "$stage" && exec ./warp slow.warp >"$stage/crash.log" 2>&1) & crashing=$!
 	sleep 2.5; kill -ABRT $crashing; wait $crashing; crash_status=$?
