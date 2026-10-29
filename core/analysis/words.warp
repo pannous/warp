@@ -15,7 +15,7 @@ required_type(word: text): text := if word.ends_with("?") then word[0..<(#word -
 # the guard markers, data items and fields, the shown text of an instance
 # and the missing part of an `of` lookup
 enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·step", TryElse = "try·else",
-	AssertElse = "assert·else", DataItem = "data·item", DataField = "data·field", TextShown = "text·shown", OfNone = "of·none",
+	AssertElse = "assert·else", DataItem = "data·item", DataField = "data·field", TextShown = "text·shown", FloatConverted = "float·converted", FloatCast = "float·cast", OfNone = "of·none",
 	ViewOpaque = "view·opaque", ViewAttribute = "view·attribute", DataSpliced = "data·spliced", GlueName = "glue·name",
 	GlueHidden = "glue·hidden", MatchSubject = "match·subject", MatchBound = "match·bound", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",

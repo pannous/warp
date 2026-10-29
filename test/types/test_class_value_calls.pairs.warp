@@ -1,0 +1,6 @@
+# a class passed as a value is called as the class itself is: its instance of the values (card class-value-callable)
+'class P{n: int; s: text}; make(c, xs) := c(xs#1, xs#2); make(P, [3, "a"]).s'	'a'
+'class P{n: int; s: text}; make(c) := c(4, "b"); p = make(P); p.n + 1'	5
+'class P{n: int}; class Q{n: int}; k = Q; k(5)'	Q{n: 5}
+'class P{n: int; m: int = 7}; build(c) := c(1); build(P).m'	7
+'apply(g, v) := g(v); apply(x => x + 1, 4)'	5

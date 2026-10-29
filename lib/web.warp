@@ -1,7 +1,8 @@
 // The standard module web (card native-server): a program's routes (lib/router.warp) served over HTTP/1.1 through the
 // process's C sockets, as a plain `warp app.warp` asks (the native warp sets WARP_SERVE; `warp run` runs once), on
-// WARP_PORT, else 8080. One request at a time, each connection closed after its answer; a route answers as in a WAGI
+// WARP_PORT, else 8080; port 0 is one the system chooses, printed as it serves. One request at a time, each connection closed after its answer; a route answers as in a WAGI
 // build (lib/wagi.warp): a text as text, anything else as JSON, with the status and headers it set.
+use os
 use router
 use wagi
 
@@ -17,6 +18,8 @@ SOCKET_LEVEL = {Darwin: 65535, Linux: 1}
 REUSE_ADDRESS = {Darwin: 4, Linux: 2}
 // struct utsname: its first field, the system's name
 SYSTEM_NAME_BYTES = 256
+// struct sockaddr_in: its bytes 3 and 4 the port, the high byte first
+SOCKET_ADDRESS_BYTES = 16
 STATUS_REASONS = {200: "OK", 201: "Created", 204: "No Content", 301: "Moved Permanently", 302: "Found", 400: "Bad Request", 404: "Not Found", 418: "I'm a teapot", 500: "Internal Server Error"}
 
 socket(domain: i32, kind: i32, protocol: i32): i32 from 'c'
@@ -31,7 +34,10 @@ calloc(count: i64, size: i64): handle from 'c'
 free(pointer: handle): void from 'c'
 strndup(buffer: handle, size: i64): owned_text from 'c'
 uname(name: handle): i32 from 'c'
-getenv(name: text): text from 'c'
+getsockname(fd: i32, address: handle, size: bytes): i32 from 'c'
+fmemopen(buffer: handle, size: i64, mode: text): handle from 'c'
+fgetc(file: handle): i32 from 'c'
+fclose(file: handle): i32 from 'c'
 
 // the system's name, Darwin or Linux
 system_name() := {
@@ -46,6 +52,20 @@ system_name() := {
 internet_address(system: text, port: int) := {
 	start = if system == "Linux" then [INTERNET, 0] else [16, INTERNET]
 	start + [port div 256, port % 256] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}
+
+// the port a socket is bound to (one the system chose for port 0), read back from its address: a C stream over the
+// bytes reads them NULs and all
+bound_port(fd: int) := {
+	address = calloc(1, SOCKET_ADDRESS_BYTES)
+	getsockname(fd, address, [SOCKET_ADDRESS_BYTES, 0, 0, 0])
+	bytes = fmemopen(address, SOCKET_ADDRESS_BYTES, "r")
+	fgetc(bytes)
+	fgetc(bytes)
+	port = fgetc(bytes) * 256 + fgetc(bytes)
+	fclose(bytes)
+	free(address)
+	port
 }
 
 // a listening socket at the port, else an error naming it
@@ -118,7 +138,7 @@ http_served(raw: text) := try http_answer(route_answer(request_of(raw))) catch e
 // the program's routes served at the port until the process is stopped
 serve(port: int) := {
 	fd = listening(port)
-	print "serving http://localhost:" + port + " (`warp run` runs the program once without serving)"
+	print "serving http://localhost:" + bound_port(fd) + " (`warp run` runs the program once without serving)"
 	while true {
 		client = accept(fd, 0, 0)
 		if client >= 0 {
@@ -129,9 +149,9 @@ serve(port: int) := {
 }
 
 // the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
-// else that value, the program's result
+// else that value, the program's result; read by env, so a program not serving calls no C (none in a browser)
 routes_end(value: any = ø) := {
-	if getenv("WARP_SERVE") == ø { return value }
-	port = getenv("WARP_PORT")
+	if env("WARP_SERVE") == ø { return value }
+	port = env("WARP_PORT")
 	serve(if port == ø then DEFAULT_PORT else int(port))
 }

@@ -58,6 +58,10 @@ ordering_operators = ["<", "<=", ">", ">="]
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
+# the methods a class's instances convert by, each with its dispatcher and the call it falls back to on any other value:
+# `x as text` by text() (also print, str), `x as float` and float(x) by float() (lib/reals.warp's π); emitter/output.warp
+# and emitter.warp cast read the dispatchers
+conversion_methods = {text: [showing_dispatcher, "str"], float: [HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text]}
 # a class's positions (card class-position-index, decisions instance-position and property-accessors): `b#p` is its
 # position(p), from 1, `b[i]` (the parser's b#(i+1)) its index(i), from 0, either one deriving the other; `b#p = v` the
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
@@ -206,7 +210,8 @@ constructor_functions(classes: map, owning_class: text, routes: list): list := {
 	made = block_of([Key(self_node, Op.Assign, call_of(owning_class, [])), call_of(initializer, [self_node] + given), self_node])
 	[lifted, Key(call_of(constructor_name(owning_class), parameters), Op.Define, made)]
 }
-# the dispatchers a class's compare(o) and text() give: its instances ordered by <, <=, >, >=, and shown by their text
+# the dispatchers a class's compare(o), text() and float() give: its instances ordered by <, <=, >, >=, shown by their
+# text, converted to a float
 derived_dispatchers(classes: map, names: list, routes: list): list := {
 	made = []
 	other = symbol("other")
@@ -221,11 +226,14 @@ derived_dispatchers(classes: map, names: list, routes: list): list := {
 			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, orderers), ordered, Key(self_node, glyph as Op, other)))]
 		}
 	}
-	showers = owners_of(classes, names, showing_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], showing_method)) == 0)
-	if #showers > 0 {
-		shown = {}
-		for owning_class in showers { shown[owning_class] = call_of(lifted_name(classes, names, showing_method, owning_class, routes), [self_node]) }
-		made += [Key(call_of(showing_dispatcher, [Key(self_node, Op.Colon, symbol("any"))]), Op.Define, value_dispatch(deepest_first(classes, showers), shown, call_of("str", [self_node])))]
+	for method in conversion_methods.keys {
+		converters = owners_of(classes, names, method).filter(owning_class => #method_parameters(method_in(classes[owning_class], method)) == 0)
+		if #converters > 0 {
+			converted = {}
+			for owning_class in converters { converted[owning_class] = call_of(lifted_name(classes, names, method, owning_class, routes), [self_node]) }
+			dispatcher = conversion_methods[method]
+			made += [Key(call_of(dispatcher#1, [Key(self_node, Op.Colon, symbol("any"))]), Op.Define, value_dispatch(deepest_first(classes, converters), converted, call_of(dispatcher#2, [self_node])))]
+		}
 	}
 	made
 }
@@ -475,8 +483,8 @@ routed(n: Node, routing: Routing): Node := {
 	method_routed(n, routing)
 }
 counts(word: text): bool := word == counting_method or canonical_word(word) == counting_method
-# `b#p` of a value, no field read `m#("x"+1)`
-is_position(n: Node): bool := is_key(n, Op.Hash) and key_of(n) != ø and not (is_key(value_of(n), Op.Add) and key_of(value_of(n)) is text)
+# `b#p` of a value, no field read `m#("x"+1)` nor typed array `float[n]` (the parser's float#(n+1), lib/sugar/lists.warp)
+is_position(n: Node): bool := is_key(n, Op.Hash) and key_of(n) != ø and not (is_key(value_of(n), Op.Add) and key_of(value_of(n)) is text) and not (key_of(n) is symbol and is_type_word(name_of(key_of(n))))
 # `b#(i+1)`, the parser's b[i], is the class's index(i); another b#p its position(p)
 is_shifted(at: Node): bool := is_key(at, Op.Add) and value_of(at) == 1
 element_word(element: Node): text := if is_shifted(value_of(element)) then index_method else position_method

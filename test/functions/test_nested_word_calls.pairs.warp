@@ -1,0 +1,6 @@
+# a function word before more words than it takes takes the phrase of the function word after it (card prelude-word-calls)
+'f(x) := x; g(a) := a; f g 1'	1
+'g(a) := [a]; first g 1'	1
+'f(x) := x; g(a) := a; h(y) := y * 2; f g h 3'	6
+'add(a, b) := a + b; twice(x) := 2 * x; twice add 1 2'	6
+'apply(f, x) := f(x); sq(x) := x * x; apply sq 3'	9

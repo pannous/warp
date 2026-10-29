@@ -56,6 +56,9 @@ def use_library(folder: text) { given_library = folder }
 // older seed) calls library_sources below and reads them where it runs
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
+// core's folders bundled all the same: the extensions' rules, which every compile reads (rewrites.warp
+// extension_module_names), baked with the rest instead of parsed at each run (~25 ms of a small program's 0.15 s)
+BUNDLED_CORE_FOLDERS = ["compiler/extensions"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
@@ -71,6 +74,12 @@ def library_texts(library: text, within: text): map {
 			found[path] = try read(library + "/" + path) else ""
 		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
+			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
+		}
+	}
+	if within == "" {
+		for folder in BUNDLED_CORE_FOLDERS {
+			inner = library_texts(library, folder + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
 		}
 	}
@@ -252,10 +261,10 @@ def operator_alias(words: list): list {
 }
 // [spelling, target] of each operator alias a source declares
 // Rust twin: aliases.rs source_aliases
-def operator_aliases(source: text): list {
+def operator_aliases(source: text): list := if source.contains(":=") then operator_aliases_in(code_statements(source)) else []
+def operator_aliases_in(statements: list): list {
 	found = []
-	if not source.contains(":=") { return found }
-	for statement in code_statements(source) {
+	for statement in statements {
 		alias = operator_alias(blank_words(statement))
 		if alias.length > 0 { found += [alias] }
 	}
@@ -265,7 +274,7 @@ def operator_aliases(source: text): list {
 // Rust twin: aliases.rs math_aliases
 global math_aliases = ø
 def math_operator_aliases(): list {
-	if math_aliases == ø { math_aliases = operator_aliases(module_source("math")) }
+	if math_aliases == ø { math_aliases = operator_aliases_in(code_statements_of("math")) }
 	math_aliases
 }
 // `circumfix operator ⌊ ⌋ := floor`: [opening, closing, function] of a circumfix statement's words, else []
@@ -275,10 +284,10 @@ def circumfix_alias(words: list): list {
 }
 // [opening, closing, function] of each circumfix operator a source declares
 // Rust twin: aliases.rs source_circumfixes
-def circumfix_aliases(source: text): list {
+def circumfix_aliases(source: text): list := if source.contains("circumfix") then circumfix_aliases_in(code_statements(source)) else []
+def circumfix_aliases_in(statements: list): list {
 	found = []
-	if not source.contains("circumfix") { return found }
-	for statement in code_statements(source) {
+	for statement in statements {
 		pair = circumfix_alias(blank_words(statement))
 		if pair.length > 0 { found += [pair] }
 	}
@@ -288,8 +297,15 @@ def circumfix_aliases(source: text): list {
 // Rust twin: aliases.rs math_circumfixes
 global math_circumfixes = ø
 def math_circumfix_aliases(): list {
-	if math_circumfixes == ø { math_circumfixes = circumfix_aliases(module_source("math")) }
+	if math_circumfixes == ø { math_circumfixes = circumfix_aliases_in(code_statements_of("math")) }
 	math_circumfixes
+}
+// A library's code statements by its name ("math"), split once a compile for every scanner of them: splitting math's
+// text for its operators, its aliases and its circumfixes each was a tenth of a small program's compile
+global library_code_statements = {}
+def code_statements_of(name: text): list {
+	if not library_code_statements.has(name) { library_code_statements[name] = code_statements(join(module_sources([name]), "")) }
+	library_code_statements[name]
 }
 // The canonical names of the alias targets parser.warp's operator lists spell otherwise
 // Rust twin: spellings.rs OPERATOR_SPELLINGS ("approximately", "+-", "<-")
@@ -588,9 +604,10 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		dedent = bracket == Bracket.None and newline and line_indent(p) < p.indent
 		after = if dedent then Separator.None else separator(p, closer, newline)
 		if tabbed and after == Separator.Space { after = Separator.Tab }
-		// `ys = xs.map { |x| x+1 }`: the block belongs to the method call, not to the statement
-		if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) and is_list_of(item, "{") {
-			item = with_trailing_block(found#(found.length)#1, item)
+		// `ys = xs.map { |x| x+1 }`, `n = t.split " "`: what follows an assigned method belongs to its call, not to the
+		// statement
+		if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) {
+			item = with_trailing_item(found#(found.length)#1, item)
 			found = found[0 .. found.length - 1]
 		}
 		found += [[statement, after] for statement in statements_of(item)]
@@ -601,11 +618,17 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 	grouped(found, bracket)
 }
 
-// `ys = xs.map`, `f(xs) := xs.map`: an assignment of a method, which a block after it is given to
+// `ys = xs.map`, `f(xs) := xs.map`, `n = t.replace "a"`: an assignment of a method, which a block or value after it is
+// given to
 // Rust twin: functions.rs assigned_method_call
 def assigned_method_call(n: Node): bool := match n {
-	Key(target, op, value): ["=", ":=", "->"].contains(op as text) and (names_method(value) or assigned_method_call(value))
+	Key(target, op, value): ["=", ":=", "->"].contains(op as text) and (method_phrase(value) or assigned_method_call(value))
 	_: false
+}
+// `t.split`, `t.replace "a"`: a method, alone or with values after it already
+def method_phrase(n: Node): bool {
+	parts = group_parts(n)
+	names_method(n) or (parts != ø and parts#1 == "" and parts#2 == " " and #parts#3 > 0 and names_method(parts#3#1))
 }
 
 def names_method(n: Node): bool := match n {
@@ -613,10 +636,10 @@ def names_method(n: Node): bool := match n {
 	_: false
 }
 
-// The assignment with `block` given to the method call it assigns: `ys = (xs.map {…})`
+// The assignment with `item` given to the method call it assigns: `ys = (xs.map {…})`, `n = (t.split " ")`
 // Rust twin: blocks.rs with_trailing_block
-def with_trailing_block(assignment: Node, block: Node): Node := match assignment {
-	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_block(value, block) else spaced([value, block]))
+def with_trailing_item(assignment: Node, item: Node): Node := match assignment {
+	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_item(value, item) else spaced((if names_method(value) then [value] else group_parts(value)#3) + [item]))
 	_: assignment
 }
 
@@ -957,9 +980,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			left = keyed(op, left, ø)
 		} else if c == '!' and SUFFIX_POWER >= min_power and bang_suffix_at(p) {
 			p.at = p.at + 1
-			fully = is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n)
-			if fully { p.at = p.at + 1 }
-			left = forced(left, fully)
+			# `x!!` is `x!`
+			if is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n) { p.at = p.at + 1 }
+			left = forced(left)
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
@@ -1510,15 +1533,16 @@ def bang_suffix_at(p: Parser): bool {
 	glued or not operand_follows(p, 1)
 }
 
-// `left!` (`left!!` when fully): `x.upper!` and `upper x!` mark their name for mutation.rs, `upper(x)!` assigns the
-// result back to x, `{…}!` runs the block anyway, `ø!` unwraps
+// `left!` (or `left!!`): `upper(x)!` assigns the result back to x, `{…}!` runs the block anyway, anything else
+// is `unwrap(left)`, which lib/sugar/methods.warp turns into an assignment back where a function's call is marked
+// (`x.upper!`, `upper x!`), and which runs a lone `x!` as it is
 // Rust twin: suffixes.rs try_parse_evaluate_bang
-def forced(left: Node, fully: bool): Node := {
+def forced(left: Node): Node := {
 	if left == ø { return call_of([symbol("unwrap"), ø]) }
 	variable = mutated_variable(left)
 	if variable != ø and not is_member(left) { return Key(variable, Op.Assign, left) }
 	if is_block(left) { return left }
-	attributed("mutated", if fully then 2 else true, left)
+	call_of([symbol("unwrap"), left])
 }
 
 def is_member(node: Node): bool := match node {
@@ -1690,10 +1714,9 @@ def blank_words(statement: text): list := statement.replace("\t", " ").split(" "
 // Each operator a source declares: `[prefix|suffix|infix]
 // operator ⊕ := …` and the pattern `a ⊕ b := …` (infix), at the level a precedence declaration gives it
 // Rust twin: operators.rs declared_operators
-def declared_operators(source: text): list {
+def declared_operators(source: text): list := if source.contains(":=") then operators_declared_in(code_statements(source)) else []
+def operators_declared_in(statements: list): list {
 	found = []
-	if not source.contains(":=") { return found }
-	statements = code_statements(source)
 	for statement in statements {
 		if not statement.contains(":=") { continue }
 		found += operator_declared(blank_words(statement))
@@ -1725,8 +1748,8 @@ def scanned_operators(source: text): list {
 global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
-		sources = module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")
-		library_operators = declared_operators(sources).filter(operator => not is_name_start(operator.glyph#1))
+		statements = ["math", "list", "regex"].flat_map(name => code_statements_of(name))
+		library_operators = operators_declared_in(statements).filter(operator => not is_name_start(operator.glyph#1))
 	}
 	library_operators
 }
@@ -2722,7 +2745,8 @@ def shaped(parameter: Node, shapes: list): Node := {
 // - a preposition (`to of from …`) separates the slots and labels the one after it: `to add a to b` → `a`, `to b`
 // - an article starts a noun slot when a known type follows it or the body never names the article: `a number` →
 //   `number: number`, `a photo` → `photo` (typed once `class photo` is declared); `to add a b: a+b` keeps `a`
-// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`
+// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`;
+//   when together they name a declared type, by all of them: `a full name` → `full-name: full-name`
 // - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
 // Rust twin: type_name_matching.rs parameter_slots (labelled)
 def phrase_slots(words: list, body: Node, types: list): list {
@@ -2745,7 +2769,8 @@ def phrase_slots(words: list, body: Node, types: list): list {
 			}
 		}
 		at = at + 1
-		head = noun#(#noun)
+		// `a full name` of `class full name`: the nouns together are the type, and the slot's name
+		head = if #noun > 1 and known_type(noun.join("-"), types) then noun.join("-") else noun#(#noun)
 		slot = if known_type(head, types) then Key(symbol(head), Op.Colon, symbol(head)) else symbol(head)
 		parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
 		preposition = ""

@@ -189,7 +189,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {} }
+class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {} }
 
 ## the walk
 
@@ -214,6 +214,7 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
+		List(items, Bracket.None, Separator.Comma): comma_call(n, locals, lowering)
 		List(items, bracket, separator): List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
 		_: n
 	}
@@ -225,11 +226,19 @@ function_value(name: text, n: Node, locals: list, lowering: Lowering): Node := {
 	call_node(symbol("closure_new"), [n])
 }
 
+# an argument as passed: a function without parameters given for a parameter declared a function, `g(d)` of
+# `g(c: function)`, is its closure, not its call
+passed_value(argument: Node, at: int, callee: Node, locals: list, lowering: Lowering): Node := {
+	takes_function = callee is symbol and lowering.function_positions.has(name_of(callee)) and at in lowering.function_positions[name_of(callee)]
+	parameterless = argument is symbol and name_of(argument) not in locals and lowering.arities.has(name_of(argument)) and lowering.arities[name_of(argument)] == 0
+	if takes_function and parameterless then call_node(symbol("closure_new"), [argument]) else lowered_lambdas(argument, locals, lowering)
+}
 # `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name; a call
 # of any other expression calls the function value it gives: `(x => x*2)(5)`, `adder(5)(1)`, `fs[0](3)`
 lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 	if #call == 0 { return n }
-	arguments = arguments_of(call).map(argument => lowered_lambdas(argument, locals, lowering))
+	given = arguments_of(call)
+	arguments = (1 to #given).map(at => passed_value(given#at, at, call#1, locals, lowering))
 	signature = call#1
 	if signature is symbol and is_variable(name_of(signature), locals, lowering) { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
 	if signature is symbol { return call_node(signature, arguments) }
@@ -249,7 +258,40 @@ lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := 
 	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
 	# `sq 3` of `sq = x => x*x`: a variable holding a function, given its arguments, calls it
 	if #words > 1 and is_variable(name_of(words#1), locals, lowering) and lowering.function_values.has(name_of(words#1)) { return lowered_call(words, call_node(words#1, arguments_of(words)), locals, lowering) }
+	nested = if name_of(words#1) in locals then ø else nested_phrase(words, lowering)
+	if nested != ø { return lowered_phrase(nested, n, locals, lowering) }
 	group_like(n, [words#1] + arguments_of(words).map(word => lowered_lambdas(word, locals, lowering)))
+}
+# `show a, b`, `puts add 1, 2` (decision function-words-consume): a phrase before commas takes the items after them
+# its function words still miss, show(a, b); the items left stay the comma list's
+comma_call(n: Node, locals: list, lowering: Lowering): Node := {
+	items = items_of(n)
+	# `x = add 1, 2` parses as `(x = add 1), 2`: the assigned phrase takes them
+	assigned = is_key(items#1, Op.Assign)
+	first = if assigned then value_of(items#1) else items#1
+	missing = if is_phrase(first) and #first > 1 and first#1 is symbol and name_of(first#1) not in locals then missing_arguments(items_of(first), lowering) else 0
+	taken = min(missing, #items - 1)
+	if taken == 0 { return List(items.map(item => lowered_lambdas(item, locals, lowering)), Bracket.None, Separator.Comma) }
+	phrase = List(items_of(first) + items[1 .. taken + 1], Bracket.None, Separator.Space)
+	call = if assigned then Key(key_of(items#1), Op.Assign, phrase) else phrase
+	lowered_lambdas(if taken == #items - 1 then call else List([call] + items[taken + 1 ..], Bracket.None, Separator.Comma), locals, lowering)
+}
+# the arguments a phrase's function words still miss: `add 1` 1, `puts add 1` 1 (puts takes the phrase add 1)
+missing_arguments(words: list, lowering: Lowering): int := {
+	nested = nested_phrase(words, lowering)
+	if nested != ø { return missing_arguments(items_of(nested.last), lowering) }
+	wanted = (lowering.arities.get(name_of(words#1)) ?? 0) - (#words - 1)
+	if wanted > 0 then wanted else 0
+}
+# `f g 1`, `first add 1 2`: more words than the function takes, a function word where its last argument goes: that
+# word's phrase is the argument, f(g(1)), as Rust's words take their arguments by their parameters (card
+# prelude-word-calls); ø for other words
+nested_phrase(words: list, lowering: Lowering): list? := {
+	taken = lowering.arities.get(name_of(words#1)) ?? 0
+	if taken == 0 or #words <= taken + 1 { return ø }
+	last = words#(taken + 1)
+	if not (last is symbol and (lowering.arities.get(name_of(last)) ?? 0) > 0) { return ø }
+	words[0 ..< taken] + [List(words[taken ..], Bracket.None, Separator.Space)]
 }
 
 # `x.f(a)`: of a field the program gives a function value (callable_fields), the function it holds called,
@@ -523,7 +565,7 @@ lambdas(program: Node): Node := {
 		parts = definition_of(statement)
 		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
-	lowering = Lowering{arities: arities, lambdas_lifted: []}
+	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions}
 	function_parameters = function_parameters_of(written)
 	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
 	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)

@@ -1,0 +1,3 @@
+# a call of a word overloaded by parameter types may leave out the defaulted parameters at the end; a call no variant takes names the word's variants (card call-leaving)
+'f(a: int, b = 1) := a + b; f(a: text, b = "!") := a + b; [f(1), f("x"), f(1, 5)]'	[2, "x!", 6]
+'f(a: int) := 1; f(a: text) := 2; f(1, 2)'	error

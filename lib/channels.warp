@@ -1,14 +1,28 @@
-// Channels (P155, notes/channels.md): Go's unbuffered channel inside one run, on the host words of tasks.rs, and
-// `channel "chat"`, the machine-wide channel (src/host/channels.rs) with the same words. The words are rewrite rules
-// (card compiler-modules, src/modules/rewrites.rs): every program mentioning them gets them, no `use` needed.
-// `ch.send(v)` waits until a receiver took v, `for v in ch {…}` receives until the channel is closed.
+// Channels (P155, notes/channels.md): a channel inside one run, written in warp, and `channel "chat"`, the
+// machine-wide channel (src/host/channels.rs). The words are rewrite rules (card compiler-modules): every program
+// mentioning them gets them, no `use` needed. A task `go {…}` runs to its end where it is started
+// (lib/sugar/tasks.warp), so what it sends waits in the channel: `ch.receive()` takes the oldest value, `for v in ch {…}`
+// receives until none is left.
 use units
-rewrite channel() => channel_new()
-rewrite $c.send($v) => channel_put($c, $v) where $c = channel()
-rewrite send $v to $c => channel_put($c, $v) where $c = channel()
-rewrite $c.receive() => channel_take($c) where $c = channel()
-rewrite $c.close() => channel_close($c) where $c = channel()
-rewrite (for $item in $c $body) => while channel_more($c) { $item = channel_take($c); $body } where $c = channel()
+rewrite channel() => Channel()
+rewrite send $v to $c => $c.send($v) where $c = channel()
+rewrite (for $item in $c $body) => while #$c.waiting > 0 { $item = $c.receive(); $body } where $c = channel()
+
+class Channel {
+	waiting: list = []
+	closed: bool = no
+	send(value) := {
+		if closed { raise "send on a closed channel" }
+		waiting += [value]
+	}
+	receive() := {
+		if #waiting == 0 { raise "receive on a channel no task sends to: every task has ended" }
+		oldest = waiting#1
+		waiting = waiting[1..]
+		oldest
+	}
+	close() := { closed = yes }
+}
 
 // the machine-wide channel listens from its assignment on: a variable holds its name and its listener
 rewrite channel $name => machine_channel($name)

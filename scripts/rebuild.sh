@@ -94,6 +94,16 @@ besides() {
 companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm 2>/dev/null); }
 # a compiler's name before the rename (transition)
 legacy() { case $1 in warp) echo compiler ;; warp-self) echo compiler-self ;; *) echo "$1" ;; esac; }
+# a failed build's compiler moved aside, the old name's too: lib/ holds none older than its sources, so no smoke test
+# passes on the compiler before them (card stale-wasm-rebuild)
+set_aside() {
+	local file
+	for file in "$compilers/$1.wasm" "$compilers/$(legacy "$1").wasm"; do
+		[ -f "$file" ] || continue
+		mv -f "$file" "$file.stale" && rm -f "$file.inputs"
+		echo "rebuild.sh: ${file#"$tree"/} moved aside to $(basename "$file").stale: lib/ has no compiler of these sources" >&2
+	done
+}
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
 one() {
 	local name=$1 file=$compilers/$1.wasm built status old
@@ -117,7 +127,7 @@ one() {
 	[ "$name" = warp-self ] && lane=self
 	built=$(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash "$warp" rebuild $lane 2>&1)
 	status=$?
-	[ $status = 0 ] || { echo "$built" | tail -5 >&2; logged "$name" build-failed; return 1; }
+	[ $status = 0 ] || { echo "$built" | tail -5 >&2; set_aside "$name"; logged "$name" build-failed; return 1; }
 	local path
 	path=$(echo "$built" | sed -n 's/^built //p' | tail -1)
 	[ -n "$path" ] && [ "$path" != "$file" ] && [ -f "$path" ] && copied "$path" "$file"

@@ -249,12 +249,13 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
 # runtime_image: runtime.wasm read back (prepend_runtime), ø while a program compiles the runtime words it calls itself;
-# runtime_calls: its call graph, read once; relocates_program: the program is also written as a separate module
+# runtime_calls: its call graph, read once; relocates_program: the program is also written as a separate module;
+# shakes_runtime: the program carries only the runtime functions it reaches, shaking: which (prebuilt.warp Shaking)
 # linked_images: the prebuilt library modules linked (prebuilt.warp LibraryImage); linked_own_names: the names the
 # program defines itself, never the module's; linked_words: each linked module word by name, its kinds and result,
 # which the program declares (prelude_words.warp declared_only) and the analyzer takes as they are
 # Every compile starts with a fresh Module (fresh_module): nothing of one compile reaches the next
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; relocates_program: bool = no; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; linked_closures_shown: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; linked_closures_shown: map = {} }
 
 module = Module({}, [])
 # a new compile's module, emitting the same file
@@ -473,8 +474,15 @@ text_words = ["text", "string"]
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
 # the words casting to a number, `int(x)`, `float(x)`
 cast_words = ["int", "float"]
+float_converting_word = HiddenWord.FloatConverted as text
 text_reader(kind: ValueKind): text? := match kind { ValueKind.Int: "text_as_int"; ValueKind.Float: "text_as_float"; _: ø }
 node_cast(kind: ValueKind): text? := match kind { ValueKind.Int: "truncated_int"; ValueKind.Float: "float_cast"; _: ø }
+# `π as float`, `float(x)`: the value of code `n` other than a number literal may be an instance of a class converting
+# by its float() (class_methods.warp conversion_methods)
+def instance_cast(n: Node, value: TypedCode, to: ValueKind): TypedCode {
+	if not (n is number) and value.kind == ValueKind.Node and to == ValueKind.Float and float_converting_word in module.functions { return TypedCode(to, converted(call_values(module.functions[float_converting_word], [value]), to)) }
+	cast(value, to)
+}
 def cast(value: TypedCode, to: ValueKind): TypedCode {
 	if value.kind == ValueKind.Text { return runtime_call(text_reader(to), [value]) }
 	# '7' as int is 7, the text it is
@@ -792,8 +800,16 @@ def declared_global(name: text, kind: ValueKind): list {
 def global_assignment(name: text, value: TypedCode): TypedCode {
 	entry = module.globals[name]
 	index = relocatable(relocated.globals, entry#1)
-	if widening(entry#2, value.kind) and widens_later(global_slot(name), joint_kind(entry#2, value.kind)) { return TypedCode(entry#2, [op.unreachable]) }
+	if global_widens(name, entry#2, value.kind) and widens_later(global_slot(name), joint_kind(entry#2, value.kind)) { return TypedCode(entry#2, [op.unreachable]) }
 	TypedCode(entry#2, converted(value, entry#2) + [op.global_set] + index + [op.global_get] + index)
+}
+# whether a global holding `held` takes the joint kind of a `kind` given it: a float takes an exact number as it is
+# (float_of_node), and a global of the runtime or a linked module never widens, its kind being that module's code's
+# (sound's `global attack = 0.005 as float` given `attack = 0.02`)
+def global_widens(name: text, held: ValueKind, kind: ValueKind): bool {
+	if not widening(held, kind) or (held == ValueKind.Float and kind == ValueKind.Node) { return no }
+	images = module.linked_images.map(image => image.globals) + (if module.runtime_image != ø then [module.runtime_image.globals] else [])
+	not images.any(globals => globals.any(entry => entry#1 == name))
 }
 # `symbol("word")`: one symbol per word and module, made at its first use and kept in the global `symbol·word`, which
 # holds a node of another kind until then (Rust's node_api.rs emit_interned_symbol; card speed-symbol-calls)
@@ -949,7 +965,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in bit_casts { return bit_cast(expression_code(body, n#2), bit_casts[name_of(n#1)]) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("unwrap") { return unwrapped(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in cast_words { return cast(expression_code(body, n#2), name_of(n#1)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in cast_words { return instance_cast(n#2, expression_code(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("number") { return as_number(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression_code(body, n#2)) }
@@ -1035,6 +1051,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
 	if operator == Op.None and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
 	if (operator == Op.Colon or operator == Op.None) and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_map_entry) {
+		# `json{ 'a': 1 }`, a tag named by a function taking the one value: its call with the map, as Rust's
+		if name_of(left) not in body.names and name_of(left) in module.functions and takes_arguments(module.functions[name_of(left)], [right]) { return call(body, module.functions[name_of(left)], [right]) }
 		# `div{ a: 1 }` of no class is Rust's `div:a:1`: a block of one entry is that entry
 		if #right == 1 and name_of(left) not in module.classes {
 			return TypedCode(ValueKind.Node, keyed_code(name_node(left), boxed(expression_code(body, right#1))))
@@ -1106,6 +1124,12 @@ def key_expression(body: Body, n: Node): TypedCode {
 			called = module.functions[name_of(right)]
 			return field_or_word(body, value, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
 		}
+		# `t.split`: a member naming a library word that takes the value alone, its other parameters defaulted
+		word = library_words.get(name_of(right))
+		if word != ø and takes_arguments(module.runtime[word], [left]) {
+			runtime_word = module.runtime[word]
+			return field_or_word(body, value, name_of(right), receiver => call_values(runtime_word, defaulted(body, runtime_word, [receiver], 1)))
+		}
 		return field_of(body, value, name_of(right), receiver_class(body, left))
 	}
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)
@@ -1117,8 +1141,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
 	if operator == Op.As and (is_held_kind(target)) {
 		value = expression_code(body, left)
-		if text_reader(target) != ø { return cast(value, target) }
-		if target == ValueKind.Text { return if value.kind == ValueKind.Node then runtime_call("cast_text", [value]) else shown_text(value) }
+		if text_reader(target) != ø { return instance_cast(left, value, target) }
+		if target == ValueKind.Text { return if value.kind == ValueKind.Node then shown_text(runtime_call("spelled_case", [value])) else shown_text(value) }
 		# `"ab" as list` is its characters, as Rust's emit_cast
 		if target == ValueKind.List and value.kind == ValueKind.Text { return runtime_call("text_chars", [value]) }
 		# `65 as codepoint` is 'A', `2 as char` the digit '2'
@@ -1202,6 +1226,9 @@ def bitwise(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	logical_code(body, bit_words[symbol], a, b)
 }
 def logical_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+	# `c and print x`: a statement's nothing beside a value is ø, a value known only at run time
+	if a.kind == no_kind { a = TypedCode(ValueKind.Node, boxed(a)) }
+	if b.kind == no_kind { b = TypedCode(ValueKind.Node, boxed(b)) }
 	# a value whose kind the first reading of a recursive function does not know yet (pending) beside a yes/no is one
 	yes_no = kind => kind == ValueKind.Bool or kind == pending
 	if yes_no(a.kind) and yes_no(b.kind) {

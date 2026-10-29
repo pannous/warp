@@ -118,8 +118,7 @@ results_in(program: Node, enums: map): map := {
 	found = {}
 	for n in nodes_in(program) {
 		call = if is_key(n, Op.Define) then key_of(n) else ø
-		first = if call != ø and is_group(value_of(n)) and #value_of(n) > 0 then value_of(n)#1 else ø
-		declared = if first != ø and is_key(first, Op.Assign) and is_key(key_of(first), Op.Colon) and key_of(key_of(first)) == symbol("the result") then value_of(key_of(first)) else ø
+		declared = held_result(n)
 		if declared is symbol and required_type(name_of(declared)) in enums and is_group(call) and bracket_of(call) == "(" and #call > 0 and call#1 is symbol {
 			found[name_of(call#1)] = required_type(name_of(declared))
 		}

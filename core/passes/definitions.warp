@@ -51,7 +51,8 @@ typed_definition_held(n: Node): Node := {
 # `void`, which the parser reads as ø
 is_no_result(n: Node): bool := n == Node.Empty
 declared_result_form(n: Node): Node := match n {
-	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else typed_by_word(target, body)
+	# `f(x) as pdf := e`: in a definition's head `as` names the result, any type the program has, as `:` does
+	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else if is_key(target, Op.As) and is_call(key_of(target)) and value_of(target) is symbol then Key(Key(key_of(target), Op.Colon, value_of(target)), Op.Define, body) else typed_by_word(target, body)
 	Key(target, Op.Assign, body): typed_by_word(target, body)
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts != 2 or not (is_result_type(parts#1) or is_no_result(parts#1)) or name_of(parts#1) in function_keywords { return ø }
@@ -87,16 +88,23 @@ is_runtime_declaration(n: Node): bool := {
 }
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
+result_word = "the result"
 result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
 		if not is_call(head) { return n }
-		result = symbol("the result")
+		result = symbol(result_word)
 		held = optional_when_answering_empty(head, body, result_type)
 		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
 		if is_list_type(name_of(held)) and can_answer_empty(body, optional_functions) { body = Key(with_empty_otherwise(body), Op.Coalesce, List([], Bracket.Square, Separator.Comma)) }
 		Key(head, Op.Define, List([Key(Key(result, Op.Colon, held), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
 	}
 	_: n
+}
+
+# T of a definition holding its result, `f(k) := {the result: T = …; the result}`; ø of another node
+held_result(n: Node): Node? := {
+	first = if is_key(n, Op.Define) and is_group(value_of(n)) and #value_of(n) > 0 then value_of(n)#1 else ø
+	if first != ø and is_key(first, Op.Assign) and is_key(key_of(first), Op.Colon) and key_of(key_of(first)) == symbol(result_word) then value_of(key_of(first)) else ø
 }
 
 # A function that can answer ø declares `T?` (decision optional-result): `def f(x): int { … return ø … }` warns with

@@ -306,8 +306,13 @@ def error_function(name: text): int {
 	module.errors[name] = f
 	f.index
 }
-# a recursive call not yet known (pending) is read as the node it may be, as element() takes it (card recursive-class-return)
-def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): TypedCode { if value.kind == ValueKind.Node or value.kind == pending then field_read(body, TypedCode(ValueKind.Node, value.code), name, class_name) else refuse("the field " + name + " of a " + kind_spelling(value.kind)) }
+# a recursive call not yet known (pending) is read as the node it may be, as element() takes it (card recursive-class-return);
+# a list known as one swizzles too (`[1, 2, 3].xy`)
+def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): TypedCode {
+	if value.kind == ValueKind.Node or value.kind == pending { return field_read(body, TypedCode(ValueKind.Node, value.code), name, class_name) }
+	if value.kind == ValueKind.List and is_swizzle(name) { return field_read(body, TypedCode(ValueKind.Node, boxed(value)), name, class_name) }
+	refuse("the field " + name + " of a " + kind_spelling(value.kind))
+}
 # `m.x = v`: the map with its entry x set to v
 def field_assignment(map: TypedCode, name: TypedCode, value: TypedCode): TypedCode { runtime_call("field_with", [TypedCode(ValueKind.Node, boxed(map)), shown_text(name), TypedCode(ValueKind.Node, boxed(value))]) }
 # a name as a text value, even of one character (text_value gives a "char" then)

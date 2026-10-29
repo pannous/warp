@@ -6,3 +6,6 @@
 'import toupper from "c"; toupper(97)'	65
 'import sqlite3; sqlite3_errstr(0)'	"not an error"
 'require zlib; compressBound(100)'	113
+# a C library's own words beside its functions: sqlite3's rows, not matrix's rows(m) (card declares-functions)
+«use sqlite3; db = sqlite3_open(":memory:"); rows(db, "select 1+2, 'a'")»	[[3, "a"]]
+'use sqlite3; db = sqlite3_open(":memory:"); run_query(db, "create table t(x)"); run_query(db, "insert into t values (4), (5)")'	2
