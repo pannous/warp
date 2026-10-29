@@ -1,0 +1,5 @@
+# the sound effects in warp, every host the same (lib/sound.warp effected): a delay rings on as long as Rust's did, a filter keeps the length
+'use sound; count(delay(osc(440, 0.1s), 0.1, 0.5, 0.5))'	23105
+'use sound; count(lowpass(osc(C4, 0.1s), 800, 0.707))'	2205
+'use sound; count(reverb(osc(C4, 0.1s), 0.3)) > 2205'	yes
+'use sound; count(effected([1.0, 2.0], ["compress", -20, 4, 0.01, 0.1]))'	2
