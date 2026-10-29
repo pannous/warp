@@ -6,6 +6,13 @@ use os
 use router
 use wagi
 
+// `get "/fib/:n:int" { … }`: a route, the route table's entry of lib/router.warp, `route_add("GET", "/fib/:n:int",
+// request => { n = route_parameter("/fib/:n:int", request.path, "n"); … })`, each `:name` of the path a variable of
+// its body; post, put, delete and patch alike. A program with routes ends serving them (routes_end; lib/rule_words.warp
+// computes both, decision computed-hole)
+rewrite $m $path {$body...} => route_add($verb, $path, request => { $bindings...; $body... }) where $m in [get, post, put, delete, patch] and $path is text and $verb = route_verb($m) and $bindings = route_bindings($path)
+rewrite $p => $q where program and $q = served($p)
+
 DEFAULT_PORT = 8080
 BACKLOG = 64
 READ_BYTES = 65536
