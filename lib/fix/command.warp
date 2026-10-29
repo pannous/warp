@@ -23,6 +23,8 @@ skipped_folders = ["golf"]
 skipped_folder_reason = "code golf counts bytes"
 not_warp_reason = "not a warp file"
 code_label = "code"
+# the compiler's answer to which standard modules a file uses without their `use` (warp uses, the implicit_use hint)
+uses_command = "warp uses "
 
 is_folder(path: text): bool := (try list_files(path) else ø) != ø
 name_of_path(path: text): text := last(path.split("/"))
@@ -105,6 +107,19 @@ confirmed(shown: text, old: text, new: text): bool := {
 	answer != ø and (answer.trim() == "y" or answer.trim() == "yes")
 }
 
+# the fix with a `use` line of each standard module the file uses without saying it, after its leading comments and
+# uses (beautify only: warp format lays out)
+with_uses_written(result: list, file: text): list := {
+	modules = command(uses_command + quoted_path(file)).split("\n").filter(module => module.trim() != "")
+	if #modules == 0 { return result }
+	lines = result[0].split("\n")
+	at = 0
+	while at < #lines and (lines[at].starts_with("#") or lines[at].starts_with("use ")) { at += 1 }
+	uses = modules.map(module => "use " + module.trim())
+	[(lines[0 ..< at] + uses + lines[at ..]).join("\n"), result[1] + uses.map(line => "" + (at + 1) + " " + line)]
+}
+quoted_path(path: text): text := "'" + path.replace("'", "'\\''") + "'"
+
 # a change "<line> <rule>" as check lists it
 listed_change(shown: text, change: text): text := {
 	parts = change.split(" ")
@@ -155,6 +170,7 @@ fix_command(command: text, arguments: list): int := {
 			failed += 1
 		} else {
 			result = fixed(code, rules, rewriting)
+			if rewriting { result = with_uses_written(result, file) }
 			lines = #result[1]
 			if result[0] != code {
 				if checking {

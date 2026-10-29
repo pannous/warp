@@ -49,7 +49,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
 	# (the standard modules it names words of without their `use`, as if it said them)
-	source = with_implicit_uses(source, library_folder + "/" + MODULES_FOLDER + "/" + WORD_INDEX)
+	source = with_implicit_uses(source, word_index_file())
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
 	foreign = c_functions_of(source, library_folder)
 	unknown = foreign#3
@@ -86,6 +86,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 MODULES_FOLDER = "modules"
 # which standard module defines which word, beside the prebuilt modules (prelude_words.warp word_index)
 WORD_INDEX = "words.tsv"
+word_index_file(): text := library_folder + "/" + MODULES_FOLDER + "/" + WORD_INDEX
 linked_libraries(source: text): list := {
 	if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { return [] }
 	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
@@ -219,6 +220,7 @@ show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
 show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
+show_uses() := { for module in implicit_modules(source_or_code(1), word_index_file()) { print module } }
 # where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
 # they are code, compiled there for it to run; no other harness sets it
 RUN_TO_VARIABLE = "WARP_RUN_TO"
@@ -230,6 +232,7 @@ match command {
 	"parse": show_parsed()
 	"data": show_data()
 	"lower": show_lowered()
+	"uses": show_uses()
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
 	"build": build(args[1 ..< #args])
 	"repl": repl()
