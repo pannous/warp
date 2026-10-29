@@ -1080,8 +1080,13 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = Key(left, Op.Colon, block)
 				continue
 			}
+			// `f.(xs)`, julia's dot call, the phrase [f .( (xs)] for the sugar (lib/sugar/broadcasting.warp): never the
+			// member call `t.chars()`, whose tree it would be otherwise
+			dot_call = op#1 == "." and peek(p.code, p.at, p.n) == "("
 			skip_blanks(p)
-			if PHRASE_OPERATORS contains op#1 {
+			if dot_call {
+				left = phrase_operation(left, DOT_CALL, expression(p, powers#2))
+			} else if PHRASE_OPERATORS contains op#1 {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
@@ -1590,6 +1595,7 @@ SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-"
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
 // does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
+DOT_CALL = ".("
 // `left op right` as its phrase, for the sugar to read (lib/sugar/arithmetic.warp, fallbacks.warp)
 def phrase_operation(left: Node, op: text, right: Node): Node := spaced([left, symbol(op), right])
 // The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
