@@ -1,0 +1,6 @@
+# a module's names never reach the program's, nor the reverse (card module-hygiene)
+'f() := {}; f()'	{}
+'f() := []; f()'	[]
+'x = 5; first_items(x, n) := 99; [x, 6, 7].first(2)'	[5, 6]
+'use color; global hue = 10; hsv(0, 1, 1) == red and hue == 10'	true
+'use sound; tuning = 442; A4'	442

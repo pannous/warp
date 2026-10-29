@@ -10,8 +10,9 @@ def name_node(name: any): list {
 	if one_code_point(name) { return node(Kind.Codepoint, [op.i32_const] + sleb(ord(name)) + gc_code(gc_ops.ref_i31, [])) }
 	node(Kind.Text, text_bytes(name))
 }
-# (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry)
-is_map_entry(n: Node): bool := is_key(n, Op.Colon) and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global")
+# (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry; nor is an
+# opaque view, `f() := {}` the body `{ {} }`, an empty map, card module-hygiene)
+is_map_entry(n: Node): bool := is_key(n, Op.Colon) and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global") and key_of(n) != opaque_symbol
 # `{a: 1, b: "x"}`: a map
 def map_value(body: Body, entries: list): TypedCode { TypedCode(ValueKind.Node, entries_code(body, entries.map(e => key_of(e)), entries.map(e => value_of(e)))) }
 # the map of the names to the values
