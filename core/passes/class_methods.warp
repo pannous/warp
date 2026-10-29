@@ -67,9 +67,11 @@ assigned_position = HiddenWord.PositionAssigned as text
 assigned_index = HiddenWord.IndexAssigned as text
 counting_method = "count"
 position_words = [position_method, index_method, assigned_position, assigned_index]
-# what a dispatcher of a method no operator spells gives any other value: the function itself; an element read or
+# what a dispatcher of a method no operator spells gives any other value: the function itself; a method changing its
+# value in place as written, `x.remove(k)`, which lib/sugar/methods.warp and method_calls.warp read; an element read or
 # written, `b#(i+1)` (the parser's b[i]), `b#p = v`, as written
 builtin_call(method: text, arguments: list): Node := {
+	if method in in_place_methods { return Key(arguments#1, Op.Dot, call_of(method, arguments[1..])) }
 	if method not in position_words { return call_of(method, arguments) }
 	element = Key(arguments#1, Op.Hash, if method.starts_with(index_method) then Key(arguments#2, Op.Add, 1) else arguments#2)
 	if method.ends_with("·assigned") then Key(element, Op.Assign, arguments#3) else element
@@ -294,10 +296,10 @@ class_declared(top_statement: Node, view: list): Declared := {
 # sugar's rules don't enter (rewrites.warp early_sugared), so a member gets it here: the function keyword or modifier
 # before it goes (`def f(): x + 1`, `public fun g() {…}`)
 member_read(member: list): Node := special_named(brace_method(colon_method(bottom_up(early_sugared(node_of(member)), definition))))
-# a method another language's name for showing or ordering spells (lib/aliases.warp) as warp's: `toString()` and
-# `to_s()` as text(), `compareTo(o)` as compare(o)
+# a method another spelling of a word warp asks an instance for (lib/aliases.warp) as that word: `toString()` and
+# `to_s()` as text(), `compareTo(o)` as compare(o), `size()` and `len()` as count(), which `#s` and `size(s)` call
 special_named(member: Node): Node := match member {
-	Key(head, Op.Define, body): { word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, ordering_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
+	Key(head, Op.Define, body): { word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, ordering_method, counting_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
 	_: member
 }
 # a method written with its body in braces, `area(side) { … }` (a call beside a block as it parses), read as
@@ -418,9 +420,14 @@ method_function(classes: map, owning_class: text, method: text, name: text, rout
 	taken = parameters.map(parameter_name)
 	body = value_of(declared)
 	fields = fields_reaching(classes, owning_class).filter(field => field not in taken)
-	siblings = methods_reaching(classes, owning_class).filter(sibling => sibling not in taken and not assigns_name(body, sibling))
+	siblings = methods_reaching(classes, owning_class).filter(sibling => sibling not in taken and not assigns_name(body, sibling) and not overcalled(body, sibling, taking(classes, owning_class, sibling)))
 	Key(call_of(name, [self_node] + parameters), Op.Define, on_instance(body, fields, siblings, routes))
 }
+# how many parameters the method of that name the class reaches takes
+taking(classes: map, owning_class: text, method: text): int := #method_parameters(lineage(classes, owning_class).flat_map(ancestor => classes[ancestor].methods).filter(m => defined_word(m) == method)#1)
+# whether the body calls the name with more arguments than the method takes, so the call is the function's: `count(items)`
+# beside a count() method counts the list
+overcalled(body: Node, name: text, taken: int): bool := nodes_in(body).any(part => is_called_name(part) and name_of(part#1) == name and #part - 1 > taken)
 assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
@@ -463,8 +470,11 @@ routed(n: Node, routing: Routing): Node := {
 	if n is key and op_of(n) in assigning_operators and is_position(key_of(n)) { return Key(Key(parts(key_of(key_of(n))), Op.Hash, parts(value_of(key_of(n)))), op_of(n), parts(value_of(n))) }
 	if is_position(n) and element_word(n) in routing.methods { return position_call(n, element_word(n), [], parts) }
 	if is_key(n, Op.Hash) and key_of(n) == ø and counting_method in routing.methods { return call_of(routed_name(counting_method), [parts(value_of(n))]) }
+	# `count(b)`, `len(b)`, `size(b)` the same as `#b`
+	if is_called_name(n) and #n == 2 and counts(name_of(n#1)) and counting_method in routing.methods { return call_of(routed_name(counting_method), [parts(n#2)]) }
 	method_routed(n, routing)
 }
+counts(word: text): bool := word == counting_method or canonical_word(word) == counting_method
 # `b#p` of a value, no field read `m#("x"+1)`
 is_position(n: Node): bool := is_key(n, Op.Hash) and key_of(n) != ø and not (is_key(value_of(n), Op.Add) and key_of(value_of(n)) is text)
 # `b#(i+1)`, the parser's b[i], is the class's index(i); another b#p its position(p)
