@@ -2272,7 +2272,7 @@ def prefixed(p: Parser): Node := {
 		literal = data_literal(p)
 		if literal != ø { return literal }
 	}
-	if PREFIX_OPERATORS.contains(form) and not defines_word(p, word) { return word_prefixed(p, word, form) }
+	if PREFIX_OPERATORS.contains(form) and not defines_word(p, word) and not dot_call_follows(p, word) { return word_prefixed(p, word, form) }
 	if form == "not" or no_asks_emptiness(p, word) {
 		p.at = p.at + word.length
 		skip_spaces(p)
@@ -2343,6 +2343,8 @@ def after_member_dot(p: Parser): bool := p.at > 0 and p.code[p.at - 1] == '.' an
 
 // `sqrt(x: f64): f64 from "c"`, `abs(x) := …` at a line's start: the word is the name a definition or foreign line
 // gives, no operator (card primitive-c-math-names)
+// `sqrt.([4, 9])`, `abs.(xs)`: a prefix operator's word dot-called is the function, the dot call broadcasting it
+def dot_call_follows(p: Parser, word: text): bool := peek(p.code, p.at + word.length, p.n) == '.' and peek(p.code, p.at + word.length + 1, p.n) == '('
 def defines_word(p: Parser, word: text): bool {
 	at = p.at + word.length
 	if peek(p.code, at, p.n) != '(' or not at_line_start(p.code, p.at) { return false }
