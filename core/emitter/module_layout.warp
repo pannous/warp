@@ -215,8 +215,13 @@ def rebased(code: list, relocations: list, moves: list): list {
 }
 # where an index of one kind goes in a link: the table's entry for it, else shifted (the one old -> new rule of
 # rebased and moved_body, over every index space: functions, types, globals, texts)
-class Move { shift: int; table: map }
-def moved(move: Move, index: int): int { if move.table.has(index) then move.table[index] else index + move.shift }
+# gap: [first, end] of indices no longer there (a runtime function shaken out), whose use fails the compile loudly
+class Move { shift: int; table: map; gap: list = [] }
+def moved(move: Move, index: int): int {
+	if move.table.has(index) { return move.table[index] }
+	if #move.gap == 2 and index >= move.gap#1 and index < move.gap#2 { throw "runtime function " + (index - move.gap#1) + " was shaken out of the module but is called (card runtime-shaking)" }
+	index + move.shift
+}
 def shifted(shift: int): Move { Move(shift, {}) }
 # a function's entry of the code section with each relocatable operand moved by moves[kind], written unpadded
 def moved_body(f: Function, moves: list): list {

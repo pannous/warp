@@ -1,0 +1,6 @@
+# a map stays a map through a binding: a parameter declared map and a name bound to a map are keyed, not positions (card map-binding-stability)
+'f(m: map) := m[1]; x = {}; x[1] = 2; f(x)'	2
+'def f(m: map) { m[5] = 3; #m.keys }; x = {}; x[1] = 2; f(x)'	2
+'x = {}; x[1] = 2; y = x; y[5] = 3; #y.keys'	2
+'def g(more: map): map { table = more; table[5] = 7; table }; m = {}; m[1] = 2; #g(m).keys'	2
+'xs = [4, 5]; ys = xs; ys[1]'	5

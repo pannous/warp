@@ -57,6 +57,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)
 	prepend_runtime(library_runtime ?? runtime_bytes())
 	relocate_program(separate_output != "" or linked_output != "")
+	shake_runtime(library_runtime == ø and separate_output == "" and linked_output == "")
 	linking = library_runtime == ø and prepended()
 	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}
