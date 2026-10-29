@@ -223,6 +223,25 @@ big_int_product(a: Node, b: Node): Node := {
 	y = as_big_int(b)
 	normalized_big_int(magnitude_product(trimmed_magnitude(x), trimmed_magnitude(y)), big_int_negative(x) != big_int_negative(y))
 }
+# a rem b of a big int by a plain int below 2^31, the sign of a as i64.rem_s: the limbs from the top, each rest times a
+# limb staying within 64 bits; a bigger divisor fails, loud, until big ints divide by big ints
+big_int_remainder(a: Node, b: Node): Node := {
+	if is_plain_int(b) and unboxed_int(b) == 0 { divide_by_zero() }
+	if not is_plain_int(b) or unboxed_int(b) >= 2147483648 or unboxed_int(b) <= -2147483648 { big_int_remainder_by_a_big_divisor() }
+	x = as_big_int(a)
+	divisor = if unboxed_int(b) < 0 then 0 - unboxed_int(b) else unboxed_int(b)
+	rest = 0
+	i = limb_count(x) - 1
+	while i >= 0 {
+		rest = int_remainder(rest * limb_base() + limb(x, i), divisor)
+		i -= 1
+	}
+	if big_int_negative(x) then 0 - rest else rest
+}
+big_int_remainder_by_a_big_divisor(): int := {
+	fail()
+	0
+}
 # -1, 0 or 1 as a is below, equal to or above b, plain or big ints
 big_int_order(a: Node, b: Node): int := {
 	x = as_big_int(a)
