@@ -273,8 +273,8 @@ sugar_applied(program: Node, rules: list): Node := {
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
 	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
-	needs = rules.map(rule => required_words(rule.pattern))
-	results = rules.map(rule => words_within(rule.template))
+	needs = rules.map(needed_tokens)
+	results = rules.map(rule => tokens_within(rule.template))
 	walked = children(program, statement => sugared_statement(statement, rules_reaching(rules, needs, results, statement), maps))
 	rule_maps = maps
 	sugared_node(walked, rules)
@@ -287,13 +287,13 @@ sugared_statement(statement: Node, rules: list, maps: map): Node := {
 }
 
 # the words of the templates of the rules that can fire in the program
-reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(rule => required_words(rule.pattern)), rules.map(rule => words_within(rule.template)), program).flat_map(rule => words_within(rule.template))
+reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(needed_tokens), rules.map(rule => tokens_within(rule.template)), program).flat_map(rule => words_within(rule.template))
 
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
 # with these alone gives what all the rules give, without trying the others at each node
 rules_reaching(rules: list, needs: list, results: list, statement: Node): list := {
-	mentioned = word_set(words_within(statement))
+	mentioned = word_set(tokens_within(statement))
 	picked = []
 	grew = yes
 	while grew {
@@ -311,6 +311,9 @@ rules_reaching(rules: list, needs: list, results: list, statement: Node): list :
 	reaching
 }
 
+# what code must hold for the rule to fire in it (tokens_within): its pattern's words outside holes, and the operator
+# of the key its pattern is (`$a ?? $b` fires only where code has a `??`)
+needed_tokens(rule: Rule): list := required_words(rule.pattern) + (if rule.pattern is key and rule.head != "" then [rule.head] else [])
 # the words code must hold for the pattern to match it (rule_matches): its words outside holes
 required_words(pattern: Node): list := {
 	if rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø { return [] }
