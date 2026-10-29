@@ -16,3 +16,7 @@
 'div{ id: pwd }'	div:{id:pwd}
 'form{ label{ for: email } }; 1'	1
 'form{ guests: 2 }'	form:{guests:2}
+# a class's method, a field and a sum type's variants are the program's own (warp-separate-modules' reds)
+'class P{x:int; max() := x}; max(3, 5)'	5
+'class Bag{items; def sum():=7}; Bag([1]).sum'	7
+'type Color = red | rgb(r, g, b); c = rgb(1, 2, 3); c.g'	2
