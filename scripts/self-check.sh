@@ -89,7 +89,15 @@ check_host() {
 self_lane() {
   said=$(WARP_BINARY=$warp WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/rebuild.sh self $worktree 2>&1) || {
     verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
-  check_lane self
+  check_lane self && self_runtime
+}
+# the self build builds the runtime too, as the next seed's stage will: hello runs behind the runtime.wasm the seed's
+# stage built, so a self build that cannot lower the runtime words passed here while the seed refresh failed (card
+# compiler-built: `f(length: int)` read as a field of its parameters)
+self_runtime() {
+  said=$($warp $worktree/lib/warp-self.wasm -- runtime $scratch/runtime.wasm 2>&1)
+  [[ $? == 0 && -s $scratch/runtime.wasm && $said != *Error* ]] || {
+    verdict="SELF CHECK RED: warp-self.wasm does not build runtime.wasm: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
 }
 check_lane pure && self_lane && { [[ ! -x $host ]] || { check_host --compiler full run && check_host run; }; }
 passed=$?

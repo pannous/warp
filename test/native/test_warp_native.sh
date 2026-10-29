@@ -68,6 +68,11 @@ if [ -x "$stage/warp" ]; then
 	check "a sound at its time in the save" "$(native $'use sound\ntone(440Hz, 0.5s)\nat 2s { tone(880, 0.5s) }\nround(render_sound("c.wav") * 100)' | tail -1)" 250
 	printf "posix_spawnp(pid: out, file: text, actions: handle, attributes: handle, arguments: texts, environment: handle): i32 from 'c'\nposix_spawnp('echo', 0, 0, ['echo', 'eins', 'zwei'], 0)\n" >"$stage/spawning.warp"
 	check "a list of texts as a C argv" "$(native spawning.warp | sort | tr '\n' ' ')" "0 eins zwei "
+	# a recorder as the player: nothing sounds even if WARP_SOUND_PLAYER were ignored, WARP_NO_WINDOW mutes the others
+	printf '#!/bin/sh\necho "$0 ${1##*-}" >>"%s/played.log"\n' "$stage" >"$stage/recorder.sh" && chmod +x "$stage/recorder.sh"
+	paced=$(WARP_SOUND_PLAYER="$stage/recorder.sh" native $'use sound\nc = clock()\ntone(440Hz, 0.5s)\ntone(880Hz, 0.5s)\nwait_sound()\nclock() - c >= 1000' | tail -1)
+	sleep 0.2
+	check "sounds through the player, each when its voice reaches it" "$paced $(wc -l <"$stage/played.log" | tr -d ' ') $(sed -n 2p "$stage/played.log")" "yes 2 $stage/recorder.sh 2.wav"
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
 	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
