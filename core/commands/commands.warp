@@ -170,6 +170,8 @@ DEFAULT_TRIM = "optimize"
 # `warp rebuild` optimizes the compiler with
 WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
 BINARYEN_INSTALL = "brew install binaryen"
+# without Binaryen a build or rebuild keeps the unoptimized module and says so, never fails (user 2026-10-29)
+has_wasm_opt(): bool := shell("command -v wasm-opt || true").trim() != ""
 
 build(words: list) := {
 	options = words.filter(word => word.starts_with(OPTION_MARK))
@@ -207,6 +209,10 @@ option_of(options: list, name: text): any := {
 trim(module: text, trimmed: text, way: text) := {
 	if not (way in TRIM_WAYS) { raise "warp build --trim=" + way + ": no such way, the ways are " + TRIM_WAYS.keys.join(", ") + " (warp, our own linker, is card runtime-shaking)" }
 	if way == "none" { return write_bytes(trimmed, read_bytes(module)) }
+	if not has_wasm_opt() {
+		warn "wasm-opt not found (" + BINARYEN_INSTALL + "), " + trimmed + " stays unoptimized"
+		return write_bytes(trimmed, read_bytes(module))
+	}
 	try { shell(WASM_OPT + " " + TRIM_WAYS[way] + " " + quoted_path(module) + " -o " + quoted_path(trimmed)) } catch failure {
 		raise "warp build: wasm-opt trims the module (" + BINARYEN_INSTALL + "), --trim=none builds it untrimmed: " + failure
 	}
