@@ -58,6 +58,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/types/test_kind_marks.pairs.warp:4-9, 12-14, 17-20, 23, 24 | kind_number/kind_info/kind_mark expose the internal kind bits, a layout test | delete? |
 | test/types/test_real_text.pairs.warp:4, 5, 7, 10 | symbolic surds, √2 printed as "√2" | |
 | test/wasm/test_wasm.pairs.warp:252-255 | postfix (RPN) operators, `true true and` | delete? |
+| samples/text/word_lengths.warp:5 | `length all xs`, a keyword to broadcast; `xs.map length` is the form (decision sample-word-functions) | delete? |
 | test/wasm/test_wasm.pairs.warp:307 | a second block as else without `else`, `if(2){3}{4}` | delete? |
 
 ## Gap groups (cards)
