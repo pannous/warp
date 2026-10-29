@@ -165,34 +165,36 @@ bit_and(a: int, b: int) := {
 bit_or(a: int, b: int) := (a xor b) + bit_and(a, b)
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here: the alias lines (wiki/alias.md)
+// Each broadcasts, decided at run time (prelude each_any): binary_log([1, 8]) is [0 3], as a list may reach a word of
+// a module, where the program's broadcasting rules (lib/sugar/broadcasting.warp) don't look
 
 square(x) := x * x
-square_root(x) := sqrt(x)
+square_root(x) := each_any(x, e -> sqrt(e))
 cube_root(x) := ∛x
 alias pow = power
 power(base, exponent) := base ^ exponent
 alias exp = exponential
-exponential(x) := exp(x)
+exponential(x) := each_any(x, e -> exp(e))
 alias ln = natural_log
-natural_log(x) := log(x)
+natural_log(x) := each_any(x, e -> log(e))
 alias log2 = binary_log
-binary_log(x) := log2(x)
+binary_log(x) := each_any(x, e -> log2(e))
 alias log10 = decimal_log
-decimal_log(x) := log10(x)
+decimal_log(x) := each_any(x, e -> log10(e))
 // the logarithm of x to any base: logarithm(8, 2) is 3
 logarithm(x, base) := log(x) / log(base)
 alias sin = sine
-sine(x) := sin(x)
+sine(x) := each_any(x, e -> sin(e))
 alias cos = cosine
-cosine(x) := cos(x)
+cosine(x) := each_any(x, e -> cos(e))
 alias tan = tangent
-tangent(x) := tan(x)
+tangent(x) := each_any(x, e -> tan(e))
 alias asin = arc_sine
-arc_sine(x) := asin(x)
+arc_sine(x) := each_any(x, e -> asin(e))
 alias acos = arc_cosine
-arc_cosine(x) := acos(x)
+arc_cosine(x) := each_any(x, e -> acos(e))
 alias atan = arc_tangent
-arc_tangent(x) := atan(x)
+arc_tangent(x) := each_any(x, e -> atan(e))
 # arcsine(x) := asin(x)
 # arccosine(x) := acos(x)
 # arctangent(x) := atan(x)
@@ -203,19 +205,19 @@ arctan=&arc_tangent
 // the angle of the point (x, y) from the x axis, in radians: C's atan2(y, x)
 angle(x, y) := atan2(y, x)
 alias sinh = hyperbolic_sine
-hyperbolic_sine(x) := sinh(x)
+hyperbolic_sine(x) := each_any(x, e -> sinh(e))
 alias cosh = hyperbolic_cosine
-hyperbolic_cosine(x) := cosh(x)
+hyperbolic_cosine(x) := each_any(x, e -> cosh(e))
 alias tanh = hyperbolic_tangent
-hyperbolic_tangent(x) := tanh(x)
+hyperbolic_tangent(x) := each_any(x, e -> tanh(e))
 // the length of the long side of a right triangle with sides a and b
 alias hypot = hypotenuse
 hypotenuse(a, b) := hypot(a, b)
 alias ceil = ceiling
-ceiling(x) := ceil(x)
+ceiling(x) := each_any(x, e -> ceil(e))
 // x without its fraction, toward zero: whole_part(-2.5) is -2
 alias trunc = whole_part
-whole_part(x) := trunc(x)
+whole_part(x) := each_any(x, e -> trunc(e))
 // what remains of a after taking out b as often as it fits, with the sign of a (C's fmod)
 alias fmod = remainder
 remainder(a, b) := fmod(a, b)
