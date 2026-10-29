@@ -1,0 +1,6 @@
+# a case equals its spelling wherever it is held, a list's item or a parameter too (decisions enum-raw-values, enum-identity; card spelled-enum)
+'enum K {A = "a"}; xs = [K.A]; xs#1 == "a"'	true
+'enum K {A = "a"}; f(k) := k == "a"; f(K.A)'	true
+'enum K {A = "a", Q}; xs = [K.Q]; xs#1 == "Q"'	true
+'enum K {A = "a"}; xs = [K.A]; xs#1 as text'	"a"
+'enum Cx {Dyz}; enum Ex {Dyz}; [Cx.Dyz] == [Ex.Dyz]'	false
