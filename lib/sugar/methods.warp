@@ -1,11 +1,12 @@
 # Methods that change the list they are called on (notes/layers.md, sugar): `xs.push(v)` (also add, append, and insert
 # of one value) appends, `xs += [v]`, which emitter.warp grows in place while the list is unshared; `xs.pop()` is the
-# runtime word list_pop(xs), which shortens xs in place. Rust twin: list_mutations.rs appends
-rewrite $xs.push($v...) => $xs += [$v...]
-rewrite $xs.add($v...) => $xs += [$v...]
-rewrite $xs.append($v...) => $xs += [$v...]
-rewrite $xs.insert($v) => $xs += [$v]
-rewrite $xs.pop() => list_pop($xs)
+# runtime word list_pop(xs), which shortens xs in place; an instance's own push and pop are its class's. Rust twin:
+# list_mutations.rs appends
+rewrite $xs.push($v...) => $xs += [$v...] where $xs is not instance
+rewrite $xs.add($v...) => $xs += [$v...] where $xs is not instance
+rewrite $xs.append($v...) => $xs += [$v...] where $xs is not instance
+rewrite $xs.insert($v) => $xs += [$v] where $xs is not instance
+rewrite $xs.pop() => list_pop($xs) where $xs is not instance
 # `x.json`: the JSON text of any value (lib/prelude.warp json_text), a map's field json where it has one
 rewrite $x.json => json_text($x)
 

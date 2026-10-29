@@ -45,7 +45,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block", "instance"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed"]
@@ -144,6 +144,8 @@ global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
+# the names that hold only instances of the program's classes (`where $s is instance`)
+global rule_instances = {}
 # the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
 global rule_program = Node.Empty
 global rule_varying = {}
@@ -225,6 +227,7 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
+	rule_instances = instance_names_of(program)
 	rule_program = program
 	rule_varying_known = no
 	maps = map_names_of(program)
@@ -756,10 +759,25 @@ has_property(code: Node, property: text): bool := {
 	word = name_of(code)
 	if property == "label" { return word in label_words }
 	if property == "varying" { return varying_values().has(word) }
+	if property == "instance" { return rule_instances.has(word) }
 	if property == "type" { return word == any_word or is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) and not locally_bound(code) }
 	not rule_scope.has(word)
+}
+
+# the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)
+instance_names_of(program: Node): map := {
+	classes = {}
+	for statement in statements_in(program) {
+		view = class_view(statement)
+		if view != ø { classes[declared_type_name(view#2)] = yes }
+	}
+	found = {}
+	if #classes == 0 { return found }
+	types = assigned_types(statements_in(program), classes)
+	for name in types.keys { if types[name] in classes { found[name] = yes } }
+	found
 }
 
 # The program's value definitions `A4 := midi_hertz(69)` that read a variable, directly or through any chain of words,
