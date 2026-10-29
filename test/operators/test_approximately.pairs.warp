@@ -16,9 +16,12 @@
 '"a" ≈ "b"'	false
 
 # a_bool_is_approximately_any_value_of_its_truthiness
-# triage-held 2026-10-28: truthiness under ≈ (yes ≈ 2, no ≈ "") :: 'yes ≈ 2'	true
-# triage-held 2026-10-28: truthiness under ≈ (yes ≈ 2, no ≈ "") :: 'yes ≈ 0'	false
-# triage-held 2026-10-28: truthiness under ≈ (yes ≈ 2, no ≈ "") :: 'no ≈ ""'	true
+# triage-held 2026-10-28: truthiness under ≈ (yes ≈ 2, no ≈ "") 
+'yes ≈ 2'	true  # keep but later extension
+# triage-held 2026-10-28: truthiness under ≈ (yes ≈ 2, no ≈ "") 
+'yes ≈ 0'	false
+# triage-held 2026-10-28: truthiness under ≈ (yes ≈ 2, no ≈ "") 
+'no ≈ ""'	true
 
 # numbers_near_zero_are_approximately_zero
 'sin(3.141592653589793) ≈ 0'	true
