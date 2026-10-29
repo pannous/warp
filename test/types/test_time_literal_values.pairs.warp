@@ -8,3 +8,9 @@
 '1 month < 28 days'	no
 '1 month <= 31 days'	yes
 '2 days <= 1 day'	no
+
+# a time's fields at run time
+'d = 2024-02-29; d.year * 10000 + d.month * 100 + d.day'	20240229
+'d = 2024-02-29; d.weekday'	4
+'t = 2024-01-31T10:30:15; t.hour + t.minute + t.second'	55
+'t = 2024-01-31T10:30Z; t.epoch_seconds'	1706697000

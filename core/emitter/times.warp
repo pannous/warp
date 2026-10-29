@@ -75,6 +75,7 @@ def time_literal(written: text): TypedCode {
 }
 # `2024-02-29` a date (days since 1970), `2024-01-31T10:30` a local time, `…Z` or `…+01:00` an instant (nanoseconds); [] for a zoned time
 def moment_parts(written: text): list {
+	# (days_from_civil: the prelude's calendar)
 	day = days_from_civil(int(written[0 ..< 4]), int(written[5 ..< 7]), int(written[8 ..< 10]))
 	if #written == 10 { return [TimeFormCode.Date, day] }
 	at = 16
@@ -115,11 +116,13 @@ def duration_parts(written: text): list {
 	}
 	[TimeFormCode.Duration + (days % TimeInfoUnit.DayRange) * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos]
 }
-# the day since 1970 of a proleptic Gregorian date (Howard Hinnant's days_from_civil)
-def days_from_civil(year: int, month: int, day: int): int {
-	shifted = if month <= 2 then year - 1 else year
-	era = shifted /! 400
-	year_of_era = shifted - era * 400
-	day_of_year = (153 * ((month + 9) % 12) + 2) /! 5 + day - 1
-	era * 146097 + year_of_era * 365 + year_of_era /! 4 - year_of_era /! 100 + day_of_year - 719468
+
+## time fields (card triage-time-values; rust-harness:src/time/times.rs TIME_FIELDS): `d.month`, `t.hour`, read at run time by
+## the prelude's time_field_of, which a program writing a time literal brings (passes/prelude_words.warp emitted_words)
+time_fields = {year: 0, month: 1, day: 2, weekday: 3, day_of_year: 4, hour: 5, minute: 6, second: 7, epoch_seconds: 8, offset: 9}
+# the field of a time: its form and position given to time_field_of, no zone (a zoned time is refused as a literal)
+def time_field(time: TypedCode, name: text): TypedCode {
+	form = masked(kind_word_shifted(time.code, kind_bits, no), form_mask)
+	position = unboxed(time.code, gc_type(gc.int_box))
+	call_values(module.functions[time_field_word], [TypedCode(ValueKind.Int, form), TypedCode(ValueKind.Int, position), number_value(0), number_value(time_fields[name])])
 }
