@@ -2,7 +2,7 @@
 // of modifiers mixing warp's (`public export fun f()`), and the forms `new Point(1, 2)`, Ruby's `attr_accessor :x`,
 // Kotlin's `enum class` and `data class`, `mixin Name {…}`, read as the warp form they mean. Modifiers without warp
 // meaning alone (`public static fun f()`, `private x = 4`) and `constant x` are rewrite rules: lib/sugar/declarations.warp
-// Rust twin: src/warp_parser/definitions/foreign.rs
+// Rust twin: rust-harness:src/warp_parser/definitions/foreign.rs
 // A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
 
 // Modifiers of other languages with no meaning in warp ; `static` marks the statement

@@ -1,4 +1,4 @@
-## ordering: node_order and the sort words (Rust's src/wasm_emitter/reflection/library_ops/ordering.rs)
+## ordering: node_order and the sort words (Rust's rust-harness:src/wasm_emitter/reflection/library_ops/ordering.rs)
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "arithmetic.warp"
@@ -27,7 +27,7 @@ sorted_node(xs: Node): Node := {
 	if is_null(xs) { return xs }
 	sorted_like(xs, sortable_items(xs))
 }
-# `xs.sort_by(p => p.k)` as `list_sorted_by(xs, keys)` (src/lowering/lambdas.rs): xs's items ordered by their keys,
+# `xs.sort_by(p => p.k)` as `list_sorted_by(xs, keys)` (rust-harness:src/lowering/lambdas.rs): xs's items ordered by their keys,
 # the items themselves where keys is ø or ends early
 sorted_node_by(xs: Node, keys: Node): Node := {
 	if is_null(keys) { return sorted_node(xs) }

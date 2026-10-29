@@ -1,4 +1,4 @@
-# `parse(text)` is the code the text holds, as data (card pure-parse-call; Rust twin: src/lowering/words/parse_word.rs):
+# `parse(text)` is the code the text holds, as data (card pure-parse-call; Rust twin: rust-harness:src/lowering/words/parse_word.rs):
 # a constant text folds here into `as_code(data …)`, any other is parsed at run time by the host word parse_code.
 # `eval(text)` runs that code where it is written: `interpret(parse(text))`. A program's own `parse` stays its own, and
 # so does a method `x.parse(…)`.

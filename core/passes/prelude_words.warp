@@ -1,4 +1,4 @@
-# The definitions of a module's text a program reaches (Rust twin: src/modules/prelude_slices.rs), for the prelude and
+# The definitions of a module's text a program reaches (Rust twin: rust-harness:src/modules/prelude_slices.rs), for the prelude and
 # each standard module the program uses (`use case_tables`): a call of a word the program defines nowhere brings that
 # word's definition, and those it calls in turn, as Rust's resolve loads them. The text is cut into slices, one per
 # top-level `name(…) := …` or `name = …`; the reached ones are parsed after the program's own statements, so its
@@ -253,7 +253,7 @@ is_value_definition(statement: Node): bool := {
 	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 }
 
-# `alias keys = map_keys` of a module: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
+# `alias keys = map_keys` of a module: the word by each alias (Rust: rust-harness:src/modules/declarations.rs, an alias declares
 # nothing, its calls call the word)
 module_aliases(source: text): any := {
 	aliases = {}
@@ -356,11 +356,11 @@ definition_head_of(statement: Node): any := {
 }
 
 # the standard modules named after a builtin type word (Rust's type_modules: lib/<word>.warp for a word of
-# BUILTIN_TYPES in src/lowering/types/type_tests.rs), and the reals, whose `π` a program names bare
+# BUILTIN_TYPES in rust-harness:src/lowering/types/type_tests.rs), and the reals, whose `π` a program names bare
 type_modules = ["list", "map", "text", "time", "reals"]
 
 # `xs.flatten()`, `unique(xs)`: a program calling a word of exactly one type module, a word it defines nowhere and no
-# library word, uses that module, a `use` in front of it (Rust twin: src/modules/implicit_modules.rs
+# library word, uses that module, a `use` in front of it (Rust twin: rust-harness:src/modules/implicit_modules.rs
 # with_type_module_uses; a word of two such modules needs its `use`)
 with_type_module_uses(program: Node): Node := {
 	own = own_heads(program)

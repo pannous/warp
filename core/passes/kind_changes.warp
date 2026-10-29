@@ -1,4 +1,4 @@
-# Kind changes (P45, card pure-diagnostics; Rust twin: src/analyzer/checks/kind_changes.rs): a variable given values
+# Kind changes (P45, card pure-diagnostics; Rust twin: rust-harness:src/analyzer/checks/kind_changes.rs): a variable given values
 # of evidently different kinds that do not mix, `x = [1]; x = 5`, in the program or in one function body, is the
 # diagnosed fact `kind_change(x, List, Int)`. A first evident value fixes the kind (an Int widens to a Float); a value
 # of no evident kind ends the check of that variable.

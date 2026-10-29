@@ -12,7 +12,7 @@ node_is_error(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Error
 # a boxed text or character
 textual_node(n: Node): bool := not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Codepoint)
 # `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
-# masks (src/lowering/types/type_tests.rs BUILTIN_TYPES). `kinds` holds the bits (held_kind_bit) of the kinds passing
+# masks (rust-harness:src/lowering/types/type_tests.rs BUILTIN_TYPES). `kinds` holds the bits (held_kind_bit) of the kinds passing
 # the test, so it compares no texts (card pure-compile-speed: texts compared for the type tests of match patterns
 # took 80% of warp-self lowering runtime.warp)
 node_is_type(n: Node, type: text, kinds: int): bool := {

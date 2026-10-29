@@ -1,5 +1,5 @@
 // SQLite through its C library (card pure-c-imports): `use sqlite3` declares these functions for the program and brings
-// the warp words below. warp-host loads libsqlite3 (libsqlite3.so.0, libsqlite3.dylib) and calls them; nothing of
+// the warp words below. The native warp loads libsqlite3 (libsqlite3.so.0, libsqlite3.dylib) and calls them; nothing of
 // SQLite is in the host. The types are lib/c.warp's: a handle is a C pointer held as an id, an out-pointer is no
 // argument and its pointer is the call's result.
 //   db = sqlite3_open(":memory:")

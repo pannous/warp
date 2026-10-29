@@ -41,8 +41,8 @@ native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild"
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
 natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
-# what no host of these commands has yet: under the native warp, the commands it lacks (warp-rust has them)
-NOT_YET = " is not in the native warp yet: warp-rust "
+# what no host of these commands has yet: under the native warp, the commands it lacks
+NOT_YET = " is not in warp yet"
 
 command_name(entry: list): text := entry#1.split(" ")#1
 # the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
@@ -59,7 +59,7 @@ show_help() := {
 	host_commands = running_commands + native_commands
 	if natively_hosted() {
 		print "  the native warp itself: " + native_warp_commands.join(" ")
-		print "  not in the native warp yet (warp-rust has them): " + host_commands.filter(word => word not in native_warp_commands).join(" ")
+		print "  not in warp yet: " + host_commands.filter(word => word not in native_warp_commands).join(" ")
 	} else { print "  need the native warp: " + host_commands.join(" ") }
 }
 
@@ -74,7 +74,7 @@ padded(words: text, width: int): text := {
 version_text(library: text): text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
 
 # the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
-# src/cli/display.rs structure)
+# rust-harness:src/cli/display.rs structure)
 structure(n: Node): text := match n {
 	Key(left, op, right): "(" + (op as text) + " " + structure(left) + " " + structure(right) + ")"
 	List(items, bracket, separator): grouped_structure(items.map(structure), bracket as text, separator as text)
@@ -89,11 +89,11 @@ grouped_structure(items: list, bracket: text, separator: text): text := {
 }
 
 refuse_running(command: text) := {
-	if natively_hosted() { raise "warp " + command + NOT_YET + command + " runs it" }
+	if natively_hosted() { raise "warp " + command + NOT_YET }
 	raise "warp " + command + " runs the module it compiles, which plain WASI cannot (no instantiate in WASI preview 1): use " + NATIVE + " or `warp " + command + "`"
 }
 refuse_native(command: text) := {
-	if natively_hosted() { raise "warp " + command + NOT_YET + command + " runs it" }
+	if natively_hosted() { raise "warp " + command + NOT_YET }
 	raise "warp " + command + " needs " + NATIVE + "'s host: run `warp " + command + "`"
 }
 
@@ -167,7 +167,7 @@ UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component", "--wagi"]
 TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2"}
 DEFAULT_TRIM = "optimize"
 # what wasmtime runs; Binaryen's -all would add custom descriptors, whose exact references wasmtime refuses. The name
-# section stays (--debuginfo), so traps and results still name their functions. Twin: src/compiler/binaryen.rs, which
+# section stays (--debuginfo), so traps and results still name their functions. Twin: rust-harness:src/compiler/binaryen.rs, which
 # `warp rebuild` optimizes the compiler with
 WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
 BINARYEN_INSTALL = "brew install binaryen"
@@ -256,7 +256,7 @@ write_executable(module: text, executable: text) := {
 	print "wrote " + executable + " (" + size_of(executable) + " bytes, carrying ${carried_size})"
 }
 
-# Just enough of 64-bit Mach-O (crates/warp-runtime macho.rs): codesign wants every byte of the file inside a segment, so
+# Just enough of 64-bit Mach-O (rust-harness:crates/warp-runtime macho.rs): codesign wants every byte of the file inside a segment, so
 # the last one (__LINKEDIT) grows to the end of the file, over the program carried there
 MACHO_MAGIC = 0xfeedfacf
 MACHO_HEADER = 32

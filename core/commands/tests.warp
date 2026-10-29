@@ -1,4 +1,4 @@
-# `warp test` on the native warp (card native-warp-test; twin of src/compiler/pure_tests.rs): warp.wasm lists the test
+# `warp test` on the native warp (card native-warp-test; twin of rust-harness:src/compiler/pure_tests.rs): warp.wasm lists the test
 # cases of the folders' test files into a work folder (test_listed), the native warp (core/native/tests.warp) runs each
 # case's code, and the code of an expected value that is no data, as a program of its own in the test file's folder
 # with WARP_VALUE_AS_DATA set, then warp.wasm judges what they gave (test_verdicts). The test files: `*.pairs.warp`
@@ -164,7 +164,7 @@ is_data_expected(view: any): bool := {
 	form == "list" and view#2 == "[" and view[3 ..< #view].all(is_data_expected)
 }
 needs_run(expected: any): bool := not is_data_expected(expected) and not expects_error(expected)
-# two values equal as Rust's Node == has them (src/node/comparison.rs): lists item by item whatever their brackets and
+# two values equal as Rust's Node == has them (rust-harness:src/node/comparison.rs): lists item by item whatever their brackets and
 # separators, a text and a symbol of the same name, a character and a text it starts, ø and an empty value, yes and no
 # and the values they are true of
 same_value(a: any, b: any): bool := {

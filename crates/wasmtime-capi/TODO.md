@@ -1,0 +1,1 @@
+Get rid of our custom wasmtime build as soon as the dependency version wasmtime-50 is available on Homebrew and APT 

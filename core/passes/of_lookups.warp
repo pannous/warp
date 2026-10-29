@@ -1,4 +1,4 @@
-# One rule (card sugar-twins; Rust twin: src/lowering/collections/of_lookups.rs): `a of b` is `b.a`. `first 3 of xs`
+# One rule (card sugar-twins; Rust twin: rust-harness:src/lowering/collections/of_lookups.rs): `a of b` is `b.a`. `first 3 of xs`
 # is `xs.first(3)`, `a of b of c` is `c.b.a`, `name of p + 1` is `p.name + 1`; the object takes its qualifier
 # (`name of people where …`). Not lookups: a type phrase `list of int` and a spaced definition `square of a number = …`.
 # `type of x` is the call `type(x)`. `in` and `from` select like `of` after a selector word the program does not bind:

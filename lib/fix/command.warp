@@ -1,5 +1,5 @@
-# The command line of warp fix and warp beautify, in warp (card fix-in-lib), as src/cli/formatting.rs gives it for
-# beautify: `warp-rust run lib/fix/command.warp -- <fix|beautify> [check|yes] <file|folder|code>…`. Each warp file is
+# The command line of warp fix and warp beautify, in warp (card fix-in-lib), as rust-harness:src/cli/formatting.rs gives it for
+# beautify: `warp run lib/fix/command.warp -- <fix|beautify> [check|yes] <file|folder|code>…`. Each warp file is
 # fixed by fix.warp, shown as a diff and written after "apply? y/n" (yes: without asking, check: the changes listed,
 # exit 1 when there are some); code given instead of files is printed fixed. A golf folder and non-warp files are
 # skipped; the end of the input answers no.

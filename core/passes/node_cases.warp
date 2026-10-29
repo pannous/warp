@@ -1,4 +1,4 @@
-# A value of kind Node (card pure-node-values; Rust twin src/lowering/types/node_cases.rs): `Node` is the type of any
+# A value of kind Node (card pure-node-values; Rust twin rust-harness:src/lowering/types/node_cases.rs): `Node` is the type of any
 # node, so `n: Node`, `f(…): Node` and `x: Node = v` hold any value; `Node.Key` is the case Key; after the matches took
 # their patterns apart (node_matches.warp), `Key(a, op, b)` builds the key, `List(items, bracket, separator)` the list,
 # unless the program gives Key or List a meaning of its own. Op, Bracket and Separator are node.warp's enums whose cases
