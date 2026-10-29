@@ -91,7 +91,8 @@ void* c_function(char* name) { return native_function(name); }
 
 // The C calls of a module the driver runs (core/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
 // where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
-static const char* LIBRARY_PATHS[] = {"lib%s.dylib", "/opt/homebrew/lib/lib%s.dylib", "/usr/local/lib/lib%s.dylib", "lib%s.so", "lib%s.so.0"};
+// warp's own libraries (libwarp_sound) beside the executable first, as libwarp_wasmtime is
+static const char* LIBRARY_PATHS[] = {"@executable_path/lib%s.dylib", "$ORIGIN/lib%s.so", "lib%s.dylib","/opt/homebrew/lib/lib%s.dylib", "/usr/local/lib/lib%s.dylib", "lib%s.so", "lib%s.so.0"};
 static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
 // a library's function, NULL when the library has none of that name: never another library's
 void* library_function(char* library, char* name) {
