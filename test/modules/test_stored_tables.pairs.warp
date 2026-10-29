@@ -1,0 +1,8 @@
+# a class's instances kept as a table's rows (lib/storage.warp, card storage-words-unknown): code run without a file
+# keeps its tables in memory, a program beside it in <program>.database.sqlite
+'use storage; class U{name: text; age: int}; count(stored_table("u", U))'	0
+'use storage; class U{name: text; age: int}; stored_table("u", U); stored_add("u", U("Ann", 30)); stored_table("u", U)#1.name'	'Ann'
+'use storage; class U{name: text; age: int}; stored_table("u", U); stored_add("u", U("Ann", 30)); stored_add("u", U("Bo", 4)); count(stored_table("u", U))'	2
+'use storage; class U{n: int; tall: bool; h: float}; stored_table("u", U); stored_add("u", U(1, yes, 1.5)); stored_table("u", U)#1'	U{n: 1, tall: yes, h: 1.5}
+'use storage; class U{n: int}; stored_table("u", U); stored_add("u", U(1)); stored_add("u", U(2)); stored_save("u", [U(7)]); stored_table("u", U)'	[U{n: 7}]
+«use storage; class U{name: text}; stored_table("u", U); stored_add("u", U("it's'); drop table u")); stored_table("u", U)#1.name»	"it's'); drop table u"

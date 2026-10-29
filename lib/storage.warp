@@ -1,0 +1,81 @@
+// The standard module storage (card storage-words-unknown, notes/orm.md): a class's instances kept as the rows of a
+// table in <program>.database.sqlite beside the program (WARP_PROGRAM, as the native warp names it), else in memory.
+// Loaded whole and written whole for now: `users = stored_table("users", User)` gives the rows as instances, the table
+// made or widened from User's fields first; `stored_add("users", u)` inserts u; `stored_save("users", users)` makes the
+// list the table's rows. Waiting: the `stored users: [User]` form (computed-hole), write-through and lazy loading (card
+// storage-write-through).
+use os
+use sqlite3
+
+PROGRAM_VARIABLE = "WARP_PROGRAM"
+PROGRAM_EXTENSION = ".warp"
+DATABASE_EXTENSION = ".database.sqlite"
+IN_MEMORY = ":memory:"
+// the column of a field's value, by the type its default has
+COLUMN_TYPES = {bool: "INTEGER", int: "INTEGER", float: "REAL", text: "TEXT"}
+
+global storage_database = ø
+// the program's database, opened at its first use
+database() := {
+	if storage_database == ø {
+		program = env(PROGRAM_VARIABLE)
+		storage_database = sqlite3_open(if program == ø then IN_MEMORY else without_extension(program) + DATABASE_EXTENSION)
+	}
+	storage_database
+}
+
+without_extension(program: text) := if program.ends_with(PROGRAM_EXTENSION) then program[0 ..< count(program) - count(PROGRAM_EXTENSION)] else program
+// a name as SQL quotes it, whatever it is
+quoted_name(name: text) := "\"" + name.replace("\"", "\"\"") + "\""
+// the type of a field's default value: bool, int, float or text
+value_type(value: any) := if value is bool then "bool" else if value is int then "int" else if value is float then "float" else "text"
+
+// the table holding the class's instances, made, and widened by the fields it lacks, from the class's fields: the rows
+// it holds take a new field's default
+migrated(name: text, model: any) := {
+	blank = model()
+	fields = keys(blank)
+	types = values(blank).map(value_type)
+	columns = (1 to count(fields)).map(i => quoted_name(fields#i) + " " + COLUMN_TYPES[types#i])
+	run_query(database(), "create table if not exists " + quoted_name(name) + " (" + columns.join(", ") + ")")
+	present = rows(database(), "select name from pragma_table_info(" + "'" + name.replace("'", "''") + "')").map(row => row#1)
+	defaults = values(blank)
+	for i in 1 to count(fields) {
+		if fields#i not in present {
+			run_query(database(), "alter table " + quoted_name(name) + " add column " + columns#i)
+			run_bound(database(), "update " + quoted_name(name) + " set " + quoted_name(fields#i) + " = ?", [defaults#i])
+		}
+	}
+	fields
+}
+
+// the instance of the class a row holds, its fields set from the row's columns in the class's order
+instance_of(model: any, fields: list, row: list) := {
+	made = model()
+	for i in 1 to count(fields) {
+		value = row#i
+		made[fields#i] = if made[fields#i] is bool then value == 1 else value
+	}
+	made
+}
+
+// the table's rows as instances of the class
+stored_table(name: text, model: any) := {
+	fields = migrated(name, model)
+	rows(database(), "select " + fields.map(quoted_name).join(", ") + " from " + quoted_name(name)).map(row => instance_of(model, fields, row))
+}
+
+// the instance inserted as a row of the table; the instance
+stored_add(name: text, instance: any) := {
+	fields = keys(instance)
+	marks = fields.map(field => "?").join(", ")
+	run_bound(database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", values(instance))
+	instance
+}
+
+// the table's rows made those of the list, each instance a row in its order; the list
+stored_save(name: text, instances: list) := {
+	run_query(database(), "delete from " + quoted_name(name))
+	for instance in instances { stored_add(name, instance) }
+	instances
+}
