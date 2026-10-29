@@ -16,6 +16,8 @@ def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedC
 	if symbol == "+" and a.kind == ValueKind.List and b.kind != ValueKind.Node { return runtime_call("list_join", [a, TypedCode(ValueKind.List, vector_code([boxed(b)]))]) }
 	textual = is_textual(a.kind) or is_textual(b.kind)
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
+	# `d + 1 day`, `a - b` of a time: lib/time_arithmetic.warp's time_operation
+	if (a.kind == ValueKind.Time or b.kind == ValueKind.Time) and symbol in time_operators and module.functions.has(time_operation_word) { return time_operation_call(body, symbol, a, b) }
 	structured = a.kind == ValueKind.List or b.kind == ValueKind.List or a.kind == ValueKind.Node or b.kind == ValueKind.Node
 	# a boxed operand may be an instance whose class defines the operator: its dispatcher (class_methods.warp's
 	# `+·operator`, the operator a codepoint) calls the method, the right operand's for a commutative one (`5 * q`), or

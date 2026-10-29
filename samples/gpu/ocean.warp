@@ -98,8 +98,9 @@ wave_at(p, direction, length, amplitude) := {
 waves(p, count) := {
 	swell = wave_at(p, heading(swell_direction), swell_length, swell_height * 0.35)
 	surface = swell.xyz
-	length = 1.6 + wind_speed * 4.5
-	amplitude = 0.05 * wind_speed * choppiness
+	# floats: twelve exact divisions by 1.18 would leave 64 bits
+	length = (1.6 + wind_speed * 4.5) as float
+	amplitude = (0.05 * wind_speed * choppiness) as float
 	weights = amplitude
 	at = p
 	for wave in 0..count {

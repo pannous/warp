@@ -1,20 +1,18 @@
 # TODO move to lib/time  (card time-arithmetic-move)
 
-# Arithmetic on times and durations at run time (card time-arithmetic-warp; Rust twin:
-# rust-harness:src/wasm_emitter/time/time_arithmetic.rs, notes/dates_at_run_time.md): `d + 1 day`, `t - 90 minutes`, `a - b`,
-# `1 month + 2 days`, `3 * 1 hour`, as calendar.rs `Time::add`, `since`, `Duration::plus` and `times` do for constants.
-# A class library beside lib/units.warp, not a compiler pass nor a runtime part (card time-arithmetic-library): the
-# compiler never loads it, as Span's plus would send every `+` it compiles through operator dispatch. Its
-# time_form, day_nanos, hour_nanos and sign_of also clash with the runtime's times.warp and durations.warp. The calendar is plain integers here: a time is its form and position, a
-# duration its month, day and nanosecond counts. Wiring it to run-time time nodes (times.warp's time_form,
-# time_position, duration_months, duration_days, time_of, duration_of) waits for a bridge hook in node_add and the
-# emitter's node_operation for - and *; until then node_add, node_sub and node_mul call the Rust function.
-# Zoned times are refused here (their wall clock needs card time-zones-warp); the Rust function keeps them.
-# Names avoid the unit words (days, months, hours …), which the lowering reads as durations.
+# Arithmetic on times and durations at run time (card day-hour; Rust twin:
+# rust-harness:src/wasm_emitter/time/time_arithmetic.rs, notes/dates_at_run_time.md): `d + 1 day`, `a - b`,
+# `1 month + 2 days`, `3 * 1 day`, as calendar.rs `Time.add`, `since`, `Duration.plus` and `times` do for constants.
+# The emitter hands `+`, `-` and `*` of a run-time time to time_operation, a time as its form, position, months and
+# days (emitter/times.warp time_operation); a program writing a time literal brings this module
+# (passes/prelude_words.warp). The calendar is plain integers here: a time is its form and position, a duration its
+# month, day and nanosecond counts. Its names stay clear of the runtime's times.warp and durations.warp words and
+# of the unit words (days, months, hours …), which the lowering reads as durations.
+# Zoned times are refused here (their wall clock needs card time-zones-warp).
 use time
 
-day_nanos = 86400000000000
-hour_nanos = 3600000000000
+nanos_per_day = 86400000000000
+nanos_per_hour = 3600000000000
 months_per_year = 12
 shortest_month = 28
 longest_month = 31
@@ -30,12 +28,12 @@ lengths_vary = "cannot order durations that compare differently on different dat
 
 # the order of rust-harness:src/time/mod.rs TimeForm: a form's code is its index there
 enum TimeForm { Instant, Date, Local, Duration, Zoned, Clock }
-time_forms = [TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned, TimeForm::Clock]
-time_form(code: int): TimeForm := time_forms#(code + 1)
+time_forms = [TimeForm.Instant, TimeForm.Date, TimeForm.Local, TimeForm.Duration, TimeForm.Zoned, TimeForm.Clock]
+form_of(code: int): TimeForm := time_forms#(code + 1)
 
 # the operators a time takes at run time, the operator index of the Rust twin (TIME_OPERATORS)
 enum TimeOperator { Add, Sub, Mul }
-time_operators = [TimeOperator::Add, TimeOperator::Sub, TimeOperator::Mul]
+time_operators = [TimeOperator.Add, TimeOperator.Sub, TimeOperator.Mul]
 time_operator(code: int): TimeOperator := time_operators#(code + 1)
 
 class Span {
@@ -64,23 +62,23 @@ floor_split(value: int, divisor: int): list := {
 }
 
 # the day since 1970 and the nanoseconds into it of a date or local time (times.rs time_parts)
-day_and_nanos(moment: Moment): list := if moment.form == TimeForm::Date then [moment.position, 0] else floor_split(moment.position, day_nanos)
+day_and_nanos(moment: Moment): list := if moment.form == TimeForm.Date then [moment.position, 0] else floor_split(moment.position, nanos_per_day)
 
-# `moment + span`, the span already signed: calendar.rs `Time::add`. The month count first, then the days: 2024-01-31
+# `moment + span`, the span already signed: calendar.rs `Time.add`. The month count first, then the days: 2024-01-31
 # + 1 month is refused, + 1 month 2 days too (no 2024-02-31 to add the days to)
 shift_time(moment: Moment, span: Span): Moment := match moment.form {
-	TimeForm::Zoned => raise no_zones
-	TimeForm::Instant => {
+	TimeForm.Zoned => raise no_zones
+	TimeForm.Instant => {
 		if span.has_calendar_parts() { raise no_calendar }
 		Moment(moment.form, moment.position + span.nano_count)
 	}
 	# a time of day goes round the clock: 23:00 + 2 hours is 01:00
-	TimeForm::Clock => {
+	TimeForm.Clock => {
 		if span.has_calendar_parts() { raise clock_without_calendar }
-		Moment(moment.form, floor_split(moment.position + span.nano_count, day_nanos)#2)
+		Moment(moment.form, floor_split(moment.position + span.nano_count, nanos_per_day)#2)
 	}
 	_ => {
-		if moment.form == TimeForm::Date and span.nano_count != 0 { raise no_time_of_day }
+		if moment.form == TimeForm.Date and span.nano_count != 0 { raise no_time_of_day }
 		parts = day_and_nanos(moment)
 		civil = date_of(parts#1 * 86400000)
 		year_and_month = floor_split(civil.year * months_per_year + civil.month - 1 + span.month_count, months_per_year)
@@ -89,57 +87,54 @@ shift_time(moment: Moment, span: Span): Moment := match moment.form {
 		if span.month_count != 0 and civil.day > days_in_month(shifted_year, shifted_month) { raise no_such_day }
 		epoch_day = days_from_date(shifted_year, shifted_month, civil.day) + span.day_count
 		# a date's position is its day, a local time's the nanoseconds since 1970 as if UTC
-		if moment.form == TimeForm::Date then Moment(moment.form, epoch_day) else Moment(moment.form, epoch_day * day_nanos + parts#2 + span.nano_count)
+		if moment.form == TimeForm.Date then Moment(moment.form, epoch_day) else Moment(moment.form, epoch_day * nanos_per_day + parts#2 + span.nano_count)
 	}
 }
 
 # `a - b` of two times of one form: the days between dates, else an exact duration
 time_difference(a: Moment, b: Moment): Operand := {
 	if a.form != b.form { raise mismatched }
-	if a.form == TimeForm::Date { return Operand::Whole(a.position - b.position) }
-	Operand::Lasting(Span(0, 0, a.position - b.position))
+	if a.form == TimeForm.Date { return Whole(a.position - b.position) }
+	Lasting(Span(0, 0, a.position - b.position))
 }
 
-sign_of(op: TimeOperator): int := if op == TimeOperator::Add then 1 else -1
+operator_sign(op: TimeOperator): int := if op == TimeOperator.Add then 1 else -1
 
-# `3 * d` is `d * 3`, `d + t` is `t + d`
-time_arithmetic(a: Operand, b: Operand, op: TimeOperator): Operand := match a {
-	Whole(_) => {
-		if b is Whole { raise not_arithmetic }
-		time_arithmetic(b, a, op)
-	}
-	Lasting(span) => lasting_arithmetic(span, b, op)
-	At(time) => moment_arithmetic(time, b, op)
+# `3 * d` is `d * 3`, `d + t` is `t + d`. The cases are told apart by `is` and built bare (`Whole(2)`): a match on
+# an enum's cases with data and `Whole(2)` don't hold their data yet (card enum-case-data)
+time_arithmetic(a: Operand, b: Operand, op: TimeOperator): Operand := {
+	if a is Lasting { return lasting_arithmetic(a.span, b, op) }
+	if a is At { return moment_arithmetic(a.moment, b, op) }
+	if b is Whole { raise not_arithmetic }
+	time_arithmetic(b, a, op)
 }
 
-lasting_arithmetic(span: Span, b: Operand, op: TimeOperator): Operand := match b {
-	At(_) => {
-		if op != TimeOperator::Add { raise not_arithmetic }
-		time_arithmetic(b, Operand::Lasting(span), op)
+lasting_arithmetic(span: Span, b: Operand, op: TimeOperator): Operand := {
+	if b is At {
+		if op != TimeOperator.Add { raise not_arithmetic }
+		return time_arithmetic(b, Lasting(span), op)
 	}
-	Whole(count) => {
-		if op != TimeOperator::Mul { raise not_arithmetic }
-		Operand::Lasting(span.scaled(count))
+	if b is Whole {
+		if op != TimeOperator.Mul { raise not_arithmetic }
+		return Lasting(span.scaled(b.count))
 	}
-	Lasting(other) => {
-		if op == TimeOperator::Mul { raise not_arithmetic }
-		Operand::Lasting(span.plus(other.scaled(sign_of(op))))
-	}
+	if op == TimeOperator.Mul { raise not_arithmetic }
+	Lasting(span.plus(b.span.scaled(operator_sign(op))))
 }
 
-moment_arithmetic(moment: Moment, b: Operand, op: TimeOperator): Operand := match b {
-	Lasting(shift) => {
-		if op == TimeOperator::Mul { raise not_arithmetic }
-		Operand::At(shift_time(moment, shift.scaled(sign_of(op))))
+moment_arithmetic(moment: Moment, b: Operand, op: TimeOperator): Operand := {
+	if b is Lasting {
+		if op == TimeOperator.Mul { raise not_arithmetic }
+		return At(shift_time(moment, b.span.scaled(operator_sign(op))))
 	}
-	At(other) => {
-		if op != TimeOperator::Sub { raise not_arithmetic }
-		time_difference(moment, other)
+	if b is At {
+		if op != TimeOperator.Sub { raise not_arithmetic }
+		return time_difference(moment, b.moment)
 	}
-	_ => raise not_arithmetic
+	raise not_arithmetic
 }
 
-# -1, 0 or 1 as `a` is shorter, as long or longer than `b` on every date (Duration::compare); an order that depends
+# -1, 0 or 1 as `a` is shorter, as long or longer than `b` on every date (Duration.compare); an order that depends
 # on the date is an error. Daylight saving moves an exact part against the calendar part by at most an hour
 duration_order(a: Span, b: Span): int := {
 	difference = a.plus(b.scaled(-1))
@@ -156,8 +151,29 @@ duration_order(a: Span, b: Span): int := {
 		fewest = most
 		most = longer
 	}
-	dst = if difference.nano_count != 0 then hour_nanos else 0
-	if fewest * day_nanos + difference.nano_count - dst > 0 { return 1 }
-	if most * day_nanos + difference.nano_count + dst < 0 { return -1 }
+	dst = if difference.nano_count != 0 then nanos_per_hour else 0
+	if fewest * nanos_per_day + difference.nano_count - dst > 0 { return 1 }
+	if most * nanos_per_day + difference.nano_count + dst < 0 { return -1 }
 	raise lengths_vary
 }
+
+# the form codes of the runtime's time nodes (core/analysis/kinds.warp TimeFormCode, TimeInfoUnit): a duration's days
+# (32 bits) and months sit in its info above the form
+duration_form_code = 3
+info_days = 8
+info_day_range = 4294967296
+info_months = 34359738368
+# `a + b`, `a - b`, `a * b` (operator 0, 1, 2) of two run-time operands, each its form code (-1 a whole number, its
+# position the number), position, months and days: the time node or whole number they make
+time_operation(a_form: int, a_position: int, a_months: int, a_days: int, b_form: int, b_position: int, b_months: int, b_days: int, operator: int) := operand_value(time_arithmetic(operand_of(a_form, a_position, a_months, a_days), operand_of(b_form, b_position, b_months, b_days), time_operator(operator)))
+operand_of(form: int, position: int, months: int, days: int): Operand := {
+	if form < 0 { return Whole(position) }
+	if form == duration_form_code { return Lasting(Span(months, days, position)) }
+	At(Moment(form_of(form), position))
+}
+operand_value(operand: Operand) := {
+	if operand is Whole { return operand.count }
+	if operand is Lasting { return time_of(duration_form_code + (operand.span.day_count % info_day_range) * info_days + operand.span.month_count * info_months, operand.span.nano_count) }
+	time_of(form_code(operand.moment.form), operand.moment.position)
+}
+form_code(form: TimeForm): int := (0 to 5).filter(code => form_of(code) == form)#1

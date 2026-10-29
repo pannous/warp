@@ -126,3 +126,22 @@ def time_field(time: TypedCode, name: text): TypedCode {
 	position = unboxed(time.code, gc_type(gc.int_box))
 	call_values(module.functions[time_field_word], [TypedCode(ValueKind.Int, form), TypedCode(ValueKind.Int, position), number_value(0), number_value(time_fields[name])])
 }
+
+## time arithmetic (card day-hour): `d + 1 day`, `a - b`, `2 * 1 day` of a run-time time, by lib/time_arithmetic.warp's
+## time_operation, which a program writing a time literal and an operator brings (passes/prelude_words.warp)
+time_operators = {"+": 0, "-": 1, "*": 2}
+# the runtime words an operand's parts are read with: its form, position, months and days
+operand_parts = ["operand_form", "operand_position", "duration_months", "duration_days"]
+# each operand held in a local, read four times
+def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+	stored = []
+	parts = []
+	for operand in [a, b] {
+		place = fresh_local(body, ValueKind.Node)
+		stored += boxed(operand) + [op.local_set] + uleb(place)
+		held = TypedCode(ValueKind.Node, [op.local_get] + uleb(place))
+		parts += operand_parts.map(word => runtime_call(word, [held]))
+	}
+	result = call_values(module.functions[time_operation_word], parts + [number_value(time_operators[symbol])])
+	TypedCode(result.kind, stored + result.code)
+}
