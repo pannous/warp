@@ -96,9 +96,24 @@ route_fits(kind: any, segment: any) := {
 }
 
 // a route's answer (card web-route-header): `status 418` sets its status (the CGI header Status), `header "name" "value"`
-// adds a header; the next request starts without them. Through the host's response_header, lib/wagi.warp's in a WAGI build
-status(code: int) := response_header("Status", code)
-header(name: text, value: any) := response_header(name, value)
+// adds a header, kept for the answer lib/web.warp or a WAGI build (lib/wagi.warp) makes; a set Content-Type replaces
+// the answer's own. The next request starts without them (answer_reset)
+global answer_status = 200
+global answer_content_type = ""
+global answer_header_lines = ""
+status(code: int) := answer_header("Status", code)
+header(name: text, value: any) := answer_header(name, value)
+answer_header(name: any, value: any) := {
+	let field = lower(str(name))
+	if field == "status" { answer_status = value }
+	else if field == "content-type" { answer_content_type = str(value) }
+	else { answer_header_lines = answer_header_lines + "\n" + str(name) + ": " + str(value) }
+}
+answer_reset() := {
+	answer_status = 200
+	answer_content_type = ""
+	answer_header_lines = ""
+}
 
 // the program's routes answer requests (a server's, through the host's serve_routes) and, without a server (`warp run`,
 // the playground, WAGI), its page's forms: each route is a table entry (lowering/web/serve.rs route_entry); the one of
@@ -107,11 +122,6 @@ global route_table = []
 // `+=`, not route_table.add: a program's own function add (`server def add(a, b)`) would take that call
 route_add(method: text, path: any, answer: function) := {
 	route_table += [{method: method, path: path, answer: answer}]
-	ø
-}
-// the end of a program with routes: said on stderr until the native warp serves them (card native-server)
-routes_unserved() := {
-	warning("" + count(route_table) + " routes found: the native warp serves none of them yet (card native-server)")
 	ø
 }
 route_answer(request: any) := {

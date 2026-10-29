@@ -22,8 +22,9 @@ COMMAND_COUNT_AT = 16
 CODE_SIGNATURE = 29
 SIGNATURE_OFFSET_AT = 8
 STDERR = 2
-# access()'s R_OK and X_OK
+# access()'s R_OK, W_OK and X_OK
 READABLE = 4
+WRITABLE = 2
 EXECUTABLE = 1
 COLON = 58
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
@@ -55,6 +56,7 @@ RANDOM_SEED_WORD = 7
 SYSTEM_VALUE_WORD = 8
 STD_PURE_WORD = 9
 PAINT_WORD = 10
+KEY_HELD_WORD = 11
 
 wasm_config_new(): handle from "warp_wasmtime"
 wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -452,6 +454,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "system_value") { return SYSTEM_VALUE_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
+	if same_text(name, "key_held") { return KEY_HELD_WORD }
 	unanswered_word(name)
 }
 # a host word the driver doesn't answer (a library's: draw_shape, gpu_compute, …), as a word that names it when called:
@@ -589,7 +592,7 @@ file_ran(path: text, given: Arguments): nothing := {
 		complain(joined("no module at ", path))
 		exit(1)
 	}
-	run(module, given, joined(path, ".driver.cwasm"))
+	run(module, given, machine_code_file(path))
 }
 # the module warp.wasm wrote to `output` run, named `name`, with this executable's arguments from `first` on
 written_run(output: text, name: text, first: int): nothing := {
@@ -627,7 +630,33 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 machine_code_kept(path: text): nothing := {
 	trap = allocate(8)
 	long_at(trap).value = 0
-	compiled_module(wasm_engine_new_with_config(warp_config(no)), read_file(path), joined(path, ".driver.cwasm"), trap)
+	compiled_module(wasm_engine_new_with_config(warp_config(no)), read_file(path), machine_code_file(path), trap)
+}
+# where a module's machine code is kept: beside it, else (an installed lib/ this user can't write) in the user's cache
+# folder under the module's whole path; "" when neither can be written: compiled anew each run, never failing
+machine_code_file(path: text): text := {
+	if access(c_string(folder_of(path)), WRITABLE) == 0 { return joined(path, ".driver.cwasm") }
+	cache = cache_folder()
+	if cache.length == 0 { return "" }
+	joined(joined(cache, flattened(resolved_path(path))), ".driver.cwasm")
+}
+# $XDG_CACHE_HOME/warp, else ~/Library/Caches/warp (macOS), else ~/.cache/warp, made when missing, ending in a slash;
+# "" when it can't be written
+cache_folder(): text := {
+	base = getenv("XDG_CACHE_HOME")
+	home = getenv("HOME")
+	if base.length == 0 and access(c_string(joined(home, "/Library/Caches")), WRITABLE) == 0 { base = joined(home, "/Library/Caches") }
+	if base.length == 0 { base = joined(home, "/.cache") }
+	mkdir(c_string(base), FOLDER_MODE)
+	folder = joined(base, "/warp")
+	mkdir(c_string(folder), FOLDER_MODE)
+	if access(c_string(folder), WRITABLE) == 0 then joined(folder, "/") else ""
+}
+# the path as one file name, its slashes underscores
+flattened(path: text): text := {
+	name = joined(path, "")
+	for i in 0..name.length { if byte_at(name.address + i).value == SLASH { byte_at(name.address + i).value = UNDERSCORE } }
+	name
 }
 # the text without its trailing newlines
 trimmed_end(t: text): text := {
@@ -676,6 +705,8 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == RANDOM_WORD { return float_result(drand48(), results) }
 	if word == RANDOM_BELOW_WORD { return int_result((drand48() * (number as f64)) as i64, results) }
 	if word == RANDOM_SEED_WORD { return srand48(number) }
+	# no window, no key held
+	if word == KEY_HELD_WORD { return int_result(0, results) }
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
@@ -765,10 +796,13 @@ system_value(name: text): i64 := {
 	if same_text(name, "time of day") { return time_of_day() }
 	if same_text(name, "view_width") { return terminal_extent(0, "COLUMNS", 80) }
 	if same_text(name, "view_height") { return terminal_extent(1, "LINES", 24) }
+	if windowless(name) { return 0 }
 	complain(joined(joined("the system value ", name), " is not in the native warp yet (warp-rust has it)"))
 	exit(1)
 	0
 }
+# what a window would tell, without one: no window open, no pointer, no key, no GPU drawing
+windowless(name: text): bool := same_text(name, "window_open") or same_text(name, "gpu_drawing") or same_text(name, "gpu_paints") or same_text(name, "key_down") or same_text(name, "key code held") or same_text(name, "mouse_x") or same_text(name, "mouse_y") or same_text(name, "mouse_down") or same_text(name, "mouse_wheel")
 # outside a window the view is the terminal: its columns (rows), else the variable's, else the default
 terminal_extent(rows: i32, variable: text, default: i64): i64 := {
 	measured = terminal_size(rows)
@@ -1331,6 +1365,8 @@ PARAMETER_TEXT = 5
 PARAMETER_HANDLE = 6
 PARAMETER_OUT = 7
 PARAMETER_TEXTS = 8
+PARAMETER_BYTES = 9
+PARAMETER_LENGTH = 10
 REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
@@ -1353,6 +1389,8 @@ parameter_kind(name: text): i32 := {
 	if same_text(name, "handle") { return PARAMETER_HANDLE }
 	if same_text(name, "out") { return PARAMETER_OUT }
 	if same_text(name, "texts") { return PARAMETER_TEXTS }
+	if same_text(name, "bytes") { return PARAMETER_BYTES }
+	if same_text(name, "length") { return PARAMETER_LENGTH }
 	0
 }
 register_of(name: text): i32 := {
@@ -1410,8 +1448,9 @@ failed_call(message: text): nothing := {
 	exit(1)
 }
 
-# the call of a C function with the module's values: numbers as they are, a text NUL-terminated, a handle id its C
-# pointer, the first out-pointer a slot that becomes the result; its result crossed back the same way
+# the call of a C function with the module's values: numbers as they are, a text NUL-terminated, bytes copied and their
+# count the length after them, a handle id its C pointer, the first out-pointer a slot that becomes the result; its
+# result crossed back the same way
 c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
 	name = text_from(c.name, c.name_length)
 	integers = zeroed(REGISTERS * 8)
@@ -1421,6 +1460,7 @@ c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: p
 	float_count = 0
 	passed = 0
 	outs = 0
+	bytes_length = 0
 	for p in 0..c.count {
 		kind = byte_at(c.kinds + p).value as i32
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
@@ -1428,10 +1468,12 @@ c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: p
 			long_at(floats + float_count * 8).value = if kind == PARAMETER_F64 then long_at(value).value else word_at(value).value as i64
 			float_count = float_count + 1
 		} else {
-			long_at(integers + integer_count * 8).value = c_argument(caller, context, name, kind, value, if outs == 0 then out else 0)
+			long_at(integers + integer_count * 8).value = if kind == PARAMETER_LENGTH then bytes_length else c_argument(caller, context, name, kind, value, if outs == 0 then out else 0)
 			integer_count = integer_count + 1
 		}
-		if kind == PARAMETER_OUT { outs = outs + 1 } else { passed = passed + 1 }
+		if kind == PARAMETER_BYTES { bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET) }
+		if kind == PARAMETER_OUT { outs = outs + 1 }
+		if kind != PARAMETER_OUT and kind != PARAMETER_LENGTH { passed = passed + 1 }
 	}
 	returned = native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
 	if (c.failure == FAILURE_NOT_NULL and returned != 0) or (c.failure == FAILURE_FALSE and returned % 256 == 0) { failed_call(joined(joined(name, " failed, C result "), text_of(returned))) }
@@ -1451,10 +1493,20 @@ c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointe
 	if kind == PARAMETER_TEXT { return native_pointer(c_string(shown(caller, context, value - VALUE_OFFSET))) }
 	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
 	if kind == PARAMETER_TEXTS { return native_pointer(c_strings(caller, context, value - VALUE_OFFSET)) }
+	if kind == PARAMETER_BYTES { return native_pointer(c_bytes(caller, context, value - VALUE_OFFSET)) }
 	id = word_at(value).value as i32
 	if not handle_known(id) { failed_call(joined(joined(name, ": no handle "), text_of(id))) }
 	handle_pointer(id)
 }
+# a text's bytes or a list of 0 to 255 of the module, copied into the arena, and how many they are
+c_bytes(caller: handle, context: handle, given: pointer): pointer := {
+	if guest_flag(caller, context, "is_textual", given) { return c_string(shown(caller, context, given)) }
+	count = guest_number(caller, context, "item_count", given)
+	bytes = allocate(count as i32)
+	for i in 0..count { byte_at(bytes + i).value = (long_at(indexed(caller, context, "int_item_at", given, i + 1) + VALUE_OFFSET).value % 256) as u8 }
+	bytes
+}
+c_bytes_length(caller: handle, context: handle, given: pointer): i64 := if guest_flag(caller, context, "is_textual", given) then shown(caller, context, given).length as i64 else guest_number(caller, context, "item_count", given)
 # a list of texts of the module as a NULL-terminated array of C strings (argv), the strings and it in the arena
 c_strings(caller: handle, context: handle, list: pointer): pointer := {
 	counted = allocate(VALUE_BYTES)

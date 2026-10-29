@@ -190,8 +190,10 @@ def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	type = core_type_words[spec]
 	value = expression_code(body, subject)
 	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
-	TypedCode(ValueKind.Bool, [op.i32_const, if value.kind in covered_kinds[type] then 1 else 0])
+	TypedCode(ValueKind.Bool, [op.i32_const, if covered_kinds[type].any(kind => same_kind(kind, value.kind)) then 1 else 0])
 }
+# (typed, so a kind from a table and one a cast spelled, `2 as float`, compare as kinds)
+same_kind(a: ValueKind, b: ValueKind): bool := a == b
 # `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline, as
 # Rust's kind masks; a type value (`int is number`) and `is code` ask runtime node_is_type
 def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {

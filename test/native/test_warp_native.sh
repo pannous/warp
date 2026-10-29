@@ -81,9 +81,18 @@ if [ -x "$stage/warp" ]; then
 	painting=$(native 'paint([0, 1, 0xFF00FF00, 0], 2, 2)')
 	check "paint, a PNG" "${painting%%:*} $(file -b "${painting#*: }")" "painted 2×2 PNG image data, 2 x 2, 8-bit/color RGB, non-interlaced"
 	check "paint of a shader" "$(native 'paint("fn x", 2, 2, ø)')" "paint of a shader: the native warp has no GPU yet (warp-rust renders it)"
+	check "exit() ends the run well" "$(native $'print 1\nexit()\nprint 2'; echo $?)" "1
+0"
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
 	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
+	# an installed lib/ this user can't write: the machine code goes to the user's cache folder, a file only read opens
+	(cp -Rc "$library" "$stage/readonly" 2>/dev/null || cp -R "$library" "$stage/readonly") && rm -f "$stage"/readonly/*.cwasm* && chmod a-w "$stage/readonly"
+	check "a read-only lib/, its machine code in the user's cache" "$(XDG_CACHE_HOME="$stage/cache" WARP_LIB="$stage/readonly" native '6 * 7'; ls "$stage/cache/warp" | grep -c 'cwasm$')" "42
+1"
+	chmod u+w "$stage/readonly"
+	printf hi >"$stage/kept.txt" && chmod a-w "$stage/kept.txt"
+	check "a read-only file read" "$(native "use file; read('$stage/kept.txt')")" hi
 	check "a built executable after the next install" "$(cd "$stage/install/app" && WARP_LIB="$stage/install/bin/lib" ./warp '6 * 7' 2>&1)" 42
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
