@@ -55,7 +55,16 @@ signal_listen_word = "signal_listen"
 signal_old = "signal·old"
 # `whenever x > y {…}`: a listener of each name the condition reads, running the block when the write made the
 # condition hold, it holding not with the name's old value: `if value > y and not old > y {…}` for x
-whenever_listens(condition: Node, body: Node): Node := separated(bracketed(symbol_words(condition).map(name => call_of(signal_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(renamed(condition, name, symbol("value")), renamed(condition, name, symbol("old")), body))])), "("), ";")
+whenever_listens(condition: Node, body: Node): Node := condition_listens(condition, body, [])
+# `once x == 5 {…}`: as whenever, the block running the first time only, its listeners sharing a flag named by the condition
+once_listens(condition: Node, body: Node): Node := condition_listens(condition, body, [symbol("signal·fired " + spelled(condition))])
+condition_listens(condition: Node, body: Node, flags: list): Node := {
+	unfired = flags.map(flag => Key(ø, Op.Not, Key(flag, Op.Hash, 1)))
+	block = if #flags == 0 then body else List(flags.map(flag => Key(Key(flag, Op.Hash, 1), Op.Assign, Node.True)) + [body], Bracket.Curly, Separator.Semicolon)
+	declared = flags.map(flag => Key(flag, Op.Assign, List([Node.False], Bracket.Square, Separator.Comma)))
+	listens = symbol_words(condition).map(name => call_of(signal_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
+	separated(bracketed(declared + listens, "("), ";")
+}
 became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
 # the program with each write of a watched name notifying its listeners (signal_notify), `x = 3` as
 # `(signal·old = x; x = 3; signal_notify("x", x, signal·old))`; a main statement's only once a listener of the name came
@@ -152,4 +161,4 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, misnamed: misnamed}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, misnamed: misnamed}
