@@ -20,8 +20,11 @@ rewrite ($xs includes $x) => collection_contains($xs, $x)
 rewrite count(collection_contains($xs, $x)) => count_in($xs, $x)
 # `x.upper!`, `sort xs!` (the parser's unwrap of a marked call): a function's bang assigns its result back to the
 # variable it was called on, as `upper(x)!` does (test/operators/test_mutating_bang.pairs.warp)
+# (a printing word prints the forced value and keeps the variable: `print friends!`, test_print_bang.pairs.warp)
 rewrite unwrap($x.$m) => $x = $x.$m where $x is value and $m is function
-rewrite unwrap(($f $x)) => $x = $f($x) where $x is value and $f is function
+rewrite unwrap($x.$m()) => $x = $x.$m() where $x is value and $m is function
+rewrite $f unwrap($x) => $x = $f($x) where $x is value and $f is function and not $f in [print, puts]
+rewrite $f(unwrap($x)) => $x = $f($x) where $x is value and $f is function and not $f in [print, puts]
 # `t.replace "tea" with: "coffee"`: a member followed by arguments, unbracketed, is its call
 rewrite $x.$f $b $a... => $x.$f($b, $a...) where $f is symbol and $x is not enum and $b is not block
 
