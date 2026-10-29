@@ -74,7 +74,8 @@ def exported_shown_at(): any {
 }
 # trap_message(code): the sentence of the runtime error a run failed in, or of the engine's trap of that code (-1 for
 # none), at its place in the program's file (runtime/error_sentences.warp), packed as shown_at's: what every host
-# prints of a failed run. The compiler's own source is no place of the user's program: its refusals say theirs
+# prints of a failed run, exported by a program that can raise (prebuilt.warp can_raise); without it a host says the
+# engine's trap. The compiler's own source is no place of the user's program: its refusals say theirs
 def exported_trap_message() {
 	f = exported_function("trap_message", [ValueKind.Int], ValueKind.Int)
 	position = if is_compiler_source(module.program_file) then [op.i64_const, 0] else [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1) + [op.i64_extend_i32_s]

@@ -80,6 +80,9 @@ def shown_result(result: ValueKind): any {
 }
 # main's value as given, unboxed when main knows its kind to be one shown by that kind's own word
 def unboxed_to_show(given: TypedCode, result: ValueKind): TypedCode {
+	# main's text is a Text node: its bytes taken unchecked, as text_of_node's check can raise (a program that cannot
+	# keeps no error sentences, prebuilt.warp can_raise)
+	if result == ValueKind.Text { return TypedCode(result, payload(given.code, gc_type(gc.text))) }
 	if result in kinds_shown_unboxed { return TypedCode(result, converted(given, result)) }
 	given
 }
