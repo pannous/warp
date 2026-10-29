@@ -104,8 +104,10 @@ writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign
 
 # `count(2 in xs)`: a yes/no question is no count, the compile refused with the count it means
 counted_question(items: Node, item: Node): Node := {
-	throw "count(${item} in ${items}) counts a yes/no question: did you mean ${items}.count(${item})?"
+	throw "count(${as_code(item)} in ${as_code(items)}) counts a yes/no question: did you mean ${as_code(items)}.count(${as_code(item)})?"
 }
+# a value as code to paste: a text in its quotes
+as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
 # the words by name, as a rule's `where` calls them
 rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled}
