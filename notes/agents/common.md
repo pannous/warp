@@ -39,6 +39,9 @@ before asking a question). After a context swap, this file and your role file be
   who takes core changes to the user via the Interviewer). So does any new syntax, whatever its size: a rewrite-engine
   condition or form, a parser branch, a keyword or a foreign spelling (two lines are no exemption). Small bug fixes of
   existing behaviour need no question.
+- Core changes (parser, passes, analysis, emitter, runtime, native) need the user's OK through the Interviewer BEFORE
+  the work, not after; the Supervisor's OK of a shape is not that OK. A feature that only works with core changes
+  (time features in the emitter, 2026-10-29) waits for the question first (user STOP 2026-10-29).
 - Layout: core/ = compiler, runtime, sugar, extensions; lib/ = plain modules programs import. Folder names never join
   two topics with an underscore. core/ is the real folder; lib/compiler links to ../core for a transition
   (the compiler is still found as <lib>/compiler). New syntax goes by layer (notes/layers.md): table row or declaration first, else a
