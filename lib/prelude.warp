@@ -697,13 +697,15 @@ converted_part(part: text, type_word: any): any := {
 	part_conversions[name](part)
 }
 is_digits(t: text): bool := t != "" and t.all(c => c >= '0' and c <= '9')
-int_part(t: text): any := if is_digits(t) then int(t) else ø
+# a number's digits after its leading minus, if any: `-3`, `-2.5`
+unsigned(t: text): text := if starts_with(t, "-") then slice(t, 1) else t
+int_part(t: text): any := if is_digits(unsigned(t)) then int(t) else ø
 float_part(t: text): any := {
-	pieces = t.split(".")
+	pieces = unsigned(t).split(".")
 	if #pieces > 2 or not is_digits(pieces#1) or (#pieces == 2 and not is_digits(pieces#2)) { return ø }
 	float(t)
 }
-number_part(t: text): any := if is_digits(t) then int(t) else float_part(t)
+number_part(t: text): any := if is_digits(unsigned(t)) then int(t) else float_part(t)
 text_part(t: text): any := t
 // the name without its mark: `$a` → a, `*rest` → rest
 unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
