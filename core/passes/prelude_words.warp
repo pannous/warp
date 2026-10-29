@@ -179,8 +179,8 @@ lowering_words(program: Node): list := {
 
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
-# loader places them: a used module's in front of the program, the prelude's after it. The words the program and each
-# slice will say once the sugar rewrote them are reached too (sugar_words_of)
+# loader places them: a used module's in front of the program, the prelude's after it. The words the program (a used
+# module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of)
 with_reached(program: Node, module: text, in_front: bool, files: list = []): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
@@ -218,7 +218,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 				else if slice#2 in declared { slice_node = declared_only(slice_node) }
 				slice_node = with_own_locals(slice_node, program_globals)
 				reached[slice#2] = statements_in(slice_node)
-				wanted += words_within(slice_node) + lowering_words(slice_node) + sugar_words_of(slice_node)
+				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
 	}
