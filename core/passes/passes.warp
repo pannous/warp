@@ -54,7 +54,6 @@ passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 #   data_items library_calls sugar         data items, library calls, lib/sugar's main rules (fallbacks, places)
 #   lambdas loop_heads iteration_sugar     lambdas, `for` heads, the `for` loops lowered onto `while`
 #   late_sugar list_methods number_keys    late rules, `xs.add(x)`-style methods, number keys
-#   reached_only                           the brought functions nothing calls dropped
 
 # the pass that owns each form the emitter may refuse: a refusal of that form names it, so a form that reaches the
 # emitter unlowered says which pass did not claim it
@@ -70,7 +69,7 @@ owned_refusal(refusal: text, form: text?): text := {
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside rust-harness:src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys, reached_only]
+pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: Node): Node := {
@@ -83,8 +82,10 @@ lowered_node(n: Node): Node := {
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
-	lowered_node(with_used(plain_node(parsed(rules_ended(source))), source, folder, prelude))
+	lowered_reached(plain_node(parsed(rules_ended(source))), source, folder, prelude)
 }
+# the program with the definitions it reaches, after every pure pass, those it doesn't call after all dropped
+lowered_reached(program: Node, source: text, folder: text, prelude: text): Node := called_only(lowered_node(with_used(program, source, folder, prelude)))
 # the sugar rules the program at hand keeps (with_used), of each sugar step
 global kept_first_sugar = []
 global kept_sugar = []
@@ -136,7 +137,7 @@ checked_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
 	program = plain_node(source_checks(parsed(rules_ended(source)), prelude))
 	own_names = statements_in(program).map(declared_name)
-	main_globals(kind_changes(lowered_node(with_used(program, source, folder, prelude))), own_names)
+	main_globals(kind_changes(lowered_reached(program, source, folder, prelude)), own_names)
 }
 
 # [the view of the checked program, what its checks diagnosed: [level, message, fix] each]
