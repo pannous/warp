@@ -141,6 +141,8 @@ global rewrite_depth = 0
 global rule_scope = {}
 # function → the type of its first parameter, of the program being rewritten (`where $f takes value`)
 global first_parameter_types = {}
+# function → the signature of each of its definitions, of the program being rewritten (`where $f takes number`)
+global rule_signatures = {}
 # the names that hold a map, of the program being rewritten (`where $m is map`)
 global rule_maps = {}
 # name → the enum whose cases it holds, of the program being rewritten (`where $c is case of $e`)
@@ -189,6 +191,7 @@ rewritten_program(program: Node, source: text): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_signatures = definitions_signatures(program)
 	rule_enums = enums_in(program, {})
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
@@ -235,6 +238,7 @@ sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_signatures = definitions_signatures(program)
 	rule_case_holders = case_holders_of(program)
 	rule_instances = instance_names_of(program)
 	rule_program = program
@@ -669,12 +673,23 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
 	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
+	if wanted == number_word { return takes_only_numbers(word, matched_arity(code)) }
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
 	if typed == ø or typed == "" { typed = conversion_type(word) }
 	if typed == ø { return no }
 	if wanted == value_word { return not (typed in yes_no_types) }
-	if wanted == number_word then typed in numeric_parameter_types else typed == wanted
+	typed == wanted
 }
+# every definition the word has, the program's, else the library's, that a call of that many arguments fits (ø: any)
+# takes numbers only, so none takes a list as it is: `min(xs: list)` beside `min(a: number, b: number, more...)`, and
+# `gc_code(op: int, immediates: list)`, never broadcast; `max(v, 0.5)` does
+takes_only_numbers(word: text, arity: int?): bool := {
+	defined = if rule_signatures.has(word) then rule_signatures[word] else if word_lines().has(word) then word_lines()[word].map(line => line.signature) else []
+	fitting = defined.filter(signature => arity == ø or takes(signature, arity))
+	#fitting > 0 and fitting.all(signature => #signature.parameters > 0 and signature.parameters.filter(parameter => not parameter.rest).all(parameter => parameter.type_name in numeric_parameter_types))
+}
+# how many arguments the call the rule matched passes the word, ø when it matched no call of it
+matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 
 # what a type word converts, unless the program binds it: a value of another type (`int 3.7 == 3` is int(3.7) == 3),
 # yes or no for the yes/no type's own (`bool x == y` stays bool(x == y)), decision function-words-consume
@@ -688,6 +703,18 @@ library_first_type(word: text): text? := {
 	if #parameters == 0 then ø else parameters#1.type_name
 }
 
+# `f(x: int, y) := …`: f → the signature of each definition of the program
+definitions_signatures(program: Node): map := {
+	signatures = {}
+	for n in nodes_in(program) {
+		call = definition_call(n)
+		if call != ø {
+			word = name_of(call#1)
+			signatures[word] = (if signatures.has(word) then signatures[word] else []) + [signature_of(items_of(call))]
+		}
+	}
+	signatures
+}
 # `f(x: int) := …`: f → "int", for each definition of the program with a typed first parameter
 typed_first_parameters(program: Node): map := {
 	types = {}
