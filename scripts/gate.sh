@@ -1,7 +1,7 @@
 #!/bin/bash
 # The tiered gate of a tree (a merged batch, a branch, main), pure pipeline first, stopping at the first red tier:
 #   tier 0  rebuild pure (warp.wasm, scripts/rebuild.sh: a build of the same inputs is reused) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
-#   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
+#   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout (else its first error line) against <name>.expected
 #           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm once it compiles itself, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 # usage: scripts/gate.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
@@ -80,10 +80,11 @@ if wants 1; then
 		name=${probe%.warp}; want=$(cat "$name.expected" 2>/dev/null) || { echo "FAIL ${name##*/}: no $name.expected"; ok=0; continue; }
 		for lane in $lanes; do
 			timeout 120 "$warp" $lane "$probe" > "$logs/probe.out" 2> "$logs/probe.err"
+			# what the probe printed, else (a refused program: no output, exit 1) its first error line
 			got=$(cat "$logs/probe.out")
+			[[ -n $got ]] || got=$(said "$logs/probe.err")
 			if [[ $got == "$want" ]]; then echo "ok   ${name##*/} ($lane)"
 			else
-				[[ -n $got ]] || got=$(said "$logs/probe.err")
 				echo "FAIL ${name##*/} ($lane): got ${got//$'\n'/⏎} want ${want//$'\n'/⏎}"; ok=0
 			fi
 		done
