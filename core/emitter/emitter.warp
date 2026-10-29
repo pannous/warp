@@ -1208,6 +1208,9 @@ def bitwise(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	logical_code(body, bit_words[symbol], a, b)
 }
 def logical_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+	# `c and print x`: a statement's nothing beside a value is ø, a value known only at run time
+	if a.kind == no_kind { a = TypedCode(ValueKind.Node, boxed(a)) }
+	if b.kind == no_kind { b = TypedCode(ValueKind.Node, boxed(b)) }
 	# a value whose kind the first reading of a recursive function does not know yet (pending) beside a yes/no is one
 	yes_no = kind => kind == ValueKind.Bool or kind == pending
 	if yes_no(a.kind) and yes_no(b.kind) {

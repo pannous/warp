@@ -371,6 +371,8 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 // a list with the other side, two lists paired by index, two numbers plainly; `combined` is `(l, r) => l op r`. Both
 // sides are `any`: inferred from the body, one call with a number made it a list
 element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
+// f of a value that may be a list (lib/sugar/broadcasting.warp): of each item of a list, else of the value itself
+each_any(value: any, f) := if value is list then [f(item) for item in value] else f(value)
 // a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v

@@ -41,8 +41,10 @@ def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if numeric and arity == 1 and not (arguments#1 is symbol) { return expression_code(body, Key(arguments#1, Op.Mul, arguments#2)) }
 	call_values(dispatcher(arity), [callee] + arguments[1..].map(a => expression_code(body, a)))
 }
+# the name of a dispatcher's argument i, from 0
+dispatcher_argument(i: int): text := "argument" + (i + 1)
 dispatcher(arity: int): any := {
-	made_late(closure_call_prefix + arity, ValueKind.Node, ["closure"] + range_list(arity).map(i => "argument" + (i + 1)))
+	made_late(closure_call_prefix + arity, ValueKind.Node, ["closure"] + range_list(arity).map(dispatcher_argument))
 }
 # a function over closures whose code is written once the program's closures are known, made at its first call
 made_late(name: text, result: ValueKind, parameters: list): any := {
@@ -89,6 +91,21 @@ late_code(f: Function): int := {
 	if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name == instance_place_name { instance_place_code(f) } else if f.name == is_class_instance_name { is_class_instance_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
 	0
 }
+# a class value called, `make(c, xs) := c(xs#1, xs#2)` of `make(P, [3, "a"])`: the instance `P(3, "a")` makes, for each
+# class of at least that many fields, built from the dispatcher's arguments as positional_instance builds a call's
+def class_value_calls(f: Function, arity: int): list {
+	scope = new_body(f)
+	# a runtime hook's signature names no parameters: its locals in their order, the closure, then the arguments
+	parameters = ["closure"] + range_list(arity).map(dispatcher_argument)
+	for name in parameters { if name not in scope.names { local_index(scope, name, ValueKind.Node) } }
+	code = []
+	for class_name in module.classes.keys.filter(name => #module.classes[name].keys >= arity) {
+		named = runtime_call("names_class", [TypedCode(ValueKind.Node, [op.local_get, 0]), text_value_of(class_name)])
+		code += named.code + [op.if, no_value] + boxed(positional_instance(scope, class_name, parameters[1 ..].map(name => symbol(name)))) + [op.return, op.end]
+	}
+	f.locals = scope.kinds[#parameters ..]
+	code
+}
 # a value called that is no closure fails in not_a_function; the closure's number picks, in one br_table jump, the
 # target's call on the captured values and the arguments (a test per closure made every call scan them all); a closure
 # of another arity fails in wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)
@@ -98,6 +115,7 @@ dispatcher_code(f: Function): any := {
 	number = unboxed(closure_item(closure, 0).code, gc_type(gc.int_box))
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
+	code += class_value_calls(f, arity)
 	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
 	# the arms in closure order, each the block its br_table label leaves; the outermost block (label #arms) fails
 	arms = []
