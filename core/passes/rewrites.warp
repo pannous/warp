@@ -102,7 +102,7 @@ extension_module_names = [
 	"compiler/extensions/tuples"
 	"compiler/extensions/safe_navigation"
 ]
-first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words", "sugar/dot_calls"]
+first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/arms", "sugar/heads", "sugar/test_words", "sugar/dot_calls"]
 # every other file of lib/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
 sugar_folder = "sugar/"
 placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names

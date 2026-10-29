@@ -18,11 +18,13 @@ class Real {
 	-(other) := if alike(other) then real_of(coefficient - other.coefficient, pi_power, radicand) else float() - real_float(other)
 	alike(other) := other is Real and other.pi_power == pi_power and other.radicand == radicand
 	compare(other) := float() - real_float(other)
-	# √(c·π^p) of a rational c = n/d is √(n·d)/d · π^(p/2); of a root under it, a fourth root, or a float the float's
+	# √(c·π^p) of a rational c = n/d is √(n·d)/d · π^(p/2); of a root under it, a fourth root, a float or a fraction of
+	# a denominator past largest_shown_denominator the float's
 	root() := {
 		if radicand != 1 or coefficient is float or coefficient < 0 { return √float() }
 		denominator = denominator_of(coefficient)
-		real_of(1 / denominator, pi_power / 2, coefficient * denominator * denominator)
+		under = coefficient * denominator * denominator
+		if under is int then real_of(1 / denominator, pi_power / 2, under) else √float()
 	}
 	text() := real_text(coefficient, pi_power, radicand)
 	show() := real_text(coefficient, pi_power, radicand)
@@ -32,9 +34,10 @@ class Real {
 # first, so `3 / π` is 3/π exact (decision as-promotes)
 n: number as Real := Real(n, 0, 1)
 # the real c·√r·π^p at its simplest: the square factors of r out under the root, a plain number where no π or root is
-# left, a float of a float coefficient
-real_of(coefficient: number, pi_power: number, radicand: int) := {
+# left, a float of a float coefficient or a radicand past largest_exact_radicand
+real_of(coefficient: number, pi_power: number, radicand: number) := {
 	if coefficient == 0 { return 0 }
+	if radicand > largest_exact_radicand { return coefficient * √(radicand as float) * float_pi ^ pi_power }
 	parts = square_parts(radicand)
 	coefficient = coefficient * parts#1
 	if parts#2 == 1 and pi_power == 0 { return coefficient }
@@ -42,6 +45,8 @@ real_of(coefficient: number, pi_power: number, radicand: int) := {
 	if coefficient is float then real.float() else real
 }
 real_float(x) := if x is Real then x.float() else x
+# a root under it past this, a whole number beyond an int, is the float's
+largest_exact_radicand = 1000000000000
 # [s, r] of n = s²·r, the square factors of the primes up to largest_square_factor taken out, a perfect square whole
 largest_square_factor = 100
 square_parts(n: int): list := {
@@ -86,6 +91,8 @@ coefficient_text(coefficient: number, power: text) := {
 	denominator = denominator_of(coefficient)
 	numerator = coefficient * denominator
 	over = if denominator == 1 then "" else "/" + str(denominator)
+	# a fraction of a larger denominator kept whole ahead of the power: (3481/41375)π, not 3481/41375π
+	if not (numerator is int) { return "(" + str(coefficient) + ")" + power }
 	if numerator == 1 { return power + over }
 	if numerator == -1 { return "-" + power + over }
 	str(numerator) + power + over

@@ -2,14 +2,15 @@
 # the count or the negative, `print(#xs)`, `f(-x)` (card pure-lane-print; Rust twin: lowering/words/negated_calls.rs).
 # A name the program binds as a value subtracts or indexes: `size -1` of a variable size, `xs #1`. A pass, not a rewrite
 # rule: which words take a value (the program's functions with a parameter, untyped too, and the builtins of one
-# value) is no `where` condition yet. `sq 2 == 4` is lib/sugar/comparisons.warp.
+# value) is no `where` condition yet. `max xs > 0` before a comparison is fitted_comparison below.
 use "walk.warp"
 use "scope.warp"
 use "../analysis/builtin_signatures.warp"
 
 spaced_prefix_calls(program: Node): Node := {
 	takers = value_takers(program)
-	bottom_up(prefix_calls(program, takers, count_takers(program, takers)), fitted_comparison)
+	own_types = own_parameter_types(program)
+	bottom_up(prefix_calls(program, takers, count_takers(program, takers)), n => fitted_comparison(n, own_types))
 }
 
 prefix_call_operators = [Op.Sub, Op.Hash]
@@ -71,25 +72,46 @@ counted_parts(counted: Node?): list? := if counted == ø then ø else [key_of(co
 
 # `f a > b` read by the fit of f's parameter, never by where the phrase stands (decision juxtaposition): f(a > b) when
 # f takes a yes/no (print), (f a) > b when it doesn't (max of a list); the parser reads the first at a statement's start
-# and the second after `=` or `if`. A word of unknown or untyped parameters stays as written (`sq 2 == 4`,
-# lib/sugar/comparisons.warp)
-fitted_comparison(n: Node): Node := {
-	if n is key and op_of(n) in comparing_ops and is_word_phrase(key_of(n)) and condition_fit(key_of(n)#1) == yes { return spaced([key_of(n)#1, Key(key_of(n)#2, op_of(n), value_of(n))]) }
-	if is_word_phrase(n) and n#2 is key and op_of(n#2) in comparing_ops and condition_fit(n#1) == no { return Key(spaced([n#1, key_of(n#2)]), op_of(n#2), value_of(n#2)) }
+# and the second after `=` or `if`. A function of the program whose parameter is untyped reads both ways: refused,
+# naming both (decision untyped-fit-ambiguous); a word of no typed line stays as written
+fitted_comparison(n: Node, own_types: map): Node := {
+	if n is key and op_of(n) in comparing_ops and is_word_phrase(key_of(n)) { return fitted(key_of(n)#1, key_of(n)#2, op_of(n), value_of(n), n, own_types) }
+	if is_word_phrase(n) and n#2 is key and op_of(n#2) in comparing_ops { return fitted(n#1, key_of(n#2), op_of(n#2), value_of(n#2), n, own_types) }
 	n
+}
+fitted(word: Node, left: Node, op: Op, right: Node, written: Node, own_types: map): Node := {
+	fit = condition_fit(word, own_types)
+	if fit == ambiguous_fit {
+		compared = op as text
+		throw "`${word} ${left} ${compared} ${right}` reads two ways: ${word}(${left} ${compared} ${right}) or (${word} ${left}) ${compared} ${right}; ${word}'s parameter is untyped: write the parentheses or declare its type"
+	}
+	if fit == yes { return spaced([word, Key(left, op, right)]) }
+	if fit == no { return Key(spaced([word, left]), op, right) }
+	written
 }
 comparing_ops = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 # `all xs > 0`: the words that compare each element of their list (lib/sugar/broadcasting.warp, decision
 # each-all-broadcast), their rules matching `all (xs > 0)`
 element_comparing_words = ["all", "any"]
 is_word_phrase(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 is symbol
-# whether the word's first parameter takes a yes/no: yes for an untyped rest (`print(values...)`), any or bool, no for
-# another declared type, ø for a word of no typed line
-condition_fit(word: Node): any := {
+# each function of the program taking a value by name, the type its first parameter is declared ("" untyped)
+own_parameter_types(program: Node): map := {
+	types = {}
+	for name in value_taking_functions(program) { types[name] = "" }
+	typed = typed_first_parameters(program)
+	for name in typed.keys { types[name] = typed[name] }
+	types
+}
+ambiguous_fit = "ambiguous"
+condition_takers = ["any", "bool"]
+# whether the word's first parameter takes a yes/no: yes for any, bool or an untyped rest (`print(values...)`), no for
+# another declared type, ambiguous_fit for a program's function of an untyped parameter, ø for a word of no typed line
+condition_fit(word: Node, own_types: map): any := {
 	name = unaliased(name_of(word))
 	if name in element_comparing_words { return yes }
+	if own_types.has(name) { return if own_types[name] == "" then ambiguous_fit else own_types[name] in condition_takers }
 	lines = lines_of(typed_lines, name) + (word_lines().get(name) ?? [])
 	firsts = lines.filter(line => #line.signature.parameters > 0).map(line => line.signature.parameters#1)
 	if #firsts == 0 { return ø }
-	firsts.any(p => p.type_name == "any" or p.type_name == "bool" or (p.rest and p.type_name == ""))
+	firsts.any(p => p.type_name in condition_takers or (p.rest and p.type_name == ""))
 }
