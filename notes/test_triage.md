@@ -25,6 +25,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | `tests/fixtures/…` in 18 files, 70 failing lines (test/modules/test_wasm_modules, test_include, test_import_compiled, test_module_signals; test/control/test_reflection_words; test/ffi/test_component_short_use; test/wasm/test_wasm.warp) | `include tests/fixtures/counter` | `include test/fixtures/counter` | the folder is test/ now; with the new path `include "test/fixtures/counter.warp"` works, unquoted paths stay a gap |
 | test/parser/test_newline_precedence.warp:18 | 56 | 55 | `fib := it < 2 ? it : …` starts 0, 1: fib(10) is 55 |
 | test/ffi/test_foreign_lines.pairs.warp:4 | π | 3.141592653589793 | atan2 is a float function; the exact π comes only from π |
+| test/control/test_database_tables.warp, test_database_optional.warp, test_database_short_names.warp (all `stored x: [C] in "t"` lines) | rows in the table before the line runs | each line its setup first, `pets.add(Pet("Rex"))` before `count(pets)` | the Rust tests wrote the rows with `eval(…)` lines the conversion dropped (saved/archive/rust-history tests/control/test_database_tables.rs:30); alone each is! reads an empty table |
 
 ## Held (esoteric)
 

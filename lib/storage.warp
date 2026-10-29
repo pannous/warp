@@ -2,10 +2,13 @@
 // table in <program>.database.sqlite beside the program (WARP_PROGRAM, as the native warp names it), else in memory.
 // Loaded whole and written whole for now: `users = stored_table("users", User)` gives the rows as instances, the table
 // made or widened from User's fields first; `stored_add("users", u)` inserts u; `stored_save("users", users)` makes the
-// list the table's rows. Waiting: the `stored users: [User]` form (computed-hole), write-through and lazy loading (card
-// storage-write-through).
+// list the table's rows. `stored users: [User]` declares users so, its table named as it is, or `in "people"`.
+// Waiting: write-through and lazy loading (card storage-write-through).
 use os
 use sqlite3
+
+rewrite stored $name: [$kind] in $table => $name = stored_table($table, $kind)
+rewrite stored $name: [$kind] => $name = stored_table($table, $kind) where $table = spelled($name)
 
 PROGRAM_VARIABLE = "WARP_PROGRAM"
 PROGRAM_EXTENSION = ".warp"
