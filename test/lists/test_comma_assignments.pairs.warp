@@ -4,3 +4,10 @@
 'x = "a", "b"; x#2'	'b'
 'a, b = 1, 2; b'	2
 'a, b = 2, 1; a, b = b, a; [a, b]'	[1, 2]
+
+# spaced values after one name are their list, unless a function word takes them (card xs-refused, decisions reconsider-spaced and function-words-consume)
+'xs = 1 2 3; xs'	[1, 2, 3]
+'xs = 1 2 3; count xs'	3
+'xs = "a" "b"; xs#2'	'b'
+'add(a, b) := a + b; x = add 1 2; x'	3
+'def add(a, b){ a+b }; x = add 1, 2; x'	3

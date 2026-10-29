@@ -12,9 +12,9 @@ PARALLEL=4
 # FFI windows honour WARP_NO_WINDOW, warp-native-harness)
 WINDOW_LIBRARIES='raylib|SDL|glfw'
 # a server sample serves until its timeout once it printed this (lib/web.warp serve): served, counted apart; each on a
-# port of its own from SERVER_PORTS on, as several run at once
+# port the system chooses (SERVER_PORT 0), so samples run at once, other runs and tests never collide
 SERVING='^serving http://'
-SERVER_PORTS=8300
+SERVER_PORT=0
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
@@ -27,8 +27,7 @@ mkdir -p "$results/out"
 one() {
 	local out=$results/out/$(echo "$1" | tr / _)
 	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
-	local port=$((SERVER_PORTS + $(echo "$1" | cksum | cut -d' ' -f1) % 1000))
-	(cd "$tree" && WARP_NO_WINDOW=1 WARP_PORT=$port timeout "$SECONDS_EACH" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
+	(cd "$tree" && WARP_NO_WINDOW=1 WARP_PORT=$SERVER_PORT timeout "$SECONDS_EACH" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
@@ -37,7 +36,7 @@ one() {
 	echo "FAIL $1: ${first:-exit $status, nothing on stderr}"
 }
 export -f one
-export tree results WARP SECONDS_EACH WINDOW_LIBRARIES SERVING SERVER_PORTS
+export tree results WARP SECONDS_EACH WINDOW_LIBRARIES SERVING SERVER_PORT
 
 commit=$(git -C "$tree" rev-parse --short=10 HEAD)
 day=$results/$(date +%F).txt
