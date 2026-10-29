@@ -78,10 +78,10 @@ module_text(n: Node): any := {
 	if source == ø then n else source
 }
 is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(name)
-# each file's parse, packed (parser.warp LIBRARY_PARSES)
+# each file's parse, packed (parser.warp LIBRARY_PARSES), made here: never the building compiler's own baked one
 packed_parses(files: map): map := {
 	parses = {}
-	for path in files.keys { parses[path] = pack(source_parse(run_library() + "/" + path, files[path])) }
+	for path in files.keys { parses[path] = pack(plain_node(parsed(rules_ended(files[path])))) }
 	parses
 }
 # each top-level module's slices parsed, packed, by their place (prelude_words.warp SLICE_PARSES, slice_key)
@@ -102,6 +102,17 @@ baked_slices(files: map): map := {
 	for path in files.keys { slices[path] = slice_spans(files[path]).map(span => "${span#1} ${span#2} ${span#3}").join("\n") }
 	slices
 }
+# `baked-current <file>`: yes when the library baked into this compiler is cut and parsed as this very compiler cuts
+# and parses it, else no. One built by an older compiler (the seed) carries that one's slices and parses, so `warp
+# rebuild` builds it once more by itself: the baked library is always the built compiler's (card once-seed)
+write_baked_current(file: text) := {
+	stale = baked_tables().filter(table => not same_texts(table#2, table#3)).map(table => table#1)
+	write(file, if #stale == 0 then "yes" else "no: " + stale.join(", "))
+}
+# [name, baked in, as this compiler makes it] of each table module_text bakes from the library: a new baked table
+# joins here
+baked_tables(): list := [["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(LIBRARY_FILES)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(LIBRARY_FILES)], ["SLICE_PARSES", SLICE_PARSES, packed_slice_parses(LIBRARY_FILES)]]
+same_texts(a: map, b: map): bool := #a == #b and a.keys.all(key => b.get(key) == a[key])
 # a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
 library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
