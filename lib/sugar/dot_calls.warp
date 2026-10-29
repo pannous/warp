@@ -1,7 +1,6 @@
 # The dot call of Julia (P50, notes/broadcasting.md), the phrase `f .( (x)` of the parser: any function applied to each
 # item whatever it takes, by the broadcasting words (prelude each_any, element_wise_any): length.(["ab", "c"]) is
-# [2 1], max.(u, v) pairs the items. First sugar: a later pass reads the phrase as a call of its first word. Guarded by
-# a vector as the rules of broadcasting.warp: a seed older than the phrase reads `first.trim()` so, card once-seed
-rewrite $f.($x) => each_any($x, $e -> $f($e)) where $x is vector
-rewrite $f.($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $a is vector
-rewrite $f.($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $b is vector
+# [2 1], max.(u, v) pairs the items. First sugar: a later pass reads the phrase as a call of its first word; the dot
+# asks for the broadcast, so no guard: of a value not known to be a list each_any decides at run time
+rewrite $f.($x) => each_any($x, $e -> $f($e))
+rewrite $f.($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r))
