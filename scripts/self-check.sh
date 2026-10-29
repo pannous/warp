@@ -51,6 +51,8 @@ check_lane() {
 scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT
 warp=$scratch/warp
 cp $main_warp $warp || exit 1
+# the copy links its wasmtime beside itself (rpath @executable_path), as the binary does in its build folder
+cp ${main_warp:A:h}/libwarp_wasmtime.dylib $scratch/ || exit 1
 # the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>)
 # with its runtime (warp-seed.runtime.wasm), the one it compiles compiler.warp behind
 for seed_file in warp-seed.wasm warp-seed.runtime.wasm; do
