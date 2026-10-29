@@ -1,0 +1,4 @@
+'key_name(63234)'	"ArrowLeft"
+'key_name(65)'	"A"
+'held_key == ""'	yes
+'[held_key == ESC, LEFT]'	[no "ArrowLeft"]
