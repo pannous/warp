@@ -1,0 +1,5 @@
+# a cast to a type keeps that type, also inline: whole floats stay floats (card whole-float-cast-kind)
+'(2 as float) is float'	true
+'g(x) := x is number; g(2.0 as float)'	true
+'global p = 0.0 as float; p is float'	true
+'x = 2; is_type(x as int, "int")'	true
