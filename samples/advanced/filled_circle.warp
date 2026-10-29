@@ -3,7 +3,7 @@
 radius = 50
 width = height = 200
 center = height / 2
-surface = height * width int
+surface = int[height * width]
 for y in 0..height {
 	for x in 0..width {
 		surface[y * width + x] = (y - center) ^ 2 + (x - center) ^ 2 < radius ^ 2
