@@ -82,7 +82,7 @@ big_decimal_in_loop(n: Node): any := {
 	ø
 }
 is_loop_statement(n: Node): bool := (is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in looping_words) or (is_key(n, Op.Do) and is_key(key_of(n), Op.While))
-is_big_decimal(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "number" and value_of(n)#2.contains(".")
+is_big_decimal(n: Node): bool := is_big_number_view(n) and value_of(n)#2.contains(".")
 
 # a node as the warnings quote it
 as_written(n: Node): text := "${n}".trim()
