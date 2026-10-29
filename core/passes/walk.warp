@@ -13,6 +13,9 @@ opaque_symbol = symbol(opaque_word)
 # (emitter/times.warp time_field)
 is_time_view(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "data"
 time_field_word = "time_field_of"
+# a number literal past int64 or past 18 places as the parser views it, ["number", "100000000000000000000"] (parser.warp
+# whole_number, decimal_value): a number to the rules all the same
+is_big_number_view(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "number"
 # `+ - *` of a run-time time: lib/time_arithmetic.warp's word, its module (emitter/times.warp time_operation_call)
 time_operation_word = "time_operation"
 time_arithmetic_module = "time_arithmetic"
