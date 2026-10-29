@@ -56,6 +56,9 @@ def use_library(folder: text) { given_library = folder }
 // older seed) calls library_sources below and reads them where it runs
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
+// core's folders bundled all the same: the extensions' rules, which every compile reads (rewrites.warp
+// extension_module_names), baked with the rest instead of parsed at each run (~25 ms of a small program's 0.15 s)
+BUNDLED_CORE_FOLDERS = ["compiler/extensions"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
@@ -71,6 +74,12 @@ def library_texts(library: text, within: text): map {
 			found[path] = try read(library + "/" + path) else ""
 		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
+			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
+		}
+	}
+	if within == "" {
+		for folder in BUNDLED_CORE_FOLDERS {
+			inner = library_texts(library, folder + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
 		}
 	}
@@ -2729,7 +2738,8 @@ def shaped(parameter: Node, shapes: list): Node := {
 // - a preposition (`to of from …`) separates the slots and labels the one after it: `to add a to b` → `a`, `to b`
 // - an article starts a noun slot when a known type follows it or the body never names the article: `a number` →
 //   `number: number`, `a photo` → `photo` (typed once `class photo` is declared); `to add a b: a+b` keeps `a`
-// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`
+// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`;
+//   when together they name a declared type, by all of them: `a full name` → `full-name: full-name`
 // - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
 // Rust twin: type_name_matching.rs parameter_slots (labelled)
 def phrase_slots(words: list, body: Node, types: list): list {
@@ -2752,7 +2762,8 @@ def phrase_slots(words: list, body: Node, types: list): list {
 			}
 		}
 		at = at + 1
-		head = noun#(#noun)
+		// `a full name` of `class full name`: the nouns together are the type, and the slot's name
+		head = if #noun > 1 and known_type(noun.join("-"), types) then noun.join("-") else noun#(#noun)
 		slot = if known_type(head, types) then Key(symbol(head), Op.Colon, symbol(head)) else symbol(head)
 		parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
 		preposition = ""
