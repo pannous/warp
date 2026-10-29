@@ -26,6 +26,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/parser/test_newline_precedence.warp:18 | 56 | 55 | `fib := it < 2 ? it : …` starts 0, 1: fib(10) is 55 |
 | test/ffi/test_foreign_lines.pairs.warp:4 | π | 3.141592653589793 | atan2 is a float function; the exact π comes only from π |
 | test/control/test_database_tables.warp, test_database_optional.warp, test_database_short_names.warp (all `stored x: [C] in "t"` lines) | rows in the table before the line runs | each line its setup first, `pets.add(Pet("Rex"))` before `count(pets)` | the Rust tests wrote the rows with `eval(…)` lines the conversion dropped (saved/archive/rust-history tests/control/test_database_tables.rs:30); alone each is! reads an empty table |
+| test/wasm/test_wasm.pairs.warp:478 | 6 (`for i=1..3;sum+=i`) | 3, or written `for i=1 to 3` for 6 | decision range-dots: `..` is exclusive; :477 and test_wasm.warp:64 were rewritten to `1 to 3` (user-approved), this one is still a gap too (`for i=…` refused) |
 
 ## Held (esoteric)
 
