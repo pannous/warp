@@ -679,8 +679,10 @@ def runtime_call_graph(): map {
 	module.runtime_calls = graph
 	graph
 }
-# [relocation, caller position, callee position] of each call of a runtime function in runtime.wasm's code
+# [relocation, caller position, callee position] of each call of a runtime function in runtime.wasm's code, read once
+# (module.runtime_sites)
 def runtime_call_sites(): list {
+	if module.runtime_sites != ø { return module.runtime_sites }
 	content = runtime_part(section_ids.code)
 	ends = body_ranges(content).map(range => range#2)
 	sites = []
@@ -692,6 +694,7 @@ def runtime_call_sites(): list {
 		while ends[caller] <= entry#1 { caller += 1 }
 		if callee >= module.runtime_image.imports { sites += [[entry, caller, callee - module.runtime_image.imports]] }
 	}
+	module.runtime_sites = sites
 	sites
 }
 # [start, end] of each function's entry in a code section's content, its size included

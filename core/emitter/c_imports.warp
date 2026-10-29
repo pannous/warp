@@ -1,7 +1,7 @@
 # C functions a program calls through its host (card pure-c-imports, notes/warp_host.md "C calls"): read from the
 # source's text before it is parsed, each becomes a host word of the module its library names, so the emitter imports
 # `library.name` and calls it like any host word, and describes it in the warp.c_functions custom section with one
-# crates/warp-runtime/src/c_signatures.rs line, which warp-host links by dlopen and dlsym.
+# rust-harness:crates/warp-runtime/src/c_signatures.rs line, which the native warp links by dlopen and dlsym.
 #   strlen(s: text): i64 from 'c'          a foreign line: declares the function (the line itself is left out)
 #   import strlen from "c"                 one function of lib/c.warp or lib/math.warp's foreign lines
 #   import (sin, floor, fabs) from 'm'     several
@@ -263,7 +263,7 @@ c_without(lines: list, statements: list): list := {
 # floor is an int, libm's a float; warp's other math words (ceil, round) have no pure code yet, so libm's serve
 c_emitted_words = ["floor"]
 # whether `name` of `library` is such a word of warp's own (`own`, warp_word_names), which a libc or libm import leaves
-# warp's, as Rust's lane keeps its built-ins (src/ffi/mod.rs)
+# warp's, as Rust's lane keeps its built-ins (rust-harness:src/ffi/mod.rs)
 c_warps(own: map, name: text, library: text): bool := library in c_and_m and own.has(name) and name in c_emitted_words
 # the line with each `use sqlite3` of a library of `native` ([library, path] each) a `use` of its native file
 native_uses(line: text, native: list): text := {

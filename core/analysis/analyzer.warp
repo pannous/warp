@@ -1,6 +1,6 @@
-# The analyzer (card inferred-kinds, notes/self_hosting.md step 14; Rust twin src/analyzer): the kind of each
+# The analyzer (card inferred-kinds, notes/self_hosting.md step 14; Rust twin rust-harness:src/analyzer): the kind of each
 # function's parameters and result, of each main-level variable and of the program's value, read off the program
-# after every lowering pass. `inferred_kinds` writes them as src/analyzer/inferred_kinds.rs does:
+# after every lowering pass. `inferred_kinds` writes them as rust-harness:src/analyzer/inferred_kinds.rs does:
 # `f(int, float) -> float`, `x: text`, `= int`, definitions sorted, the value last. Kinds are types.warp's ValueKind; a
 # variable holding a list also has a type word naming its elements (`list of int`, `map of text`, `list of node`).
 use "../passes/walk.warp"

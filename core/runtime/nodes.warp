@@ -15,7 +15,7 @@ global runtime_spelling_lists = []
 spellings_of(table: int): list := {
 	if not runtime_spelling_lists {
 		runtime_spelling_lists = [
-			# a key's operator is its code above the kind bits, the position of its spelling here (src/operators/codes.rs OP_CODES)
+			# a key's operator is its code above the kind bits, the position of its spelling here (rust-harness:src/operators/codes.rs OP_CODES)
 			["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 				"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
 				"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
@@ -58,7 +58,7 @@ info_byte(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.I
 key_operator(n: Node): text := node_text(operator_spellings()#(info_byte(n) + 1))
 symbol_node(name: Node): Node := symbol_of(node_text(name))
 # a list's bracket and separator in its kind field: the bracket's info in the byte above the kind, the separator's
-# code at bit 48 (src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
+# code at bit 48 (rust-harness:src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
 bracket_spellings(): list := spellings_of(2)
 separator_spellings(): list := spellings_of(3)
 bracket_info(n: Node): int := info_byte(n)
@@ -66,10 +66,12 @@ separator_info(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindU
 bracket_openings(): list := spellings_of(4)
 bracket_closings(): list := spellings_of(5)
 separator_joiners(): list := spellings_of(6)
-# `(1; 2)`, `'x', 2`: a list between its brackets, its items joined as its separator joins them
+# `(1; 2)`, `'x', 2`: a list between its brackets, its items joined as its separator joins them; a list or map of no
+# written separator by commas, `[1, 2]`, `{a: 1, b: 'x'}`, as `warp format` writes them (decision shown-spaced)
 list_shown(n: Node): text := {
 	at = bracket_info(n) + 1
-	joiner = node_text(separator_joiners()#(separator_info(n) + 1))
+	listed = separator_info(n) == 0 and (bracket_info(n) == BracketCode.Curly or bracket_info(n) == BracketCode.Square)
+	joiner = if listed then ", " else node_text(separator_joiners()#(separator_info(n) + 1))
 	node_text(bracket_openings()#at) + joined_items(unboxed_list(n), joiner) + node_text(bracket_closings()#at)
 }
 # `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too

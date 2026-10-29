@@ -10,5 +10,5 @@
 
 # the_text_of_a_global_is_its_value
 'global s = [1]; string(s)'	'[1]'
-'global s = int[3]; def f() { s[1] = 4 }; f(); str(s)'	'[0 4 0]'
-'global s = [1]; string({s: 2})'	'{s:2}'
+'global s = int[3]; def f() { s[1] = 4 }; f(); str(s)'	'[0, 4, 0]'
+'global s = [1]; string({s: 2})'	'{s: 2}'

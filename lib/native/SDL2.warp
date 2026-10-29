@@ -1,5 +1,5 @@
 // SDL2 through its C library (card pure-c-imports): `use SDL2` (or `use sdl`), or `import SDL_Init from 'SDL2'`,
-// declares these functions; warp-host loads libSDL2 (libSDL2.dylib, libSDL2-2.0.so.0) and calls them. Windows and
+// declares these functions; the native warp loads libSDL2 (libSDL2.dylib, libSDL2-2.0.so.0) and calls them. Windows and
 // renderers are handles.
 SDL_Init(flags: i32): i32 from 'SDL2'
 SDL_Quit(): void from 'SDL2'

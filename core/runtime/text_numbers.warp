@@ -1,5 +1,5 @@
 ## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
-## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
+## rust-harness:src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in rust-harness:src/wasm_emitter/numbers/casts.rs): a text
 ## that spells no number fails with invalid_number
 use "intrinsics.warp"
 use "conversions.warp"

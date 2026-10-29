@@ -27,7 +27,7 @@
 # then $t else $b)` computes a once; a pattern of statements `($a; $b)` matches a run of them in a block; a rule's result is rewritten again until no rule fires; `T for $x in $xs...` splices T once for each item of a rest hole; a template of statements in a value's place is that value's block; `·` glues
 # words and holes into a name (`square·$a`, `$i·end`, F5). What the
 # template adds sits where the rewritten code was written, so errors point at the user's code (notes/rewrites.md).
-# Rust twin: src/modules/rewrites.rs lower
+# Rust twin: rust-harness:src/modules/rewrites.rs lower
 use "walk.warp"
 use "scope.warp"
 use "uses.warp"
@@ -37,6 +37,7 @@ use "../analysis/diagnostics.warp"
 use "../analysis/builtin_signatures.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
+use rule_words
 
 rewrite_word = "rewrite"
 where_word = "where"
@@ -75,8 +76,8 @@ each_in_word = "in"
 each_at_word = "at"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions (`key` and `value` of
 # `k: v` the PairKey and PairValue); Anywhere a rule asking none
-enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element }
-PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element}
+enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element, Program }
+PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element, "program": Place.Program}
 # the mark of a rule whose pattern's first word spells the template's another way
 alias_mark = "alias"
 takes_word = "takes"
@@ -101,7 +102,7 @@ extension_module_names = [
 	"compiler/extensions/tuples"
 	"compiler/extensions/safe_navigation"
 ]
-first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words"]
+first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words", "sugar/dot_calls"]
 # every other file of lib/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
 sugar_folder = "sugar/"
 placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
@@ -117,7 +118,7 @@ comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage", "frames"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
@@ -168,9 +169,10 @@ global rule_binding = []
 # the code the rule being tried matched, for the context conditions; ø for a run of statements
 global rule_matched = ø
 
-# the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out;
-# `source` is the text the program was parsed from, which tells a template's `·` from `*`
-rewritten_program(program: Node, source: text): Node := {
+# the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out, its
+# stores assignments; `source` is the text the program was parsed from, which tells a template's `·` from `*`
+rewritten_program(program: Node, source: text): Node := stored(own_rules_applied(program, source))
+own_rules_applied(program: Node, source: text): Node := {
 	rules = []
 	kept = []
 	for statement in statements_in(program) {
@@ -183,7 +185,8 @@ rewritten_program(program: Node, source: text): Node := {
 	for module in std_module_names {
 		module_source = file_text(std_module_path(module))
 		if module_source != ø and rule_needs(module_source).any(word => mentioned.has(word)) {
-			module_rules += module_rules_of(std_module_path(module), module).filter(rule => needed_words(rule).any(word => mentioned.has(word)))
+			# (a rule of the whole program, `where program`, comes with the module's others)
+			module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program or needed_words(rule).any(word => mentioned.has(word)))
 		}
 	}
 	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
@@ -196,13 +199,34 @@ rewritten_program(program: Node, source: text): Node := {
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
+	rule_program = program
 	program = placed_map_scoped(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
+	program = with_program_rules(program, rules, origins)
 	uses = []
 	for module in fired_modules {
 		statement = plain_node(parsed("use " + module))
 		if statement not in uses { uses += [statement] }
 	}
 	if #uses == 0 then program else separated(bracketed(uses + statements_in(program), ""), ";")
+}
+
+# each plain store `x ← v` (the parser's store·value(x, v)) the assignment `x = v`, once the rules of a step ran: a
+# rule's template stores without its own pattern taking the store for an assignment again (notify in lib/sugar/signals)
+store_word = HiddenWord.StoredValue as text
+stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if is_store(part) then Key(part#2, Op.Assign, part#3) else part) else n
+is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
+
+# the program rewritten by the rules of its whole, `where program`, each once, after the rules inside it fired
+# (`$program` their program): lib/web.warp's ending of a program with routes
+with_program_rules(program: Node, rules: list, origins: list): Node := {
+	for index in 0 ..< #rules {
+		if rules[index].place == Place.Program {
+			rule_program = program
+			result = rule_applied(rules[index], origins[index], program)
+			if result != ø { program = result }
+		}
+	}
+	program
 }
 
 # `class Bag { max() := 7 }`: a type declaration; its method named like a library word binds that name in the class
@@ -232,9 +256,10 @@ enums_declared(program: Node): Node := {
 	program
 }
 
-# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too;
-# the rules of a place apply only there
-sugared(program: Node, rules: list): Node := {
+# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too,
+# its stores assignments; the rules of a place apply only there
+sugared(program: Node, rules: list): Node := stored(sugar_applied(program, rules))
+sugar_applied(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
@@ -471,7 +496,8 @@ rule_needs(source: text): list := {
 			rule = line[#rewrite_line_start ..]
 			parts = rule.split(" " + where_word + " ")
 			origin = if #parts > 1 then parts#2.split("=") else []
-			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø then origin#2 else rule.split("=>")#1
+			# (a hole a rule word binds, `$names = path_parameters($path)`, is no origin)
+			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not rule_words.has(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
 			needs += if word != "" then [word] else listed_in_text(rule)
 		}
@@ -481,8 +507,8 @@ rule_needs(source: text): list := {
 
 # the words of a rule's `in [a, b]` listing, as written
 listed_in_text(rule: text): list := {
+	if not rule.contains(" " + listed_word + " [") { return [] }
 	start = rule.find(" " + listed_word + " [")
-	if start == 0 { return [] }
 	listing = rule[start - 1 + #listed_word + 3 ..]
 	listing[0 ..< listing.find("]") - 1].split(",").map(word => word.trim())
 }
@@ -589,10 +615,10 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	conditions = conditions.filter(condition => not is_place_word(condition))
 	if #places > 1 or not conditions.all(is_condition) { return ø }
 	place = if #places == 0 then Place.Anywhere else PLACE_WORDS[name_of(places#1)]
-	origins = conditions.filter(condition => is_key(condition, Op.Assign))
+	origins = conditions.filter(condition => is_key(condition, Op.Assign) and not is_computed_binding(condition))
 	if #origins > 1 { return ø }
 	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
-	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole, aliased, pattern_head(pattern))
+	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => condition != origins#1), place, module, whole, aliased, pattern_head(pattern))
 }
 
 # a template cut at a `where` its last words swallowed (`$c + $n where`, `$s where statement`): the template before it
@@ -646,16 +672,27 @@ continued_key(words: list): Node := {
 	Key(key_of(first), op_of(first), rule_phrase(words_of_all([value_of(first)] + words[1 ..])))
 }
 
-# the conditions joined by `and`, also inside an origin's shape: `$c = channel() and $x is type`
+# the conditions joined by `and`, also around an assignment, which the parser let take the `and`s beside it: `$c =
+# channel() and $x is type`, `$m in [get, post] and $verb = route_verb($m) and $names = path_parameters($path)`
 conjuncts(condition: Node): list := match condition {
 	Key(left, Op.And, right): conjuncts(left) + conjuncts(right)
-	Key(hole, Op.Assign, Key(shape, Op.And, more)): conjuncts(Key(hole, Op.Assign, shape)) + conjuncts(more)
+	Key(left, Op.Assign, right): {
+		before = and_parts(left)
+		chained = is_key(right, Op.Assign)
+		after = and_parts(if chained then key_of(right) else right)
+		rest = after[1 ..]
+		more = if #rest == 0 then [] else if chained then conjuncts(Key(and_joined(rest), Op.Assign, value_of(right))) else rest.flat_map(conjuncts)
+		before[0 ..< #before - 1].flat_map(conjuncts) + [Key(before.last(), Op.Assign, after#1)] + more
+	}
 	_: [condition]
 }
+and_parts(n: Node): list := if is_key(n, Op.And) then and_parts(key_of(n)) + and_parts(value_of(n)) else [n]
+and_joined(parts: list): Node := if #parts == 1 then parts#1 else Key(and_joined(parts[0 ..< #parts - 1]), Op.And, parts.last())
 
-# `$c = shape`, `$t is type`, `not $t is type` (also written `$t is not type`), `$n < 0`, `$f takes value`
+# `$c = shape`, `$t is type`, `not $t is type` (also written `$t is not type`), `$n < 0`, `$f takes value`, a rule
+# word's call or the hole it binds
 is_condition(condition: Node): bool := {
-	if is_takes(condition) { return yes }
+	if is_takes(condition) or is_rule_word_call(condition) or is_computed_binding(condition) { return yes }
 	if is_negation(condition) { return is_condition(value_of(condition)) and not is_key(value_of(condition), Op.Assign) }
 	if is_context_word(condition) or membership(condition) != ø { return yes }
 	if not (condition is key and rule_hole(key_of(condition)) != ø) { return no }
@@ -665,6 +702,20 @@ is_condition(condition: Node): bool := {
 	literal_comparisons.any(op => is_key(condition, op)) and is_number_literal(wanted)
 }
 
+# `routed($program)`: a call of a word of lib/rule_words.warp, run at compile time (decision computed-hole)
+is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and rule_words.has(name_of(n#1))
+# `$names = path_parameters($path)`: a hole bound to a rule word's result
+is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of(n)) != ø or rest_hole_name(key_of(n)) != ø) and is_rule_word_call(value_of(n))
+# the rule word's result for the code its arguments' holes bound, `$program` the whole program
+program_hole = "$program"
+computed(call: Node, bound: map): any := {
+	word = rule_words[name_of(call#1)]
+	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else rule_spliced(argument, bound, argument))
+	if #given == 0 { return word() }
+	if #given == 1 { return word(given#1) }
+	if #given == 2 { return word(given#1, given#2) }
+	word(given#1, given#2, given#3)
+}
 # `$f takes value`, `$f takes int`
 is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition) == "" and separator_of(condition) == " " and #condition == 3 and rule_hole(condition#1) != ø and condition#2 == symbol(takes_word) and condition#3 is symbol
 
@@ -774,6 +825,14 @@ named_enum(code: Node): text := {
 # whether the code a hole bound passes the condition
 condition_holds(condition: Node, bound: map): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
+	if is_rule_word_call(condition) { return computed(condition, bound) == yes }
+	if is_computed_binding(condition) {
+		result = computed(value_of(condition), bound)
+		target = key_of(condition)
+		# a list the word gives, `[…]`, is a rest hole's items; any other node, a program's statements too, the hole's code
+		bound[rest_hole_name(target) ?? rule_hole(target)] = if is_group(result) and bracket_of(result) == "[" then List(items_of(result), Bracket.None, Separator.Space) else result
+		return result != ø
+	}
 	if is_takes(condition) {
 		hole = rule_hole(condition#1)
 		if not first_parameter_fits(bound[hole], name_of(condition#3)) { return no }
@@ -878,9 +937,14 @@ may_be_list(code: Node, scope: text, vectors: list): bool := {
 	if code is symbol { return vectors#1.has(scoped_name(scope, name_of(code))) }
 	if is_group(code) and bracket_of(code) == "[" { return yes }
 	if is_key(code, Op.Dot) and value_of(code) is symbol { return is_swizzle_word(name_of(value_of(code))) }
+	# a value in parentheses, `sqrt([4, 9])`: as the value
+	if is_round(code) and #code == 1 and may_be_list(code#1, scope, vectors) { return yes }
+	if is_element_wise_phrase(code) { return yes }
 	if not (is_round(code) and #code > 0 and code#1 is symbol) { return no }
 	name_of(code#1) in list_giving_words or vectors#2.has(name_of(code#1))
 }
+# `v .* 2` as the parser leaves it, before lib/sugar/arithmetic.warp spells it element_wise_any
+is_element_wise_phrase(code: Node): bool := is_spaced(code) and #code == 3 and code#2 is symbol and name_of(code#2) in PHRASE_OPERATORS and name_of(code#2).starts_with(".")
 is_swizzle_word(name: text): bool := #name >= 2 and #name <= 4 and name.all(c => c in "xyzw")
 
 # the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)

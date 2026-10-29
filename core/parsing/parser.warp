@@ -1,5 +1,5 @@
 // The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as nodes
-// (core/passes/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
+// (core/passes/shapes.warp), each word next to its Rust twin in rust-harness:src/warp_parser (tests/parser/test_self_parser.rs),
 // which compares its view (tests/common/twins.rs node_view)
 use "lexer.warp"
 use "../passes/shapes.warp"
@@ -17,7 +17,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: list; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: list; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): list := view_of(parsed(source))
@@ -45,7 +45,17 @@ ENTITY_TABLE = module_source("compiler/entities.tsv")
 // from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic): that
 // folder, a build machine's, is only the last resort
 global given_library = ""
-def run_library(): text := if given_library != "" then given_library else (env("WARP_LIB") ?? library_of_core(folder_of(module_directory)))
+def run_library(): text := if given_library != "" then given_library else (warp_lib() ?? library_of_core(folder_of(module_directory)))
+// WARP_LIB, asked of the host once a compile: file_source asks for every file it gives, ~50 µs a host call
+global warp_lib_asked = no
+global warp_lib_given = ø
+def warp_lib(): text? {
+	if not warp_lib_asked {
+		warp_lib_given = env("WARP_LIB")
+		warp_lib_asked = yes
+	}
+	warp_lib_given
+}
 // this file lies in core/parsing/, reached as core/ or as lib/'s link compiler/
 def library_of_core(core: text): text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
 // The lib/ the run was given, which run_library answers from now on
@@ -90,7 +100,7 @@ def library_texts(library: text, within: text): map {
 // ø for none
 def file_source(path: text): text? {
 	bundled = LIBRARY_FILES.get(library_path(path))
-	if bundled != ø and env("WARP_LIB") == ø { return bundled }
+	if bundled != ø and warp_lib() == ø { return bundled }
 	(try read(path) else ø) ?? bundled
 }
 // a path's place within lib/ ("sugar/lists.warp"), "" outside it
@@ -307,9 +317,12 @@ def code_statements_of(name: text): list {
 	if not library_code_statements.has(name) { library_code_statements[name] = code_statements(join(module_sources([name]), "")) }
 	library_code_statements[name]
 }
+// `x ← v` (also `<-`), the plain store: the hidden call store·value(x, v), an assignment no rewrite rule takes for one
+// (rewrites.warp stored), so a rule's template writes it without matching itself again; `x = v` once the rules ran
+STORE_OPERATOR = "←"
 // The canonical names of the alias targets parser.warp's operator lists spell otherwise
 // Rust twin: spellings.rs OPERATOR_SPELLINGS ("approximately", "+-", "<-")
-ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": "="}
+ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": STORE_OPERATOR}
 
 // The parser's spellings: its own operators and keyword forms, with lib/aliases.warp's (card alias-mechanism,
 // notes/aliases.md: one entry per canonical word, `add { operator: "+", aliases: [plus] }`), made the first time a
@@ -986,8 +999,11 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
+			outer_indexing = p.indexing
+			p.indexing = true
 			index = slice_from_start(p)
 			if index == ø { index = expression(p, 0) }
+			p.indexing = outer_indexing
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
 			left = subscript(left, index)
@@ -1037,7 +1053,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = operator_call(glyph, [left, expression(p, fixity_level(Fixity.Infix) + 1)])
 				continue
 			}
-			if op.length == 0 {
+			if op.length == 0 or negative_item_at(p) {
 				if not applies(p, left, min_power) or comprehension_filter_at(p) { break }
 				// `s + f 2 each: 3`: the labelled arguments after the argument are the call's too
 				labelled = labelled_argument(p)
@@ -1071,11 +1087,18 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = Key(left, Op.Colon, block)
 				continue
 			}
+			// `f.(xs)`, julia's dot call, the phrase [f .( (xs)] for the sugar (lib/sugar/broadcasting.warp): never the
+			// member call `t.chars()`, whose tree it would be otherwise
+			dot_call = op#1 == "." and peek(p.code, p.at, p.n) == "("
 			skip_blanks(p)
-			if PHRASE_OPERATORS contains op#1 {
+			if dot_call {
+				left = phrase_operation(left, DOT_CALL, expression(p, powers#2))
+			} else if PHRASE_OPERATORS contains op#1 {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
+			} else if op#2 == STORE_OPERATOR {
+				left = call_of([symbol(HiddenWord.StoredValue as text), left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
 				left = piped(left, expression(p, powers#2))
 			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at, p.n) or ",;)]}".contains(peek(p.code, p.at, p.n)) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
@@ -1571,16 +1594,25 @@ def is_element(n: Node): bool := match n {
 	Key(target, op, index): op == Op.Hash
 	_: false
 }
+// `[a -1]`, `f it -1`, `x -1`: a minus spaced before and glued after starts a negative operand, a new item, not a
+// subtraction (decision glued-negative); `a - 1` and `a-1` subtract, so does `-` inside an index, `xs[i -1]`
+def negative_item_at(p: Parser): bool {
+	if p.indexing or not is_at(p.code, p.at, '-', p.n) or p.at == 0 or not is_blank(p.code[p.at - 1]) { return false }
+	next = peek(p.code, p.at + 1, p.n)
+	not is_blank(next) and not "=->".contains(next)
+}
+
 // The left power of `#`, which a glued `[` indexes with
 INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
 // spellings (lib/aliases.warp)
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
+SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
 // does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
+DOT_CALL = ".("
 // `left op right` as its phrase, for the sugar to read (lib/sugar/arithmetic.warp, fallbacks.warp)
 def phrase_operation(left: Node, op: text, right: Node): Node := spaced([left, symbol(op), right])
 // The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp

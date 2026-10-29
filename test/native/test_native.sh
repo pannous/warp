@@ -64,7 +64,7 @@ if [ -x "$stage/driver" ]; then
 	# a GC program's std_io through the driver's callback: the Error saying the driver lacks the word
 	printf 'use os\nprint run("ls")\n' >"$stage/run.warp"
 	(cd "$stage" && "$warp" build --wasm run.warp >/dev/null 2>&1)
-	check "std_io by the driver" "$(cd "$stage" && ./driver run.wasm)" 'the host word os.run is not in the native warp yet (warp-rust has it)'
+	check "std_io by the driver" "$(cd "$stage" && ./driver run.wasm)" 'the host word os.run is not in warp yet'
 	# a GC program's C calls by the driver, as its warp.c_functions section describes them: texts, numbers, handles
 	printf 'use c\nprint getenv("HOME")\nprint atof("2.5")\nabs(-7)\n' >"$stage/c_texts.warp"
 	(cd "$stage" && "$warp" build --wasm c_texts.warp >/dev/null 2>&1)

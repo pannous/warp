@@ -1,4 +1,4 @@
-# `parse(text)` is the code the text holds, as data (card pure-parse-call; Rust twin: src/lowering/words/parse_word.rs):
+# `parse(text)` is the code the text holds, as data (card pure-parse-call; Rust twin: rust-harness:src/lowering/words/parse_word.rs):
 # a constant text folds here into `as_code(data …)`, any other is parsed at run time by the host word parse_code.
 # `eval(text)` runs that code where it is written: `interpret(parse(text))`. A program's own `parse` stays its own, and
 # so does a method `x.parse(…)`.
@@ -63,4 +63,38 @@ parse_words(program: Node): Node := {
 	# the program's own `parse(t) := …`, `parse = …`
 	if statements_in(program).any(statement => declared_name(statement) in words) { return program }
 	words_rewritten(program, n => parse_call(eval_call(n)), words)
+}
+
+# `warp.wasm parse-code <code> <file>`: the code's tree as the native warp's parse_code rebuilds it in the module through
+# its builders (core/native/driver.warp code_built), a node before its parts: a tag, its fields each ended by
+# FIELD_END. `e` nothing, `T`/`F` yes/no, `i`/`f` a number, `c` a character's code, `t`/`s` a text, a symbol, `k` a key's
+# operator (its two sides after it), `l` a list's count, bracket and separator (its items after it), `x` the message of
+# code that does not parse; any other node as its text
+FIELD_END = "${chr(1)}"
+write_parse_code(code: text, file: text) := write(file, code_encoding(plain_node(parsed(code))))
+code_encoding(n: Node): text := {
+	if n is bool { return if n then "T" else "F" }
+	if n is int { return encoded_field("i", "${n}") }
+	if n is number { return encoded_field("f", "${float(n)}") }
+	if n === ø { return "e" }
+	# `[]` and `{}`, opaque keys of their view (plain_node)
+	if n is key and key_of(n) == opaque_symbol and is_empty_group(value_of(n)) { return list_encoding([], "${value_of(n)#2}", "${value_of(n)#3}") }
+	view = view_of(n)
+	if kind_of(view) == "error" { return encoded_field("x", view#2#2) }
+	match n {
+		Symbol(name): encoded_field("s", name)
+		Text(t): encoded_field("t", t)
+		Char(c): encoded_field("c", "${ord(c)}")
+		Key(left, op, right): encoded_field("k", op as text) + code_encoding(left) + code_encoding(right)
+		List(items, bracket, separator): list_encoding(items, bracket as text, separator as text)
+		_: encoded_field("t", "${n}")
+	}
+}
+list_encoding(items: list, bracket: text, separator: text): text := {
+	count = #items
+	encoded_field("l", "${count}") + encoded_field("", bracket) + encoded_field("", separator) + items.map(code_encoding).join("")
+}
+encoded_field(tag: text, field: text): text := {
+	if FIELD_END in field { raise "parse_code: the code holds the character U+0001, which its encoding ends fields with" }
+	tag + field + FIELD_END
 }

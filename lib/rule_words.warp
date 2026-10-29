@@ -1,0 +1,53 @@
+# The words a rewrite rule's `where` calls at compile time (decision computed-hole; core/passes/rewrites.warp
+# computed): `where $names = path_parameters($path)` binds the hole to the word's result, a node or a list of nodes
+# (a rest hole's items), `where routed($program)` holds when the word gives yes. Each word takes the code its rule's
+# holes bound, `$program` the whole program, and runs inside the compiler.
+
+# where a path parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
+parameter_ends = ":(?*+"
+
+# the names of a path's parameters: "/users/:id:int/posts/:post" → ["id", "post"]
+path_parameters(path: Node): list := "${path}".split("/").filter(part => part.starts_with(":")).map(path_parameter)
+path_parameter(part: text): text := {
+	name = ""
+	for letter in part[1 ..< #part] {
+		if parameter_ends.contains(letter) { return name }
+		name += letter
+	}
+	name
+}
+
+# `users` → "users": a name as the text it is spelled by
+spelled(name: Node): text := "${name}"
+
+# --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
+
+# `get` → "GET": a route's method as HTTP spells it
+route_verb(method: Node): text := "${method}".upper()
+# each `:name` of a route's path a variable of its body, its segment of the request's path (an int where it is digits):
+# `n = route_parameter("/fib/:n:int", request.path, "n")`
+route_bindings(path: Node): list := path_parameters(path).map(name => Key(symbol(name), Op.Assign, List([symbol("route_parameter"), path, Key(symbol("request"), Op.Dot, symbol("path")), name], Bracket.Round, Separator.None)))
+# a program with routes, ending in serving them (lib/web.warp routes_end) once all of it ran; ø for a program without
+# routes or served already
+routes_end_word = "routes_end"
+served(program: Node): any := ended_by(program, "route_add", routes_end_word)
+# a program with frame listeners, ending in its frames (lib/frames.warp frames_end): one, as no window opens
+frames_end_word = "frames_end"
+framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
+# the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
+# ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
+# that declares
+ended_by(program: Node, starting: text, ending_word: text): any := {
+	statements = program_statements(program)
+	if not statements.any(statement => is_call_of(statement, starting)) or statements.any(statement => is_call_of(statement, ending_word)) { return ø }
+	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
+	ending = statements[last]
+	ended = if is_declaration(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
+	separated(bracketed(statements[0 ..< last] + ended + statements[last + 1 ..], ""), ";")
+}
+# the main level's statements, of lines and of `;` within a line alike
+program_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then program_statements(s) else [s])
+is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
+
+# the words by name, as a rule's `where` calls them
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed}

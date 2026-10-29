@@ -24,10 +24,14 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
   owner re-lands it fixed. A lane regression with no suspect: `git bisect run` from the newest good/* tag (handbook).
 - `warp self` red never blocks anything: an urgent card for the author of the newest core change. The self lane may
   pass up to 5 % fewer tests than the pure lane.
-- The full suite at rare intervals (nightly, before a release), in the background, as `warp test --each test >
-  test/results.txt` (a ✓ or ✗ line per test, in file order, and the `m of n failed` summary): commit it to main, so
+- The full suite at rare intervals (nightly, before a release), in the background, as `scripts/full-suite.sh
+  --commit` (one at a time on the machine, by its lock; `warp test --each test` into test/results.txt only when the
+  run ended with its summary: a ✓ or ✗ line per test, in file order, and the `m of n failed` summary), committed, so
   `git diff test/results.txt` (or `git log -p`) shows what went green or red since the last run (user 2026-10-28). Its
   failures are grouped into cards.
+- The samples the same way: scripts/samples.sh overwrites test/samples.txt (ok/FAIL/SRV/WIN and the sample, a line,
+  run with the tree's own compilers), and after-push's slow lane commits it to main when it changed ("chore: samples N
+  of 232 at <commit>"): its git log is the history, `git diff` names the samples that changed (user 2026-10-29).
 - Read each failure's message before passing it as flaky; a different message is a real failure.
 - A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) is installed by after-push.sh too, before the
   compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs

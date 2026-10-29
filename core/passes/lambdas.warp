@@ -1,4 +1,4 @@
-# Lambdas and functions as values (card pure-lambdas; Rust twins: src/lowering/definitions/lambdas.rs, closures.rs):
+# Lambdas and functions as values (card pure-lambdas; Rust twins: rust-harness:src/lowering/definitions/lambdas.rs, closures.rs):
 # - an iteration word over a list and a function, `map(xs, x => x + 1)`, `xs.filter(even)`, `xs.map(f)` of a variable or
 #   parameter f, is a loop, the lambda's body inlined with its parameters renamed, a function name or value
 #   called on each item:
@@ -211,9 +211,11 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
 		# `p as text` names a type, also where the program defines a function text()
 		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
+		Key(left, Op.Assign, right): Key(lowered_lambdas(left, locals, lowering), Op.Assign, lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
+		List(items, Bracket.Round, Separator.Space): lowered_phrase(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Comma): comma_call(n, locals, lowering)
 		List(items, bracket, separator): List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
 		_: n
@@ -251,9 +253,25 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 # function value elsewhere)
 is_variable(name: text, locals: list, lowering: Lowering): bool := name in locals or (lowering.globals.has(name) and name not in lowering.arities)
 
+# `xs = a b 3` of variables a and b (the parser's `a (b 3)`): a name bound to a value heads no call, the values side by
+# side are their list (decision reconsider-spaced); any other value as it is
+assigned_values(n: Node, locals: list, lowering: Lowering): Node := {
+	words = side_by_side_words(n)
+	if #words > 1 and words.all(word => is_plain_value(word, locals, lowering)) then List(words, Bracket.Square, Separator.Comma) else n
+}
+side_by_side_words(n: Node): list := {
+	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " ") { return [n] }
+	words = []
+	for item in items_of(n) { words += side_by_side_words(item) }
+	words
+}
+# a number, a text, or a variable holding no function
+is_plain_value(word: Node, locals: list, lowering: Lowering): bool := word is number or word is text or (word is symbol and is_variable(name_of(word), locals, lowering) and not lowering.function_values.has(name_of(word)))
 # `f 3 4`, words side by side: the first calls the others, its name kept; a lambda first is called with them,
 # `(x => x*2) 4` as `(x => x*2)(4)` (and `{it*2} 4`, lib/sugar/calls.warp)
 lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
+	# `(a -1)`, `(a b)` of variables: a bound value heads no call, the values side by side are their list
+	if #words > 1 and words.all(word => is_plain_value(word, locals, lowering)) { return List(words, Bracket.Square, Separator.Comma) }
 	if #words > 1 and is_lambda(words#1) { return lowered_call(words, call_node(words#1, arguments_of(words)), locals, lowering) }
 	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
 	# `sq 3` of `sq = x => x*x`: a variable holding a function, given its arguments, calls it

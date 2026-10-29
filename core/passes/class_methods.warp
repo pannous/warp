@@ -59,9 +59,11 @@ ordering_operators = ["<", "<=", ">", ">="]
 showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
 # the methods a class's instances convert by, each with its dispatcher and the call it falls back to on any other value:
-# `x as text` by text() (also print, str), `x as float` and float(x) by float() (lib/reals.warp's π); emitter/output.warp
-# and emitter.warp cast read the dispatchers
-conversion_methods = {text: [showing_dispatcher, "str"], float: [HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text]}
+# `x as text` by text() (also print, str), `x as float` and float(x) by float() (lib/reals.warp's π), a shown value by
+# show(), ø on any other value: it then shows its structure (decision show-hook; runtime show.warp key_text through the
+# hook instance_show); emitter/output.warp and emitter.warp cast read the dispatchers
+form_method = "show"
+conversion_methods = {text: [showing_dispatcher, "str"], float: [HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], show: [HiddenWord.ShowShown as text, ø]}
 # a class's positions (card class-position-index, decisions instance-position and property-accessors): `b#p` is its
 # position(p), from 1, `b[i]` (the parser's b#(i+1)) its index(i), from 0, either one deriving the other; `b#p = v` the
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
@@ -232,7 +234,8 @@ derived_dispatchers(classes: map, names: list, routes: list): list := {
 			converted = {}
 			for owning_class in converters { converted[owning_class] = call_of(lifted_name(classes, names, method, owning_class, routes), [self_node]) }
 			dispatcher = conversion_methods[method]
-			made += [Key(call_of(dispatcher#1, [Key(self_node, Op.Colon, symbol("any"))]), Op.Define, value_dispatch(deepest_first(classes, converters), converted, call_of(dispatcher#2, [self_node])))]
+			fallback = if dispatcher#2 == ø then Node.Empty else call_of(dispatcher#2, [self_node])
+			made += [Key(call_of(dispatcher#1, [Key(self_node, Op.Colon, symbol("any"))]), Op.Define, value_dispatch(deepest_first(classes, converters), converted, fallback))]
 		}
 	}
 	made
@@ -307,7 +310,7 @@ member_read(member: list): Node := special_named(brace_method(colon_method(botto
 # a method another spelling of a word warp asks an instance for (lib/aliases.warp) as that word: `toString()` and
 # `to_s()` as text(), `compareTo(o)` as compare(o), `size()` and `len()` as count(), which `#s` and `size(s)` call
 special_named(member: Node): Node := match member {
-	Key(head, Op.Define, body): { word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, ordering_method, counting_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
+	Key(head, Op.Define, body): { word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, form_method, ordering_method, counting_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
 	_: member
 }
 # a method written with its body in braces, `area(side) { … }` (a call beside a block as it parses), read as

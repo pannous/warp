@@ -1,0 +1,9 @@
+# `x ← v` and `x <- v`, the plain store, are `x = v` in a program: plain, global, typed and declaring forms (decision computed-hole; a rule's template stores without matching itself again, card signals-lib)
+'x ← 3; x + 1'	4
+'x <- 3; x + 1'	4
+'x<-3; x'	3
+'x ← 3; x ← x + 1; x'	4
+'global g = 1; f() := { g ← 5 }; f(); g'	5
+'x: int ← 3; x'	3
+'xs ← [1, 2]; xs#2'	2
+'x = 5; x < -3'	no

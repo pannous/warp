@@ -1,4 +1,4 @@
-# The enums a program declares (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red,
+# The enums a program declares (card pure-enums; Rust twin: rust-harness:src/lowering/types/plain_enums.rs): `enum Color { Red,
 # Green }`, Swift's `{ case north, south }`, read as [name, case names], for the passes that lower them
 # (plain_enums.warp), match over their cases (node_matches.warp, node_cases.warp) and bring them from a used file
 # (uses.warp)

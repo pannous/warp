@@ -6,7 +6,7 @@ use "instructions.warp"
 use "library_words.warp"
 # `round(x)`: the nearest int, half to even as wasm rounds (f64.nearest)
 rounded(x: float): int := truncated(float_nearest(x))
-# the text of a run-time float (src/wasm_emitter/numbers/float_text.rs): its shortest digits that read back,
+# the text of a run-time float (rust-harness:src/wasm_emitter/numbers/float_text.rs): its shortest digits that read back,
 # positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7; ∞, -∞ and NaN as the exact numbers print them
 float_text(x: float): text := {
 	if x != x { return "NaN" }

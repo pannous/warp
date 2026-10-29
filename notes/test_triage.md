@@ -25,6 +25,12 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | `tests/fixtures/…` in 18 files, 70 failing lines (test/modules/test_wasm_modules, test_include, test_import_compiled, test_module_signals; test/control/test_reflection_words; test/ffi/test_component_short_use; test/wasm/test_wasm.warp) | `include tests/fixtures/counter` | `include test/fixtures/counter` | the folder is test/ now; with the new path `include "test/fixtures/counter.warp"` works, unquoted paths stay a gap |
 | test/parser/test_newline_precedence.warp:18 | 56 | 55 | `fib := it < 2 ? it : …` starts 0, 1: fib(10) is 55 |
 | test/ffi/test_foreign_lines.pairs.warp:4 | π | 3.141592653589793 | atan2 is a float function; the exact π comes only from π |
+| test/lists/test_list_literal_sign.pairs.warp:12, 14, 15 | [4, 2] / [4] / 4 | [5 -1 2] / … / 5 then -1 | glued-negative: a minus spaced before and glued after starts a new item (`[a -1]` = [a, -1]) |
+| test/lists/test_signed_operand_list.pairs.warp:14; test/operators/test_negated_call_operand.pairs.warp:15 | 4 | 5 then -1 | glued-negative: `x -1` is x then -1 |
+| test/operators/test_minus_after_callable.pairs.warp:19, 21, 22 | 3 / 2 / 4 | x then -2 … | glued-negative, as above (`a - 1`, `a-1` stay subtraction) |
+| test/operators/test_minus_after_callable.pairs.warp:11 | -3 | -2 | call-takes-right: `f -2 + 1` = f(-2 + 1) |
+| test/control/test_database_tables.warp, test_database_optional.warp, test_database_short_names.warp (all `stored x: [C] in "t"` lines) | rows in the table before the line runs | each line its setup first, `pets.add(Pet("Rex"))` before `count(pets)` | the Rust tests wrote the rows with `eval(…)` lines the conversion dropped (saved/archive/rust-history tests/control/test_database_tables.rs:30); alone each is! reads an empty table |
+| test/wasm/test_wasm.pairs.warp:478 | 6 (`for i=1..3;sum+=i`) | 3, or written `for i=1 to 3` for 6 | decision range-dots: `..` is exclusive; :477 and test_wasm.warp:64 were rewritten to `1 to 3` (user-approved), this one is still a gap too (`for i=…` refused) |
 
 ## Held (esoteric)
 
@@ -58,7 +64,6 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/types/test_kind_marks.pairs.warp:4-9, 12-14, 17-20, 23, 24 | kind_number/kind_info/kind_mark expose the internal kind bits, a layout test | delete? |
 | test/types/test_real_text.pairs.warp:4, 5, 7, 10 | symbolic surds, √2 printed as "√2" | |
 | test/wasm/test_wasm.pairs.warp:252-255 | postfix (RPN) operators, `true true and` | delete? |
-| samples/text/word_lengths.warp:5 | `length all xs`, a keyword to broadcast; `xs.map length` is the form (decision sample-word-functions) | delete? |
 | test/wasm/test_wasm.pairs.warp:307 | a second block as else without `else`, `if(2){3}{4}` | delete? |
 
 ## Gap groups (cards)
