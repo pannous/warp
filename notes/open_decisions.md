@@ -26,7 +26,14 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - split-whitespace (interviewer, card sample-word-functions): `t.split` with no argument splits on runs of whitespace (Python's split()).
 - named-arguments-general (interviewer): any parameter can be named at the call, so `t.replace "tea" with: "coffee"` works because replace's second parameter is named `with`; no special case for replace.
 - length-all-held (interviewer): `length all xs` is triage-held; the forms are `xs.map length` and, per julia-compat, the broadcast `length.(xs)`. A general `all`/`each` broadcast word is for you to revisit.
-- server-routes-pass (fixer, 3866446f18): `get/post/put/delete/patch "/path" { … }` at the main level is a core pass (core/passes/routes.warp, ~50 lines) onto lib/router.warp's route_add, the path's `:name`s bound in the body; a rule can't bind names read from a path text (computed-hole would let lib/sugar do it). A plain `warp app.warp` serves the routes over HTTP through lib/web.warp (native-server, a25e56f5aa).
+- computed-hole-shape (fixer): the words a rule's `where` calls at compile time live in lib/rule_words.warp, a std
+  module the compiler itself uses (`use rule_words` in core/passes/rewrites.warp), named in its `rule_words` table: a new
+  word needs `warp rebuild`, as a sugar rule does. `where $h = word(…)` of such a word binds $h (a `[…]` result is a
+  rest hole's items), `where word(…)` tests it, `$program` is the program; the same syntax with any other call stays
+  the origin's shape. A rule `where program` rewrites the whole program once, after the rules inside it; a module's
+  program rules come with its others. Instead of the store `x ← v`, a rule word gives ø where it already did its work
+  (routes' served). The routes rules sit in lib/web.warp, not lib/sugar/routes.warp, so a firing brings `use web`;
+  core/passes/routes.warp is gone. A plain `warp app.warp` serves the routes over HTTP through lib/web.warp.
 - one-name-list (fixer, card gave-dropped): `x = 1, 2` makes x the list [1, 2] (was 1, the 2 dropped silently), read from reconsider-spaced (`xs = 1 2 3` is a list) and the unpacking `a, b = 1, 2`; the other reading would refuse it.
 
 ## To present
