@@ -89,15 +89,24 @@ check_host() {
 self_lane() {
   said=$(WARP_BINARY=$warp WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/rebuild.sh self $worktree 2>&1) || {
     verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
-  check_lane self && self_runtime
+  check_lane self && stage_two
 }
-# the self build builds the runtime too, as the next seed's stage will: hello runs behind the runtime.wasm the seed's
-# stage built, so a self build that cannot lower the runtime words passed here while the seed refresh failed (card
-# compiler-built: `f(length: int)` read as a field of its parameters)
-self_runtime() {
-  said=$($warp $worktree/lib/warp-self.wasm -- runtime $scratch/runtime.wasm 2>&1)
-  [[ $? == 0 && -s $scratch/runtime.wasm && $said != *Error* ]] || {
-    verdict="SELF CHECK RED: warp-self.wasm does not build runtime.wasm: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
+# stage 2 for real, as the next seed's stage will be: warp-self.wasm is only a copy of warp.wasm, so the compiler
+# warp.wasm builds from compiler.warp is built here, builds runtime.wasm, then compiles and runs hello behind it, from
+# a lib/ of links whose warp.wasm and runtime.wasm are stage 2's (cards compiler-built, compiler-built-wasm: a build
+# by warp.wasm failed `-- runtime` with "list of node" while this check, running the copy, passed)
+stage_two() {
+  local stage=$scratch/lib native=/Users/me/dev/bin/warp  # the native warp: WARP_LIB first, nothing beside it wins
+  mkdir -p $stage && ln -s $worktree/lib/*(N) $stage/ && rm -f $stage/warp.wasm* $stage/warp-self.wasm* $stage/runtime.wasm*
+  said=$(WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $native $worktree/lib/warp.wasm -- $worktree/lib/compiler/compiler.warp \
+    $stage/warp.wasm $worktree/lib/compiler $worktree/lib $worktree/lib/runtime.wasm 2>&1)
+  [[ -s $stage/warp.wasm ]] || { verdict="SELF CHECK RED: warp.wasm does not build stage 2: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
+  said=$($native $stage/warp.wasm -- runtime $stage/runtime.wasm 2>&1)
+  [[ $? == 0 && -s $stage/runtime.wasm && $said != *Error* ]] || {
+    verdict="SELF CHECK RED: stage 2 (compiler.warp built by warp.wasm) does not build runtime.wasm: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
+  said=$(WARP_LIB=$stage $native samples/hello/hello.warp 2>&1 | tail -1)
+  [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: stage 2's hello said: $said"; return 1; }
+  verdict="SELF CHECK ok: $said (stage 2 built runtime.wasm and ran hello)"
 }
 check_lane pure && self_lane && { [[ ! -x $host ]] || { check_host --compiler full run && check_host run; }; }
 passed=$?
