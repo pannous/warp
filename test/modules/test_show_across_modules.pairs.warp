@@ -1,0 +1,6 @@
+# same-named functions of different arity coexist across modules: draw's show(), color's show(c: Color), the show()
+# methods of units and reals (card module-arity-overloads)
+'use sound; use draw; 1'	1
+'use sound; use color; 1'	1
+'use color; str(red)'	"red"
+'class N { x: int; show() := "n" }; def show() { 7 }; [N(1).show(), show()]'	["n" 7]
