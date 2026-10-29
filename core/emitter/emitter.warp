@@ -1050,6 +1050,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
 	if operator == Op.None and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
 	if (operator == Op.Colon or operator == Op.None) and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_map_entry) {
+		# `json{ 'a': 1 }`, a tag named by a function taking the one value: its call with the map, as Rust's
+		if name_of(left) not in body.names and name_of(left) in module.functions and takes_arguments(module.functions[name_of(left)], [right]) { return call(body, module.functions[name_of(left)], [right]) }
 		# `div{ a: 1 }` of no class is Rust's `div:a:1`: a block of one entry is that entry
 		if #right == 1 and name_of(left) not in module.classes {
 			return TypedCode(ValueKind.Node, keyed_code(name_node(left), boxed(expression_code(body, right#1))))
