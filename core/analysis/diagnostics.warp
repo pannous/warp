@@ -100,8 +100,8 @@ first_error(found: list, file: text): text? := {
 	said_text(failing, file)
 }
 
-# the warnings among the diagnosed in the program's file, each as Rust's Diagnostic says it
-warnings_said(found: list, file: text): list := found.filter(said => said#1 == Level.Warning).map(said => said_text(said, file))
+# the diagnosed of a level in the program's file, each as Rust's Diagnostic says it: its warnings, its hints
+said_at(found: list, level: Level, file: text): list := found.filter(said => said#1 == level).map(said => said_text(said, file))
 
 # a diagnosed [level, message, fix, topic, place] as diagnostic says it: the message and where in the file,
 # todo wrap [level, message, fix, topic, place] as small type / class

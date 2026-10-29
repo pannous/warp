@@ -226,9 +226,13 @@ written_bytes(fd: int, count: int) := {
 	store_scratch_word(scratch_iovec() + 4, count)
 	fd_write(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 }
-# `warn "careful"`: "warning: careful" on stderr, a chunk at a time, as the Rust lane says a runtime warning
-warned(message: Node): Node := {
-	t = "warning: " + text_of_textual(message) + "\n"
+# `warn "careful"`: "warning: careful" on stderr, as the Rust lane says a runtime warning
+warned(message: Node): Node := said_on_stderr("warning: " + text_of_textual(message))
+# `hint "…"`: "hint: …" on stderr, the compiler's hints (`A4 is sound's; fix: use sound`)
+hinted(message: Node): Node := said_on_stderr("hint: " + text_of_textual(message))
+# the line on stderr, a chunk at a time
+said_on_stderr(words: text): Node := {
+	t = words + "\n"
 	start = 0
 	while start < byte_count(t) {
 		stop = if start + wasi_chunk() < byte_count(t) then start + wasi_chunk() else byte_count(t)
