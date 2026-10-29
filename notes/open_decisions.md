@@ -17,7 +17,14 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - unit tests without `use units` (supervisor): the 83 lines the triage listed as wrong are gaps under implicit-standard-words, not wrong expectations.
 - release workflow quiet (supervisor): Release re-enabled with one summary at the end, no per-job notifications; the other workflows stay off.
 - no extra workers tonight (supervisor): the ten triage gap groups wait on the board (Next) for the four feature workers instead of new sessions (rule: at most two feature workers, already exceeded by the runtime-linking team).
-- server-routes-pass (fixer, 3866446f18): `get/post/put/delete/patch "/path" { … }` at the main level is a core pass (core/passes/routes.warp, ~50 lines) onto lib/router.warp's route_add, the path's `:name`s bound in the body; a rule can't bind names read from a path text (computed-hole would let lib/sugar do it). A plain `warp app.warp` serves the routes over HTTP through lib/web.warp (native-server, a25e56f5aa).
+- computed-hole-shape (fixer): the words a rule's `where` calls at compile time live in lib/rule_words.warp, a std
+  module the compiler itself uses (`use rule_words` in core/passes/rewrites.warp), named in its `rule_words` table: a new
+  word needs `warp rebuild`, as a sugar rule does. `where $h = word(…)` of such a word binds $h (a `[…]` result is a
+  rest hole's items), `where word(…)` tests it, `$program` is the program; the same syntax with any other call stays
+  the origin's shape. A rule `where program` rewrites the whole program once, after the rules inside it; a module's
+  program rules come with its others. Instead of the store `x ← v`, a rule word gives ø where it already did its work
+  (routes' served). The routes rules sit in lib/web.warp, not lib/sugar/routes.warp, so a firing brings `use web`;
+  core/passes/routes.warp is gone. A plain `warp app.warp` serves the routes over HTTP through lib/web.warp.
 
 ## To present
 - ffi-link-any-import (harness OK, user away, card pure-compiled): pure runs link C libraries for any import module other than wasi/host (was: only libm), so `import strlen from "c"`, sqlite3, raylib run (test/ffi 110/133 failed). Grown: one C linker shared by `warp pure` and warp-host (the module's warp.c_functions, moved into warp-runtime), header parsing only for executables until carded away; `--sandbox` refuses C imports.
