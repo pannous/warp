@@ -72,3 +72,7 @@ notes/OLD/
 *.bak
 **/*.bak
 test/web/task.txt
+
+samples/tune.mid
+
+samples/sound/tune.mid
