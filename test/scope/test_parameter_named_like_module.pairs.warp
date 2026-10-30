@@ -1,0 +1,11 @@
+# A parameter or a lambda's parameter named like a standard module is the value, not the module: its method call
+# calls the method on it (notes/dispatch.md: shadowing is scoped; card rule-condition-scope)
+
+# a_parameter_named_like_a_module_is_its_value
+'firsts(list) := list.first(); firsts([7, 8])'	7
+'counted(map) := map.count(); counted({a: 1, b: 2})'	2
+'shout(text) := text.upper(); shout("hi")'	'HI'
+
+# a_lambda_parameter_named_like_a_module_is_its_value
+'[[3, 4], [5]].map(list => list.first())'	[3 5]
+'["a", "b"].map(text => text.upper())'	['A' 'B']
