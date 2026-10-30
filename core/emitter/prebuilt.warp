@@ -441,6 +441,7 @@ def behind_libraries() {
 # text), else the program compiles the module from its source
 def bind_library_words() {
 	for image in module.linked_images {
+		if method_clash(image) { refuse(LINKED_METHOD_CLASH + image.name) }
 		for name in image.c_functions { program_import(name) }
 		for entry in image.classes {
 			if entry#1 == instance_struct() { gc_type(instance_struct()) }
@@ -460,6 +461,26 @@ def bind_library_words() {
 		}
 	}
 }
+# a method of a linked class that another class of the program or of another module declares too: the module's
+# dispatcher of it (`*·operator`, `text·shown` of reals' Real) knows its own classes only, and binding would take it
+# for the program's over all of them (card bind-linked binds the classes' methods instead)
+LINKED_METHOD_CLASH = "a method of a linked class another class declares too, compiled from source: "
+def method_clash(image: LibraryImage): bool {
+	own = image.classes.map(entry => entry#1)
+	owners = method_owners()
+	image.functions.any(word => owners.has(method_word(word.name)) and owners[method_word(word.name)].any(owner => class_struct(owner) not in own))
+}
+# each method name the program lifted per class (`*·V`, `text·Quantity`): the classes declaring it
+def method_owners(): map {
+	owners = {}
+	for name in module.functions.keys {
+		parts = name.split(name_joiner)
+		if #parts == 2 and parts#2 in module.classes { owners[parts#1] = (owners.get(parts#1) ?? []) + [parts#2] }
+	}
+	owners
+}
+# the method a function is or dispatches: `*` of `*·operator`, `text` of `text·shown`, `area` of `area`
+def method_word(name: text): text := name.split(name_joiner)#1
 def linked_closure_name(image: LibraryImage, target: text): text := image.name + name_joiner + target
 # the program's index of a linked module's k-th function
 def linked_index(image: LibraryImage, k: int): int := #module.imports + image.base#1 + k - dropped()
