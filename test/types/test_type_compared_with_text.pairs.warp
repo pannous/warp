@@ -2,5 +2,5 @@
 
 # type_compared_with_text_stays_no
 'x=3; type(x) == "int"'	0
-'x=3; type(x) == int'	1
+'x=3; type(x) == nat'	1
 'x=3; "" + type(x) == "int"'	0

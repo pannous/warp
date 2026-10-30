@@ -39,12 +39,13 @@ names_class(n: Node, name: text): bool := names_a_type(n) and same_bytes(unboxed
 # third copy of the type words beside words.warp type_kinds and emitter.warp core_type_words, as runtime bodies read no
 # compiler globals yet (beautify-round, runtime constants)
 covered_type_words(type: text): list := {
-	ints = ["int", "integer", "long", "i64", "i32"]
-	rationals = ints + ["rational", "real", "exact"]
+	ints = ["int", "nat", "integer", "long", "i64", "i32"]
+	rationals = ints + ["rational", "real", "exact", "fraction"]
 	floats = ["float", "double", "f64", "f32", "float32", "float64", "fast"]
 	chars = ["codepoint", "char", "character"]
 	match type {
 		"int": ints
+		"nat": ints
 		"rational": rationals
 		"float": floats
 		"number": rationals + floats + ["number"]
@@ -69,6 +70,8 @@ instance_among(n: Node, classes: list): bool := {
 # `type(x)` of a value known only at run time (Rust's list_ops.rs node_type_name): the type value naming its kind as
 # the static names do; an instance names its class, one of the program's `classes`
 node_type_name(n: any, classes: list): any := with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue)
+# … of a variable declared int in an optional or union slot: its whole number an int
+int_slot_type_name(n: any, classes: list): any := if node_type_word(n, classes) == "nat" then with_kind(symbol_of("int"), Marked.TypeValue) else node_type_name(n, classes)
 node_type_word(n: any, classes: list): text := {
 	# ø's type is empty, though it passes `is list`
 	if is_null(n) { return "empty" }
@@ -76,6 +79,8 @@ node_type_word(n: any, classes: list): text := {
 	# a one-character text's type is a character (chars-codepoints): what a parameter given "a" holds; `x is char`
 	# tests the kind alone, so node_text's Char arm takes no text
 	if word == "text" and one_character(unboxed_text(n)) { return "codepoint" }
+	# a boxed whole number is a nat: a declared int is never boxed (decision nat-and-int)
+	if word == "int" { return "nat" }
 	if word != "key" { return word }
 	for class_name in classes { if instance_of(n, class_name) { return class_name } }
 	if key_operator(n) in operation_spellings() then "operation" else word
