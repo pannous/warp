@@ -1,7 +1,7 @@
 # Shaders written in warp
 
 `paint(f, width, height)` compiles a warp function `f(x, y)` to a fragment shader (lib/prelude.warp's paint rules
-call lib/rule_words.warp's wgsl_shader in the compiler; the Rust era's was src/lowering/foreign/gpu_maps/kernels.rs), with the program's numbers it reads as the shader's values; the same
+call lib/wgsl.warp's wgsl_shader in the compiler; the Rust era's was src/lowering/foreign/gpu_maps/kernels.rs), with the program's numbers it reads as the shader's values; the same
 functions run on the CPU where there is no GPU. `shader { … }` blocks of WGSL with `$name` holes stay for hand-written
 shaders. `shader_of(f)` is the WGSL that paint compiles f to. Samples: samples/sound/gpu_visualizer_warp.warp (the
 tunnel as warp functions, playing mozart.mp3; native only), samples/gpu/warp_compiled_wgsl_shader.warp (three
@@ -45,8 +45,9 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
   (card count-in-interpolation): compute into a local first
 - a line starting with `[` or `(` glues to the statement before it as indexing or a call: `return [...]`
 - locals must not shadow a core function or global name; map keys that are operator words (ln, sqrt, π) are quoted
-- a lib module used by a std module is followed only if rewrites.warp's std_module_names lists it (card
-  nested-module-use), so the translator lives in rule_words.warp itself
+- the translator is lib/wgsl.warp, used by rule_words.warp (whose rule-word map names its words) and using
+  rule_words for the program's reflection words; both are baked into the compiler (compiler-inputs.sh BAKED), so a
+  change of either needs `scripts/rebuild.sh pure` before it shows
 - `use math` brings lib's own `cosine` etc. into the program: WGSL's words are looked up before program functions
 
 ## Where paint's rule lives, and what the seed keeps (cards gpu-functions, paint-frame-failure, program-frame)
@@ -74,7 +75,7 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
   mismatch, loud at validation.
 - `$name` holes: plain_node strips the parser's shader_hole_names attribute before rules, so shader_values reads the
   holes from the text's values.name. A new rule word must also join the `rule_words` map at the end of
-  rule_words.warp, otherwise "not in this compiler (an older seed)". Do not name a rule word like a core word
+  rule_words.warp (lib/wgsl.warp's words too), otherwise "not in this compiler (an older seed)". Do not name a rule word like a core word
   (assigned_value clashed with the analyzer's).
 - Natively, built-in holes (time, mouse, size …) are filled in lib/native/foreign.c values_filled, and $previous in
   warp_gpu.c. The first painting opens libwarp_window's window; a still picture stays shown until closed.
