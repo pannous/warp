@@ -310,8 +310,17 @@ assigned_kinds(program: Node): map := {
 			kind = static_kind(value_of(n))
 			kinds[name] = if kind == ø or (name in kinds and kinds[name] != kind) then [] else kind
 		}
+		# a parameter takes any value, whatever a variable of its name is given: the `e` of `e -> tan(e)` beside the
+		# case `e = "e"` of keys.warp
+		for name in parameters_bound(n) { kinds[name] = [] }
 	}
 	kinds
+}
+# the names a lambda or a definition binds as its parameters
+parameters_bound(n: Node): list := {
+	if is_key(n, Op.Arrow) { return parameters_of(key_of(n)) }
+	call = definition_call(n)
+	if call == ø then [] else items_of(call)[1 ..].map(parameter_name)
 }
 
 # what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
