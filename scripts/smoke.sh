@@ -8,7 +8,7 @@
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
 set -uo pipefail
 INSTALLED=$HOME/dev/bin/warp
-COMPILERS=(warp.wasm warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
+COMPILERS=(warp.wasm warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key warp.wasm.driver.build.cwasm warp.wasm.driver.build.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
 EXPECTED=Hello
 
 tree=$(cd "${1:?usage: smoke.sh <worktree>}" && pwd) || exit 2
@@ -24,6 +24,8 @@ if [ -n "$baked" ]; then
 	way="its own build"
 else
 	for part in "${COMPILERS[@]}"; do
+		# the 512 MB heap's machine code is made at the first compile of the compiler, so an install may have none yet
+		[[ $part == *.build.cwasm* && ! -e $installed/$part ]] && continue
 		rm -rf "${tree:?}/lib/$part" && cp -Rc "$installed/$part" "$tree/lib/$part" || exit 1
 	done
 	for library in "$installed"/lib*warp_*.*; do cp -c "$library" "$tree/lib/" 2>/dev/null; done

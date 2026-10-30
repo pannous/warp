@@ -199,11 +199,13 @@ def with_entries(content: list, more: list): list {
 	count = uleb_read(content, 0)
 	uleb(count#1 + #more) + content[count#2 ..] + concatenated(more)
 }
-# the runtime's code, each call of a runtime function moved by the C functions' imports (not those of host words)
+# the runtime's code, each call of a runtime function moved by the C functions' imports (not those of host words); a
+# call of a host word too when some are dropped
 def rebased_runtime_code(): list {
 	content = runtime_part(section_ids.code)
-	if runtime_shift() == 0 { return content }
-	rebased(content, runtime_call_sites().map(site => site#1), [[shifted(runtime_shift())]])
+	if runtime_shift() == 0 and not drops_imports() { return content }
+	sites = if drops_imports() then operand_sites(relocated.calls) else runtime_call_sites()
+	rebased(content, sites.map(site => site#1), [[import_move(runtime_shift(), {})]])
 }
 # the code section's content: the runtime's functions, a hook's the program's code, then the program's functions, each
 # body knowing where it starts (its relocations' offsets)
@@ -217,16 +219,18 @@ def prepended_code(functions: list): list {
 	count = uleb_read(runtime, 0)
 	at = count#2
 	linked = library_bodies()
-	content = uleb(count#1 + #linked + #functions)
+	stubs = unreached_import_stubs()
+	content = uleb(count#1 + #linked + #functions + #stubs)
 	for p in 0..<count#1 {
 		size = uleb_read(runtime, at)
 		end = size#2 + size#1
 		hook = module.dispatchers.filter(f => f.index == #module.imports + p)
-		content += if #hook > 0 then function_body(hook#1, #content) else runtime[at ..< end]
+		content += if #hook > 0 then own_body(hook#1, #content) else runtime[at ..< end]
 		at = end
 	}
 	for body in linked { content += body }
-	for f in functions { content += function_body(f, #content) }
+	for f in functions { content += own_body(f, #content) }
+	for body in stubs { content += body }
 	content
 }
 # a subsection of runtime.wasm's names by its id, its content (an empty vector when it has none); with more entries
@@ -243,7 +247,7 @@ def runtime_subsection(id: int): list {
 def runtime_names(id: int, more: list): list { subsection(id, with_entries(runtime_subsection(id), more)) }
 # the runtime's local names, each function's moved by runtime_shift, then more
 def shifted_locals(content: list, more: list): list {
-	if runtime_shift() == 0 and not shaken() { return with_entries(content, more) }
+	if runtime_shift() == 0 and not shaken() and not drops_imports() { return with_entries(content, more) }
 	count = uleb_read(content, 0)
 	at = count#2
 	entries = []
@@ -270,22 +274,28 @@ def name_map_end(content: list, at: int): int {
 def own_function_type(f: Function): int := module.runtime_image.types + #module.gc_order - #gc_names + f.index - #module.imports - module.runtime_image.functions
 def prepended_bytes(functions: list): list {
 	if module.shakes_runtime and not module.relocating { module.shaking = shaking_of(functions) }
+	forget_import_drop()
+	if relocates() and not module.relocating and not shaken() { drop_imports(functions) }
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
 	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), library_types() + class_types + function_types + c_import_types()))
 	c_entries = c_import_entries(module.runtime_image.types + linked_function_count() + #classes + #functions)
-	declared = section(section_ids.function, with_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f)))))
+	declared = section(section_ids.function, with_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f))) + stub_types()))
 	own_globals = module.global_order[#module.runtime_image.globals ..]
 	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
 	codes = section(section_ids.code, prepended_code(functions))
-	# the exports and names by the shaken numbering
+	# the exports and names by the shaken numbering, or behind the host words dropped
 	for f in functions { f.index -= dropped() }
 	texts = section(section_ids.data, with_entries(runtime_part(section_ids.data), library_segments() + text_segments()))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
-	parts = [types, section(section_ids.import, with_entries(runtime_part(section_ids.import), c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
+	parts = [types, section(section_ids.import, host_imports(c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
 		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(module.runtime_image.data + linked_text_count() + #module.texts)), codes, texts]
-	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks() + runtime_sections(functions)
+	made = wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks() + runtime_sections(functions)
+	# the separate module (separate_module) is numbered behind the whole runtime, every host word kept
+	for f in functions { f.index += imports_dropped() }
+	forget_import_drop()
+	made
 }
 # the program's C functions, imported behind the runtime's host words; their types after every other: no runtime type moves
 def c_imports(): list { module.imports[module.runtime_image.imports ..] }
@@ -301,7 +311,7 @@ def program_marks(): list {
 }
 # runtime.wasm's names and the program's behind them
 def prepended_names(functions: list, classes: list, own_globals: list): list {
-	imported = range_list(#module.imports).map(i => index_name(i, module.imports#(i + 1)#2))
+	imported = range_list(#module.imports).filter(i => import_kept(i)).map(i => index_name(import_place(i), module.imports#(i + 1)#2)) + stub_names()
 	words = module.runtime_image.words.keys.filter(name => runtime_index(module.runtime_image.words[name]#1) != ø).map(name => index_name(runtime_index(module.runtime_image.words[name]#1), name))
 	content = subsection(names_subsections.functions, vector(imported + words + library_names() + functions.map(f => index_name(f.index, f.name))))
 	content += subsection(names_subsections.locals, shifted_locals(runtime_subsection(names_subsections.locals), functions.map(local_name_map)))
@@ -431,6 +441,7 @@ def behind_libraries() {
 # text), else the program compiles the module from its source
 def bind_library_words() {
 	for image in module.linked_images {
+		if method_clash(image) { refuse(LINKED_METHOD_CLASH + image.name) }
 		for name in image.c_functions { program_import(name) }
 		for entry in image.classes {
 			if entry#1 == instance_struct() { gc_type(instance_struct()) }
@@ -450,6 +461,26 @@ def bind_library_words() {
 		}
 	}
 }
+# a method of a linked class that another class of the program or of another module declares too: the module's
+# dispatcher of it (`*·operator`, `text·shown` of reals' Real) knows its own classes only, and binding would take it
+# for the program's over all of them (card bind-linked binds the classes' methods instead)
+LINKED_METHOD_CLASH = "a method of a linked class another class declares too, compiled from source: "
+def method_clash(image: LibraryImage): bool {
+	own = image.classes.map(entry => entry#1)
+	owners = method_owners()
+	image.functions.any(word => owners.has(method_word(word.name)) and owners[method_word(word.name)].any(owner => class_struct(owner) not in own))
+}
+# each method name the program lifted per class (`*·V`, `text·Quantity`): the classes declaring it
+def method_owners(): map {
+	owners = {}
+	for name in module.functions.keys {
+		parts = name.split(name_joiner)
+		if #parts == 2 and parts#2 in module.classes { owners[parts#1] = (owners.get(parts#1) ?? []) + [parts#2] }
+	}
+	owners
+}
+# the method a function is or dispatches: `*` of `*·operator`, `text` of `text·shown`, `area` of `area`
+def method_word(name: text): text := name.split(name_joiner)#1
 def linked_closure_name(image: LibraryImage, target: text): text := image.name + name_joiner + target
 # the program's index of a linked module's k-th function
 def linked_index(image: LibraryImage, k: int): int := #module.imports + image.base#1 + k - dropped()
@@ -496,8 +527,8 @@ def library_code(image: LibraryImage): list {
 	# a runtime function behind the program's C imports, not the module's; a C function the program's import of it
 	imported = {}
 	for j in 0..<#image.c_functions { imported[module.runtime_image.imports + j] = program_import(image.c_functions[j]) }
-	runtime_calls = if shaken() then kept_calls(module.runtime_image.imports + #image.c_functions, imported) else Move(runtime_shift() - #image.c_functions, imported)
-	relocations = relocations_of(image.wasm).filter(entry => entry#3 == own_space or (entry#3 == runtime_space and entry#2 == relocated.calls and uleb_read(content, entry#1)#1 >= module.runtime_image.imports))
+	runtime_calls = if shaken() then kept_calls(module.runtime_image.imports + #image.c_functions, imported) else import_move(runtime_shift() - #image.c_functions, imported)
+	relocations = relocations_of(image.wasm).filter(entry => entry#3 == own_space or (entry#3 == runtime_space and entry#2 == relocated.calls and (drops_imports() or uleb_read(content, entry#1)#1 >= module.runtime_image.imports)))
 	globals = {}
 	for j in 0..<#image.globals { globals[image.behind#3 + j] = module.globals[image.globals[j]#1]#1 }
 	# its class structs first among its types, the program's of their names, then a type per function
@@ -835,7 +866,7 @@ def body_ranges(content: list): list {
 class Shaking { kept: list; places: list; dropped: int }
 def shake_runtime(wanted: bool) { module.shakes_runtime = wanted }
 def shaken(): bool := module.shaking != ø
-def dropped(): int := if shaken() then module.shaking.dropped else 0
+def dropped(): int := if shaken() then module.shaking.dropped else imports_dropped()
 def shaking_of(functions: list): any {
 	reached = runtime_reach(runtime_positions_called(functions) + library_positions_called())
 	kept = range_list(module.runtime_image.functions).filter(p => reached.has(p))
@@ -900,7 +931,7 @@ def shaken_function_types(): list {
 # where runtime.wasm's function of this index lands: behind the program's C imports; ø when shaken out
 def runtime_index(index: int): int? {
 	if index < module.runtime_image.imports { return index }
-	if not shaken() { return index + runtime_shift() }
+	if not shaken() { return index + runtime_shift() - imports_dropped() }
 	places: list = module.shaking.places
 	if places[index - module.runtime_image.imports] < 0 then ø else places[index - module.runtime_image.imports]
 }
@@ -963,3 +994,93 @@ def runtime_type_of(f: Function): int {
 	for i in 0..<(f.index - #module.imports) { at = uleb_read(types, at)#2 }
 	uleb_read(types, at)#1
 }
+
+## a built program's full module importing only the host words its code reaches (card module-imports, decision
+## unused-imports-pass): every function behind the host imports moved down by the count dropped; the runtime functions
+## it never reaches stay, their calls of a dropped host word going to one trapping stub per type behind all functions.
+## The program's code is relocatable (relocates), so each call is moved as the runtime's (import_move)
+# each host import's new index, the stub's of a dropped one (import_places); the host imports kept; each stub's type;
+# the index of the first stub; how many go. Globals, as a Module field more fails the seed's compile (raisers_read),
+# set only while prepended_bytes writes
+global import_places = []
+global kept_imports = {}
+global stub_type_list = []
+global first_stub = 0
+global imports_gone = 0
+def drops_imports(): bool := imports_gone > 0
+def imports_dropped(): int := imports_gone
+def forget_import_drop() {
+	import_places = []
+	kept_imports = {}
+	stub_type_list = []
+	imports_gone = 0
+}
+def drop_imports(functions: list) {
+	called = host_words_called(functions)
+	host_types = runtime_import_entries().map(entry => entry#2)
+	# each stub's type, and the stub of each type
+	trapping = []
+	stub_of = {}
+	for i in 0..<#host_types {
+		if not called.has(i) and not stub_of.has(host_types[i]) {
+			stub_of[host_types[i]] = #trapping
+			trapping += [host_types[i]]
+		}
+	}
+	gone = #host_types - #called.keys
+	first_stub = #module.imports + module.runtime_image.functions + linked_function_count() + #functions - gone
+	places = []
+	count_kept = 0
+	for i in 0..<#host_types {
+		places += [if called.has(i) then count_kept else first_stub + stub_of[host_types[i]]]
+		if called.has(i) { count_kept += 1 }
+	}
+	import_places = places
+	kept_imports = called
+	stub_type_list = trapping
+	imports_gone = gone
+}
+# the host words called by the program's own code, the runtime functions it reaches and the linked modules' code
+def host_words_called(functions: list): map {
+	own = exports_reach(functions)
+	reached = runtime_reach(runtime_positions_called(own) + library_positions_called())
+	called = {}
+	own_calls = relocated_operands(own, relocated.calls)
+	for index in 0..<module.runtime_image.imports { if own_calls.has(index) { called[index] = yes } }
+	for site in operand_sites(relocated.calls) { if site#3 < module.runtime_image.imports and reached.has(site#2) { called[site#3] = yes } }
+	for image in module.linked_images {
+		place = section_place(image.wasm, section_ids.code)
+		for entry in relocations_of(image.wasm).filter(entry => entry#3 == runtime_space and entry#2 == relocated.calls) {
+			index = uleb_read(image.wasm, place#1 + entry#1)#1
+			if index < module.runtime_image.imports { called[index] = yes }
+		}
+	}
+	called
+}
+# where a function index goes, as behind the whole runtime: a host word to its place, one in more to its entry there,
+# every other by shift, all behind the host words moved down by the count dropped
+def import_move(shift: int, more: map): Move {
+	table = {}
+	for i in more.keys { table[i] = more[i] - imports_dropped() }
+	if drops_imports() { for i in 0..<#import_places { table[i] = import_places[i] } }
+	Move(shift - imports_dropped(), table)
+}
+# a program function's entry of the code section, its calls moved past the host words dropped
+def own_body(f: Function, at: int): list {
+	if not drops_imports() { return function_body(f, at) }
+	moved_body(f, [import_move(0, {})] + range_list(#relocated.keys - 1).map(k => shifted(0)))
+}
+# the import section's content: the host words kept, then the program's C functions
+def host_imports(c_entries: list): list {
+	if not drops_imports() { return with_entries(runtime_part(section_ids.import), c_entries) }
+	entries = runtime_import_entries()
+	kept = range_list(#entries).filter(i => kept_imports.has(i)).map(i => entries[i]#1 + uleb(entries[i]#2))
+	uleb(#kept + #c_entries) + concatenated(kept) + concatenated(c_entries)
+}
+def import_kept(i: int): bool := not drops_imports() or i >= module.runtime_image.imports or kept_imports.has(i)
+def import_place(i: int): int := if drops_imports() and i < module.runtime_image.imports then import_places[i] else i - imports_dropped()
+def stub_types(): list := if drops_imports() then stub_type_list.map(typed => uleb(typed)) else []
+def stub_names(): list := if drops_imports() then range_list(#stub_type_list).map(k => index_name(first_stub + k, unreached_import)) else []
+unreached_import = "unreached_import"
+# a stub's entry of the code section: no locals, a trap
+def unreached_import_stubs(): list := if drops_imports() then stub_type_list.map(typed => uleb(3) + [0, op.unreachable, op.end]) else []

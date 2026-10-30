@@ -30,8 +30,20 @@ getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
 execv(path: pointer, arguments: pointer): i32 from "c"
 execvp(name: pointer, arguments: pointer): i32 from "c"
+read(descriptor: i32, data: pointer, size: i64): i64 from "c"
 STDIN = 0
 STDOUT = 1
+KEY_ESCAPE = 27
+KEY_BRACKET = 91
+ARROW_UP = 65
+ARROW_DOWN = 66
+ARROW_RIGHT = 67
+ARROW_LEFT = 68
+KEY_DELETE = 127
+KEY_BACKSPACE = 8
+KEY_END_OF_INPUT = 4
+KEY_RETURN = 13
+KEY_SPACE = 32
 
 # a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
 hosted(compiler: text, first: int): nothing := {
@@ -64,7 +76,7 @@ rebuilt(): nothing := {
 	seed_runtime = seed_prepared(seed)
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
 	built = joined(compiler_path(), ".new")
-	file_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
+	builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
 	rebaked(built, compiler, library)
 	file_ran(built, words(built, "optimize", built, built, "", ""))
 	stamped(built, library)
@@ -89,7 +101,7 @@ rebaked(built: text, compiler: text, library: text): nothing := {
 		runtime = joined(built, ".runtime.wasm")
 		file_ran(built, words(built, "runtime", runtime, "", "", ""))
 		again = joined(built, ".again")
-		file_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
+		builder_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
 		rename(c_string(again), c_string(built))
 		unlink(runtime)
 	}
@@ -132,13 +144,13 @@ promoted(): nothing := {
 	compiler = compiler_path()
 	source = real_path(joined(library, "/compiler/compiler.warp"))
 	next = joined(compiler, ".next")
-	file_ran(compiler, words(compiler, source, next, folder_of(source), library, joined(library, "/runtime.wasm")))
+	builder_ran(compiler, words(compiler, source, next, folder_of(source), library, joined(library, "/runtime.wasm")))
 	fixpoint = same_text(read_file(next), read_file(compiler))
 	unlink(next)
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
-	copied(joined(compiler, ".driver.cwasm"), joined(promoted_file, ".driver.cwasm"))
-	copied(joined(compiler, ".driver.cwasm.key"), joined(promoted_file, ".driver.cwasm.key"))
+	machine_code_copied(compiler, promoted_file, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
 }
@@ -157,9 +169,19 @@ seed_prepared(seed: text): text := {
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
-	machine_code = joined(from, ".driver.cwasm")
-	rename(c_string(machine_code), c_string(joined(to, ".driver.cwasm")))
-	rename(c_string(joined(machine_code, ".key")), c_string(joined(to, ".driver.cwasm.key")))
+	machine_code_renamed(from, to, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_renamed(from, to, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+}
+machine_code_renamed(from: text, to: text, suffix: text): nothing := {
+	rename(c_string(joined(from, suffix)), c_string(joined(to, suffix)))
+	rename(c_string(joined(joined(from, suffix), ".key")), c_string(joined(joined(to, suffix), ".key")))
+}
+# a build's machine code of one heap copied beside another build file, when it has that one
+machine_code_copied(from: text, to: text, suffix: text): nothing := {
+	if read_file(joined(joined(from, suffix), ".key")).length > 0 {
+		copied(joined(from, suffix), joined(to, suffix))
+		copied(joined(joined(from, suffix), ".key"), joined(joined(to, suffix), ".key"))
+	}
 }
 # a file's copy, written aside and renamed, so a run beside this one never reads half of it
 copied(from: text, to: text): nothing := {
@@ -196,7 +218,9 @@ words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
 	list
 }
 # `warp repl`, the console: each line compiled by warp.wasm's repl-step after the lines that stayed (declarations,
-# uses: its state file), then run, in a child process of its own, so a line that fails ends only its child
+# uses: its state file), then run, in a child process of its own, so a line that fails ends only its child. The child
+# is this warp started anew (`warp repl-line <state> <line>`), never a fork that runs on: a forked copy of a process
+# whose libraries started threads (Cocoa, SDL) aborts (card repl-aborts)
 console(compiler: text): nothing := {
 	print("Interactive console (Ctrl+D to exit)")
 	state = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl.warp")
@@ -204,22 +228,130 @@ console(compiler: text): nothing := {
 	input = fdopen(STDIN, c_string("r"))
 	line_cell = allocate(8)
 	capacity = allocate(8)
+	editing = isatty(STDIN) != 0
+	history = ""
+	lines = 0
 	while yes {
-		fd_write(STDOUT, "🌀", 1, allocate(4))
-		length = getline(line_cell, capacity, input)
-		if length < 0 then break
-		line = trimmed_end(native_copy(long_at(line_cell).value, length))
+		fd_write(STDOUT, prompt(), 1, allocate(4))
+		line = ""
+		if editing {
+			line = edited_line(history, lines)
+			if same_text(line, input_ended()) then break
+		} else {
+			length = getline(line_cell, capacity, input)
+			if length < 0 then break
+			line = trimmed_end(native_copy(long_at(line_cell).value, length))
+		}
 		if line.length > 0 {
+			history = joined(joined(history, line), "\n")
+			lines = lines + 1
 			child = fork()
-			if child == 0 {
-				line_ran(compiler, state, line)
-				exit(0)
-			}
+			if child == 0 { line_started(state, line) }
 			waitpid(child, allocate(4), 0)
 		}
 	}
 	print("")
 	unlink(state)
+}
+# The console's line on a terminal (card repl-arrow-escape): the terminal reads a key at a time without echo while
+# the line is edited, ←/→ move the cursor, ↑/↓ step through the earlier lines, ⌫ deletes before the cursor, Ctrl+D on
+# an empty line ends the console (input_ended). The cursor steps over a character's UTF-8 bytes whole
+edited_line(history: text, lines: i64): text := {
+	settings = command_output("stty -g")
+	command_output("stty -icanon -echo min 1")
+	line = ""
+	at = 0
+	back = 0
+	while yes {
+		c = key()
+		if c < 0 or (c == KEY_END_OF_INPUT and line.length == 0) {
+			line = input_ended()
+			break
+		}
+		if c == KEY_RETURN or c == NEWLINE then break
+		if c == KEY_ESCAPE {
+			if key() == KEY_BRACKET {
+				arrow = key()
+				if arrow == ARROW_LEFT and at > 0 { at = character_before(line, at) }
+				if arrow == ARROW_RIGHT and at < line.length { at = character_after(line, at) }
+				if arrow == ARROW_UP and back < lines { back = back + 1 }
+				if arrow == ARROW_DOWN and back > 0 { back = back - 1 }
+				if arrow == ARROW_UP or arrow == ARROW_DOWN {
+					line = if back == 0 then "" else history_line(history, lines - back)
+					at = line.length
+				}
+			}
+		} else if (c == KEY_DELETE or c == KEY_BACKSPACE) and at > 0 {
+			start = character_before(line, at)
+			line = joined(text_from(line.address, start as u32), text_from(line.address + at, (line.length - at) as u32))
+			at = start
+		} else if c >= KEY_SPACE {
+			line = joined(joined(text_from(line.address, at as u32), byte_text(c)), text_from(line.address + at, (line.length - at) as u32))
+			at = at + 1
+		}
+		redrawn(line, at)
+	}
+	command_output(joined("stty ", settings))
+	fd_write(STDOUT, "\n", 1, allocate(4))
+	line
+}
+prompt(): text := "🌀"
+# what edited_line gives at the input's end: a line no key makes, the one byte Ctrl+D
+input_ended(): text := byte_text(KEY_END_OF_INPUT)
+byte_text(value: i32): text := {
+	cell = allocate(1)
+	byte_at(cell).value = value as u8
+	text_from(cell, 1)
+}
+# a terminal control sequence: ESC [ and the rest
+control(rest: text): text := joined(joined(byte_text(KEY_ESCAPE), "["), rest)
+# the next byte the terminal gives, -1 at its end
+key(): i32 := {
+	cell = allocate(1)
+	if read(STDIN, cell, 1) <= 0 then -1 else byte_at(cell).value as i32
+}
+# a UTF-8 byte that continues a character
+continues(line: text, at: i64): bool := byte_at(line.address + at).value / 64 == 2
+character_before(line: text, at: i64): i64 := {
+	start = at - 1
+	while start > 0 and continues(line, start) { start = start - 1 }
+	start
+}
+character_after(line: text, at: i64): i64 := {
+	end = at + 1
+	while end < line.length and continues(line, end) { end = end + 1 }
+	end
+}
+# the prompt and the line written anew, the cursor moved back over the characters after it
+redrawn(line: text, at: i64): nothing := {
+	fd_write(STDOUT, joined(joined(joined("\r", prompt()), line), control("K")), 1, allocate(4))
+	after = 0
+	for i in at..line.length { if not continues(line, i) { after = after + 1 } }
+	if after > 0 { fd_write(STDOUT, control(joined(text_of(after), "D")), 1, allocate(4)) }
+}
+# the history's line at that index from 0, its lines each ended by a newline
+history_line(history: text, index: i64): text := {
+	start = 0
+	seen = 0
+	for i in 0..history.length {
+		if byte_at(history.address + i).value == NEWLINE {
+			if seen == index { return text_from(history.address + start, (i - start) as u32) }
+			seen = seen + 1
+			start = i + 1
+		}
+	}
+	""
+}
+# the forked child replaced by `warp repl-line <state> <line>` at once
+line_started(state: text, line: text): nothing := {
+	given = arguments()
+	added(given, executable_path())
+	added(given, "repl-line")
+	added(given, state)
+	added(given, line)
+	long_at(given.pointers + given.count * 8).value = 0
+	execv(c_string(executable_path()), given.pointers)
+	exit(1)
 }
 # one console line compiled after the state's lines (repl-step keeps its declarations there), then its module run
 line_ran(compiler: text, state: text, line: text): nothing := {
@@ -293,6 +425,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
 	}
 	if same_text(word, "repl") or same_text(word, "console") or same_text(word, "start") { return console(compiler) }
+	if same_text(word, "repl-line") { return line_ran(compiler, arg(first + 1), arg(first + 2)) }
 	if same_text(word, "version") or same_text(word, "--version") { return versioned(compiler) }
 	# a plain `warp app.warp` serves its routes (lib/web.warp routes_end), `warp run app.warp` runs it once
 	if is_warp_file(word) and not prefixed { setenv(c_string("WARP_SERVE"), c_string("yes"), 1) }

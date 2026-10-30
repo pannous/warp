@@ -186,7 +186,7 @@ sort_words = ["sorted_node", "sorted_node_by"]
 def orders_instances(): bool { module.functions.keys.any(name => name == "compare" or name.starts_with("compare·")) }
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (rust-harness:src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
-core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
+core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
@@ -194,11 +194,11 @@ core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "in
 # the kinds of a value known only at run time each type passes, as Rust's BUILTIN_TYPES masks take them: an int is a
 # rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
 # types.warp node_is_type, held_kind_bit)
-passing_kinds = {int: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
+passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
 	number: [Kind.Int, HeldBit.Rational, Kind.Float], text: [Kind.Text, Kind.Codepoint], char: [Kind.Codepoint],
 	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
 	error: [Kind.Error], code: [], function: [Kind.Function]}
-covered_kinds = {int: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char],
+covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char],
 	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], symbol: [], map: [], error: [], code: [], function: []}
 kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it

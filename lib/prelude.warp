@@ -110,6 +110,8 @@ string(x): text from emitter
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
 alias tuple = list
+// decision nat-and-int: a fraction is a rational
+type fraction = rational
 alias keys = map_keys
 alias values = map_values
 alias contains = collection_contains

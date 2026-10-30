@@ -24,6 +24,8 @@ for option in "$@"; do
 	esac
 done
 [ -d "$lib/compiler" ] || { echo "compiler-inputs.sh: no compiler/ in $lib" >&2; exit 1; }
+# a hash without the seed is no tree's: refused, never a quiet wrong hash (2026-10-30)
+[ -f "${WARP_SEED-}" ] || { echo "compiler-inputs.sh: WARP_SEED names no seed (${WARP_SEED-unset}); rebuild.sh sets it, by hand: WARP_SEED=~/dev/bin/warp-seed.wasm" >&2; exit 1; }
 modules() {
 	if [ -n "$baked" ]; then (cd "$lib" && ls "${BAKED[@]}" 2>/dev/null); return; fi
 	(cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||' | LC_ALL=C sort)
@@ -34,6 +36,6 @@ files() {
 }
 [ -n "$listed" ] && files >&2
 {
-	echo "seed $([ -f "${WARP_SEED-}" ] && { sha256sum "$WARP_SEED" 2>/dev/null || shasum -a 256 "$WARP_SEED"; } | cut -c1-64)"
+	echo "seed $({ sha256sum "$WARP_SEED" 2>/dev/null || shasum -a 256 "$WARP_SEED"; } | cut -c1-64)"
 	files | while IFS= read -r file; do printf '%s\0' "$file"; cat "$lib/$file"; printf '\0'; done
 } | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16

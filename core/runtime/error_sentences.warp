@@ -17,7 +17,9 @@ whole_number_fix() := "fix: compute it with /! (floor division) or `… as int`"
 error_in_data_fix() := "handle it with try … else, or declare `or error`"
 # how a runtime error is fixed, after its words; "" for one without a fix
 error_fix(name: text): text := {
-	if name == "index_must_be_an_integer" or name == "count_must_be_an_integer" or name == "an_int_must_be_a_whole_number" { return whole_number_fix() }
+	if name == "index_must_be_an_integer" or name == "count_must_be_an_integer" or name == "an_int_must_be_a_whole_number" or name == "not_a_whole_number" { return whole_number_fix() }
+	if name == "too_big_for_int" { return "fix: `x as! int` keeps its low 64 bits" }
+	if name == "not_an_exact_number" { return "fix: `x as rational` takes a float's exact value" }
 	if name == "a_list_item_holds_no_error" or name == "a_field_holds_no_error" { return error_in_data_fix() }
 	if name == "not_a_map" { return "keys, values and entries are a map's; a list's positions are 1..count(xs)" }
 	if name == "ø_plus_a_text" { return "fix: start a text with `t = \"\"`, a list with `t = []`" }
@@ -65,6 +67,7 @@ error_sentence(name: text): text := {
 	}
 	if name == "a_list_item_holds_no_error" or name == "a_field_holds_no_error" { return detail_text(trap_detail) + ": " + error_words(name) }
 	if text_starts_with(name, "no_case_") { return error_words(name) + " = " + node_text(trap_detail) }
+	if name == "too_big_for_int" { return "too big for int: " + node_text(trap_detail) }
 	if name == "no_length" { return "no length of " + held_kind_word(trap_detail) + " " + node_text(trap_detail) + ": only a list, a text or a character has one" }
 	error_words(name)
 }
