@@ -155,6 +155,29 @@ int32_t library_system_value_set(char* name, int64_t value) {
 	for (int i = 0; i < OWNING_COUNT; i++) if (value_takers[i] && value_takers[i](name, value)) owned = 1;
 	return owned;
 }
+// The host words the driver does not answer, bound to the libraries beside warp that own some (libwarp_gpu's
+// gpu_compute, libwarp_window's text_coverage, decision library-direct-refs): the wasmtime_func_callback_t
+// `warp_word_<name>` a library exports, reading and building the module's values in place (lib/native/warp_node.h);
+// NULL when none owns it. Two owning one name end the run naming both
+static const char* HOST_WORD_LIBRARIES[] = {"warp_gpu", "warp_window"};
+enum { HOST_WORD_COUNT = sizeof HOST_WORD_LIBRARIES / sizeof *HOST_WORD_LIBRARIES, WORD_SYMBOL_ROOM = 256 };
+void* library_word(char* name) {
+	char symbol[WORD_SYMBOL_ROOM];
+	snprintf(symbol, sizeof symbol, "warp_word_%s", name);
+	void* word = NULL;
+	const char* owner = NULL;
+	for (int i = 0; i < HOST_WORD_COUNT; i++) {
+		void* found = library_function((char*)HOST_WORD_LIBRARIES[i], symbol);
+		if (!found) continue;
+		if (word) {
+			fprintf(stderr, "the host word %s is in two libraries: lib%s and lib%s\n", name, owner, HOST_WORD_LIBRARIES[i]);
+			exit(1);
+		}
+		word = found;
+		owner = HOST_WORD_LIBRARIES[i];
+	}
+	return word;
+}
 // A painting shown in an open window (libwarp_window's layer) by libwarp_gpu, on the GPU throughout: 1 shown, 0 no
 // window open (the driver writes its PNG), -1 failed, the reason told
 static void* window_layer(int64_t width, int64_t height) {

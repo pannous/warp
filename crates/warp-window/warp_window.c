@@ -7,6 +7,7 @@
 // Built by scripts/wasmtime-c-api.sh where SDL3 is installed
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -151,4 +152,129 @@ void* warp_window_layer(int32_t painting_width, int32_t painting_height) {
 		SDL_SetWindowSize(window, (int)width, (int)height);
 	}
 	return SDL_Metal_GetLayer(view);
+}
+
+// --- text_coverage(words, size) (label of use draw, card samples-graphics): the words set `size` pixels per em on one
+// line in a system sans-serif font through stb_truetype (notes/reuse_graphics.md), as [width, height, then how much
+// each pixel is covered from 0 to 255, row by row], its height the font's ascent and descent, as the playground's
+// canvas sets them (web/playground/host-media.js). WARP_FONT names another font file
+#define STB_TRUETYPE_IMPLEMENTATION
+#define STBTT_STATIC
+#include "stb_truetype.h"
+#include "warp_node.h"
+
+#define FONT_VARIABLE "WARP_FONT"
+// the sans-serif fonts looked for, the first found used: what browsers show for sans-serif on each system
+static const char* SYSTEM_FONTS[] = {"/System/Library/Fonts/Helvetica.ttc", "/System/Library/Fonts/Supplemental/Arial.ttf",
+	"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+	"/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
+	"C:\\Windows\\Fonts\\arial.ttf"};
+enum { FONT_COUNT = sizeof SYSTEM_FONTS / sizeof *SYSTEM_FONTS };
+static char font_failure[1024];
+
+static unsigned char* file_bytes(const char* path) {
+	FILE* file = fopen(path, "rb");
+	if (!file) return NULL;
+	fseek(file, 0, SEEK_END);
+	long size = ftell(file);
+	fseek(file, 0, SEEK_SET);
+	unsigned char* bytes = malloc((size_t)size);
+	if (fread(bytes, 1, (size_t)size, file) != (size_t)size) { free(bytes); bytes = NULL; }
+	fclose(file);
+	return bytes;
+}
+// the font, read once; NULL and font_failure without one
+static stbtt_fontinfo* font(void) {
+	static stbtt_fontinfo info;
+	static int asked, found;
+	if (asked) return found ? &info : NULL;
+	asked = 1;
+	const char* named = getenv(FONT_VARIABLE);
+	const char* path = named && *named ? named : NULL;
+	for (int i = 0; !path && i < FONT_COUNT; i++) if (SDL_GetPathInfo(SYSTEM_FONTS[i], NULL)) path = SYSTEM_FONTS[i];
+	if (!path) {
+		snprintf(font_failure, sizeof font_failure, "no font found: install DejaVu Sans, or name a .ttf in " FONT_VARIABLE);
+		return NULL;
+	}
+	unsigned char* bytes = file_bytes(path);
+	if (!bytes || !stbtt_InitFont(&info, bytes, stbtt_GetFontOffsetForIndex(bytes, 0))) {
+		snprintf(font_failure, sizeof font_failure, "cannot read the font %s", path);
+		return NULL;
+	}
+	found = 1;
+	return &info;
+}
+// the next code point of UTF-8 text, the text moved past it
+static int code_point(const unsigned char** text) {
+	const unsigned char* at = *text;
+	int length = *at < 0x80 ? 1 : *at < 0xE0 ? 2 : *at < 0xF0 ? 3 : 4;
+	int point = length == 1 ? *at : *at & (0x7F >> length);
+	for (int i = 1; i < length && at[i]; i++) point = point << 6 | (at[i] & 0x3F);
+	for (int i = 0; i < length && **text; i++) (*text)++;
+	return point;
+}
+// the coverage of the words, `count` its numbers (the caller frees it); NULL without a font
+static int64_t* coverage(const char* words, float size, size_t* count) {
+	stbtt_fontinfo* info = font();
+	if (!info) return NULL;
+	float scale = stbtt_ScaleForMappingEmToPixels(info, size);
+	int ascent, descent, gap;
+	stbtt_GetFontVMetrics(info, &ascent, &descent, &gap);
+	float caret = 0;
+	int previous = 0;
+	for (const unsigned char* at = (const unsigned char*)words; *at;) {
+		int point = code_point(&at), advance, bearing;
+		if (previous) caret += scale * stbtt_GetCodepointKernAdvance(info, previous, point);
+		stbtt_GetCodepointHMetrics(info, point, &advance, &bearing);
+		caret += scale * advance;
+		previous = point;
+	}
+	int width = caret < 1 ? 1 : (int)ceilf(caret), height = (int)ceilf(scale * (ascent - descent));
+	if (height < 1) height = 1;
+	int64_t* covered = calloc((size_t)width * height + 2, sizeof *covered);
+	covered[0] = width, covered[1] = height;
+	float baseline = scale * ascent;
+	caret = 0, previous = 0;
+	for (const unsigned char* at = (const unsigned char*)words; *at;) {
+		int point = code_point(&at), advance, bearing, left, top, right, bottom;
+		if (previous) caret += scale * stbtt_GetCodepointKernAdvance(info, previous, point);
+		float shift = caret - floorf(caret);
+		stbtt_GetCodepointBitmapBoxSubpixel(info, point, scale, scale, shift, 0, &left, &top, &right, &bottom);
+		int columns = right - left, rows = bottom - top;
+		if (columns > 0 && rows > 0) {
+			unsigned char* glyph = malloc((size_t)columns * rows);
+			stbtt_MakeCodepointBitmapSubpixel(info, glyph, columns, rows, columns, scale, scale, shift, 0, point);
+			for (int y = 0; y < rows; y++) for (int x = 0; x < columns; x++) {
+				int column = (int)floorf(caret) + left + x, row = (int)roundf(baseline) + top + y;
+				if (column < 0 || column >= width || row < 0 || row >= height) continue;
+				int64_t* cell = &covered[2 + (size_t)row * width + column];
+				*cell = *cell + glyph[y * columns + x] > 255 ? 255 : *cell + glyph[y * columns + x];
+			}
+			free(glyph);
+		}
+		stbtt_GetCodepointHMetrics(info, point, &advance, &bearing);
+		caret += scale * advance;
+		previous = point;
+	}
+	*count = (size_t)width * height + 2;
+	return covered;
+}
+// text_coverage(words, size), bound by the driver (lib/native/foreign.c library_word)
+wasm_trap_t* warp_word_text_coverage(void* engine, wasmtime_caller_t* caller, const wasmtime_val_t* given, size_t given_count, wasmtime_val_t* results, size_t result_count) {
+	(void)given_count, (void)result_count;
+	warp_values values = warp_values_of(engine, caller, &given[0].of.anyref);
+	wasmtime_anyref_t answer;
+	wasmtime_anyref_set_null(&answer);
+	char* words = warp_text_bytes(&values, &given[0].of.anyref, NULL);
+	size_t count = 0;
+	int64_t* covered = values.failure[0] ? NULL : coverage(words, (float)given[1].of.i64, &count);
+	if (covered) {
+		wasmtime_anyref_t* numbers = malloc(count * sizeof *numbers);
+		for (size_t i = 0; i < count; i++) numbers[i] = warp_int(&values, covered[i]);
+		answer = warp_list(&values, WARP_MARKED_SQUARELIST, numbers, count);
+		free(numbers);
+		free(covered);
+	} else if (!values.failure[0]) warp_failed(&values, font_failure);
+	free(words);
+	return warp_answered(&values, answer, results);
 }

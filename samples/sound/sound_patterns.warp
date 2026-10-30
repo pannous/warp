@@ -3,7 +3,7 @@
 
 use sound
 
-tempo = 110
+tempo = 180
 bass() := pattern "c3 ~ [c3 c3] <~ c3?>"           # the bass: a bar; the last step alternates
 low() := pattern "c2 _ _ e2"                         # c2 holds three steps
 offbeat() := pattern("~ g4 ~ g4*2", bar 1)           # the offbeat chords' root
