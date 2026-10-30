@@ -8,7 +8,7 @@
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
 set -uo pipefail
 INSTALLED=$HOME/dev/bin/warp
-COMPILERS=(warp.wasm warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
+COMPILERS=(warp.wasm warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key warp.wasm.driver.build.cwasm warp.wasm.driver.build.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
 EXPECTED=Hello
 
 tree=$(cd "${1:?usage: smoke.sh <worktree>}" && pwd) || exit 2

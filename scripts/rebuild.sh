@@ -103,7 +103,7 @@ self_passed() { mkdir -p "$store/self-tested" && inputs_line >"$store/self-teste
 promoted_untested() {
 	local file=$compilers/warp-self.wasm part
 	[ -f "$compilers/warp.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp.wasm.inputs" 2>/dev/null)" = "$hash" ] || return 1
-	for part in "" .driver.cwasm .driver.cwasm.key; do
+	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
 		[ -f "$compilers/warp.wasm$part" ] && copied "$compilers/warp.wasm$part" "$file$part"
 	done
 	inputs_line >"$file.inputs"
