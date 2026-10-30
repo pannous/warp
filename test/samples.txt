@@ -131,8 +131,8 @@ WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
+SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
-SRV  samples/servers/worker.warp
 FAIL samples/advanced/neural_net.warp
 FAIL samples/advanced/raytracer.warp
 FAIL samples/advanced/snake.warp
@@ -195,8 +195,8 @@ FAIL samples/objects/data_structures.warp
 FAIL samples/objects/references.warp
 FAIL samples/python/numpy_matrix.warp
 FAIL samples/python/python_modules.warp
-FAIL samples/servers/hosting.warp
 FAIL samples/servers/server.warp
+FAIL samples/servers/worker.warp
 FAIL samples/signals/signal_fields.warp
 FAIL samples/sound/arrangement.warp
 FAIL samples/sound/gpu_visualizer_warp.warp
