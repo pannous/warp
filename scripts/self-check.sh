@@ -66,7 +66,7 @@ fi
 case $? in
   0) ;;
   3) print -r -- "self-check: REBUILD NEEDED: no pair for these compiler inputs in lib/ nor the store; checking the existing pair (scripts/self-check.sh --rebuild builds it)" ;;
-  *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree: $(print -r -- $pair | tail -3)"; exit 1 ;;
+  *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree (its step and log in the store):"; print -r -- $pair; exit 1 ;;
 esac
 print -r -- $pair
 # the self test itself (AGENTS.md "Testing"): warp.wasm compiles compiler.warp and that build, promoted to warp-self.wasm,
@@ -74,7 +74,8 @@ print -r -- $pair
 # when the compile fails: the self lane was red unnoticed for hours while it was skipped here (card self-check-compile)
 self_lane() {
   said=$(WARP_BINARY=$warp WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/rebuild.sh self $worktree 2>&1) || {
-    verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
+    verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp:
+$said"; return 1; }
   check_lane self && stage_two
 }
 # stage 2 for real, as the next seed's stage will be: warp-self.wasm is only a copy of warp.wasm, so the compiler

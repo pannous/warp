@@ -12,9 +12,17 @@
 #      /Volumes/Build/compilers/<hash>/ on the Mac (WARP_COMPILER_STORE names another)
 #   3. else, unless --check, `warp rebuild`, the result published to the store; the store's `main` link moves to it only for a build of origin/main
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
+# A failed build is kept too, so every build of a hash happens once (user 2026-10-30): <store>/<hash>/<compiler>.failed/
+# holds its log (build.log), the step it failed in (seed, stage-two, optimize, runtime, modules; `warp rebuild` says each
+# before it runs), what was said (message) and the half-built warp.wasm.new and runtime.wasm. A request for that hash
+# prints the stored failure at once and exits 1; --force builds again, from the failed step on with the stored artifacts
+# (`warp rebuild from <step>`), for a fix outside the inputs (the warp binary, memory, a full disk): a fix of the sources
+# is a new hash, whose build starts at the seed.
 # The warp binary building: WARP_BINARY, else the shared native warp (~/dev/bin/warp on the Mac, warp on the PATH elsewhere).
 # Every hit and miss is a line of <store>/rebuilds.log: time, tree, hash, compiler, hit or miss.
 set -uo pipefail
+STEPS=(seed stage-two optimize runtime modules)  # core/native/warp.warp rebuilt, in order
+SHOWN_LINES=60  # of a failed step's output, printed before its log's path
 check= force= which=pure tree=
 for word in "$@"; do
 	case $word in
@@ -49,13 +57,16 @@ copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/nul
 # runs in the first free slot of <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many
 build_slots=${WARP_BUILD_SLOTS:-5}
 lock_held_elsewhere=75
+# in_build_slot <log> <command…>: the command's output into the log
 in_build_slot() {
-	command -v lockf >/dev/null || { "$@"; return; }
+	local log=$1
+	shift
+	command -v lockf >/dev/null || { "$@" >>"$log" 2>&1; return; }
 	mkdir -p "$store/build-slots"
 	local slot status waited=
 	while :; do
 		for slot in $(seq "$build_slots"); do
-			lockf -s -t 0 "$store/build-slots/$slot" "$@"
+			lockf -s -t 0 "$store/build-slots/$slot" "$@" >>"$log" 2>&1
 			status=$?
 			[ $status = $lock_held_elsewhere ] || return $status
 		done
@@ -74,6 +85,44 @@ publish() {
 	rm -f "$store/$hash/$name.new-$$"
 	inputs_line >"$store/$hash/$name.inputs"
 }
+# a failed build's record: its log, step and message, the half-built artifacts of a later step (resumed by --force)
+failure() { echo "$store/$hash/$1.failed"; }
+# step_after_seed <step>: a step that starts on artifacts of an earlier one
+step_after_seed() { [ -n "$1" ] && [ "$1" != "${STEPS[0]}" ]; }
+# kept_failure <name> <log> <status>: the failed build kept in the store (the build lock held), its message printed
+kept_failure() {
+	local name=$1 log=$2 status=$3 record step lines output part
+	record=$(failure "$name")
+	step=$(sed -n 's/^rebuild step //p' "$log" | tail -1)
+	output=$(awk '/^rebuild step /{output=""; next} {output=output $0 "\n"} END{printf "%s", output}' "$log")
+	lines=$(printf '%s' "$output" | grep -c '')
+	rm -rf "$record.new-$$" && mkdir -p "$record.new-$$" || return 1
+	{
+		echo "rebuild.sh: $name of $hash build-failed${step:+ at step $step} (exit $status; $(inputs_line); by $warp)"
+		[ "$lines" -gt $SHOWN_LINES ] && echo "rebuild.sh: the step's last $SHOWN_LINES of $lines lines:"
+		printf '%s' "$output" | tail -$SHOWN_LINES
+		echo "rebuild.sh: $name build-failed${step:+ at step $step}, log $record/build.log (this hash is answered from the store; --force builds it again${step:+ from step $step})"
+	} >"$record.new-$$/message"
+	mv "$log" "$record.new-$$/build.log"
+	echo "$step" >"$record.new-$$/step"
+	if [ "$name" = warp ] && step_after_seed "$step"; then
+		for part in warp.wasm.new runtime.wasm; do [ -f "$compilers/$part" ] && copied "$compilers/$part" "$record.new-$$/$part"; done
+	fi
+	rm -f "$compilers/warp.wasm.new"
+	rm -rf "$record" && mv "$record.new-$$" "$record"
+}
+# the stored failure printed, its last line naming the step and the log (what smoke.sh, gate.sh and after-push.sh show)
+failure_said() { cat "$(failure "$1")/message" >&2; }
+# the step a forced build of a failed hash starts at, its half-built artifacts put back into lib/; none: the seed
+resumed_step() {
+	local record step part
+	record=$(failure "$1")
+	step=$(cat "$record/step" 2>/dev/null)
+	[ "$1" = warp ] && step_after_seed "$step" && [ -f "$record/warp.wasm.new" ] || return
+	for part in warp.wasm.new runtime.wasm; do [ -f "$record/$part" ] && copied "$record/$part" "$compilers/$part"; done
+	echo "$step"
+}
+
 # the store's main link to this hash, when the tree is origin/main and its core unchanged
 mark_main() {
 	local head remote
@@ -150,6 +199,7 @@ one() {
 	if [ -z "$force" ] && [ "$name" = warp-self ] && self_tested; then
 		promoted_untested && logged "$name" hit-baked && return 0
 	fi
+	if [ -z "$force" ] && [ -d "$(failure "$name")" ]; then logged "$name" failed-before; set_aside "$name"; failure_said "$name"; return 1; fi
 	if [ -n "$check" ]; then logged "$name" miss; return 3; fi
 	# one build of a hash at a time: a second tree waits for the first and takes its result from the store
 	if ! building "$name"; then
@@ -160,19 +210,27 @@ one() {
 		one "$@"
 		return
 	fi
-	logged "$name" miss-building
-	local lane=pure
-	[ "$name" = warp-self ] && lane=self
-	built=$(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash in_build_slot "$warp" rebuild $lane 2>&1)
+	local lane=(pure) from log=$store/$hash/$name.building/log
+	[ "$name" = warp-self ] && lane=(self)
+	from=$(resumed_step "$name")
+	[ -n "$from" ] && lane=(from "$from")
+	logged "$name" "miss-building${from:+-from-$from}"
+	: >"$log"
+	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash in_build_slot "$log" "$warp" rebuild "${lane[@]}")
 	status=$?
-	[ $status = 0 ] || { released "$name"; echo "$built" | tail -5 >&2; set_aside "$name"; logged "$name" build-failed; return 1; }
-	local path
-	path=$(echo "$built" | sed -n 's/^built //p' | tail -1)
-	[ -n "$path" ] && [ "$path" != "$file" ] && [ -f "$path" ] && copied "$path" "$file"
-	[ -f "$file" ] || { released "$name"; echo "rebuild.sh: warp rebuild said no file ($built)" >&2; return 1; }
+	if [ $status != 0 ]; then
+		kept_failure "$name" "$log" $status
+		released "$name"
+		set_aside "$name"
+		logged "$name" build-failed
+		failure_said "$name"
+		return 1
+	fi
+	[ -f "$file" ] || { cat "$log" >&2; released "$name"; echo "rebuild.sh: warp rebuild wrote no $file" >&2; return 1; }
 	inputs_line >"$file.inputs"
 	publish "$file"
 	for companion in $(companions "$name" "$compilers"); do publish "$compilers/$companion" "$companion"; done
+	rm -rf "$(failure "$name")"
 	released "$name"
 	[ "$name" = warp-self ] && self_passed
 	logged "$name" built

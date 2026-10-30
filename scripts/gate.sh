@@ -52,7 +52,7 @@ said() { local text; text=$(grep -v '^ *[0-9]* |\|^ *|' "$1" | head -1); echo "$
 # the compilers of the tree's lib in that lib/ (scripts/rebuild.sh: built only when no build of these inputs exists),
 # then beside the binary copy, which takes the compiler beside it first: a stale one there never runs the probes
 if ((rebuild)) && wants 0; then
-	WARP_BINARY=$binary "$(dirname "$0")/rebuild.sh" pure "$tree" > "$logs/rebuild-pure.log" 2>&1 || { echo "FAIL rebuild pure: $(grep -i 'error\|refus' "$logs/rebuild-pure.log" | head -1 | cut -c1-160) (log $logs/rebuild-pure.log)"; red 0; }
+	WARP_BINARY=$binary "$(dirname "$0")/rebuild.sh" pure "$tree" > "$logs/rebuild-pure.log" 2>&1 || { echo "FAIL rebuild pure: $(tail -1 "$logs/rebuild-pure.log") (output $logs/rebuild-pure.log)"; red 0; }
 fi
 for compiler in warp warp-self; do
 	rm -f "$logs/$compiler.wasm"
