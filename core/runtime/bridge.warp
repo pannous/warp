@@ -17,6 +17,8 @@ extended_product(a: Node, b: Node): Node from runtime
 # conversions: an exact ratio as a float, and truncated toward 0
 extended_float(n: Node): float from runtime
 extended_truncated(n: Node): int from runtime
+# an int past 64 bits where an int is needed: its low 64 bits, as an int wraps (decision nat-and-int)
+extended_wrapped(n: Node): int from runtime
 # text_numbers: "1/3" read, n/d in lowest terms
 extended_ratio(n: int, d: int): Node from runtime
 # floats: a text of count zero digits

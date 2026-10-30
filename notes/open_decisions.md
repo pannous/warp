@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- type-shows-nat (interviewer, warp-fixer nat-and-int step c): type(3) and type(x) of an undeclared whole value show `nat`, a declared int shows `int`; the test/types lines pinning 'int' are upgraded.
 - bare-overloaded-word (interviewer, core OK in core/passes/arity_overloads.warp, restores saved-words): a bare word naming a word overloaded by arity becomes its zero-argument variant (`use sound; x = sound` is a Recording); no zero-argument variant and no single fit as a value → refused naming the variants, never "unknown name".
 - linked-variants-by-arity (interviewer, core OK in core/emitter/prebuilt.warp, implements module-arity-overloads): linking keeps every variant of a name and a call takes the one whose arity fits; none fits → refused loudly naming the variants. Fixes `use draw; show()` silently not painting when run from a file.
 - fast-int-readings (interviewer, for warp-fixer's nat-and-int step b): a literal beside a fast int takes the int side (`xs[i + 1]` in a range loop stays int); `i++`/`i--` on an undeclared counter stay int, `+=` grows like + (so `s += i` is a nat).

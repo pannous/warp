@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+# a million floats doubled on the GPU: gpu_compute reads and builds the list in place (lib/native/warp_node.h)
+doubling = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) { if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] * 2.0; } }"
+n = 1000000
+started = clock()
+xs = [float(i) for i in 0..n]
+made = clock()
+big = gpu_compute(doubling, xs, n / 64 + 1)
+print("list made in ${made - started} ms, 1M floats through the GPU in ${clock() - made} ms, last ${big#n}")
