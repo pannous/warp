@@ -1049,31 +1049,11 @@ def own_body(f: Function, at: int): list {
 	if not drops_imports() { return function_body(f, at) }
 	moved_body(f, [import_move(0, {})] + range_list(#relocated.keys - 1).map(k => shifted(0)))
 }
-# runtime.wasm's imports, each [entry, type]: host words, functions only
-def runtime_import_entries(): list {
-	content = runtime_part(section_ids.import)
-	count = uleb_read(content, 0)
-	at = count#2
-	entries = []
-	for i in 0..<count#1 {
-		start = at
-		for part in 0..<2 {
-			size = uleb_read(content, at)
-			at = size#2 + size#1
-		}
-		if content[at] != import_function_byte { throw "runtime.wasm imports other than functions: warp rebuild writes it anew" }
-		described = uleb_read(content, at + 1)
-		end = described#2
-		entries += [[content[start ..< end], described#1]]
-		at = end
-	}
-	entries
-}
 # the import section's content: the host words kept, then the program's C functions
 def host_imports(c_entries: list): list {
 	if not drops_imports() { return with_entries(runtime_part(section_ids.import), c_entries) }
 	entries = runtime_import_entries()
-	kept = range_list(#entries).filter(i => kept_imports.has(i)).map(i => entries[i]#1)
+	kept = range_list(#entries).filter(i => kept_imports.has(i)).map(i => entries[i]#1 + uleb(entries[i]#2))
 	uleb(#kept + #c_entries) + concatenated(kept) + concatenated(c_entries)
 }
 def import_kept(i: int): bool := not drops_imports() or i >= module.runtime_image.imports or kept_imports.has(i)
