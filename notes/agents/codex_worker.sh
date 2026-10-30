@@ -13,6 +13,7 @@ DEFAULT_TURN_TIMEOUT_SECONDS=16200
 EXEC_EXIT_GRACE_SECONDS=30
 RELAY_TIMEOUT_SECONDS=60
 MAX_ROUNDS=4 # runs of Codex per timer firing while a card stays parked
+CAPACITY_PAUSE_SECONDS=600
 POLL_SECONDS=1
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${CODEX_REPO:-$DEFAULT_REPO}
@@ -288,9 +289,17 @@ echo "$(date +%FT%T) $OUTCOME"
 
 # Codex ends its turn after a few minutes even with hours left: a parked card that needs no core gets another round,
 # which continues from the handover (PARKED_BEFORE); exec keeps the pid, so the lock stays ours
+# A round the model's capacity cut short (its pushed commits survive) continues after a pause, as a parked one does
 ROUND=${CODEX_ROUND:-1}
-if [ -z "${CODEX_PROBE_PROMPT:-}" ] && [ -n "$PARKED" ] && [ "$ROUND" -lt "$MAX_ROUNDS" ] && ! grep -qi 'needs core' <<< "$PARKED"; then
-	echo "$(date +%FT%T) round $ROUND parked $(card_keys "$PARKED"); round $((ROUND + 1)) of $MAX_ROUNDS continues it"
+continuable=""
+if [ -n "$PARKED" ] && ! grep -qi 'needs core' <<< "$PARKED"; then
+	continuable="parked $(card_keys "$PARKED")"
+elif tail -3 "$RUN.jsonl" 2>/dev/null | grep -q 'at capacity'; then
+	continuable="cut short by the model's capacity"
+	sleep "$CAPACITY_PAUSE_SECONDS"
+fi
+if [ -z "${CODEX_PROBE_PROMPT:-}" ] && [ -n "$continuable" ] && [ "$ROUND" -lt "$MAX_ROUNDS" ]; then
+	echo "$(date +%FT%T) round $ROUND $continuable; round $((ROUND + 1)) of $MAX_ROUNDS continues it"
 	trap - EXIT INT TERM HUP
 	CODEX_ROUND=$((ROUND + 1)) exec "$0"
 fi
