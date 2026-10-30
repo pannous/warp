@@ -12,6 +12,25 @@ text_join(a: text, b: text): text := {
 	if same_text(a, other_text) { other_text = out }
 	out
 }
+# the texts joined, `between` between each two: one text made and each byte copied once, where `+=` in a loop copies
+# all bytes so far each time (card list-display-slowness)
+texts_joined(parts: list, between: text): text := {
+	size = 0
+	for i in 1 to #parts { size += byte_count(unboxed_text(parts#i)) }
+	if #parts > 1 { size += byte_count(between) * (#parts - 1) }
+	out = new_text(size)
+	at = 0
+	for i in 1 to #parts {
+		if i > 1 {
+			copy_text(out, at, between, 0, byte_count(between))
+			at += byte_count(between)
+		}
+		part = unboxed_text(parts#i)
+		copy_text(out, at, part, 0, byte_count(part))
+		at += byte_count(part)
+	}
+	out
+}
 global other_index = 0
 global other_at = 0
 global other_before = -1

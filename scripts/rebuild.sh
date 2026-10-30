@@ -43,6 +43,24 @@ baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
+# The machine's few build slots, shared by every session (user 2026-10-30: six rebuilds at once took the Mac): a build
+# runs in the first free slot of <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many
+build_slots=${WARP_BUILD_SLOTS:-2}
+lock_held_elsewhere=75
+in_build_slot() {
+	command -v lockf >/dev/null || { "$@"; return; }
+	mkdir -p "$store/build-slots"
+	local slot status waited=
+	while :; do
+		for slot in $(seq "$build_slots"); do
+			lockf -s -t 0 "$store/build-slots/$slot" "$@"
+			status=$?
+			[ $status = $lock_held_elsewhere ] || return $status
+		done
+		[ -n "$waited" ] || { echo "rebuild.sh: all $build_slots build slots taken, waiting" >&2; waited=1; }
+		sleep 10
+	done
+}
 inputs_line() { echo "$hash commit=$(git -C "$tree" rev-parse --short HEAD 2>/dev/null) built=$(date '+%Y-%m-%dT%H:%M:%S%z')"; }
 
 # a file into the store under its hash, by its name or the path given, never over one there (write-once)
@@ -115,7 +133,7 @@ one() {
 	logged "$name" miss-building
 	local lane=pure
 	[ "$name" = warp-self ] && lane=self
-	built=$(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash "$warp" rebuild $lane 2>&1)
+	built=$(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash in_build_slot "$warp" rebuild $lane 2>&1)
 	status=$?
 	[ $status = 0 ] || { echo "$built" | tail -5 >&2; set_aside "$name"; logged "$name" build-failed; return 1; }
 	local path

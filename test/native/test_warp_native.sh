@@ -80,7 +80,8 @@ if [ -x "$stage/warp" ]; then
 	check "the view of a terminal" "$(script -q /dev/null sh -c 'stty cols 101 rows 31; cd "$1" && ./warp "[view_width(), view_height()]"' sh "$stage" </dev/null | grep -o '\[[0-9]*, [0-9]*\]')" "[101, 31]"
 	painting=$(native 'paint([0, 1, 0xFF00FF00, 0], 2, 2)')
 	check "paint, a PNG" "${painting%%:*} $(file -b "${painting#*: }")" "painted 2×2 PNG image data, 2 x 2, 8-bit/color RGB, non-interlaced"
-	check "paint of a shader" "$(native 'paint("fn x", 2, 2, ø)')" "paint of a shader: warp has no GPU yet"
+	shaded=$(native 'paint("@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 2, 2, ø)')
+	check "paint of a shader, a PNG" "${shaded%%:*} $(file -b "${shaded#*: }" | cut -d, -f1)" "painted 2×2 PNG image data"
 	check "exit() ends the run well" "$(native $'print 1\nexit()\nprint 2'; echo $?)" "1
 0"
 	# never called, so no window even if the refusal failed
