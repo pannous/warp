@@ -7,6 +7,8 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- linked-variants-by-arity (interviewer, core OK in core/emitter/prebuilt.warp, implements module-arity-overloads): linking keeps every variant of a name and a call takes the one whose arity fits; none fits → refused loudly naming the variants. Fixes `use draw; show()` silently not painting when run from a file.
+- fast-int-readings (interviewer, for warp-fixer's nat-and-int step b): a literal beside a fast int takes the int side (`xs[i + 1]` in a range loop stays int); `i++`/`i--` on an undeclared counter stay int, `+=` grows like + (so `s += i` is a nat).
 - baked-prelude-slices (interviewer, core OK, ~6 lines core/passes/prelude_words.warp): definition_slices takes the baked LIBRARY_SLICES for a bundled file's text instead of cutting it anew; fixes hello's 34 MiB regression (prelude_definitions cut the whole prelude when no earlier caller had filled the cache). O(n²) slicing carded separately.
 - made-by-reach (interviewer, core OK, module-imports shape 1): module.made counts only kinds made by functions reachable from the program's roots, so `"hi"` no longer imports big_int_text through the shown_big_int hook.
 - comments-not-candidates (interviewer, core OK): a word in a comment or shebang (`#!/usr/bin/env warp` names `env`) never makes a program an implicit-use candidate; candidacy reads code words only.
