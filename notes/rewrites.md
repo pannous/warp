@@ -271,3 +271,16 @@ rewrite (def $h($p...): $t {$b...}) => ($h($p...): $t := {$b...})
 rewrite def $h($p...) {$b...} => ($h($p...) := {$b...})
 rewrite (def $d) => $d
 ```
+
+## Operator holes: `$op=` and `.$op` (cards elementwise-operator-forms, compound-assignment-desugaring)
+
+`rewrite ($a $op= $b) => $a = ($a $op $b)` and `rewrite ($a .$op $b) => element_wise_any($a, $b, ($l, $r) -> ($l $op $r))`
+(lib/sugar/arithmetic.warp) bind the operator a compound assignment or an element-wise form is written with; a
+template's `$l $op $r` (bare or in parentheses) becomes the operation, a function word's call (`x max= 5`). Pitfalls met:
+- the seed reads new rule syntax with its old parser (`$op=` as `$op =`) and applies the rules to the compiler's own
+  code: guard such rules with a condition the old reading fails (`where $op is symbol`)
+- `x = $a $op $b` parses as `(x = $a) $op $b` (a phrase takes the assignment): group the operation in the template
+- a pattern whose operator hole binds weaker than `=>` loses its rule: parenthesize the pattern
+- a hole marked as an operator only when the affix bound it, else every phrase template `match $x {…}` became a call
+- rules_reaching only tries a rule whose operator the code holds: the operator inside `/!=` counts (operated_within)
+- the sugar loader drops a rule after a comment with an odd apostrophe (`operator's`)

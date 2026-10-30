@@ -13,3 +13,10 @@ rewrite $f.description => $refused where $f is symbol and $f is function and $re
 rewrite $f.returns => $refused where $f is symbol and $f is function and $refused = misnamed($f, returns, return_type)
 rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, body)
+
+# `dir(time)`, `dir text`: the words of a module or type named as written (lib/rule_words.warp dir_words); `dir(v)` of
+# a value only the run knows: a map's keys, a list's or a text's words, none of a number (lib/prelude.warp
+# dir_of_value). A program's own dir wins
+rewrite dir $x => dir($x)
+rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)
+rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)

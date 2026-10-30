@@ -324,7 +324,7 @@ rules_reaching(rules: list, needs: list, results: list, statement: Node): list :
 needed_tokens(rule: Rule): list := required_words(rule.pattern) + (if rule.pattern is key and rule.head != "" then [rule.head] else [])
 # the words code must hold for the pattern to match it (rule_matches): its words outside holes
 required_words(pattern: Node): list := {
-	if rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø { return [] }
+	if rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
 	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
@@ -1045,7 +1045,7 @@ may_be_list(code: Node, scope: text, vectors: list): bool := {
 	name_of(code#1) in list_giving_words or vectors#2.has(name_of(code#1))
 }
 # `v .* 2` as the parser leaves it, before lib/sugar/arithmetic.warp spells it element_wise_any
-is_element_wise_phrase(code: Node): bool := is_spaced(code) and #code == 3 and code#2 is symbol and name_of(code#2) in PHRASE_OPERATORS and name_of(code#2).starts_with(".")
+is_element_wise_phrase(code: Node): bool := is_spaced(code) and #code == 3 and code#2 is symbol and #name_of(code#2) > 1 and name_of(code#2).starts_with(".") and name_of(code#2)#2 != '.'
 is_swizzle_word(name: text): bool := #name >= 2 and #name <= 4 and name.all(c => c in "xyzw")
 
 # the program's classes by name
@@ -1656,6 +1656,8 @@ origin_holds(rule: Rule, origin: map, bound: map): bool := {
 # key has the same operator, a group the same bracket and length (a rest hole binds the items from there on), other
 # parts are equal
 rule_matches(pattern: Node, code: Node, bound: map): bool := {
+	affix = affixed_hole(pattern)
+	if affix != ø { return affix_matches(affix, code, bound) }
 	hole = rule_hole(pattern)
 	if hole != ø { return hole_binding(hole, code, bound) }
 	typed = typed_hole(pattern)
@@ -1697,6 +1699,43 @@ one_statement_kept(pattern: Node, code: Node, bound: map): bool := {
 # a rest hole's binding that is a block of one statement (one_statement_kept)
 is_one_statement(binding: Node): bool := is_curly_group(binding) and separator_of(binding) == " "
 
+# `$op=`, `.$op`: a hole of the operator a compound assignment or an element-wise form is written with (decisions
+# op-assign-general, dot-operators-now) as [hole, before, after]: `x ^= 3` binds ^, `xs .< 2` binds <
+affixed_hole(n: Node): list? := {
+	if not (n is symbol) { return ø }
+	name = name_of(n)
+	if #name > 2 and name.starts_with(rule_hole_mark) and name.ends_with("=") { return [name[0 ..< #name - 1], "", "="] }
+	if #name > 2 and name.starts_with("." + rule_hole_mark) { return [name[1 ..], ".", ""] }
+	ø
+}
+affix_matches(affix: list, code: Node, bound: map): bool := {
+	if not (code is symbol) { return no }
+	written = name_of(code)
+	before = affix#2
+	after = affix#3
+	inner = #written - #before - #after
+	if inner <= 0 or not written.starts_with(before) or not written.ends_with(after) or canonical_operator(written) != "" { return no }
+	spelling = written[#before ..< #before + inner]
+	if not (operates(spelling) and hole_binding(affix#1, symbol(spelling), bound)) { return no }
+	bound[affixed_mark(affix#1)] = yes
+	yes
+}
+# the note in a binding that a hole holds an operator (affix_matches), for bound_operation
+affixed_mark(hole: text): text := "affixed·" + hole
+# an operator's spelling `x op= y` and `xs .op ys` are written with: one computing a value (parser computes), or a
+# function's word, `x max= 5`, also an element-wise one, `xs .*= 2`; `<=` and `:=` are operators of their own (affix_matches)
+operates(spelling: text): bool := if spelling#1 == '.' and #spelling > 1 then operates(spelling[1 ..]) else if is_name_start(spelling#1) then canonical_operator(spelling) == "" or computes(canonical_operator(spelling)) else computes(canonical_operator(spelling))
+# `$a $op $b` of a template, its hole bound to an operator's spelling (affixed_hole): the operation, a function's word
+# its call, `x max 5` max(x, 5), an element-wise form the phrase the sugar reads on
+bound_operation(template: Node, items: list, bound: map): Node? := {
+	if not (is_group(template) and separator_of(template) == " " and bracket_of(template) in ["", "("] and #template == 3 and #items == 3 and rule_hole(template#2) != ø and items#2 is symbol) { return ø }
+	if not bound.has(affixed_mark(rule_hole(template#2))) or bound.get(rule_hole(template#2)) != items#2 { return ø }
+	spelling = name_of(items#2)
+	if spelling.starts_with(".") { return ø }
+	canonical = canonical_operator(spelling)
+	if canonical != "" { return operation(items#1, canonical, items#3) }
+	if is_name_start(spelling#1) then call_of(spelling, [items#1, items#3]) else operator_call(spelling, [items#1, items#3])
+}
 hole_binding(name: text, code: Node, bound: map): bool := {
 	if bound.has(name) { return bound[name] == code }
 	bound[name] = code
@@ -1734,6 +1773,8 @@ rule_spliced(template: Node, bound: map, at: Node): Node := {
 			index += 1
 		}
 	}
+	operated = bound_operation(template, items, bound)
+	if operated != ø { return placed(operated, at) }
 	if is_phrase(template) { return placed(as_phrase(items), at) }
 	if is_block_of_rest(template) and bound.has(rest_hole_name(template#1)) and is_one_statement(bound[rest_hole_name(template#1)]) { return bound[rest_hole_name(template#1)] }
 	placed(if is_block_of_rest(template) and #items > 1 then List(items, Bracket.Curly, Separator.Semicolon) else group_like(template, items), at)
