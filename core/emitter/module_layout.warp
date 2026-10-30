@@ -7,7 +7,7 @@ def zero_code_of(kind: ValueKind): list {
 	if kind == ValueKind.Int { return [op.i64_const, 0] }
 	if kind == ValueKind.Float { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
-	if kind == ValueKind.Node { return boxed(number_value(0)) }
+	if kind == ValueKind.Node { return fresh_int_code(number_value(0).code) }
 	if kind == ValueKind.List { return vector_code([]) }
 	if is_reference(kind) { return [ref_null] + (if kind == ValueKind.Time then [110] else uleb(gc_type(reference_of(kind)#2))) }
 	[op.i32_const, 0]
