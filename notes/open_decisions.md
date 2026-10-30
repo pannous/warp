@@ -5,8 +5,11 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+- unused-imports-pass (warp-hello-rss-peak, module-imports shape 2, needs the user's yes: a new assembly phase): a reachability walk from exports/_start/hooks/global initializers drops every unreferenced function and global import; full.wasm keeps unreached runtime functions but their calls to dropped imports go to one trapping stub per type ("unreached import"), so `wasmtime hello.full.wasm` runs standalone. Recommend: yes.
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- made-by-reach (interviewer, core OK, module-imports shape 1): module.made counts only kinds made by functions reachable from the program's roots, so `"hi"` no longer imports big_int_text through the shown_big_int hook.
+- comments-not-candidates (interviewer, core OK): a word in a comment or shebang (`#!/usr/bin/env warp` names `env`) never makes a program an implicit-use candidate; candidacy reads code words only.
 - native-window-sdl3 (interviewer, core OK for ocean-native-window): the native warp gets its one window path through lib's warp_window.c over SDL3 (lazily bound like libwarp_gpu; headless/CI/WARP_NO_WINDOW/no library: one frame as today); GPU paints straight into the window surface. Condition: the driver learns no window words, it forwards system values it does not own to the loaded libraries (one generic hook, also for future sound/gamepad libraries).
 - node-attributes (interviewer, core OK for let-inside-mark, ~25 lines in two landings with a seed refresh): marks ride on the node itself, a new `attributes` field of $MetaNode beside `comment` (kept free for comments as metadata), intrinsics with_attribute(n, word) / attributes_of(n); `let` inside a lambda is such a mark, replacing the position side table. Rejected: info bits on the symbol's kind (a marked `n` would stop equalling `n`).
 - hello-lazy-runtime-dropped (interviewer): shape B of hello-compile-allocations (binding runtime words lazily) is dropped: under 7 MB of hello's 176 MB for churn at 23 emitter sites. Bigger targets: emit 29 MB, passes 45 MB, card list-boxed.

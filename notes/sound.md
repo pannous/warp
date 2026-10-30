@@ -27,6 +27,10 @@ UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 - Run sound probes under WARP_NO_WINDOW=1: otherwise sound plays on the user's Mac. Under tests, CI and
   WARP_NO_WINDOW nothing plays; a `sound 0.50 s: <path>` line goes to stderr and the WAVs are still collected for
   render_sound.
+- Checking that a run is silent without listening: `/usr/bin/log stream --style compact --predicate 'process ==
+  "coreaudiod"'` beside the run; a run that sounds shows `on behalf of <its pid>` (coreaudiod's power assertion), a
+  silent one never does (`log` alone is a zsh builtin). Verified 2026-10-30: the sound tests and samples under
+  `warp test` / WARP_NO_WINDOW show no warp pid, a normal run does.
 - probes/sound/sound_words.warp exercises the words; probes/music_go/ the `play`/`melody` phrases;
   probes/music_outlives_file.py that the player stops with warp.
 - A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word.
