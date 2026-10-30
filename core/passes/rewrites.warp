@@ -1649,7 +1649,8 @@ rule_applied(rule: Rule, origin: map, n: Node): Node := {
 }
 
 fired(rule: Rule, result: Node): Node := {
-	if rule.module != "" { fired_modules += [rule.module] }
+	# (the prelude is in every program already: a use of it once more is none, card prelude-rule)
+	if rule.module != "" and rule.module != "prelude" { fired_modules += [rule.module] }
 	if rule.alias { diagnose(call_of("alias_word", [symbol(first_word_of(rule.pattern)), symbol(first_word_of(rule.template))]), result) }
 	result
 }
