@@ -22,7 +22,7 @@ int_type_kinds(statements: list): map := {
 	kinds = {}
 	for statement in statements {
 		name = int_type_name(statement)
-		if name != ø and name not in kinds { kinds[name] = MARKED_NUMBER_KINDS[name_of(value_of(statement))] + (FIRST_INT_MARK + #kinds) * KindUnit.Info }
+		if name != ø and name not in kinds { kinds[name] = MARKED_NUMBER_KINDS[name_of(value_of(statement))] + (TypeMark.First + #kinds) * KindUnit.Info }
 	}
 	kinds
 }
