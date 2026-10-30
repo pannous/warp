@@ -17,8 +17,9 @@ Made = {BigInt: 0, Ratio: 1, Time: 2}
 NodeShape = {Empty: 0, Meta: 1, Int: 2, Ratio: 3, BigInt: 4, Float: 5, Codepoint: 6, Text: 7, Pair: 8, List: 9}
 Marked = {Bool: 257, Map: 8, SquareList: 264, UnbracketedList: 1288, Instance: 6, Entry: 262, TypeValue: 18014398509481989}
 # the units of the parts above the Kind: the info byte (a key's operator, a list's bracket, a time's form, KIND_BITS
-# 8), a list's separator (SEPARATOR_SHIFT 48), the code mark (CODE_MARK, 1 << 56)
-KindUnit = {Info: 256, Separator: 281474976710656, Code: 72057594037927936}
+# 8), a list's separator (SEPARATOR_SHIFT 48), a GPU list's mark (1 << 52, runtime/gpu_lists.warp), the code mark
+# (CODE_MARK, 1 << 56)
+KindUnit = {Info: 256, Separator: 281474976710656, GpuList: 4503599627370496, Code: 72057594037927936}
 # a list's bracket in its info byte (rust-harness:src/wasm_emitter/mod.rs bracket_info)
 BracketCode = {Curly: 0, Square: 1, Round: 2, Less: 3, Other: 4, None: 5}
 # a time's form in its info bits (rust-harness:src/time/mod.rs TimeForm), Clock the time of day

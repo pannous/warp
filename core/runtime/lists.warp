@@ -5,6 +5,7 @@ use "arithmetic.warp"
 use "characters.warp"
 use "errors.warp"
 use "text.warp"
+use "gpu_lists.warp"
 list_join(a: list, b: list): list := {
 	out = new_list(#a + #b)
 	copy_items(out, 0, a, 0, #a)
@@ -29,6 +30,7 @@ list_append(a: list, b: list): list := {
 # an empty list"), any other value fails as Rust's "not a list"
 node_at(n: Node, index: int): Node := {
 	if is_null(n) { index_out_of_range_of(index, 0) }
+	if is_gpu_list(n) { return gpu_list_at(n, index) }
 	if kind_code(n) == Kind.List { return unboxed_list(n)#index }
 	if kind_code(n) == Kind.Text { return text_char(unboxed_text(n), index) }
 	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
@@ -44,6 +46,7 @@ instance_position(instance: Node, index: int): Node := instance_field_at(instanc
 node_length(n: Node): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) { return 0 }
+	if is_gpu_list(n) { return gpu_list_count(n) }
 	if kind_code(n) == Kind.List { return #unboxed_list(n) }
 	if kind_code(n) == Kind.Text { return text_count(unboxed_text(n)) }
 	if kind_code(n) == Kind.Codepoint { return 1 }
@@ -72,6 +75,7 @@ list_insert(xs: list, at: int, value: Node): list := {
 # `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
 node_set_at(n: Node, index: int, value: Node): Node := {
 	if kind_code(n) != Kind.List { fail() }
+	if is_gpu_list(n) { return gpu_list_set(n, index, value) }
 	items = unboxed_list(n)
 	forget_map_index(items)
 	items#index = value

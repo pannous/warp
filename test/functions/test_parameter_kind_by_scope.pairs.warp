@@ -1,0 +1,4 @@
+# A parameter takes any value, whatever a variable of its name is given elsewhere: the overload is chosen by what the
+# parameter holds (samples/gpu/ocean.warp: `e -> tan(e)` beside keys.warp's case `e = "e"`, card samples-gpu-ocean-2)
+'e = "e"; f(a: int) := 1; f(a: text) := 2; [5].map(e -> f(e))'	[1]
+'x = "a"; f(a: int) := 1; f(a: text) := 2; g(x) := f(x); g(5)'	1

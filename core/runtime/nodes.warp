@@ -5,6 +5,7 @@ use "errors.warp"
 use "instructions.warp"
 use "show.warp"
 use "text.warp"
+use "gpu_lists.warp"
 # a value as a boxed $Node
 held(value: Node): Node := value
 # an int as its Int node (the emitter boxes every int so, emitter.warp boxed): one node per small number, made at its
@@ -85,7 +86,8 @@ list_shown(n: Node): text := {
 	at = bracket_info(n) + 1
 	listed = separator_info(n) == 0 and (bracket_info(n) == BracketCode.Curly or bracket_info(n) == BracketCode.Square)
 	joiner = if listed then ", " else node_text(separator_joiners()#(separator_info(n) + 1))
-	node_text(bracket_openings()#at) + joined_items(unboxed_list(n), joiner) + node_text(bracket_closings()#at)
+	items = if is_gpu_list(n) then gpu_list_items(n) else unboxed_list(n)
+	node_text(bracket_openings()#at) + joined_items(items, joiner) + node_text(bracket_closings()#at)
 }
 # `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too
 list_bracket(n: Node): Node := {
