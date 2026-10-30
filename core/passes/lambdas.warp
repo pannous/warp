@@ -234,8 +234,17 @@ passed_value(argument: Node, at: int, callee: Node, locals: list, lowering: Lowe
 	takes_function = callee is symbol and lowering.function_positions.has(name_of(callee)) and at in lowering.function_positions[name_of(callee)]
 	parameterless = argument is symbol and name_of(argument) not in locals and lowering.arities.has(name_of(argument)) and lowering.arities[name_of(argument)] == 0
 	if takes_function and parameterless { return call_node(symbol("closure_new"), [argument]) }
-	declared_word_value(argument, parameter_called_counts(callee, at, lowering), locals, lowering) ?? lowered_lambdas(argument, locals, lowering)
+	if gives_word_value(callee, at, locals, lowering) { return declared_word_value(argument, parameter_called_counts(callee, at, lowering), locals, lowering) ?? lowered_lambdas(argument, locals, lowering) }
+	lowered_lambdas(argument, locals, lowering)
 }
+# whether a word passed at `at` is a function value there: but where a word warp declares takes it as a word,
+# `empty_extremum(min)`, a parameter it doesn't declare a function
+gives_word_value(callee: Node, at: int, locals: list, lowering: Lowering): bool := {
+	if not (callee is symbol) or name_of(callee) in locals or name_of(callee) in lowering.arities { return yes }
+	lines = value_word_lines(name_of(callee))
+	#lines == 0 or lines.any(line => at <= #line.signature.parameters and line.signature.parameters[at - 1].type_name in function_types_named)
+}
+function_types_named = ["function", "block", "callable"]
 
 # a word warp declares, not the program, named where a value goes, `f = sqrt`, `apply(floor, 2.5)` (card fails-word,
 # decision function-words-consume): the closure of a function calling it with as many values as it takes; of a word
