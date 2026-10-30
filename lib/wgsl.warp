@@ -227,9 +227,13 @@ wgsl_operator(op: Op): text := {
 }
 # the operator warp spells so, `%` of `x %= 2`; ø for a word (`x max= 5`) or a spelling WGSL has no operator for
 wgsl_spelled_operator(spelled: text): any := {
-	for pair in WGSL_OPERATORS + OPERATOR_MEANINGS + [[Op.Pow, ""]] { if "${pair#1}" == spelled { return pair#1 } }
+	for pair in WGSL_OPERATORS { if wgsl_op_spelling(pair#1) == spelled { return pair#1 } }
+	for meaning in OPERATOR_MEANINGS { if wgsl_op_spelling(meaning#1) == spelled { return meaning#1 } }
+	if wgsl_op_spelling(Op.Pow) == spelled { return Op.Pow }
 	ø
 }
+# `%` of Op.Mod: an operator as warp spells it
+wgsl_op_spelling(op: Op): text := "${op}"
 # `a op b` of an operator or a word as written: `.*` element-wise, `%`, `max` the call max(a, b)
 wgsl_combined(left: Node, spelled: text, right: Node, n: Node, scope: WgslScope): list := {
 	if ELEMENT_WISE.has(spelled) {
@@ -371,8 +375,9 @@ wgsl_arranged(name: Node, arguments: list): list := {
 	}
 	for i in 0 ..< #placed {
 		if placed[i] == Node.Empty {
+			# (a default is kept as [value], so that ø is none)
 			if parameters[i].defaulted_to == ø { return arguments }
-			placed[i] = parameters[i].defaulted_to
+			placed[i] = parameters[i].defaulted_to#1
 		}
 	}
 	placed
@@ -671,7 +676,7 @@ wgsl_changed(parts: list, n: Node, scope: WgslScope, depth: int) := {
 # the parts [target, operator as written, value] of a compound assignment: the parser's own (`x += 1`) or another
 # operator's or word's, which it leaves as written (`x %= 3`, `x max= 5`); [] for any other code
 wgsl_compound(n: Node): list := {
-	for pair in COMPOUND_OPERATORS { if is_key(n, pair#1) { return [key_of(n), "${pair#2}", value_of(n)] } }
+	for pair in COMPOUND_OPERATORS { if is_key(n, pair#1) { return [key_of(n), wgsl_op_spelling(pair#2), value_of(n)] } }
 	if not is_group(n) or bracket_of(n) != "" or #n != 3 or not (n#2 is symbol) { return [] }
 	written = name_of(n#2)
 	if #written < 2 or not written.ends_with(COMPOUND_MARK) { return [] }

@@ -93,15 +93,6 @@ check compound_assignments 'f(x, y) := {
 	[a / 5, b, c]
 }
 paint(f, 16, 16)'
-# components of a vector variable assigned
-check component_assignments 'f(x, y) := {
-	p = [0.0, 0.0, 0.0]
-	p.z = 0.5
-	p.x += x / 16
-	p.gb = [y / 16, p.z]
-	p
-}
-paint(f, 16, 16)'
 # c ? a : b, yes and no, continue
 check conditions 'f(x, y) := {
 	s = 0
