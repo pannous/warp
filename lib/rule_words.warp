@@ -244,6 +244,9 @@ first_parameter_type(word: text, definition: text): text := {
 # after v
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List([module_dir("list"), module_dir("text")], Bracket.Square, Separator.Comma)
 
+# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's) the program doesn't bind, else ø
+module_named(module: Node, program: Node): any := if "${module}" in names_bound_in(program) or used_module_text("${module}".lower()) == "" then ø else module
+
 # --- warp functions as one WGSL shader (lib/prelude.warp paint rules) ---
 
 # Warp functions as one WGSL fragment shader (card warp-to-shaders, decision shaders-in-lib): paint(f, width, height)
@@ -791,4 +794,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
