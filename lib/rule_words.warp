@@ -213,6 +213,37 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
 }
 
+# `dir(time)`, `dir text` (card dir-ownership): the words a standard module defines, in their order, then the
+# prelude's whose first parameter is of the type so named, `upper(t: text)`; ø when the program defines its own dir
+# or binds the name, or no module is so named
+dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in(program) then ø else module_dir("${name}")
+owns_dir(program: Node): bool := function_definition(symbol("dir"), program) != ø
+module_dir(word: text): any := {
+	source = used_module_text(word)
+	if source == "" { return ø }
+	listed = {}
+	for name in definition_slices(source).map(cut => cut#1) + typed_words(word) { if is_listed_word(name) { listed[name] = yes } }
+	List(listed.keys, Bracket.Square, Separator.Comma)
+}
+# the prelude's words whose first parameter is of the type: its declarations, `upper(t: text): text from warp`
+# (word_lines), and its definitions, `pad_left(t: text, width) := …`
+typed_words(kind: text): list := {
+	declared = word_lines()
+	found = declared.keys.filter(name => declared[name].any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == kind))
+	found + definition_slices(prelude_text).filter(cut => first_parameter_type(cut#1, cut#2) == kind).map(cut => cut#1)
+}
+# a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
+is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
+# `text` of `upper(t: text): text from warp`, "" of an untyped first parameter
+first_parameter_type(word: text, definition: text): text := {
+	if not definition.starts_with(word + "(") { return "" }
+	first = definition[#word + 1 ..].split(")")#1.split(",")#1
+	if first.contains(":") then first.split(":")#2.trim() else ""
+}
+# `dir(v)` of a value only the run knows: the words of a list and of a text, the prelude's dir_of_value's arguments
+# after v
+value_dir_words(program: Node): any := if owns_dir(program) then ø else List([module_dir("list"), module_dir("text")], Bracket.Square, Separator.Comma)
+
 # --- warp functions as one WGSL shader (lib/prelude.warp paint rules) ---
 
 # Warp functions as one WGSL fragment shader (card warp-to-shaders, decision shaders-in-lib): paint(f, width, height)
@@ -760,4 +791,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
