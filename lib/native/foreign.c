@@ -5,6 +5,9 @@
 #include <dlfcn.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -30,6 +33,33 @@ static uint32_t module_address(struct w2c_wasi__snapshot__preview1* wasi, void* 
 void* native_pointer(void* address) { return address; }
 // paint's count in this run, from 1: its PNG's number (core/native/driver.warp painted)
 int32_t next_painting(void) { static int32_t painted; return ++painted; }
+void* library_function(char* library, char* name);
+// libwarp_gpu beside warp (crates/warp-gpu, card gpu-functions), found at the first question: a shader paints on the
+// GPU, else (none, or WARP_GPU=off) its function on the CPU (lib/prelude.warp paint_shader)
+typedef int32_t (*gpu_paint_function)(const char*, const char*, int32_t, int32_t, uint32_t*);
+static gpu_paint_function gpu_paint;
+static const char* (*gpu_failure)(void);
+int32_t gpu_paints(void) {
+	static int32_t asked;
+	if (!asked) {
+		asked = 1;
+		const char* chosen = getenv("WARP_GPU");
+		if (chosen && !strcmp(chosen, "off")) return 0;
+		gpu_paint = (gpu_paint_function)library_function("warp_gpu", "warp_gpu_paint");
+		gpu_failure = (const char* (*)(void))library_function("warp_gpu", "warp_gpu_failure");
+	}
+	return gpu_paint && gpu_failure;
+}
+// the shader's pixels, as 0xAARRGGBB ints of 8 bytes (driver.warp png_written); 0, else -1, the GPU's reason told
+int32_t gpu_painted(char* shader, char* values, int64_t width, int64_t height, int64_t* pixels) {
+	if (!gpu_paints()) return fprintf(stderr, "paint of a shader: libwarp_gpu is not beside warp\n"), -1;
+	uint32_t* colors = malloc(width * height * sizeof *colors);
+	int32_t failed = gpu_paint(shader, values, (int32_t)width, (int32_t)height, colors);
+	if (failed) fprintf(stderr, "paint of a shader: %s\n", gpu_failure());
+	else for (int64_t i = 0; i < width * height; i++) pixels[i] = colors[i];
+	free(colors);
+	return failed;
+}
 // the terminal's rows, else its columns, on standard output; 0 outside a terminal (ioctl is variadic: called here, not
 // through native_call)
 int32_t terminal_size(int32_t rows) {

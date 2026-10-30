@@ -182,6 +182,12 @@ rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first)
 // `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
 rewrite $n floats => float[$n]
 rewrite $n ints => int[$n]
+// paint(f, width, height) of a program function f(x, y) (card warp-to-shaders, decision shaders-in-lib): the WGSL shader
+// that wgsl_shader of lib/rule_words.warp compiles f to, the program values it reads the values of paint, read again
+// at each paint; on the GPU, else f of each pixel on the CPU, by paint_shader below. shader_of(f) is the text of that
+// shader. Rules of the prelude, so they meet paint before arity_overloads names its overloads
+rewrite paint($f, $w, $h) => paint_shader($shader, $w, $h, $values, $f) where $f is symbol and $f is function and $shader = wgsl_shader($f, $program) and $values = wgsl_shader_values($f, $program)
+rewrite shader_of($f) => $shader where $f is symbol and $f is function and $shader = wgsl_shader($f, $program)
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
@@ -393,8 +399,8 @@ paint_each(f, width, height) := {
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a function, f(column, row)
 // of each pixel on the CPU (paint_each)
 paint(picture, width, height) := if picture is list then paint(picture, width, height, ø) else paint_each(picture, width, height)
-// paint(f, width, height) of a program function, as lib/sugar/shaders.warp compiles it: its shader on the GPU, f of each
-// pixel on the CPU where the host has none
+// paint(f, width, height) of a program function: its shader on the GPU, else f of each pixel on the CPU (the rules
+// at the sum rules above)
 paint_shader(shader: text, width, height, values, f) := if gpu_paints() then paint(shader, width, height, values) else paint_each(f, width, height)
 // paint(shader) of a WGSL shader text, at the view's size (wiki/graphics.md)
 paint(shader: text) := paint(shader, view_width(), view_height(), ø)
