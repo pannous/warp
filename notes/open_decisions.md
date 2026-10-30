@@ -5,7 +5,6 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
-- unused-imports-pass (warp-hello-rss-peak, module-imports shape 2, needs the user's yes: a new assembly phase): a reachability walk from exports/_start/hooks/global initializers drops every unreferenced function and global import; full.wasm keeps unreached runtime functions but their calls to dropped imports go to one trapping stub per type ("unreached import"), so `wasmtime hello.full.wasm` runs standalone. Recommend: yes.
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
 - made-by-reach (interviewer, core OK, module-imports shape 1): module.made counts only kinds made by functions reachable from the program's roots, so `"hi"` no longer imports big_int_text through the shown_big_int hook.
