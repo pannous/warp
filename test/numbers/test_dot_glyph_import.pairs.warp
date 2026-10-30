@@ -1,0 +1,2 @@
+# Decision dot-glyphs: ∘ is the dot product (explicit math import).
+'use math; [1,2,3] ∘ [4,5,6]'	32
