@@ -68,6 +68,14 @@ check() { # check <name> <code painting f>
 	got=$(compared "$gpu" "$cpu")
 	if [ "$got" = same ]; then echo "✓ $1"; else echo "✗ $1: $got"; failures=$((failures + 1)); fi
 }
+refused() { # refused <name> <code painting f> <words the refusal says>
+	case $only in "  ") ;; *" $1 "*) ;; *) return ;; esac
+	printf '%s\n' "$2" >"$stage/$1.warp"
+	gpu=$(painted "$stage/$1-gpu" "$stage/$1.warp")
+	if [ -z "$gpu" ] && grep -qF "$3" "$stage/$1-gpu/said"; then echo "✓ $1 refused"; return; fi
+	echo "✗ $1: not refused with \"$3\": $(grep -v '^hint' "$stage/$1-gpu/said" | head -2)"
+	failures=$((failures + 1))
+}
 
 # warp's operators as warp means them: % never negative, /! the floored quotient, rem truncated
 check euclidean_remainder 'f(x, y) := [((x - 8) % 3) / 3, ((y - 8) % 2.5) / 2.5, 0.5]
@@ -118,4 +126,9 @@ f(x, y) := {
 	[target(x), filter, 0.5]
 }
 paint(f, 16, 16)'
+# what warp means otherwise on lists is refused, never painted as WGSL means it: + joins lists, length counts
+refused vector_plus 'f(x, y) := [x, y, 0] + [0, 0, 1]
+paint(f, 16, 16)' 'element-wise math is .+'
+refused vector_length 'f(x, y) := [length([x, y]) / 16, 0, 0]
+paint(f, 16, 16)' 'magnitude is norm(v)'
 exit $((failures > 0))
