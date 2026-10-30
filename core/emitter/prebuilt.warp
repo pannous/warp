@@ -50,7 +50,10 @@ def all_hooks() {
 ## functions, globals and texts first, as runtime.wasm has them; the program's numbered behind them
 # runtime.wasm read back (module.runtime_image)
 class RuntimeImage { wasm: list; types: int; imports: int; functions: int; data: int; globals: list; words: map; hooks: list }
-def prepend_runtime(wasm: any) { module.runtime_image = if wasm == ø then ø else runtime_image_of(wasm) }
+def prepend_runtime(wasm: any) {
+	module.runtime_image = if wasm == ø then ø else runtime_image_of(wasm)
+	raisers_read = ø
+}
 def prepended(): bool { module.runtime_image != ø and not module.prebuilding }
 # whether the code's index operands are emitted relocatable (padded, marked): in a prebuilt module (relocating), and
 # in a program that is also written as a separate module (relocates_program; linked_bytes moves them to its numbering)
@@ -701,27 +704,107 @@ def runtime_call_sites(): list {
 	module.runtime_sites = sites
 	sites
 }
-# runtime.wasm with its call sites baked in, a warp.calls section of each one's [offset, caller, callee]
+# runtime.wasm with its call sites baked in, a warp.calls section of each one's [offset, caller, callee], and its
+# raisers, a warp.raises section of their positions
 call_sites_section = "warp.calls"
+raisers_section = "warp.raises"
 def with_call_sites(wasm: list): list {
 	prepend_runtime(wasm)
 	sites = worked_out_call_sites().map(site => concatenated([site#1#1, site#2, site#3].map(uleb)))
-	wasm + section(section_ids.custom, name_bytes(call_sites_section) + vector(sites))
+	raisers = worked_out_raisers().map(uleb)
+	wasm + section(section_ids.custom, name_bytes(call_sites_section) + vector(sites)) + section(section_ids.custom, name_bytes(raisers_section) + vector(raisers))
 }
 # the call sites read off runtime.wasm's relocations and code
 def worked_out_call_sites(): list {
+	sites = operand_sites(relocated.calls).filter(site => site#3 >= module.runtime_image.imports)
+	sites.map(site => [site#1, site#2, site#3 - module.runtime_image.imports])
+}
+# the runtime functions that raise, by position: those setting a global a host reads after a run failed in a runtime
+# error (raising_globals), once each
+def worked_out_raisers(): list {
+	content = runtime_part(section_ids.code)
+	names = module.runtime_image.globals.map(entry => entry#1)
+	raisers = []
+	for site in operand_sites(relocated.globals) { if content[site#1#1 - 1] == op.global_set and site#3 < #names and names[site#3] in raising_globals and not (site#2 in raisers) { raisers += [site#2] } }
+	raisers
+}
+# [relocation, caller position, operand] of each relocated operand of this kind in runtime.wasm's code
+def operand_sites(kind: int): list {
 	content = runtime_part(section_ids.code)
 	ends = body_ranges(content).map(range => range#2)
 	sites = []
 	caller = 0
-	for entry in relocations_of(module.runtime_image.wasm).filter(entry => entry#2 == relocated.calls and entry#3 == runtime_space) {
-		callee = uleb_read(content, entry#1)#1
+	code_end = ends[#ends - 1]
+	# a global's relocation can lie outside the code (a global's initializer)
+	for entry in relocations_of(module.runtime_image.wasm).filter(entry => entry#2 == kind and entry#3 == runtime_space and entry#1 < code_end) {
 		# the entries come in code order; one before the last caller's start is looked up from the first
 		if caller > 0 and ends[caller - 1] > entry#1 { caller = 0 }
 		while ends[caller] <= entry#1 { caller += 1 }
-		if callee >= module.runtime_image.imports { sites += [[entry, caller, callee - module.runtime_image.imports]] }
+		sites += [[entry, caller, uleb_read(content, entry#1)#1]]
 	}
 	sites
+}
+# the positions of runtime.wasm's raisers, read once per runtime (prepend_runtime forgets them) from its warp.raises
+# section; a global, as a Module field more fails the seed's compile (index out of range)
+global raisers_read = ø
+def runtime_raisers(): list {
+	if raisers_read != ø { return raisers_read }
+	place = section_place(module.runtime_image.wasm, section_ids.custom, raisers_section)
+	if place == ø { throw "runtime.wasm without its " + raisers_section + " section: warp rebuild writes it anew" }
+	count = uleb_read(module.runtime_image.wasm, place#1)
+	at = count#2
+	raisers = []
+	for i in 0..<count#1 {
+		read = uleb_read(module.runtime_image.wasm, at)
+		raisers += [read#1]
+		at = read#2
+	}
+	raisers_read = raisers
+	raisers
+}
+# whether the functions can fail in a runtime error: their code or a runtime function they reach sets a raising global
+def can_raise(functions: list): bool {
+	raising = raising_globals.map(name => module.globals.get(name)).filter(entry => entry != ø).map(entry => entry#1)
+	own = exports_reach(functions)
+	if sets_global(own, raising) { return yes }
+	reached = runtime_reach(runtime_positions_called(own) + library_positions_called())
+	runtime_raisers().any(p => reached.has(p))
+}
+# the functions the module's exports reach (main, _start, the builders, the program's own words), through the calls
+# and closures of their code: a prelude word compiled but never called raises in no run
+def exports_reach(functions: list): list {
+	at = {}
+	for f in functions { at[f.index] = f }
+	builders = module.builders.map(f => f.name)
+	pending = functions.filter(f => f.name == "main" or f.name == wasi_start or f.name in builders or not f.is_runtime)
+	reached = {}
+	found = []
+	i = 0
+	while i < #pending {
+		f = pending[i]
+		i += 1
+		if not reached.has(f.index) {
+			reached[f.index] = yes
+			found += [f]
+			for index in relocated_operands([f], relocated.calls).keys + relocated_operands([f], relocated.closures).keys { if at.has(index) { pending += [at[index]] } }
+		}
+	}
+	found
+}
+# whether the functions' code sets one of these globals (relocatable code: a marked operand behind global.set)
+def sets_global(functions: list, indices: list): bool {
+	for f in functions {
+		code = f.code
+		at = 0
+		while at < #code {
+			if code[at] < 0 {
+				operand = uleb_read(code, at + 1)
+				if kind_marked(code[at]) == relocated.globals and at > 0 and code[at - 1] == op.global_set and operand#1 in indices { return yes }
+				at = operand#2
+			} else { at += 1 }
+		}
+	}
+	no
 }
 # [start, end] of each function's entry in a code section's content, its size included
 def body_ranges(content: list): list {

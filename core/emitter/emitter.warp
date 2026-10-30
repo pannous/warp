@@ -97,6 +97,8 @@ hook_arities = 8
 error_tag_name = "warp_error"
 try_depth_name = "try_depth"
 trap_name_global = "trap_name"
+# the globals a runtime error sets, which a host reads after the run failed (exported_trap_message)
+raising_globals = [trap_name_global, "trap_detail"]
 # the trap-only functions of a missing field or switch case: their prefix, then the name (error_function)
 no_field_prefix = "no_field_"
 no_case_prefix = "no_case_"
@@ -1443,9 +1445,6 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		if prepended() { linked_builders() }
 		# the host shows no ø: a program giving nothing needs no show
 		if not main.gives_nothing { shown_result(main.result) }
-		# a host reading no GC objects shows what the program raised by it
-		exported_shown_at()
-		exported_trap_message()
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
 		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
 		for name in module.functions.keys {
@@ -1488,6 +1487,9 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		start.code = call_code(main.index) + [op.drop]
 		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(shown_code(unboxed_to_show(result, shown_kind))).code + [op.end] }
 		if not main.gives_nothing and value_as_data { start.code = call_code(main.index) + [op.local_set, 0] + value_printed_as_data(result) }
+		# what a host says of a run that failed in a runtime error, of a program that can fail so (a trimmed hello
+		# carried its sentences and the whole node printer: 25 KB for 1.5)
+		if module.runtime_image == ø or not relocates() or can_raise(module.order) { exported_trap_message() }
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }
