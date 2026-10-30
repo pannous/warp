@@ -37,6 +37,9 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
   compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs
   `cargo build --release`, puts the binary in ~/dev/bin/warp-builds/<hash>/ with a warp.wasm it built, checks hello,
   links ~/dev/bin/warp there and deletes every other warp-builds/ folder. No ~/dev/bin/warp-<hash> links (user).
+- Seed refresh (asked for by a landing that needs it): one heavy job, slow tier stopped, in a detached cowtree at the
+  installed tip: `WARP_SEED_STAGES="A B" scripts/refresh-seed.sh <tree>`. It publishes the release on its source
+  commit and commits seed.lock in the tree: push that commit to main (refresh-seed doesn't), then tell the askers.
 - Compilers beside ~/dev/bin/warp come only with main's tip, never because a lib/ changed, and are never built in the
   main checkout (a pull mid-build paired mismatched compilers).
 
