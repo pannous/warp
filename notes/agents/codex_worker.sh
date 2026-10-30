@@ -12,6 +12,7 @@ CODEX_APP_SOCKET=/Users/me/.codex/app-server-control/app-server-control.sock
 DEFAULT_TURN_TIMEOUT_SECONDS=16200
 EXEC_EXIT_GRACE_SECONDS=30
 RELAY_TIMEOUT_SECONDS=60
+MAX_ROUNDS=4 # runs of Codex per timer firing while a card stays parked
 POLL_SECONDS=1
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${CODEX_REPO:-$DEFAULT_REPO}
@@ -24,7 +25,7 @@ TURN_TIMEOUT_SECONDS=${CODEX_TURN_TIMEOUT_SECONDS:-$DEFAULT_TURN_TIMEOUT_SECONDS
 export PATH=/Users/me/.local/bin:/Users/me/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/sbin:/usr/bin:/bin:$PATH
 
 mkdir -p "$LOG_DIR"
-if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
+if [ -f "$LOCK" ] && [ "$(cat "$LOCK")" != $$ ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
 	echo "$(date +%FT%T) Codex run $(cat "$LOCK") still going; skipping this one"
 	exit 0
 fi
@@ -284,4 +285,13 @@ fi
 
 echo "$(date +%FT%T) Codex run ended: $RUN_STATUS (exit $FINAL_EXIT)"
 echo "$(date +%FT%T) $OUTCOME"
+
+# Codex ends its turn after a few minutes even with hours left: a parked card that needs no core gets another round,
+# which continues from the handover (PARKED_BEFORE); exec keeps the pid, so the lock stays ours
+ROUND=${CODEX_ROUND:-1}
+if [ -z "${CODEX_PROBE_PROMPT:-}" ] && [ -n "$PARKED" ] && [ "$ROUND" -lt "$MAX_ROUNDS" ] && ! grep -qi 'needs core' <<< "$PARKED"; then
+	echo "$(date +%FT%T) round $ROUND parked $(card_keys "$PARKED"); round $((ROUND + 1)) of $MAX_ROUNDS continues it"
+	trap - EXIT INT TERM HUP
+	CODEX_ROUND=$((ROUND + 1)) exec "$0"
+fi
 exit "$FINAL_EXIT"

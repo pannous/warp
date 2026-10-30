@@ -87,6 +87,17 @@ signaled(program: Node): any := {
 	}
 	separated(bracketed(written, ""), ";")
 }
+# the program with each list it makes for the GPU (lib/wgsl.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
+# creating form packed (same-scope flow only, decision gpu-bound-floats)
+gpu_lists_packed(program: Node): any := {
+	statements = program_statements(program)
+	bound = statements.filter(statement => is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program))
+	if #bound == 0 { return ø }
+	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement)))) else statement)
+	separated(bracketed(packed, ""), ";")
+}
+# a list made right in a GPU word's call made as a GPU list, else ø
+gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
 # the names the statement's signal_listen calls listen to
 names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, signal_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
 # each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
@@ -290,4 +301,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}

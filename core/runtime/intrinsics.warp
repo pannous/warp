@@ -94,6 +94,9 @@ output_byte(at: int, byte: int) from runtime
 write_output(count: int): int from runtime
 output_address(): int from runtime
 memory_byte(address: int): int from runtime
+memory_f32(address: int): float from runtime
+memory_set_f32(address: int, value: float) from runtime
+memory_grown(pages: int): int from runtime
 # times and durations, packed in the kind field; time_of(info, position) builds one (emitter.warp time_words, which
 # Rust's lane knows only of a constant info)
 time_of(info: int, position: int): any from runtime
