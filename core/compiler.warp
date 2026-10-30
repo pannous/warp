@@ -91,9 +91,10 @@ MODULES_FOLDER = "modules"
 # which standard module defines which word, beside the prebuilt modules (prelude_words.warp word_index)
 WORD_INDEX = "words.tsv"
 word_index_file(): text := library_folder + "/" + MODULES_FOLDER + "/" + WORD_INDEX
+# Every entry links them alike, a file, inline or piped code and `warp compile` (card inline-code): beside the runtime
+# the compile is prepended with, its fifth argument or lib/'s
 linked_libraries(source: text): list := {
-	if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { return [] }
-	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
+	folder = folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 	images = []
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole
 	names = used_modules(source)

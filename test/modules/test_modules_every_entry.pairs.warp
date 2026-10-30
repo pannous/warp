@@ -1,0 +1,2 @@
+# a standard module links alike whichever way the program comes, a file, inline or piped code (card inline-code)
+'use collections; Set([1, 2, 2]).size()'	2
