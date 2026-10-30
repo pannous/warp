@@ -189,7 +189,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {} }
+class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {}; statements: list = []; word_closures: map = {} }
 
 ## the walk
 
@@ -211,7 +211,7 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
 		# `p as text` names a type, also where the program defines a function text()
 		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
-		Key(left, Op.Assign, right): Key(lowered_lambdas(left, locals, lowering), Op.Assign, lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
+		Key(left, Op.Assign, right): Key(lowered_lambdas(left, locals, lowering), Op.Assign, declared_word_value(right, called_counts(left, lowering.statements), locals, lowering) ?? lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
@@ -233,7 +233,50 @@ function_value(name: text, n: Node, locals: list, lowering: Lowering): Node := {
 passed_value(argument: Node, at: int, callee: Node, locals: list, lowering: Lowering): Node := {
 	takes_function = callee is symbol and lowering.function_positions.has(name_of(callee)) and at in lowering.function_positions[name_of(callee)]
 	parameterless = argument is symbol and name_of(argument) not in locals and lowering.arities.has(name_of(argument)) and lowering.arities[name_of(argument)] == 0
-	if takes_function and parameterless then call_node(symbol("closure_new"), [argument]) else lowered_lambdas(argument, locals, lowering)
+	if takes_function and parameterless { return call_node(symbol("closure_new"), [argument]) }
+	declared_word_value(argument, parameter_called_counts(callee, at, lowering), locals, lowering) ?? lowered_lambdas(argument, locals, lowering)
+}
+
+# a word warp declares, not the program, named where a value goes, `f = sqrt`, `apply(floor, 2.5)` (card fails-word,
+# decision function-words-consume): the closure of a function calling it with as many values as it takes; of a word
+# taking several counts, `max(a, b, more...)`, as many as its use calls it with, `f = max; f(1, 2)`, else refused
+# naming its variants. ø for any other code and a word taking none (its bare call)
+declared_word_value(word: Node, uses: list, locals: list, lowering: Lowering): Node? := {
+	if not (word is symbol) { return ø }
+	name = name_of(word)
+	if name in locals or name in lowering.arities or is_tested_type_word(name) { return ø }
+	lines = value_word_lines(name)
+	if #lines == 0 { return ø }
+	fixed = lines.map(line => arity(line.signature)).filter(span => span#1 == span#2).map(span => span#1)
+	count = if #fixed == #lines and fixed.all(n => n == fixed#1) and not lines.any(line => line.signature.parameters.any(parameter => parameter.rest)) then fixed#1 else used_count(uses, lines)
+	if count == ø { raise name + " as a value: say how many values it takes, as " + lines.map(line => name + "(" + line.signature.parameters.map(parameter => parameter.name + (if parameter.rest then "..." else "")).join(", ") + ")").join(" or ") + " do, `(a, b) -> " + name + "(a, b)`" }
+	if count == 0 then ø else word_closure(name, count, lowering)
+}
+# the one count of values the uses call a value with, when a line of the word takes it; else ø
+used_count(uses: list, lines: list): int? := if #uses > 0 and uses.all(n => n == uses#1) and lines.any(line => takes(line.signature, uses#1)) then uses#1 else ø
+# the closure of the function calling the word with `count` values, one per word and count
+word_closure(name: text, count: int, lowering: Lowering): Node := {
+	key = name + "·" + count
+	if not lowering.word_closures.has(key) {
+		wrapper = lifted_prefix + fresh_number()
+		parameters = (1 to count).map(i => symbol(wrapper + "·" + i))
+		lowering.lambdas_lifted += [Key(call_node(symbol(wrapper), parameters), Op.Define, call_node(symbol(name), parameters))]
+		lowering.arities[wrapper] = count
+		lowering.word_closures[key] = wrapper
+	}
+	call_node(symbol("closure_new"), [symbol(lowering.word_closures[key])])
+}
+# the counts of values the name is called with in the statements, `f(1, 2)` and `f 1 2`
+called_counts(name: Node, statements: list): list := {
+	if not (name is symbol) { return [] }
+	statements.flat_map(statement => nodes_in(statement)).filter(n => is_group(n) and #n > 0 and n#1 == name and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
+}
+# the counts of values the program's function calls its parameter at `at` with, `apply(f, x) := f(x)` 1
+parameter_called_counts(callee: Node, at: int, lowering: Lowering): list := {
+	if not (callee is symbol) { return [] }
+	definition = lowering.statements.map(definition_of).find(parts => parts != ø and parts.name == name_of(callee))
+	if definition == ø or at > #definition.parameters { return [] }
+	called_counts(symbol(parameter_name(definition.parameters#at)), [definition.body])
 }
 # `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name; a call
 # of any other expression calls the function value it gives: `(x => x*2)(5)`, `adder(5)(1)`, `fs[0](3)`
@@ -611,7 +654,7 @@ lambdas(program: Node): Node := {
 		parts = definition_of(statement)
 		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
-	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions}
+	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions, statements: written}
 	function_parameters = function_parameters_of(written)
 	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
 	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)

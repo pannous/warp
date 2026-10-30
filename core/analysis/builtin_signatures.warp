@@ -158,6 +158,10 @@ type_word_kind(word: text): text? := type_kinds.get(word)
 # libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
 # floor compiles to, so its result is the call's
 foreign_math_lines = module_source("math").split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
+# the words lib/math.warp declares from the runtime, `max(a, b, more...) from warp`, which a program calls without its use
+math_runtime_lines = module_source("math").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø)
+# the lines declaring a word a program may name as a function value (lambdas.warp declared_word_value)
+value_word_lines(word: text): list := lines_of(typed_lines + math_runtime_lines + foreign_math_lines, unaliased(word))
 
 # the kind a declared result is held as: `nothing` and `any` a node of run-time kind, a yes/no an int, a type of
 # values its kind, any other type (`time`, `signal`) an object; ø for `number`, decided where the value is made

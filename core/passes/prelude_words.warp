@@ -531,8 +531,7 @@ definition_arities(module: text, word: text): list := {
 	heads = slices.map(slice => nodes_in(plain_node(parsed(slice#2))).reverse().filter(n => is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)))
 	heads.filter(found => #found > 0).map(found => arity(signature_of(items_of(found#1))))
 }
-# the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
-runtime_words_of_math = module_source("math").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
+runtime_words_of_math = math_runtime_lines.map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
 # a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
 used_module_text(module: text): text := {

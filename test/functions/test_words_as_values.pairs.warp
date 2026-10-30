@@ -1,0 +1,7 @@
+# a word warp declares is a function value too, as the program's own are (card fails-word, decision function-words-consume)
+'f = sqrt; f(16)'	4
+'apply(f, x) := f(x); apply(floor, 2.5)'	2
+'f = abs; f(-2)'	2
+'f = max; f(1, 2)'	2
+'twice(f, x) := f(f(x)); twice(sqrt, 16)'	2
+'f = max'	error
