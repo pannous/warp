@@ -86,6 +86,8 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Testing
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
+- Build only a branch merged with origin/main: the installed native warp's rebuild steps (rebake) call main's
+  compiler words, so an unmerged branch can fail to build for reasons that aren't its own (warp-shaders, 2026-10-30).
 - Only the pure pipeline counts. Smoke test, every branch: `scripts/smoke.sh <worktree>`. It rebuilds only for what
   the compiler bakes in (user 2026-10-30: a library change needs no rebuild): lib/ only (modules, lib/sugar/ rules)
   runs hello on the installed compilers in seconds; core/ or prelude.warp, aliases.warp, math.warp, rule_words.warp
@@ -94,15 +96,22 @@ before asking a question). After a context swap, this file and your role file be
   <folders>`. A core change also runs `scripts/self-check.sh <worktree>`. Never rebuild in the main checkout. One
   heavy job (rebuild, self-check) of yours at a time. Machine-wide, rebuild.sh runs at most 5 compiler builds at once
   (<store>/build-slots, WARP_BUILD_SLOTS); "all 5 build slots taken, waiting" is normal, never work around it.
-- A compiler is built once per inputs hash, machine-wide (ea5cb68f6b): `scripts/rebuild.sh` asks the store
-  /Volumes/Build/compilers/<hash>/ first and copies a hit in seconds, whoever built it; while another tree builds the
-  same hash (lock <store>/<hash>/warp.building, its pid) it logs `waiting-for-<pid>` and takes that result. So
-  never copy compilers by hand, never rebuild "to be sure", never use --force to get past a wait, and never kill
-  another session's build. Every hit, miss and wait is a line of <store>/rebuilds.log.
+- A compiler is built once per inputs hash, machine-wide, whether it builds or fails (ea5cb68f6b, card
+  build-failed-store): `scripts/rebuild.sh` asks the store /Volumes/Build/compilers/<hash>/ first and copies a hit in
+  seconds, whoever built it; while another tree builds the same hash (lock <store>/<hash>/warp.building, its pid) it
+  logs `waiting-for-<pid>` and takes that result. A failed build is kept there too (<hash>/warp.failed/: build.log,
+  the failing step, its half-built artifacts), and a request for that hash prints it at once: its last line names the
+  step (seed, stage-two, optimize, runtime, modules) and the log. Read that log, never rebuild to see an error; a
+  fixed source is a new hash and builds anew. `--force` builds the same hash again, from the failed step on, only
+  after a fix outside the sources (the warp binary, memory, disk). self-check's stage two is kept the same way
+  (<hash>/stage-two.passed or .failed/; `self-check.sh --rebuild` runs it again). So never copy compilers by hand,
+  never rebuild "to be sure", never use --force to get past a wait, and never kill another session's build. Every
+  hit, miss, wait and failure is a line of <store>/rebuilds.log.
   Only core/**, the BAKED files (compiler-inputs.sh) and the seed are a compiler's code; the rest of lib/ is data it
   carries. A lib/-only change compiles nothing: rebuild.sh takes the stored compiler of the same code
   (<store>/code/<baked hash>), rebakes lib/ into it and makes its runtime and modules (`miss-rebaking-<hash>`, about a
-  minute; decision lib-hash-rebake). So a library feature costs no compiler build, a core one does.
+  minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
+  costs no compiler build, a core one does.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
