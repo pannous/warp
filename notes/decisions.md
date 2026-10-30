@@ -625,3 +625,5 @@ the original questions 1–41: test edits and housekeeping done.
 - canonical-output (user: "the documentation already talks about canonical forms; maybe we just need to apply it consistently"): everything warp prints (errors, fix-its, shown results, `warp format`, help, docs) uses the canonical word of each alias group (2026-10-30)
 
 - unused-imports-pass (user 2026-10-30, answering their todo.md question): after module assembly one reachability walk (exports, _start, hooks, global initializers) drops every unreferenced function and global import; full.wasm keeps unreached runtime functions, whose calls to dropped imports go to one trapping stub per type ("unreached import"). `wasmtime hello.full.wasm` and `hello.mod.wasm` run standalone.
+
+- relative-paths-cwd (user 2026-10-30): a relative file name in a program (`play "tune.mp3"`) resolves against the current folder, as in shells; samples reach their neighbours with `here / "tune.mp3"`. Rejected: the program folder (writes would land beside the script), program-then-current (two readings).
