@@ -25,3 +25,8 @@ The user's taste, by example (2026-10-27). Judge a design, a test or a sample by
 ## Tests are spec only when backed
 A test file's header names its source: a wiki page or a decision key. New cases only for forms a wiki page or a decision
 shows; a new form needs the decision first, then the test.
+
+## Familiar conventions first
+Where warp has no stated reason to differ, the meaning people know from shells and mainstream languages wins over a
+convenience for samples: relative paths resolve against the current folder, samples write `here / "tune.mp3"`
+(relative-paths-cwd, 2026-10-30).
