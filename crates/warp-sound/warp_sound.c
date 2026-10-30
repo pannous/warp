@@ -7,6 +7,7 @@
 #define MA_NO_GENERATION
 #include "miniaudio.h"
 #include <stdlib.h>
+#include <string.h>
 enum { MOST_SOUNDS = 256, HEARD_OUT_POLL_MS = 10 };
 static const ma_uint32 SOUND_FLAGS = MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION;
 
@@ -98,4 +99,60 @@ int warp_sound_play_samples(const void* bytes, size_t size, int rate, int channe
 	ma_result copied = ma_audio_buffer_alloc_and_init(&config, &v->samples);
 	if (copied != MA_SUCCESS) return voice_started(v, copied);
 	return voice_started(v, ma_sound_init_from_data_source(&engine, v->samples, SOUND_FLAGS, NULL, &v->sound));
+}
+
+// Audio files decoded (wav, mp3, flac built into miniaudio): a file's 16-bit samples at a rate and channel count (0 for
+// the file's own), kept for the run, each file once, so lib/sound.warp reads them value by value as the run needs them
+enum { MOST_DECODED = 64, DECODE_CHUNK_FRAMES = 4096 };
+typedef struct {
+	char* path;
+	int asked_rate, asked_channels;
+	int rate, channels;
+	ma_int16* values;
+	ma_uint64 frames;
+} decoded_file;
+static decoded_file decoded[MOST_DECODED];
+static int decoded_count;
+
+static int decoded_found(const char* path, int rate, int channels) {
+	for (int i = 0; i < decoded_count; i++)
+		if (decoded[i].asked_rate == rate && decoded[i].asked_channels == channels && strcmp(decoded[i].path, path) == 0) return i;
+	return -1;
+}
+// the file's number, else minus miniaudio's error (MA_DOES_NOT_EXIST, MA_INVALID_FILE for a format it can't read)
+int warp_sound_decode(const char* path, int rate, int channels) {
+	int found = decoded_found(path, rate, channels);
+	if (found >= 0) return found;
+	if (decoded_count == MOST_DECODED) return MA_OUT_OF_MEMORY;
+	ma_decoder_config config = ma_decoder_config_init(ma_format_s16, channels, rate);
+	ma_decoder decoder;
+	ma_result opened = ma_decoder_init_file(path, &config, &decoder);
+	if (opened != MA_SUCCESS) return opened;
+	int frame_size = decoder.outputChannels;
+	ma_int16* values = NULL;
+	ma_uint64 frames = 0, read = 0;
+	do {
+		ma_int16* grown = realloc(values, (frames + DECODE_CHUNK_FRAMES) * frame_size * sizeof *values);
+		if (!grown) {
+			free(values);
+			ma_decoder_uninit(&decoder);
+			return MA_OUT_OF_MEMORY;
+		}
+		values = grown;
+		ma_decoder_read_pcm_frames(&decoder, values + frames * frame_size, DECODE_CHUNK_FRAMES, &read);
+		frames += read;
+	} while (read == DECODE_CHUNK_FRAMES);
+	decoded[decoded_count] = (decoded_file){strdup(path), rate, channels, (int)decoder.outputSampleRate, frame_size, values, frames};
+	decoded_count++;
+	ma_decoder_uninit(&decoder);
+	return decoded_count - 1;
+}
+long warp_sound_decoded_frames(int file) { return file >= 0 && file < decoded_count ? (long)decoded[file].frames : 0; }
+int warp_sound_decoded_rate(int file) { return file >= 0 && file < decoded_count ? decoded[file].rate : 0; }
+int warp_sound_decoded_channels(int file) { return file >= 0 && file < decoded_count ? decoded[file].channels : 0; }
+// the value at that place among the interleaved channels, 0 past the end
+int warp_sound_decoded_value(int file, long at) {
+	if (file < 0 || file >= decoded_count || at < 0) return 0;
+	decoded_file* f = &decoded[file];
+	return (ma_uint64)at < f->frames * (ma_uint64)f->channels ? f->values[at] : 0;
 }

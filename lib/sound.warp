@@ -936,7 +936,27 @@ class Sample {
 	channels: int
 	frames: [int]
 }
-sample(path: text) := wav_sample(read_bytes(path), path)
+// decoded by libwarp_sound, else (the playground) read here as a 16-bit WAV
+sample(path: text) := if sound_library_loads() then decoded_sample(path) else wav_sample(read_bytes(path), path)
+decoded_sample(path: text) := {
+	file = decoded_sound(path, 0, 0)
+	channels = warp_sound_decoded_channels(file)
+	Sample(warp_sound_decoded_rate(file), channels, [warp_sound_decoded_value(file, at) + sample_offset for at in 0..(warp_sound_decoded_frames(file) * channels)])
+}
+// Audio files decoded by libwarp_sound (miniaudio: wav, mp3, flac), each once a run: its number there for that rate
+// and channel count (0: the file's own), its values read one by one as the run needs them
+warp_sound_decode(path: text, rate: i32, channels: i32): i32 from 'warp_sound'
+warp_sound_decoded_frames(file: i32): i64 from 'warp_sound'
+warp_sound_decoded_rate(file: i32): i32 from 'warp_sound'
+warp_sound_decoded_channels(file: i32): i32 from 'warp_sound'
+warp_sound_decoded_value(file: i32, at: i64): i32 from 'warp_sound'
+decoded_sound(path: text, rate, channels) := {
+	if not exists(path) { raise path + ": no such sound file" }
+	if not sound_library_loads() { raise path + ": decoding a sound file needs libwarp_sound beside warp" }
+	file = warp_sound_decode(path, rate, channels)
+	if file < 0 { raise path + ": not decoded, miniaudio error " + str(file) + " (it reads wav, mp3 and flac)" }
+	file
+}
 // a 16-bit PCM WAV's chunks: fmt's channels and rate, data's samples (the formats beside it: card sound-native-files)
 wav_sample(bytes, path) := {
 	if count(bytes) < 12 or bytes[0..4] != codes("RIFF") or bytes[8..12] != codes("WAVE") { raise path + ": not a WAV file (other audio files are not in the native warp yet)" }
@@ -1136,7 +1156,7 @@ read_midi(path) := {
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
 // audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
 // band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
-// Goertzel's recurrence: of samples in warp, the same natively and in the playground; of a file by the host
+// Goertzel's recurrence in warp, of samples or of a file's decoded by libwarp_sound
 global band_low = 60
 global band_high = 5000
 // the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
@@ -1144,12 +1164,23 @@ spectrum_window = 512
 // the band whose middle frequency is nearest in pitch
 nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
 // how many seconds an audio file sounds: sound_seconds("song.mp3")
-sound_seconds(path: text) := std_io("sound", "file_seconds", [path])
-spectrum(file: text, seconds, bands) := std_io("sound", "file_spectrum", [file, seconds, spectrum_window / sample_rate, bands, band_low, band_high])
+sound_seconds(path: text) := {
+	file = decoded_sound(path, sample_rate, 1)
+	warp_sound_decoded_frames(file) / (sample_rate as float)
+}
+spectrum(file: text, seconds, bands) := {
+	decoded = decoded_sound(file, sample_rate, 1)
+	window = spectrum_span(seconds, warp_sound_decoded_frames(decoded))
+	band_levels([warp_sound_decoded_value(decoded, at) for at in window], bands)
+}
 def spectrum(samples, seconds, bands) {
-	start = min(round(seconds * sample_rate) as int, count(samples))
-	window = samples[start..min(start + spectrum_window, count(samples))]
-	band_levels([x - sample_offset for x in window], bands)
+	window = spectrum_span(seconds, count(samples))
+	band_levels([samples[at] - sample_offset for at in window], bands)
+}
+// the places of the samples a spectrum at that moment looks at, among that many
+spectrum_span(seconds, total) := {
+	start = min(round(seconds * sample_rate) as int, total)
+	start..min(start + spectrum_window, total)
 }
 // the levels of the bands in amplitudes around 0, all 0 for fewer than 2
 band_levels(amplitudes, bands) := {
