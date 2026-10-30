@@ -1062,9 +1062,10 @@ def runtime_import_entries(): list {
 			at = size#2 + size#1
 		}
 		if content[at] != import_function_byte { throw "runtime.wasm imports other than functions: warp rebuild writes it anew" }
-		typed = uleb_read(content, at + 1)
-		entries += [[content[start ..< typed#2], typed#1]]
-		at = typed#2
+		described = uleb_read(content, at + 1)
+		end = described#2
+		entries += [[content[start ..< end], described#1]]
+		at = end
 	}
 	entries
 }
