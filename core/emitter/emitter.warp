@@ -1421,10 +1421,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.class_structs = {}
 	module.relocations = []
 	module.runtime_types = 0
-	if module.prebuilding or prepended() {
-		canonical_type_entries()
-		for kind in Made.keys { module.made[kind] = yes }
-	}
+	if module.prebuilding or prepended() { canonical_type_entries() }
+	if module.prebuilding { for kind in Made.keys { module.made[kind] = yes } }
 	if prepended() { behind_runtime() }
 	module.aliases = type_synonyms()
 	collect_types(program)
@@ -1432,6 +1430,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	declare_class_structs()
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	reached = reached_words(program)
+	# behind a prepended runtime, the kinds of values the runtime words reached make (big_int_of on an overflow)
+	if prepended() { for kind in Made.keys { if made_makers[kind].any(maker => maker in reached) { module.made[kind] = yes } } }
 	# a print, or a runtime word reached that writes to stdout or stderr (a field check failing, card text-field; a
 	# warning, card declared-class)
 	prints = module.prebuilding or "print" in reached or "write_output" in reached or "fd_write" in reached
