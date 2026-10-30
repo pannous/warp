@@ -130,6 +130,33 @@ released() {
 	local lock=$store/$hash/$1.building
 	[ "$(cat "$lock/pid" 2>/dev/null)" = $$ ] && rm -rf "$lock"
 }
+# A compiler's code is core/**, BAKED and the seed (the --baked hash); the rest of lib/ is data baked into its segments
+# (uses.warp baked_tables). <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change
+# rebakes that compiler with this lib/ (warp.wasm rebake, ~1 min) and makes its runtime and modules anew instead of
+# compiling compiler.warp (decision lib-hash-rebake)
+code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$baked"; }
+rebaked_stored() {
+	local stored=$store/code/$baked/warp.wasm new=$compilers/rebaking-$$.wasm said
+	[ -f "$stored" ] || return 1
+	logged warp "miss-rebaking-$(basename "$(readlink "$store/code/$baked")")"
+	copied "$stored" "$new" || return 1
+	said=$(cd "$tree" && WARP_LIB=$lib "$warp" "$new" rebake "$new" 2>&1 && WARP_LIB=$lib "$warp" "$new" baked-current "$new.baked" 2>&1)
+	if [ "$(cat "$new.baked" 2>/dev/null)" != yes ]; then
+		echo "rebuild.sh: rebaking the stored compiler of this code failed ($said $(cat "$new.baked" 2>/dev/null)); compiling it" >&2
+		rm -f "$new" "$new".*
+		return 1
+	fi
+	rm -f "$new.baked" "$compilers/runtime.wasm.cwasm"
+	(cd "$tree" && WARP_LIB=$lib "$warp" "$new" runtime "$compilers/runtime.wasm" && mkdir -p "$compilers/modules" &&
+		WARP_LIB=$lib "$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >/dev/null 2>&1 ||
+		{ echo "rebuild.sh: the rebaked compiler made no runtime or modules; compiling it" >&2; rm -f "$new" "$new".*; return 1; }
+	local part
+	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
+		[ -f "$new$part" ] && mv -f "$new$part" "$file$part"
+	done
+	inputs_line >"$file.inputs"
+	code_kept
+}
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
 one() {
 	local name=$1 file=$compilers/$1.wasm built status old
@@ -160,6 +187,13 @@ one() {
 		one "$@"
 		return
 	fi
+	if [ -z "$force" ] && [ "$name" = warp ] && rebaked_stored; then
+		publish "$file"
+		for companion in $(companions "$name" "$compilers"); do publish "$compilers/$companion" "$companion"; done
+		released "$name"
+		logged "$name" built-rebaked
+		return 0
+	fi
 	logged "$name" miss-building
 	local lane=pure
 	[ "$name" = warp-self ] && lane=self
@@ -173,6 +207,7 @@ one() {
 	inputs_line >"$file.inputs"
 	publish "$file"
 	for companion in $(companions "$name" "$compilers"); do publish "$compilers/$companion" "$companion"; done
+	[ "$name" = warp ] && code_kept
 	released "$name"
 	[ "$name" = warp-self ] && self_passed
 	logged "$name" built
