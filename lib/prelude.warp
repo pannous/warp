@@ -188,7 +188,7 @@ rewrite $n ints => int[$n]
 // paint(f, width, height) of a program function f(x, y) (card warp-to-shaders, decision shaders-in-lib): the WGSL shader
 // that wgsl_shader of lib/rule_words.warp compiles f to, the program values it reads the values of paint, read again
 // at each paint; on the GPU, else f of each pixel on the CPU, by paint_shader below. shader_of(f) is the text of that
-// shader. Rules of the prelude, so they meet paint before arity_overloads names its overloads
+// shader. Rules of the prelude, so they meet paint before arity_overloads names its overloads, in every program
 rewrite paint($f, $w, $h) => paint_shader($painting, $w, $h, $f) where $f is symbol and $f is function and $painting = wgsl_painting($f, $program)
 rewrite shader_of($f) => $shader where $f is symbol and $f is function and $shader = wgsl_shader($f, $program)
 // the arithmetic mean, also spelled average
