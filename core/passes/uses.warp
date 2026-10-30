@@ -265,7 +265,7 @@ is_declaration_keyword(n: Node): bool := n is symbol and name_of(n) in declarati
 is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
 
 # the name a declaration defines, as rust-harness:src/modules/declarations.rs name_declared_by: `f(x) := …`, `x = …`,
-# `def f(x) …`, `def f(x): T {…}`, `global x = 0`; ø for another statement
+# `def f(x) …`, `def f(x): T {…}`, `global x = 0`, a foreign line `f(x): T from "c"`; ø for another statement
 declared_name(statement: Node): any := match statement {
 	Key(left, op, right): {
 		if assigns_or_defines(op) { return aliased_type_name(left) ?? leftmost_name(left) }
@@ -273,8 +273,10 @@ declared_name(statement: Node): any := match statement {
 		if is_keyword_group(left) { return leftmost_name(left#2) }
 		if is_declaration_keyword(left) then declared_name(right) else ø
 	}
-	_: if is_keyword_group(statement) or is_pattern_definition(statement) then leftmost_name(statement#2) else ø
+	_: if is_keyword_group(statement) or is_pattern_definition(statement) then leftmost_name(statement#2) else if is_foreign_line(statement) then leftmost_name(statement#1) else ø
 }
+# `sqrt(x: f64): f64 from "c"`: a foreign line, whose word is the program's own (a library's sqrt is not the one called)
+is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
 # `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø
 aliased_type_name(left: Node): text? := if is_key(left, Op.Colon) and key_of(left) == opaque_symbol and kind_of(value_of(left)) == "type" then declared_type_name(value_of(left)#2) else ø
 leftmost_name(n: Node): any := {
