@@ -88,6 +88,7 @@ ok   samples/numbers/sine.warp
 ok   samples/numbers/sum.warp
 ok   samples/numbers/units_dynamic.warp
 ok   samples/objects/binary_tree.warp
+ok   samples/objects/dijkstra.warp
 ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/json_parser.warp
 ok   samples/sound/arrangement.warp
@@ -134,7 +135,6 @@ WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
-SRV  samples/servers/worker.warp
 FAIL samples/advanced/neural_net.warp
 FAIL samples/advanced/raytracer.warp
 FAIL samples/advanced/test.warp
@@ -192,11 +192,11 @@ FAIL samples/numbers/bits.warp
 FAIL samples/numbers/dates.warp
 FAIL samples/numbers/measurements.warp
 FAIL samples/objects/data_structures.warp
-FAIL samples/objects/dijkstra.warp
 FAIL samples/objects/references.warp
 FAIL samples/python/numpy_matrix.warp
 FAIL samples/python/python_modules.warp
 FAIL samples/servers/server.warp
+FAIL samples/servers/worker.warp
 FAIL samples/signals/signal_fields.warp
 FAIL samples/sound/gpu_visualizer_warp.warp
 FAIL samples/sound/midi.warp

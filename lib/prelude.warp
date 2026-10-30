@@ -61,7 +61,7 @@ each(xs: list, f: function) from emitter
 each(t: text, f: function) from emitter
 // the call form of xs.add(x), which lib/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
-insert(xs: list, x, at: int): same as xs from emitter
+insert(xs: list, at: int, x) := list_insert(xs, at, x)
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
