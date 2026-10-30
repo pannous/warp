@@ -711,8 +711,8 @@ type_module_providers(): map := {
 	}
 	providers
 }
-# the word of a root, `√2`, which lib/reals.warp keeps exact (emitter.warp exact_root_word)
-root_words(program: Node): list := if nodes_in(program).any(n => is_key(n, Op.Sqrt) and is_empty(key_of(n)) and not surely_float(value_of(n))) then [exact_root_word] else []
+# the word of a root, `√2`, sqrt(2), which lib/reals.warp keeps exact (emitter.warp exact_root_word)
+root_words(program: Node): list := if nodes_in(program).any(n => is_group(n) and #n == 2 and n#1 == symbol("sqrt") and not surely_float(n#2)) then [exact_root_word] else []
 # `2.5`, `x as f64`, `(n as float)`: a value written a float, whose root is the float's (a primitive program's too)
 surely_float(n: Node): bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
 # the classes the program converts to, `3 as Real`: a type module's class comes with its conversions (`x as text`

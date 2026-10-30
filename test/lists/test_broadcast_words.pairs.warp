@@ -5,11 +5,11 @@
 'abs [-1, 2]'	[1 2]
 'xs = [1.0, 4.0]; sqrt xs'	[1 2]
 'sqrt 9'	3
-# the dot call of Julia applies any function to each item, one list or two paired
-'length.(["ab", "c"])'	[2 1]
-'xs = ["ab", "c"]; length.(xs)'	[2 1]
-'f(x) := x + 1; f.([1, 2])'	[2 3]
-'f(a, b) := a * b; f.([1, 2], [3, 4])'	[3 8]
-'max.([1, 5], 3)'	[3 5]
+# Julia's dot call is no warp (decision no-dot-call-broadcast): a did-you-mean of `f xs`, `f each xs`
+'length.(["ab", "c"])'	error
+'xs = ["ab", "c"]; length.(xs)'	error
+'f(x) := x + 1; f.([1, 2])'	error
+'f(a, b) := a * b; f.([1, 2], [3, 4])'	error
+'max.([1, 5], 3)'	error
 # a method call without arguments stays one
 't = "ab"; t.chars()'	['a' 'b']

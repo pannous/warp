@@ -324,22 +324,12 @@ keeps_numbers(op: Op): bool := match op {
 	Op.Mul: yes
 	_: no
 }
-# `-x`, `‖x‖` keep a number's kind, `√x` a float's (any other root is exact, lib/reals.warp), `∛x` gives a float
-prefixed_kind(op: Op, number: list?): list? := match op {
-	Op.Sub: number
-	Op.Neg: number
-	Op.Abs: number
-	Op.Sqrt: if number != ø and number#1 == "float" then number else ø
-	Op.Cbrt: if number != ø then ["float", ø] else ø
-	_: ø
-}
-# [the operator, its operand] of `-x`, `√x`, also written as a word, `sqrt(x)`, `abs x`; else ø
-prefix_operation(n: Node): list? := {
-	if n is key and is_empty(key_of(n)) { return [op_of(n), value_of(n)] }
-	if not (is_group(n) and #n == 2 and n#1 is symbol) { return ø }
-	word = name_of(n#1)
-	operator = if word in PREFIX_OPERATORS then word else KEYWORD_FORMS.get(word) ?? ""
-	if operator in PREFIX_OPERATORS then [operator as Op, n#2] else ø
+# `-x` and abs(x) (‖x‖) keep a number's kind, sqrt(x) (√x) a float's (any other root is exact, lib/reals.warp),
+# cbrt(x) (∛x) gives a float
+magnitude_kind(word: text, number: list?): list? := {
+	if word == "abs" { return number }
+	if word == "sqrt" { return if number != ø and number#1 == "float" then number else ø }
+	if number != ø then ["float", ø] else ø
 }
 numeric_kinds = ["int", "float"]
 known_kind(n: Node, judge: ArgumentJudge): list? := {
@@ -349,8 +339,8 @@ known_kind(n: Node, judge: ArgumentJudge): list? := {
 	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) and #judge.own[name_of(n)] > 1 { return ["function", #judge.own[name_of(n)] - 1] }
 	# `(2)`, the operand of `sqrt(2)`, is 2
 	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return known_kind(n#1, judge) }
-	prefixed = prefix_operation(n)
-	if prefixed != ø { return prefixed_kind(prefixed#1, numeric(known_kind(prefixed#2, judge))) }
+	if n is key and is_empty(key_of(n)) { return if op_of(n) == Op.Sub or op_of(n) == Op.Neg then numeric(known_kind(value_of(n), judge)) else ø }
+	if is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in magnitude_words and name_of(n#1) not in judge.own { return magnitude_kind(name_of(n#1), numeric(known_kind(n#2, judge))) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) not in judge.own { return declared_result(name_of(n#1), #n - 1) }
 	if n is key and not is_empty(key_of(n)) and keeps_numbers(op_of(n)) { return joined_numbers(known_kind(key_of(n), judge), known_kind(value_of(n), judge)) }
 	static_kind(n)
