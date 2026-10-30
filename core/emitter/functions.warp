@@ -65,7 +65,7 @@ def call_values(f: Function, values: list): TypedCode {
 		widen_parameter(f, i, values[i]#1)
 		code += passed(f, i, values[i])
 	}
-	TypedCode(result, code + call_code(f.index))
+	TypedCode(result, code + call_code(f.index), if result == ValueKind.Node then 0 else declared_mark(f))
 }
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module). A reading that widened
@@ -149,16 +149,29 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
 # `… as text`, or the block `{the result: text = …; the result}` (definitions.warp result_held)
-declared_result(f: Function): any := cast_kind(f.body)
-cast_kind(n: Node): any := {
-	if is_key(n, Op.As) and value_of(n) is symbol {
-		kind = annotated_kind(name_of(value_of(n)))
+declared_result(f: Function): any := {
+	declaration = result_declaration(f.body)
+	if declaration == ø { return ø }
+	if is_key(declaration, Op.As) {
+		kind = annotated_kind(name_of(value_of(declaration)))
 		return if is_held_kind(kind) then kind else ValueKind.Node
 	}
+	result_type_kind(held_result_type(declaration))
+}
+# the mark of a number type the definition declares it gives, `f(c: Color): Color := c`, so its caller holds the
+# result unboxed with its mark; 0 for any other result
+declared_mark(f: Function): int := {
+	declaration = result_declaration(f.body)
+	if declaration == ø { return 0 }
+	type = if is_key(declaration, Op.As) then name_of(value_of(declaration)) else held_result_type(declaration)
+	module.marks.get(type) ?? 0
+}
+# the part of a body that declares its result: `… as T`, or `the result: T = …` of a block, ø when none does
+result_declaration(n: Node): Node? := {
+	if is_key(n, Op.As) and value_of(n) is symbol { return n }
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
-	held = held_result_type(n#1)
-	if held != ø { return result_type_kind(held) }
-	cast_kind(n#(#n))
+	if held_result_type(n#1) != ø { return n#1 }
+	result_declaration(n#(#n))
 }
 # `T` of `the result: T = …`, else ø
 held_result_type(n: Node): any := {
