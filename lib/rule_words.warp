@@ -208,6 +208,39 @@ comment_above(source: text, word: text): text := {
 defines_function(line: text, word: text): bool := ["fun ", "def "].any(keyword => line.starts_with(keyword + word + "(") or line.starts_with(keyword + word + " ")) or ((line.starts_with(word + "(") or line.starts_with(word + " ")) and (line.contains(":=") or line.contains("=>")))
 is_comment_line(line: text): bool := line.starts_with("//") or line == "#" or line.starts_with("# ")
 comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1) ..].trim()
+# `area(width: int, height: int) := width * height`: the function's definition as code to paste (decision
+# reflection-definition); ø when the program defines no such function
+definition_text(name: Node, program: Node, source: text): any := {
+	definition = function_definition(name, program)
+	if definition == ø { return ø }
+	written_definition(source, "${name}") ?? serialize(view_of(definition))
+}
+# the definition as the source writes it: from its head to the end of its statement, a `;` or a line's end outside
+# brackets and texts; ø when no statement of the source defines the word
+written_definition(source: text, word: text): any := {
+	start = definition_start(source, word)
+	if start == ø { return ø }
+	depth = 0
+	at = start
+	while at < #source and not (depth == 0 and (source[at] == ";" or source[at] == "\n")) {
+		c = source[at]
+		if c == "(" or c == "[" or c == "{" { depth += 1 }
+		if c == ")" or c == "]" or c == "}" { depth -= 1 }
+		at = if c == "\"" or c == "'" then quoted_end(source, at + 1, c, #source) else at + 1
+	}
+	source[start ..< at].trim()
+}
+# where the statement defining the word starts: at the source's start, a line's or after a `;`, its blanks skipped
+definition_start(source: text, word: text): any := {
+	for at in 0 ..< #source {
+		if at == 0 or source[at - 1] == "\n" or source[at - 1] == ";" {
+			start = at
+			while start < #source and (source[start] == " " or source[start] == "\t") { start += 1 }
+			if defines_function(source[start ..].split("\n")#1, word) { return start }
+		}
+	}
+	ø
+}
 # `twice.description`: a word a function has none of, the compile refused with the word it means
 misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
@@ -805,4 +838,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}

@@ -1,0 +1,5 @@
+# f.definition: the function's whole definition as the source writes it (decision reflection-definition)
+'area(width: int, height: int) := width * height; area.definition'	"area(width: int, height: int) := width * height"
+'twice(x) := x*2; twice.definition'	"twice(x) := x*2"
+'f = x => x + 1; f.definition'	"f = x => x + 1"
+'g(s) := { t = "a;b"; s + t }; g.definition'	'g(s) := { t = "a;b"; s + t }'

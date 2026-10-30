@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- hello-lazy-runtime-dropped (interviewer): shape B of hello-compile-allocations (binding runtime words lazily) is dropped: under 7 MB of hello's 176 MB for churn at 23 emitter sites. Bigger targets: emit 29 MB, passes 45 MB, card list-boxed.
 - canonical-runtime-names (interviewer, core OK, mechanical ~30 references in core/runtime/maps.warp, emitter, analyzer, parser, prelude_words): the runtime words map_keys/map_values/map_get_or/collection_contains are renamed keys/values/get/has (follows definition-name-canonical); `alias contains/includes = has` stay. No behaviour change.
 - definition-name-canonical (interviewer, for warp-fixer's dir-map-keys-first; replaces first-alias-canonical, which would have renamed count→size, upper→uppercase): the name a definition carries is canonical for dir and everything warp prints; internal-named definitions get their canonical name (map_keys→keys, map_values→values, map_get_or→get, collection_contains→has, kept apart by parameter type), old names become aliases or go. dir {a:1} shows keys, values, has, get.
 - rule-not-in-own-definition (interviewer, urgent, ~6 lines core/passes/rewrites.warp): a rewrite rule never fires inside the definition of the word its template produces (frames' `listen(data frame, …) => frame_listened(…)` rewrote frame_listened's own body into self-recursion: every file with `on frame` overflowed the stack).
