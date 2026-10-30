@@ -448,8 +448,8 @@ inlined_call(n: Node, locals: list, lowering: Lowering): Node? := match n {
 
 # A variable of a scope that a lambda in it changes, `n += 1` or `n = 5`, is shared (P124, decision
 # lambda-assign-writes-through): it lives in a cell, `n·cell = Cell(n)`, each mention `n·cell.value`, and the lambda
-# captures the cell by value (a lambda's `let n = 5` should be its own n: lib/sugar/declarations.warp drops the let
-# before this pass, card let-inside). A block
+# captures the cell by value; a lambda's `let n = 5` is its own n (card let-inside: the declaration rules drop the
+# `let` but note where its name was written, local_declarations). A block
 # is of its scope (decision handler-blocks-share): each name of the scope it assigns is shared. A name only the lambda
 # or block binds stays its own, a `global` one global
 cell_class = "Cell"
@@ -459,13 +459,25 @@ shared_names(statements: list, locals: list, blocks: list): list := {
 	changed = blocks.flat_map(block => assigned_names(block, assigning_operators))
 	for lambda in statements.flat_map(nodes_in).filter(is_lambda) {
 		own = lambda_parameter_names(lambda_of(lambda))
-		changed += assigned_names(arrow_result(lambda), assigning_operators).filter(name => name not in own)
+		declared = declared_locally(arrow_result(lambda))
+		changed += assigned_names(arrow_result(lambda), assigning_operators).filter(name => name not in own and name not in declared)
 	}
 	changed += captures_assigned_later(statements)
 	globals = global_variables(block_of(statements))
 	shared = []
 	for name in changed { if name in locals and name not in globals and name not in shared { shared += [name] } }
 	shared
+}
+# where each name a local declaration word declared was written (lib/rule_words.warp declared_local), set anew for
+# each program (passes.warp with_used)
+global local_declarations = {}
+# a name a declaration word declared, noted where it was written (a name a pass made is written nowhere)
+declared_at(name: Node) := if written_at(name) != ø { local_declarations["${written_at(name)}"] = yes }
+# the names a node declares as its own, `let n = 5`
+declared_locally(n: Node): list := {
+	declared = []
+	for part in nodes_in(n) { if is_key(part, Op.Assign) and key_of(part) is symbol and local_declarations.has("${written_at(key_of(part))}") { declared += [name_of(key_of(part))] } }
+	declared
 }
 # `x=1; f=()=>x; x=2; f()` is 2: a captured variable is the same variable, so a name a lambda reads that a later
 # statement of its scope assigns is shared (decision captured-same-variable); a read-only capture stays a copy
