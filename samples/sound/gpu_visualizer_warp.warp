@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 # warp functions compiled to a GPU shader: paint(tunnel, width, height) turns tunnel and the functions it calls into one
 # WGSL fragment shader, which raymarches 16 glowing frequency bars around a pulsing gem frame after frame while
-# mozart.mp3 plays. Vectors are lists of 2 to 4 numbers, .+ .- .* ./ .^ their element-wise math, p.x p.zy their
+# tune.mp3 plays. Vectors are lists of 2 to 4 numbers, .+ .- .* ./ .^ their element-wise math, p.x p.zy their
 # components; the functions read the program's levels, bass, treble and time
 use sound
 use math
@@ -10,7 +10,7 @@ width = 1920
 height = 1080
 bands = 16
 # any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same
-song = "mozart.mp3"
+song = "tune.mp3"
 # how much the quiet spectrum is turned up before it lights the bars
 loudness = 15
 # the shortest frame: a frame that took less waits for the rest

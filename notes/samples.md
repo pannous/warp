@@ -38,7 +38,7 @@ runs every sample not listed in web/playground/excluded_samples.txt, which gives
 - Put a focused example in the earliest chapter whose concept it demonstrates: `simple.warp` is basic arithmetic in
   Numbers, while Advanced is reserved for programs that combine several chapters.
 - The menu and the address (#fizzbuzz) name a sample by its file name, so names stay unique across folders
-  (build.sh refuses twins); samples.js has SAMPLE_FILES name → path for the runs' neighbour files (play "mozart.mp3").
+  (build.sh refuses twins); samples.js has SAMPLE_FILES name → path for the runs' neighbour files (play "tune.mp3").
 - Tests find a sample by name with tests/common sample_path / sample_files (never format!("samples/{name}.warp")).
 - `use lib`, `use square` and `import shapes` find the module samples through SEARCH_DIRECTORIES "samples/modules"
   and "samples/wasm" (src/modules.rs). A sample naming a repository file climbs two folders (`../../tests/fixtures`).

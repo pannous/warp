@@ -1,2 +1,3 @@
 #!/usr/bin/env warp
-play "mozart.mp3"
+use sound
+play "tune.mp3"
