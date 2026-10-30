@@ -38,6 +38,19 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
 - `scripts/self-check.sh` checks the pair for the branch's inputs, taken from lib/ or the store. On a miss it says
   "REBUILD NEEDED" and checks the existing pair. `--rebuild` builds the missing pair.
 
+## Failed builds (card build-failed-store, user 2026-10-30)
+
+Every build of a hash happens once, whether it succeeds or fails. `warp rebuild` says each step before it runs
+(`rebuild step seed|stage-two|optimize|runtime|modules`); when one fails, rebuild.sh keeps the failure in
+<store>/<hash>/<compiler>.failed/: build.log (the whole output), step, message (what is printed) and, for a step after
+the seed, the half-built warp.wasm.new and runtime.wasm. It prints the header, the failing step's output (its last 60
+lines) and, last, `rebuild.sh: warp build-failed at step <step>, log <path> …`, the line smoke.sh, gate.sh,
+promote-self.sh and after-push.sh show. A later request for the hash (--check too) prints the same at once and exits 1.
+`--force` builds it again from the failed step: the stored artifacts go back into lib/ and `warp rebuild from <step>`
+runs the rest; a success removes the record. That is for a fix outside the inputs (the warp binary, memory, a full or
+read-only disk): a fix of the sources changes the hash, and the earlier steps' artifacts bake those sources in, so that
+build starts at the seed.
+
 ## The inputs hash (scripts/compiler-inputs.sh <lib> [<rust fingerprint>])
 
 16 hex digits. Paths are hashed relative to lib/, so the same inputs give the same hash in any tree. It covers:
