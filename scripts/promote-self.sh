@@ -48,6 +48,7 @@ fi
 if [ $status = 0 ]; then
 	echo "promote-self: PROMOTED in ${took}s: warp-self.wasm = warp.wasm (sha256 $(sha "$compilers/warp-self.wasm")…; $(echo "$said" | grep -o 'a fixpoint\|no fixpoint' | head -1))"
 else
-	echo "promote-self: FAILED in ${took}s (warp-self.wasm left as it was): $(echo "$said" | tail -3 | tr '\n' ' ' | cut -c1-400)"
+	echo "$said"
+	echo "promote-self: FAILED in ${took}s (warp-self.wasm left as it was): $(echo "$said" | tail -1)"
 fi
 exit 0

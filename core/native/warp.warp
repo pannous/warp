@@ -12,6 +12,7 @@
 #   warp docs|wiki|home   where the documentation is, opened
 #   warp repl|start       the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
+#   warp rebuild from <step>  the same from that step on (seed, stage-two, optimize, runtime, modules)
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
 #   warp rebuild seed     the seed's runtime and machine code made (seed_shipped)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
@@ -69,25 +70,52 @@ words_ran(compiler: text, given: Arguments): nothing := {
 # `warp rebuild`: warp.wasm built anew from lib/, as rust-harness:src/compiler/standalone.rs build did: the seed compiles compiler.warp
 # behind its own runtime, then the new warp.wasm optimizes itself and writes runtime.wasm and the modules beside it;
 # warp.wasm is replaced, with its machine code, only once all of that worked. Any step failing stops the rebuild with
-# its message
-rebuilt(): nothing := {
+# its message. Each step is said before it runs (`rebuild step <name>`), so a failed rebuild names the step it failed
+# in; `warp rebuild from <step>` starts there, on the warp.wasm.new and runtime.wasm the earlier steps left (scripts/rebuild.sh
+# keeps those of a failed build in the store and resumes it, notes/compiler_rebuilds.md "Failed builds")
+rebuilt(first: text): nothing := {
 	library = library_folder()
-	seed = seed_path()
-	seed_runtime = seed_prepared(seed)
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
 	built = joined(compiler_path(), ".new")
-	builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
-	rebaked(built, compiler, library)
-	file_ran(built, words(built, "optimize", built, built, "", ""))
-	stamped(built, library)
 	runtime = joined(library, "/runtime.wasm")
-	file_ran(built, words(built, "runtime", runtime, "", "", ""))
 	modules = joined(library, "/modules")
-	mkdir(c_string(modules), FOLDER_MODE)
-	file_ran(built, words(built, "modules", modules, runtime, "", ""))
+	start = step_number(first)
+	if step_runs("seed", start) {
+		seed = seed_path()
+		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_prepared(seed)))
+	}
+	if step_runs("stage-two", start) { rebaked(built, compiler, library) }
+	if step_runs("optimize", start) {
+		optimized = joined(built, ".optimized")
+		file_ran(built, words(built, "optimize", built, optimized, "", ""))
+		rename(c_string(optimized), c_string(built))
+		stamped(built, library)
+	}
+	if step_runs("runtime", start) { file_ran(built, words(built, "runtime", runtime, "", "", "")) }
+	if step_runs("modules", start) {
+		mkdir(c_string(modules), FOLDER_MODE)
+		file_ran(built, words(built, "modules", modules, runtime, "", ""))
+	}
 	machine_code_moved(built, compiler_path())
 	rename(c_string(built), c_string(compiler_path()))
 	print(joined("rebuilt ", compiler_path()))
+}
+# a step of `warp rebuild` from the first one on, said before it runs
+step_runs(name: text, start: int): bool := {
+	if step_number(name) < start { return false }
+	print(joined("rebuild step ", name))
+	true
+}
+# a rebuild step's place in the order; the first step for no name, and an unknown name refused
+step_number(name: text): int := {
+	if name.length == 0 or same_text(name, "seed") { return 1 }
+	if same_text(name, "stage-two") { return 2 }
+	if same_text(name, "optimize") { return 3 }
+	if same_text(name, "runtime") { return 4 }
+	if same_text(name, "modules") { return 5 }
+	complain(joined(joined("warp rebuild: no step ", name), "; the steps are seed, stage-two, optimize, runtime, modules"))
+	exit(1)
+	0
 }
 # the seed's build carries the library as the seed cut and parsed it: where its own cut differs (a changed slicer or
 # parser), it writes its own tables over the baked ones (rebake); only a build whose tables are no segments of their
@@ -204,14 +232,12 @@ copied(from: text, to: text): nothing := {
 # `warp rebuild [pure|self|seed]`, its word at `at`
 rebuild_command(at: int): nothing := {
 	which = if arg_count() > at + 1 then arg(at + 1) else "pure"
-	if same_text(which, "pure") { rebuilt() } else {
-		if same_text(which, "self") { promoted() } else {
-			if same_text(which, "seed") { seed_shipped() } else {
-				complain(joined(joined("warp rebuild: no compiler ", which), "; say `warp rebuild`, `warp rebuild pure`, `warp rebuild self` or `warp rebuild seed`"))
-				exit(1)
-			}
-		}
-	}
+	if same_text(which, "pure") { return rebuilt("") }
+	if same_text(which, "from") { return rebuilt(if arg_count() > at + 2 then arg(at + 2) else "") }
+	if same_text(which, "self") { return promoted() }
+	if same_text(which, "seed") { return seed_shipped() }
+	complain(joined(joined("warp rebuild: no compiler ", which), "; say `warp rebuild`, `warp rebuild pure`, `warp rebuild from <step>`, `warp rebuild self` or `warp rebuild seed`"))
+	exit(1)
 }
 # the seed, the compiler that compiles compiler.warp: $WARP_SEED, else warp-seed.wasm beside this executable
 seed_path(): text := {

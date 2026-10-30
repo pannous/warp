@@ -19,7 +19,8 @@ base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED")
 if [ -n "$baked" ]; then
 	echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
-	built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed: $(echo "$built" | tail -2)" >&2; exit 1; }
+	# a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
+	built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed:" >&2; echo "$built" >&2; exit 1; }
 	echo "$built" | tail -1
 	way="its own build"
 else
