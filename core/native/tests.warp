@@ -4,8 +4,9 @@
 # rust-harness:src/compiler/pure_tests.rs): warp.wasm lists the cases into a work folder (core/commands/tests.warp test-list), each
 # run of a case's code is a child process of this warp (`warp run <code>`, `warp self <code>` for --self) in the test
 # file's folder with the value printed as data (WARP_VALUE_AS_DATA), its output, errors and exit status written beside
-# its code; the children run in parallel, each in a slot of the machine's pool, one past CASE_SECONDS killed; then
-# warp.wasm prints the verdicts and the total (test-verdicts), the exit status 1 when one failed
+# its code, and how long it took (<run>.ms); the children run in parallel, each in a slot of the machine's pool, one
+# past CASE_MILLISECONDS killed; then warp.wasm prints the verdicts, the cases over a second and the total (test-verdicts),
+# the exit status 1 when one failed
 
 creat(path: pointer, mode: i32): i32 from "c"
 dup2(from: i32, to: i32): i32 from "c"
@@ -13,11 +14,10 @@ close(descriptor: i32): i32 from "c"
 chdir(path: pointer): i32 from "c"
 flock(descriptor: i32, operation: i32): i32 from "c"
 kill(child: i32, signal: i32): i32 from "c"
-time(at: pointer): i64 from "c"
 usleep(microseconds: i32): i32 from "c"
 _exit(status: i32) from "c"
 
-CASE_SECONDS = 30
+CASE_MILLISECONDS = 30000
 FILE_MODE = 420
 # flock's LOCK_EX | LOCK_NB
 LOCKED_NOW = 6
@@ -84,7 +84,7 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 				if lock >= 0 {
 					child.pid = started_run(work, field(runs, next, NEWLINE), prefix, children, slots)
 					child.run = next
-					child.started = time(0)
+					child.started = milliseconds_now()
 					child.lock = lock
 					next = next + 1
 				}
@@ -97,7 +97,7 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 				run_ended(work, field(runs, child.run, NEWLINE), exit_status(word_at(status).value as i32), child)
 				done = done + 1
 			}
-			if child.pid != 0 and time(0) - child.started > CASE_SECONDS {
+			if child.pid != 0 and milliseconds_now() - child.started > CASE_MILLISECONDS {
 				kill(child.pid, KILLED)
 				waitpid(child.pid, status, 0)
 				run_ended(work, field(runs, child.run, NEWLINE), "timeout", child)
@@ -108,9 +108,11 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 	}
 }
 child_at(address: pointer): Child := address
-# a run's status written, its slot freed
+# a run's status and milliseconds written, its slot freed
 run_ended(work: text, run: text, status: text, child: Child): nothing := {
-	write_file(joined(joined(joined(work, "/"), field(run, 0, TAB)), ".status"), status)
+	id = joined(joined(work, "/"), field(run, 0, TAB))
+	write_file(joined(id, ".status"), status)
+	write_file(joined(id, ".ms"), text_of(milliseconds_now() - child.started))
 	close(child.lock)
 	child.pid = 0
 }
