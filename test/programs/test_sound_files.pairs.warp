@@ -1,0 +1,6 @@
+# an audio file decoded natively by libwarp_sound (card sound-direct): its length, its samples, its spectrum; a file it can't read is refused by name
+'use sound; sound_seconds("../../samples/sound/tune.mp3") > 0.5'	true
+'use sound; clip = sample("../../samples/sound/tune.mp3"); [clip.rate, clip.channels]'	[44100 1]
+'use sound; count(spectrum("../../samples/sound/tune.mp3", 0.25, 16))'	16
+'use sound; max(spectrum("../../samples/sound/tune.mp3", 0.25, 16)) > 0.1'	true
+'use sound; sound_seconds("no_such.mp3")'	error
