@@ -37,6 +37,11 @@ a local lambda (now refused by name: WGSL has no closures).
 - Refuse, never guess: on a vector, `+ - * /` (warp's + joins lists, - and * are refused by warp), negation, and
   `length`/`count`/`size` (warp counts; the magnitude is `norm`) are refused with the element-wise fix-it.
 
+## Outcome (2026-10-30)
+test/gpu/test_gpu_matches_cpu.sh: all 8 cases pass (6 GPU == CPU pixel checks, 2 refusals). A compound operator written
+as warp writes it (`x %= 5`) is looked up by its spelling (SPELLED_OPERATORS), never by the Op's name (`"${Op.Mod}"` is
+"Mod", not "%").
+
 ## Not translator (cards)
 - rule-fn-in-sequence (is-function-miss): a function defined in a `;`-joined line of a file isn't `is function` to the
   rules, so shader_of fails ("text of node") and paint skips the shader.
