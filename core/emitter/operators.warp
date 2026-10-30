@@ -2,8 +2,13 @@
 # `30° * 2`: arithmetic keeps a marked operand's mark (decision marks-survive-arithmetic), the left one's, else the
 # right one's, where it marks a number of the result's kind; a boxed operand's by the runtime's marks_kept
 def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
-	result = unmarked_operation(body, symbol, a, b)
+	marked(symbol, unmarked_operation(body, symbol, a, b), a, b)
+}
+# an arithmetic result with the mark of its operands: unboxed, carried statically; boxed (an int's grown or exact
+# result), stamped by the runtime's kept_mark
+def marked(symbol: text, result: TypedCode, a: TypedCode, b: TypedCode): TypedCode {
 	if symbol in comparisons or (a.mark == 0 and b.mark == 0) or result.mark != 0 { return result }
+	if result.kind == ValueKind.Node and module.runtime.has("kept_mark") { return runtime_call("kept_mark", [result, number_value(if a.mark != 0 then a.mark else b.mark)]) }
 	mark = if marks_kind(a.mark, result.kind) then a.mark else if marks_kind(b.mark, result.kind) then b.mark else 0
 	if mark != 0 { return TypedCode(result.kind, result.code, mark) }
 	result
@@ -116,7 +121,7 @@ grown_words = {"+": "grown_sum", "-": "grown_difference", "*": "grown_product"}
 def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	a = expression_code(body, left)
 	b = expression_code(body, right)
-	if symbol in grown_words and a.kind == ValueKind.Int and b.kind == ValueKind.Int and not wraps(body, left, right) { return runtime_call(grown_words[symbol], [a, b]) }
+	if symbol in grown_words and a.kind == ValueKind.Int and b.kind == ValueKind.Int and not wraps(body, left, right) { return marked(symbol, runtime_call(grown_words[symbol], [a, b]), a, b) }
 	operation_code(body, symbol, a, b)
 }
 # a literal beside a fast int takes the int side: `i + 1` of a counter wraps

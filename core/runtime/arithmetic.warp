@@ -26,11 +26,14 @@ node_sum(a: Node, b: Node): Node := {
 # one's, else the right one's, where it marks a number of the result's Kind; a type's mark lies above a yes/no's,
 # which never carries
 marks_kept(result: Node, a: Node, b: Node): Node := {
-	mark = carried_mark(result, a)
-	if mark == 0 { mark = carried_mark(result, b) }
-	if mark == 0 then result else with_kind(result, mark)
+	mark = type_mark(a)
+	if mark == 0 or mark % KindUnit.Info != kind_code(result) { mark = type_mark(b) }
+	kept_mark(result, mark)
 }
-carried_mark(result: Node, x: Node): int := if is_null(x) or is_null(result) or kind_code(x) != kind_code(result) or not (kind_code(result) == Kind.Float or is_plain_int(result)) or code_bit(x) != 0 or info_byte(x) * KindUnit.Info + Kind.Int <= Marked.Bool then 0 else marked_kind(x)
+# the value's type mark (its marked kind), 0 for none: a type's mark lies above a yes/no's, which never carries
+type_mark(x: Node): int := if is_null(x) or code_bit(x) != 0 or info_byte(x) * KindUnit.Info + Kind.Int <= Marked.Bool then 0 else marked_kind(x)
+# the result marked so where the mark is of its Kind and it is a plain number, never a ratio or a big int
+kept_mark(result: Node, mark: int): Node := if mark == 0 or is_null(result) or mark % KindUnit.Info != kind_code(result) or not (kind_code(result) == Kind.Float or is_plain_int(result)) then result else with_kind(result, mark)
 # a + b, a - b, a * b of two plain ints held boxed (nats): past 64 bits the big int they make (D16, the extended runtime's exact words)
 grown_sum(a: int, b: int): Node := if sum_overflows(a, b) then extended_sum(a, b) else a + b
 grown_difference(a: int, b: int): Node := if difference_overflows(a, b) then extended_difference(a, b) else a - b

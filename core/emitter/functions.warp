@@ -52,6 +52,9 @@ def default_value(body: Body, f: Function, i: int, count: int): TypedCode {
 	expression_code(body, default#1)
 }
 def call_values(f: Function, values: list): TypedCode {
+	# a marked number given an unannotated parameter is given boxed, where its static mark runs out (decision
+	# marks-unboxed-first): `k(x) := x` of an Angle keeps it an Angle
+	values = range_list(#values).map(i => if values[i].mark != 0 and i < #f.signature.parameters and f.signature.parameters[i].type_name == "" then TypedCode(ValueKind.Node, boxed(values[i])) else values[i])
 	if f.kinds == ø { compile_function(f, values.map(v => v.kind)) }
 	# a function still compiling gives the kind it declares; without one its result is not known yet, and the caller
 	# is read again once every function is compiled
@@ -302,15 +305,15 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		given = expression_code(first, statements_block(f.body))
 		result = given.kind
 		for kind in first.returned { result = joint_kind(result, kind) }
-		# a body giving a number of a marked type gives it boxed, so its mark survives the call (decision
-		# marks-unboxed-first: no inference of the result's mark)
-		if given.mark != 0 and declared_result(f) == ø { result = ValueKind.Node }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø and (result == pending or held_as(result, analyzed_result_kind(f))) { result = analyzed_result_kind(f) }
 	# the kind a definition declares is the one its callers took while it was compiling (call_values), whatever its body
 	# gave in a first reading of a cycle
 	if result != no_kind and declared_result(f) != ø { result = declared_result(f) }
 	if result == ValueKind.Mixed { return refuse(f.name + " giving a " + kind_spelling(result)) }
+	# a body giving a number of a marked type gives it boxed, so its mark survives the call (decision
+	# marks-unboxed-first: no inference of the result's mark)
+	if given.mark != 0 and declared_result(f) == ø { result = ValueKind.Node }
 	# a body ending in a statement (a loop, a print) gives ø, as Rust's does; one giving only the result of a call
 	# still compiling gives a node
 	f.result = if result == no_kind or result == pending then ValueKind.Node else result
@@ -324,7 +327,7 @@ function_compiled(f: Function, argument_kinds: list): any := {
 body_code(f: Function) := {
 	scope = new_body(f)
 	value = expression_code(scope, statements_block(f.body))
-	value = TypedCode(value.kind, position_code(scope, f.body) + value.code)
+	value = TypedCode(value.kind, position_code(scope, f.body) + value.code, value.mark)
 	f.code = if f.gives_nothing then value.code + [ref_null, gc_type(gc.node)] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
