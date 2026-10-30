@@ -2,3 +2,4 @@
 'seen=0; f=() => {seen=3}; f(); seen'	3
 'n=1; set = x => {n = x}; set(5); set(7); n'	7
 'x=0; seen=0; once x>2 {seen=x}; x=1; x=3; x=7; seen'	3
+'n=1; f=() => {let n = 5; n}; [f(), n]'	[5, 1]

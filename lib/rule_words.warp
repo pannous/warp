@@ -213,5 +213,12 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
 }
 
+# `let n = 5` is the assignment `n = 5`, where its name was written noted (core/passes/lambdas.warp
+# local_declarations): inside a lambda the name stays the lambda's own, not the scope's (card let-inside)
+declared_local(declaration: Node): Node := {
+	if is_key(declaration, Op.Assign) and key_of(declaration) is symbol { declared_at(key_of(declaration)) }
+	declaration
+}
+
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed}
