@@ -188,9 +188,13 @@ watch() {
 }
 
 # the samples that run, the gap to 2.0 (decision night-samples-modules): test/samples.txt committed on main when it
-# changed, so its git log is the history and git diff names the samples that changed (user 2026-10-29)
+# changed, so its git log is the history and git diff names the samples that changed (user 2026-10-29); at most once
+# every SAMPLES_HOURS, never on every push (the sweep with the rest loaded the machine to 109, 2026-10-30)
+SAMPLES_HOURS=4
 samples_committed() {
-	local count report=test/samples.txt
+	local count report=test/samples.txt last=$state/samples-at
+	[ -f "$last" ] && [ $(($(date +%s) - $(cat "$last"))) -lt $((SAMPLES_HOURS * 3600)) ] && return
+	date +%s >"$last"
 	count=$("$scripts/samples.sh" "$TREE" | head -1 | sed -n 's/^samples: \([0-9]* of [0-9]*\) run.*/\1/p')
 	cp "$TREE/$report" "$MAIN_CHECKOUT/$report" || return
 	# the slow tree stays clean for its next checkout

@@ -7,6 +7,9 @@
 # first element equal to k removed. Rust twin: list_mutations.rs removed_key
 # The method word is a hole: a rule naming `remove` would give way to a program's own remove(a, b), which the pass
 # never did
+# `math.gcd(4, 6)`, `json.parse(t)`, `Math.sqrt(16)`: a standard module's word called through the module's name is the
+# word's own call (lib/rule_words.warp module_named); a name the program binds is a value, `text = "ab"; text.upper()`
+rewrite $m.$f($a...) => $f($a...) where $m is symbol and $m is not value and $f is symbol and $module = module_named($m, $program)
 rewrite $m.$f($k) => ($r = removed_value($m, $k); $m = map_without($m, $k); $r) where $m is symbol and $m is not instance and $f in [remove, delete]
 rewrite $x.$f($a...) => $f($x, $a...) where $f is symbol and $f not in [add, append, push, insert, pop, remove, delete, clear]
 # an instance's own methods of those names are its class's: `s.push(1)` of a Stack s
