@@ -90,22 +90,34 @@ rebuilt(): nothing := {
 	print(joined("rebuilt ", compiler_path()))
 }
 # the seed's build carries the library as the seed cut and parsed it: where its own cut differs (a changed slicer or
-# parser), it compiles compiler.warp once more, so the library baked into warp.wasm is always its own (card once-seed)
+# parser), it writes its own tables over the baked ones (rebake); only a build whose tables are no segments of their
+# own (an older seed's) compiles compiler.warp once more, so the library baked into warp.wasm is always its own (card
+# once-seed, decision rebake-tables)
 rebaked(built: text, compiler: text, library: text): nothing := {
+	if not baked_current(built) {
+		builder_ran(built, words(built, "rebake", built, "", "", ""))
+		said = baked_said(built)
+		if not same_text(said, "yes") { compiled_once_more(built, compiler, library, said) }
+	}
+}
+compiled_once_more(built: text, compiler: text, library: text, said: text): nothing := {
+	print(joined(joined("rebuild: the baked library is not this compiler's (", said), "), built once more"))
+	runtime = joined(built, ".runtime.wasm")
+	file_ran(built, words(built, "runtime", runtime, "", "", ""))
+	again = joined(built, ".again")
+	builder_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
+	rename(c_string(again), c_string(built))
+	unlink(runtime)
+}
+# what `baked-current` says of a build: yes, or no and the tables it baked otherwise
+baked_said(built: text): text := {
 	answer = joined(built, ".baked")
 	file_ran(built, words(built, "baked-current", answer, "", "", ""))
 	said = read_file(answer)
 	unlink(answer)
-	if not same_text(said, "yes") {
-		print(joined(joined("rebuild: the baked library is not this compiler's (", said), "), built once more"))
-		runtime = joined(built, ".runtime.wasm")
-		file_ran(built, words(built, "runtime", runtime, "", "", ""))
-		again = joined(built, ".again")
-		builder_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
-		rename(c_string(again), c_string(built))
-		unlink(runtime)
-	}
+	said
 }
+baked_current(built: text): bool := same_text(baked_said(built), "yes")
 # the build stamp appended to a build file, a custom section warp.build of lines as the Rust harness wrote them
 # (rust-harness:src/compiler/standalone.rs current_build): lib/, its compiler inputs hash (left empty: no run compares it, decision
 # compilers-delivered), the warp that built it, lib/'s commit, then when it was built. `warp version` shows it

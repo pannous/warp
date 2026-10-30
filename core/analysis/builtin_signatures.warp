@@ -79,6 +79,7 @@ compiler_lines = [
 	"instance_of(x, class_name): bool from emitter",
 	"caught_error(finished, value): error from emitter",
 	"byte_at(t, offset): int from emitter",
+	"baked_segment(t): text from emitter",
 	# todo Can we move all the uniscript to a later extension pass because the core compiler does not use any uniscript
 	"uniscript_error(values...): int from emitter",
 	"uniscript_warnings(values...): int from emitter",
