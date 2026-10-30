@@ -178,7 +178,14 @@ names_within(n: Node, with_keys: bool): list := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is symbol { for name in [name_of(part)] + operated_within(name_of(part)) { found[name] = yes } } else {
+		if part is symbol {
+			found[name_of(part)] = yes
+			for name in operated_within(name_of(part)) {
+				found[name] = yes
+				# the operation a rule makes of it, `x = x /! 2` (rules_reaching)
+				if with_keys and canonical_operator(name) != "" { found[key_head(operation(part, canonical_operator(name), part))] = yes }
+			}
+		} else {
 			if with_keys and part is key { found[key_head(part)] = yes }
 			waiting += parts_within(part)
 		}
