@@ -90,7 +90,9 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	integers = plain_int_test(left.code) + plain_int_test(right.code) + [op.i32_and] + if_else_code(kind, ints, exact)
 	numbers = both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats)
 	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
-	if symbol not in comparisons { return runtime_call("marks_kept", [TypedCode(kind, code + numbers), left, right]) }
+	# (a runtime built before marks_kept, the seed's, keeps none)
+	if symbol not in comparisons and module.runtime.has("marks_kept") { return runtime_call("marks_kept", [TypedCode(kind, code + numbers), left, right]) }
+	if symbol not in comparisons { return TypedCode(kind, code + numbers) }
 	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
