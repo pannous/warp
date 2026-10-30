@@ -76,7 +76,7 @@ rebuilt(): nothing := {
 	seed_runtime = seed_prepared(seed)
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
 	built = joined(compiler_path(), ".new")
-	file_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
+	builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
 	rebaked(built, compiler, library)
 	file_ran(built, words(built, "optimize", built, built, "", ""))
 	stamped(built, library)
@@ -101,7 +101,7 @@ rebaked(built: text, compiler: text, library: text): nothing := {
 		runtime = joined(built, ".runtime.wasm")
 		file_ran(built, words(built, "runtime", runtime, "", "", ""))
 		again = joined(built, ".again")
-		file_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
+		builder_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
 		rename(c_string(again), c_string(built))
 		unlink(runtime)
 	}
@@ -144,13 +144,13 @@ promoted(): nothing := {
 	compiler = compiler_path()
 	source = real_path(joined(library, "/compiler/compiler.warp"))
 	next = joined(compiler, ".next")
-	file_ran(compiler, words(compiler, source, next, folder_of(source), library, joined(library, "/runtime.wasm")))
+	builder_ran(compiler, words(compiler, source, next, folder_of(source), library, joined(library, "/runtime.wasm")))
 	fixpoint = same_text(read_file(next), read_file(compiler))
 	unlink(next)
 	promoted_file = joined(library, "/warp-self.wasm")
 	copied(compiler, promoted_file)
-	copied(joined(compiler, ".driver.cwasm"), joined(promoted_file, ".driver.cwasm"))
-	copied(joined(compiler, ".driver.cwasm.key"), joined(promoted_file, ".driver.cwasm.key"))
+	machine_code_copied(compiler, promoted_file, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_copied(compiler, promoted_file, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
 }
@@ -169,9 +169,19 @@ seed_prepared(seed: text): text := {
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
-	machine_code = joined(from, ".driver.cwasm")
-	rename(c_string(machine_code), c_string(joined(to, ".driver.cwasm")))
-	rename(c_string(joined(machine_code, ".key")), c_string(joined(to, ".driver.cwasm.key")))
+	machine_code_renamed(from, to, machine_code_suffix(COMPILER_GC_HEAP_BYTES))
+	machine_code_renamed(from, to, machine_code_suffix(BUILDER_GC_HEAP_BYTES))
+}
+machine_code_renamed(from: text, to: text, suffix: text): nothing := {
+	rename(c_string(joined(from, suffix)), c_string(joined(to, suffix)))
+	rename(c_string(joined(joined(from, suffix), ".key")), c_string(joined(joined(to, suffix), ".key")))
+}
+# a build's machine code of one heap copied beside another build file, when it has that one
+machine_code_copied(from: text, to: text, suffix: text): nothing := {
+	if read_file(joined(joined(from, suffix), ".key")).length > 0 {
+		copied(joined(from, suffix), joined(to, suffix))
+		copied(joined(joined(from, suffix), ".key"), joined(joined(to, suffix), ".key"))
+	}
 }
 # a file's copy, written aside and renamed, so a run beside this one never reads half of it
 copied(from: text, to: text): nothing := {
