@@ -49,10 +49,6 @@ def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedC
 	if symbol == "^" { return float_power(body, converted(a, kind), converted(b, kind)) }
 	ops = if kind == ValueKind.Float then float_ops else int_ops
 	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind_spelling(kind)) }
-	if kind == ValueKind.Int and symbol in checked_words and not body.intrinsics {
-		checked = runtime_call(checked_words[symbol], [TypedCode(ValueKind.Int, converted(a, kind)), TypedCode(ValueKind.Int, converted(b, kind))])
-		return TypedCode(if unknown then pending else checked.kind, checked.code)
-	}
 	result = if symbol in comparisons then ValueKind.Bool else if unknown then pending else kind
 	TypedCode(result, converted(a, kind) + converted(b, kind) + [ops[symbol]])
 }

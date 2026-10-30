@@ -164,8 +164,7 @@ gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast: 22, ref_cast_nu
 i31_type = 108
 ref_null = 208
 int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>": 135, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
-# where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
-checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply", "<<": "checked_shift_left", ">>": "checked_shift_right"}
+# an int is wasm's i64: + - * wrap silently, never checked (decision nat-and-int); a nat that may grow is boxed
 bit_operators = ["xor", "<<", ">>"]
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
 # yes/no held as i32: only equal or not

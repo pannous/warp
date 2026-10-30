@@ -42,13 +42,11 @@ error_words(name: text): text := {
 	if text_starts_with(name, "no_field_") { return "no field " + bytes_between(name, 9, byte_count(name)) }
 	if text_starts_with(name, "no_case_") { return "no case for " + bytes_between(name, 8, byte_count(name)) }
 	if text_starts_with(name, "overflow_of_") { return overflow_words(bytes_between(name, 12, byte_count(name))) }
-	# the int arithmetic past 64 bits (runtime/arithmetic.warp checked_add …)
-	if text_starts_with(name, "checked_") { return overflow_words("int64") }
 	fix = error_fix(name)
 	if fix == "" then spaced_words(name) else spaced_words(name) + "; " + fix
 }
 overflow_words(type: text): text := {
-	if type == "int64" { return "int64 overflow: the value does not fit int64 (-9223372036854775808…9223372036854775807); fix: declare it int, which is unbounded" }
+	if type == "int64" { return "int64 overflow: the value does not fit int64 (-9223372036854775808…9223372036854775807)" }
 	type + " overflow"
 }
 # a value a runtime error names as its message reads: an error's own message, a text as it is, else as print shows it
