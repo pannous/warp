@@ -45,7 +45,7 @@ logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>
 copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 # The machine's few build slots, shared by every session (user 2026-10-30: six rebuilds at once took the Mac): a build
 # runs in the first free slot of <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many
-build_slots=${WARP_BUILD_SLOTS:-2}
+build_slots=${WARP_BUILD_SLOTS:-5}
 lock_held_elsewhere=75
 in_build_slot() {
 	command -v lockf >/dev/null || { "$@"; return; }
