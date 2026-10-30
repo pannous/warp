@@ -324,7 +324,15 @@ WGSL_WORDS = {"sine": ["sin", "each"], "cosine": ["cos", "each"], "tangent": ["t
 	"step": ["step", "each"], "smoothstep": ["smoothstep", "each"], "pow": ["pow", "each"], "power": ["pow", "each"],
 	"mix": ["mix", "mix"], "lerp": ["mix", "mix"], "dot": ["dot", "to_one"], "distance": ["distance", "to_one"],
 	"norm": ["length", "to_one"], "magnitude": ["length", "to_one"], "length": ["length", "to_one"],
-	"normalize": ["normalize", "kept"], "cross": ["cross", "kept"], "reflect": ["reflect", "kept"]}
+	"normalize": ["normalize", "kept"], "cross": ["cross", "kept"], "reflect": ["reflect", "kept"],
+	"sinh": ["sinh", "each"], "cosh": ["cosh", "each"], "tanh": ["tanh", "each"], "fabs": ["abs", "each"],
+	"fmin": ["min", "each"], "fmax": ["max", "each"], "ceiling": ["ceil", "each"], "whole_part": ["trunc", "each"]}
+# warp's math words WGSL lacks, or has with another meaning, as WGSL expressions of the same meaning: $1, $2 … the
+# arguments, all of one width (a number broadcasts). warp's round takes halves away from zero, WGSL's to even
+WGSL_MEANINGS = {"round": "sign($1) * floor(abs($1) + 0.5)", "remainder": "$1 - $2 * trunc($1 / $2)",
+	"fmod": "$1 - $2 * trunc($1 / $2)", "hypot": "sqrt($1 * $1 + $2 * $2)", "hypotenuse": "sqrt($1 * $1 + $2 * $2)",
+	"cbrt": "sign($1) * exp(log(abs($1)) / 3.0)", "log10": "log($1) * 0.4342944819", "log1p": "log(1.0 + $1)",
+	"expm1": "exp($1) - 1.0"}
 # words that keep their argument as it is on the GPU: every number is already a float there
 SAME_VALUE_WORDS = ["float", "double", "number"]
 CONSTANTS = {"pi": "3.14159265", "π": "3.14159265", "tau": "6.2831853", "τ": "6.2831853"}
@@ -545,7 +553,7 @@ wgsl_spaced(n: Node, scope: WgslScope): list := {
 	if #items >= 2 and items#1 is symbol { return wgsl_call(items#1, items[1 ..], n, scope) }
 	wgsl_refused(n, "WGSL has no form for " + form_of(n))
 }
-wgsl_is_function(name: Node): bool := WGSL_WORDS.has(name_of(name)) or function_definition(name, shading.program) != ø
+wgsl_is_function(name: Node): bool := WGSL_WORDS.has(name_of(name)) or WGSL_MEANINGS.has(name_of(name)) or function_definition(name, shading.program) != ø
 
 wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	word = name_of(name)
@@ -554,6 +562,7 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	}
 	# a word WGSL has wins over its library definition (lib/math's cosine is each_any of cos)
 	if word in SAME_VALUE_WORDS and #arguments == 1 { return wgsl_expression(arguments#1, scope) }
+	if WGSL_MEANINGS.has(word) { return wgsl_meant(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 	if not WGSL_WORDS.has(word) {
 		if function_definition(name, shading.program) != ø { return wgsl_program_call(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 		return wgsl_refused(n, "${word} is no word WGSL has, nor a function of the program")
@@ -567,6 +576,16 @@ wgsl_builtin(word: text, combining: text, values: list, n: Node): list := {
 	width = wgsl_common_width(values, n)
 	called = word + "(" + values.map(value => wgsl_splat(value, width)).join(", ") + ")"
 	if combining == "to_one" then [called, 1] else [called, width]
+}
+# a word of WGSL_MEANINGS, its arguments in their places, each in parentheses
+wgsl_meant(word: text, values: list, n: Node): list := {
+	meaning = WGSL_MEANINGS[word]
+	takes = if meaning.contains("$2") then 2 else 1
+	if #values != takes { return wgsl_refused(n, "${word} takes ${takes} values") }
+	width = wgsl_common_width(values, n)
+	expression = meaning
+	for i in 1 to takes { expression = expression.replace("$" + "${i}", "(" + wgsl_splat(values#i, width) + ")") }
+	["(" + expression + ")", width]
 }
 # `mix(a, b, weight)`: a and b of one width, the weight a number or of that width too
 wgsl_mixed(word: text, values: list, n: Node): list := {

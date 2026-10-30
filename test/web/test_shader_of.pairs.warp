@@ -8,3 +8,4 @@
 'f(x, y) := [x, f(y, x)#1, 0]; shader_of(f)'	error	WGSL has no recursion
 'f(x, y) := x > y; shader_of(f).contains("select(vec3f(0.98039216), vec3f(0.11372549), f(position.x - 0.5, position.y - 0.5))")'	yes
 'f(x, y) := { i = 0; while i < x { i = i + 1 }; [i, y, 0] }; shader_of(f).contains("while ((i < x)) {")'	yes
+'f(x, y) := round(x / 2); shader_of(f).contains("sign(((x / 2.0))) * floor(abs(((x / 2.0))) + 0.5)")'	yes
