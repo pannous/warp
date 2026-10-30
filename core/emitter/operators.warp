@@ -74,7 +74,9 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	if symbol in bit_operators { return operation_code(body, symbol, TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, a), ValueKind.Int)), TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, b), ValueKind.Int))) }
 	left = TypedCode(ValueKind.Node, [op.local_get] + uleb(fresh_local(body, ValueKind.Node)))
 	right = TypedCode(ValueKind.Node, [op.local_get] + uleb(fresh_local(body, ValueKind.Node)))
-	ints = operation_code(body, symbol, TypedCode(ValueKind.Int, unboxed(left.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right.code, gc_type(gc.int_box))))
+	plain = [TypedCode(ValueKind.Int, unboxed(left.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right.code, gc_type(gc.int_box)))]
+	# two plain ints past 64 bits make a big int (D16): the runtime's grown words
+	ints = if symbol in grown_words then runtime_call(grown_words[symbol], plain) else operation_code(body, symbol, plain#1, plain#2)
 	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
 	kind = if ints.kind == ValueKind.Bool then ValueKind.Bool else ValueKind.Node
 	exact = exact_operation(body, symbol, left, right, floats)
@@ -100,6 +102,7 @@ def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
+grown_words = {"-": "grown_difference", "*": "grown_product"}
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod", "rem": "exact_rem"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }

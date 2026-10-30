@@ -1,0 +1,6 @@
+# an int held boxed (a list item, an any value) grows past 64 bits into a big int where it trapped (D16, decision int-boxed-overflow-big)
+'xs = [2^62]; xs#1 * 4'	18446744073709551616
+'xs = [2^62]; xs#1 + 2^62'	9223372036854775808
+'xs = [0 - 2^62]; xs#1 - 2^62 - 2^62'	-13835058055282163712
+'f(x: any) := x * x; f(2^40)'	1208925819614629174706176
+'xs = [3]; xs#1 * 4'	12

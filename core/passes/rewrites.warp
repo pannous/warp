@@ -153,6 +153,8 @@ global rule_case_holders = {}
 global rule_enums = {}
 # the names that hold only instances of the program's classes (`where $s is instance`)
 global rule_instances = {}
+# the program's classes, whose construction `Counter(3)` is an instance (`where $o is instance`)
+global rule_classes = {}
 # the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
 global rule_program = Node.Empty
 # the text of the program being compiled, `$source` of a rule word: what its parse drops, the comment above a definition
@@ -271,6 +273,7 @@ sugar_applied(program: Node, rules: list): Node := {
 	rule_signatures = definitions_signatures(program)
 	rule_case_holders = case_holders_of(program)
 	rule_instances = instance_names_of(program)
+	rule_classes = class_names_of(program)
 	rule_program = program
 	rule_varying_known = no
 	rule_vectors_known = no
@@ -958,6 +961,7 @@ has_property(code: Node, property: text): bool := {
 	if property == "function_block" { return bracket_of(code) == "{" and mentions(code, implicit_parameter) }
 	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
 	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
+	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_classes.has(name_of(code#1)) }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
@@ -1044,13 +1048,18 @@ may_be_list(code: Node, scope: text, vectors: list): bool := {
 is_element_wise_phrase(code: Node): bool := is_spaced(code) and #code == 3 and code#2 is symbol and #name_of(code#2) > 1 and name_of(code#2).starts_with(".") and name_of(code#2)#2 != '.'
 is_swizzle_word(name: text): bool := #name >= 2 and #name <= 4 and name.all(c => c in "xyzw")
 
-# the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)
-instance_names_of(program: Node): map := {
+# the program's classes by name
+class_names_of(program: Node): map := {
 	classes = {}
 	for statement in statements_in(program) {
 		view = class_view(statement)
 		if view != ø { classes[declared_type_name(view#2)] = yes }
 	}
+	classes
+}
+# the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)
+instance_names_of(program: Node): map := {
+	classes = class_names_of(program)
 	found = {}
 	if #classes == 0 { return found }
 	types = assigned_types(statements_in(program), classes)

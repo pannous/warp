@@ -10,8 +10,10 @@
 extended_text(n: Node): text from runtime
 # ordering and equality: -1, 0 or 1 as a is below, equal to or above b, two Int nodes, one an exact ratio
 extended_order(a: Node, b: Node): int from runtime
-# arithmetic: the sum of two Int nodes, one an exact ratio
+# arithmetic: the sum, difference and product of two Int nodes, one an exact ratio or both plain ints past 64 bits
 extended_sum(a: Node, b: Node): Node from runtime
+extended_difference(a: Node, b: Node): Node from runtime
+extended_product(a: Node, b: Node): Node from runtime
 # conversions: an exact ratio as a float, and truncated toward 0
 extended_float(n: Node): float from runtime
 extended_truncated(n: Node): int from runtime
