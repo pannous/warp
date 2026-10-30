@@ -1138,6 +1138,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`, `($as..., $bs...)`: a range without end; also a
 				// rule's rest hole before a comprehension's clause, `[$e... for $x in $xs]` (card sugar-comprehensions)
 				left = keyed(op#2, left, ø)
+			} else if op#2 == "%" and ",;)]}".contains(peek(p.code, p.at, p.n)) {
+				// `[10%, 20%]`: a percent with no operand after it (decision Trailing percent, lib/sugar/arithmetic.warp)
+				left = keyed(op#2, left, ø)
 			} else {
 				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else expression(p, powers#2)
 				// `x(p: P) -> int := …`, Swift's and Rust's result arrow, is the typed head `x(p: P): int := …`
