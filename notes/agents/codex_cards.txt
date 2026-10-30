@@ -1,7 +1,6 @@
 # Cards for the timed Codex worker (notes/agents/codex_worker.sh), in order; the Supervisor keeps this list.
 # Library work only (lib/, samples/, test/, wiki/), away from the sessions changing core/ (user 2026-10-26).
 # Refreshed 2026-10-30: the old top two (list-word-methods, canvas-paint-arity) need core and were released every run.
-pipe-functions-tests        # land tests/operators/test_pipe_functions.warp under test/operators
 alias-arc-cosine            # alias acos = arc_cosine in lib/aliases.warp
 linear-hint-warp            # prefer xs = float[n] over linear: the hint, in lib
 typed-parse                 # parse<T>(json) checks the data against T: lib/json.warp
