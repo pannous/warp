@@ -123,10 +123,13 @@ BAKED_LENGTH_DIGITS = 10
 BAKED_HEADER_BYTES = 42
 BAKED_MARK = "warp.baked "
 baked_segment_text(name: text, table: map): text := {
-	body = pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
-	length = "${byte_size(body)}"
-	head = "0" * (BAKED_LENGTH_DIGITS - length.length) + length + BAKED_MARK + name
-	head + " " * (BAKED_HEADER_BYTES - 1 - head.length) + "\n" + body
+	body: text = pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
+	body_bytes: int = byte_size(body)
+	count_text: text = "${body_bytes}"
+	zeros: int = BAKED_LENGTH_DIGITS - #count_text
+	head: text = ("0" * zeros) + count_text + BAKED_MARK + name
+	spaces: int = BAKED_HEADER_BYTES - 1 - #head
+	head + (" " * spaces) + "\n" + body
 }
 unbaked_table(body: text): map := {
 	table = {}
@@ -153,20 +156,23 @@ write_rebaked(file: text) := {
 			rebaked += [name]
 		}
 	}
-	if #rebaked < #made {
-		print "rebake: ${file} carries ${#rebaked} of the ${#made} baked tables as segments of their own, left as it is"
-		return
+	found = #rebaked
+	tables = #made
+	if found < tables { print "rebake: ${file} carries ${found} of the ${tables} baked tables as segments of their own, left as it is" } else {
+		size_bytes = uleb(place#2 - place#1)
+		section_start = place#1 - 1 - #size_bytes
+		ahead = wasm[0 ..< section_start]
+		behind = wasm[place#2 ..< #wasm]
+		write_bytes(file, ahead + section(section_ids.data, vector(segments)) + behind)
 	}
-	data = section(section_ids.data, vector(segments))
-	header = 1 + #uleb(place#2 - place#1)
-	write_bytes(file, wasm[0 ..< place#1 - header] + data + wasm[place#2 ..])
 }
 # the baked table a data segment holds (its mark after the digits), ø for any other segment
 baked_name(segment: list, names: list): text? := {
-	bytes_at = uleb_read(segment, 1)#2 + BAKED_LENGTH_DIGITS
+	size = uleb_read(segment, 1)
+	bytes_at = size#2 + BAKED_LENGTH_DIGITS
 	for name in names {
 		mark = (BAKED_MARK + name + " ").bytes
-		if segment[bytes_at ..< bytes_at + #mark] == mark { return name }
+		if bytes_at + #mark <= #segment and segment[bytes_at ..< bytes_at + #mark] == mark { return name }
 	}
 	ø
 }
