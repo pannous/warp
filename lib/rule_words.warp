@@ -419,9 +419,10 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	if scope.widths.has(word) {
 		return wgsl_refused(n, "${word} is a value, not a function")
 	}
-	if function_definition(name, shading.program) != ø { return wgsl_program_call(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
+	# a word WGSL has wins over its library definition (lib/math's cosine is each_any of cos)
 	if word in SAME_VALUE_WORDS and #arguments == 1 { return wgsl_expression(arguments#1, scope) }
 	if not WGSL_WORDS.has(word) {
+		if function_definition(name, shading.program) != ø { return wgsl_program_call(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 		return wgsl_refused(n, "${word} is no word WGSL has, nor a function of the program")
 	}
 	values = arguments.map(argument => wgsl_expression(argument, scope))
