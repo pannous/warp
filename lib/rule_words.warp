@@ -240,9 +240,9 @@ first_parameter_type(word: text, definition: text): text := {
 	first = definition[#word + 1 ..].split(")")#1.split(",")#1
 	if first.contains(":") then first.split(":")#2.trim() else ""
 }
-# `dir(v)` of a value only the run knows: the words of a list and of a text, the prelude's dir_of_value's arguments
+# `dir(v)` of a value only the run knows: the words of a list, a text and a map, the prelude's dir_of_value's arguments
 # after v
-value_dir_words(program: Node): any := if owns_dir(program) then ø else List([module_dir("list"), module_dir("text")], Bracket.Square, Separator.Comma)
+value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
 
 # `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's) the program doesn't bind, else ø
 module_named(module: Node, program: Node): any := if "${module}" in names_bound_in(program) or used_module_text("${module}".lower()) == "" then ø else module
