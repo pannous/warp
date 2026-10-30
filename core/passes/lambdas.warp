@@ -266,7 +266,8 @@ used_count(uses: list, lines: list): int? := if #uses > 0 and uses.all(n => n ==
 # the closure of the function calling the word with `taken` values, a lambda's
 word_closure(name: text, taken: int, lowering: Lowering): Node := {
 	parameters = (1 to taken).map(i => symbol("value" + i))
-	lifted(Key(List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, call_node(symbol(name), parameters)), [], lowering)
+	# (made after the sugar, its call sugared as written ones were: max(a, b) is a comparison, lib/sugar/extremes.warp)
+	lifted(Key(List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, sugar(call_node(symbol(name), parameters))), [], lowering)
 }
 # the counts of values the name is called with in the statements, `f(1, 2)` and `f 1 2`
 called_counts(name: Node, statements: list): list := {
