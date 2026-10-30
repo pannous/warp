@@ -59,15 +59,12 @@ bytes_between(t: text, start: int, stop: int): text := {
 # `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only, as Rust joins
 joined(xs: list, separator: Node): text := {
 	between = node_text(separator)
-	out = ""
-	count = 0
+	parts = []
 	for x in xs {
 		if kind_code(x) == Kind.List { fail() }
-		if count > 0 { out += between }
-		out += node_text(x)
-		count += 1
+		parts += [node_text(x)]
 	}
-	out
+	texts_joined(parts, between)
 }
 # `n times "ab"`: t n times over
 repeated_text(n: int, t: Node): text := {
