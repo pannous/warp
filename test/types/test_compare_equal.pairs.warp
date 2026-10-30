@@ -1,0 +1,10 @@
+# == and != call a type's equal(other), compare(other) == 0 where it has none (decision compare-equal-hooks)
+'class V{n:int; m:int; compare(o) := n - o.n}; V(3,1) == V(3,2)'	yes
+'class V{n:int; m:int; compare(o) := n - o.n}; V(3,1) != V(3,2)'	no
+'class V{n:int; m:int; compare(o) := n - o.n}; V(3,1) != V(4,2)'	yes
+'class V{n:int; m:int; equal(o) := n == o.n}; V(3,1) != V(3,2)'	no
+'class V{n:int; m:int}; V(3,1) == V(3,2)'	no
+'x = 2 hours; y = 120 minutes; x == y'	yes
+'x = 2 hours; y = 120 minutes; x != y'	no
+'√2 < 2'	yes
+'√2 != √3'	yes

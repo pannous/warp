@@ -190,5 +190,6 @@ exact_decimal(t: text) := {
 	if t.starts_with("-") then - magnitude else magnitude
 }
 
-// a duration sleeps that long: `sleep(300ms)`
-sleep(duration: Time) := sleep_ms(duration.amount * 1000)
+// a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
+// sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
+sleep(duration) := sleep_ms((if duration is Time then duration.amount else duration) * 1000)

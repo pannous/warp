@@ -6,6 +6,10 @@ rewrite $xs.push($v...) => $xs += [$v...] where $xs is not instance
 rewrite $xs.add($v...) => $xs += [$v...] where $xs is not instance
 rewrite $xs.append($v...) => $xs += [$v...] where $xs is not instance
 rewrite $xs.insert($v) => $xs += [$v] where $xs is not instance
+# `xs.insert(i, v)`, the position first as in Python, `xs.insert(v, at: i)` by name: the runtime word list_insert, in
+# xs itself (decision list-insert)
+rewrite $xs.insert($v, at: $i) => list_insert($xs, $i, $v) where $xs is not instance
+rewrite $xs.insert($i, $v) => list_insert($xs, $i, $v) where $xs is not instance
 rewrite $xs.pop() => list_pop($xs) where $xs is not instance
 # `x.json`: the JSON text of any value (lib/json.warp json_text), a map's field json where it has one
 rewrite $x.json => json_text($x)

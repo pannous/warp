@@ -56,6 +56,9 @@ commutative_operators = ["+", "*", "==", "!="]
 # the method ordering a class's instances, and the operators it gives them
 ordering_method = "compare"
 ordering_operators = ["<", "<=", ">", ">="]
+# the method a class's instances are equal by under == (and != by its negation), compare's 0 where it declares none
+# (decision compare-equal-hooks)
+equality_method = "equal"
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
@@ -118,7 +121,7 @@ methods_lifted(program: Node): Node := {
 		owner.methods = owner.methods + [as_operator_method(definition)]
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
-	for name in classes.keys { classes[name].methods = positions_derived(classes[name].methods, operator_table) }
+	for name in classes.keys { classes[name].methods = equality_derived(positions_derived(classes[name].methods, operator_table), operator_table) }
 	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 and not respelled { return program }
@@ -171,7 +174,7 @@ methods_lifted(program: Node): Node := {
 		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions, floaters)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, name, routes) }
-	rewritten += derived_dispatchers(classes, liftable, routes, promotions)
+	rewritten += derived_dispatchers(classes, liftable, routes, promotions, operator_table)
 	group_like(program, rewritten)
 }
 # `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
@@ -219,9 +222,14 @@ constructor_functions(classes: map, owning_class: text, routes: list): list := {
 }
 # the dispatchers a class's compare(o), text() and float() give: its instances ordered by <, <=, >, >=, shown by their
 # text, converted to a float
-derived_dispatchers(classes: map, names: list, routes: list, promotions: list): list := {
+derived_dispatchers(classes: map, names: list, routes: list, promotions: list, operator_table: map): list := {
 	made = []
 	other = symbol("other")
+	# `a != b` of instances equal by their equal(other): not a == b, unless a class spells != itself
+	if names.any(name => owns_operator(classes[name], "==", operator_table)) and not names.any(name => owns_operator(classes[name], "!=", operator_table)) {
+		head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
+		made += [Key(call_of("!=·operator", head), Op.Define, Key(ø, Op.Not, call_of("==·operator", [self_node, other])))]
+	}
 	orderers = owners_of(classes, names, ordering_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], ordering_method)) == 1)
 	if #orderers > 0 {
 		called = {}
@@ -422,6 +430,15 @@ position_named(method: Node, operator_table: map): Node := {
 	name = if #method_parameters(method) == 2 then word + "·assigned" else word
 	Key(call_of(name, method_parameters(method)), Op.Define, value_of(method))
 }
+# a class ordering by compare(other) and spelling no == is equal where compare gives 0: `equal(other) := self.compare(other) == 0`
+equality_derived(methods: list, operator_table: map): list := {
+	words = methods.map(defined_word)
+	if ordering_method not in words or words.any(word => spells_operator(word, "==", operator_table)) { return methods }
+	other = symbol("other")
+	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0))]
+}
+owns_operator(declared: Declared, glyph: text, operator_table: map): bool := declared.methods.any(method => spells_operator(defined_word(method), glyph, operator_table))
+spells_operator(word: any, glyph: text, operator_table: map): bool := word is text and spelled_operator(operator_table, word) != ø and operator_table[word]#2 == glyph
 shifted_twin(name: text, twin: text, shift: Op): Node := {
 	setting = if name.ends_with("·assigned") then [symbol("value")] else []
 	Key(call_of(name, [symbol("at")] + setting), Op.Define, call_of(twin, [Key(symbol("at"), shift, 1)] + setting))
