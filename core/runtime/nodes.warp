@@ -7,6 +7,19 @@ use "show.warp"
 use "text.warp"
 # a value as a boxed $Node
 held(value: Node): Node := value
+# an int as its Int node (the emitter boxes every int so, emitter.warp boxed): one node per small number, made at its
+# first use, as a node never changes; a list of bytes or counts made a node and a box per item (16 MB to read the 232 KB
+# runtime.wasm, card hello-compile-allocations)
+small_int_low(): int := -128
+small_int_high(): int := 1023
+global small_int_nodes = []
+int_node(n: int): Node := {
+	if n < small_int_low() or n > small_int_high() { return fresh_int_node(n) }
+	if not small_int_nodes { small_int_nodes = new_list(small_int_high() - small_int_low() + 1) }
+	at = n - small_int_low() + 1
+	if is_null(small_int_nodes#at) { small_int_nodes#at = fresh_int_node(n) }
+	small_int_nodes#at
+}
 # The spellings of the built-in node's parts (core/node.warp), made at their first use only: a key's operator, a list's
 # bracket and separator are read at every step of a walk over a program, and each list of texts made anew was a tenth
 # of a rebuild (card key-op-case)

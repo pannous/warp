@@ -623,8 +623,12 @@ def boxed(value: TypedCode): list {
 	if kind == ValueKind.Float { return node(Kind.Float, code + gc_code(gc_ops.struct_new, [gc_type(gc.float_box)])) }
 	if kind == ValueKind.Bool { return node(Marked.Bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])) }
 	if kind != ValueKind.Int and kind != pending { refuse("a " + kind_spelling(kind) + " as a value") }
-	node(Kind.Int, code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]))
+	# (a small number's node is shared, runtime nodes.warp int_node)
+	if module.runtime.has("int_node") { return runtime_call("int_node", [TypedCode(ValueKind.Int, code)]).code }
+	fresh_int_code(code)
 }
+# a new Int $Node of the int the code gives
+def fresh_int_code(code: list): list { node(Kind.Int, code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])) }
 # `[a, b, c]`: a vector of its items, boxed, read in order
 # `{1, 2}` as a value is a curly list of its values, as Rust builds the list structure; `{a; b}` and the spaced `{3 4}`
 # run as statements ` giving 4 is reasonable), and a body or branch runs its block

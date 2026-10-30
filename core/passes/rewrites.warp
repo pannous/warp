@@ -511,7 +511,7 @@ rule_needs(source: text): list := {
 			parts = rule.split(" " + where_word + " ")
 			origin = if #parts > 1 then parts#2.split("=") else []
 			# (a hole a rule word binds, `$names = path_parameters($path)`, is no origin)
-			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not rule_words.has(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
+			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not is_rule_word(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
 			needs += if word != "" then [word] else listed_in_text(rule)
 		}
@@ -803,13 +803,34 @@ is_condition(condition: Node): bool := {
 }
 
 # `routed($program)`: a call of a word of lib/rule_words.warp, run at compile time (decision computed-hole)
-is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and rule_words.has(name_of(n#1))
+is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
+# a word of lib/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
+# newer compiler, card rule-whose), one the library's file defines, read only then
+is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
+global library_rule_words = ø
+library_rule_word_names(): map := {
+	if library_rule_words == ø {
+		library_rule_words = {}
+		for cut in definition_slices(used_module_text("rule_words")) { library_rule_words[cut#1] = yes }
+	}
+	library_rule_words
+}
+# a rule word this compiler lacks: the rules calling it don't fire, said once a word
+global skipped_rule_words = {}
+skipped_rule_word(word: text): any := {
+	if not skipped_rule_words.has(word) {
+		warn "the rule word " + word + " is not in this compiler (an older seed): its rules are skipped"
+		skipped_rule_words[word] = yes
+	}
+	ø
+}
 # `$names = path_parameters($path)`: a hole bound to a rule word's result
 is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of(n)) != ø or rest_hole_name(key_of(n)) != ø) and is_rule_word_call(value_of(n))
 # the rule word's result for the code its arguments' holes bound, `$program` the whole program, `$source` its text
 program_hole = "$program"
 source_hole = "$source"
 computed(call: Node, bound: map): any := {
+	if not rule_words.has(name_of(call#1)) { return skipped_rule_word(name_of(call#1)) }
 	word = rule_words[name_of(call#1)]
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
 	if #given == 0 { return word() }
