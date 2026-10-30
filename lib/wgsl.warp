@@ -5,9 +5,9 @@
 # its element-wise math, `p.x` `p.xz` its components. The program values the shader reads are paint's `values`, whose
 # struct the host appends (web/playground/host-gpu.js uniformLayout), so a frame changes them without a new shader.
 # A form WGSL has none of is refused, naming it; the Rust era's twin: rust-harness:src/lowering/foreign/gpu_maps/kernels.rs
-# The compiler runs these words as rule words (lib/rule_words.warp); they read the program through its reflection
-# words (function_definition, body_of …).
-use rule_words
+# Its words run as rule words (lib/rule_words.warp, outside the compiler); they read the program through the reflection
+# words of core/extensions/reflection.warp (function_definition, body_of …).
+use "compiler/extensions/reflection.warp"
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUES_NAME = "values"
@@ -470,7 +470,7 @@ wgsl_value_width(assigned_code: Node): int := {
 wgsl_assigned_value(word: text): any := main_level_value(word, shading.program)
 # the value the program's main level assigns the name first, ø where it assigns none
 main_level_value(word: text, program: Node): any := {
-	found = program_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
+	found = flat_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
 	if #found == 0 then ø else value_of(found#1)
 }
 # `global x = 3`, parsed `global: (x = 3)`: the assignment it declares

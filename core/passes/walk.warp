@@ -4,6 +4,7 @@
 # passes before it left it, as a node built by `node_of(view)`, and compares `view_of(result)` with the view after
 # the Rust pass.
 use "../analysis/words.warp"
+use "../analysis/types.warp"
 
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
 opaque_word = HiddenWord.ViewOpaque as text

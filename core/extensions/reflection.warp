@@ -1,0 +1,43 @@
+# Reading a program's functions, shared by the rule words the compiler runs itself (compiler_rule_words.warp) and those
+# of lib/rule_words.warp, run outside it (card rule-words-removal): a function's definition, parameters and body, as
+# the program writes them
+use "../passes/walk.warp"
+use "../passes/scope.warp"
+use "../analysis/analyzer.warp"
+
+
+# `users` → "users": a name as the text it is spelled by
+spelled(name: Node): text := "${name}"
+
+is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
+
+# a value as code to paste: a text in its quotes
+as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
+
+# the program's definition of the function named, `f(a, b) := …` or `f = x => …`; ø for none
+function_definition(name: Node, program: Node): any := {
+	found = flat_statements(program).filter(statement => defines(statement, "${name}"))
+	if #found == 0 then ø else found#1
+}
+defines(statement: Node, name: text): bool := defined_name(statement) == name or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
+definition_parameters(definition: Node): list := function_parameters_written(definition).map(parameter_name)
+# the parameters as the definition writes them, `a: int` of `f(a: int) := …`, `x` of `f = x => …`
+function_parameters_written(definition: Node): list := {
+	if is_definition(definition) { return defined_parameters(definition) }
+	taken = key_of(value_of(definition))
+	if is_group(taken) then items_of(taken) else [taken]
+}
+# the code the function computes, `x*2` of `twice(x) := x*2`; ø when the program defines no such function
+body_of(name: Node, program: Node): any := {
+	definition = function_definition(name, program)
+	if definition == ø { return ø }
+	if is_definition(definition) then value_of(definition) else value_of(value_of(definition))
+}
+
+# the word called with the arguments, of up to three
+called_with(word: function, given: list): any := {
+	if #given == 0 { return word() }
+	if #given == 1 { return word(given#1) }
+	if #given == 2 { return word(given#1, given#2) }
+	word(given#1, given#2, given#3)
+}

@@ -1,9 +1,15 @@
-# The words a rewrite rule's `where` calls at compile time (decision computed-hole; core/passes/rewrites.warp
-# computed): `where $names = path_parameters($path)` binds the hole to the word's result, a node or a list of nodes
-# (a rest hole's items), `where routed($program)` holds when the word gives yes. Each word takes the code its rule's
-# holes bound, `$program` the whole program, and runs inside the compiler.
-# warp functions as one WGSL shader (lib/prelude.warp paint rules) are lib/wgsl.warp's words
+# The words of the standard modules' rules a rewrite rule's `where` calls at compile time (decision computed-hole;
+# core/passes/rewrites.warp computed): `where $names = path_parameters($path)` binds the hole to the word's result, a
+# node or a list of nodes (a rest hole's items), `where routed($program)` holds when the word gives yes. Each word takes
+# the code its rule's holes bound, `$program` the whole program. They run outside the compiler (card
+# rule-words-removal): `warp rebuild` builds this file as the program modules/rule_words.wasm, which the compiler
+# runs through the native warp's host word module_word, the code going out and back encoded (answer below); a new
+# word needs no new compiler. The words reading what only the compiler knows are its own,
+# core/extensions/reflection.warp. Warp functions as one WGSL shader (lib/prelude.warp paint rules) are
+# lib/wgsl.warp's words
 use wgsl
+use "compiler/extensions/reflection.warp"
+use "compiler/parsing/parse_words.warp"
 
 # where a path parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
 parameter_ends = ":(?*+"
@@ -19,8 +25,6 @@ path_parameter(part: text): text := {
 	name
 }
 
-# `users` → "users": a name as the text it is spelled by
-spelled(name: Node): text := "${name}"
 
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
@@ -40,16 +44,13 @@ framed(program: Node): any := ended_by(program, "frame_listened", frames_end_wor
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
 # that declares
 ended_by(program: Node, starting: text, ending_word: text): any := {
-	statements = program_statements(program)
+	statements = flat_statements(program)
 	if not statements.any(statement => is_call_of(statement, starting)) or statements.any(statement => is_call_of(statement, ending_word)) { return ø }
 	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
 	ending = statements[last]
 	ended = if is_declaration(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
 	separated(bracketed(statements[0 ..< last] + ended + statements[last + 1 ..], ""), ";")
 }
-# the main level's statements, of lines and of `;` within a line alike
-program_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then program_statements(s) else [s])
-is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
 
 # --- variable signals (lib/signals.warp's rules, card signals-lib) ---
 
@@ -73,7 +74,7 @@ became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key
 # before it (the first write declares the name), that of a definition or a listener always, as they run later. ø for a
 # program without listeners
 signaled(program: Node): any := {
-	statements = program_statements(program)
+	statements = flat_statements(program)
 	watched = statements.flat_map(names_listened)
 	if #watched == 0 { return ø }
 	derived = derived_inputs(statements)
@@ -90,7 +91,7 @@ signaled(program: Node): any := {
 # the program with each list it makes for the GPU (lib/wgsl.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
 # creating form packed (same-scope flow only, decision gpu-bound-floats)
 gpu_lists_packed(program: Node): any := {
-	statements = program_statements(program)
+	statements = flat_statements(program)
 	bound = statements.filter(statement => is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program))
 	if #bound == 0 { return ø }
 	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement)))) else statement)
@@ -140,165 +141,15 @@ stepping_ops = [Op.Inc, Op.Dec]
 signal_old_of(name: text): text := "signal·" + name
 writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
 
-# `count(2 in xs)`: a yes/no question is no count, the compile refused with the count it means
-counted_question(items: Node, item: Node): Node := {
-	throw "count(${as_code(item)} in ${as_code(items)}) counts a yes/no question: did you mean ${as_code(items)}.count(${as_code(item)})?"
-}
-# a value as code to paste: a text in its quotes
-as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
-
-# --- a function's own words (lib/sugar/reflection.warp's rules, card name-params) ---
-
-# the program's definition of the function named, `f(a, b) := …` or `f = x => …`; ø for none
-function_definition(name: Node, program: Node): any := {
-	found = program_statements(program).filter(statement => defines(statement, "${name}"))
-	if #found == 0 then ø else found#1
-}
-defines(statement: Node, name: text): bool := defined_name(statement) == name or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
-# `["a", "b"]`: the names of the function's parameters as a list; ø when the program defines no such function
-parameters_named(name: Node, program: Node): any := {
-	definition = function_definition(name, program)
-	if definition == ø { return ø }
-	List(definition_parameters(definition), Bracket.Square, Separator.Comma)
-}
-definition_parameters(definition: Node): list := function_parameters_written(definition).map(parameter_name)
-# the parameters as the definition writes them, `a: int` of `f(a: int) := …`, `x` of `f = x => …`
-function_parameters_written(definition: Node): list := {
-	if is_definition(definition) { return defined_parameters(definition) }
-	taken = key_of(value_of(definition))
-	if is_group(taken) then items_of(taken) else [taken]
-}
-# `(a: int, b: int) -> int`: the parameters as written, untyped ones by their name alone, and the kind its result
-# has; ø when the program defines no such function or no kind is known of its result
-signature_text(name: Node, program: Node): any := {
-	definition = function_definition(name, program)
-	if definition == ø { return ø }
-	returned = function_result_kind(name, definition)
-	if returned == ø { return ø }
-	"(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
-}
-# `int` of `twice(x) := x*2`: the kind the analyzer infers for the function's result
-return_kind(name: Node, program: Node): any := {
-	definition = function_definition(name, program)
-	if definition == ø then ø else function_result_kind(name, definition)
-}
-function_result_kind(name: Node, definition: Node): any := {
-	found = kinds(definition).functions.get("${name}")
-	if found == ø then ø else found.result
-}
-parameter_shown(written: Node): text := {
-	parameter = parameter_of(written)
-	if parameter.type_name == "" then parameter.name else parameter.name + ": " + parameter.type_name
-}
-# the code the function computes, `x*2` of `twice(x) := x*2`; ø when the program defines no such function
-body_of(name: Node, program: Node): any := {
-	definition = function_definition(name, program)
-	if definition == ø { return ø }
-	if is_definition(definition) then value_of(definition) else value_of(value_of(definition))
-}
-# a function's doc: its body's leading text, else the comment lines right above its definition, in the program's
-# source (`$source`, which keeps what the parse drops) or the module defining it (lerp's `// the value a fraction t of
-# the way from a to b`); "" without
-doc_of(name: Node, program: Node, source: text): text := {
-	body = body_of(name, program)
-	if body != ø and is_sequence_block(body) and #body > 1 and body#1 is text { return "${body#1}" }
-	word = "${name}"
-	found = comment_above(source, word)
-	modules = word_index(word_index_file()).get(word) ?? []
-	for module in modules { if found == "" { found = comment_above(used_module_text(module), word) } }
-	found
-}
-# the comment lines right above the line defining the word, without their marks; "" when none
-comment_above(source: text, word: text): text := {
-	comments = []
-	for line in source.split("\n") {
-		trimmed = line.trim()
-		if defines_function(trimmed, word) { return comments.join("\n") }
-		comments = if is_comment_line(trimmed) then comments + [comment_text(trimmed)] else []
-	}
-	""
-}
-defines_function(line: text, word: text): bool := ["fun ", "def "].any(keyword => line.starts_with(keyword + word + "(") or line.starts_with(keyword + word + " ")) or ((line.starts_with(word + "(") or line.starts_with(word + " ")) and (line.contains(":=") or line.contains("=>")))
-is_comment_line(line: text): bool := line.starts_with("//") or line == "#" or line.starts_with("# ")
-comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1) ..].trim()
-# `area(width: int, height: int) := width * height`: the function's definition as code to paste (decision
-# reflection-definition); ø when the program defines no such function
-definition_text(name: Node, program: Node, source: text): any := {
-	definition = function_definition(name, program)
-	if definition == ø { return ø }
-	written_definition(source, "${name}") ?? serialize(view_of(definition))
-}
-# the definition as the source writes it: from its head to the end of its statement, a `;` or a line's end outside
-# brackets and texts; ø when no statement of the source defines the word
-written_definition(source: text, word: text): any := {
-	start = definition_start(source, word)
-	if start == ø { return ø }
-	depth = 0
-	at = start
-	while at < #source and not (depth == 0 and (source[at] == ";" or source[at] == "\n")) {
-		c = source[at]
-		if c == "(" or c == "[" or c == "{" { depth += 1 }
-		if c == ")" or c == "]" or c == "}" { depth -= 1 }
-		at = if c == "\"" or c == "'" then quoted_end(source, at + 1, c, #source) else at + 1
-	}
-	source[start ..< at].trim()
-}
-# where the statement defining the word starts: at the source's start, a line's or after a `;`, its blanks skipped
-definition_start(source: text, word: text): any := {
-	for at in 0 ..< #source {
-		if at == 0 or source[at - 1] == "\n" or source[at - 1] == ";" {
-			start = at
-			while start < #source and (source[start] == " " or source[start] == "\t") { start += 1 }
-			if defines_function(source[start ..].split("\n")#1, word) { return start }
-		}
-	}
-	ø
-}
-# `twice.description`: a word a function has none of, the compile refused with the word it means
-misnamed(function: Node, word: Node, meant: Node): Node := {
-	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
-}
-
-# `dir(time)`, `dir text` (card dir-ownership): the words a standard module defines, in their order, then the
-# prelude's whose first parameter is of the type so named, `upper(t: text)`; ø when the program defines its own dir
-# or binds the name, or no module is so named
-dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in(program) then ø else module_dir("${name}")
-owns_dir(program: Node): bool := function_definition(symbol("dir"), program) != ø
-module_dir(word: text): any := {
-	source = used_module_text(word)
-	if source == "" { return ø }
-	listed = {}
-	for name in definition_slices(source).map(cut => cut#1) + typed_words(word) { if is_listed_word(name) { listed[name] = yes } }
-	List(listed.keys, Bracket.Square, Separator.Comma)
-}
-# the prelude's words whose first parameter is of the type: its declarations, `upper(t: text): text from warp`
-# (word_lines), and its definitions, `pad_left(t: text, width) := …`
-typed_words(kind: text): list := {
-	declared = word_lines()
-	found = declared.keys.filter(name => declared[name].any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == kind))
-	found + definition_slices(prelude_text).filter(cut => first_parameter_type(cut#1, cut#2) == kind).map(cut => cut#1)
-}
-# a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
-is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
-# `text` of `upper(t: text): text from warp`, "" of an untyped first parameter
-first_parameter_type(word: text, definition: text): text := {
-	if not definition.starts_with(word + "(") { return "" }
-	first = definition[#word + 1 ..].split(")")#1.split(",")#1
-	if first.contains(":") then first.split(":")#2.trim() else ""
-}
-# `dir(v)` of a value only the run knows: the words of a list, a text and a map, the prelude's dir_of_value's arguments
-# after v
-value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
-
-# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's) the program doesn't bind, else ø
-module_named(module: Node, program: Node): any := if "${module}" in names_bound_in(program) or used_module_text("${module}".lower()) == "" then ø else module
-
-# `let n = 5` is the assignment `n = 5`, where its name was written noted (core/passes/lambdas.warp
-# local_declarations): inside a lambda the name stays the lambda's own, not the scope's (card let-inside)
-declared_local(declaration: Node): Node := {
-	if is_key(declaration, Op.Assign) and key_of(declaration) is symbol { declared_at(key_of(declaration)) }
-	declaration
-}
-
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+module_rule_words = {path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, signaled: signaled, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+
+# `rule_words.wasm <word> <given> <answer>`: the word called with the code the file `given` encodes, a list of its
+# arguments (core/parsing/parse_words.warp code_encoding, exact), its result encoded into the file `answer`, or the
+# message it refused the code with as an `x`
+answer(word: text, given: text, answer_file: text) := {
+	arguments = items_of(code_decoded(read(given)))
+	encoded = try code_encoding(called_with(module_rule_words[word], arguments), yes) catch refusal { encoded_field("x", "${refusal}") }
+	write(answer_file, encoded)
+}
+if #args == 3 { answer(args#1, args#2, args#3) }

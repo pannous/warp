@@ -69,10 +69,16 @@ parse_words(program: Node): Node := {
 # its builders (core/native/driver.warp code_built), a node before its parts: a tag, its fields each ended by
 # FIELD_END. `e` nothing, `T`/`F` yes/no, `i`/`f` a number, `c` a character's code, `t`/`s` a text, a symbol, `k` a key's
 # operator (its two sides after it), `l` a list's count, bracket and separator (its items after it), `x` the message of
-# code that does not parse; any other node as its text
+# code that does not parse; any other node as its text. `exact`, as the compiler and its rule words exchange code
+# (core/extensions/reflection.warp module_word_result): `p` where a node was written (line:column, the node after it)
+# and `y` a type declaration (its name and body after it) too
 FIELD_END = "${chr(1)}"
 write_parse_code(code: text, file: text) := write(file, code_encoding(plain_node(parsed(code))))
-code_encoding(n: Node): text := {
+code_encoding(n: Node, exact: bool = no): text := {
+	place = if exact and is_positioned(n) then encoded_field("p", "${line_of(n)}:${column_of(n)}") else ""
+	place + node_encoding(n, exact)
+}
+node_encoding(n: Node, exact: bool): text := {
 	if n is bool { return if n then "T" else "F" }
 	if n is int { return encoded_field("i", "${n}") }
 	if n is number { return encoded_field("f", "${float(n)}") }
@@ -85,16 +91,61 @@ code_encoding(n: Node): text := {
 		Symbol(name): encoded_field("s", name)
 		Text(t): encoded_field("t", t)
 		Char(c): encoded_field("c", "${ord(c)}")
-		Key(left, op, right): encoded_field("k", op as text) + code_encoding(left) + code_encoding(right)
-		List(items, bracket, separator): list_encoding(items, bracket as text, separator as text)
+		Key(left, op, right): encoded_field("k", op as text) + code_encoding(left, exact) + code_encoding(right, exact)
+		List(items, bracket, separator): list_encoding(items, bracket as text, separator as text, exact)
+		Type(name, body): if exact then encoded_field("y", "") + code_encoding(name, yes) + code_encoding(body, yes) else encoded_field("t", "${n}")
 		_: encoded_field("t", "${n}")
 	}
 }
-list_encoding(items: list, bracket: text, separator: text): text := {
+list_encoding(items: list, bracket: text, separator: text, exact: bool = no): text := {
 	count = #items
-	encoded_field("l", "${count}") + encoded_field("", bracket) + encoded_field("", separator) + items.map(code_encoding).join("")
+	encoded_field("l", "${count}") + encoded_field("", bracket) + encoded_field("", separator) + items.map(item => code_encoding(item, exact)).join("")
 }
 encoded_field(tag: text, field: text): text := {
 	if FIELD_END in field { raise "parse_code: the code holds the character U+0001, which its encoding ends fields with" }
 	tag + field + FIELD_END
+}
+# the node code_encoding encoded, exact or not; an `x` raises its message
+code_decoded(encoding: text): Node := decoded_node(Decoding(encoding, 0))
+class Decoding { encoding: text; at: int }
+decoded_node(reading: Decoding): Node := {
+	tag = reading.encoding[reading.at]
+	reading.at += 1
+	if tag == "e" { return ø }
+	if tag == "T" or tag == "F" { return tag == "T" }
+	field = decoded_field(reading)
+	match tag {
+		"p": {
+			place = field.split(":")
+			positioned(decoded_node(reading), int(place#1), int(place#2))
+		}
+		"i": int(field)
+		"f": float(field)
+		"c": chr(int(field))
+		"s": symbol(field)
+		# code that does not parse, or a rule word's refusal (lib/rule_words.warp answer): raised
+		"x": raise field
+		"k": {
+			left = decoded_node(reading)
+			Key(left, field as Op, decoded_node(reading))
+		}
+		"l": {
+			bracket = decoded_field(reading)
+			separator = decoded_field(reading)
+			separated(bracketed((0 ..< int(field)).map(_ => decoded_node(reading)), bracket), separator)
+		}
+		"y": {
+			name = decoded_node(reading)
+			Type(name, decoded_node(reading))
+		}
+		_: field
+	}
+}
+# the field at the reading, up to its FIELD_END, the reading past that
+decoded_field(reading: Decoding): text := {
+	end = reading.at
+	while reading.encoding[end] != FIELD_END { end += 1 }
+	field = reading.encoding[reading.at ..< end]
+	reading.at = end + 1
+	field
 }

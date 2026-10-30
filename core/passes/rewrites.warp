@@ -37,7 +37,8 @@ use "../analysis/diagnostics.warp"
 use "../analysis/builtin_signatures.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
-use rule_words
+use "../extensions/compiler_rule_words.warp"
+use "../parsing/parse_words.warp"
 
 rewrite_word = "rewrite"
 where_word = "where"
@@ -802,27 +803,17 @@ is_condition(condition: Node): bool := {
 	literal_comparisons.any(op => is_key(condition, op)) and is_number_literal(wanted)
 }
 
-# `routed($program)`: a call of a word of lib/rule_words.warp, run at compile time (decision computed-hole)
+# `routed($program)`: a call of a rule word, run at compile time (decision computed-hole)
 is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
-# a word of lib/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
-# newer compiler, card rule-whose), one the library's file defines, read only then
-is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
-global library_rule_words = ø
-library_rule_word_names(): map := {
-	if library_rule_words == ø {
-		library_rule_words = {}
-		for cut in definition_slices(used_module_text("rule_words")) { library_rule_words[cut#1] = yes }
+# a word of core/extensions/reflection.warp, the compiler's own, or one lib/rule_words.warp defines
+is_rule_word(word: text): bool := compiler_rule_words.has(word) or module_rule_word_names().has(word)
+global module_rule_words = ø
+module_rule_word_names(): map := {
+	if module_rule_words == ø {
+		module_rule_words = {}
+		for cut in definition_slices(used_module_text(rule_words_module)) { module_rule_words[cut#1] = yes }
 	}
-	library_rule_words
-}
-# a rule word this compiler lacks: the rules calling it don't fire, said once a word
-global skipped_rule_words = {}
-skipped_rule_word(word: text): any := {
-	if not skipped_rule_words.has(word) {
-		warn "the rule word " + word + " is not in this compiler (an older seed): its rules are skipped"
-		skipped_rule_words[word] = yes
-	}
-	ø
+	module_rule_words
 }
 # `$names = path_parameters($path)`: a hole bound to a rule word's result
 is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of(n)) != ø or rest_hole_name(key_of(n)) != ø) and is_rule_word_call(value_of(n))
@@ -830,13 +821,18 @@ is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of
 program_hole = "$program"
 source_hole = "$source"
 computed(call: Node, bound: map): any := {
-	if not rule_words.has(name_of(call#1)) { return skipped_rule_word(name_of(call#1)) }
-	word = rule_words[name_of(call#1)]
+	word = name_of(call#1)
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
-	if #given == 0 { return word() }
-	if #given == 1 { return word(given#1) }
-	if #given == 2 { return word(given#1, given#2) }
-	word(given#1, given#2, given#3)
+	if compiler_rule_words.has(word) then called_with(compiler_rule_words[word], given) else module_word_result(word, given)
+}
+# lib/rule_words.warp, whose words run outside the compiler: the native warp runs its prebuilt program
+# modules/rule_words.wasm (core/native/driver.warp rule_word_answered), the code going out and back exact
+# (parse_words.warp code_encoding); a host without it answers an Error, the compile failing on it
+rule_words_module = "rule_words"
+module_word_result(word: text, given: list): any := {
+	answer = std_io(rule_words_module, word, [code_encoding(List(given, Bracket.Square, Separator.Comma), yes)])
+	if not (answer is text) { raise "the rule word ${word} could not run: ${answer}" }
+	code_decoded(answer)
 }
 # `$f takes value`, `$f takes int`
 is_takes(condition: Node): bool := is_group(condition) and bracket_of(condition) == "" and separator_of(condition) == " " and #condition == 3 and rule_hole(condition#1) != ø and condition#2 == symbol(takes_word) and condition#3 is symbol
