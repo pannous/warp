@@ -6,13 +6,25 @@ use "../analysis/kinds.warp"
 
 showing_word = "show"
 
-# `type Color = int`: Color; ø for any other statement
+# the number types a marked type is held as: `type Color = int`, `type Angle = float`
+MARKED_NUMBER_KINDS = {int: Kind.Int, float: Kind.Float}
+# `type Color = int`, `type Angle = float`: Color, Angle; ø for any other statement
 int_type_name(statement: Node): text? := {
-	if not is_key(statement, Op.Assign) or value_of(statement) != symbol("int") { return ø }
+	if not is_key(statement, Op.Assign) or not (value_of(statement) is symbol) or name_of(value_of(statement)) not in MARKED_NUMBER_KINDS { return ø }
 	declared = key_of(statement)
 	if not (is_key(declared, Op.Colon) and key_of(declared) == opaque_symbol) { return ø }
 	view = value_of(declared)
 	if kind_of(view) == "type" and view#3 == ø then declared_type_name(view#2) else ø
+}
+# each number type the statements declare, its marked kind: the number's Kind with the type's mark above it, the
+# marks numbered in order of declaration (int_types.warp marks the values, the emitter the values it holds unboxed)
+int_type_kinds(statements: list): map := {
+	kinds = {}
+	for statement in statements {
+		name = int_type_name(statement)
+		if name != ø and name not in kinds { kinds[name] = MARKED_NUMBER_KINDS[name_of(value_of(statement))] + (FIRST_INT_MARK + #kinds) * KindUnit.Info }
+	}
+	kinds
 }
 # `show(c: Color) := …`: Color; ø for any other statement
 shower_of(statement: Node): text? := {

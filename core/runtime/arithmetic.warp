@@ -16,9 +16,22 @@ node_add(a: Node, b: Node): Node := {
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
 	if is_null(a) or is_null(b) { fail() }
 	# two plain ints add here; a ratio or a big int on either side goes to the extended runtime
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return grown_sum(unboxed_int(a), unboxed_int(b)) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return marks_kept(grown_sum(unboxed_int(a), unboxed_int(b)), a, b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_sum(a, b) }
-	float_of_node(a) + float_of_node(b)
+	marks_kept(float_of_node(a) + float_of_node(b), a, b)
+}
+# the result of arithmetic on boxed values keeps a marked operand's mark (decision marks-survive-arithmetic): the left
+# one's, else the right one's, where it marks a number of the result's Kind; a yes/no's never carries
+marks_kept(result: Node, a: Node, b: Node): Node := {
+	mark = carried_mark(result, a)
+	if mark == 0 { mark = carried_mark(result, b) }
+	if mark == 0 then result else with_kind(result, mark)
+}
+carried_mark(result: Node, x: Node): int := {
+	if is_null(x) or is_null(result) or kind_code(x) != kind_code(result) { return 0 }
+	mark = marked_kind(x)
+	if mark >= KindUnit.Separator or mark /! KindUnit.Info < FIRST_INT_MARK { return 0 }
+	mark
 }
 # a + b, a - b, a * b of two plain ints held boxed (nats): past 64 bits the big int they make (D16, the extended runtime's exact words)
 grown_sum(a: int, b: int): Node := if sum_overflows(a, b) then extended_sum(a, b) else a + b

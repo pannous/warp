@@ -19,6 +19,8 @@ Marked = {Bool: 257, Map: 8, SquareList: 264, UnbracketedList: 1288, Instance: 6
 # the units of the parts above the Kind: the info byte (a key's operator, a list's bracket, a time's form, KIND_BITS
 # 8), a list's separator (SEPARATOR_SHIFT 48), the code mark (CODE_MARK, 1 << 56)
 KindUnit = {Info: 256, Separator: 281474976710656, Code: 72057594037927936}
+# the first mark in an Int's or Float's info byte a number type takes (passes/int_types.warp): 1 is a yes/no's
+FIRST_INT_MARK = 2
 # a list's bracket in its info byte (rust-harness:src/wasm_emitter/mod.rs bracket_info)
 BracketCode = {Curly: 0, Square: 1, Round: 2, Less: 3, Other: 4, None: 5}
 # a time's form in its info bits (rust-harness:src/time/mod.rs TimeForm), Clock the time of day

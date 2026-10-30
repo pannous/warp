@@ -110,7 +110,13 @@ widen_parameter(f: Function, i: int, kind: ValueKind) := {
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_body(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [], {})
-	for i in 0..<#f.signature.parameters { local_index(scope, parameter_local_name(scope, f.signature.parameters[i].name, i), f.kinds[i]) }
+	for i in 0..<#f.signature.parameters {
+		parameter = f.signature.parameters[i]
+		name = parameter_local_name(scope, parameter.name, i)
+		local_index(scope, name, f.kinds[i])
+		# a parameter of a marked type, `a: Angle`, holds the number unboxed, its mark known (decision marks-unboxed-first)
+		if parameter.type_name in module.marks and f.kinds[i] != ValueKind.Node { scope.marks[name] = module.marks[parameter.type_name] }
+	}
 	scope
 }
 # every parameter has a local of its own: a name given twice, `middle(_, value, _)`, names only the first
@@ -293,8 +299,12 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f.name, i) in f.widened then f.widened[parameter_key(f.name, i)] else parameter_kinds[i])
 		f.result = pending
 		first = new_body(f)
-		result = expression_code(first, statements_block(f.body)).kind
+		given = expression_code(first, statements_block(f.body))
+		result = given.kind
 		for kind in first.returned { result = joint_kind(result, kind) }
+		# a body giving a number of a marked type gives it boxed, so its mark survives the call (decision
+		# marks-unboxed-first: no inference of the result's mark)
+		if given.mark != 0 and declared_result(f) == ø { result = ValueKind.Node }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø and (result == pending or held_as(result, analyzed_result_kind(f))) { result = analyzed_result_kind(f) }
 	# the kind a definition declares is the one its callers took while it was compiling (call_values), whatever its body
