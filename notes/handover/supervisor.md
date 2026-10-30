@@ -27,5 +27,4 @@ Retired tonight: warp-fixer, warp-wgsl, warp-exact-decimal-big, warp-cards, warp
 ## Waiting
 - format-missing (Next): `warp format` can't read hello.warp, so the Done step's format is broken; first card for a free worker.
 - codex-cron: 4 rounds per firing now; check data/agents/codex/*.last.md of the 23:5x run and the 02:35 run.
-  4 rounds while a card is unfinished?
 - Promise: tell the user what warp-speed's profile finds and when lib-hash-rebake lands.
