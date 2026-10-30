@@ -1,0 +1,3 @@
+# Card typed-parse: typed JSON parsing validates against the declared class (user 2026-10-25).
+'class User { id: number; name: string }; parse("{\\"id\\":7,\\"name\\":\\"Ada\\"}", User).id'	7
+'class User { id: number; name: string }; parse("{\\"id\\":\\"7\\",\\"name\\":\\"Ada\\"}", User)'	error

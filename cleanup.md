@@ -1,3 +1,3 @@
 # typed-parse plan
 
-Add an outcome test for typed JSON parsing, then derive validation from the declared class using the existing library rewrite mechanism. Reject mismatched types and missing or unknown fields without coercion; preserve optional and defaulted fields. Verify the test and smoke before landing.
+Generate a class validator through a computed library rewrite, test valid and invalid JSON through the public spelling, and retain the generic-spelling test until it works. Reject unsupported shapes and avoid coercion. Remove this task plan once the work is complete.
