@@ -1,8 +1,12 @@
 # typed-parse
 
-State: investigating on branch typed-parse. No implementation or existing tests changed.
+State: the new outcome test is committed; implementation remains. No existing tests changed.
 
-Default: no coercion; reject missing required and unknown fields, allow optional or defaulted fields (decision D4). A new outcome test covers valid input and the motivating type mismatch. Existing rewrite rule words can inspect `$program`; `class_view` and `class_declared` provide the declarations and field types. Next generate validation and construction through a computed rule word, including nested and list fields; unsupported shapes must refuse rather than silently accept them.
+Default: no coercion; reject missing required and unknown fields, allow optional or defaulted fields (decision D4). A new outcome test covers valid input and the motivating type mismatch. Existing rewrite rule words can inspect `$program`; `class_view` and `class_declared` provide the declarations and field types.
+
+`WARP_NO_WINDOW=1 /Users/me/dev/bin/warp test test/types/test_typed_parse.pairs.warp` reports 1 of 2 failed: valid input gives `outside the core: the unknown name parse of User at 1:42 (no owner)`; the invalid-input error case passes even without validation and therefore does not prove it. `rewrite parse<User>($a) => 42` matches, but `rewrite parse<$t>($a) => 42 where $t is type` and `rewrite $f($a) => 42` do not. `core/parsing/parser.warp` type_application_name makes `parse<User>` one symbol `parse of User`, so the hole is not a separate argument. `rewrite parse($a, $t) => 42 where $t is type` does match `parse("{}", User)`; this is a possible library spelling, not proof the requested generic form works.
+
+`class User { id: number; name: string }; x = json("{\\"id\\":\\"7\\",\\"name\\":\\"Ada\\"}"); User{id: x["id"], name: x["name"]}.id` gives `'7'`: construction alone does not check a dynamically read field. Next try generating a validator and construction with a computed rule word for the two-argument spelling, with outcome tests for nested/list fields and exact diagnostics; investigate a general library rewrite of the generic symbol separately. Unsupported shapes must refuse rather than silently accept them. `lib/rule_words.warp` is baked, so smoke rebuilds it.
 
 Reproduced with `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp 'class User { id: number; name: string }; parse<User>("{\"id\":\"7\",\"name\":\"Ada\"}")'`: `outside the core: the unknown name parse of User at 1:42 (no owner)`.
 
