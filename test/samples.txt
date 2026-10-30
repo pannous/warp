@@ -48,6 +48,7 @@ ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/gpu_map.warp
+ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/phrases.warp
 ok   samples/lists/quicksort.warp
@@ -131,7 +132,6 @@ WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
-SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
 FAIL samples/advanced/neural_net.warp
 FAIL samples/advanced/raytracer.warp
@@ -160,7 +160,6 @@ FAIL samples/gpu/manual_3d_object_viewer.warp
 FAIL samples/gpu/northern_lights.warp
 FAIL samples/gpu/ocean.warp
 FAIL samples/gpu/ringed_planet.warp
-FAIL samples/gpu/warp_compiled_wgsl_shader.warp
 FAIL samples/graphics/finger_paint.warp
 FAIL samples/graphics/paint_function.warp
 FAIL samples/graphics/paint_text.warp
@@ -195,6 +194,7 @@ FAIL samples/objects/data_structures.warp
 FAIL samples/objects/references.warp
 FAIL samples/python/numpy_matrix.warp
 FAIL samples/python/python_modules.warp
+FAIL samples/servers/hosting.warp
 FAIL samples/servers/server.warp
 FAIL samples/servers/worker.warp
 FAIL samples/signals/signal_fields.warp
