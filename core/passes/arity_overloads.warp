@@ -165,8 +165,6 @@ resolved(n: Node, overloaded: map, called: map): Node := {
 		_: resolved_parts(variant_call(passed_variants(n, overloaded, called), overloaded, 0), overloaded, called)
 	}
 }
-# the names a match arm's pattern binds, `List(items, bracket, separator)`; none of a key's label
-pattern_names(label: Node): list := if is_call_form(label) and #label > 0 then parameters_in(items_of(label)[1 ..]) else []
 # a call's arguments resolved, its head as the call named it
 resolved_parts(n: Node, overloaded: map, called: map): Node := {
 	if is_call_form(n) and #n > 0 and n#1 is symbol { return group_like(n, [n#1] + items_of(n)[1 ..].map(x => resolved(x, overloaded, called))) }
