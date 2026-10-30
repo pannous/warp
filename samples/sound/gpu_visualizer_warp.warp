@@ -6,6 +6,7 @@
 use sound
 use math
 use os
+use keys
 width = 1920
 height = 1080
 bands = 16
