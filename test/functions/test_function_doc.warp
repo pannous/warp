@@ -1,0 +1,12 @@
+# the comment lines right above a definition are its doc (card doc-signature)
+is! '// doubles a number
+twice(x) := x*2
+twice.doc' 'doubles a number'
+is! '# doubles a number
+fun twice(x) { x*2 }
+twice.doc' 'doubles a number'
+is! '# header
+
+# doubles
+twice(x) := x*2
+twice.doc' 'doubles'

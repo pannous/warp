@@ -238,6 +238,7 @@ declare_c_function(d: list, line: int) := {
 
 declare_primitive(head: list, body: Node) := {
 	name = name_of(head#1)
+	declared_place(head#1, name)
 	parameters = head[1 ..< #head]
 	types = parameters.map(p => primitive_parameter_type(p))
 	names = parameters.map(p => name_of(key_of(p)))
@@ -300,6 +301,12 @@ primitive_refusal(n: Node, why: text) := {
 	at = written_at(n)
 	place = if at then place_text(at, module.program_file) else primitive_place
 	throw "primitive mode cannot emit " + why + place
+}
+
+# a refusal while declaring a function names its place, else the function (a type the passes wrote has no place)
+declared_place(head: Node, name: text) := {
+	at = written_at(head)
+	primitive_place = if at then place_text(at, module.program_file) else " in the function " + name
 }
 
 # the function's code, its result type once read
@@ -452,8 +459,6 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	if operator == Op.Not { return PrimitiveCode(BOOL_TYPE, mvp_condition(f, right) + [op.i32_eqz]) }
 	if operator == Op.Sub and left === ø { return mvp_arithmetic(f, Key(0, Op.Sub, right), "sub", expected) }
 	if operator == Op.Inc or operator == Op.Dec { return mvp_assigned(f, left, Key(left, if operator == Op.Inc then Op.Add else Op.Sub, 1), n) }
-	spelled = prefix_word_of(operator)
-	if left === ø and spelled != "" and primitive_callee(spelled) != ø { return mvp_call(f, symbol(spelled), [right], n) }
 	operation = mvp_operation_of(operator)
 	if operation in integer_comparisons { return mvp_compared(f, left, operation, right) }
 	if operation in integer_arithmetic { return mvp_arithmetic(f, n, operation, expected) }
@@ -462,13 +467,6 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	primitive_refusal(n, form_of(n))
 }
 
-# `sqrt(x)` read as `√x`: a call of the function of that name the file declares (`sqrt(x: f64): f64 from "c"`)
-prefix_word_of(op: Op): text := match op {
-	Op.Sqrt: "sqrt"
-	Op.Cbrt: "cbrt"
-	Op.Abs: "abs"
-	_: ""
-}
 mvp_operation_of(op: Op): text := match op {
 	Op.Add: "add"
 	Op.Sub: "sub"
@@ -727,6 +725,7 @@ primitive_callee(name: text): any := {
 # which other primitive code calls directly
 primitive_compiled(f: Function) := {
 	primitive_hosted = yes
+	primitive_place = " in the function " + f.name
 	parameters = f.signature.parameters
 	types = parameters.map(p => primitive_type_name(symbol(if p.type_name then p.type_name else "?")))
 	inner = added_function(f.name + "·primitive", types.map(hosted_kind), ValueKind.Int, [])

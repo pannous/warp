@@ -34,6 +34,7 @@
 # A class keeping a member that is neither field nor method (an operator), or whose method takes another count of
 # parameters than its namesakes, stays as written: the emitter refuses it as a class with methods.
 use "walk.warp"
+use "int_type_shows.warp"
 use "../analysis/signatures.warp"
 use "../analysis/builtin_signatures.warp"
 use "../analysis/words.warp"
@@ -55,6 +56,9 @@ commutative_operators = ["+", "*", "==", "!="]
 # the method ordering a class's instances, and the operators it gives them
 ordering_method = "compare"
 ordering_operators = ["<", "<=", ">", ">="]
+# the method a class's instances are equal by under == (and != by its negation), compare's 0 where it declares none
+# (decision compare-equal-hooks)
+equality_method = "equal"
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
@@ -117,7 +121,7 @@ methods_lifted(program: Node): Node := {
 		owner.methods = owner.methods + [as_operator_method(definition)]
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
-	for name in classes.keys { classes[name].methods = positions_derived(classes[name].methods, operator_table) }
+	for name in classes.keys { classes[name].methods = equality_derived(positions_derived(classes[name].methods, operator_table), operator_table) }
 	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 and not respelled { return program }
@@ -127,7 +131,9 @@ methods_lifted(program: Node): Node := {
 		name = if view == ø then "" else declared_type_name(view#2)
 		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
 	}
-	functions = functions_defined(top_statements)
+	# an int type's show(c: Color) is a hook int_types.warp renames show·Color, no function show to route to
+	hooks = int_type_showers(top_statements)
+	functions = functions_defined(top_statements.filter(statement => statement not in hooks))
 	constructed = {}
 	for name in liftable.filter(name => constructor_of(classes[name]) != ø) { constructed[name] = #method_parameters(method_in(classes[name], constructor_of(classes[name]))) > 0 }
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
@@ -151,7 +157,7 @@ methods_lifted(program: Node): Node := {
 		owners = owners_of(classes, liftable, name)
 		# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 		# call (list.warp's tally(xs) beside a class's tally(x))
-		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(rewritten, name, taken_count(classes, liftable, name) + 1)
+		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, taken_count(classes, liftable, name) + 1)
 		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
 	}
 	for word in entry_words {
@@ -168,7 +174,7 @@ methods_lifted(program: Node): Node := {
 		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions, floaters)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, name, routes) }
-	rewritten += derived_dispatchers(classes, liftable, routes, promotions)
+	rewritten += derived_dispatchers(classes, liftable, routes, promotions, operator_table)
 	group_like(program, rewritten)
 }
 # `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
@@ -216,9 +222,14 @@ constructor_functions(classes: map, owning_class: text, routes: list): list := {
 }
 # the dispatchers a class's compare(o), text() and float() give: its instances ordered by <, <=, >, >=, shown by their
 # text, converted to a float
-derived_dispatchers(classes: map, names: list, routes: list, promotions: list): list := {
+derived_dispatchers(classes: map, names: list, routes: list, promotions: list, operator_table: map): list := {
 	made = []
 	other = symbol("other")
+	# `a != b` of instances equal by their equal(other): not a == b, unless a class spells != itself
+	if names.any(name => owns_operator(classes[name], "==", operator_table)) and not names.any(name => owns_operator(classes[name], "!=", operator_table)) {
+		head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
+		made += [Key(call_of("!=·operator", head), Op.Define, Key(ø, Op.Not, call_of("==·operator", [self_node, other])))]
+	}
 	orderers = owners_of(classes, names, ordering_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], ordering_method)) == 1)
 	if #orderers > 0 {
 		called = {}
@@ -419,6 +430,15 @@ position_named(method: Node, operator_table: map): Node := {
 	name = if #method_parameters(method) == 2 then word + "·assigned" else word
 	Key(call_of(name, method_parameters(method)), Op.Define, value_of(method))
 }
+# a class ordering by compare(other) and spelling no == is equal where compare gives 0: `equal(other) := self.compare(other) == 0`
+equality_derived(methods: list, operator_table: map): list := {
+	words = methods.map(defined_word)
+	if ordering_method not in words or words.any(word => spells_operator(word, "==", operator_table)) { return methods }
+	other = symbol("other")
+	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0))]
+}
+owns_operator(declared: Declared, glyph: text, operator_table: map): bool := declared.methods.any(method => spells_operator(defined_word(method), glyph, operator_table))
+spells_operator(word: any, glyph: text, operator_table: map): bool := word is text and spelled_operator(operator_table, word) != ø and operator_table[word]#2 == glyph
 shifted_twin(name: text, twin: text, shift: Op): Node := {
 	setting = if name.ends_with("·assigned") then [symbol("value")] else []
 	Key(call_of(name, [symbol("at")] + setting), Op.Define, call_of(twin, [Key(symbol("at"), shift, 1)] + setting))
@@ -603,10 +623,17 @@ field_type(classes: map, owning_class: text, field: text): text? := {
 # whether a call of that many arguments fits a definition the word has, the program's or a typed line of the
 # library's; a word of none (a sugar rule's, the emitter's) is taken as fitting
 written_call_fits(statements: list, word: text, count: int): bool := {
-	defined = statements.filter(statement => defined_word(statement) == word and is_called_name(key_of(statement)))
-	signatures = defined.map(definition => signature_of(items_of(key_of(definition)))) + (lines_of(typed_lines, word) + (if word_lines().has(word) then word_lines()[word] else [])).map(line => line.signature)
+	defined = statements.map(defined_call_head).filter(head => head != ø and name_of(head#1) == word)
+	signatures = defined.map(head => signature_of(items_of(head))) + (lines_of(typed_lines, word) + (if word_lines().has(word) then word_lines()[word] else [])).map(line => line.signature)
 	#signatures == 0 or signatures.any(signature => takes(signature, count))
 }
+# the head `f(x)` of a definition `f(x) := …`, or of `def f(x) {…}` before lib/sugar/declarations.warp makes it one
+# (draw's `def show()`), else ø
+defined_call_head(statement: Node): Node? := {
+	head = if is_key(statement, Op.Define) then key_of(statement) else if is_keyword_definition(statement) then (statement#2)#1 else ø
+	if head != ø and is_called_name(head) then head else ø
+}
+is_keyword_definition(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords and is_group(n#2) and #(n#2) > 0
 # variable → the type of the values assigned to it, "" where they differ or are not known: by name across the
 # program, as arity_overloads.warp's assigned_kinds
 assigned_types(statements: list, classes: map): map := {

@@ -56,6 +56,8 @@ phrase_articles = ["a", "an", "the"]
 
 # the words opening a definition, `def f(x) {…}` (Rust twin: operators/mod.rs FUNCTION_KEYWORDS)
 function_keywords = ["fun", "fn", "def", "define", "function", "func"]
+# the functions √, ∛ and ‖ ‖ spell (lib/math.warp), whose result kind the compile knows: the emitter's
+magnitude_words = ["abs", "sqrt", "cbrt"]
 # the word declaring an enum, `enum Coin {Penny, Dime}`
 enum_word = "enum"
 # the words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t` (Rust twin:

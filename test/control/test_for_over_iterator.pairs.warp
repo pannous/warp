@@ -1,0 +1,4 @@
+# an object whose class has next() walks in a for loop until next() gives ø (decision for-over-iterator)
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; out = []; for x in C(3) { out += [x] }; out'	[3, 2, 1]
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; s = 0; for x in C(5) { if x == 4 { continue }; s += x }; s'	11
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; c = C(4); s = 0; for x in c { if x == 2 { break }; s += x }; s'	7

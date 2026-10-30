@@ -259,9 +259,10 @@ c_without(lines: list, statements: list): list := {
 	if #statements == 0 { return lines }
 	lines.map(line => line.split(";").filter(part => part.trim() not in statements).join(";"))
 }
-# the words of warp's own the pure emitter makes itself (emitter.warp `floored`), of other results than C's: warp's
-# floor is an int, libm's a float; warp's other math words (ceil, round) have no pure code yet, so libm's serve
-c_emitted_words = ["floor"]
+# the words of warp's own the pure emitter makes itself (emitter.warp `floored`, `magnitude`), of other results than C's:
+# warp's floor is an int, libm's a float, warp's sqrt keeps √2 exact; warp's other math words (ceil, round) have no pure
+# code yet, so libm's serve
+c_emitted_words = ["floor"] + magnitude_words
 # whether `name` of `library` is such a word of warp's own (`own`, warp_word_names), which a libc or libm import leaves
 # warp's, as Rust's lane keeps its built-ins (rust-harness:src/ffi/mod.rs)
 c_warps(own: map, name: text, library: text): bool := library in c_and_m and own.has(name) and name in c_emitted_words

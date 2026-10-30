@@ -16,27 +16,40 @@ node_add(a: Node, b: Node): Node := {
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
 	if is_null(a) or is_null(b) { fail() }
 	# two plain ints add here; a ratio or a big int on either side goes to the extended runtime
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return checked_add(unboxed_int(a), unboxed_int(b)) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return grown_sum(unboxed_int(a), unboxed_int(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_sum(a, b) }
 	float_of_node(a) + float_of_node(b)
 }
-# a + b, a - b, a * b of ints; past i64 the ints of Rust grow unbounded, here they trap
+# a + b, a - b, a * b of ints held unboxed (an i64 local): past 64 bits they trap
 checked_add(a: int, b: int): int := {
-	added = a + b
-	if (b > 0 and added < a) or (b < 0 and added > a) { fail() }
-	added
+	if sum_overflows(a, b) { fail() }
+	a + b
 }
 checked_subtract(a: int, b: int): int := {
-	difference = a - b
-	if (b > 0 and difference > a) or (b < 0 and difference < a) { fail() }
-	difference
+	if difference_overflows(a, b) { fail() }
+	a - b
 }
-# 2^63 bounds the product; one rounded to it from just below traps too, loud rather than wrong
 checked_multiply(a: int, b: int): int := {
+	if product_overflows(a, b) { fail() }
+	a * b
+}
+# the same of two plain ints held boxed: past 64 bits the big int they make (D16, the extended runtime's exact words)
+grown_sum(a: int, b: int): Node := if sum_overflows(a, b) then extended_sum(a, b) else a + b
+grown_difference(a: int, b: int): Node := if difference_overflows(a, b) then extended_difference(a, b) else a - b
+grown_product(a: int, b: int): Node := if product_overflows(a, b) then extended_product(a, b) else a * b
+sum_overflows(a: int, b: int): bool := {
+	added = a + b
+	(b > 0 and added < a) or (b < 0 and added > a)
+}
+difference_overflows(a: int, b: int): bool := {
+	difference = a - b
+	(b > 0 and difference > a) or (b < 0 and difference < a)
+}
+# 2^63 bounds the product; one rounded to it from just below counts as past it too, loud rather than wrong
+product_overflows(a: int, b: int): bool := {
 	estimate = float(a) * float(b)
 	bound = float(4611686018427387904) + float(4611686018427387904)
-	if estimate >= bound or estimate < 0 - bound { fail() }
-	a * b
+	estimate >= bound or estimate < 0 - bound
 }
 # a << n, a >> n of ints: wasm counts n modulo 64 (1 << 100 was 2^36), so a shift past the bits traps as the product
 # a * 2^n would, and one right past them leaves the sign

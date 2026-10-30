@@ -29,6 +29,8 @@ extended_text(n: Node): text := {
 }
 extended_order(a: Node, b: Node): int := exact_order(a, b)
 extended_sum(a: Node, b: Node): Node := exact_add(a, b)
+extended_difference(a: Node, b: Node): Node := exact_sub(a, b)
+extended_product(a: Node, b: Node): Node := exact_mul(a, b)
 extended_float(n: Node): float := {
 	made_case(Made.BigInt, big_exact_float(n))
 	float(exact_numerator(n)) / float(exact_denominator(n))

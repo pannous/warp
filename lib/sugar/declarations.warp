@@ -27,13 +27,14 @@ rewrite transient $s... => $s...
 rewrite native $s... => $s...
 
 # A declaration word (card sugar-declarations): `var x = 1`, and `let`, `const` and the other constant words (Rust
-# twin: words.rs CONSTANT_KEYWORDS), are the assignment `x = 1`; that a constant binds once is the checks' to say
-rewrite (var $d) => $d
-rewrite (let $d) => $d
-rewrite (const $d) => $d
-rewrite (constant $d) => $d
-rewrite (final $d) => $d
-rewrite (val $d) => $d
+# twin: words.rs CONSTANT_KEYWORDS), are the assignment `x = 1`, a lambda's its own (declared_local); that a constant
+# binds once is the checks' to say
+rewrite (var $d) => $own where $own = declared_local($d)
+rewrite (let $d) => $own where $own = declared_local($d)
+rewrite (const $d) => $own where $own = declared_local($d)
+rewrite (constant $d) => $own where $own = declared_local($d)
+rewrite (final $d) => $own where $own = declared_local($d)
+rewrite (val $d) => $own where $own = declared_local($d)
 
 # `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which parser.warp
 # bundled_declarations reads off the module's text); as code, the definition itself

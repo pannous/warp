@@ -11,6 +11,29 @@ use "../analysis/builtin_signatures.warp"
 use "scope.warp"
 use "../emitter/c_imports.warp"
 
+# each function a library file brought, by name: [the file, the line its definition starts on], the place a refusal
+# inside it names (emitter.warp note_emitting): its slice was parsed alone, its nodes keep no line of the file
+global defined_origins = {}
+# [file, line] of each definition slice of the files, by the slice's text
+slice_origins(files: list): map := {
+	found = {}
+	for path in files {
+		source = file_text(path) ?? ""
+		line = 1
+		at = 0
+		for span in slice_spans(source) {
+			line += #source[at ..< span#2].split("\n") - 1
+			at = span#2
+			found[source[span#2 ..< span#3]] = [working_relative(path), line]
+		}
+	}
+	found
+}
+# the place of each definition of a used file, as brought from it
+note_file_origins(file: text, source: text) := {
+	origins = slice_origins([file])
+	for slice in definition_slices(source) { if origins.has(slice#2) { defined_origins[slice#1] = origins[slice#2] } }
+}
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
 definition_slices(source: text): list := {
@@ -255,6 +278,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	# (a linked module's classes and globals, the prelude's Cell of its closures too)
 	wanted = symbol_words(program) + lowering_words(program) + sugar_words_of(program) + linked_needs()
 	uses = ø
+	origins = {}
 	keys = slice_keys(files)
 	while #wanted > 0 {
 		word = wanted#1
@@ -269,6 +293,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 				else if slice#2 in declared { slice_node = declared_only(slice_node) }
 				slice_node = with_own_locals(slice_node, program_globals)
 				reached[slice#2] = statements_in(slice_node)
+				if #origins == 0 { origins = slice_origins(files) }
+				if origins.has(slice#2) { defined_origins[slice#1] = origins[slice#2] }
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
@@ -711,8 +737,9 @@ type_module_providers(): map := {
 	}
 	providers
 }
-# the word of a root, `√2`, which lib/reals.warp keeps exact (emitter.warp exact_root_word)
-root_words(program: Node): list := if nodes_in(program).any(n => is_key(n, Op.Sqrt) and is_empty(key_of(n)) and not surely_float(value_of(n))) then [exact_root_word] else []
+# the word of a root, `√2`, sqrt(2), which lib/reals.warp keeps exact (emitter.warp exact_root_word); a program's own
+# sqrt wins, driver.warp's `sqrt(x: f64): f64 from "c"`
+root_words(program: Node): list := if not own_heads(program).has("sqrt") and nodes_in(program).any(n => is_group(n) and #n == 2 and n#1 == symbol("sqrt") and not surely_float(n#2)) then [exact_root_word] else []
 # `2.5`, `x as f64`, `(n as float)`: a value written a float, whose root is the float's (a primitive program's too)
 surely_float(n: Node): bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
 # the classes the program converts to, `3 as Real`: a type module's class comes with its conversions (`x as text`
