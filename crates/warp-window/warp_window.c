@@ -1,8 +1,10 @@
 // libwarp_window (card native-window): the native warp's one window, over SDL3. It answers the system values it owns
 // (warp_system_value) and takes the ones a program sets (warp_set_system_value); lib/native/foreign.c forwards those
 // the driver does not own here, and asks for the window's Metal layer, which libwarp_gpu shows paintings in.
-// `window_open = 1` opens it, never under WARP_NO_WINDOW or CI; each reading of window_open is a frame: the window's
-// events taken in, its title telling the frame times. Built by scripts/wasmtime-c-api.sh where SDL3 is installed
+// `window_open = 1` or the first painting opens it, never under WARP_NO_WINDOW or CI. Each painting is a frame, its
+// title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
+// ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
+// Built by scripts/wasmtime-c-api.sh where SDL3 is installed
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
 #include <stdint.h>
@@ -20,7 +22,7 @@ static const int64_t WARP_KEYS[] = {63232, 63233, 63234, 63235, 63312, 63312, 63
 
 static SDL_Window* window;
 static SDL_MetalView view;
-static int open_now, sized_by_program;
+static int open_now, sized_by_program, closed_by_user;
 static int64_t width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT;
 static int64_t held[MOST_HELD];
 static int held_count;
@@ -44,8 +46,11 @@ static void key_released(int64_t code) {
 		if (held[i] == code) { memmove(held + i, held + i + 1, (--held_count - i) * sizeof *held); return; }
 }
 
+static void held_open(void);
 static void window_opened(void) {
 	if (window || windows_refused()) return;
+	static int holding;
+	if (!holding) holding = 1, atexit(held_open);
 	if (!SDL_Init(SDL_INIT_VIDEO)) { fprintf(stderr, "window: %s\n", SDL_GetError()); return; }
 	window = SDL_CreateWindow(WINDOW_TITLE, (int)width, (int)height, SDL_WINDOW_METAL);
 	if (!window) { fprintf(stderr, "window: %s\n", SDL_GetError()); return; }
@@ -80,7 +85,7 @@ static void events_taken(void) {
 	wheel = 0;
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
-		case SDL_EVENT_QUIT: case SDL_EVENT_WINDOW_CLOSE_REQUESTED: window_closed(); return;
+		case SDL_EVENT_QUIT: case SDL_EVENT_WINDOW_CLOSE_REQUESTED: closed_by_user = 1; window_closed(); return;
 		case SDL_EVENT_KEY_DOWN: key_pressed(key_code(event.key.key)); break;
 		case SDL_EVENT_KEY_UP: key_released(key_code(event.key.key)); break;
 		case SDL_EVENT_MOUSE_MOTION: mouse_x = event.motion.x; mouse_y = event.motion.y; break;
@@ -91,7 +96,15 @@ static void events_taken(void) {
 	}
 	// a window out of sight has no refresh to wait for: its frames idle instead of spinning
 	if (SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) SDL_Delay(OUT_OF_SIGHT_MS);
-	frame_timed();
+}
+// a run that painted one picture leaves it in the window until the window is closed (or Escape); an animation's
+// window closes with its run
+static void held_open(void) {
+	SDL_Event event;
+	while (open_now && frames == 1 && SDL_WaitEvent(&event)) {
+		int escaped = event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE;
+		if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED || escaped) window_closed();
+	}
 }
 
 // the value of a system value this library owns into *value; 0 for a name it does not own
@@ -120,11 +133,19 @@ int32_t warp_set_system_value(const char* name, int64_t value) {
 	if (window && sized_by_program && (named(name, "window_width") || named(name, "window_height"))) SDL_SetWindowSize(window, (int)width, (int)height);
 	return 0;
 }
-// the open window's Metal layer for a painting of width × height, NULL without a window: a window the program gave no
-// size takes its first painting's
+// the window's Metal layer for a painting of width × height, the window opened by the first, NULL where none opens: a
+// window the program gave no size takes its first painting's. Closed by its user, the run ends
 void* warp_window_layer(int32_t painting_width, int32_t painting_height) {
+	if (closed_by_user) exit(0);
+	if (!open_now) {
+		if (!sized_by_program) width = painting_width, height = painting_height;
+		window_opened();
+	}
 	if (!open_now || !view) return NULL;
-	if (!sized_by_program && frames <= 1 && (painting_width != width || painting_height != height)) {
+	events_taken();
+	if (closed_by_user) exit(0);
+	frame_timed();
+	if (!sized_by_program && frames == 1 && (painting_width != width || painting_height != height)) {
 		width = painting_width;
 		height = painting_height;
 		SDL_SetWindowSize(window, (int)width, (int)height);

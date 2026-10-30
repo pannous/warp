@@ -17,6 +17,10 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
   it was. `scripts/promote-self.sh [--background] [<tree>]` runs it (through
   rebuild.sh self, so the store's promoted warp-self.wasm of these inputs is reused) every once in a while, in
   parallel, and never fails its caller. The gate and the normal rebuild need only warp.wasm.
+  A passed self test is kept per baked hash (`compiler-inputs.sh --baked`: seed, core/, the lib/ files the compiler
+  bakes in) as <store>/self-tested/<baked hash>; a tree of that baked hash, a library change, gets warp.wasm promoted
+  with no compile (rebuild.sh logs `warp-self hit-baked`). Before it, 20 of the Integrator's 24 self compiles of
+  2026-10-30 were pushes no worker had self-checked.
 - Names: until 2026-10-26 the files were compiler.wasm and compiler-self.wasm (and the seed seed/compiler-self.wasm, in git until 2026-10-26). Every
   lookup (warp, warp-host, rebuild.sh, the launcher) still reads a file of the old name when the new one is missing;
   installs should write the new names.

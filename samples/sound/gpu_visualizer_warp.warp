@@ -6,11 +6,12 @@
 use sound
 use math
 use os
+use keys
 width = 1920
 height = 1080
 bands = 16
 # any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same
-song = "tune.mp3"
+song = "samples/sound/tune.mp3"
 # how much the quiet spectrum is turned up before it lights the bars
 loudness = 15
 # the shortest frame: a frame that took less waits for the rest
@@ -126,14 +127,20 @@ on key {
 	if key == ESC { exit() }
 }
 
-# the whole song, or as many seconds as the command line gives: `warp gpu_visualizer_warp.warp 3`; measuring it decodes
-# the song before it plays, so the first frame keeps up with the music
-seconds = if count(args) > 0 then min(args#1 as number, sound_seconds(song)) else sound_seconds(song)
-play song
+# the song over and over while the window is open (headless once), or as many seconds as the command line gives:
+# `warp samples/sound/gpu_visualizer_warp.warp 3`; measuring it decodes the song before it plays, so the first frame
+# keeps up with the music
+song_seconds = sound_seconds(song)
+seconds = if count(args) > 0 then args#1 as number else song_seconds
 started = clock()
-while time < seconds {
+plays = 0
+while time < seconds or (count(args) == 0 and window_open()) {
 	frame_started = clock()
-	levels = [min(1.0, sqrt(level * loudness)) for level in spectrum(song, time, bands)]
+	if time >= plays * song_seconds {
+		play song
+		plays = plays + 1
+	}
+	levels = [min(1.0, sqrt(level * loudness)) for level in spectrum(song, time - (plays - 1) * song_seconds, bands)]
 	bass = (levels#1 + levels#2 + levels#3 + levels#4) / 4
 	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)

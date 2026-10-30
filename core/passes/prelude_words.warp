@@ -45,8 +45,14 @@ note_file_origins(file: text, source: text) := {
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
 definition_slices(source: text): list := {
-	if not source_slices.has(source) { source_slices[source] = slices_cut(source) }
+	if not source_slices.has(source) { source_slices[source] = slices_of(source) }
 	source_slices[source]
+}
+# the baked slices when source is a bundled module's very text (as parser.warp source_parse), cut otherwise (a
+# WARP_LIB edit, a program)
+slices_of(source: text): list := {
+	for within in LIBRARY_SLICES.keys { if LIBRARY_FILES.get(within) == source { return unbaked_slices(LIBRARY_SLICES[within], source) } }
+	slices_cut(source)
 }
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
@@ -71,15 +77,6 @@ slice_spans(source: text): list := {
 	}
 	if name { spans += [[name, start, at - 1]] }
 	spans
-}
-# a file's slices: the baked ones when it is the bundled module of this very text (as parser.warp source_parse), cut
-# where they're asked for otherwise (a WARP_LIB edit)
-file_slices(path: text, source: text): list := {
-	within = library_path(path)
-	baked = if LIBRARY_FILES.get(within) == source then LIBRARY_SLICES.get(within) else ø
-	if baked == ø { return definition_slices(source) }
-	if not source_slices.has(source) { source_slices[source] = unbaked_slices(baked, source) }
-	source_slices[source]
 }
 # the slices of a baked line per slice, `name start end`
 unbaked_slices(baked: text, source: text): list := baked.split("\n").filter(line => line != "").map(line => line.split(" ")).map(span => [span#1, source[(span#2 as int) ..< (span#3 as int)]])
@@ -625,7 +622,7 @@ with_module_uses(program: Node, modules: list): Node := {
 with_expected_type_uses(program: Node, prelude: text): Node := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
-	prelude_slices = file_slices(std_module_path("prelude"), prelude)
+	prelude_slices = definition_slices(prelude)
 	prelude_names = prelude_slices.map(slice => slice#1)
 	is_unknown = word => word not in own and word not in bound and word not in prelude_names and not is_declared_word(word)
 	calls = nodes_in(program).filter(n => is_group(n) and (bracket_of(n) == "(" or bracket_of(n) == "") and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
@@ -658,7 +655,7 @@ module_hint(word: text): text := {
 # module name → the slices of each module at the top of lib/, `units` → lib/units.warp's
 bundled_slices(): map := {
 	modules = {}
-	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = file_slices(run_library() + "/" + path, LIBRARY_FILES[path]) } }
+	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = definition_slices(LIBRARY_FILES[path]) } }
 	modules
 }
 # name → the texts of its definitions in these lists of slices, the first written first
@@ -682,7 +679,7 @@ bare_calls(program: Node, providers: map): list := {
 	nullary = {}
 	for module in type_modules {
 		path = std_module_path(module)
-		for slice in file_slices(path, file_text(path) ?? "") { if slice#2.starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
+		for slice in definition_slices(file_text(path) ?? "") { if slice#2.starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
 	}
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
@@ -754,7 +751,7 @@ type_module_providers(): map := {
 		path = std_module_path(module)
 		source = file_text(path)
 		if source != ø {
-			for slice in file_slices(path, source) {
+			for slice in definition_slices(source) {
 				word = slice#1
 				providers[word] = if word in providers and providers[word] != module then "" else module
 			}
