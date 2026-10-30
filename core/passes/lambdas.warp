@@ -189,7 +189,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {}; statements: list = [] }
+class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {}; statements: list = []; scope: list = [] }
 
 ## the walk
 
@@ -211,7 +211,7 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
 		# `p as text` names a type, also where the program defines a function text()
 		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
-		Key(left, Op.Assign, right): Key(lowered_lambdas(left, locals, lowering), Op.Assign, declared_word_value(right, called_counts(left, lowering.statements), locals, lowering) ?? lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
+		Key(left, Op.Assign, right): Key(lowered_lambdas(left, locals, lowering), Op.Assign, declared_word_value(right, called_counts(left, lowering.scope), locals, lowering) ?? lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
@@ -574,6 +574,8 @@ celled_definition(statement: Node, positions: map): Node := {
 # global holding a function value, `g = (x => x * 2); h(t) := g(t)`, is called as one
 lowered_statement(statement: Node, top_locals: list, lowering: Lowering): Node := {
 	parts = definition_of(statement)
+	# where a name the statement assigns is called (declared_word_value): its function's body, else the main statements
+	lowering.scope = if parts == ø then lowering.statements.filter(other => definition_of(other) == ø) else [parts.body]
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
 	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, []) + top_locals.filter(name => name not in lowering.arities)
 	match statement {
