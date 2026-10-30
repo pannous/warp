@@ -1,0 +1,55 @@
+# GPU lists `[f32]` (decision gpu-bound-floats): the numbers a program hands the GPU, packed as f32 cells in linear
+# memory from their creation (lib/wgsl.warp gpu_packed chooses them), so the GPU's library reads and writes them where
+# they are (lib/native/warp_node.h warp_floats). A List $Node of the square bracket marked KindUnit.GpuList, its data
+# an Int of (address << 32) + count. It reads, shows and compares as a list; a list word that would change one refuses
+# (gpu_list_refused), as a boxed copy would lose the change
+use "intrinsics.warp"
+use "../analysis/kinds.warp"
+use "errors.warp"
+use "conversions.warp"
+use "instructions.warp"
+page_bytes(): int := 65536
+cell_bytes(): int := 4
+address_unit(): int := 4294967296
+gpu_list_kind(): int := Kind.List + BracketCode.Square * KindUnit.Info + KindUnit.GpuList
+is_gpu_list(n: Node): bool := not is_null(n) and kind_code(n) == Kind.List and bits_and(marked_kind(n), KindUnit.GpuList) != 0
+gpu_list_address(n: Node): int := shifted_right(unboxed_int(n), 32)
+gpu_list_count(n: Node): int := bits_and(unboxed_int(n), address_unit() - 1)
+# count zeros in pages grown for them (a grown page is zero)
+gpu_zeros(count: int): Node := {
+	pages = int_quotient(count * cell_bytes() + page_bytes() - 1, page_bytes())
+	before = memory_grown(if pages > 0 then pages else 1)
+	if before < 0 { gpu_list_refused("no memory left for a GPU list of this size") }
+	with_kind(fresh_int_node(shifted_left(before * page_bytes(), 32) + count), gpu_list_kind())
+}
+# a GPU list of a list's numbers: what a GPU word gives back (lib/wgsl.warp packs a list where it is made)
+gpu_list_of(xs: list): Node := {
+	out = gpu_zeros(#xs)
+	for i in 1 to #xs { gpu_list_set(out, i, xs#i) }
+	out
+}
+# the list with its index-th number set: a literal's items written one by one (lib/wgsl.warp gpu_packed)
+gpu_put(n: Node, index: int, value: Node): Node := {
+	gpu_list_set(n, index, value)
+	n
+}
+# the index-th number (from 1), as a float
+gpu_list_at(n: Node, index: int): Node := {
+	if index < 1 or index > gpu_list_count(n) { index_out_of_range_of(index, gpu_list_count(n)) }
+	memory_f32(gpu_list_address(n) + (index - 1) * cell_bytes())
+}
+gpu_list_set(n: Node, index: int, value: Node): Node := {
+	if index < 1 or index > gpu_list_count(n) { index_out_of_range_of(index, gpu_list_count(n)) }
+	if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float { gpu_list_refused("a GPU list [f32] holds numbers only") }
+	memory_set_f32(gpu_list_address(n) + (index - 1) * cell_bytes(), float_of_node(value))
+	value
+}
+# the numbers as a list of floats, for the list words that read a list
+gpu_list_items(n: Node): list := {
+	out = new_list(gpu_list_count(n))
+	for i in 1 to #out { out#i = gpu_list_at(n, i) }
+	out
+}
+gpu_list_refused(message: text): int := returned_error(message)
+# a list word given a GPU list, which would read or change a copy of it
+gpu_list_refused_as(n: Node): int := gpu_list_refused("a GPU list [f32] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first")

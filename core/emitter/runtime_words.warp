@@ -47,7 +47,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"unboxed_int": TypedCode(ValueKind.Int, unboxed(values#1.code, gc_type(gc.int_box)))
 		"fresh_int_node": TypedCode(ValueKind.Node, fresh_int_code(converted(values#1, ValueKind.Int)))
 		"marked_kind": TypedCode(ValueKind.Int, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]))
-		"unboxed_list": TypedCode(ValueKind.List, payload(values#1.code, gc_type(gc.list)))
+		"unboxed_list": unboxed_list_code(body, values#1)
 		"unboxed_text": TypedCode(ValueKind.Text, payload(values#1.code, gc_type(gc.text)))
 		"unboxed_char": TypedCode(ValueKind.Char, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, []) + [i31_type] + gc_code(gc_ops.i31_get_u, []))
 		"char_of": TypedCode(ValueKind.Char, index_code(values#1))
@@ -152,6 +152,11 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 			written = uleb(fresh_local(body, ValueKind.Int))
 			TypedCode(ValueKind.Int, index_code(values#1) + converted(values#2, ValueKind.Int) + [op.local_tee] + written + [op.i32_wrap_i64, op.i32_store8, 0, 0, op.local_get] + written)
 		}
+		# a GPU list's f32 cells (runtime/gpu_lists.warp): one read as a float, one written, pages added to the memory (the
+		# page count before, -1 when it can't grow)
+		"memory_f32": TypedCode(ValueKind.Float, index_code(values#1) + [op.f32_load, 2, 0, f64_promote])
+		"memory_set_f32": TypedCode(no_kind, index_code(values#1) + converted(values#2, ValueKind.Float) + [f32_demote, op.f32_store, 2, 0])
+		"memory_grown": TypedCode(ValueKind.Int, index_code(values#1) + [op.memory_grow, 0, op.i64_extend_i32_s])
 		# copy_text(to, at, from, start, count)
 		_: TypedCode(no_kind, values#1.code + index_code(values#2) + values#3.code + index_code(values#4) + index_code(values#5) + gc_code(gc_ops.array_copy, [gc_type(gc.text), gc_type(gc.text)]))
 	}
@@ -160,13 +165,13 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 # memory_set_byte(address, value)
 program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same_node"]
 intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
-	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
+	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, memory_f32: 1, memory_set_f32: 2, memory_grown: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, meta_with_attributes: 2, meta_attributes: 1, same_text: 2, same_list: 2, same_node: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
-library_words = {join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
+library_words = {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop", list_insert: "list_insert",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values", keys: "map_keys", values: "map_values", has: "collection_contains", get: "map_get_or",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
@@ -241,6 +246,16 @@ def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 def as_node(code: list): list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
 def kind_code_of(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
+# a list node's $list; a GPU list's cells are no $list, so a list word given one refuses loudly naming it
+# (runtime/gpu_lists.warp gpu_list_refused_as) rather than casting
+def unboxed_list_code(body: Body, value: TypedCode): TypedCode {
+	held = uleb(fresh_local(body, ValueKind.Node))
+	data = [op.local_get] + held + as_node([]) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
+	code = value.code + [op.local_set] + held + data + gc_code(gc_ops.ref_test, [gc_type(gc.list)]) + [op.if] + gc_bytes(references.list)
+	code += data + gc_code(gc_ops.ref_cast_null, [gc_type(gc.list)]) + [op.else]
+	code += dropped(runtime_call("gpu_list_refused_as", [TypedCode(ValueKind.Node, [op.local_get] + held)])) + [op.unreachable, op.end]
+	TypedCode(ValueKind.List, code)
+}
 def payload(code: list, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
 def unboxed(code: list, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # an Int node's data, its $i64box or $BigInt, as a $Ratio holds a part

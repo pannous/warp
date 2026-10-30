@@ -510,7 +510,8 @@ int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int3
 // declares the storage array of that name, f32 unless array<i32> or array<u32>; the arrays it left come back as a map,
 // in the order given. `arrays` a list: the numbers at @binding(0), they come back as a list
 enum { MOST_ARRAYS = 8 };
-typedef struct { char name[NAME_BYTES]; int binding; char element; double* numbers; size_t count; } StorageArray;
+// an array's numbers: a GPU list's f32 cells where they are (cells, its node kept to give back), else a list's read
+typedef struct { char name[NAME_BYTES]; int binding; char element; double* numbers; float* cells; wasmtime_anyref_t node; size_t count; } StorageArray;
 // the storage arrays the shader declares: `@binding(1) var<storage, read_write> counts: array<i32>`
 static int storage_arrays(const char* shader, StorageArray* arrays) {
 	int found = 0;
@@ -543,6 +544,12 @@ static double* numbers_of(warp_values* values, const wasmtime_anyref_t* list, si
 	}
 	return numbers;
 }
+// a list given into its array: a GPU list's cells as they are, any other list's numbers read
+static void array_given(warp_values* values, const wasmtime_anyref_t* list, StorageArray* array) {
+	array->cells = warp_floats(values, list, &array->count);
+	if (array->cells) wasmtime_anyref_clone(list, &array->node);
+	else array->numbers = numbers_of(values, list, &array->count);
+}
 static StorageArray* array_named(StorageArray* arrays, int count, const char* name) {
 	for (int i = 0; i < count; i++) if (!strcmp(arrays[i].name, name)) return &arrays[i];
 	return NULL;
@@ -561,7 +568,7 @@ static int arrays_given(warp_values* values, const wasmtime_anyref_t* given, Sto
 		for (int i = 0; i < declared_count; i++) if (declared[i].binding == 0) first = &declared[i];
 		if ((kind & WARP_KIND_MASK) != WARP_KIND_LIST) return given_failed(values, "gpu_compute takes a list of numbers or a map of named lists%s", "");
 		if (!first) return given_failed(values, "gpu_compute of a list: the shader declares no storage array at @binding(0)%s", "");
-		first->numbers = numbers_of(values, given, &first->count);
+		array_given(values, given, first);
 		order[0] = (int)(first - declared);
 		return 1;
 	}
@@ -574,7 +581,7 @@ static int arrays_given(warp_values* values, const wasmtime_anyref_t* given, Sto
 		char* name = warp_text_bytes(values, &key, NULL);
 		StorageArray* array = array_named(declared, declared_count, name);
 		if (array) {
-			array->numbers = numbers_of(values, &list, &array->count);
+			array_given(values, &list, array);
 			order[i] = (int)(array - declared);
 		}
 		wasmtime_anyref_unroot(&list);
@@ -585,11 +592,13 @@ static int arrays_given(warp_values* values, const wasmtime_anyref_t* given, Sto
 		if (!array->count) return given_failed(values, "%s is empty: a storage array holds at least one number", array->name);
 	}
 	for (int i = 0; i < declared_count; i++)
-		if (!declared[i].numbers) return given_failed(values, "the shader's array %s has no numbers", declared[i].name);
+		if (!declared[i].numbers && !declared[i].cells) return given_failed(values, "the shader's array %s has no numbers", declared[i].name);
 	return values->failure[0] ? 0 : given_count;
 }
 static void element_written(const StorageArray* array, uint8_t* bytes) {
+	if (array->cells && array->element == 'f') { memcpy(bytes, array->cells, array->count * 4); return; }
 	for (size_t i = 0; i < array->count; i++) {
+		if (array->cells) { ((int32_t*)bytes)[i] = (int32_t)array->cells[i]; continue; }
 		if (array->element == 'f') ((float*)bytes)[i] = (float)array->numbers[i];
 		else if (array->element == 'u') ((uint32_t*)bytes)[i] = (uint32_t)array->numbers[i];
 		else ((int32_t*)bytes)[i] = (int32_t)array->numbers[i];
@@ -668,6 +677,16 @@ static wasmtime_anyref_t arrays_written(warp_values* values, const StorageArray*
 	wasmtime_anyref_t lists[MOST_ARRAYS];
 	for (int a = 0; a < count; a++) {
 		const StorageArray* array = &declared[order[a]];
+		if (array->cells) {
+			// a GPU list takes what the shader left in its own cells, in place
+			for (size_t i = 0; i < array->count; i++) {
+				if (array->element == 'f') array->cells[i] = ((float*)left[a])[i];
+				else array->cells[i] = array->element == 'u' ? (float)((uint32_t*)left[a])[i] : (float)((int32_t*)left[a])[i];
+			}
+			lists[a] = array->node;
+			if (as_map) lists[a] = warp_entry(values, array->name, lists[a]);
+			continue;
+		}
 		wasmtime_anyref_t* numbers = malloc(array->count * sizeof *numbers);
 		for (size_t i = 0; i < array->count; i++) {
 			if (array->element == 'f') numbers[i] = warp_float(values, ((float*)left[a])[i]);
@@ -697,7 +716,11 @@ wasm_trap_t* warp_word_gpu_compute(void* engine, wasmtime_caller_t* caller, cons
 		answer = arrays_written(&values, declared, order, count, warp_kind_field(&values, &given[1].of.anyref) == WARP_MARKED_MAP, left);
 	else if (count) warp_failed(&values, failure);
 	for (int a = 0; a < count; a++) free(left[a]);
-	for (int i = 0; i < declared_count; i++) free(declared[i].numbers);
+	for (int i = 0; i < declared_count; i++) {
+		free(declared[i].numbers);
+		// (a GPU list the answer did not take back)
+		if (declared[i].cells && wasmtime_anyref_is_null(&answer)) wasmtime_anyref_unroot(&declared[i].node);
+	}
 	free(shader);
 	return warp_answered(&values, answer, results);
 }

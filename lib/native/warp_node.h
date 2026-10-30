@@ -123,6 +123,18 @@ static inline bool warp_text_is(warp_values* values, const wasmtime_anyref_t* no
 	free(text);
 	return same;
 }
+// a GPU list [f32] (core/runtime/gpu_lists.warp): its f32 cells where they are in the module's memory and their
+// count, NULL for any other value
+static inline float* warp_floats(warp_values* values, const wasmtime_anyref_t* node, size_t* count) {
+	if (wasmtime_anyref_is_null(node) || !(warp_kind_field(values, node) & WARP_GPU_LIST_MARK)) return NULL;
+	wasmtime_anyref_t box = warp_field_ref(values, node, WARP_NODE_DATA);
+	int64_t packed = warp_boxed_number(values, &box).of.i64;
+	wasmtime_anyref_unroot(&box);
+	wasmtime_extern_t memory;
+	if (!wasmtime_caller_export_get(values->caller, "memory", 6, &memory) || memory.kind != WASMTIME_EXTERN_MEMORY) return NULL;
+	*count = (size_t)(packed & 0xFFFFFFFF);
+	return (float*)(wasmtime_memory_data(values->context, &memory.of.memory) + (packed >> 32));
+}
 // a list's (a map's, a block's) $list: its length and items
 static inline wasmtime_anyref_t warp_list_of(warp_values* values, const wasmtime_anyref_t* node) {
 	int kind = warp_node_kind(values, node);
