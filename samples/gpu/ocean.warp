@@ -59,7 +59,7 @@ zenith_blue = [0.09, .13, 0.22]
 horizon_gold = [1.0, 0.58, 0.2]
 
 # a number in 0 … 1 per lattice point: sin-hashes stripe in f32 for big arguments, so the point is wrapped first
-hash(p) := fract(sine((p .- 289 .* floor(p ./ 289)) ∘ [127.1, 311.7]) * 43758.547)
+hash(p) := fract(sine(dot(p .- 289 .* floor(p ./ 289), [127.1, 311.7])) * 43758.547) # todo dot => ·
 
 # smooth value noise: the corner hashes of the lattice cell, blended
 noise(p) := {
