@@ -1,0 +1,2 @@
+# Card typed-parse: generic JSON parsing reports the field and actual type (user 2026-10-25).
+'class User { id: number }; try { parse<User>("{\\\\"id\\\\":\\\\"7\\\\"}") } catch e { e.message }'	'id must be number, received text'
