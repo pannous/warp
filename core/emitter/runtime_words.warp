@@ -272,6 +272,8 @@ shown_big_int_code(f: Function): any := {
 # is noted (module.made_sites) and read again when a kind is first made (module_compiled): each maker notes its kind
 # (made_by: big_int_of, ratio_node, times.warp time_node)
 made_tests = {BigInt: "holds_big_int", Ratio: "holds_ratio", Time: "holds_time"}
+# the words making a value of each kind, compiled into the prepended runtime (made_by, times.warp time_node)
+made_makers = {BigInt: ["big_int_of"], Ratio: ["ratio_of_parts"], Time: ["time_of", "instant_at"]}
 def made_case(body: Body, arguments: list): TypedCode {
 	made = name_of(value_of(arguments#1))
 	if made not in module.made {
