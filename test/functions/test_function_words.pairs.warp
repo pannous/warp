@@ -9,3 +9,13 @@
 # a word a function has none of but another one means is refused naming that one (decision reflection-words)
 'twice(x) := x*2; twice.description'	error
 'twice(x) := x*2; twice.dump'	error
+# a function's signature and result kind as the analyzer infers them (card doc-signature)
+'f(a:int, b:int) := a+b; f.signature'	'(a: int, b: int) -> int'
+'twice(x) := x*2; twice.signature'	'(x) -> int'
+'twice(x) := x*2; twice.return_type'	'int'
+'use math; gcd.return_type'	'int'
+# a function's doc: its leading text, the comment above it, a library function's too; "" without
+'twice(x) := {"doubles a number"; x*2}; twice.doc'	'doubles a number'
+'twice(x) := x*2; twice.doc'	''
+'use math; lerp.doc'	'the value a fraction t of the way from a to b'
+'use math; gcd.doc'	''

@@ -1563,12 +1563,13 @@ known(kind: i32, name: text, what: text, word: text): i32 := {
 	if kind == 0 { failed_call(joined(joined(joined(joined(name, ": "), what), word), ", not in the native driver yet")) }
 	kind
 }
-# the C function of a line, found in its library; one the driver can't call stops the run naming it
+# the C function of a line, found in its library; one the driver can't call stops the run naming it. One its library
+# lacks, or a library not found, stops the run only when called: a program may ask for an optional library first
+# (lib/sound.warp's libwarp_sound, else the system's player)
 foreign_of(line: text): i64 := {
 	library = field(line, 1, TAB)
 	name = field(line, 2, TAB)
 	function = library_function(c_string(library), c_string(name))
-	if function == 0 { failed_call(joined(joined(joined("no C function ", name), " in the library "), library)) }
 	parameters = field(line, 3, TAB)
 	count = field_count(parameters, COMMA)
 	kinds = allocate(count as i32)
@@ -1596,6 +1597,7 @@ failed_call(message: text): nothing := {
 # result crossed back the same way
 c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
 	name = text_from(c.name, c.name_length)
+	if c.function == 0 { failed_call(joined(joined("no C function ", name), " in its library, or the library not found")) }
 	integers = zeroed(REGISTERS * 8)
 	floats = zeroed(REGISTERS * 8)
 	out = zeroed(8)

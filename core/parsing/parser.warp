@@ -288,14 +288,18 @@ def statement_end(p: Parser): int {
 	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end += 1 }
 	end
 }
-// `operator × := *`, `prefix operator √ := sqrt` (lib/math.warp): another spelling of a built-in operator, a statement
-// declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
+// `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
+// function, `√x` is sqrt(x): a statement declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
 // [spelling, target] of an alias statement's words (`operator ∧ := and`, `prefix operator √ := sqrt`), else []
 // Rust twin: aliases.rs alias_line
 def operator_alias(words: list): list {
-	if words.length > 0 and words#1 == "prefix" { words = words[1 .. words.length] }
-	if words.length == 4 and words#1 == "operator" and words#3 == ":=" and is_operator_spelling(words#4) then [words#2, words#4] else []
+	prefix = words.length > 0 and words#1 == "prefix"
+	if prefix { words = words[1 .. words.length] }
+	if not (words.length == 4 and words#1 == "operator" and words#3 == ":=") { return [] }
+	if is_operator_spelling(words#4) or (prefix and is_name_start(words#4#1)) then [words#2, words#4] else []
 }
+// An alias spelling a function, `√` of sqrt, no operator
+def spells_function(alias: list): bool := is_name_start(alias#2#1) and not is_operator_spelling(alias#2)
 // [spelling, target] of each operator alias a source declares
 // Rust twin: aliases.rs source_aliases
 def operator_aliases(source: text): list := if source.contains(":=") then operator_aliases_in(code_statements(source)) else []
@@ -470,12 +474,11 @@ def aliased_operator_at(p: Parser): list {
 	canonical = if alias.length == 0 then "" else canonical_operator(alias#2)
 	if canonical is empty or (is_name_start(alias#1#1) and opens_block(p, alias#1.length)) then [] else [alias#1, canonical]
 }
-// A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
+// A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `contains`)
 // Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
 def is_operator_spelling(word: text): bool {
 	if not is_name_start(word#1) or word_operator(word) != ø { return true }
-	form = keyword_form(word)
-	PREFIX_OPERATORS.contains(form) or form == "contains" or word == "in" or word == "approximately"
+	keyword_form(word) == "contains" or word == "in" or word == "approximately"
 }
 // The statement at the parser's position skipped: ø
 def skip_statement(p: Parser): Node := {
@@ -582,15 +585,13 @@ def words_ahead_end(p: Parser, words: list, first_end: int): int {
 	end
 }
 
-// The keyword forms: each word with a form of its own and the form's shape; a prefix word's shape is the operator it
-// spells (`sqrt x` is `√x`), a constant word's the constant (any case: `True`, `NULL`); their aliases come from
+// The keyword forms: each word with a form of its own and the form's shape, a constant word's the constant (any case: `True`, `NULL`); their aliases come from
 // lib/aliases.warp (spellings)
 // Rust twin: atoms.rs keyword_form, expressions.rs parse_expr, if_else.rs, conditions.rs, warp_parser check_constants
 KEYWORD_FORMS = {"return": "return", "if": "condition", "while": "condition", "unless": "condition", "until": "condition", "for": "loop", "loop": "endless",
 	"class": "type", "struct": "type", "type": "type", "global": "global", "export": "global", "not": "not",
-	"sqrt": "√", "cbrt": "∛", "abs": "‖", "else if": "else if", "where": "clause", "match": "clause", "switch": "clause",
+	"else if": "else if", "where": "clause", "match": "clause", "switch": "clause",
 	"contains": "contains", "function": "reference", "func": "reference", "yes": "true", "no": "false", "ø": "empty", "empty": "empty"}
-PREFIX_OPERATORS = ["√", "∛", "‖"]
 
 // The shape of the keyword form `word` opens, else ""
 def keyword_form(word: text): text := if word in keyword_forms() then keyword_forms()[word] else ""
@@ -1123,13 +1124,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = Key(left, Op.Colon, block)
 				continue
 			}
-			// `f.(xs)`, julia's dot call, the phrase [f .( (xs)] for the sugar (lib/sugar/broadcasting.warp): never the
-			// member call `t.chars()`, whose tree it would be otherwise
-			dot_call = op#1 == "." and peek(p.code, p.at, p.n) == "("
+			if op#1 == "." and peek(p.code, p.at, p.n) == "(" { raise dot_call_refused(left) }
 			skip_blanks(p)
-			if dot_call {
-				left = phrase_operation(left, DOT_CALL, expression(p, powers#2))
-			} else if PHRASE_OPERATORS contains op#1 {
+			if PHRASE_OPERATORS contains op#1 {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
@@ -1648,7 +1645,12 @@ SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-"
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
 // does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
-DOT_CALL = ".("
+// `abs.(xs)`, Julia's dot call: warp has none (decision no-dot-call-broadcast), a function of numbers broadcasts by itself
+// and `each` applies any other to every item
+def dot_call_refused(f: Node): text {
+	name = if f is symbol then name_of(f) else "f"
+	"no dot call " + name + ".(…): did you mean `" + name + " xs`, or `" + name + " each xs` for a function taking a list?"
+}
 // `left op right` as its phrase, for the sugar to read (lib/sugar/arithmetic.warp, fallbacks.warp)
 def phrase_operation(left: Node, op: text, right: Node): Node := spaced([left, symbol(op), right])
 // The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
@@ -1823,25 +1825,37 @@ def library_glyph_operators(): list {
 	library_operators
 }
 
-// The classes the bundled modules at the top of lib/ declare, read off their text once a run: class → its module,
-// `class Time` of units (decision expected-type-names: a parameter typed Time finds its values there)
-global module_classes = ø
-def declared_classes_modules(): map {
-	if module_classes == ø { module_classes = classes_scanned() }
-	module_classes
+// What the bundled modules at the top of lib/ declare for every program, read off their text once a run: "words",
+// word → the module declaring it global, `global play(file: text) := …` (decision bizarre-global: a program naming it
+// uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
+// expected-type-names: a parameter typed Time finds its values there)
+global module_declarations = ø
+def bundled_declarations(): map {
+	if module_declarations == ø {
+		module_declarations = declarations_scanned()
+	}
+	module_declarations
 }
-def classes_scanned(): map {
+def global_words(): map := bundled_declarations()["words"]
+def declared_classes_modules(): map := bundled_declarations()["classes"]
+def declarations_scanned(): map {
+	words = {}
 	classes = {}
 	for path in LIBRARY_FILES.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
 			for line in LIBRARY_FILES[path].split("\n") {
+				if line.starts_with(GLOBAL_MARK) {
+					word = name_starting(line[#GLOBAL_MARK ..])
+					if word and line[#GLOBAL_MARK + #word ..].starts_with("(") { words[word] = module }
+				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
 			}
 		}
 	}
-	classes
+	{"words": words, "classes": classes}
 }
+GLOBAL_MARK = "global "
 CLASS_MARK = "class "
 // the name a text starts with, "" when none
 def name_starting(line: text): text {
@@ -1859,9 +1873,19 @@ def folder_of(path: text): text {
 	parts[0 ..< #parts - 1].join("/")
 }
 // The sources of the standard modules a source uses by name, read from lib/ beside this compiler (module_source takes
-// a name written out only); a compile has written the use of each it reaches by a word (with_implicit_uses)
+// a name written out only), and of those whose global words it names (`play "mozart.mp3"`, words.warp global_words)
 // Rust twin: declaration_scan.rs used_std_modules
-def used_module_sources(source: text): list := module_sources(used_modules(source))
+def used_module_sources(source: text): list := module_sources(reached_modules(source))
+// the standard modules a source uses by name or reaches by one of their global words
+def reached_modules(source: text): list {
+	modules = used_modules(source)
+	code = code_only(source)
+	words = global_words()
+	for word in words.keys {
+		if not modules.contains(words[word]) and mentions_word(code, word) { modules += [words[word]] }
+	}
+	modules
+}
 def module_sources(modules: list): list {
 	sources = []
 	for module in modules {
@@ -2272,7 +2296,6 @@ def prefixed(p: Parser): Node := {
 		literal = data_literal(p)
 		if literal != ø { return literal }
 	}
-	if PREFIX_OPERATORS.contains(form) and not defines_word(p, word) and not dot_call_follows(p, word) { return word_prefixed(p, word, form) }
 	if form == "not" or no_asks_emptiness(p, word) {
 		p.at = p.at + word.length
 		skip_spaces(p)
@@ -2336,53 +2359,11 @@ def emitted(p: Parser, word: text): Node := {
 	spaced(phrase)
 }
 
-// Whether the word at the parser's position follows a member's dot: `math.sqrt(4)` calls the member sqrt, no √
-// (a range's `..sqrt 4` keeps the operator)
-// Rust twin: the member name after `.` never reaches lookahead.rs peek_prefix_operator
+// Whether the word at the parser's position follows a member's dot: `op.if` names the member if, no keyword (a
+// range's `..if` keeps it)
 def after_member_dot(p: Parser): bool := p.at > 0 and p.code[p.at - 1] == '.' and not (p.at > 1 and p.code[p.at - 2] == '.')
 
-// `sqrt(x: f64): f64 from "c"`, `abs(x) := …` at a line's start: the word is the name a definition or foreign line
-// gives, no operator (card primitive-c-math-names)
-// `sqrt.([4, 9])`, `abs.(xs)`: a prefix operator's word dot-called is the function, the dot call broadcasting it
-def dot_call_follows(p: Parser, word: text): bool := peek(p.code, p.at + word.length, p.n) == '.' and peek(p.code, p.at + word.length + 1, p.n) == '('
-def defines_word(p: Parser, word: text): bool {
-	at = p.at + word.length
-	if peek(p.code, at, p.n) != '(' or not at_line_start(p.code, p.at) { return false }
-	depth = 0
-	while at < p.n and p.code[at] != '\n' {
-		if p.code[at] == '(' { depth = depth + 1 }
-		if p.code[at] == ')' {
-			depth = depth - 1
-			if depth == 0 { return code_after(p, at + 1) == ':' or starts_at(p.code, "from ", p.resumes[at + 1], p.n) }
-		}
-		at = at + 1
-	}
-	false
-}
-
-// `abs x`, `sqrt(2)`: the operator word and its operand; `f = abs` alone is the operator itself. Braceless, the word
-// takes its argument like a call (`sqrt 4 + 5` is sqrt(9)); glued parentheses are the whole operand (`sqrt(16) + 1`)
-// Rust twin: expressions.rs parse_expr (prefix words), lookahead.rs expression_ends_after
-// Rust twin of the words: lookahead.rs PREFIX_OPERATOR_WORDS
-def word_prefixed(p: Parser, word: text, operator: text): Node := {
-	p.at = p.at + word.length
-	if expression_ends(p) { return keyed(operator, ø, ø) }
-	glued = peek(p.code, p.at, p.n) == '('
-	skip_spaces(p)
-	keyed(operator, ø, expression(p, if glued then PREFIX_POWER else ARGUMENT_POWER))
-}
-
 PREFIX_POWER = 162
-
-// No operand follows the parser's position: the end of a line or group, or an infix operator set apart by blanks
-// Rust twin: lookahead.rs expression_ends_after, operand_follows
-def expression_ends(p: Parser): bool {
-	c = code_after(p, p.at)
-	at = p.resumes[p.at]
-	if "\n>)]},;=".contains(c) { return true }
-	if c == '.' and is_name_start(peek(p.code, at + 1, p.n)) { return true }
-	at > p.at and "+-*/<".contains(c) and is_blank(peek(p.code, at + 1, p.n))
-}
 
 // The dashes 0x2010..0x2015 and the minus sign: each means `-` (infix ones: lib/aliases.warp, the minus sign
 // lib/math.warp's alias line)
@@ -2412,8 +2393,7 @@ def circumfix_closing(p: Parser, pair: list, from: int): int {
 	}
 	p.n
 }
-// `‖x‖`, `⌊x⌋` bracket a whole expression like parentheses and apply their function to it: `‖3-5‖*2` is 4; a prefix
-// operator word's function (abs) is that operator, any other a call
+// `‖x‖`, `⌊x⌋` bracket a whole expression like parentheses and call their function with it: `‖3-5‖*2` is 4
 // Rust twin: math_notation.rs try_parse_circumfix
 def circumfixed(p: Parser, pair: list): Node := {
 	opened = p.at + pair#1.length
@@ -2425,8 +2405,7 @@ def circumfixed(p: Parser, pair: list): Node := {
 	inner = expression(p, 0)
 	p.n = whole
 	p.at = closing + pair#2.length
-	form = keyword_form(pair#3)
-	if PREFIX_OPERATORS.contains(form) then keyed(form, ø, inner) else call_of([symbol(pair#3), inner])
+	call_of([symbol(pair#3), inner])
 }
 
 def prefixed_by_symbol(p: Parser, c: text): Node := {
@@ -2465,10 +2444,12 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	}
 	circumfix = circumfix_at(p)
 	if circumfix.length > 0 { return circumfixed(p, circumfix) }
-	if PREFIX_OPERATORS.contains("$(c)") {
-		p.at = p.at + 1
+	// `√x`, `∛x`: a glyph spelling a function calls it (lib/math.warp `prefix operator √ := sqrt`)
+	spelled = alias_at(p)
+	if spelled.length > 0 and spells_function(spelled) {
+		p.at = p.at + spelled#1.length
 		skip_spaces(p)
-		return keyed("$(c)", ø, expression(p, PREFIX_POWER))
+		return call_of([symbol(spelled#2), expression(p, PREFIX_POWER)])
 	}
 	// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
 	// subject; a glued `<tag` stays a bracket
@@ -3436,7 +3417,7 @@ FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '�
 def is_free_symbol(p: Parser, c: text): bool {
 	glyph = "$(c)"
 	// a declared operator calls as declared: `prefix operator ∆` makes `print ∆ 5` print ∆(5), no free infix
-	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or declared_level(p.operators, glyph) >= 0 { return false }
+	if glyph.length != 1 or p.aliases.any(alias => alias#1 == glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or declared_level(p.operators, glyph) >= 0 { return false }
 	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2) and not p.aliases.any(alias => alias#1 == glyph)
 }
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;

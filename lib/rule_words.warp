@@ -55,7 +55,16 @@ signal_listen_word = "signal_listen"
 signal_old = "signal·old"
 # `whenever x > y {…}`: a listener of each name the condition reads, running the block when the write made the
 # condition hold, it holding not with the name's old value: `if value > y and not old > y {…}` for x
-whenever_listens(condition: Node, body: Node): Node := separated(bracketed(symbol_words(condition).map(name => call_of(signal_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(renamed(condition, name, symbol("value")), renamed(condition, name, symbol("old")), body))])), "("), ";")
+whenever_listens(condition: Node, body: Node): Node := condition_listens(condition, body, [])
+# `once x == 5 {…}`: as whenever, the block running the first time only, its listeners sharing a flag named by the condition
+once_listens(condition: Node, body: Node): Node := condition_listens(condition, body, [symbol("signal·fired " + spelled(condition))])
+condition_listens(condition: Node, body: Node, flags: list): Node := {
+	unfired = flags.map(flag => Key(ø, Op.Not, Key(flag, Op.Hash, 1)))
+	block = if #flags == 0 then body else List(flags.map(flag => Key(Key(flag, Op.Hash, 1), Op.Assign, Node.True)) + [body], Bracket.Curly, Separator.Semicolon)
+	declared = flags.map(flag => Key(flag, Op.Assign, List([Node.False], Bracket.Square, Separator.Comma)))
+	listens = symbol_words(condition).map(name => call_of(signal_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
+	separated(bracketed(declared + listens, "("), ";")
+}
 became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
 # the program with each write of a watched name notifying its listeners (signal_notify), `x = 3` as
 # `(signal·old = x; x = 3; signal_notify("x", x, signal·old))`; a main statement's only once a listener of the name came
@@ -89,16 +98,32 @@ derived_inputs(statements: list): map := {
 # write changed it: `a = 2` as `(signal·old = a; signal·total = total; a = 2; if a != signal·old {
 # signal_notify("total", total, signal·total) })`; any other node as it is
 notifying(n: Node, names: list, derived: map): Node := {
-	if not (n is key and key_of(n) is symbol and op_of(n) in writing_ops) { return n }
-	name = key_of(n)
+	if not writes(n) { return n }
+	name = written_target(key_of(n))
+	if not (name is symbol) { return n }
 	old = symbol(signal_old)
 	dependents = names.filter(d => derived.has(d) and name_of(name) in derived[d])
 	own = name_of(name) in names
 	if not own and #dependents == 0 { return n }
-	before = [Key(old, Op.Assign, name)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d)))
+	# an item's write changes the list itself: the old one a copy, `[] + xs`
+	kept = if key_of(n) is symbol then name else Key(List([], Bracket.Square, Separator.Comma), Op.Add, name)
+	before = [Key(old, Op.Assign, kept)] + dependents.map(d => Key(symbol(signal_old_of(d)), Op.Assign, symbol(d)))
 	notified = (if own then [call_of("signal_notify", [name_of(name), name, old])] else []) + dependents.map(d => Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [d, symbol(d), symbol(signal_old_of(d))])))
-	separated(bracketed(before + [n] + notified, "("), ";")
+	# `x--` gives the value before the step
+	result = if op_of(n) in stepping_ops then [old] else []
+	separated(bracketed(before + [n] + notified + result, "("), ";")
 }
+# a write: `x = 3`, `x += 1`, `x--`
+writes(n: Node): bool := {
+	if not (n is key) { return no }
+	op_of(n) in writing_ops or op_of(n) in stepping_ops
+}
+# the variable a write changes: `x`, that of an item's `xs#1` or a field's `p.n`; else the target itself
+written_target(target: Node): Node := {
+	if target is key and (op_of(target) == Op.Hash or op_of(target) == Op.Dot) { return written_target(key_of(target)) }
+	target
+}
+stepping_ops = [Op.Inc, Op.Dec]
 signal_old_of(name: text): text := "signal·" + name
 writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
 
@@ -123,17 +148,70 @@ parameters_named(name: Node, program: Node): any := {
 	if definition == ø { return ø }
 	List(definition_parameters(definition), Bracket.Square, Separator.Comma)
 }
-definition_parameters(definition: Node): list := if is_definition(definition) then defined_parameters(definition).map(parameter_name) else lambda_parameters(key_of(value_of(definition)))
+definition_parameters(definition: Node): list := function_parameters_written(definition).map(parameter_name)
+# the parameters as the definition writes them, `a: int` of `f(a: int) := …`, `x` of `f = x => …`
+function_parameters_written(definition: Node): list := {
+	if is_definition(definition) { return defined_parameters(definition) }
+	taken = key_of(value_of(definition))
+	if is_group(taken) then items_of(taken) else [taken]
+}
+# `(a: int, b: int) -> int`: the parameters as written, untyped ones by their name alone, and the kind its result
+# has; ø when the program defines no such function or no kind is known of its result
+signature_text(name: Node, program: Node): any := {
+	definition = function_definition(name, program)
+	if definition == ø { return ø }
+	returned = function_result_kind(name, definition)
+	if returned == ø { return ø }
+	"(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
+}
+# `int` of `twice(x) := x*2`: the kind the analyzer infers for the function's result
+return_kind(name: Node, program: Node): any := {
+	definition = function_definition(name, program)
+	if definition == ø then ø else function_result_kind(name, definition)
+}
+function_result_kind(name: Node, definition: Node): any := {
+	found = kinds(definition).functions.get("${name}")
+	if found == ø then ø else found.result
+}
+parameter_shown(written: Node): text := {
+	parameter = parameter_of(written)
+	if parameter.type_name == "" then parameter.name else parameter.name + ": " + parameter.type_name
+}
 # the code the function computes, `x*2` of `twice(x) := x*2`; ø when the program defines no such function
 body_of(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
 	if definition == ø { return ø }
 	if is_definition(definition) then value_of(definition) else value_of(value_of(definition))
 }
+# a function's doc: its body's leading text, else the comment lines right above its definition, in the program's
+# source (`$source`, which keeps what the parse drops) or the module defining it (lerp's `// the value a fraction t of
+# the way from a to b`); "" without
+doc_of(name: Node, program: Node, source: text): text := {
+	body = body_of(name, program)
+	if body != ø and is_sequence_block(body) and #body > 1 and body#1 is text { return "${body#1}" }
+	word = "${name}"
+	found = comment_above(source, word)
+	modules = word_index(word_index_file()).get(word) ?? []
+	for module in modules { if found == "" { found = comment_above(used_module_text(module), word) } }
+	found
+}
+# the comment lines right above the line defining the word, without their marks; "" when none
+comment_above(source: text, word: text): text := {
+	comments = []
+	for line in source.split("\n") {
+		trimmed = line.trim()
+		if defines_function(trimmed, word) { return comments.join("\n") }
+		comments = if is_comment_line(trimmed) then comments + [comment_text(trimmed)] else []
+	}
+	""
+}
+defines_function(line: text, word: text): bool := ["fun ", "def "].any(keyword => line.starts_with(keyword + word + "(") or line.starts_with(keyword + word + " ")) or ((line.starts_with(word + "(") or line.starts_with(word + " ")) and (line.contains(":=") or line.contains("=>")))
+is_comment_line(line: text): bool := line.starts_with("//") or line == "#" or line.starts_with("# ")
+comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1) ..].trim()
 # `twice.description`: a word a function has none of, the compile refused with the word it means
 misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, misnamed: misnamed}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed}

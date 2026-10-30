@@ -428,23 +428,24 @@ with_type_module_uses(program: Node): Node := {
 	}
 	# in the order of type_modules, Rust's sorted one
 	modules = type_modules.filter(module => module in wanted and module not in used)
-	with_module_uses(program, modules + sugar_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used))
+	with_module_uses(program, modules + global_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used))
 }
-# the one module defining each word a sugar rule reaching the program writes (`x.json` json_text) that it binds nothing
-# to, by the word index as implicit_modules reads the program's own words, each once
-sugar_word_modules(program: Node, own: any, used: list): list := {
+# the modules of the global words a program names, or a sugar rule reaching it writes (`x.json` json_text), and binds
+# nothing to, each once
+global_word_modules(program: Node, own: any, used: list): list := {
 	bound = names_bound_in(program)
-	index = word_index(word_index_file())
+	words = global_words()
 	modules = []
-	for word in sugar_words_of(program) {
-		definers = index.get(word) ?? []
-		if #definers == 1 and word not in own and word not in bound and word not in used and definers#1 not in used and definers#1 not in modules { modules += definers }
+	for word in symbol_words(program) + sugar_words_of(program) {
+		module = words.get(word)
+		if module != ø and word not in own and word not in bound and word not in used and module not in used and module not in modules { modules += [module] }
 	}
 	modules
 }
 # The standard modules a source uses without saying it (decision implicit-standard-words): the one module defining a
 # word the program names free (never a member's, `c.pi`) that neither it, the prelude nor a module it uses defines,
-# by the index `warp rebuild` writes beside the prebuilt modules (write_word_index). A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
+# by the index `warp rebuild` writes beside the prebuilt modules (write_word_index); a module's `global` word is its
+# own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
 implicit_modules(source: text, index_file: text): list := {
 	index = word_index(index_file)
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
@@ -459,12 +460,13 @@ implicit_modules(source: text, index_file: text): list := {
 	used = used_module_sources(statements_in(program), ".", [])#2
 	known = {}
 	for module in used { for slice in definition_slices(used_module_text(module)) { known[slice#1] = yes } }
+	globals = global_words()
 	providers = type_module_providers()
 	free = free_words(program)
 	modules = []
 	# (the module a `use` names is no word of it: `use hash` beside color's hash)
 	for word in candidates.filter(word => word in free and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
-		definers = if word in providers then [providers[word]] else index[word]
+		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
 		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
 		if #definers == 0 { raise word + " is defined by " + index[word].join(" and ") + ", none taking these arguments: say which, " + index[word].map(module => "`use " + module + "`").join(" or ") }
@@ -709,8 +711,8 @@ type_module_providers(): map := {
 	}
 	providers
 }
-# the word of a root, `√2`, which lib/reals.warp keeps exact (emitter.warp exact_root_word)
-root_words(program: Node): list := if nodes_in(program).any(n => is_key(n, Op.Sqrt) and is_empty(key_of(n)) and not surely_float(value_of(n))) then [exact_root_word] else []
+# the word of a root, `√2`, sqrt(2), which lib/reals.warp keeps exact (emitter.warp exact_root_word)
+root_words(program: Node): list := if nodes_in(program).any(n => is_group(n) and #n == 2 and n#1 == symbol("sqrt") and not surely_float(n#2)) then [exact_root_word] else []
 # `2.5`, `x as f64`, `(n as float)`: a value written a float, whose root is the float's (a primitive program's too)
 surely_float(n: Node): bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
 # the classes the program converts to, `3 as Real`: a type module's class comes with its conversions (`x as text`

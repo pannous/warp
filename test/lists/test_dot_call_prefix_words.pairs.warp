@@ -1,8 +1,12 @@
-# the dot call of a word the parser makes a prefix operator broadcasts as any function's (card abs-abs); of a value
-# not known as a list it applies once
-'abs.([-3, 2])'	[3 2]
-'abs.(-3)'	3
-'x = -3; abs.(x)'	3
-'sqrt.([4, 9])'	[2 3]
-'cbrt.([8, 27])'	[2 3]
-'floor.(2.5)'	2
+# sqrt, cbrt and abs are plain functions, √ ∛ and ‖ ‖ their spellings (decision prefix-symbols-alias-functions):
+# broadcast by the general rule; Julia's dot call is no warp (decision no-dot-call-broadcast)
+'abs.([-3, 2])'	error
+'sqrt.([4, 9])'	error
+'abs [-3, 2]'	[3 2]
+'x = -3; abs x'	3
+'√9'	3
+'∛27'	3
+'‖-3‖ * 2'	6
+'√[4, 9]'	[2 3]
+'sqrt(2)'	√2
+'sqrt(8)'	2√2

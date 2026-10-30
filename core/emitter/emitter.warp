@@ -97,6 +97,8 @@ hook_arities = 8
 error_tag_name = "warp_error"
 try_depth_name = "try_depth"
 trap_name_global = "trap_name"
+# the globals a runtime error sets, which a host reads after the run failed (exported_trap_message)
+raising_globals = [trap_name_global, "trap_detail"]
 # the trap-only functions of a missing field or switch case: their prefix, then the name (error_function)
 no_field_prefix = "no_field_"
 no_case_prefix = "no_case_"
@@ -479,6 +481,14 @@ cast_words = ["int", "float"]
 float_converting_word = HiddenWord.FloatConverted as text
 # lib/reals.warp's √ of a value not known to be a float
 exact_root_word = "exact_root"
+# abs(x) (‖x‖) the absolute value; sqrt(x) (√x) the float root of a float, of any other value lib/reals.warp's exact one,
+# √9 is 3, √2 stays √2 (decision exact-roots); cbrt(x) (∛x) the float's
+magnitude(body: Body, word: text, value: TypedCode): TypedCode := {
+	if word == "abs" { return absolute_value(body, value) }
+	if word == "cbrt" { return runtime_call("float_cbrt", [TypedCode(ValueKind.Float, converted(value, ValueKind.Float))]) }
+	if value.kind != ValueKind.Float and exact_root_word in module.functions { return call_values(module.functions[exact_root_word], [TypedCode(ValueKind.Node, boxed(value))]) }
+	TypedCode(ValueKind.Float, converted(value, ValueKind.Float) + [wasm_instructions["f64.sqrt"]])
+}
 text_reader(kind: ValueKind): text? := match kind { ValueKind.Int: "text_as_int"; ValueKind.Float: "text_as_float"; _: ø }
 node_cast(kind: ValueKind): text? := match kind { ValueKind.Int: "truncated_int"; ValueKind.Float: "float_cast"; _: ø }
 # `π as float`, `float(x)`: the value of code `n` other than a number literal may be an instance of a class converting
@@ -968,6 +978,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		return length_code(expression_code(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(instance_number(n#2, expression_code(body, n#2))) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in magnitude_words and name_of(n#1) not in module.functions { return magnitude(body, name_of(n#1), expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in byte_count_words { return byte_size_code(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("type") { return type_value_of(body, expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ord") { return code_point(expression_code(body, n#2)) }
@@ -1105,7 +1116,6 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return assignment(body, left, operation_code(body, steps[operator], stepped, number_value(1)))
 	}
 	if operator == Op.Neg and left == ø { return negation(body, expression_code(body, right)) }
-	if operator == Op.Abs and left == ø { return absolute_value(body, expression_code(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator in bit_words { return bitwise(body, operator, left, right) }
 	if operator == Op.Hash and left == ø { return length_code(expression_code(body, right)) }
@@ -1163,14 +1173,6 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return TypedCode(target, converted(value, target))
 	}
 	if operator == Op.Not and left == ø { return TypedCode(ValueKind.Bool, condition(expression_code(body, right)) + [op.i32_eqz]) }
-	# `√x`: the float root of a float; of any other value lib/reals.warp's exact one, √9 is 3, √2 stays √2 (decision
-	# exact-roots)
-	if operator == Op.Sqrt and left == ø {
-		rooted = expression_code(body, right)
-		if rooted.kind != ValueKind.Float and exact_root_word in module.functions { return call_values(module.functions[exact_root_word], [TypedCode(ValueKind.Node, boxed(rooted))]) }
-		return TypedCode(ValueKind.Float, converted(rooted, ValueKind.Float) + [wasm_instructions["f64.sqrt"]])
-	}
-	if operator == Op.Cbrt and left == ø { return runtime_call("float_cbrt", [TypedCode(ValueKind.Float, converted(expression_code(body, right), ValueKind.Float))]) }
 	if left === ø or right === ø {
 		other = if left === ø then right else left
 		if operator in identities or operator in equalities { return identity_with_nothing(body, operator, other) }
@@ -1443,9 +1445,6 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		if prepended() { linked_builders() }
 		# the host shows no ø: a program giving nothing needs no show
 		if not main.gives_nothing { shown_result(main.result) }
-		# a host reading no GC objects shows what the program raised by it
-		exported_shown_at()
-		exported_trap_message()
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
 		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
 		for name in module.functions.keys {
@@ -1488,6 +1487,9 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		start.code = call_code(main.index) + [op.drop]
 		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(shown_code(unboxed_to_show(result, shown_kind))).code + [op.end] }
 		if not main.gives_nothing and value_as_data { start.code = call_code(main.index) + [op.local_set, 0] + value_printed_as_data(result) }
+		# what a host says of a run that failed in a runtime error, of a program that can fail so (a trimmed hello
+		# carried its sentences and the whole node printer: 25 KB for 1.5)
+		if module.runtime_image == ø or not relocates() or can_raise(module.order) { exported_trap_message() }
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }
