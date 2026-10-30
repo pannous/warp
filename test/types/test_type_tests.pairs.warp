@@ -58,7 +58,7 @@
 'x=2; y=3; type(x) == type(y)'	1
 'type(2) == type(3.5)'	0
 'type(2) != type(3)'	0
-'type(0.0) == int'	1
+'type(0.0) == nat'	1
 'type(1.5) == rational'	1
 'type(3/2) == rational'	1
 'type(0) == number'	0
@@ -69,6 +69,6 @@
 't = type(0); t is int'	1
 't = type(0); t is number'	1
 't = type(0); t is text'	0
-'t = type(0); t == int'	1
+'t = type(0); t == nat'	1
 'int == int'	1
 'int == number'	0

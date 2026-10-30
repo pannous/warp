@@ -2,7 +2,7 @@
 
 # the_type_of_a_node_held_value_is_read_at_run_time
 'x:int?=3; type(x)'	'int'
-'f(x:any) := type(x); f(3)'	'int'
+'f(x:any) := type(x); f(3)'	'nat'
 'f(x:any) := type(x); f("ab")'	'text'
 'f(x:any) := type(x); f(2.5)'	'rational'
 'f(x:any) := type(x); f(true)'	'bool'

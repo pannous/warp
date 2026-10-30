@@ -6,4 +6,4 @@
 'type(ø)'	'empty'
 'x = ø; type(x)'	'empty'
 'class P{x:int}; p = P(1); type(p)'	'P'
-'x = 3; type(x)'	'int'
+'x = 3; type(x)'	'nat'
