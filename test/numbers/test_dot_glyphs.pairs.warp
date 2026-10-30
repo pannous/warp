@@ -1,0 +1,4 @@
+# Decision dot-glyphs: ∘ is the dot product; · and • are aliases.
+'[1,2,3] ∘ [4,5,6]'	32
+'[1,2,3] · [4,5,6]'	32
+'[1,2,3] • [4,5,6]'	32

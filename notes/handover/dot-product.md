@@ -1,0 +1,3 @@
+# dot-product
+
+Decision dot-glyphs: ∘ is canonical for vector dot product; · and • are aliases. No coercion or alternate behavior chosen. `dot([1,2,3], [4,5,6])` returns 32 with the installed compiler. Baseline `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp test test/numbers/test_dot_glyphs.pairs.warp` fails all three: ∘ refuses `operator_∘` (no owner), while · and • produce unevaluated lists. Next try a library sugar rule or operator function and verify all three; if the parser or alias machinery cannot express it, document the smallest needed core change and release the card. No existing tests changed.
