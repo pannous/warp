@@ -2,7 +2,7 @@
 # scripts/wasmtime-c-api.sh [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
 # (crates/wasmtime-capi, card wasmtime-bundled) libwarp_sound (crates/warp-sound, miniaudio, decision sound-plays) and libwarp_gpu (crates/warp-gpu, wgpu-native,
-# card gpu-functions).
+# card gpu-functions) and libwarp_window (crates/warp-window, SDL3, card native-window).
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail
@@ -14,6 +14,7 @@ export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 sound_build=${WARP_SOUND_TARGET:-/opt/cargo/warp-sound}
 WGPU_VERSION=29.0.1.1
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
+window_build=${WARP_WINDOW_TARGET:-/opt/cargo/warp-window}
 (cd "$checkout/crates/wasmtime-capi" && nice -n 19 cargo build --release --locked -q)
 case $(uname -s) in
   Darwin) suffix=dylib; prefix=lib; system_libraries=""
@@ -24,6 +25,7 @@ esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
 sound_library=${prefix}warp_sound.$suffix
 gpu_library=${prefix}warp_gpu.$suffix
+window_library=${prefix}warp_window.$suffix
 
 # miniaudio's one header, fetched once at its pinned version and checked
 sound_library_built() {
@@ -74,6 +76,19 @@ gpu_library_built() {
 }
 gpu_library_built
 
+# SDL3 as the system installs it (brew install sdl3, apt install libsdl3-dev), linked as a library of its own
+window_library_built() {
+  flags=$(pkg-config --cflags --libs sdl3 2>/dev/null) || return 0
+  mkdir -p "$window_build"
+  source=$checkout/crates/warp-window/warp_window.c
+  built=$window_build/$window_library
+  [ "$built" -nt "$source" ] && return
+  # shellcheck disable=SC2086 # the flags are words
+  nice -n 19 cc -O2 -shared -fPIC -o "$built.new" "$source" $flags
+  mv -f "$built.new" "$built"
+}
+window_library_built
+
 # each library moved into place whole: a run loading it meanwhile meets the old one or the new one
 installed() {
   built=$1 folder=$2 name=$(basename "$1")
@@ -86,4 +101,6 @@ for folder in "$@"; do
   installed "$sound_build/$sound_library" "$folder"
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
   if [ -f "$gpu_build/$gpu_library" ]; then installed "$gpu_build/$gpu_library" "$folder"; fi
+  # (a machine without SDL3 gets none: its programs run their frames once, windowless)
+  if [ -f "$window_build/$window_library" ]; then installed "$window_build/$window_library" "$folder"; fi
 done

@@ -5,6 +5,7 @@
 # web-ocean simulates its waves by FFT on a quadtree mesh over several passes; here they are a sum of wind waves, each
 # one dragging the next along (cheap, and the crests stay sharp)
 use math
+use keys
 width = 960
 height = 540
 global time = 0.0

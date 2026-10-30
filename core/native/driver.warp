@@ -131,6 +131,10 @@ display_extent(height: i32): i64 from "c"
 next_painting(): i32 from "c"
 gpu_paints(): i32 from "c"
 gpu_painted(shader: pointer, values: pointer, width: i64, height: i64, pixels: pointer): i32 from "c"
+library_system_value(name: text, value: pointer): i32 from "c"
+library_system_value_set(name: text, value: i64): i32 from "c"
+shader_shown(shader: pointer, values: pointer, width: i64, height: i64): i32 from "c"
+pixels_shown(pixels: pointer, width: i64, height: i64): i32 from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -831,7 +835,8 @@ milliseconds_now(): i64 := {
 	long_at(now).value * 1000 + long_at(now + 8).value / MILLION
 }
 # system_value(name): the machine's readings that are plain libc; the others (battery, mouse, window, display …) come
-# with the libraries that own them (decision libraries-not-core), a run asking for one ends naming it
+# with the libraries that own them (decision libraries-not-core), forwarded to them (lib/native/foreign.c
+# library_system_value); one no library owns ends the run naming it
 system_value(name: text): i64 := {
 	if same_text(name, "time of day") { return time_of_day() }
 	if same_text(name, "view_width") { return terminal_extent(0, "COLUMNS", 80) }
@@ -843,6 +848,8 @@ system_value(name: text): i64 := {
 	if same_text(name, "display_height") { return display_side(1, "display.height") }
 	if same_text(name, "online") { return route_online() as i64 }
 	if same_text(name, "gpu_paints") { return gpu_paints() as i64 }
+	answer = allocate(8)
+	if library_system_value(name, answer) != 0 { return long_at(answer).value }
 	if windowless(name) { return 0 }
 	complain(joined(joined("the system value ", name), " is not in warp yet"))
 	exit(1)
@@ -939,8 +946,12 @@ display_side(height: i32, name: text): i64 := {
 	}
 	side
 }
-# `window.width = 800` (no window opens: the size one would open at), `display.dpi = 300 dpi`; the others are read only
+# `window.width = 800` (the size a window opens at, told the libraries too), `display.dpi = 300 dpi`, the others the
+# libraries' (window_open: without a window library none opens) or read only
 system_value_set(name: text, value: i64): nothing := {
+	if library_system_value_set(name, value) == 0 and not same_text(name, "window_open") { slot_set(name, value) }
+}
+slot_set(name: text, value: i64): nothing := {
 	slot = if same_text(name, "window_width") then WINDOW_WIDTH_SLOT else if same_text(name, "window_height") then WINDOW_HEIGHT_SLOT else if same_text(name, "display_dpi") then DISPLAY_DPI_SLOT else -1
 	if slot < 0 {
 		complain(joined(name, " cannot be set; settable: window_width, window_height, display_dpi"))
@@ -1001,14 +1012,20 @@ PNG_SIGNATURE_LOW = 218765834
 painted(caller: handle, context: handle, given: pointer): nothing := {
 	width = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
 	height = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
-	if width > 0 and height > 0 { png_written(painted_pixels(caller, context, given, width, height), width, height) }
+	if width > 0 and height > 0 {
+		pixels = painted_pixels(caller, context, given, width, height)
+		if pixels != 0 { png_written(pixels, width, height) }
+	}
 }
 # the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (lib/native/foreign.c, libwarp_gpu),
-# else the list's
+# else the list's; 0 when a library showed them in its open window (foreign.c shader_shown, pixels_shown)
 painted_pixels(caller: handle, context: handle, given: pointer, width: i64, height: i64): pointer := {
 	if guest_flag(caller, context, "is_textual", given) {
 		shader = shown(caller, context, given)
 		values = shown(caller, context, given + 3 * VALUE_BYTES)
+		in_window = shader_shown(c_string(shader), c_string(values), width, height)
+		if in_window < 0 { exit(1) }
+		if in_window > 0 { return 0 }
 		pixels = allocate((width * height * 8) as i32)
 		if gpu_painted(c_string(shader), c_string(values), width, height, pixels) != 0 { exit(1) }
 		pixels
@@ -1018,7 +1035,10 @@ painted_pixels(caller: handle, context: handle, given: pointer, width: i64, heig
 			complain(joined(joined(joined(joined("paint: ", text_of(width)), "x"), text_of(height)), joined(" needs more pixels than ", text_of(count))))
 			exit(1)
 		}
-		pixels_of(caller, context, given, width * height)
+		pixels = pixels_of(caller, context, given, width * height)
+		in_window = pixels_shown(pixels, width, height)
+		if in_window < 0 { exit(1) }
+		if in_window > 0 then 0 else pixels
 	}
 }
 # the first n pixels of the picture, as ints
