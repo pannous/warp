@@ -244,11 +244,11 @@ first_parameter_type(word: text, definition: text): text := {
 # after v
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List([module_dir("list"), module_dir("text")], Bracket.Square, Separator.Comma)
 
-# --- warp functions as one WGSL shader (lib/sugar/shaders.warp's rules) ---
+# --- warp functions as one WGSL shader (lib/prelude.warp paint rules) ---
 
 # Warp functions as one WGSL fragment shader (card warp-to-shaders, decision shaders-in-lib): paint(f, width, height)
 # of a function f(x, y) giving a color [r, g, b] compiles f, the functions it calls and the program values it reads
-# (lib/sugar/shaders.warp's rules call wgsl_shader and wgsl_shader_values, in the compiler). On the GPU
+# (lib/prelude.warp's paint rules call wgsl_shader and wgsl_painting, in the compiler). On the GPU
 # every number is an f32, never exact (decision gpu-first-asap); a list of 2 to 4 numbers is a vecNf, `.+ .- .* ./ .^`
 # its element-wise math, `p.x` `p.xz` its components. The program values the shader reads are paint's `values`, whose
 # struct the host appends (web/playground/host-gpu.js uniformLayout), so a frame changes them without a new shader.
@@ -311,10 +311,17 @@ wgsl_shader(f: Node, program: Node): text := {
 	shader_functions = shading.written_functions.join("\n\n")
 	shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn vec4f(" + painted + ", 1.0);\n}\n"
 }
-# `{time: time, sun: sun}`: the program values the shader of f reads, as paint's values
-wgsl_shader_values(f: Node, program: Node): Node := {
-	wgsl_painted_call(f, program)
-	List(shading.read_values.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
+# `{shader: "…", uniform: {time: time, sun: sun}}`: paint's shader of f and the program values it reads (one word, as
+# the seed keeps a rule binding one hole by a word it does not know; a map, as a word giving a list gives its items)
+wgsl_painting(f: Node, program: Node): Node := {
+	# (a function the program defines: a parameter called as one, the prelude's own paint(picture, …), stays as it is)
+	if function_definition(f, program) == ø { return ø }
+	shader = wgsl_shader(f, program)
+	# (no values: ø, as an empty map is)
+	values = if #shading.read_values == 0 then "ø" else "{" + shading.read_values.map(name => name + ": " + name).join(", ") + "}"
+	# (parsed, as the compiler compiling itself has no node constructors; WGSL has no quote nor backslash)
+	written = shader.replace("\n", "\\n").replace("\t", "\\t")
+	plain_node(parsed("{shader: \"" + written + "\", uniform: " + values + "}"))
 }
 # f called at the pixel's column and row (WGSL's position is the pixel's center)
 wgsl_painted_call(f: Node, program: Node): text := {
@@ -784,4 +791,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, wgsl_shader: wgsl_shader, wgsl_shader_values: wgsl_shader_values}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}

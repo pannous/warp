@@ -1,6 +1,6 @@
 # Shaders written in warp
 
-`paint(f, width, height)` compiles a warp function `f(x, y)` to a fragment shader (lib/sugar/shaders.warp's rules
+`paint(f, width, height)` compiles a warp function `f(x, y)` to a fragment shader (lib/prelude.warp's paint rules
 call lib/rule_words.warp's wgsl_shader in the compiler; the Rust era's was src/lowering/foreign/gpu_maps/kernels.rs), with the program's numbers it reads as the shader's values; the same
 functions run on the CPU where there is no GPU. `shader { … }` blocks of WGSL with `$name` holes stay for hand-written
 shaders. `shader_of(f)` is the WGSL that paint compiles f to. Samples: samples/sound/gpu_visualizer_warp.warp (the

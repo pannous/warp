@@ -129,6 +129,8 @@ keep_value(slot: i64, value: i64) from "c"
 route_online(): i32 from "c"
 display_extent(height: i32): i64 from "c"
 next_painting(): i32 from "c"
+gpu_paints(): i32 from "c"
+gpu_painted(shader: pointer, values: pointer, width: i64, height: i64, pixels: pointer): i32 from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -840,6 +842,7 @@ system_value(name: text): i64 := {
 	if same_text(name, "display_width") { return display_side(0, "display.width") }
 	if same_text(name, "display_height") { return display_side(1, "display.height") }
 	if same_text(name, "online") { return route_online() as i64 }
+	if same_text(name, "gpu_paints") { return gpu_paints() as i64 }
 	if windowless(name) { return 0 }
 	complain(joined(joined("the system value ", name), " is not in warp yet"))
 	exit(1)
@@ -949,8 +952,8 @@ system_value_set(name: text, value: i64): nothing := {
 	}
 	keep_value(slot, value)
 }
-# what a window would tell, without one: no window open, no pointer, no key, no GPU drawing
-windowless(name: text): bool := same_text(name, "window_open") or same_text(name, "gpu_drawing") or same_text(name, "gpu_paints") or same_text(name, "key_down") or same_text(name, "key code held") or same_text(name, "mouse_x") or same_text(name, "mouse_y") or same_text(name, "mouse_down") or same_text(name, "mouse_wheel")
+# what a window would tell, without one: no window open, no pointer, no key, no GPU drawing (paint is no window)
+windowless(name: text): bool := same_text(name, "window_open") or same_text(name, "gpu_drawing") or same_text(name, "key_down") or same_text(name, "key code held") or same_text(name, "mouse_x") or same_text(name, "mouse_y") or same_text(name, "mouse_down") or same_text(name, "mouse_wheel")
 # outside a window the view is the terminal: its columns (rows), else the variable's, else the default
 terminal_extent(rows: i32, variable: text, default: i64): i64 := {
 	measured = terminal_size(rows)
@@ -998,16 +1001,25 @@ PNG_SIGNATURE_LOW = 218765834
 painted(caller: handle, context: handle, given: pointer): nothing := {
 	width = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
 	height = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+	if width > 0 and height > 0 { png_written(painted_pixels(caller, context, given, width, height), width, height) }
+}
+# the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (lib/native/foreign.c, libwarp_gpu),
+# else the list's
+painted_pixels(caller: handle, context: handle, given: pointer, width: i64, height: i64): pointer := {
 	if guest_flag(caller, context, "is_textual", given) {
-		complain("paint of a shader: warp has no GPU yet")
-		exit(1)
+		shader = shown(caller, context, given)
+		values = shown(caller, context, given + 3 * VALUE_BYTES)
+		pixels = allocate((width * height * 8) as i32)
+		if gpu_painted(c_string(shader), c_string(values), width, height, pixels) != 0 { exit(1) }
+		pixels
+	} else {
+		count = guest_number(caller, context, "item_count", given)
+		if count < width * height {
+			complain(joined(joined(joined(joined("paint: ", text_of(width)), "x"), text_of(height)), joined(" needs more pixels than ", text_of(count))))
+			exit(1)
+		}
+		pixels_of(caller, context, given, width * height)
 	}
-	count = guest_number(caller, context, "item_count", given)
-	if count < width * height {
-		complain(joined(joined(joined(joined("paint: ", text_of(width)), "x"), text_of(height)), joined(" needs more pixels than ", text_of(count))))
-		exit(1)
-	}
-	if width > 0 and height > 0 { png_written(pixels_of(caller, context, given, width * height), width, height) }
 }
 # the first n pixels of the picture, as ints
 pixels_of(caller: handle, context: handle, picture: pointer, n: i64): pointer := {
