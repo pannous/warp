@@ -57,7 +57,7 @@ WGSL_WORDS = {"sine": ["sin", "each"], "cosine": ["cos", "each"], "tangent": ["t
 	"degrees": ["degrees", "each"], "min": ["min", "each"], "max": ["max", "each"], "clamp": ["clamp", "each"],
 	"step": ["step", "each"], "smoothstep": ["smoothstep", "each"], "pow": ["pow", "each"], "power": ["pow", "each"],
 	"mix": ["mix", "mix"], "lerp": ["mix", "mix"], "dot": ["dot", "to_one"], "distance": ["distance", "to_one"],
-	"norm": ["length", "to_one"], "magnitude": ["length", "to_one"], "length": ["length", "to_one"],
+	"norm": ["length", "to_one"], "magnitude": ["length", "to_one"],
 	"normalize": ["normalize", "kept"], "cross": ["cross", "kept"], "reflect": ["reflect", "kept"],
 	"sinh": ["sinh", "each"], "cosh": ["cosh", "each"], "tanh": ["tanh", "each"], "fabs": ["abs", "each"],
 	"fmin": ["min", "each"], "fmax": ["max", "each"], "ceiling": ["ceil", "each"], "whole_part": ["trunc", "each"]}
@@ -78,6 +78,8 @@ COMPOUND_MARK = "="
 # yes and no as WGSL writes them
 WGSL_TRUE = "true"
 WGSL_FALSE = "false"
+# warp's words that count a list's items, where WGSL's length is a vector's magnitude
+COUNTING_WORDS = {"length": yes, "count": yes, "size": yes}
 # words that keep their argument as it is on the GPU: every number is already a float there
 SAME_VALUE_WORDS = ["float", "double", "number"]
 CONSTANTS = {"pi": "3.14159265", "π": "3.14159265", "tau": "6.2831853", "τ": "6.2831853"}
@@ -175,6 +177,7 @@ wgsl_expression(n: Node, scope: WgslScope): list := {
 	if is_key(n, Op.As) { return wgsl_expression(key_of(n), scope) }
 	if is_key(n, Op.Neg) or (is_key(n, Op.Sub) and key_of(n) == ø) {
 		value = wgsl_expression(value_of(n), scope)
+		if value#2 > 1 { return wgsl_refused(n, "a negated list: warp negates numbers; a vector's opposite is v .* -1") }
 		return ["-(" + value#1 + ")", value#2]
 	}
 	if is_key(n, Op.Not) {
@@ -202,6 +205,9 @@ wgsl_operation(left: Node, op: Op, right: Node, n: Node, scope: WgslScope): list
 	if op == Op.And or op == Op.Or { return ["(" + wgsl_condition(left, scope) + " " + written_op + " " + wgsl_condition(right, scope) + ")", 0] }
 	a = wgsl_expression(left, scope)
 	b = wgsl_expression(right, scope)
+	if LIST_OPERATORS.has(written_op) and (a#2 > 1 or b#2 > 1) {
+		return wgsl_refused(n, "${written_op} of a list: warp's + joins lists; a vector's element-wise math is .+ .- .* ./")
+	}
 	if wgsl_comparisons.has(written_op) {
 		if a#2 != 1 or b#2 != 1 {
 		return wgsl_refused(n, "a comparison of vectors")
@@ -210,6 +216,8 @@ wgsl_operation(left: Node, op: Op, right: Node, n: Node, scope: WgslScope): list
 	}
 	return ["(" + a#1 + " " + written_op + " " + b#1 + ")", wgsl_common_width([a, b], n)]
 }
+# the operators whose meaning on lists is not the element-wise one: refused there, naming the element-wise ones
+LIST_OPERATORS = {"+": yes, "-": yes, "*": yes, "/": yes}
 wgsl_comparisons = {"<": yes, ">": yes, "<=": yes, ">=": yes, "==": yes, "!=": yes}
 WGSL_OPERATORS = [[Op.Add, "+"], [Op.Sub, "-"], [Op.Mul, "*"], [Op.Div, "/"], [Op.Lt, "<"], [Op.Gt, ">"], [Op.Le, "<="],
 	[Op.Ge, ">="], [Op.Eq, "=="], [Op.Ne, "!="], [Op.And, "&&"], [Op.Or, "||"]]
@@ -336,6 +344,7 @@ wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
 	if WGSL_MEANINGS.has(word) { return wgsl_meant(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
 	if not WGSL_WORDS.has(word) {
 		if function_definition(name, shading.program) != ø { return wgsl_program_call(word, wgsl_arranged(name, arguments).map(argument => wgsl_expression(argument, scope)), n) }
+		if COUNTING_WORDS.has(word) { return wgsl_refused(n, "${word}(v) counts the numbers of v in warp; a vector's magnitude is norm(v)") }
 		return wgsl_refused(n, "${word} is no word WGSL has, nor a function of the program")
 	}
 	values = arguments.map(argument => wgsl_expression(argument, scope))
