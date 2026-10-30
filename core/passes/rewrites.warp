@@ -170,6 +170,9 @@ global rule_vector_scope = ""
 # being walked (the right of `x.f(…)`), else ø; the names the definitions around it bind
 global rule_method_part = ø
 global rule_binding = []
+# the word whose definition the rules walk inside: a rule producing that word leaves its definition as written, so
+# frames' `listen(data frame, …) => frame_listened(…)` never makes frame_listened call itself (card frame-self-rule)
+global rule_defining = ""
 # the code the rule being tried matched, for the context conditions; ø for a run of statements
 global rule_matched = ø
 
@@ -1347,9 +1350,12 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		return f(walked)
 	}
 	outer = rule_binding
+	outer_defining = rule_defining
 	rule_binding = rule_binding + bound_by_definition(n)
+	rule_defining = defined_word(n) ?? ""
 	walked = children(n, x => placed_map_scoped(x, f, inner))
 	rule_binding = outer
+	rule_defining = outer_defining
 	rule_maps = maps
 	f(walked)
 }
@@ -1618,6 +1624,7 @@ with_rightmost(n: Node, words: list): Node := {
 
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: map, n: Node): Node := {
+	if rule_defining != "" and first_word_of(rule.template) == rule_defining { return ø }
 	bound = {}
 	if rule_matches(rule.pattern, n, bound) and conditions_hold_at(rule, origin, bound, n) { return fired(rule, rule_spliced(rule.template, bound, n)) }
 	if not (is_group(rule.pattern) and bracket_of(rule.pattern) == "" and is_curly_group(n)) { return ø }
