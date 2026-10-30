@@ -524,7 +524,15 @@ wgsl_item(n: Node, scope: WgslScope): list := {
 	at_component = wgsl_small_whole(index)
 	if at_component >= 1 and at_component <= vec#2 { return [vec#1 + "." + COMPONENTS#at_component, 1] }
 	at = wgsl_expression(index, scope)
+	if vec#2 < 0 { return wgsl_array_item(vec#1, -vec#2, "(i32(" + at#1 + ") - 1)") }
 	return [vec#1 + "[i32(" + at#1 + ") - 1]", 1]
+}
+# an item of an array value, from 0: as libwarp_gpu and host-gpu.js lay one out in the uniform, numbers four to a
+# vec4f, a vector one vec4f each
+wgsl_array_item(array: text, item_width: int, at: text): list := {
+	if item_width == 1 { return [array + "[" + at + " / 4][" + at + " % 4]", 1] }
+	shown = if item_width == 4 then "" else "." + COMPONENTS[0 ..< item_width].join("")
+	[array + "[" + at + "]" + shown, item_width]
 }
 # `(a + b)`, a call `f(a, b)`
 wgsl_round(n: Node, scope: WgslScope): list := {
@@ -616,13 +624,23 @@ wgsl_program_value(n: Node): list := {
 	if wgsl_name(word) != word {
 		return wgsl_refused(n, "a value named ${word} has no name in WGSL")
 	}
-	width = wgsl_value_width(assigned_code)
-	if width < 1 or width > 4 {
-		return wgsl_refused(n, "${word} is no number nor a vector of 2 to 4")
+	item_width = wgsl_array_item_width(assigned_code)
+	width = if item_width > 0 then -item_width else wgsl_value_width(assigned_code)
+	if item_width > 4 or (item_width == 0 and (width < 1 or width > 4)) {
+		return wgsl_refused(n, "${word} is no number, no vector of 2 to 4, nor a list of either")
 	}
 	shading.value_widths[word] = width
 	shading.read_values += [word]
 	return [VALUES_NAME + "." + word, width]
+}
+# a program value that is an array, its items' width (a negative width stands for it, `levels#b` reads an item); 0
+# for any other: a comprehension, a list of more than four, or a list of lists
+wgsl_array_item_width(assigned_code: Node): int := {
+	if not is_group(assigned_code) or bracket_of(assigned_code) != "[" or #assigned_code == 0 { return 0 }
+	first = assigned_code#1
+	comprehension = #assigned_code == 2 and is_group(assigned_code#2) and #assigned_code#2 > 0 and assigned_code#2#1 == symbol("for")
+	if not comprehension and #assigned_code <= 4 and not (is_group(first) and bracket_of(first) == "[") { return 0 }
+	wgsl_value_width(first)
 }
 # the width of a program value: that of its code as the shader would compute it, without keeping that translation
 wgsl_value_width(assigned_code: Node): int := {
@@ -638,8 +656,10 @@ wgsl_value_width(assigned_code: Node): int := {
 	if refused_here then 1 else value#2
 }
 # `x = 3`, `global x = 3` at the program's main level: the value assigned first
-wgsl_assigned_value(word: text): any := {
-	found = program_statements(shading.program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
+wgsl_assigned_value(word: text): any := main_level_value(word, shading.program)
+# the value the program's main level assigns the name first, ø where it assigns none
+main_level_value(word: text, program: Node): any := {
+	found = program_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
 	if #found == 0 then ø else value_of(found#1)
 }
 # `global x = 3`, parsed `global: (x = 3)`: the assignment it declares
@@ -647,6 +667,40 @@ wgsl_declared(statement: Node): Node := if is_key(statement, Op.Colon) and key_o
 wgsl_assigned_name(target: Node): text := {
 	if target is symbol { return name_of(target) }
 	if is_group(target) and #target > 0 and target.last is symbol then name_of(target.last) else ""
+}
+
+# --- a shader's holes (decision P235b, card shader-holes; Rust twin graphics/shader_holes.rs): each `$name` of a
+# shader block the parser wrote values.name; every paint of a shader the program assigns gets `name: name` in its
+# values for each hole its map lacks, so the variable is read at each paint. A built-in hole (lib/native/foreign.c
+# values_filled, host-gpu.js builtinValues) gets one only where the program assigns that name; $previous never ---
+
+SHADER_BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
+SHADER_FRAME_HOLE = "previous"
+# the values of a paint of shader s with the given map: its entries, then the holes it lacks; ø where s is no shader
+# the program assigns or the map has every hole
+shader_values(s: Node, given: Node, program: Node): any := shader_holes_added(s, if is_group(given) then items_of(given) else [], program)
+# the values of a paint of shader s given none
+shader_values_of(s: Node, program: Node): any := shader_holes_added(s, [], program)
+shader_holes_added(s: Node, entries: list, program: Node): any := {
+	shader = main_level_value(name_of(s), program)
+	if shader == ø or not (shader is text) { return ø }
+	given = entries.filter(entry => is_key(entry, Op.Colon)).map(entry => "${key_of(entry)}")
+	added = shader_holes("${shader}").filter(name => name not in given and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
+	if #added == 0 { return ø }
+	List(entries + added.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
+}
+# the names a shader reads as values.name, each once
+shader_holes(code: text): list := {
+	names = []
+	for part in code.split(VALUES_NAME + ".")[1 ..] {
+		name = ""
+		for letter in part {
+			if not IDENTIFIER_LETTERS.contains(letter) { break }
+			name += letter
+		}
+		if name != "" and name not in names { names += [name] }
+	}
+	names
 }
 
 # --- functions ---
@@ -857,4 +911,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of}

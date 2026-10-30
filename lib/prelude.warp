@@ -193,6 +193,10 @@ rewrite $n ints => int[$n]
 // shader. Rules of the prelude, so they meet paint before arity_overloads names its overloads, in every program
 rewrite paint($f, $w, $h) => paint_shader($painting, $w, $h, $f) where $f is symbol and $f is function and $painting = wgsl_painting($f, $program)
 rewrite shader_of($f) => $shader where $f is symbol and $f is function and $shader = wgsl_shader($f, $program)
+// a paint of a shader the program assigns reads its holes from the variables of their names (lib/rule_words.warp shader_values)
+rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values($s, $v, $program)
+rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
+rewrite paint($s) => paint($s, view_width(), view_height(), $filled) where $s is symbol and $filled = shader_values_of($s, $program)
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
