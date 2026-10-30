@@ -16,13 +16,13 @@ Language-meaning questions that would go to the Interviewer go there too.
 | session | card / task |
 |---|---|
 | warp-speed | compile slowdown, TOP PRIORITY (decision compile-speed-first): self-compile profile; building lib-hash-rebake (user OK) |
-| warp-build-failed-store | build-failed-store: failures stored by hash, full error shown, resume from the failed step; also self-check stage_two through the build slots |
+| warp-rule-words-removal | where-cheap-first: the rewrite engine evaluates where-conditions cheapest first (rule-words-removal parked) |
 | warp-shaders | angle-type-alias → units-ignored-by-shaders → use-keys → ocean m/s todos (ocean landed fc2ed2681c; dot-product is Codex's) |
-| warp-diff-core | diff-core: audit of core/ growth since the fast 10-29 compiler, result notes/core_growth_audit.md, then retires |
-| warp-integrator | full suites held tonight for warp-speed's measurements |
-| Codex (cron 02/07/12/17/22:35) | notes/agents/codex_worker.sh; typed-parse parked on its branch, continued by the next run |
+| warp-integrator | full suites held tonight for warp-speed's measurements; seed refresh after lib-hash-rebake lands |
+| Codex (cron 02/07/12/17/22:35) | notes/agents/codex_worker.sh, 4 rounds per firing; typed-parse and dot-product parked on their branches |
 
-Retired tonight: warp-fixer, warp-wgsl, warp-exact-decimal-big, warp-cards, warp-interviewer (archived by the user).
+Retired tonight: warp-fixer, warp-wgsl, warp-exact-decimal-big, warp-cards, warp-diff-core, warp-build-failed-store
+(landed 06d61d3be1), warp-interviewer (archived by the user).
 
 ## Waiting
 - format-missing (Next): `warp format` can't read hello.warp, so the Done step's format is broken; first card for a free worker.
