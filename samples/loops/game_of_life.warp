@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+use units
 # Conway's Game of Life
 # Cellular automaton simulation on a torus (the edges wrap), animated in the terminal
 # the grid is a flat list of cells, row by row; the grid is global, shared by the functions
@@ -56,23 +57,26 @@ def render() {
 	}
 }
 
-# Main loop: a few generations instead of forever; each one is drawn over the last:
-# "\e[2J" clears the terminal, "\e[H" puts the cursor back at its top left (the playground shows frames alike)
-print "\e[2J"
-for generation in 0 to generations {
-	print "\e[H" + "generation ${generation}"
-	render()
-	if generation < generations {
-		step()
-		sleep 150ms
+main:={
+	# Main loop: a few generations instead of forever; each one is drawn over the last:
+	# "\e[2J" clears the terminal, "\e[H" puts the cursor back at its top left (the playground shows frames alike)
+	print "\e[2J"
+	for generation in 0 to generations {
+		print "\e[H" + "generation ${generation}"
+		render()
+		if generation < generations {
+			step()
+			sleep 150ms
+		}
 	}
-}
 
-# the glider moved two cells right and down: sum of y*100+x over live cells
-checksum = 0
-for y in 0..height {
-	for x in 0..width {
-		if cell(x, y) { checksum = checksum + y * 100 + x }
+	# the glider moved two cells right and down: sum of y*100+x over live cells
+	checksum = 0
+	for y in 0..height {
+		for x in 0..width {
+			if cell(x, y) { checksum = checksum + y * 100 + x }
+		}
 	}
+	checksum
 }
-checksum
+main()

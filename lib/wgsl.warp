@@ -765,3 +765,89 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 	wgsl_block(n#5, scope, depth + 1)
 	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
 }
+
+# --- GPU lists (decision gpu-bound-floats; core/runtime/gpu_lists.warp): a list the program makes for the GPU is
+# packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
+# rule packs the creating forms of the program's (lib/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
+GPU_LIST_WORDS = ["gpu_compute"]
+# the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø]
+class GpuLists { program: Node; uses: map }
+gpu_lists = GpuLists(Node.Empty, {})
+# whether xs is made for the GPU (a GPU word takes it: gpu_compute's arrays, itself or a map's value), made once by a
+# form gpu_packed packs, and mentioned otherwise only as a GPU list serves it: #xs, xs#i, xs#i = v, for x in xs, print xs
+gpu_bound(xs: Node, program: Node): bool := {
+	if not (xs is symbol) { return no }
+	if not same_node(program, gpu_lists.program) {
+		gpu_lists.program = program
+		gpu_lists.uses = {}
+		gpu_uses_counted(program)
+	}
+	uses = gpu_lists.uses.get(name_of(xs))
+	uses != ø and uses#1 > 0 and uses#2 == 1 and uses#3 == 0 and uses#4 != ø
+}
+gpu_use_added(name: text, at: int) := {
+	uses = gpu_lists.uses.get(name) ?? [0, 0, 0, ø]
+	uses[at] = uses[at] + 1
+	gpu_lists.uses[name] = uses
+}
+gpu_uses_counted(n: Node) := {
+	if n is symbol { return gpu_use_added(name_of(n), 2) }
+	if is_key(n, Op.Assign) and key_of(n) is symbol {
+		gpu_use_added(name_of(key_of(n)), 1)
+		uses = gpu_lists.uses[name_of(key_of(n))]
+		uses[3] = if gpu_creating(value_of(n)) then value_of(n) else ø
+		gpu_lists.uses[name_of(key_of(n))] = uses
+		return gpu_uses_counted(value_of(n))
+	}
+	# xs#i, #xs, xs#i = v
+	if is_key(n, Op.Hash) and (key_of(n) is symbol or key_of(n) == ø) { return gpu_uses_counted(if key_of(n) == ø then ø else value_of(n)) }
+	if is_key(n, Op.Assign) and is_key(key_of(n), Op.Hash) and key_of(key_of(n)) is symbol { return gpu_uses_both(value_of(key_of(n)), value_of(n)) }
+	if not is_group(n) {
+		for part in parts_of(n) { gpu_uses_counted(part) }
+		return ø
+	}
+	items = items_of(n)
+	head = if #items > 0 and items#1 is symbol then name_of(items#1) else ""
+	if head == "print" and #items == 2 and items#2 is symbol { return ø }
+	if head == "for" and #items == 5 and items#4 is symbol { return gpu_uses_counted(items#5) }
+	if head in GPU_LIST_WORDS {
+		for argument in items[1..] { gpu_sink_counted(argument) }
+		return ø
+	}
+	for item in items { gpu_uses_counted(item) }
+}
+gpu_uses_both(a: Node, b: Node) := {
+	gpu_uses_counted(a)
+	gpu_uses_counted(b)
+}
+# a GPU word's argument: a list variable, or a map literal of them, is a GPU use
+gpu_sink_counted(argument: Node) := {
+	if argument is symbol { return gpu_use_added(name_of(argument), 0) }
+	if is_group(argument) and bracket_of(argument) == "{" {
+		for entry in items_of(argument) { if is_key(entry, Op.Colon) and value_of(entry) is symbol { gpu_use_added(name_of(value_of(entry)), 0) } else { gpu_uses_counted(entry) } }
+		return ø
+	}
+	gpu_uses_counted(argument)
+}
+# the forms a GPU list is made by: `float[n]`, a list literal of items, a comprehension `[e for x in r]`
+gpu_creating(v: Node): bool := gpu_zeros_count(v) != ø or gpu_comprehension(v) or gpu_literal(v)
+# `float[n]`, which the parser reads as float#(n + 1): that shifted count
+gpu_zeros_count(v: Node): Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) == "float" then value_of(v) else ø
+gpu_comprehension(v: Node): bool := is_group(v) and bracket_of(v) == "[" and #v == 2 and is_group(v#2) and #(v#2) == 5 and v#2#1 is symbol and name_of(v#2#1) == "for"
+gpu_literal(v: Node): bool := is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)
+# the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
+# one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
+gpu_packed(v: Node): Node := plain_node(parsed(gpu_packed_code(v)))
+gpu_packed_code(v: Node): text := {
+	if not gpu_creating(v) { return "gpu_list_of(" + as_code(v) + ")" }
+	shifted = gpu_zeros_count(v)
+	if shifted != ø { return "gpu_zeros((" + as_code(shifted) + ") - 1)" }
+	if gpu_comprehension(v) {
+		each = v#2
+		over = "for " + as_code(each#2) + " in " + as_code(each#4)
+		return "{ gpu_count = 0; " + over + " { gpu_count += 1 }; gpu_made = gpu_zeros(gpu_count); gpu_at = 1; " + over + " { gpu_made#gpu_at = " + as_code(v#1) + "; gpu_at += 1 }; gpu_made }"
+	}
+	written = "gpu_zeros(" + #v + ")"
+	for i in 1 to #v { written = "gpu_put(" + written + ", " + i + ", " + as_code(v#i) + ")" }
+	written
+}

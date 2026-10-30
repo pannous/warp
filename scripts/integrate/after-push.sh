@@ -241,7 +241,10 @@ slow_tiers() {
 	say "slow tiers of ${tip:0:10} done"
 }
 
+# the slow tiers paused until the time in this file (seconds since 1970), for someone's quiet CPU (a profile, a timing)
+SLOW_PAUSE=$HOME/.cache/warp/slow-tiers-paused-until
 if [ -n "$slow" ]; then
+	[ "$(cat "$SLOW_PAUSE" 2>/dev/null || echo 0)" -gt "$(date +%s)" ] && { say "slow tiers paused until $(date -r "$(cat "$SLOW_PAUSE")" +%H:%M)"; exit 0; }
 	git -C "$TREE" fetch -q origin || exit 1
 	installed=$(cat "$installed_state/watched")
 	[ "$installed" = "$(cat "$state/tested" 2>/dev/null)" ] || slow_tiers "$installed"

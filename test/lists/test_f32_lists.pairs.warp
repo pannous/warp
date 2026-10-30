@@ -1,0 +1,6 @@
+# GPU lists [f32] (decision gpu-bound-floats): f32 cells from their creation, read and written as a list
+'xs: [f32] = [0.1, 2]; xs#1'	0.10000000149011612
+'xs: [f32] = float[3]; xs#2 = 7; xs'	[0, 7, 0]
+'xs: [f32] = [i * 0.5 for i in 1..4]; xs'	[0.5, 1, 1.5]
+'zs = [1, 2]; ws: [f32] = zs; #ws'	2
+'xs: [f32] = [1, 2, 3]; s = 0; for x in xs { s += x }; s'	6
