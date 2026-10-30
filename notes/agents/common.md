@@ -86,6 +86,8 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Testing
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
+- Build only a branch merged with origin/main: the installed native warp's rebuild steps (rebake) call main's
+  compiler words, so an unmerged branch can fail to build for reasons that aren't its own (warp-shaders, 2026-10-30).
 - Only the pure pipeline counts. Smoke test, every branch: `scripts/smoke.sh <worktree>`. It rebuilds only for what
   the compiler bakes in (user 2026-10-30: a library change needs no rebuild): lib/ only (modules, lib/sugar/ rules)
   runs hello on the installed compilers in seconds; core/ or prelude.warp, aliases.warp, math.warp, rule_words.warp
