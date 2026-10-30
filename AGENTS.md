@@ -19,8 +19,7 @@ The specification is not fully implemented yet
 
 # self hosted
 
-warp began as a Rust implementation; Since 2026-10-29 the compiler is COMPLETELY written in warp (core/,
-notes/self_hosting.md) and compiles itself. 
+warp began as a Rust implementation; Since 2026-10-29 the compiler is COMPLETELY written in warp (core/, notes/self_hosting.md) and compiles itself.
 The old Rust compiler is the snapshot on branch `rust-bootstrap`; nothing of it is on main.
 Most things are implemented as libraries (lib/) or compiler extensions (core/extensions/). Changes to the core
 (core/) go through the interviewer. Ignore all old tasks about Rust features or 'both lanes'.
