@@ -20,9 +20,8 @@ fun neighbors(grid, r, c) {
 
 fun step(grid) {
 	next = []
-	# warp: `..` excludes the end, so `0..size-1` stops at size-2 ("index out of range" later); write `0..size` or `0...size-1`
-	for r in 0..size-1 {
-		for c in 0..size-1 {
+	for r in 0..size {
+		for c in 0..size {
 			n = neighbors(grid, r, c)
 			alive = grid[r * size + c] == 1
 			if alive and (n == 2 or n == 3) {
@@ -36,24 +35,32 @@ fun step(grid) {
 	}
 	return next
 }
-
-grid = []
-for i in 0..size * size - 1 { grid.push(0) }
-for (r, c) in [(0, 1), (1, 2), (2, 0), (2, 1), (2, 2)] {
-	grid[r * size + c] = 1
-}
-
-for gen in 1..4 {
-	grid = step(grid)
-}
-
-# checksum: sum of r*10+c over live cells; the glider moved by (1,1)
-checksum = 0
-for r in 0..size-1 {
-	for c in 0..size-1 {
-		if grid[r * size + c] == 1 { checksum += r * 10 + c }
+visualize(grid):={
+	for r in 0..size {
+		print(grid[r*size..(r+1)*size])
+		# print(grid[r*size..(r+1)*size].map{it and "•" or " " }) // todo how?
 	}
 }
-checksum
 
-# Kotlin habit kept on purpose: `0..size-1` meant inclusive; warp excludes the end and explains it (tests/welcoming/test_welcoming_ask.rs)
+main():={
+	grid = []
+	for i in 0..size * size { grid.push(0) }
+	for (r, c) in [(0, 1), (1, 2), (2, 0), (2, 1), (2, 2)] {
+		grid[r * size + c] = 1
+	}
+
+	for gen in 1..4 {
+		grid = step(grid)
+		visualize(grid)
+	}
+
+	# checksum: sum of r*10+c over live cells; the glider moved by (1,1)
+	checksum = 0
+	for r in 0..size {
+		for c in 0..size {
+			if grid[r * size + c] == 1 { checksum += r * 10 + c }
+		}
+	}
+	checksum
+}
+main()

@@ -1,6 +1,7 @@
 #!/usr/bin/env warp
+# a struct in a primitive file is a fixed (auto-padded!) layout in linear memory, 
+# as in C: len at 0, tag at 4, total at 8
 @primitive
-# a struct in a primitive file is a fixed layout in linear memory, as in C: len at 0, tag at 4, total at 8
 struct Header { len: u32; tag: u8; total: i64 }
 
 # the sum of the first n squares, kept in a Header
@@ -14,3 +15,6 @@ squares(n: u32): Header := {
 }
 h = squares(10)
 h.total + h.tag
+# todo works ONLY with warp build:
+# outside the core: a parameter of kind u32 at structs.warp:16:13 (no owner) 
+# h
