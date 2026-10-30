@@ -1,45 +1,51 @@
-// libwarp_sound (decision sound-plays): lib/sound.warp's WAV files played in the process by miniaudio, one engine for
-// the run, each sound mixed over the ones still playing; a run waits at its end till its sounds are heard out.
+// libwarp_sound (decision sound-plays): lib/sound.warp's sounds played in the process by miniaudio, one engine for the
+// run, each sound mixed over the ones still playing; a run waits at its end till its sounds are heard out. A sound comes
+// as its 16-bit samples straight from memory (card sound-direct) or as an audio file
 // Built by scripts/wasmtime-c-api.sh beside libwarp_wasmtime, called `from 'warp_sound'`
 #define MINIAUDIO_IMPLEMENTATION
 #define MA_NO_ENCODING
 #define MA_NO_GENERATION
 #include "miniaudio.h"
 #include <stdlib.h>
-
+#include <string.h>
 enum { MOST_SOUNDS = 256, HEARD_OUT_POLL_MS = 10 };
+static const ma_uint32 SOUND_FLAGS = MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION;
+
+// a sound playing and the samples it plays from memory (none for a file, which miniaudio holds itself)
+typedef struct {
+	ma_sound sound;
+	ma_audio_buffer* samples;
+} voice;
 
 static ma_engine engine;
 static int engine_started;
-static ma_sound* sounds[MOST_SOUNDS];
-static int sound_count;
+static voice* voices[MOST_SOUNDS];
+static int voice_count;
 
+static void voice_freed(voice* v) {
+	ma_sound_uninit(&v->sound);
+	if (v->samples) ma_audio_buffer_uninit_and_free(v->samples);
+	free(v);
+}
 static int playing(void) {
-	for (int i = 0; i < sound_count; i++)
-		if (ma_sound_is_playing(sounds[i])) return 1;
+	for (int i = 0; i < voice_count; i++)
+		if (ma_sound_is_playing(&voices[i]->sound)) return 1;
 	return 0;
 }
 // at the run's end: its sounds heard out, then the engine closed
 static void heard_out(void) {
 	while (playing()) ma_sleep(HEARD_OUT_POLL_MS);
-	for (int i = 0; i < sound_count; i++) {
-		ma_sound_uninit(sounds[i]);
-		free(sounds[i]);
-	}
+	for (int i = 0; i < voice_count; i++) voice_freed(voices[i]);
 	ma_engine_uninit(&engine);
 }
 // the finished sounds dropped, so a long run keeps room for new ones
 static void finished_dropped(void) {
 	int kept = 0;
-	for (int i = 0; i < sound_count; i++) {
-		if (ma_sound_is_playing(sounds[i])) {
-			sounds[kept++] = sounds[i];
-		} else {
-			ma_sound_uninit(sounds[i]);
-			free(sounds[i]);
-		}
+	for (int i = 0; i < voice_count; i++) {
+		if (ma_sound_is_playing(&voices[i]->sound)) voices[kept++] = voices[i];
+		else voice_freed(voices[i]);
 	}
-	sound_count = kept;
+	voice_count = kept;
 }
 // under WARP_NO_WINDOW or CI (a test, an agent's run) the sounds go to miniaudio's silent device, unwaited for
 static int silent(void) { return getenv("WARP_NO_WINDOW") || getenv("CI"); }
@@ -53,22 +59,100 @@ static ma_result engine_init(void) {
 	config.pContext = &context;
 	return ma_engine_init(&config, &engine);
 }
-// the WAV file played from now on: 0 once it plays, else miniaudio's error (no audio device, an unreadable file)
-int warp_sound_play(const char* path) {
+// a new voice once the engine runs and has room for it, else NULL with miniaudio's error in *failed
+static voice* voice_made(ma_result* failed) {
 	if (!engine_started) {
-		ma_result started = engine_init();
-		if (started != MA_SUCCESS) return started;
+		*failed = engine_init();
+		if (*failed != MA_SUCCESS) return NULL;
 		engine_started = 1;
 		if (!silent()) atexit(heard_out);
 	}
 	finished_dropped();
-	if (sound_count == MOST_SOUNDS) return MA_OUT_OF_MEMORY;
-	ma_sound* sound = malloc(sizeof *sound);
-	ma_result loaded = ma_sound_init_from_file(&engine, path, MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION, NULL, NULL, sound);
+	*failed = MA_OUT_OF_MEMORY;
+	if (voice_count == MOST_SOUNDS) return NULL;
+	return calloc(1, sizeof(voice));
+}
+// the voice playing from now on: 0, else miniaudio's error with the voice freed
+static int voice_started(voice* v, ma_result loaded) {
 	if (loaded != MA_SUCCESS) {
-		free(sound);
+		if (v->samples) ma_audio_buffer_uninit_and_free(v->samples);
+		free(v);
 		return loaded;
 	}
-	sounds[sound_count++] = sound;
-	return ma_sound_start(sound);
+	voices[voice_count++] = v;
+	return ma_sound_start(&v->sound);
+}
+// the audio file played from now on: 0 once it plays, else miniaudio's error (no audio device, an unreadable file)
+int warp_sound_play(const char* path) {
+	ma_result failed;
+	voice* v = voice_made(&failed);
+	if (!v) return failed;
+	return voice_started(v, ma_sound_init_from_file(&engine, path, SOUND_FLAGS, NULL, NULL, &v->sound));
+}
+// little-endian 16-bit samples, the channels interleaved, played from now on: copied, so the caller's bytes may go
+int warp_sound_play_samples(const void* bytes, size_t size, int rate, int channels) {
+	ma_result failed;
+	voice* v = voice_made(&failed);
+	if (!v) return failed;
+	ma_audio_buffer_config config = ma_audio_buffer_config_init(ma_format_s16, channels, size / (2 * channels), bytes, NULL);
+	config.sampleRate = rate;
+	ma_result copied = ma_audio_buffer_alloc_and_init(&config, &v->samples);
+	if (copied != MA_SUCCESS) return voice_started(v, copied);
+	return voice_started(v, ma_sound_init_from_data_source(&engine, v->samples, SOUND_FLAGS, NULL, &v->sound));
+}
+
+// Audio files decoded (wav, mp3, flac built into miniaudio): a file's 16-bit samples at a rate and channel count (0 for
+// the file's own), kept for the run, each file once, so lib/sound.warp reads them value by value as the run needs them
+enum { MOST_DECODED = 64, DECODE_CHUNK_FRAMES = 4096 };
+typedef struct {
+	char* path;
+	int asked_rate, asked_channels;
+	int rate, channels;
+	ma_int16* values;
+	ma_uint64 frames;
+} decoded_file;
+static decoded_file decoded[MOST_DECODED];
+static int decoded_count;
+
+static int decoded_found(const char* path, int rate, int channels) {
+	for (int i = 0; i < decoded_count; i++)
+		if (decoded[i].asked_rate == rate && decoded[i].asked_channels == channels && strcmp(decoded[i].path, path) == 0) return i;
+	return -1;
+}
+// the file's number, else minus miniaudio's error (MA_DOES_NOT_EXIST, MA_INVALID_FILE for a format it can't read)
+int warp_sound_decode(const char* path, int rate, int channels) {
+	int found = decoded_found(path, rate, channels);
+	if (found >= 0) return found;
+	if (decoded_count == MOST_DECODED) return MA_OUT_OF_MEMORY;
+	ma_decoder_config config = ma_decoder_config_init(ma_format_s16, channels, rate);
+	ma_decoder decoder;
+	ma_result opened = ma_decoder_init_file(path, &config, &decoder);
+	if (opened != MA_SUCCESS) return opened;
+	int frame_size = decoder.outputChannels;
+	ma_int16* values = NULL;
+	ma_uint64 frames = 0, read = 0;
+	do {
+		ma_int16* grown = realloc(values, (frames + DECODE_CHUNK_FRAMES) * frame_size * sizeof *values);
+		if (!grown) {
+			free(values);
+			ma_decoder_uninit(&decoder);
+			return MA_OUT_OF_MEMORY;
+		}
+		values = grown;
+		ma_decoder_read_pcm_frames(&decoder, values + frames * frame_size, DECODE_CHUNK_FRAMES, &read);
+		frames += read;
+	} while (read == DECODE_CHUNK_FRAMES);
+	decoded[decoded_count] = (decoded_file){strdup(path), rate, channels, (int)decoder.outputSampleRate, frame_size, values, frames};
+	decoded_count++;
+	ma_decoder_uninit(&decoder);
+	return decoded_count - 1;
+}
+long warp_sound_decoded_frames(int file) { return file >= 0 && file < decoded_count ? (long)decoded[file].frames : 0; }
+int warp_sound_decoded_rate(int file) { return file >= 0 && file < decoded_count ? decoded[file].rate : 0; }
+int warp_sound_decoded_channels(int file) { return file >= 0 && file < decoded_count ? decoded[file].channels : 0; }
+// the value at that place among the interleaved channels, 0 past the end
+int warp_sound_decoded_value(int file, long at) {
+	if (file < 0 || file >= decoded_count || at < 0) return 0;
+	decoded_file* f = &decoded[file];
+	return (ma_uint64)at < f->frames * (ma_uint64)f->channels ? f->values[at] : 0;
 }
