@@ -37,6 +37,7 @@ def takes_arguments(f: Function, arguments: list): bool {
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 	if name == "made_case" { return made_case(body, arguments) }
+	if name == "baked_segment" { return baked_segment_code(body, arguments#1) }
 	values = arguments.map(a => expression_code(body, a))
 	if name in late_words { return call_values(late_word(name), values) }
 	match name {
@@ -158,8 +159,8 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 }
 # the intrinsics a program calls too, as Rust's text builtins byte_at(text, offset), memory_byte(address) and
 # memory_set_byte(address, value)
-program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same_node"]
-intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
+program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same_node", "baked_segment"]
+intrinsics = {baked_segment: 1, with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,

@@ -237,6 +237,7 @@ match command {
 	"parse": show_parsed()
 	"parse-code": write_parse_code(args#2, args#3)
 	"baked-current": write_baked_current(args#2)
+	"rebake": write_rebaked(args#2)
 	"data": show_data()
 	"lower": show_lowered()
 	"uses": show_uses()

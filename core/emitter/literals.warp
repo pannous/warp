@@ -46,6 +46,16 @@ def text_value(t: text): TypedCode {
 	if one_code_point(t) { return TypedCode(ValueKind.Char, [op.i32_const] + sleb(ord(t))) }
 	TypedCode(ValueKind.Text, text_bytes(t))
 }
-def text_bytes(t: text): list {
-	[op.i32_const, 0, op.i32_const] + sleb(#t.bytes) + [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(gc.text)) + relocatable(relocated.texts, text_segment(t))
+def text_bytes(t: text): list := [op.i32_const, 0, op.i32_const] + sleb(#t.bytes) + segment_read(t)
+# a text of the bytes of t's segment, from the start and count the code before it leaves
+def segment_read(t: text): list := [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(gc.text)) + relocatable(relocated.texts, text_segment(t))
+# `baked_segment("…")`: a baked table's text (uses.warp baked_segment_text), its byte count read off the segment's
+# first digits at run time, so `rebake` writes the segment anew and the code stays as it is
+def baked_segment_code(body: Body, literal: Node): TypedCode {
+	if not (literal is text) { return refuse("baked_segment of a text written out") }
+	head = uleb(fresh_local(body, ValueKind.Text))
+	read_head = [op.i32_const, 0, op.i32_const, BAKED_LENGTH_DIGITS] + segment_read(literal) + [op.local_set] + head
+	digit_added = (at: int) => [op.i64_const, 10, op.i64_mul, op.local_get] + head + [op.i32_const, at] + gc_code(gc_ops.array_get_u, [gc_type(gc.text)]) + [op.i64_extend_i32_u, op.i64_const, 48, op.i64_sub, op.i64_add]
+	count = [op.i64_const, 0] + concatenated(range_list(BAKED_LENGTH_DIGITS).map(digit_added)) + [op.i32_wrap_i64]
+	TypedCode(ValueKind.Text, read_head + [op.i32_const] + sleb(BAKED_HEADER_BYTES) + count + segment_read(literal))
 }

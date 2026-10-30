@@ -68,12 +68,12 @@ aliased(n: Node, aliases: list): any := {
 # compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
 module_text(n: Node): any := {
 	if is_empty_call(n, "library_sources") { return library_literal(library_texts(run_library(), "")) }
-	if is_empty_call(n, "library_parses") { return library_literal(packed_parses(library_texts(run_library(), ""))) }
-	if is_empty_call(n, "library_slices") { return library_literal(baked_slices(library_texts(run_library(), ""))) }
-	if is_empty_call(n, "std_rule_needs") { return library_literal(scanned_rule_needs()) }
-	if is_empty_call(n, "library_rules") { return library_literal(packed_rules(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "library_parses") { return baked_literal("LIBRARY_PARSES", packed_parses(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "library_slices") { return baked_literal("LIBRARY_SLICES", baked_slices(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "std_rule_needs") { return baked_literal("STD_RULE_NEEDS", scanned_rule_needs()) }
+	if is_empty_call(n, "library_rules") { return baked_literal("LIBRARY_RULES", packed_rules(library_texts(run_library(), ""))) }
 	if is_empty_call(n, "block_heads") { return library_literal(block_heads_in(library_texts(run_library(), ""))) }
-	if is_empty_call(n, "slice_parses") { return library_literal(packed_slice_parses(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "slice_parses") { return baked_literal("SLICE_PARSES", packed_slice_parses(library_texts(run_library(), ""))) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
@@ -115,7 +115,62 @@ write_baked_current(file: text) := {
 # [name, baked in, as this compiler makes it] of each table module_text bakes from the library: a new baked table
 # joins here
 baked_tables(): list := [["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(LIBRARY_FILES)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(LIBRARY_FILES)], ["SLICE_PARSES", SLICE_PARSES, packed_slice_parses(LIBRARY_FILES)], ["LIBRARY_RULES", LIBRARY_RULES, packed_rules(LIBRARY_FILES)], ["STD_RULE_NEEDS", STD_RULE_NEEDS, scanned_rule_needs()]]
-same_texts(a: map, b: map): bool := #a == #b and a.keys.all(key => b.get(key) == a[key])
+# a baked table as the code of its read: one segment of its own (baked_segment_text) that `rebake` can write anew
+baked_literal(name: text, table: map): Node := List([symbol("unbaked_table"), List([symbol("baked_segment"), baked_segment_text(name, table)], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
+# a baked table's segment: its body's byte count in BAKED_LENGTH_DIGITS digits, the line `warp.baked <name>` padded to
+# BAKED_HEADER_BYTES, then the body, its entries packed
+BAKED_LENGTH_DIGITS = 10
+BAKED_HEADER_BYTES = 42
+BAKED_MARK = "warp.baked "
+baked_segment_text(name: text, table: map): text := {
+	body = pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
+	length = "${byte_size(body)}"
+	head = "0" * (BAKED_LENGTH_DIGITS - length.length) + length + BAKED_MARK + name
+	head + " " * (BAKED_HEADER_BYTES - 1 - head.length) + "\n" + body
+}
+unbaked_table(body: text): map := {
+	table = {}
+	for entry in items_of(unpack(body)) {
+		key: text = key_of(entry)
+		table[key] = value_of(entry)
+	}
+	table
+}
+# `rebake <file>`: the compiler at file with each baked table as this compiler makes it (baked_tables), written over
+# its segment: code and numbering stay, so `warp rebuild` needs no second compile where the seed cut and parsed the
+# library otherwise (decision rebake-tables). A compiler whose tables are no segments (built by an older seed) stays
+write_rebaked(file: text) := {
+	wasm = read_bytes(file)
+	place = section_place(wasm, section_ids.data)
+	made = {}
+	for table in baked_tables() { made[table#1] = table#3 }
+	segments = []
+	rebaked = []
+	for segment in entries_after(wasm[place#1 ..< place#2], 0, yes) {
+		name = baked_name(segment, made.keys)
+		if name == ø { segments += [segment] } else {
+			segments += [passive(baked_segment_text(name, made[name]).bytes)]
+			rebaked += [name]
+		}
+	}
+	if #rebaked < #made {
+		print "rebake: ${file} carries ${#rebaked} of the ${#made} baked tables as segments of their own, left as it is"
+		return
+	}
+	data = section(section_ids.data, vector(segments))
+	header = 1 + #uleb(place#2 - place#1)
+	write_bytes(file, wasm[0 ..< place#1 - header] + data + wasm[place#2 ..])
+}
+# the baked table a data segment holds (its mark after the digits), ø for any other segment
+baked_name(segment: list, names: list): text? := {
+	bytes_at = uleb_read(segment, 1)#2 + BAKED_LENGTH_DIGITS
+	for name in names {
+		mark = (BAKED_MARK + name + " ").bytes
+		if segment[bytes_at ..< bytes_at + #mark] == mark { return name }
+	}
+	ø
+}
+same_texts(a: map, b: map): bool :=#a == #b and a.keys.all(key => b.get(key) == a[key])
 # a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
 library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
