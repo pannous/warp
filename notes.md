@@ -35,3 +35,15 @@
   definition_slices now takes baked LIBRARY_SLICES for any bundled text, file_slices folded in. Compile peak footprint,
   WARP_LIB on both sides: hello.warp ("hi") 190.4 -> 143.8 MiB, samples/hello 232.0 -> 151.1 MiB. O(n²) cut of
   unbundled text: card definition-slices-quadratic
+- shared subtrees (walk-children-rebuild): a pass's walk returns n itself when every child came back same_node; fresh
+  hello unchanged at ~218 MiB RSS; pure rebuild 664 s, 4.86 GB RSS. The peak was not the compiler (flat ~1.13 GB) but
+  the native driver never freeing a run: store_delete never hit, footprint 0.53 -> 1.38 -> 4.23 -> 4.81 GB per run
+- rebuild-pure-peaked (e7cb00f317): run() deletes store, linker, module, engine after each run: rebuild peak
+  4.86 -> 2.28 GB RSS, 651 s unchanged. Precompiling warp.wasm (Cranelift) alone peaks at 2.62 GB
+- compile heaps: the semi-space GC never collects a compile that fits its initial heap, so the heap size IS the RSS.
+  heap is a Tunable baked into machine code: one cwasm per heap (.driver.cwasm 64 MB, .driver.build.cwasm 512 MB for
+  compiler.warp). hello s / RSS MiB: 8 MB 0.50/59, 16 MB 0.41/53, 32 MB 0.21/69, 64 MB 0.20/101 (was 218 at 512);
+  sudoku 2.70/2.28/1.43/1.21 s, footprint ~78 MB at every size. 3.8 MB warp.wasm -> 39.5 MB cwasm (card wasm-becomes)
+- module-imports (550dee2568): full.wasm imports only host words its code reaches, unreached runtime callers go to one
+  trapping stub per type: hello 81 -> 1 imports. Trap: the seed keeps the FIRST of two defs of a word silently (a
+  duplicate runtime_import_entries dropped the type byte; card compiler-word-redefinition); map int .keys with < traps
