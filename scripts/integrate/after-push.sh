@@ -152,7 +152,7 @@ native_built() {
 		mv "$1/compiler/native/warp" "$1/warp"
 }
 install_native() {
-	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got
+	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got made
 	rm -rf "$folder.new" && mkdir -p "$folder.new" || return 1
 	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { red "native warp: lib/ did not copy" --urgent; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
@@ -160,6 +160,7 @@ install_native() {
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
+	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { red "native warp: ${made:0:200}" --urgent; rm -rf "$folder"; return 1; }
 	linked "$folder/warp" "$MAIN_WARP" && linked "$folder" "$MAIN_LIB" || return 1
 	pruned
 	say "native warp of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
