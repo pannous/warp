@@ -60,6 +60,75 @@ int32_t gpu_painted(char* shader, char* values, int64_t width, int64_t height, i
 	free(colors);
 	return failed;
 }
+// The system values the driver does not own, forwarded to the libraries that do (libwarp_window's window, keys and
+// mouse), each found beside warp at the first question; none owning one, the driver answers it
+static const char* OWNING_LIBRARIES[] = {"warp_window"};
+enum { OWNING_COUNT = sizeof OWNING_LIBRARIES / sizeof *OWNING_LIBRARIES };
+typedef int32_t (*value_answer)(const char*, int64_t*);
+typedef int32_t (*value_taker)(const char*, int64_t);
+static value_answer value_answers[OWNING_COUNT];
+static value_taker value_takers[OWNING_COUNT];
+static void owning_libraries_found(void) {
+	static int32_t found;
+	if (found) return;
+	found = 1;
+	for (int i = 0; i < OWNING_COUNT; i++) {
+		value_answers[i] = (value_answer)library_function((char*)OWNING_LIBRARIES[i], "warp_system_value");
+		value_takers[i] = (value_taker)library_function((char*)OWNING_LIBRARIES[i], "warp_set_system_value");
+	}
+}
+// 1 and the value into *value when a library owns the name, else 0
+int32_t library_system_value(char* name, int64_t* value) {
+	owning_libraries_found();
+	for (int i = 0; i < OWNING_COUNT; i++) if (value_answers[i] && value_answers[i](name, value)) return 1;
+	return 0;
+}
+// the value told every library; 1 when one owns the name (the driver keeps it otherwise)
+int32_t library_system_value_set(char* name, int64_t value) {
+	owning_libraries_found();
+	int32_t owned = 0;
+	for (int i = 0; i < OWNING_COUNT; i++) if (value_takers[i] && value_takers[i](name, value)) owned = 1;
+	return owned;
+}
+// A painting shown in an open window (libwarp_window's layer) by libwarp_gpu, on the GPU throughout: 1 shown, 0 no
+// window open (the driver writes its PNG), -1 failed, the reason told
+static void* window_layer(int64_t width, int64_t height) {
+	static void* (*layer_of)(int32_t, int32_t);
+	static int32_t asked;
+	if (!asked) asked = 1, layer_of = (void* (*)(int32_t, int32_t))library_function("warp_window", "warp_window_layer");
+	return layer_of && gpu_paints() ? layer_of((int32_t)width, (int32_t)height) : NULL;
+}
+static int32_t shown_or_told(int32_t failed) {
+	if (failed) fprintf(stderr, "paint into the window: %s\n", gpu_failure());
+	return failed ? -1 : 1;
+}
+int32_t shader_shown(char* shader, char* values, int64_t width, int64_t height) {
+	void* layer = window_layer(width, height);
+	if (!layer) return 0;
+	static int32_t (*show)(const char*, const char*, void*, int32_t, int32_t);
+	if (!show) show = (int32_t (*)(const char*, const char*, void*, int32_t, int32_t))library_function("warp_gpu", "warp_gpu_show");
+	return shown_or_told(show(shader, values, layer, (int32_t)width, (int32_t)height));
+}
+// the pixels as driver.warp png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
+enum { PAPER = 250, INK = 29, COLOR_FROM = 16777216 };
+int32_t pixels_shown(int64_t* pixels, int64_t width, int64_t height) {
+	void* layer = window_layer(width, height);
+	if (!layer) return 0;
+	static int32_t (*show)(const uint8_t*, void*, int32_t, int32_t);
+	if (!show) show = (int32_t (*)(const uint8_t*, void*, int32_t, int32_t))library_function("warp_gpu", "warp_gpu_show_pixels");
+	uint8_t* bytes = malloc(width * height * 4);
+	for (int64_t i = 0; i < width * height; i++) {
+		int64_t value = pixels[i];
+		uint8_t shade = value == 0 ? PAPER : INK;
+		bytes[4 * i] = value >= COLOR_FROM ? (value >> 16) & 255 : shade;
+		bytes[4 * i + 1] = value >= COLOR_FROM ? (value >> 8) & 255 : shade;
+		bytes[4 * i + 2] = value >= COLOR_FROM ? value & 255 : shade;
+		bytes[4 * i + 3] = 255;
+	}
+	int32_t shown = shown_or_told(show(bytes, layer, (int32_t)width, (int32_t)height));
+	free(bytes);
+	return shown;
+}
 // the terminal's rows, else its columns, on standard output; 0 outside a terminal (ioctl is variadic: called here, not
 // through native_call)
 int32_t terminal_size(int32_t rows) {
