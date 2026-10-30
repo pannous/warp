@@ -15,10 +15,8 @@ subtract { operator: "-", symbol: Op.Sub, aliases: [minus, "‐", "‑", "‒", 
 multiply { operator: "*", symbol: Op.Mul, aliases: [times, "×", "⋅"] }
 divide { operator: "/", symbol: Op.Div }
 div { operator: "/!", symbol: Op.FloorDiv, aliases: ["÷"], infix: yes }
-"/!=" { symbol: Op.FloorDivAssign, aliases: ["÷="] }
 modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes }
 power { operator: "^", symbol: Op.Pow, aliases: ["**"] }
-"^=" { symbol: Op.PowAssign, aliases: ["**="] }
 count { prefix-operator: "#", symbol: Op.Hash, aliases: [size, len, length] }
 # a class's position(p) is `b#p` and its index(i), `b[i]`, the parser's b#(i+1) (core/passes/class_methods.warp)
 position { operator: "#", symbol: Op.Hash }
@@ -32,6 +30,7 @@ compare { aliases: [compareTo, compare_to] }
 "~" { symbol: Op.Rough, aliases: ["~~"] }
 "and" { symbol: Op.And, aliases: ["&&", "&"] }
 "or" { symbol: Op.Or, aliases: ["||", "|"] }
+"xor" { symbol: Op.Xor, aliases: ["^^"] }
 "not" { symbol: Op.Not, aliases: ["!", "¬"] }
 contains { aliases: [has, includes] }
 

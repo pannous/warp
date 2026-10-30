@@ -1,4 +1,4 @@
-# a warp function f(x, y) giving a color [r, g, b] as one WGSL fragment shader (lib/sugar/shaders.warp, card
+# a warp function f(x, y) giving a color [r, g, b] as one WGSL fragment shader (lib/prelude.warp paint rules, card
 # warp-to-shaders): every number an f32, a list of 2 to 4 numbers a vecNf, the program values it reads paint's values
 'f(x, y) := [x / 96, y / 54, 0.5]; shader_of(f).contains("fn f(x: f32, y: f32) -> vec3f {\n\treturn vec3f((x / 96.0), (y / 54.0), 0.5);\n}")'	yes
 'f(x, y) := [x, y, 1] .* 0.5; shader_of(f).contains("@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f")'	yes
