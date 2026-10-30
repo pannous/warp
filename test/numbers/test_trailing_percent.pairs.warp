@@ -1,0 +1,8 @@
+# decision Trailing percent: a % with nothing after it is a percent, exact; infix % stays the remainder
+'.8 == 80%'	yes
+'x = 10%; x * 30'	3
+'[10%, 20%]'	[0.1, 0.2]
+'50 % of 200'	100
+'7 % 3'	1
+'10% == 1/10'	yes
+'x = 80%\nx * 5'	4

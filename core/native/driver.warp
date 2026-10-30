@@ -84,6 +84,10 @@ wasm_engine_new_with_config(config: handle): handle from "warp_wasmtime"
 wasmtime_store_new(engine: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
 wasmtime_store_context(store: handle): handle from "warp_wasmtime"
 wasmtime_linker_new(engine: handle): handle from "warp_wasmtime"
+wasmtime_store_delete(store: handle) from "warp_wasmtime"
+wasmtime_linker_delete(linker: handle) from "warp_wasmtime"
+wasmtime_module_delete(module: handle) from "warp_wasmtime"
+wasm_engine_delete(engine: handle) from "warp_wasmtime"
 wasmtime_linker_define_wasi(linker: handle): handle from "warp_wasmtime"
 wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle): handle from "warp_wasmtime"
 wasmtime_linker_define_func(linker: handle, module: text, module_size: i64, name: text, size: i64, type: handle, callback: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
@@ -395,11 +399,13 @@ float_at(address: pointer): Double := address
 single_at(address: pointer): Single := address
 
 # The GC heap a run starts with, as rust-harness:crates/warp-runtime engine.rs: reserved, committed lazily, growing as the
-# run needs (decision heap-per-run). A compiler's starts large: one starting small collects at each of its many growths
-# (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild; at 128 MB 698 -> 1408 s); its machine code
-# holds the size, so every compiler has the one. A program's own starts small: one making much garbage collects early
-# (300 lists of 20000 texts: 551 -> 103 MB, as fast)
-COMPILER_GC_HEAP_BYTES = 536870912
+# run needs (decision heap-per-run). A compiler building the compiler starts large: one starting small collects at each
+# of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild; at 128 MB 698 -> 1408 s).
+# A compiler compiling a program starts small, as a program does: one that never fills its heap never collects, so
+# every byte it makes stays (hello 218 -> 101 MB RSS, sudoku 663 -> 106 MB, as fast; card compile-memory-limit). The
+# machine code holds the size, so each is kept apart (machine_code_file)
+BUILDER_GC_HEAP_BYTES = 536870912
+COMPILER_GC_HEAP_BYTES = 67108864
 PROGRAM_GC_HEAP_BYTES = 67108864
 # A program's fuel when it counts steps (decision fuel-metering, rust-harness:crates/warp-runtime fuel.rs): wasmtime burns about one
 # a WASM instruction; counting makes calls about four times slower, so only runs that ask for it count
@@ -531,7 +537,8 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
 	engine = wasm_engine_new_with_config(warp_config(fuel > 0, heap_bytes))
-	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
+	store = wasmtime_store_new(engine, 0, 0)
+	context = wasmtime_store_context(store)
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
 	linker = wasmtime_linker_new(engine)
 	# wasmtime writes it only on a trap; a run inside a host word (parse_code) gets arena bytes an earlier one used
@@ -567,6 +574,12 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
 	if results_count > 0 { print_result(results) }
 	crash_context_restored(outer)
+	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
+	# behind the last (it peaked at 4.8 GB with all of them kept)
+	wasmtime_store_delete(store)
+	wasmtime_linker_delete(linker)
+	wasmtime_module_delete(compiled)
+	wasm_engine_delete(engine)
 }
 # what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
 # engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
@@ -637,13 +650,16 @@ compiler_arguments(compiler: text): Arguments := {
 	list
 }
 # the module of a file (a compiler) run with the arguments, its machine code kept beside it (compiled_module)
-file_ran(path: text, given: Arguments): nothing := {
+file_ran(path: text, given: Arguments): nothing := heap_file_ran(path, given, COMPILER_GC_HEAP_BYTES)
+# the compiler at `path` run to build the compiler (warp rebuild), with the builder's heap and machine code
+builder_ran(path: text, given: Arguments): nothing := heap_file_ran(path, given, BUILDER_GC_HEAP_BYTES)
+heap_file_ran(path: text, given: Arguments, heap_bytes: i64): nothing := {
 	module = read_file(path)
 	if module.length == 0 {
 		complain(joined("no module at ", path))
 		exit(1)
 	}
-	run(module, given, machine_code_file(path), COMPILER_GC_HEAP_BYTES)
+	run(module, given, machine_code_file(path, heap_bytes), heap_bytes)
 }
 # the module warp.wasm wrote to `output` run, named `name`, with this executable's arguments from `first` on
 written_run(output: text, name: text, first: int): nothing := {
@@ -681,16 +697,21 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 machine_code_kept(path: text): nothing := {
 	trap = allocate(8)
 	long_at(trap).value = 0
-	compiled_module(wasm_engine_new_with_config(warp_config(no, COMPILER_GC_HEAP_BYTES)), read_file(path), machine_code_file(path), trap)
+	compiled_module(wasm_engine_new_with_config(warp_config(no, BUILDER_GC_HEAP_BYTES)), read_file(path), machine_code_file(path, BUILDER_GC_HEAP_BYTES), trap)
 }
 # where a module's machine code is kept: beside it, else (an installed lib/ this user can't write) in the user's cache
-# folder under the module's whole path; "" when neither can be written: compiled anew each run, never failing
-machine_code_file(path: text): text := {
-	if access(c_string(folder_of(path)), WRITABLE) == 0 { return joined(path, ".driver.cwasm") }
+# folder under the module's whole path; "" when neither can be written: compiled anew each run, never failing. A
+# builder's heap has its own (machine code holds the heap size)
+machine_code_file(path: text, heap_bytes: i64): text := {
+	suffix = machine_code_suffix(heap_bytes)
+	if access(c_string(folder_of(path)), WRITABLE) == 0 { return joined(path, suffix) }
 	cache = cache_folder()
 	if cache.length == 0 { return "" }
-	joined(joined(cache, flattened(resolved_path(path))), ".driver.cwasm")
+	joined(joined(cache, flattened(resolved_path(path))), suffix)
 }
+# a compiler's machine code beside it, and a builder's (primitive mode has no text constants)
+machine_code_suffix(heap_bytes: i64): text := if heap_bytes == BUILDER_GC_HEAP_BYTES then ".driver.build.cwasm" else ".driver.cwasm"
+
 # $XDG_CACHE_HOME/warp, else ~/Library/Caches/warp (macOS), else ~/.cache/warp, made when missing, ending in a slash;
 # "" when it can't be written
 cache_folder(): text := {

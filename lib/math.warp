@@ -115,6 +115,9 @@ lcm(a: int, b: int) := a / gcd(a, b) * b
 clamp(x, low, high) := each_any(x, e -> min(max(e, low), high))
 sign(x) := if x > 0 then 1 else if x < 0 then - 1 else 0
 factorial(n: int) := { out = 1; for i in 2 to n { out = out * i }; out }
+// `24!`: a number's `!` (unwrap, which a number needs not) is its factorial (decision operators-are-functions); on a
+// name `x!` keeps its own meaning
+rewrite unwrap($n) => factorial($n) where $n is literal
 is_prime(n: int) := { if n < 2 { return false }; i = 2; while i * i <= n { if n % i == 0 { return false }; i++ }; true }
 // the value a fraction t of the way from a to b
 lerp(a, b, t) := a .+ (b .- a) .* t

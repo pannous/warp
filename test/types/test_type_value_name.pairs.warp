@@ -1,7 +1,7 @@
 # from test_type_value_name.rs: edit the Rust test, then run the script again
 
 # the_name_of_a_type_is_its_word
-'type(3).name'	'int'
+'type(3).name'	'nat'
 't = type("ab"); t.name'	'text'
 'f(x: any) := type(x).name; f([])'	'list'
-'f(x: any) := type(x).name; f(3)'	'int'
+'f(x: any) := type(x).name; f(3)'	'nat'

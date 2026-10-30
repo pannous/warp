@@ -1,0 +1,32 @@
+#!/usr/bin/env warp
+# Domain warping after Inigo Quilez (iquilezles.org/articles/warp): fractal noise whose input is shifted by fractal
+# noise, twice, f(p + fbm(p + fbm(p))), shaded between two colors. All warp functions, one fragment shader
+use math
+width = 320
+height = 180
+hash(p) := fract(sine(dot(p, [127.1, 311.7])) * 43758.5453)
+noise(p) := {
+	i = floor(p)
+	f = fract(p)
+	u = f .* f .* (3 .- 2 .* f)
+	mix(mix(hash(i), hash(i .+ [1, 0]), u.x), mix(hash(i .+ [0, 1]), hash(i .+ [1, 1]), u.x), u.y)
+}
+fbm(p) := {
+	total = 0.0
+	amplitude = 0.5
+	q = p
+	for octave in 0..6 {
+		total += amplitude * noise(q)
+		q = q .* 2.02
+		amplitude *= 0.5
+	}
+	total
+}
+warped(x, y) := {
+	p = [x, y] ./ 60
+	q = [fbm(p), fbm(p .+ [5.2, 1.3])]
+	r = [fbm(p .+ q .* 4 .+ [1.7, 9.2]), fbm(p .+ q .* 4 .+ [8.3, 2.8])]
+	f = fbm(p .+ r .* 4)
+	mix([0.1, 0.2, 0.4], [0.9, 0.8, 0.5], f)
+}
+paint(warped, width, height)

@@ -11,9 +11,9 @@ height = 540
 global time = 0.0
 
 # the settings of web-ocean's panel (H), with its defaults
-wind_speed = 7 # m/s: longer, higher waves as it rises
+wind_speed = 7 # todo m/s: longer, higher waves as it rises
 wind_direction = 28° # off the line of sight, the waves roll toward the camera
-swell_height = 1.8 # metres, significant wave height
+swell_height = 1.8 # todo metres, significant wave height
 swell_length = 120 # metres
 swell_direction = -4° # off the line of sight
 choppiness = 1.25
