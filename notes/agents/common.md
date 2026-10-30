@@ -96,11 +96,17 @@ before asking a question). After a context swap, this file and your role file be
   <folders>`. A core change also runs `scripts/self-check.sh <worktree>`. Never rebuild in the main checkout. One
   heavy job (rebuild, self-check) of yours at a time. Machine-wide, rebuild.sh runs at most 5 compiler builds at once
   (<store>/build-slots, WARP_BUILD_SLOTS); "all 5 build slots taken, waiting" is normal, never work around it.
-- A compiler is built once per inputs hash, machine-wide (ea5cb68f6b): `scripts/rebuild.sh` asks the store
-  /Volumes/Build/compilers/<hash>/ first and copies a hit in seconds, whoever built it; while another tree builds the
-  same hash (lock <store>/<hash>/warp.building, its pid) it logs `waiting-for-<pid>` and takes that result. So
-  never copy compilers by hand, never rebuild "to be sure", never use --force to get past a wait, and never kill
-  another session's build. Every hit, miss and wait is a line of <store>/rebuilds.log.
+- A compiler is built once per inputs hash, machine-wide, whether it builds or fails (ea5cb68f6b, card
+  build-failed-store): `scripts/rebuild.sh` asks the store /Volumes/Build/compilers/<hash>/ first and copies a hit in
+  seconds, whoever built it; while another tree builds the same hash (lock <store>/<hash>/warp.building, its pid) it
+  logs `waiting-for-<pid>` and takes that result. A failed build is kept there too (<hash>/warp.failed/: build.log,
+  the failing step, its half-built artifacts), and a request for that hash prints it at once: its last line names the
+  step (seed, stage-two, optimize, runtime, modules) and the log. Read that log, never rebuild to see an error; a
+  fixed source is a new hash and builds anew. `--force` builds the same hash again, from the failed step on, only
+  after a fix outside the sources (the warp binary, memory, disk). self-check's stage two is kept the same way
+  (<hash>/stage-two.passed or .failed/; `self-check.sh --rebuild` runs it again). So never copy compilers by hand,
+  never rebuild "to be sure", never use --force to get past a wait, and never kill another session's build. Every
+  hit, miss, wait and failure is a line of <store>/rebuilds.log.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
