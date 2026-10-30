@@ -983,12 +983,12 @@ def group_expression(body: Body, n: Node): TypedCode {
 		word = library_words[name_of(n#1)]
 		if word in sort_words and orders_instances() { return refuse("a sort where instances order through compare") }
 		if word == "symbol_node" and #n == 2 and n#2 is text { return interned_symbol(body, n#2) }
-		# `x as Angle` of a number held unboxed: the number with its mark, carried statically (decision
-		# marks-unboxed-first); `x is Angle` of one its mark, known here
+		# `x as Angle`: the number held unboxed as its type's number, an exact 0.5 as the float an Angle is, with its
+		# mark, carried statically (decision marks-unboxed-first)
 		if word == "marked_int" and #n == 3 and n#3 is int {
-			marked = expression_code(body, n#2)
-			if marked.kind == ValueKind.Int or marked.kind == ValueKind.Float { return TypedCode(marked.kind, marked.code, n#3 as int) }
-			return runtime_call(word, [TypedCode(ValueKind.Node, boxed(marked)), number_value(n#3)])
+			mark = n#3 as int
+			held = if mark % KindUnit.Info == Kind.Float then ValueKind.Float else ValueKind.Int
+			return TypedCode(held, converted(expression_code(body, n#2), held), mark)
 		}
 		# `str(p)` shows p as print does, an instance by its class's text(); not inside that dispatcher, whose fallback it is
 		if word == "node_text" and #n == 2 and body.function.name != instance_text_word { return shown_text(expression_code(body, n#2)) }
@@ -1250,7 +1250,7 @@ def as_rational(value: TypedCode): TypedCode {
 
 # -value; a value known only at run time as 0 - value
 def negation(body: Body, value: TypedCode): TypedCode {
-	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Float, value.code + [op.f64_neg]) }
+	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Float, value.code + [op.f64_neg], value.mark) }
 	if value.kind != ValueKind.Int and value.kind != ValueKind.Node { refuse("the negation of a " + kind_spelling(value.kind)) }
 	# 0 - x, checked as a subtraction: -(-2^63) traps as 2^63 - 1 + 1 does, never wraps to itself
 	operation_code(body, "-", number_value(0), value)

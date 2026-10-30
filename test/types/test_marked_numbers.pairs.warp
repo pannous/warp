@@ -8,4 +8,4 @@
 'type Angle = float; show(a: Angle) := "angle"; "" + (0.5 as Angle) * 2'	"angle"
 'type Color = int; red = 0xFFFF0000 as Color; show(c: Color) := "C"; g(c: Color): Color := c; "" + g(red)'	"C"
 'use color; "" + (red + 1)'	"#FF0001"
-'yes + 1'	2
+'use color; "" + (red / 2)'	"#7FFF8000"
