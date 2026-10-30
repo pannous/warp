@@ -278,12 +278,12 @@ word_closure(name: text, count: int, lowering: Lowering): Node := {
 # the counts of values the name is called with in the statements, `f(1, 2)` and `f 1 2`
 called_counts(name: Node, statements: list): list := {
 	if not (name is symbol) { return [] }
-	statements.flat_map(statement => nodes_in(statement)).filter(n => is_group(n) and #n > 0 and n#1 == name and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
+	statements.flat_map(statement => nodes_in(statement)).filter(n => is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) == name_of(name) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 }
 # the counts of values the program's function calls its parameter at `at` with, `apply(f, x) := f(x)` 1
 parameter_called_counts(callee: Node, at: int, lowering: Lowering): list := {
 	if not (callee is symbol) { return [] }
-	definition = lowering.statements.map(definition_of).find(parts => parts != ø and parts.name == name_of(callee))
+	definition = lowering.statements.map(statement => definition_of(statement)).find(parts => parts != ø and parts.name == name_of(callee))
 	if definition == ø or at > #definition.parameters { return [] }
 	called_counts(symbol(parameter_name(definition.parameters#at)), [definition.body])
 }
