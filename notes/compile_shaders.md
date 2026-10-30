@@ -48,3 +48,18 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
 - a lib module used by a std module is followed only if rewrites.warp's std_module_names lists it (card
   nested-module-use), so the translator lives in rule_words.warp itself
 - `use math` brings lib's own `cosine` etc. into the program: WGSL's words are looked up before program functions
+
+## Where paint's rule lives, and what the seed keeps (cards gpu-functions, paint-frame-failure, program-frame)
+- the `paint($f, $w, $h)` rule is the prelude's: lib/sugar rules run after arity_overloads, which has bound the call
+  to the prelude's overloaded paint by then; std-module rules run first, beside the program's own
+- the seed parses the library's rules with its own rule words: a rule binding two holes to words it doesn't know is
+  dropped ("the rule … was dropped", whatever the hint says about apostrophes), a rest hole `$x... = word()` too; one
+  plain hole per rule, so wgsl_painting gives one map `{shader: …, uniform: …}` (not `values`: map's own .values)
+- a rule word giving ø (an empty map is ø) is no match; one giving `[…]` binds a rest hole's items
+- the compiler compiling itself has no node constructors: build nodes by parsing text (`plain_node(parsed(…))`)
+- a word's rule fires inside the prelude itself too: wgsl_painting answers ø unless f is a function the program
+  defines; a rule never rewrites inside the definition of the word its template produces (frames' frame_listened)
+- programs run from a FILE link the prebuilt std modules, inline code compiles them from source: test a module's
+  behaviour from a file (test/native/test_frame_file.sh)
+- native GPU: crates/warp-gpu over wgpu-native, lazily bound by lib/native/foreign.c (gpu_paints; WARP_GPU=off for
+  the CPU); ocean 960×540 about 30 ms a frame headless incl. readback and PNG, ~160 s on the CPU
