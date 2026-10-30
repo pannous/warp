@@ -4,7 +4,7 @@
 is! 'class P{age: int}
 ps: [P] = [P(1), P(2), P(3)]
 a = ps#3
-ps.insert(P(9), 1)
+ps.insert(1, P(9))
 ps#3.age' 2
 is! 'class P{age: int}
 ps: [P] = [P(1), P(2), P(3)]
