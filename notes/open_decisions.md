@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- rule-not-in-own-definition (interviewer, urgent, ~6 lines core/passes/rewrites.warp): a rewrite rule never fires inside the definition of the word its template produces (frames' `listen(data frame, …) => frame_listened(…)` rewrote frame_listened's own body into self-recursion: every file with `on frame` overflowed the stack).
 - small-int-cache (interviewer, core emitter boxing site + runtime word, lands only if hello, a byte-heavy program and rebuild time all improve): Int nodes of small values (−128..1023) are shared, as Java/Python do (nodes are immutable); then runtime-layout decoding only for called words (prebuilt.warp). Checked first: no reference comparison of nodes that an Int reaches.
 - rule-whose (interviewer, ~8 lines core/passes/rewrites.warp): a rule word defined in lib/rule_words.warp but missing from an older compiler skips its rules with a warning ("the rule word w is not in this compiler (an older seed)") instead of misreading `where $h = word(…)` and failing the build; ends the seed refresh needed for each new rule word.
 - inline-code (interviewer, core/compiler.warp linked_libraries): every entry (file, inline, piped, warp compile) links the prebuilt lib/modules beside the runtime it prepends; a module not prebuilt still compiles from source.
