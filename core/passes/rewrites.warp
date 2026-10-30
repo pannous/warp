@@ -1706,16 +1706,20 @@ affix_matches(affix: list, code: Node, bound: map): bool := {
 	inner = #written - #before - #after
 	if inner <= 0 or not written.starts_with(before) or not written.ends_with(after) or canonical_operator(written) != "" { return no }
 	spelling = written[#before ..< #before + inner]
-	operates(spelling) and hole_binding(affix#1, symbol(spelling), bound)
+	if not (operates(spelling) and hole_binding(affix#1, symbol(spelling), bound)) { return no }
+	bound[affixed_mark(affix#1)] = yes
+	yes
 }
+# the note in a binding that a hole holds an operator (affix_matches), for bound_operation
+affixed_mark(hole: text): text := "affixed·" + hole
 # an operator's spelling `x op= y` and `xs .op ys` are written with: one computing a value (parser computes), or a
-# function's word, `x max= 5`; `<=` and `:=` are operators of their own (affix_matches)
-operates(spelling: text): bool := if is_name_start(spelling#1) then canonical_operator(spelling) == "" or computes(canonical_operator(spelling)) else computes(canonical_operator(spelling))
+# function's word, `x max= 5`, also an element-wise one, `xs .*= 2`; `<=` and `:=` are operators of their own (affix_matches)
+operates(spelling: text): bool := if spelling#1 == '.' and #spelling > 1 then operates(spelling[1 ..]) else if is_name_start(spelling#1) then canonical_operator(spelling) == "" or computes(canonical_operator(spelling)) else computes(canonical_operator(spelling))
 # `$a $op $b` of a template, its hole bound to an operator's spelling (affixed_hole): the operation, a function's word
 # its call, `x max 5` max(x, 5), an element-wise form the phrase the sugar reads on
 bound_operation(template: Node, items: list, bound: map): Node? := {
-	if not (is_phrase(template) and #template == 3 and #items == 3 and rule_hole(template#2) != ø and items#2 is symbol) { return ø }
-	if bound.get(rule_hole(template#2)) != items#2 { return ø }
+	if not (is_group(template) and separator_of(template) == " " and bracket_of(template) in ["", "("] and #template == 3 and #items == 3 and rule_hole(template#2) != ø and items#2 is symbol) { return ø }
+	if not bound.has(affixed_mark(rule_hole(template#2))) or bound.get(rule_hole(template#2)) != items#2 { return ø }
 	spelling = name_of(items#2)
 	if spelling.starts_with(".") { return ø }
 	canonical = canonical_operator(spelling)
