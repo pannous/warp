@@ -30,3 +30,8 @@
   global's zero value is a constant expression, so module_layout.warp zero_code_of keeps fresh_int_code, no call
 - after shared ints: runtime.wasm read 9.4 MB (was 16.4), warp.runtime decode 6.9 MB (was 8.2); lazy decode (shape B)
   recommended dropped: 23 module.runtime sites for < 7 MB
+- definition-slices (845734129f): prelude_definitions() (83ab6595ed) cut the whole prelude anew whenever no earlier
+  file_slices call had filled source_slices (order-dependent; shebang `env` made os a candidate in samples/hello).
+  definition_slices now takes baked LIBRARY_SLICES for any bundled text, file_slices folded in. Compile peak footprint,
+  WARP_LIB on both sides: hello.warp ("hi") 190.4 -> 143.8 MiB, samples/hello 232.0 -> 151.1 MiB. O(n²) cut of
+  unbundled text: card definition-slices-quadratic
