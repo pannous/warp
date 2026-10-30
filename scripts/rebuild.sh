@@ -23,6 +23,7 @@
 set -uo pipefail
 STEPS=(seed stage-two optimize runtime modules)  # core/native/warp.warp rebuilt, in order
 SHOWN_LINES=60  # of a failed step's output, printed before its log's path
+ERROR_LINE='[Ee]rror|refus|trap|panic|is missing|failed'  # the line of a longer failed step's output printed first
 check= force= which=pure tree=
 for word in "$@"; do
 	case $word in
@@ -53,27 +54,6 @@ baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
-# The machine's few build slots, shared by every session (user 2026-10-30: six rebuilds at once took the Mac): a build
-# runs in the first free slot of <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many
-build_slots=${WARP_BUILD_SLOTS:-5}
-lock_held_elsewhere=75
-# in_build_slot <log> <command…>: the command's output into the log
-in_build_slot() {
-	local log=$1
-	shift
-	command -v lockf >/dev/null || { "$@" >>"$log" 2>&1; return; }
-	mkdir -p "$store/build-slots"
-	local slot status waited=
-	while :; do
-		for slot in $(seq "$build_slots"); do
-			lockf -s -t 0 "$store/build-slots/$slot" "$@" >>"$log" 2>&1
-			status=$?
-			[ $status = $lock_held_elsewhere ] || return $status
-		done
-		[ -n "$waited" ] || { echo "rebuild.sh: all $build_slots build slots taken, waiting" >&2; waited=1; }
-		sleep 10
-	done
-}
 inputs_line() { echo "$hash commit=$(git -C "$tree" rev-parse --short HEAD 2>/dev/null) built=$(date '+%Y-%m-%dT%H:%M:%S%z')"; }
 
 # a file into the store under its hash, by its name or the path given, never over one there (write-once)
@@ -89,7 +69,7 @@ publish() {
 failure() { echo "$store/$hash/$1.failed"; }
 # step_after_seed <step>: a step that starts on artifacts of an earlier one
 step_after_seed() { [ -n "$1" ] && [ "$1" != "${STEPS[0]}" ]; }
-# kept_failure <name> <log> <status>: the failed build kept in the store (the build lock held), its message printed
+# kept_failure <name> <log> <status>: the failed build kept in the store (the build lock held)
 kept_failure() {
 	local name=$1 log=$2 status=$3 record step lines output part
 	record=$(failure "$name")
@@ -98,9 +78,12 @@ kept_failure() {
 	lines=$(printf '%s' "$output" | grep -c '')
 	rm -rf "$record.new-$$" && mkdir -p "$record.new-$$" || return 1
 	{
-		echo "rebuild.sh: $name of $hash build-failed${step:+ at step $step} (exit $status; $(inputs_line); by $warp)"
-		[ "$lines" -gt $SHOWN_LINES ] && echo "rebuild.sh: the step's last $SHOWN_LINES of $lines lines:"
-		printf '%s' "$output" | tail -$SHOWN_LINES
+		echo "rebuild.sh: $name of $hash build-failed${step:+ at step $step} (exit $status, commit $(git -C "$tree" rev-parse --short HEAD 2>/dev/null), $(date '+%Y-%m-%d %H:%M %Z'), by $warp)"
+		if [ "$lines" -gt $SHOWN_LINES ]; then
+			echo "rebuild.sh: its first error line: $(printf '%s\n' "$output" | grep -m1 -E "$ERROR_LINE")"
+			echo "rebuild.sh: the step's last $SHOWN_LINES of $lines lines:"
+		fi
+		printf '%s\n' "$output" | tail -$SHOWN_LINES
 		echo "rebuild.sh: $name build-failed${step:+ at step $step}, log $record/build.log (this hash is answered from the store; --force builds it again${step:+ from step $step})"
 	} >"$record.new-$$/message"
 	mv "$log" "$record.new-$$/build.log"
@@ -119,6 +102,8 @@ resumed_step() {
 	record=$(failure "$1")
 	step=$(cat "$record/step" 2>/dev/null)
 	[ "$1" = warp ] && step_after_seed "$step" && [ -f "$record/warp.wasm.new" ] || return
+	# the modules step builds on runtime.wasm: without one kept, the runtime step comes again
+	[ "$step" = modules ] && [ ! -f "$record/runtime.wasm" ] && step=runtime
 	for part in warp.wasm.new runtime.wasm; do [ -f "$record/$part" ] && copied "$record/$part" "$compilers/$part"; done
 	echo "$step"
 }
@@ -216,7 +201,7 @@ one() {
 	[ -n "$from" ] && lane=(from "$from")
 	logged "$name" "miss-building${from:+-from-$from}"
 	: >"$log"
-	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash in_build_slot "$log" "$warp" rebuild "${lane[@]}")
+	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash WARP_COMPILER_STORE=$store "$scripts/build-slot.sh" "$log" "$warp" rebuild "${lane[@]}")
 	status=$?
 	if [ $status != 0 ]; then
 		kept_failure "$name" "$log" $status
@@ -236,6 +221,9 @@ one() {
 	logged "$name" built
 }
 
+# warp's wasmtime C API in lib/, which `warp build native` links the driver from (card wasmtime-bundled); a no-op when current;
+# first, so a failed build's last line is its step and log
+"$scripts/wasmtime-c-api.sh" "$lib" || echo "rebuild.sh: warp's wasmtime C API did not build (scripts/wasmtime-c-api.sh): native builds of the driver fail" >&2
 result=0
 case $which in
 	pure) one warp || result=$? ;;
@@ -244,6 +232,4 @@ case $which in
 	both) one warp || result=$?; [ $result = 1 ] || one warp-self check ;;
 esac
 [ $result = 0 ] && [ -f "$compilers/warp.wasm" ] && [ -f "$store/$hash/warp.wasm" ] && mark_main
-# warp's wasmtime C API in lib/, which `warp build native` links the driver from (card wasmtime-bundled); a no-op when current
-"$scripts/wasmtime-c-api.sh" "$lib" || echo "rebuild.sh: warp's wasmtime C API did not build (scripts/wasmtime-c-api.sh): native builds of the driver fail" >&2
 exit $result
