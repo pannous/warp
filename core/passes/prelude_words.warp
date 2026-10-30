@@ -476,10 +476,10 @@ implicit_modules(source: text, index_file: text): list := {
 	index = word_index(index_file)
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
-	code = code_only(source)
-	candidates = index.keys.filter(word => mentions_word(code, word))
+	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
+	candidates = index.keys.filter(word => mentions_word(source, word))
 	if #candidates == 0 { return [] }
-	program = plain_node(parsed(source))
+	program = interpolation(plain_node(parsed(source)))
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
