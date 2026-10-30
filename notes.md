@@ -13,3 +13,7 @@
   startup 13.3 | implicit uses + C functions 5.8 | prepend_runtime+relocate+shake 24.7 | parse+source checks 13.5 |
   with_uses..used modules 6.4 | with_reached prelude 39.1 | 28 pure passes 44.5 (5 sugar-rule passes 22.2: sugar 6.2,
   late 5.0, iteration 4.7, comprehension 3.3, first 3.0; lambdas 4.4) | called_only 1.1 | emit 29.4 | total 177.6
+- compiling-hello reach probe: with_reached(prelude) looks up 210 wanted words and reaches only 2 prelude slices, yet the
+  loop allocates 36 MB (~30 ms): each word scans every slice (`for slice in slices { if slice#1 == word …`), ~860 B per
+  comparison. So prebuilding the prelude can't help hello; an index of the slices by name can. (lldb stops cost ~7 ms
+  each, so per-pass ms above are inflated: 28 passes ≈ 35 ms real, 45 MB)
