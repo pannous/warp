@@ -268,7 +268,7 @@ word_closure(name: text, taken: int, lowering: Lowering): Node := {
 	key = name + "·" + taken
 	if not lowering.word_closures.has(key) {
 		wrapper = lifted_prefix + fresh_number()
-		parameters = (1 to taken).map(i => symbol(wrapper + "·" + i))
+		parameters = (1 to taken).map(i => symbol("value" + i))
 		lowering.lambdas_lifted += [Key(call_node(symbol(wrapper), parameters), Op.Define, call_node(symbol(name), parameters))]
 		lowering.arities[wrapper] = taken
 		lowering.word_closures[key] = wrapper
