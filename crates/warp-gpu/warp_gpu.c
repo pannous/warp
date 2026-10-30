@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "warp_node.h"
 
 #define FULL_IMAGE_VERTICES "\n@vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> @builtin(position) vec4f {\n" \
 	"\treturn vec4f(f32(corner / 2u) * 4.0 - 1.0, f32(corner % 2u) * 4.0 - 1.0, 0.0, 1.0);\n}"
@@ -502,6 +503,203 @@ int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int3
 	int shown = picture_presented(wgpuDeviceCreateCommandEncoder(device, NULL), picture, width, height);
 	wgpuTextureRelease(picture);
 	return shown ? 0 : -1;
+}
+
+// --- gpu_compute(shader, arrays, workgroups) (card host-word): a WGSL compute shader, its entry point `main`, run over
+// storage arrays as host-gpu.js gpuComputedArrays runs it. `arrays` a map of named lists, each bound where the shader
+// declares the storage array of that name, f32 unless array<i32> or array<u32>; the arrays it left come back as a map,
+// in the order given. `arrays` a list: the numbers at @binding(0), they come back as a list
+enum { MOST_ARRAYS = 8 };
+typedef struct { char name[NAME_BYTES]; int binding; char element; double* numbers; size_t count; } StorageArray;
+// the storage arrays the shader declares: `@binding(1) var<storage, read_write> counts: array<i32>`
+static int storage_arrays(const char* shader, StorageArray* arrays) {
+	int found = 0;
+	for (const char* at = strstr(shader, "var<storage"); at && found < MOST_ARRAYS; at = strstr(at + 1, "var<storage")) {
+		const char* binding = NULL;
+		for (const char* back = at; back > shader && back > at - 64; back--) if (!strncmp(back, "@binding(", 9)) { binding = back + 9; break; }
+		const char* name = strchr(at, '>');
+		if (!name || !binding) continue;
+		name = spaces_skipped(name + 1);
+		StorageArray* array = &arrays[found];
+		*array = (StorageArray){0};
+		int length = 0;
+		while (name[length] && name[length] != ':' && name[length] != ' ' && length < NAME_BYTES - 1) { array->name[length] = name[length]; length++; }
+		array->name[length] = 0;
+		array->binding = atoi(binding);
+		const char* element = strstr(name, "array<");
+		array->element = element && (!strncmp(element + 6, "i32", 3) || !strncmp(element + 6, "u32", 3)) ? element[6] : 'f';
+		found++;
+	}
+	return found;
+}
+// the numbers of a list given, as doubles
+static double* numbers_of(warp_values* values, const wasmtime_anyref_t* list, size_t* count) {
+	*count = warp_list_length(values, list);
+	double* numbers = malloc((*count ? *count : 1) * sizeof *numbers);
+	for (size_t i = 0; i < *count; i++) {
+		wasmtime_anyref_t item = warp_list_item(values, list, i);
+		numbers[i] = warp_node_float(values, &item);
+		wasmtime_anyref_unroot(&item);
+	}
+	return numbers;
+}
+static StorageArray* array_named(StorageArray* arrays, int count, const char* name) {
+	for (int i = 0; i < count; i++) if (!strcmp(arrays[i].name, name)) return &arrays[i];
+	return NULL;
+}
+static int given_failed(warp_values* values, const char* message, const char* name) {
+	char said[NAME_BYTES + 128];
+	snprintf(said, sizeof said, message, name);
+	warp_failed(values, said);
+	return 0;
+}
+// the given arrays read into the declared ones, in the order given (order); 0 and a failure where they do not fit
+static int arrays_given(warp_values* values, const wasmtime_anyref_t* given, StorageArray* declared, int declared_count, int* order) {
+	int64_t kind = warp_kind_field(values, given);
+	if (kind != WARP_MARKED_MAP) {
+		StorageArray* first = NULL;
+		for (int i = 0; i < declared_count; i++) if (declared[i].binding == 0) first = &declared[i];
+		if ((kind & WARP_KIND_MASK) != WARP_KIND_LIST) return given_failed(values, "gpu_compute takes a list of numbers or a map of named lists%s", "");
+		if (!first) return given_failed(values, "gpu_compute of a list: the shader declares no storage array at @binding(0)%s", "");
+		first->numbers = numbers_of(values, given, &first->count);
+		order[0] = (int)(first - declared);
+		return 1;
+	}
+	int given_count = (int)warp_list_length(values, given);
+	if (given_count > MOST_ARRAYS) return given_failed(values, "gpu_compute binds at most 8 arrays%s", "");
+	for (int i = 0; i < given_count; i++) {
+		wasmtime_anyref_t entry = warp_list_item(values, given, (size_t)i);
+		wasmtime_anyref_t key = warp_key_left(values, &entry);
+		wasmtime_anyref_t list = warp_key_right(values, &entry);
+		char* name = warp_text_bytes(values, &key, NULL);
+		StorageArray* array = array_named(declared, declared_count, name);
+		if (array) {
+			array->numbers = numbers_of(values, &list, &array->count);
+			order[i] = (int)(array - declared);
+		}
+		wasmtime_anyref_unroot(&list);
+		wasmtime_anyref_unroot(&key);
+		wasmtime_anyref_unroot(&entry);
+		if (!array) { given_failed(values, "the shader declares no storage array %s", name); free(name); return 0; }
+		free(name);
+		if (!array->count) return given_failed(values, "%s is empty: a storage array holds at least one number", array->name);
+	}
+	for (int i = 0; i < declared_count; i++)
+		if (!declared[i].numbers) return given_failed(values, "the shader's array %s has no numbers", declared[i].name);
+	return values->failure[0] ? 0 : given_count;
+}
+static void element_written(const StorageArray* array, uint8_t* bytes) {
+	for (size_t i = 0; i < array->count; i++) {
+		if (array->element == 'f') ((float*)bytes)[i] = (float)array->numbers[i];
+		else if (array->element == 'u') ((uint32_t*)bytes)[i] = (uint32_t)array->numbers[i];
+		else ((int32_t*)bytes)[i] = (int32_t)array->numbers[i];
+	}
+}
+// the shader run over the arrays, the arrays it left in `left` (the caller frees them): 0 and failure where it fails
+static int arrays_computed(const char* shader, const StorageArray* declared, const int* order, int count, int64_t workgroups, uint8_t** left) {
+	int read = 0;
+	{
+		wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
+		WGPUShaderSourceWGSL source = WGPU_SHADER_SOURCE_WGSL_INIT;
+		source.code = view_of(shader);
+		WGPUShaderModuleDescriptor module_descriptor = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
+		module_descriptor.nextInChain = &source.chain;
+		WGPUShaderModule module = wgpuDeviceCreateShaderModule(device, &module_descriptor);
+		WGPUComputePipelineDescriptor descriptor = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
+		descriptor.compute.module = module;
+		descriptor.compute.entryPoint = view_of("main");
+		WGPUComputePipeline pipeline = wgpuDeviceCreateComputePipeline(device, &descriptor);
+		wgpuShaderModuleRelease(module);
+		if (scope_clean()) {
+			WGPUBuffer storages[MOST_ARRAYS], readbacks[MOST_ARRAYS];
+			WGPUBindGroupEntry entries[MOST_ARRAYS];
+			for (int a = 0; a < count; a++) {
+				const StorageArray* array = &declared[order[a]];
+				uint64_t size = array->count * 4;
+				uint8_t* bytes = malloc(size);
+				element_written(array, bytes);
+				storages[a] = buffer_of(size, WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc | WGPUBufferUsage_CopyDst);
+				wgpuQueueWriteBuffer(queue, storages[a], 0, bytes, size);
+				free(bytes);
+				readbacks[a] = buffer_of(size, WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst);
+				entries[a] = (WGPUBindGroupEntry)WGPU_BIND_GROUP_ENTRY_INIT;
+				entries[a].binding = (uint32_t)array->binding;
+				entries[a].buffer = storages[a];
+				entries[a].size = size;
+			}
+			WGPUBindGroupDescriptor group = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+			group.layout = wgpuComputePipelineGetBindGroupLayout(pipeline, 0);
+			group.entryCount = (size_t)count;
+			group.entries = entries;
+			WGPUBindGroup bindings = wgpuDeviceCreateBindGroup(device, &group);
+			wgpuBindGroupLayoutRelease(group.layout);
+			WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
+			WGPUComputePassEncoder pass = wgpuCommandEncoderBeginComputePass(encoder, NULL);
+			wgpuComputePassEncoderSetPipeline(pass, pipeline);
+			wgpuComputePassEncoderSetBindGroup(pass, 0, bindings, 0, NULL);
+			wgpuComputePassEncoderDispatchWorkgroups(pass, (uint32_t)workgroups, 1, 1);
+			wgpuComputePassEncoderEnd(pass);
+			wgpuComputePassEncoderRelease(pass);
+			for (int a = 0; a < count; a++) wgpuCommandEncoderCopyBufferToBuffer(encoder, storages[a], 0, readbacks[a], 0, declared[order[a]].count * 4);
+			submitted(encoder);
+			read = 1;
+			for (int a = 0; a < count; a++) {
+				size_t size = declared[order[a]].count * 4;
+				int done = 0;
+				WGPUBufferMapCallbackInfo map_info = WGPU_BUFFER_MAP_CALLBACK_INFO_INIT;
+				map_info.mode = WGPUCallbackMode_AllowProcessEvents;
+				map_info.callback = mapped;
+				map_info.userdata1 = &done;
+				wgpuBufferMapAsync(readbacks[a], WGPUMapMode_Read, 0, size, map_info);
+				while (!done) { wgpuDevicePoll(device, 1, NULL); wgpuInstanceProcessEvents(instance); }
+				left[a] = malloc(size);
+				if (done > 0) { memcpy(left[a], wgpuBufferGetConstMappedRange(readbacks[a], 0, size), size); wgpuBufferUnmap(readbacks[a]); }
+				else read = 0;
+			}
+			for (int a = 0; a < count; a++) { wgpuBufferRelease(storages[a]); wgpuBufferRelease(readbacks[a]); }
+			wgpuBindGroupRelease(bindings);
+		}
+		if (pipeline) wgpuComputePipelineRelease(pipeline);
+	}
+	return read;
+}
+// the arrays the shader left as warp values: a map in the order given, else (a list given) the one list
+static wasmtime_anyref_t arrays_written(warp_values* values, const StorageArray* declared, const int* order, int count, int as_map, uint8_t** left) {
+	wasmtime_anyref_t lists[MOST_ARRAYS];
+	for (int a = 0; a < count; a++) {
+		const StorageArray* array = &declared[order[a]];
+		wasmtime_anyref_t* numbers = malloc(array->count * sizeof *numbers);
+		for (size_t i = 0; i < array->count; i++) {
+			if (array->element == 'f') numbers[i] = warp_float(values, ((float*)left[a])[i]);
+			else if (array->element == 'u') numbers[i] = warp_int(values, ((uint32_t*)left[a])[i]);
+			else numbers[i] = warp_int(values, ((int32_t*)left[a])[i]);
+		}
+		lists[a] = warp_list(values, WARP_MARKED_SQUARELIST, numbers, array->count);
+		free(numbers);
+		if (as_map) lists[a] = warp_entry(values, array->name, lists[a]);
+	}
+	return as_map ? warp_list(values, WARP_MARKED_MAP, lists, (size_t)count) : lists[0];
+}
+// gpu_compute(shader, arrays, workgroups), bound by the driver (lib/native/foreign.c library_word)
+wasm_trap_t* warp_word_gpu_compute(void* engine, wasmtime_caller_t* caller, const wasmtime_val_t* given, size_t given_count, wasmtime_val_t* results, size_t result_count) {
+	(void)given_count, (void)result_count;
+	warp_values values = warp_values_of(engine, caller, &given[1].of.anyref);
+	wasmtime_anyref_t answer;
+	wasmtime_anyref_set_null(&answer);
+	char* shader = warp_text_bytes(&values, &given[0].of.anyref, NULL);
+	StorageArray declared[MOST_ARRAYS];
+	int order[MOST_ARRAYS];
+	int declared_count = storage_arrays(shader, declared);
+	int count = values.failure[0] ? 0 : arrays_given(&values, &given[1].of.anyref, declared, declared_count, order);
+	uint8_t* left[MOST_ARRAYS] = {0};
+	failure[0] = 0;
+	if (count && device_ready() && arrays_computed(shader, declared, order, count, given[2].of.i64, left))
+		answer = arrays_written(&values, declared, order, count, warp_kind_field(&values, &given[1].of.anyref) == WARP_MARKED_MAP, left);
+	else if (count) warp_failed(&values, failure);
+	for (int a = 0; a < count; a++) free(left[a]);
+	for (int i = 0; i < declared_count; i++) free(declared[i].numbers);
+	free(shader);
+	return warp_answered(&values, answer, results);
 }
 
 // why the last warp_gpu_paint or warp_gpu_show failed

@@ -27,6 +27,26 @@ sound_library=${prefix}warp_sound.$suffix
 gpu_library=${prefix}warp_gpu.$suffix
 window_library=${prefix}warp_window.$suffix
 
+# a library owning host words reads and builds warp values in place (lib/native/warp_node.h) through warp's wasmtime:
+# its headers, it linked, and the value layout as the compiler has it (scripts/node_layout.warp), checked when a warp
+# is at hand: the committed header differing fails the build
+wasmtime_include=$(ls -d "$CARGO_TARGET_DIR"/release/build/wasmtime-c-api-impl-*/out/include 2>/dev/null | head -1)
+case $(uname -s) in
+  Darwin) loader_path=@loader_path ;;
+  *) loader_path='$ORIGIN' ;;
+esac
+value_libraries="-I $checkout/lib/native -I $wasmtime_include -L $CARGO_TARGET_DIR/release -lwarp_wasmtime -Wl,-rpath,$loader_path"
+value_headers="$checkout/lib/native/warp_node.h $checkout/lib/native/warp_layout.h"
+if command -v warp >/dev/null; then
+  layout=$(cd "$checkout" && WARP_NO_WINDOW=1 warp scripts/node_layout.warp)
+  if [ "$layout" != "$(cat "$checkout/lib/native/warp_layout.h")" ]; then
+    echo "wasmtime-c-api: the value layout changed: warp scripts/node_layout.warp > lib/native/warp_layout.h, and commit it" >&2
+    exit 1
+  fi
+fi
+# a library is current when newer than each of its sources
+current() { local target=$1 each; shift; for each in "$@"; do [ "$target" -nt "$each" ] || return 1; done; }
+
 # miniaudio's one header, fetched once at its pinned version and checked
 sound_library_built() {
   mkdir -p "$sound_build"
@@ -69,9 +89,10 @@ gpu_library_built() {
   fi
   source=$checkout/crates/warp-gpu/warp_gpu.c
   built=$gpu_build/$gpu_library
-  [ "$built" -nt "$source" ] && [ "$built" -nt "$archive" ] && return
+  # shellcheck disable=SC2086 # the headers are words
+  current "$built" "$source" "$archive" $value_headers && return
   # shellcheck disable=SC2086 # the system libraries are words
-  nice -n 19 cc -O2 -shared -fPIC -I "$release/include" -o "$built.new" "$source" "$archive" $gpu_libraries
+  nice -n 19 cc -O2 -shared -fPIC -I "$release/include" -o "$built.new" "$source" "$archive" $gpu_libraries $value_libraries
   mv -f "$built.new" "$built"
 }
 gpu_library_built
