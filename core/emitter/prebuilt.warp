@@ -458,14 +458,14 @@ LINKED_METHOD_CLASH = "a method of a linked class another class declares too, co
 def method_clash(image: LibraryImage): bool {
 	own = image.classes.map(entry => entry#1)
 	owners = method_owners()
-	image.functions.any(word => owners.has(method_word(word.name)) and owners[method_word(word.name)].any(owner => owner not in own))
+	image.functions.any(word => owners.has(method_word(word.name)) and owners[method_word(word.name)].any(owner => class_struct(owner) not in own))
 }
 # each method name the program lifted per class (`*·V`, `text·Quantity`): the classes declaring it
 def method_owners(): map {
 	owners = {}
 	for name in module.functions.keys {
 		parts = name.split(name_joiner)
-		if #parts == 2 and parts#2 in module.class_structs { owners[parts#1] = (owners.get(parts#1) ?? []) + [parts#2] }
+		if #parts == 2 and parts#2 in module.classes { owners[parts#1] = (owners.get(parts#1) ?? []) + [parts#2] }
 	}
 	owners
 }
