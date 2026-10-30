@@ -155,6 +155,14 @@ native_built() {
 # install_native [early]: early, before the tip's compilers are built, with the tree's compilers of the last install
 # (stage one: a driver fix reaches the user in minutes, never hours behind a compiler build; user 2026-10-30). Its
 # failure is only said: stage two installs the native warp again with the tip's compilers
+# the tip an ancestor of the installed native warp's (its folder native-<commit>[.anything], an install by hand too):
+# a link to it would take the user back (2026-10-30: an install undid the user's newer .express one)
+older_than_installed() {
+	local installed
+	installed=$(basename "$(dirname "$(readlink "$MAIN_WARP")")" | sed "s/^$NATIVE_PREFIX//; s/\..*//")
+	[ -n "$installed" ] && ! git -C "$TREE" merge-base --is-ancestor "$installed" "$tip" 2>/dev/null &&
+		git -C "$TREE" merge-base --is-ancestor "$tip" "$installed" 2>/dev/null
+}
 early_failed() { say "stage one: $1; the native warp follows with its compilers"; }
 install_native() {
 	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got made failed=(red) early=${1-}
@@ -167,6 +175,7 @@ install_native() {
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
 	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; rm -rf "$folder"; return 1; }
+	older_than_installed && { say "native warp of ${tip:0:10} not linked: the installed one is newer"; return 2; }
 	linked "$folder/warp" "$MAIN_WARP" && linked "$folder" "$MAIN_LIB" || return 1
 	pruned
 	say "native warp of ${tip:0:10} installed${early:+ (its compilers follow)}: $MAIN_WARP -> $folder/warp"
