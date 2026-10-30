@@ -274,8 +274,8 @@ def name_map_end(content: list, at: int): int {
 def own_function_type(f: Function): int := module.runtime_image.types + #module.gc_order - #gc_names + f.index - #module.imports - module.runtime_image.functions
 def prepended_bytes(functions: list): list {
 	if module.shakes_runtime and not module.relocating { module.shaking = shaking_of(functions) }
-	import_drop = ø
-	if relocates() and not module.relocating and not shaken() { import_drop = import_drop_of(functions) }
+	forget_import_drop()
+	if relocates() and not module.relocating and not shaken() { drop_imports(functions) }
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
@@ -294,7 +294,7 @@ def prepended_bytes(functions: list): list {
 	made = wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks() + runtime_sections(functions)
 	# the separate module (separate_module) is numbered behind the whole runtime, every host word kept
 	for f in functions { f.index += imports_dropped() }
-	import_drop = ø
+	forget_import_drop()
 	made
 }
 # the program's C functions, imported behind the runtime's host words; their types after every other: no runtime type moves
@@ -978,34 +978,54 @@ def runtime_type_of(f: Function): int {
 ## unused-imports-pass): every function behind the host imports moved down by the count dropped; the runtime functions
 ## it never reaches stay, their calls of a dropped host word going to one trapping stub per type behind all functions.
 ## The program's code is relocatable (relocates), so each call is moved as the runtime's (import_move)
-# places: each host import's new index, the stub's of a dropped one; kept: the host imports kept; types: each stub's
-# type; first_stub: the index of the first stub
-class ImportDrop { places: list; kept: map; types: list; first_stub: int; dropped: int }
-# a global, as a Module field more fails the seed's compile (raisers_read); set only while prepended_bytes writes
-global import_drop = ø
-def drops_imports(): bool := import_drop != ø
-def imports_dropped(): int := if drops_imports() then import_drop.dropped else 0
-def import_drop_of(functions: list): any {
+# each host import's new index, the stub's of a dropped one (import_places); the host imports kept; each stub's type;
+# the index of the first stub; how many go. Globals, as a Module field more fails the seed's compile (raisers_read),
+# set only while prepended_bytes writes
+global import_places = []
+global kept_imports = {}
+global stub_type_list = []
+global first_stub = 0
+global imports_gone = 0
+def drops_imports(): bool := imports_gone > 0
+def imports_dropped(): int := imports_gone
+def forget_import_drop() {
+	import_places = []
+	kept_imports = {}
+	stub_type_list = []
+	imports_gone = 0
+}
+def drop_imports(functions: list) {
 	called = host_words_called(functions)
 	host_types = runtime_import_entries().map(entry => entry#2)
+	# each stub's type, and the stub of each type
 	trapping = []
-	for i in 0..<#host_types { if not called.has(i) and not (host_types[i] in trapping) { trapping += [host_types[i]] } }
+	stub_of = {}
+	for i in 0..<#host_types {
+		if not called.has(i) and not stub_of.has(host_types[i]) {
+			stub_of[host_types[i]] = #trapping
+			trapping += [host_types[i]]
+		}
+	}
 	gone = #host_types - #called.keys
 	first_stub = #module.imports + module.runtime_image.functions + linked_function_count() + #functions - gone
 	places = []
 	count_kept = 0
 	for i in 0..<#host_types {
-		places += [if called.has(i) then count_kept else first_stub + trapping.index_of(host_types[i]) - 1]
+		places += [if called.has(i) then count_kept else first_stub + stub_of[host_types[i]]]
 		if called.has(i) { count_kept += 1 }
 	}
-	ImportDrop(places, called, trapping, first_stub, gone)
+	import_places = places
+	kept_imports = called
+	stub_type_list = trapping
+	imports_gone = gone
 }
 # the host words called by the program's own code, the runtime functions it reaches and the linked modules' code
 def host_words_called(functions: list): map {
 	own = exports_reach(functions)
 	reached = runtime_reach(runtime_positions_called(own) + library_positions_called())
 	called = {}
-	for index in relocated_operands(own, relocated.calls).keys { if index < module.runtime_image.imports { called[index] = yes } }
+	own_calls = relocated_operands(own, relocated.calls)
+	for index in 0..<module.runtime_image.imports { if own_calls.has(index) { called[index] = yes } }
 	for site in operand_sites(relocated.calls) { if site#3 < module.runtime_image.imports and reached.has(site#2) { called[site#3] = yes } }
 	for image in module.linked_images {
 		place = section_place(image.wasm, section_ids.code)
@@ -1021,7 +1041,7 @@ def host_words_called(functions: list): map {
 def import_move(shift: int, more: map): Move {
 	table = {}
 	for i in more.keys { table[i] = more[i] - imports_dropped() }
-	if drops_imports() { for i in 0..<#import_drop.places { table[i] = import_drop.places[i] } }
+	if drops_imports() { for i in 0..<#import_places { table[i] = import_places[i] } }
 	Move(shift - imports_dropped(), table)
 }
 # a program function's entry of the code section, its calls moved past the host words dropped
@@ -1052,13 +1072,13 @@ def runtime_import_entries(): list {
 def host_imports(c_entries: list): list {
 	if not drops_imports() { return with_entries(runtime_part(section_ids.import), c_entries) }
 	entries = runtime_import_entries()
-	kept = range_list(#entries).filter(i => import_drop.kept.has(i)).map(i => entries[i]#1)
+	kept = range_list(#entries).filter(i => kept_imports.has(i)).map(i => entries[i]#1)
 	uleb(#kept + #c_entries) + concatenated(kept) + concatenated(c_entries)
 }
-def import_kept(i: int): bool := not drops_imports() or i >= module.runtime_image.imports or import_drop.kept.has(i)
-def import_place(i: int): int := if drops_imports() and i < module.runtime_image.imports then import_drop.places[i] else i - imports_dropped()
-def stub_types(): list := if drops_imports() then import_drop.types.map(uleb) else []
-def stub_names(): list := if drops_imports() then range_list(#import_drop.types).map(k => index_name(import_drop.first_stub + k, unreached_import)) else []
+def import_kept(i: int): bool := not drops_imports() or i >= module.runtime_image.imports or kept_imports.has(i)
+def import_place(i: int): int := if drops_imports() and i < module.runtime_image.imports then import_places[i] else i - imports_dropped()
+def stub_types(): list := if drops_imports() then stub_type_list.map(typed => uleb(typed)) else []
+def stub_names(): list := if drops_imports() then range_list(#stub_type_list).map(k => index_name(first_stub + k, unreached_import)) else []
 unreached_import = "unreached_import"
 # a stub's entry of the code section: no locals, a trap
-def unreached_import_stubs(): list := if drops_imports() then import_drop.types.map(type => uleb(3) + [0, op.unreachable, op.end]) else []
+def unreached_import_stubs(): list := if drops_imports() then stub_type_list.map(typed => uleb(3) + [0, op.unreachable, op.end]) else []
