@@ -94,7 +94,13 @@ without_layers(view: View, attributes: bool): View := {
 placed(made: Node, at: Node): Node := {
 	line = line_of(at)
 	column = column_of(at)
-	if line is int and column is int then positioned(made, line, column) else made
+	if line is int and column is int then marked_as(positioned(made, line, column), at) else made
+}
+# made with the attributes the node it stands for carries (`let` of a declared name), as it takes its place
+marked_as(made: Node, at: Node): Node := {
+	marked = made
+	for word in attributes_of(at) { marked = with_attribute(marked, word) }
+	marked
 }
 
 # n without its attributes, opaque empty groups and characters, keeping the place it was written at: the parser places a

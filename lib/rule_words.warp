@@ -830,12 +830,9 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
 }
 
-# `let n = 5` is the assignment `n = 5`, where its name was written noted (core/passes/lambdas.warp
-# local_declarations): inside a lambda the name stays the lambda's own, not the scope's (card let-inside)
-declared_local(declaration: Node): Node := {
-	if is_key(declaration, Op.Assign) and key_of(declaration) is symbol { declared_at(key_of(declaration)) }
-	declaration
-}
+# `let n = 5` is the assignment `n = 5`, its name marked `let`: inside a lambda the name stays the lambda's own, not
+# the scope's (core/passes/lambdas.warp declared_locally, card let-inside)
+declared_local(declaration: Node): Node := if is_key(declaration, Op.Assign) and key_of(declaration) is symbol then Key(with_attribute(key_of(declaration), symbol("let")), Op.Assign, value_of(declaration)) else declaration
 
 # the words by name, as a rule's `where` calls them
 rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
