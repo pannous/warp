@@ -1704,8 +1704,13 @@ affix_matches(affix: list, code: Node, bound: map): bool := {
 	before = affix#2
 	after = affix#3
 	inner = #written - #before - #after
-	inner > 0 and written.starts_with(before) and written.ends_with(after) and hole_binding(affix#1, symbol(written[#before ..< #before + inner]), bound)
+	if inner <= 0 or not written.starts_with(before) or not written.ends_with(after) or canonical_operator(written) != "" { return no }
+	spelling = written[#before ..< #before + inner]
+	operates(spelling) and hole_binding(affix#1, symbol(spelling), bound)
 }
+# an operator's spelling `x op= y` and `xs .op ys` are written with: one computing a value (parser computes), or a
+# function's word, `x max= 5`; `<=` and `:=` are operators of their own (affix_matches)
+operates(spelling: text): bool := if is_name_start(spelling#1) then canonical_operator(spelling) == "" or computes(canonical_operator(spelling)) else computes(canonical_operator(spelling))
 # `$a $op $b` of a template, its hole bound to an operator's spelling (affixed_hole): the operation, a function's word
 # its call, `x max 5` max(x, 5), an element-wise form the phrase the sugar reads on
 bound_operation(template: Node, items: list, bound: map): Node? := {

@@ -1681,12 +1681,19 @@ def operator_at(p: Parser): list {
 }
 // `=` alone (no `==`) right after `width` characters
 def assigns_after(p: Parser, width: int): bool := peek(p.code, p.at + width, p.n) == '=' and peek(p.code, p.at + width + 1, p.n) != '='
-// an operator computing a value of its two sides, which has an element-wise form and a compound assignment
-def computes(canonical: text): bool := canonical in operation_spellings()
-// `.<`, `.*`: a `.` glued to a computing operator; `.$op` after a blank, a rule's hole of one
+// an operator computing a value of its two sides, which has an element-wise form and a compound assignment: one
+// binding between `or` and `^` (binding_powers), but for the range, the pipe, the cast and the fallback there
+def computes(canonical: text): bool {
+	power = binding_powers(canonical)#1
+	power >= binding_powers("or")#1 and power <= binding_powers("^")#1 and canonical not in ["..", "to", "|>", "as", "??"]
+}
+// `.<`, `.*`: a `.` glued to a computing operator; a word's after a blank, `xs .and ys` (`x.is(y)` calls the method
+// is), and so `.$op`, a rule's hole of one
 def dotted_operator_at(p: Parser): list {
 	if peek(p.code, p.at, p.n) != '.' { return [] }
-	if peek(p.code, p.at + 1, p.n) == '$' and p.at > 0 and is_blank(p.code[p.at - 1]) {
+	spaced = p.at > 0 and is_blank(p.code[p.at - 1])
+	if is_name_start(peek(p.code, p.at + 1, p.n)) and not spaced { return [] }
+	if peek(p.code, p.at + 1, p.n) == '$' and spaced {
 		hole = operand_word_at_from(p, p.at + 1)
 		return if hole == "" then [] else ["." + hole, hole]
 	}
