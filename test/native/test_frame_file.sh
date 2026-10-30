@@ -12,13 +12,13 @@ failures=0
 check() { # check <what> <got> <expected>
 	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
 }
-ran() { # ran <name> <code>: the code as a file, run, its output without hints
+ran() { # ran <name> <code>: the code as a file, run, its output without hints (the frame's lines, then the program's value)
 	printf '%s\n' "$2" >"$stage/$1.warp"
-	"$warp" "$stage/$1.warp" 2>&1 | grep -v '^hint:' | tail -1
+	"$warp" "$stage/$1.warp" 2>&1 | grep -v '^hint:'
 }
 
-check "on frame in a file" "$(ran frame 'on frame { print(7) }')" "7"
-check "a prelude rule inside on frame" "$(ran floats 'x = 3 floats; on frame { print(x) }')" "[0, 0, 0]"
+check "on frame in a file" "$(ran frame 'on frame { print(7) }' | head -1)" "7"
+check "a prelude rule inside on frame" "$(ran floats 'x = 3 floats; on frame { print(x) }' | head -1)" "[0, 0, 0]"
 check "a function painted each frame" "$(ran painted 'f(x, y) := [x / 4, y / 4, 0.5]
 on frame { paint(f, 4, 4) }' | grep -c '^painted 4×4')" "1"
 exit $((failures > 0))
