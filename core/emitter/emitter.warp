@@ -1119,7 +1119,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.DivAssign and left is symbol and name_of(left) in body.declared and body.declared[name_of(left)] == ValueKind.Int {
 		return assignment(body, left, runtime_call("floor_quotient", [expression_code(body, left), whole(expression_code(body, right))]))
 	}
-	if operator in compiled_compound_ops { return assignment(body, left, operation_code(body, compiled_compound_ops[operator], expression_code(body, left), expression_code(body, right))) }
+	if operator in compiled_compound_ops { return assignment(body, left, arithmetic(body, compiled_compound_ops[operator], left, right)) }
 	if operator in steps and right == ø {
 		stepped = expression_code(body, left)
 		step = code_point_steps[operator]
@@ -1202,7 +1202,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 		other = if is_case(body, right) then left else right
 		return tested_as(operator, runtime_call("case_equal", [TypedCode(ValueKind.Node, boxed(expression_code(body, other))), expression_code(body, case)]))
 	}
-	operation_code(body, operator, expression_code(body, left), expression_code(body, right))
+	arithmetic(body, operator, left, right)
 }
 # `xs#i` of a list whose elements analyzer.warp knows: the element as that kind, else as a node
 def analyzed_element(body: Body, list: Node, index: Node): TypedCode {
