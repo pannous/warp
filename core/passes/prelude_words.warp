@@ -188,10 +188,10 @@ names_within(n: Node, with_keys: bool): list := {
 
 # the operator inside an element-wise one or a compound assignment, which a rule makes it into: `/!` of `x /!= 2`,
 # `max` of `x max= 5` (its library word), `*` of `.*=`
+# (`div` of `x div= 2` and its operator, `/!`; a few too many, `<` of `<=`, cost nothing)
 operated_within(name: text): list := {
-	if #name > 1 and name.ends_with("=") and canonical_operator(name) == "" { return [name[0 ..< #name - 1]] + operated_within(name[0 ..< #name - 1]) }
-	if #name > 1 and name#1 == '.' and name#2 != '.' { return [name[1 ..]] + operated_within(name[1 ..]) }
-	[]
+	inner = if #name > 1 and name.ends_with("=") then name[0 ..< #name - 1] else if #name > 1 and name#1 == '.' and name#2 != '.' then name[1 ..] else ""
+	if inner == "" then [] else [inner, canonical_operator(inner)] + operated_within(inner)
 }
 
 # the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),

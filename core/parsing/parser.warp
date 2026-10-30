@@ -1704,7 +1704,7 @@ def dotted_operator_at(p: Parser): list {
 }
 // the operator of a compound assignment the parser keeps, `*` of `*=` (`xs .*= 2`), else the spelled one
 def unassigned(spelled: list): list {
-	if spelled.length == 0 or not spelled#1.ends_with("=") or spelled#1.length < 2 { return spelled }
+	if spelled.length == 0 or not spelled#1.ends_with("=") or spelled#1.length < 2 or computes(spelled#2) { return spelled }
 	written = spelled#1[0 ..< spelled#1.length - 1]
 	canonical = canonical_operator(written)
 	if canonical == "" then spelled else [written, canonical]
