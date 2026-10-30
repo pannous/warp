@@ -3,6 +3,7 @@
 # turns as you go; S saves the painting (in the playground, a download), space clears it. mouse_x, mouse_y and
 # mouse_down are the pointer over the painted picture, in its pixels
 use draw
+use keys
 # 1024 pixels across or more show pixel for pixel: crisp on a Retina screen (640×400 points there)
 width = 1280
 height = 800

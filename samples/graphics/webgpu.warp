@@ -3,6 +3,7 @@
 # `$frame` in the shader is warp's frame, read at each paint: it changes without compiling the shader anew.
 #  `$size` is the vec2 [$width, $height]
 use graphics
+use units
 demo = shader {
 @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 		let uv = (at.xy - $size/2) / $height;
