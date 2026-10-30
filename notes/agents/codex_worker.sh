@@ -6,7 +6,7 @@ set -uo pipefail
 DEFAULT_REPO=/Users/me/dev/angles/warp
 DEFAULT_MODEL=gpt-6.1-terra
 SUPERVISOR=warp-supervisor
-CODEX_BOSS="Warp Boss"
+CODEX_BOSS="Warp Handler"
 CODEX_APP_SOCKET=/Users/me/.codex/app-server-control/app-server-control.sock
 DEFAULT_TURN_TIMEOUT_SECONDS=16200
 EXEC_EXIT_GRACE_SECONDS=30
