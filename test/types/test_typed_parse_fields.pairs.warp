@@ -1,0 +1,7 @@
+# Card typed-parse: typed JSON checks field names, nested values and lists without coercion.
+'class User { id: number; name: string }; parse("{\\"name\\":\\"Ada\\"}", User)'	error
+'class User { id: number; name: string }; parse("{\\"id\\":7,\\"name\\":\\"Ada\\",\\"extra\\":true}", User)'	error
+'class Address { city: string }; class User { address: Address }; parse("{\\"address\\":{\\"city\\":\\"Berlin\\"}}", User).address.city'	'Berlin'
+'class Address { city: string }; class User { address: Address }; parse("{\\"address\\":{\\"city\\":7}}", User)'	error
+'class User { scores: list of number }; parse("{\\"scores\\":[1,2]}", User).scores#2'	2
+'class User { scores: list of number }; parse("{\\"scores\\":[1,\\"2\\"]}", User)'	error
