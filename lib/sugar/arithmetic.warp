@@ -14,6 +14,9 @@ rewrite ($a $op= $b) => $a = ($a $op $b) where $op is symbol
 # element_wise_any): two lists pair their elements, a list and a number pair each element with it, two numbers are the
 # plain operator. `xs .*= 2` is `xs = xs .* 2`
 rewrite ($a .$op $b) => element_wise_any($a, $b, ($l, $r) -> ($l $op $r)) where $op is symbol
+# `x as! int` converts no matter what (decision cast-checks): the parser reads `(x as !) int`, the emitter `x as !int`
+rewrite $x as! $t => $x as !$t
 # Trailing percent (decision Trailing percent): `10%` is 1/10, exact; `50 % of 200` is 100; infix `%` stays the remainder
 rewrite $n % of $w => $n / 100 * $w
 rewrite $n % => $n / 100
+||||||| afa97e3f5d
