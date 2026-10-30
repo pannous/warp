@@ -45,7 +45,7 @@ UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
   macOS cpal dependency is declared).
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio at its
   `at`; a new run silences what still plays. Audio starts only after a gesture: the run on page load stays silent.
-- Music files: `play "song.mp3"` / `play ./mozart.mp3` / `play_file(path)` play wav, mp3, ogg, flac, aiff or m4a in
+- Music files: `play "song.mp3"` / `play ./tune.mp3` / `play_file(path)` play wav, mp3, ogg, flac, aiff or m4a in
   the background (format by its first bytes). Natively the first player the system has for the format: afplay (no
   ogg), paplay (no mp3), ffplay, mpv; the file is decoded first by ffprobe or afinfo (a broken one fails play, also
   headless), a player failing within 0.3 s fails play, a later failure prints `sound file <path>: <player> failed

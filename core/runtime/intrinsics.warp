@@ -23,6 +23,9 @@ list_node(kind: int, items: list): any from runtime
 meta_node(n: any, line: int, column: int): any from runtime
 is_meta(n: any): bool from runtime
 meta_line(n: any): int from runtime
+# a $MetaNode's attributes (a list's node, ø when never marked), and the $MetaNode with these instead
+meta_attributes(n: any): any from runtime
+meta_with_attributes(n: any, attributes: any): any from runtime
 meta_column(n: any): int from runtime
 closure_text(n: any): text from runtime
 # a declared class's instance (its own struct type): its field set (1; 0 when its class declares no such field, 2 for

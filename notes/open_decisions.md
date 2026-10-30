@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- comments-not-candidates (interviewer, core OK): a word in a comment or shebang (`#!/usr/bin/env warp` names `env`) never makes a program an implicit-use candidate; candidacy reads code words only.
 - native-window-sdl3 (interviewer, core OK for ocean-native-window): the native warp gets its one window path through lib's warp_window.c over SDL3 (lazily bound like libwarp_gpu; headless/CI/WARP_NO_WINDOW/no library: one frame as today); GPU paints straight into the window surface. Condition: the driver learns no window words, it forwards system values it does not own to the loaded libraries (one generic hook, also for future sound/gamepad libraries).
 - node-attributes (interviewer, core OK for let-inside-mark, ~25 lines in two landings with a seed refresh): marks ride on the node itself, a new `attributes` field of $MetaNode beside `comment` (kept free for comments as metadata), intrinsics with_attribute(n, word) / attributes_of(n); `let` inside a lambda is such a mark, replacing the position side table. Rejected: info bits on the symbol's kind (a marked `n` would stop equalling `n`).
 - hello-lazy-runtime-dropped (interviewer): shape B of hello-compile-allocations (binding runtime words lazily) is dropped: under 7 MB of hello's 176 MB for churn at 23 emitter sites. Bigger targets: emit 29 MB, passes 45 MB, card list-boxed.

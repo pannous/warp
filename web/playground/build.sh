@@ -141,8 +141,8 @@ collect_site() {
 	done
 	# the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
 	mkdir -p "$site/tests/fixtures/wasm" && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h "$site/tests/fixtures/wasm/"
-	# the samples' neighbours at their repository paths, as natively: `play "mozart.mp3"` beside samples/sound/play_mp3.warp
-	# (card open-mozart), the files a sample reads, writes over or includes; the regular ones, not the links
+	# the samples' neighbours at their repository paths, as natively: `play "tune.mp3"` beside samples/sound/play_mp3.warp
+	# (card open-mozart; tune.mp3 is our own half-second C-E-G, mozart.mp3 left for its unclear copyright), the files a sample reads, writes over or includes; the regular ones, not the links
 	# (samples/tests, samples/wasm/shapes.wasm)
 	git ls-files -z samples | while IFS= read -r -d '' file; do
 		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
