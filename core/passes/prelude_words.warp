@@ -178,12 +178,20 @@ names_within(n: Node, with_keys: bool): list := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is symbol { found[name_of(part)] = yes } else {
+		if part is symbol { for name in [name_of(part)] + operated_within(name_of(part)) { found[name] = yes } } else {
 			if with_keys and part is key { found[key_head(part)] = yes }
 			waiting += parts_within(part)
 		}
 	}
 	found.keys
+}
+
+# the operator inside an element-wise one or a compound assignment, which a rule makes it into: `/!` of `x /!= 2`,
+# `max` of `x max= 5` (its library word), `*` of `.*=`
+operated_within(name: text): list := {
+	if #name > 1 and name.ends_with("=") and canonical_operator(name) == "" { return [name[0 ..< #name - 1]] + operated_within(name[0 ..< #name - 1]) }
+	if #name > 1 and name#1 == '.' and name#2 != '.' { return [name[1 ..]] + operated_within(name[1 ..]) }
+	[]
 }
 
 # the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),

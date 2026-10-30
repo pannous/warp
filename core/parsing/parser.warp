@@ -1698,9 +1698,16 @@ def dotted_operator_at(p: Parser): list {
 		return if hole == "" then [] else ["." + hole, hole]
 	}
 	p.at = p.at + 1
-	inner = spelled_operator_at(p)
+	inner = unassigned(spelled_operator_at(p))
 	p.at = p.at - 1
 	if inner.length > 0 and inner#1#1 != '.' and computes(inner#2) then ["." + inner#1, inner#2] else []
+}
+// the operator of a compound assignment the parser keeps, `*` of `*=` (`xs .*= 2`), else the spelled one
+def unassigned(spelled: list): list {
+	if spelled.length == 0 or not spelled#1.ends_with("=") or spelled#1.length < 2 { return spelled }
+	written = spelled#1[0 ..< spelled#1.length - 1]
+	canonical = canonical_operator(written)
+	if canonical == "" then spelled else [written, canonical]
 }
 // the word at the parser's position, `$op` a rule's hole too, else ""
 def operand_word_at(p: Parser): text := operand_word_at_from(p, p.at)
