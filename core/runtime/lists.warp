@@ -57,6 +57,18 @@ list_pop(xs: list): any := {
 	set_count(xs, #xs - 1)
 	last
 }
+# `xs.insert(i, v)`: v at the 0-based position i of xs itself, the items from there one further, so every alias sees
+# it; a position past the end or before 0 appends
+list_insert(xs: list, at: int, value: Node): list := {
+	one = new_list(1)
+	one#1 = value
+	list_append(xs, one)
+	if at < 0 or at >= #xs - 1 { return xs }
+	forget_map_index(xs)
+	copy_items(xs, at + 1, xs, at, #xs - 1 - at)
+	xs#(at + 1) = value
+	xs
+}
 # `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
 node_set_at(n: Node, index: int, value: Node): Node := {
 	if kind_code(n) != Kind.List { fail() }
