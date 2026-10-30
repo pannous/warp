@@ -35,9 +35,11 @@ fi
 warp=${WARP_BINARY:-$main_warp}
 [ -x "$warp" ] || { echo "rebuild.sh: no warp binary at $warp (WARP_BINARY names one)" >&2; exit 1; }
 
-# the seed building warp.wasm, named for the build and its inputs hash alike: WARP_SEED, else the one beside the binary
+# the seed building warp.wasm, named for the build and its inputs hash alike: WARP_SEED, else the tree's own (seed.lock,
+# scripts/seed.sh fetches it), else the one beside the binary
+locked_seed() { [ -f "$tree/seed.lock" ] && "$scripts/seed.sh" "$tree"; }
 seed_beside() { local folder; for folder in "$(dirname "$warp")" "$(dirname "$(readlink -f "$warp" 2>/dev/null || echo "$warp")")"; do [ -f "$folder/warp-seed.wasm" ] && { echo "$folder/warp-seed.wasm"; return; }; done; }
-export WARP_SEED=${WARP_SEED:-$(seed_beside)}
+export WARP_SEED=${WARP_SEED:-$(locked_seed || seed_beside)}
 hash=$("$scripts/compiler-inputs.sh" "$lib") || exit 1
 baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
