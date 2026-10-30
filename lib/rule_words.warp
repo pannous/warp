@@ -244,6 +244,9 @@ first_parameter_type(word: text, definition: text): text := {
 # after v
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List([module_dir("list"), module_dir("text")], Bracket.Square, Separator.Comma)
 
+# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's) the program doesn't bind, else ø
+module_named(module: Node, program: Node): any := if "${module}" in names_bound_in(program) or used_module_text("${module}".lower()) == "" then ø else module
+
 # --- warp functions as one WGSL shader (lib/prelude.warp paint rules) ---
 
 # Warp functions as one WGSL fragment shader (card warp-to-shaders, decision shaders-in-lib): paint(f, width, height)
@@ -258,6 +261,10 @@ VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUES_NAME = "values"
 # a painted function's color: three numbers from 0 to 1
 COLOR_WIDTH = 3
+# a painted number or yes/no is ink where it is not 0, paper where it is, as the native PNG writer shades it
+# (core/native/driver.warp INK 29, PAPER 250 of 255)
+INK_GRAY = "vec3f(0.11372549)"
+PAPER_GRAY = "vec3f(0.98039216)"
 # translations of a function until its variables' widths settle: one assigned a number, later a vector
 MOST_ATTEMPTS = 3
 # the words WGSL keeps: a program's name among them gets a `_` after it
@@ -334,7 +341,9 @@ wgsl_painted_call(f: Node, program: Node): text := {
 	shading.refusal = ""
 	shading.calling = []
 	called = wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
-	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], ${f} gives " + wgsl_type(called#2)) }
+	if called#2 == 0 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + ")" }
+	if called#2 == 1 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + " != 0.0)" }
+	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
 	called#1
 }
 
@@ -717,6 +726,11 @@ wgsl_statement(n: Node, scope: WgslScope, depth: int) := {
 	else if n == symbol("break") { scope.wgsl_lines += [indent + "break;"] }
 	else if wgsl_is_return(n) { wgsl_return(n#2, scope, depth) }
 	else if wgsl_is_loop(n) { wgsl_loop(n, scope, depth) }
+	else if is_key(n, Op.Do) and is_key(key_of(n), Op.While) {
+		scope.wgsl_lines += [indent + "while (" + wgsl_condition(value_of(key_of(n)), scope) + ") {"]
+		wgsl_block(value_of(n), scope, depth + 1)
+		scope.wgsl_lines += [indent + "}"]
+	}
 	else if is_key(n, Op.Else) and is_key(key_of(n), Op.Then) and is_key(key_of(key_of(n)), Op.If) {
 		scope.wgsl_lines += [indent + "if (" + wgsl_condition(value_of(key_of(key_of(n))), scope) + ") {"]
 		wgsl_block(value_of(key_of(n)), scope, depth + 1)
@@ -791,4 +805,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}

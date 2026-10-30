@@ -1,7 +1,7 @@
 # from test_dir.rs: edit the Rust test, then run the script again
 
 # dir_lists_the_names_of_a_standard_module
-'("weekday" in dir(time)) > 0'	true
+'"weekday" in dir(time)'	true
 'dir(time)#1'	'day_number'
 'names = dir text; names#1'	'repeat'
 'use time; #dir(time) > 5'	true
