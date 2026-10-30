@@ -27,14 +27,14 @@ Core change with the user's OK (decisions marks-survive-arithmetic, marks-unboxe
 - A decimal literal is an exact ratio Node: marking it a float type must convert first.
 
 ## State at handover
-Last commits: "fix: marks through grown and exact int results (kept_mark), blocks, function bodies and unannotated
-parameters …" and the user's "test: red + 1 and red / 2 commented out (user: esoteric)". A rebuild of that tip was
-running; before it, test/types/test_marked_numbers.pairs.warp failed on f(a: Angle) := a * 2 (plain), g(c: Color):
-Color (plain), and test/types/test_int_types.pairs.warp on rgb(1, 2, 3) and with_alpha(red, 0.5) (plain; the
-last fix targets these).
+Tip built (f17272551b2607fd), Hello prints. test/types/test_marked_numbers.pairs.warp + test_int_types.pairs.warp:
+17 of 18 pass (red + 1, red / 2 commented out by the user as esoteric). One fails: `g(c: Color): Color := c; "" + g(red)`
+prints 4294901760: a declared marked result `: Color` loses the mark (`g(c: C) := c` without the declared result
+works). Look at how `: Color` lowers (declared_result / cast_kind in functions.warp, or the alias resolving Color to
+int before int_types marks it).
 
 ## Next
-1. `scripts/rebuild.sh pure /Volumes/Worktrees/angle-type-alias`, then
+1. Fix the declared-result case above, `scripts/rebuild.sh pure /Volumes/Worktrees/angle-type-alias`, then
    `WARP_LIB=/Volumes/Worktrees/angle-type-alias/lib ~/dev/bin/warp test test/types/test_marked_numbers.pairs.warp test/types/test_int_types.pairs.warp`;
    probes: data/wgsl/m.warp style (type C = int / Angle = float programs).
 2. test_int_types `'red + 0'	4294901760` may now show red: upgrade in its own commit naming
