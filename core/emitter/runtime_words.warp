@@ -183,7 +183,7 @@ def orders_instances(): bool { module.functions.keys.any(name => name == "compar
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (rust-harness:src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
-	exact: "rational", fraction: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
+	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
 	function: "function", block: "function"}

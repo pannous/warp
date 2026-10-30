@@ -1125,6 +1125,17 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				continue
 			}
 			if op#1 == "." and peek(p.code, p.at, p.n) == "(" { raise dot_call_refused(left) }
+			// `80%`, `[10%, 20%]`, `10% == 1/10`: a % with no operand after it is a percent, `50 % of 200` that much of 200
+			// (decision Trailing percent, lib/sugar/arithmetic.warp)
+			if op#2 == "%" and percent_ends(p) {
+				left = keyed(op#2, left, ø)
+				if not line_ends_after(p, p.at) and keyword_at_position(p, "of", p.resumes[p.at]) {
+					p.at = p.resumes[p.at] + "of".length
+					skip_blanks(p)
+					left = keyed("*", left, expression(p, powers#2))
+				}
+				continue
+			}
 			skip_blanks(p)
 			if is_phrase_operator(op) {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
@@ -1767,6 +1778,13 @@ def operand_follows_at(p: Parser, at: int): bool := not "\n>)]},;=".contains(cod
 
 // `word` at the parser's position as a whole word
 def keyword_at(p: Parser, word: text): bool := keyword_at_position(p, word, p.at)
+// what follows a % on its line leaves it no operand: the line's end, a separator, a closing bracket, a comparison, `of`,
+// an operator standing apart (`10% + 1`; `7 % -3` takes the glued -3)
+def percent_ends(p: Parser): bool := {
+	if line_ends_after(p, p.at) { return true }
+	next = code_after(p, p.at)
+	",;)]}=<>!".contains(next) or keyword_at_position(p, "of", p.resumes[p.at]) or ("+-*/^".contains(next) and is_blank(peek(p.code, p.resumes[p.at] + 1, p.n)))
+}
 
 // `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), else 0
 // Rust twin: ranges.rs down_to_length

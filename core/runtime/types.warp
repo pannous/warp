@@ -40,7 +40,7 @@ names_class(n: Node, name: text): bool := names_a_type(n) and same_bytes(unboxed
 # compiler globals yet (beautify-round, runtime constants)
 covered_type_words(type: text): list := {
 	ints = ["int", "nat", "integer", "long", "i64", "i32"]
-	rationals = ints + ["rational", "real", "exact", "fraction"]
+	rationals = ints + ["rational", "real", "exact"]
 	floats = ["float", "double", "f64", "f32", "float32", "float64", "fast"]
 	chars = ["codepoint", "char", "character"]
 	match type {

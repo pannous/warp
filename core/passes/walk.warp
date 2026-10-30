@@ -272,11 +272,25 @@ fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
 is_statement_sequence(program: Node): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
 statements_in(program: Node): list := if is_statement_sequence(program) then items_of(program) else [program]
 
-# a node with f applied to each of its children
+# a node with f applied to each of its children; n itself when every child came back the very same node, so a pass
+# makes new nodes only on the path from a change to the root (decision shared-subtrees)
 children(n: Node, f: function): Node := match n {
-	Key(left, op, right): { if left == opaque_symbol then n else Key(f(left), op, f(right)) }
-	List(items, bracket, separator): List(items_walked(items, (bracket == Bracket.None and separator == Separator.Space) or (bracket == Bracket.Round and separator == Separator.None), f), bracket, separator)
+	Key(left, op, right): {
+		if left == opaque_symbol { return n }
+		walked_left = f(left)
+		walked_right = f(right)
+		if same_node(walked_left, left) and same_node(walked_right, right) then n else Key(walked_left, op, walked_right)
+	}
+	List(items, bracket, separator): {
+		walked = items_walked(items, (bracket == Bracket.None and separator == Separator.Space) or (bracket == Bracket.Round and separator == Separator.None), f)
+		if same_items(walked, items) then n else List(walked, bracket, separator)
+	}
 	_: n
+}
+# whether each item is the very same node as the other's at its place
+same_items(items: list, others: list): bool := {
+	for i in 0..<#items { if not same_node(items[i], others[i]) { return no } }
+	yes
 }
 
 # the parts of a node, as `children` walks them: a key's two sides, a group's items; none of an opaque view
