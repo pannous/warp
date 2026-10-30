@@ -17,3 +17,7 @@
   loop allocates 36 MB (~30 ms): each word scans every slice (`for slice in slices { if slice#1 == word …`), ~860 B per
   comparison. So prebuilding the prelude can't help hello; an index of the slices by name can. (lldb stops cost ~7 ms
   each, so per-pass ms above are inflated: 28 passes ≈ 35 ms real, 45 MB)
+- compiling-hello DONE (c4d15e63ed): slice_origins re-read the prelude and counted every slice's line (34.6 MB, ~29 ms);
+  now baked_origin per reached slice from its key + LIBRARY_FILES: hello peak footprint 228.5 -> 191.2 MB, RSS 257 -> 220.
+  Probe kit: data/rss/footprint.py + phases.cmds (lldb break on write, footprint per warn marker; ~7 ms per stop).
+  Next big ones: emit 29 MB, runtime prepend 25 MB, 28 passes 45 MB (sugar-rule passes half)
