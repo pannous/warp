@@ -160,7 +160,7 @@ intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop", list_insert: "list_insert",
-	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
+	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values", keys: "map_keys", values: "map_values", has: "collection_contains", get: "map_get_or",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
