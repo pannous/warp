@@ -5,6 +5,7 @@ set -uo pipefail
 
 DEFAULT_REPO=/Users/me/dev/angles/warp
 DEFAULT_MODEL=gpt-6.1-terra
+DEFAULT_EFFORT=high # ~/.codex/config.toml says low, which ends a run after one look at the card
 SUPERVISOR=warp-supervisor
 CODEX_BOSS="Warp Handler"
 CODEX_APP_SOCKET=/Users/me/.codex/app-server-control/app-server-control.sock
@@ -15,6 +16,7 @@ POLL_SECONDS=1
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${CODEX_REPO:-$DEFAULT_REPO}
 export CODEX_MODEL=${CODEX_MODEL:-$DEFAULT_MODEL}
+CODEX_EFFORT=${CODEX_EFFORT:-$DEFAULT_EFFORT}
 CARD_LIST=$REPO/notes/agents/codex_cards.txt
 LOG_DIR=$REPO/data/agents/codex${CODEX_PROBE_PROMPT:+/probe}
 LOCK=$LOG_DIR/running.pid
@@ -175,7 +177,13 @@ Reproduce before you judge: run the card's example with WARP_NO_WINDOW=1 /Users/
 investigation on the card is a hint, not a verdict. A card that truly needs core is not a dead end: look for the
 library way first (common.md Principles: a function, enum, overload or lib/sugar rule); only when there is none, write
 the smallest core shape into \`todo note <card> \"needs core: <files, functions, why in 3 lines>\"\`, release it and
-take the next card. You have hours: use them on real work.
+take the next card.
+
+You have hours: use them on real work. Investigating, reproducing and writing a handover are the start of a card,
+never its result: do not end your turn while a card is open and untried. Progress is a pushed commit that adds a test
+or changes lib/, samples/ or wiki/; a run whose only commit is a handover has failed. When a choice is open (coercion,
+optional fields, a name), take the recommended default, write it into the handover and keep going. End your turn only
+when every card you took is landed, parked with such a commit, or released as needing core.
 
 Per card: its own branch and worktree (\`cowtree add\`, as in common.md), a test first in test/<topic>/, then common.md
 \"Done\": format, merge origin/main, \`scripts/smoke.sh <worktree>\`, \`warp test\` on the folders you touched, push to
@@ -231,7 +239,7 @@ if [ "$FINAL_EXIT" -eq 2 ]; then
 	echo "$(date +%FT%T) $RUN_DETAIL"
 	tell_boss "Codex run active through codex exec, NOT visible in the Codex app: \"$THREAD_NAME\", log $RUN.jsonl" ||
 		RUN_DETAIL="$RUN_DETAIL; fallback start notice failed"
-	codex exec --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" >> "$RUN.jsonl" 2>&1 &
+	codex exec --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c model_reasoning_effort="$CODEX_EFFORT" -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" >> "$RUN.jsonl" 2>&1 &
 	APP_PID=$!
 	local_deadline=$((SECONDS + TURN_TIMEOUT_SECONDS))
 	while process_is_running "$APP_PID" && [ "$SECONDS" -lt "$local_deadline" ]; do
