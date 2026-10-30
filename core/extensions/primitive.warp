@@ -238,6 +238,7 @@ declare_c_function(d: list, line: int) := {
 
 declare_primitive(head: list, body: Node) := {
 	name = name_of(head#1)
+	declared_place(head#1, name)
 	parameters = head[1 ..< #head]
 	types = parameters.map(p => primitive_parameter_type(p))
 	names = parameters.map(p => name_of(key_of(p)))
@@ -300,6 +301,12 @@ primitive_refusal(n: Node, why: text) := {
 	at = written_at(n)
 	place = if at then place_text(at, module.program_file) else primitive_place
 	throw "primitive mode cannot emit " + why + place
+}
+
+# a refusal while declaring a function names its place, else the function (a type the passes wrote has no place)
+declared_place(head: Node, name: text) := {
+	at = written_at(head)
+	primitive_place = if at then place_text(at, module.program_file) else " in the function " + name
 }
 
 # the function's code, its result type once read
@@ -718,6 +725,7 @@ primitive_callee(name: text): any := {
 # which other primitive code calls directly
 primitive_compiled(f: Function) := {
 	primitive_hosted = yes
+	primitive_place = " in the function " + f.name
 	parameters = f.signature.parameters
 	types = parameters.map(p => primitive_type_name(symbol(if p.type_name then p.type_name else "?")))
 	inner = added_function(f.name + "·primitive", types.map(hosted_kind), ValueKind.Int, [])
