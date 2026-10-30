@@ -1,0 +1,6 @@
+# Warp functions painted on the GPU (card warp-to-shaders, decision shaders-in-lib): paint(f, width, height) of a
+# program function f(x, y) is the WGSL shader lib/rule_words.warp's wgsl_shader compiles f to, with the program values it reads as
+# paint's values, read again at each paint; the CPU paints f where the host has no GPU (prelude paint_shader).
+# shader_of(f) is that shader's text
+rewrite paint($f, $w, $h) => paint_shader($shader, $w, $h, $values, $f) where $f is symbol and $f is function and $shader = wgsl_shader($f, $program) and $values = wgsl_shader_values($f, $program)
+rewrite shader_of($f) => $shader where $f is symbol and $f is function and $shader = wgsl_shader($f, $program)

@@ -213,6 +213,538 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
 }
 
+# --- warp functions as one WGSL shader (lib/sugar/shaders.warp's rules) ---
+
+# Warp functions as one WGSL fragment shader (card warp-to-shaders, decision shaders-in-lib): paint(f, width, height)
+# of a function f(x, y) giving a color [r, g, b] compiles f, the functions it calls and the program values it reads
+# (lib/sugar/shaders.warp's rules call wgsl_shader and wgsl_shader_values, in the compiler). On the GPU
+# every number is an f32, never exact (decision gpu-first-asap); a list of 2 to 4 numbers is a vecNf, `.+ .- .* ./ .^`
+# its element-wise math, `p.x` `p.xz` its components. The program values the shader reads are paint's `values`, whose
+# struct the host appends (web/playground/host-gpu.js uniformLayout), so a frame changes them without a new shader.
+# A form WGSL has none of is refused, naming it; the Rust era's twin: rust-harness:src/lowering/foreign/gpu_maps/kernels.rs
+
+VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
+VALUES_NAME = "values"
+# a painted function's color: three numbers from 0 to 1
+COLOR_WIDTH = 3
+# translations of a function until its variables' widths settle: one assigned a number, later a vector
+MOST_ATTEMPTS = 3
+# the words WGSL keeps: a program's name among them gets a `_` after it
+WGSL_TAKEN = ["var", "let", "fn", "if", "else", "for", "while", "loop", "break", "continue", "return", "struct",
+	"const", "true", "false", "override", "alias", "switch", "case", "default", "discard", "enable", "requires",
+	"diagnostic", "array", "bool", "f32", "f16", "i32", "u32", "vec2f", "vec3f", "vec4f", "ptr", "sampler", "texture",
+	"sample", "filter", "self", "type", "module", "main", "position", "values", "length", "distance", "step", "select",
+	"mix", "clamp", "min", "max", "dot", "cross", "normalize", "reflect", "floor", "ceil", "fract", "sign", "abs",
+	"sqrt", "pow", "exp", "log", "exp2", "log2", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "smoothstep",
+	"round", "trunc", "radians", "degrees", "inverseSqrt", "saturate", "all", "any"]
+IDENTIFIER_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+# warp's math words as WGSL's, with how their arguments combine: "each" one width for all and the result (a number
+# broadcasts), "mix" the first two so and the third a number or that width, "to_one" a number of vectors, "kept" the
+# first argument's width
+WGSL_WORDS = {"sine": ["sin", "each"], "cosine": ["cos", "each"], "tangent": ["tan", "each"], "sin": ["sin", "each"],
+	"cos": ["cos", "each"], "tan": ["tan", "each"], "arc_sine": ["asin", "each"], "arc_cosine": ["acos", "each"],
+	"arc_tangent": ["atan", "each"], "asin": ["asin", "each"], "acos": ["acos", "each"], "atan": ["atan", "each"],
+	"atan2": ["atan2", "each"], "sqrt": ["sqrt", "each"], "abs": ["abs", "each"], "floor": ["floor", "each"],
+	"ceil": ["ceil", "each"], "fract": ["fract", "each"], "sign": ["sign", "each"], "trunc": ["trunc", "each"],
+	"exponential": ["exp", "each"], "exp": ["exp", "each"], "natural_log": ["log", "each"], "ln": ["log", "each"],
+	"log": ["log", "each"], "binary_log": ["log2", "each"], "log2": ["log2", "each"], "exp2": ["exp2", "each"],
+	"to_radians": ["radians", "each"], "to_degrees": ["degrees", "each"], "radians": ["radians", "each"],
+	"degrees": ["degrees", "each"], "min": ["min", "each"], "max": ["max", "each"], "clamp": ["clamp", "each"],
+	"step": ["step", "each"], "smoothstep": ["smoothstep", "each"], "pow": ["pow", "each"], "power": ["pow", "each"],
+	"mix": ["mix", "mix"], "lerp": ["mix", "mix"], "dot": ["dot", "to_one"], "distance": ["distance", "to_one"],
+	"norm": ["length", "to_one"], "magnitude": ["length", "to_one"], "length": ["length", "to_one"],
+	"normalize": ["normalize", "kept"], "cross": ["cross", "kept"], "reflect": ["reflect", "kept"]}
+# words that keep their argument as it is on the GPU: every number is already a float there
+SAME_VALUE_WORDS = ["float", "double", "number"]
+CONSTANTS = {"pi": "3.14159265", "π": "3.14159265", "tau": "6.2831853", "τ": "6.2831853"}
+ELEMENT_WISE = {".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^"}
+SWIZZLE_LETTERS = "xyzwrgba"
+# WGSL's assignment between a name and its value
+WGSL_ASSIGNS = " = "
+REFUSED_IN = " in function "
+COMPONENTS = ["x", "y", "z", "w"]
+
+# a function being translated: its variables' widths (1 a number, 2 to 4 a vector, 0 yes/no), its own variables to
+# declare, the parameters it assigns, the width it returns and the widths a retry should start from
+class WgslScope { widths: map; locals: list; parameters: map; assigned: map; returned: int; hints: map; retry: bool; wgsl_lines: list }
+
+# the translation in progress, one at a time: the program, the WGSL functions written so far (by name and argument
+# widths), the program values read, the first refusal; this file declares no globals, as the compiler's own modules
+class WgslTranslation { program: Node; written_functions: list; specialized: map; written_names: map; read_values: list; value_widths: map; refusal: text; calling: list }
+shading = WgslTranslation(Node.Empty, [], {}, {}, [], {}, "", [])
+
+# `shader_of(f)`: the WGSL fragment shader that paints f(column, row) at every pixel, as a text
+wgsl_shader(f: Node, program: Node): text := {
+	painted = wgsl_painted_call(f, program)
+	if shading.refusal != "" { throw "shader_of(${f}): ${shading.refusal}" }
+	shader_functions = shading.written_functions.join("\n\n")
+	shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn vec4f(" + painted + ", 1.0);\n}\n"
+}
+# `{time: time, sun: sun}`: the program values the shader of f reads, as paint's values
+wgsl_shader_values(f: Node, program: Node): Node := {
+	wgsl_painted_call(f, program)
+	List(shading.read_values.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
+}
+# f called at the pixel's column and row (WGSL's position is the pixel's center)
+wgsl_painted_call(f: Node, program: Node): text := {
+	shading.program = program
+	shading.written_functions = []
+	shading.specialized = {}
+	shading.written_names = {}
+	shading.read_values = []
+	shading.value_widths = {}
+	shading.refusal = ""
+	shading.calling = []
+	called = wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
+	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], ${f} gives " + wgsl_type(called#2)) }
+	called#1
+}
+
+wgsl_refused(n: Node, why: text): list := {
+	if shading.refusal == "" { shading.refusal = why + " (at `${n}`)" }
+	return ["0.0", 1]
+}
+wgsl_type(width: int): text := if width == 0 then "bool" else VECTOR_TYPES#width
+# the value as `width` wide: a number repeated into a vector
+wgsl_splat(value: list, width: int): text := if value#2 == width or width <= 1 then value#1 else wgsl_type(width) + "(" + value#1 + ")"
+# the width values combine to: one width, a number beside vectors of one width broadcasting
+wgsl_common_width(values: list, n: Node): int := {
+	width = 1
+	for value in values {
+		if value#2 > 1 and width > 1 and value#2 != width { wgsl_refused(n, "a vector of ${width} beside one of ${value#2}") }
+		if value#2 > width { width = value#2 }
+	}
+	width
+}
+wgsl_name(name: text): text := {
+	spelled_out = ""
+	for i in 0 ..< #name { spelled_out += if IDENTIFIER_LETTERS.contains(name[i]) then name[i] else "_" }
+	if spelled_out in WGSL_TAKEN then spelled_out + "_" else spelled_out
+}
+wgsl_number(n: Node): text := {
+	spelled_out = "${n}"
+	if spelled_out.contains(".") or spelled_out.contains("e") or spelled_out.contains("E") then spelled_out else spelled_out + ".0"
+}
+
+# --- expressions: [WGSL code, width] ---
+
+wgsl_expression(n: Node, scope: WgslScope): list := {
+	if shading.refusal != "" { return ["0.0", 1] }
+	# an item of a list literal, as data_items.warp marks it
+	if is_shown_item(n) { return wgsl_expression(value_of(n), scope) }
+	if is_big_number_view(n) { return [value_of(n)#2, 1] }
+	if n is number { return [wgsl_number(n), 1] }
+	if n is symbol { return wgsl_named(n, scope) }
+	if is_key(n, Op.Dot) { return wgsl_field(n, scope) }
+	if is_key(n, Op.Hash) { return wgsl_item(n, scope) }
+	if is_key(n, Op.As) { return wgsl_expression(key_of(n), scope) }
+	if is_key(n, Op.Neg) or (is_key(n, Op.Sub) and key_of(n) == ø) {
+		value = wgsl_expression(value_of(n), scope)
+		return ["-(" + value#1 + ")", value#2]
+	}
+	if is_key(n, Op.Not) {
+		return ["!(" + wgsl_condition(value_of(n), scope) + ")", 0]
+	}
+	if is_key(n, Op.Else) and is_key(key_of(n), Op.Then) { return wgsl_selected(n, scope) }
+	if n is key { return wgsl_operation(key_of(n), op_of(n), value_of(n), n, scope) }
+	if is_group(n) and bracket_of(n) == "[" { return wgsl_vector(items_of(n), n, scope) }
+	if is_group(n) and bracket_of(n) == "(" { return wgsl_round(n, scope) }
+	if is_group(n) and bracket_of(n) == "" { return wgsl_spaced(n, scope) }
+	wgsl_refused(n, "WGSL has no form for " + form_of(n))
+}
+
+wgsl_operation(left: Node, op: Op, right: Node, n: Node, scope: WgslScope): list := {
+	if op == Op.Pow { return wgsl_power(left, right, n, scope) }
+	written_op = wgsl_operator(op)
+	if written_op == "" {
+		return wgsl_refused(n, "WGSL has no operator ${op}")
+	}
+	if op == Op.And or op == Op.Or { return ["(" + wgsl_condition(left, scope) + " " + written_op + " " + wgsl_condition(right, scope) + ")", 0] }
+	a = wgsl_expression(left, scope)
+	b = wgsl_expression(right, scope)
+	if wgsl_comparisons.has(written_op) {
+		if a#2 != 1 or b#2 != 1 {
+		return wgsl_refused(n, "a comparison of vectors")
+	}
+		return ["(" + a#1 + " " + written_op + " " + b#1 + ")", 0]
+	}
+	return ["(" + a#1 + " " + written_op + " " + b#1 + ")", wgsl_common_width([a, b], n)]
+}
+wgsl_comparisons = {"<": yes, ">": yes, "<=": yes, ">=": yes, "==": yes, "!=": yes}
+WGSL_OPERATORS = [[Op.Add, "+"], [Op.Sub, "-"], [Op.Mul, "*"], [Op.Div, "/"], [Op.Mod, "%"], [Op.Lt, "<"], [Op.Gt, ">"],
+	[Op.Le, "<="], [Op.Ge, ">="], [Op.Eq, "=="], [Op.Ne, "!="], [Op.And, "&&"], [Op.Or, "||"], [Op.AddAssign, "+="],
+	[Op.SubAssign, "-="], [Op.MulAssign, "*="], [Op.DivAssign, "/="]]
+wgsl_operator(op: Op): text := {
+	for pair in WGSL_OPERATORS { if pair#1 == op { return pair#2 } }
+	""
+}
+# `b ^ n`: a small whole power multiplied out, any other WGSL's pow (of a negative base NaN, as on any GPU)
+wgsl_power(left: Node, right: Node, n: Node, scope: WgslScope): list := {
+	base = wgsl_expression(left, scope)
+	times = wgsl_small_whole(right)
+	if times >= 2 { return ["(" + (1 to times).map(i => base#1).join(" * ") + ")", base#2] }
+	exponent = wgsl_expression(right, scope)
+	width = wgsl_common_width([base, exponent], n)
+	return ["pow(" + wgsl_splat(base, width) + ", " + wgsl_splat(exponent, width) + ")", width]
+}
+# 1 to 4 written as a number literal, else 0: a power multiplied out, a vector's item
+SMALL_WHOLES = ["1", "2", "3", "4"]
+wgsl_small_whole(n: Node): int := {
+	if not (n is number) { return 0 }
+	for i in 1 to #SMALL_WHOLES { if "${n}" == SMALL_WHOLES#i { return i } }
+	0
+}
+# `if c then a else b` as a value: WGSL's select, both sides computed
+wgsl_selected(n: Node, scope: WgslScope): list := {
+	test = wgsl_condition(value_of(key_of(key_of(n))), scope)
+	picked = wgsl_expression(value_of(key_of(n)), scope)
+	otherwise = wgsl_expression(value_of(n), scope)
+	width = wgsl_common_width([picked, otherwise], n)
+	return ["select(" + wgsl_splat(otherwise, width) + ", " + wgsl_splat(picked, width) + ", " + test + ")", width]
+}
+wgsl_condition(n: Node, scope: WgslScope): text := {
+	value = wgsl_expression(n, scope)
+	if value#2 == 0 then value#1 else if value#2 == 1 then "(" + value#1 + " != 0.0)" else wgsl_refused(n, "a vector as a condition")#1
+}
+wgsl_vector(items: list, n: Node, scope: WgslScope): list := {
+	values = items.map(item => wgsl_expression(item, scope))
+	width = 0
+	for value in values { width += value#2 }
+	if width < 2 or width > 4 {
+		return wgsl_refused(n, "a vector of 2 to 4 numbers, not ${width}")
+	}
+	return [wgsl_type(width) + "(" + values.map(value => value#1).join(", ") + ")", width]
+}
+# `p.x`, `p.xz`: components of a vector
+wgsl_field(n: Node, scope: WgslScope): list := {
+	vec = wgsl_expression(key_of(n), scope)
+	component_name = value_of(n)
+	if not (component_name is symbol) or not wgsl_is_swizzle(name_of(component_name)) {
+		return wgsl_refused(n, "a vector's components are .x .y .z .w (or .r .g .b .a) and swizzles of them")
+	}
+	return [vec#1 + "." + name_of(component_name), #name_of(component_name)]
+}
+wgsl_is_swizzle(name: text): bool := {
+	if #name < 1 or #name > 4 { return no }
+	for i in 0 ..< #name { if not SWIZZLE_LETTERS.contains(name[i]) { return no } }
+	yes
+}
+# `p#2`: a vector's item, counted from 1
+wgsl_item(n: Node, scope: WgslScope): list := {
+	vec = wgsl_expression(key_of(n), scope)
+	index = value_of(n)
+	at_component = wgsl_small_whole(index)
+	if at_component >= 1 and at_component <= vec#2 { return [vec#1 + "." + COMPONENTS#at_component, 1] }
+	at = wgsl_expression(index, scope)
+	return [vec#1 + "[i32(" + at#1 + ") - 1]", 1]
+}
+# `(a + b)`, a call `f(a, b)`
+wgsl_round(n: Node, scope: WgslScope): list := {
+	items = items_of(n)
+	if #items == 0 {
+		return wgsl_refused(n, "an empty group")
+	}
+	if items#1 is symbol and (#items > 1 or wgsl_is_function(items#1)) { return wgsl_call(items#1, items[1 ..], n, scope) }
+	if #items == 1 {
+		value = wgsl_expression(items#1, scope)
+		return ["(" + value#1 + ")", value#2]
+	}
+	group_size = #items
+	wgsl_refused(n, "a group of ${group_size}")
+}
+# `a .* b`, `sqrt x`
+wgsl_spaced(n: Node, scope: WgslScope): list := {
+	items = items_of(n)
+	if #items == 3 and items#2 is symbol and ELEMENT_WISE.has(name_of(items#2)) {
+		element_op = ELEMENT_WISE[name_of(items#2)]
+		if element_op == "^" { return wgsl_power(items#1, items#3, n, scope) }
+		a = wgsl_expression(items#1, scope)
+		b = wgsl_expression(items#3, scope)
+		return ["(" + a#1 + " " + element_op + " " + b#1 + ")", wgsl_common_width([a, b], n)]
+	}
+	if #items >= 2 and items#1 is symbol { return wgsl_call(items#1, items[1 ..], n, scope) }
+	wgsl_refused(n, "WGSL has no form for " + form_of(n))
+}
+wgsl_is_function(name: Node): bool := WGSL_WORDS.has(name_of(name)) or function_definition(name, shading.program) != ø
+
+wgsl_call(name: Node, arguments: list, n: Node, scope: WgslScope): list := {
+	word = name_of(name)
+	if scope.widths.has(word) {
+		return wgsl_refused(n, "${word} is a value, not a function")
+	}
+	# a word WGSL has wins over its library definition (lib/math's cosine is each_any of cos)
+	if word in SAME_VALUE_WORDS and #arguments == 1 { return wgsl_expression(arguments#1, scope) }
+	if not WGSL_WORDS.has(word) {
+		if function_definition(name, shading.program) != ø { return wgsl_program_call(word, arguments.map(argument => wgsl_expression(argument, scope)), n) }
+		return wgsl_refused(n, "${word} is no word WGSL has, nor a function of the program")
+	}
+	values = arguments.map(argument => wgsl_expression(argument, scope))
+	builtin = WGSL_WORDS[word]
+	wgsl_builtin(builtin#1, builtin#2, values, n)
+}
+wgsl_builtin(word: text, combining: text, values: list, n: Node): list := {
+	if combining == "mix" { return wgsl_mixed(word, values, n) }
+	width = wgsl_common_width(values, n)
+	called = word + "(" + values.map(value => wgsl_splat(value, width)).join(", ") + ")"
+	if combining == "to_one" then [called, 1] else [called, width]
+}
+# `mix(a, b, weight)`: a and b of one width, the weight a number or of that width too
+wgsl_mixed(word: text, values: list, n: Node): list := {
+	if #values != 3 { return wgsl_refused(n, "mix takes two values and a weight") }
+	width = wgsl_common_width(values[0 ..< 2], n)
+	weight = values#3
+	weighing = if weight#2 == 1 then weight#1 else wgsl_splat(weight, width)
+	return [word + "(" + wgsl_splat(values#1, width) + ", " + wgsl_splat(values#2, width) + ", " + weighing + ")", width]
+}
+
+# a name: a variable of the function, a constant, a function of no parameters, else a value of the program's
+wgsl_named(n: Node, scope: WgslScope): list := {
+	word = name_of(n)
+	if scope.widths.has(word) { return [wgsl_local_name(word, scope), scope.widths[word]] }
+	if CONSTANTS.has(word) { return [CONSTANTS[word], 1] }
+	if function_definition(n, shading.program) != ø { return wgsl_program_call(word, [], n) }
+	wgsl_program_value(n)
+}
+wgsl_local_name(word: text, scope: WgslScope): text := wgsl_name(word)
+# a value the program's main level assigns, read through paint's values: its width is that of the value assigned
+wgsl_program_value(n: Node): list := {
+	word = name_of(n)
+	if shading.value_widths.has(word) { return [VALUES_NAME + "." + word, shading.value_widths[word]] }
+	assigned_code = wgsl_assigned_value(word)
+	if assigned_code == ø {
+		return wgsl_refused(n, "${word} is neither a variable of the function nor a value of the program")
+	}
+	if wgsl_name(word) != word {
+		return wgsl_refused(n, "a value named ${word} has no name in WGSL")
+	}
+	width = wgsl_value_width(assigned_code)
+	if width < 1 or width > 4 {
+		return wgsl_refused(n, "${word} is no number nor a vector of 2 to 4")
+	}
+	shading.value_widths[word] = width
+	shading.read_values += [word]
+	return [VALUES_NAME + "." + word, width]
+}
+# the width of a program value: that of its code as the shader would compute it, without keeping that translation
+wgsl_value_width(assigned_code: Node): int := {
+	if assigned_code is number or is_number_literal(assigned_code) { return 1 }
+	kept_functions = shading.written_functions
+	kept_specialized = shading.specialized
+	kept_refusal = shading.refusal
+	value = wgsl_expression(assigned_code, wgsl_scope({}))
+	refused_here = shading.refusal != kept_refusal
+	shading.written_functions = kept_functions
+	shading.specialized = kept_specialized
+	shading.refusal = kept_refusal
+	if refused_here then 1 else value#2
+}
+# `x = 3`, `global x = 3` at the program's main level: the value assigned first
+wgsl_assigned_value(word: text): any := {
+	found = program_statements(shading.program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
+	if #found == 0 then ø else value_of(found#1)
+}
+# `global x = 3`, parsed `global: (x = 3)`: the assignment it declares
+wgsl_declared(statement: Node): Node := if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") then value_of(statement) else statement
+wgsl_assigned_name(target: Node): text := {
+	if target is symbol { return name_of(target) }
+	if is_group(target) and #target > 0 and target.last is symbol then name_of(target.last) else ""
+}
+
+# --- functions ---
+
+wgsl_scope(hints: map): WgslScope := WgslScope({}, [], {}, {}, -1, hints, no, [])
+# f called with arguments of these widths: f written once per widths, by name, then `f_2` …
+wgsl_program_call(word: text, arguments: list, n: Node): list := {
+	if shading.refusal != "" { return ["0.0", 1] }
+	signature = word + " " + arguments.map(argument => "${argument#2}").join(" ")
+	if not shading.specialized.has(signature) {
+		if word in shading.calling {
+		return wgsl_refused(n, "${word} calls itself, which WGSL can't")
+	}
+		wgsl_function(word, arguments.map(argument => argument#2), signature, n)
+	}
+	if shading.refusal != "" { return ["0.0", 1] }
+	spelled_out = shading.specialized[signature]
+	return [spelled_out#1 + "(" + arguments.map(argument => argument#1).join(", ") + ")", spelled_out#2]
+}
+wgsl_function(word: text, widths: list, signature: text, n: Node) := {
+	defined = function_definition(symbol(word), shading.program)
+	parameters = definition_parameters(defined)
+	parameter_count = #parameters
+	argument_count = #widths
+	if parameter_count != argument_count {
+		wgsl_refused(n, "${word} takes ${parameter_count} values, given ${argument_count}")
+		return
+	}
+	body = body_of(symbol(word), shading.program)
+	plain_name = wgsl_name(word)
+	taken = if shading.written_names.has(plain_name) then shading.written_names[plain_name] else 0
+	shading.written_names[plain_name] = taken + 1
+	# the first function of a name keeps it, the next `name_2` …
+	wgsl_spelled = if taken == 0 then plain_name else plain_name + "_" + "${taken + 1}"
+	shading.calling += [word]
+	scope = wgsl_translated(body, parameters, widths, {})
+	attempts = 1
+	while scope.retry and attempts < MOST_ATTEMPTS {
+		scope = wgsl_translated(body, parameters, widths, scope.hints)
+		attempts += 1
+	}
+	shading.calling = shading.calling.filter(called => called != word)
+	if shading.refusal != "" {
+		# the innermost function names the refusal's place
+		if not shading.refusal.contains(REFUSED_IN) { shading.refusal = shading.refusal + REFUSED_IN + word }
+		return
+	}
+	if scope.returned < 0 {
+		wgsl_refused(n, "${word} gives no value")
+		return
+	}
+	declared = []
+	for i in 1 to #parameters { declared += [wgsl_parameter(parameters#i, widths#i, scope)] }
+	head = "fn " + wgsl_spelled + "(" + declared.join(", ") + ") -> " + wgsl_type(scope.returned) + " {"
+	copies = parameters.filter(parameter => scope.assigned.has(parameter)).map(parameter => "\tvar " + wgsl_name(parameter) + WGSL_ASSIGNS + wgsl_name(parameter) + "_in;")
+	locals = scope.locals.map(local => "\tvar " + wgsl_name(local) + ": " + wgsl_type(scope.widths[local]) + ";")
+	shading.written_functions += [([head] + copies + locals + scope.wgsl_lines + ["}"]).join("\n")]
+	shading.specialized[signature] = [wgsl_spelled, scope.returned]
+}
+# the function's body translated, its parameters of these widths, the variables' widths from hints
+wgsl_translated(body: Node, parameters: list, widths: list, hints: map): WgslScope := {
+	scope = wgsl_scope(hints)
+	for i in 1 to #parameters {
+		scope.widths[parameters#i] = widths#i
+		scope.parameters[parameters#i] = yes
+	}
+	wgsl_returning(body, scope, 1)
+	scope
+}
+wgsl_parameter(name: text, width: int, scope: WgslScope): text := wgsl_name(name) + (if scope.assigned.has(name) then "_in" else "") + ": " + wgsl_type(width)
+wgsl_indent(depth: int): text := {
+	indent = ""
+	for i in 1 to depth { indent += "\t" }
+	indent
+}
+
+# --- statements ---
+
+wgsl_statements_of(block: Node): list := {
+	items = if is_curly_group(block) then items_of(block) else [block]
+	items.filter(item => item != ø).flat_map(item => if is_statement_sequence(item) then wgsl_statements_of(item) else [item])
+}
+# the code as the function's value: its last statement returned
+wgsl_returning(n: Node, scope: WgslScope, depth: int) := {
+	if shading.refusal != "" { return }
+	if is_curly_group(n) or is_statement_sequence(n) {
+		body_statements = wgsl_statements_of(n)
+		if #body_statements == 0 {
+			wgsl_refused(n, "an empty block gives no value")
+			return
+		}
+		for statement in body_statements[0 ..< #body_statements - 1] { wgsl_statement(statement, scope, depth) }
+		wgsl_returning(body_statements.last, scope, depth)
+		return
+	}
+	if is_key(n, Op.Else) and is_key(key_of(n), Op.Then) and (is_curly_group(value_of(key_of(n))) or is_curly_group(value_of(n))) {
+		scope.wgsl_lines += [wgsl_indent(depth) + "if (" + wgsl_condition(value_of(key_of(key_of(n))), scope) + ") {"]
+		wgsl_returning(value_of(key_of(n)), scope, depth + 1)
+		scope.wgsl_lines += [wgsl_indent(depth) + "} else {"]
+		wgsl_returning(value_of(n), scope, depth + 1)
+		scope.wgsl_lines += [wgsl_indent(depth) + "}"]
+		return
+	}
+	if wgsl_is_statement(n) {
+		wgsl_statement(n, scope, depth)
+		return
+	}
+	wgsl_return(n, scope, depth)
+}
+wgsl_return(n: Node, scope: WgslScope, depth: int) := {
+	value = wgsl_expression(n, scope)
+	if scope.returned < 0 { scope.returned = if scope.hints.has("") then scope.hints[""] else value#2 }
+	if value#2 > 1 and scope.returned == 1 {
+		scope.hints[""] = value#2
+		scope.retry = yes
+	}
+	if value#2 > 1 and scope.returned > 1 and value#2 != scope.returned { wgsl_refused(n, "a function giving vectors of ${scope.returned} and ${value#2}") }
+	scope.wgsl_lines += [wgsl_indent(depth) + "return " + wgsl_splat(value, scope.returned) + ";"]
+}
+wgsl_is_statement(n: Node): bool := is_key(n, Op.Assign) or wgsl_compound(n) != "" or wgsl_is_loop(n) or n == symbol("break") or wgsl_is_return(n) or (is_key(n, Op.Then) and is_key(key_of(n), Op.If))
+wgsl_is_loop(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 5 and n#1 == symbol("for") and n#3 == symbol("in")
+wgsl_is_return(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 == symbol("return")
+
+wgsl_statement(n: Node, scope: WgslScope, depth: int) := {
+	if shading.refusal != "" { return }
+	indent = wgsl_indent(depth)
+	if is_key(n, Op.Assign) and key_of(n) is symbol { wgsl_assign(name_of(key_of(n)), wgsl_expression(value_of(n), scope), n, scope, depth) }
+	else if wgsl_compound(n) != "" and key_of(n) is symbol { wgsl_changed(n, scope, depth) }
+	else if n == symbol("break") { scope.wgsl_lines += [indent + "break;"] }
+	else if wgsl_is_return(n) { wgsl_return(n#2, scope, depth) }
+	else if wgsl_is_loop(n) { wgsl_loop(n, scope, depth) }
+	else if is_key(n, Op.Else) and is_key(key_of(n), Op.Then) and is_key(key_of(key_of(n)), Op.If) {
+		scope.wgsl_lines += [indent + "if (" + wgsl_condition(value_of(key_of(key_of(n))), scope) + ") {"]
+		wgsl_block(value_of(key_of(n)), scope, depth + 1)
+		scope.wgsl_lines += [indent + "} else {"]
+		wgsl_block(value_of(n), scope, depth + 1)
+		scope.wgsl_lines += [indent + "}"]
+	} else if is_key(n, Op.Then) and is_key(key_of(n), Op.If) {
+		scope.wgsl_lines += [indent + "if (" + wgsl_condition(value_of(key_of(n)), scope) + ") {"]
+		wgsl_block(value_of(n), scope, depth + 1)
+		scope.wgsl_lines += [indent + "}"]
+	} else { wgsl_refused(n, "WGSL has no statement for " + form_of(n)) }
+}
+# `x += 1`: a variable changed in place
+wgsl_changed(n: Node, scope: WgslScope, depth: int) := {
+	word = name_of(key_of(n))
+	if not scope.widths.has(word) {
+		wgsl_refused(n, "${word} changed before it is assigned")
+		return
+	}
+	if scope.parameters.has(word) { scope.assigned[word] = yes }
+	value = wgsl_expression(value_of(n), scope)
+	scope.wgsl_lines += [wgsl_indent(depth) + wgsl_name(word) + " " + wgsl_compound(n) + " " + wgsl_splat(value, scope.widths[word]) + ";"]
+}
+wgsl_compound(n: Node): text := if n is key and op_of(n) in [Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign] then wgsl_operator(op_of(n)) else ""
+wgsl_block(block: Node, scope: WgslScope, depth: int) := {
+	for statement in wgsl_statements_of(block) { wgsl_statement(statement, scope, depth) }
+}
+# `name = value`: a new variable of the function declared at its top (WGSL's blocks would hide it after a branch)
+wgsl_assign(word: text, value: list, n: Node, scope: WgslScope, depth: int) := {
+	if scope.parameters.has(word) { scope.assigned[word] = yes }
+	if not scope.widths.has(word) {
+		scope.widths[word] = if scope.hints.has(word) and scope.hints[word] > value#2 then scope.hints[word] else value#2
+		scope.locals += [word]
+	}
+	width = scope.widths[word]
+	if value#2 > 1 and width == 1 {
+		scope.hints[word] = value#2
+		scope.retry = yes
+	}
+	if value#2 > 1 and width > 1 and value#2 != width { wgsl_refused(n, "${word} holds vectors of ${width} and ${value#2}") }
+	if value#2 == 0 and width != 0 { wgsl_refused(n, "${word} holds a number and yes/no") }
+	scope.wgsl_lines += [wgsl_indent(depth) + wgsl_name(word) + WGSL_ASSIGNS + wgsl_splat(value, width) + ";"]
+}
+# `for i in a..b {…}`: i counting as a number from a below b (`a to b` up to b)
+wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
+	counter = n#2
+	range = n#4
+	if not (counter is symbol) or not (is_key(range, Op.Range) or is_key(range, Op.To)) {
+		wgsl_refused(n, "a loop over a range `for i in a..b`")
+		return
+	}
+	word = name_of(counter)
+	start = wgsl_expression(key_of(range), scope)
+	end = wgsl_expression(value_of(range), scope)
+	if start#2 != 1 or end#2 != 1 {
+		wgsl_refused(n, "a range of numbers")
+		return
+	}
+	scope.widths[word] = 1
+	below = if is_key(range, Op.To) then " <= " else " < "
+	name = wgsl_name(word)
+	scope.wgsl_lines += [wgsl_indent(depth) + "for (var " + name + WGSL_ASSIGNS + start#1 + "; " + name + below + end#1 + "; " + name + " += 1.0) {"]
+	wgsl_block(n#5, scope, depth + 1)
+	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
+}
+
 # `let n = 5` is the assignment `n = 5`, where its name was written noted (core/passes/lambdas.warp
 # local_declarations): inside a lambda the name stays the lambda's own, not the scope's (card let-inside)
 declared_local(declaration: Node): Node := {
@@ -221,4 +753,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, wgsl_shader: wgsl_shader, wgsl_shader_values: wgsl_shader_values}

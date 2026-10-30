@@ -1,7 +1,7 @@
 # Shaders written in warp
 
-`paint(f, width, height)` compiles a warp function `f(x, y)` to a fragment shader
-(src/lowering/foreign/gpu_maps/kernels.rs), with the program's numbers it reads as the shader's values; the same
+`paint(f, width, height)` compiles a warp function `f(x, y)` to a fragment shader (lib/sugar/shaders.warp's rules
+call lib/rule_words.warp's wgsl_shader in the compiler; the Rust era's was src/lowering/foreign/gpu_maps/kernels.rs), with the program's numbers it reads as the shader's values; the same
 functions run on the CPU where there is no GPU. `shader { … }` blocks of WGSL with `$name` holes stay for hand-written
 shaders. `shader_of(f)` is the WGSL that paint compiles f to. Samples: samples/sound/gpu_visualizer_warp.warp (the
 tunnel as warp functions, playing mozart.mp3; native only), samples/gpu/warp_compiled_wgsl_shader.warp (three
@@ -31,9 +31,20 @@ raymarches a sum of dragged exp(sin − 1) waves under an analytic sky with two 
 post chain (white balance, highlight bleach, AgX + look) as is; card gpu-multipass for the real pipeline.
 - Settings and camera are program numbers (globals the shader reads); program *lists* don't reach kernels as vectors
   yet (card kernel-global-lists): constant colors and the sun direction are zero-parameter functions.
-- shader_of refuses without a reason (card kernel-refusal-reason): bisect with `g(x, y) := part(…)` and
-  `print shader_of(g)`; a paint function must give a 3-list (a 4-list as color is refused too).
+- shader_of names the form it refuses and the function it is in; a paint function must give a 3-list (a 4-list as color is refused too).
 - The painted functions only work on the GPU: their CPU fallback (WARP_GPU=off) fails on vector parameters
   (card vector-params-cpu); vector math must use the dotted operators, `p - 289 * floor(p / 289)` types p as a number.
 - Original's visual check without a local browser: probes/ocean/screenshot_on_server.sh (agent-browser + SwiftShader on
   pannous.com) — it runs (906 CDLOD nodes, 60 fps) but SwiftShader gives a white frame; compare with its docs/*.jpg.
+
+## Writing rule words (lib/rule_words.warp)
+The translator runs inside the compiler as rule words, which the seed compiles; there these refuse or misbuild:
+- no `global`: keep state in a main-level class instance with mutable fields (`shading`)
+- no `: nothing` result type on a procedure (`name(...) := {` instead), else "an assignment to `… : …`"
+- calls only inside `${…}` are not reached ("the call … (no owner)", card hole-calls-unreached); `${#xs}` refuses
+  (card count-in-interpolation): compute into a local first
+- a line starting with `[` or `(` glues to the statement before it as indexing or a call: `return [...]`
+- locals must not shadow a core function or global name; map keys that are operator words (ln, sqrt, π) are quoted
+- a lib module used by a std module is followed only if rewrites.warp's std_module_names lists it (card
+  nested-module-use), so the translator lives in rule_words.warp itself
+- `use math` brings lib's own `cosine` etc. into the program: WGSL's words are looked up before program functions

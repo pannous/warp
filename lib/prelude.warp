@@ -393,6 +393,9 @@ paint_each(f, width, height) := {
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a function, f(column, row)
 // of each pixel on the CPU (paint_each)
 paint(picture, width, height) := if picture is list then paint(picture, width, height, ø) else paint_each(picture, width, height)
+// paint(f, width, height) of a program function, as lib/sugar/shaders.warp compiles it: its shader on the GPU, f of each
+// pixel on the CPU where the host has none
+paint_shader(shader: text, width, height, values, f) := if gpu_paints() then paint(shader, width, height, values) else paint_each(f, width, height)
 // paint(shader) of a WGSL shader text, at the view's size (wiki/graphics.md)
 paint(shader: text) := paint(shader, view_width(), view_height(), ø)
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
@@ -438,6 +441,7 @@ window_open() := system_value("window_open") != 0
 view_width() := system_value("view_width")
 view_height() := system_value("view_height")
 gpu_drawing() := system_value("gpu_drawing") != 0
+gpu_paints() := system_value("gpu_paints") != 0
 window_width() := system_value("window_width")
 window_height() := system_value("window_height")
 display_width() := system_value("display_width")
