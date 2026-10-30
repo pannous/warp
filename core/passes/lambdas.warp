@@ -189,7 +189,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {}; statements: list = []; word_closures: map = {} }
+class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {}; statements: list = [] }
 
 ## the walk
 
@@ -263,17 +263,10 @@ declared_word_value(word: Node, uses: list, locals: list, lowering: Lowering): N
 }
 # the one count of values the uses call a value with, when a line of the word takes it; else ø
 used_count(uses: list, lines: list): int? := if #uses > 0 and uses.all(n => n == uses#1) and lines.any(line => takes(line.signature, uses#1)) then uses#1 else ø
-# the closure of the function calling the word with `taken` values, one per word and count
+# the closure of the function calling the word with `taken` values, a lambda's
 word_closure(name: text, taken: int, lowering: Lowering): Node := {
-	key = name + "·" + taken
-	if not lowering.word_closures.has(key) {
-		wrapper = lifted_prefix + fresh_number()
-		parameters = (1 to taken).map(i => symbol("value" + i))
-		lowering.lambdas_lifted += [Key(call_node(symbol(wrapper), parameters), Op.Define, call_node(symbol(name), parameters))]
-		lowering.arities[wrapper] = taken
-		lowering.word_closures[key] = wrapper
-	}
-	call_node(symbol("closure_new"), [symbol(lowering.word_closures[key])])
+	parameters = (1 to taken).map(i => symbol("value" + i))
+	lifted(Key(List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, call_node(symbol(name), parameters)), [], lowering)
 }
 # the counts of values the name is called with in the statements, `f(1, 2)` and `f 1 2`
 called_counts(name: Node, statements: list): list := {
