@@ -208,6 +208,7 @@ ELEMENT_WISE = {".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^"}
 SWIZZLE_LETTERS = "xyzwrgba"
 # WGSL's assignment between a name and its value
 WGSL_ASSIGNS = " = "
+REFUSED_IN = " in function "
 COMPONENTS = ["x", "y", "z", "w"]
 
 # a function being translated: its variables' widths (1 a number, 2 to 4 a vector, 0 yes/no), its own variables to
@@ -296,7 +297,7 @@ wgsl_expression(n: Node, scope: WgslScope): list := {
 	if is_group(n) and bracket_of(n) == "[" { return wgsl_vector(items_of(n), n, scope) }
 	if is_group(n) and bracket_of(n) == "(" { return wgsl_round(n, scope) }
 	if is_group(n) and bracket_of(n) == "" { return wgsl_spaced(n, scope) }
-	wgsl_refused(n, "WGSL has no form for it")
+	wgsl_refused(n, "WGSL has no form for " + form_of(n))
 }
 
 wgsl_operation(left: Node, op: Op, right: Node, n: Node, scope: WgslScope): list := {
@@ -409,7 +410,7 @@ wgsl_spaced(n: Node, scope: WgslScope): list := {
 		return ["(" + a#1 + " " + element_op + " " + b#1 + ")", wgsl_common_width([a, b], n)]
 	}
 	if #items >= 2 and items#1 is symbol { return wgsl_call(items#1, items[1 ..], n, scope) }
-	wgsl_refused(n, "WGSL has no form for it")
+	wgsl_refused(n, "WGSL has no form for " + form_of(n))
 }
 wgsl_is_function(name: Node): bool := WGSL_WORDS.has(name_of(name)) or function_definition(name, shading.program) != ø
 
@@ -535,7 +536,11 @@ wgsl_function(word: text, widths: list, signature: text, n: Node) := {
 		attempts += 1
 	}
 	shading.calling = shading.calling.filter(called => called != word)
-	if shading.refusal != "" { return }
+	if shading.refusal != "" {
+		# the innermost function names the refusal's place
+		if not shading.refusal.contains(REFUSED_IN) { shading.refusal = shading.refusal + REFUSED_IN + word }
+		return
+	}
 	if scope.returned < 0 {
 		wgsl_refused(n, "${word} gives no value")
 		return
@@ -630,7 +635,7 @@ wgsl_statement(n: Node, scope: WgslScope, depth: int) := {
 		scope.wgsl_lines += [indent + "if (" + wgsl_condition(value_of(key_of(n)), scope) + ") {"]
 		wgsl_block(value_of(n), scope, depth + 1)
 		scope.wgsl_lines += [indent + "}"]
-	} else { wgsl_refused(n, "a statement WGSL has no form for") }
+	} else { wgsl_refused(n, "WGSL has no statement for " + form_of(n)) }
 }
 # `x += 1`: a variable changed in place
 wgsl_changed(n: Node, scope: WgslScope, depth: int) := {
