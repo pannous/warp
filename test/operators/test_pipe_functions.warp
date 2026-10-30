@@ -1,0 +1,19 @@
+# Operator behavior: notes/decisions.md D6 (card pipe-functions-tests)
+
+# a value piped through functions of the program, left to right
+is! 'inc(x) := x + 1; dbl(x) := x * 2; y = 3 | inc | dbl; y' 8
+
+# a pipe in an argument
+is! 'inc(x) := x + 1; identity(x) := x; identity(4 | inc)' 5
+
+# two functions piped together are their composition, a function value
+is! 'inc(x) := x + 1; dbl(x) := x * 2; both = inc | dbl; both(1)' 4
+
+# a composition as an iteration's function
+is! 'inc(x) := x + 1; dbl(x) := x * 2; [1, 2].map(inc | dbl)' [4 6]
+
+# a value piped into a library word of one value
+is! '" ab " | trim' 'ab'
+
+# between values the bar stays the logical or
+is! 'a = yes; b = no; a | b' yes
