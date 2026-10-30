@@ -6,6 +6,7 @@ use "bridge.warp"
 use "lists.warp"
 use "show.warp"
 use "types.warp"
+use "nodes.warp"
 # `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: Node, b: Node): Node := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
@@ -27,12 +28,7 @@ marks_kept(result: Node, a: Node, b: Node): Node := {
 	if mark == 0 { mark = carried_mark(result, b) }
 	if mark == 0 then result else with_kind(result, mark)
 }
-carried_mark(result: Node, x: Node): int := {
-	if is_null(x) or is_null(result) or kind_code(x) != kind_code(result) { return 0 }
-	mark = marked_kind(x)
-	if mark >= KindUnit.Separator or mark /! KindUnit.Info < FIRST_INT_MARK { return 0 }
-	mark
-}
+carried_mark(result: Node, x: Node): int := if is_null(x) or is_null(result) or kind_code(x) != kind_code(result) or code_bit(x) != 0 or info_byte(x) < FIRST_INT_MARK then 0 else marked_kind(x)
 # a + b, a - b, a * b of two plain ints held boxed (nats): past 64 bits the big int they make (D16, the extended runtime's exact words)
 grown_sum(a: int, b: int): Node := if sum_overflows(a, b) then extended_sum(a, b) else a + b
 grown_difference(a: int, b: int): Node := if difference_overflows(a, b) then extended_difference(a, b) else a - b
