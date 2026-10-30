@@ -911,10 +911,10 @@ register(flows: list) := {
 
 # a linked module's word, declared without its body: its kinds and result are those the module was compiled with
 # (Module.linked_words)
-declares_linked(name: Name): bool := name in module.linked_words and #module.linked_words[name].kinds == #function_parameters(name)
+declares_linked(name: Name): bool := linked_variant(name, #function_parameters(name)) != ø
 declared_linked(name: Name, scope: Scope) := {
-	word = module.linked_words[name]
 	parameters = function_parameters(name)
+	word = linked_variant(name, #parameters)
 	for index in 0..<#parameters {
 		own = parameters[index].name
 		scope.kinds[own] = word.kinds[index]

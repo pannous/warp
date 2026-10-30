@@ -95,6 +95,9 @@ made_case kind made, since no program decides any more what it makes.
   globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails is said
   on stderr ("units: the linked module didn't bind (…); compiled from source") and the program compiled from source.
   No separate warp.declarations section: the compiler already carries every bundled module's parse.
+- A linked name keeps all its variants (card module-export-arity): draw's own show() beside the show(x) builder the
+  host calls, which the layout names by index, not by name. A program's call takes the variant whose count of values
+  fits (prebuilt.warp linked_variant); one that none takes is refused naming theirs, never bound to another.
 - Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
   go into the program's dispatcher; module code calls the runtime's hook stubs.
 - Built (2026-10-28): `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder> [runtime.wasm]`

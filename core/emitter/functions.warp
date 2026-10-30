@@ -261,7 +261,7 @@ type_synonyms(): map := {
 names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: list): any := {
 	# a linked module's word the program only declares (no body): its code is the module's (bind_library_words)
-	if f.name in module.linked_words and f.body == Node.Empty { return refuse("the linked word " + f.name + " not bound") }
+	if f.name in module.linked_words and f.body == Node.Empty { return refuse(linked_arity_refusal(f.name, #f.signature.parameters)) }
 	placed(f)
 	if is_primitive_function(f) { return primitive_compiled(f) }
 	parameter_kinds = []
