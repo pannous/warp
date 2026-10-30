@@ -1,9 +1,10 @@
 # Cards for the timed Codex worker (notes/agents/codex_worker.sh), in order; the Supervisor keeps this list.
 # Library work only (lib/, samples/, test/, wiki/), away from the sessions changing core/ (user 2026-10-26).
-list-word-methods       # list words range(…), dot, insert, array(…), random(n)
-canvas-paint-arity      # canvas words: paint(…) with 1 or 3 arguments, window size typing
-gpu-arrays-samples      # gpu samples: gpu_arrays field totals, gpu_map sin, shader_of
-pure-units-quantity-sum # use units; quantity(5,"m") + quantity(3,"m")
-as-list-of-rule         # ["1","2"] as list of int: the lib/sugar/lists.warp rule does not fire
-sized-declaration       # x : 3 int (test/numbers/test_zero_fill): unknown name x; may need core, then release
-runtime-docs            # README for the runtime library (core vs extended split)
+# Refreshed 2026-10-30: the old top two (list-word-methods, canvas-paint-arity) need core and were released every run.
+pipe-functions-tests        # land tests/operators/test_pipe_functions.warp under test/operators
+alias-arc-cosine            # alias acos = arc_cosine in lib/aliases.warp
+linear-hint-warp            # prefer xs = float[n] over linear: the hint, in lib
+typed-parse                 # parse<T>(json) checks the data against T: lib/json.warp
+sum-element-type            # type the prelude sum as sum(xs: list)
+plural-type-words-are-lists # plural type words are list types: a rule in lib/sugar
+as-list-of-rule             # ["1","2"] as list of int: the lib/sugar/lists.warp rule does not fire
