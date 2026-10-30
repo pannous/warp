@@ -240,7 +240,7 @@ passed_value(argument: Node, at: int, callee: Node, locals: list, lowering: Lowe
 # whether a word passed at `at` is a function value there: but where a word warp declares takes it as a word,
 # `empty_extremum(min)`, a parameter it doesn't declare a function
 gives_word_value(callee: Node, at: int, locals: list, lowering: Lowering): bool := {
-	if not (callee is symbol) or name_of(callee) in locals or name_of(callee) in lowering.arities { return yes }
+	if not (callee is symbol) or is_variable(name_of(callee), locals, lowering) or name_of(callee) in lowering.arities { return yes }
 	lines = value_word_lines(name_of(callee))
 	#lines == 0 or lines.any(line => at <= #line.signature.parameters and line.signature.parameters[at - 1].type_name in function_types_named)
 }
@@ -253,7 +253,7 @@ function_types_named = ["function", "block", "callable"]
 declared_word_value(word: Node, uses: list, locals: list, lowering: Lowering): Node? := {
 	if not (word is symbol) { return ø }
 	name = name_of(word)
-	if name in locals or name in lowering.arities or is_tested_type_word(name) { return ø }
+	if is_variable(name, locals, lowering) or name in lowering.arities or is_tested_type_word(name) { return ø }
 	lines = value_word_lines(name)
 	if #lines == 0 { return ø }
 	fixed = lines.map(line => arity(line.signature)).filter(span => span#1 == span#2).map(span => span#1)
