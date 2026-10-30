@@ -29,6 +29,14 @@ slice_origins(files: list): map := {
 	}
 	found
 }
+# [file, line] of a bundled file's slice by its key, `<file> <start>`, from the baked text: no file read once the
+# compiler is built, and only the slices a program reaches (all of the prelude's took 35 MB to compile hello)
+baked_origin(key: text, files: list): list := {
+	within = key.split(" ")#1
+	start = key.split(" ")#2 as int
+	path = files.filter(file => library_path(file) == within)#1
+	[working_relative(path), #LIBRARY_FILES[within][0 ..< start].split("\n")]
+}
 # the place of each definition of a used file, as brought from it
 note_file_origins(file: text, source: text) := {
 	origins = slice_origins([file])
@@ -285,7 +293,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and slice#2 not in reached {
-				baked = SLICE_PARSES.get(keys.get(slice#2) ?? "")
+				key = keys.get(slice#2)
+				baked = SLICE_PARSES.get(key ?? "")
 				if baked == ø and uses == ø { uses = use_lines(module) }
 				slice_node = early_sugared(if baked != ø then unpack(baked) else plain_node(parsed(slice#2, uses)))
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
@@ -293,8 +302,9 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 				else if slice#2 in declared { slice_node = declared_only(slice_node) }
 				slice_node = with_own_locals(slice_node, program_globals)
 				reached[slice#2] = statements_in(slice_node)
-				if #origins == 0 { origins = slice_origins(files) }
-				if origins.has(slice#2) { defined_origins[slice#1] = origins[slice#2] }
+				if key == ø and #origins == 0 { origins = slice_origins(files) }
+				origin = if key != ø then baked_origin(key, files) else origins.get(slice#2)
+				if origin != ø { defined_origins[slice#1] = origin }
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
