@@ -164,10 +164,10 @@ def runtime_sections(functions: list): list {
 	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)) + signature_bytes(f.signature)))
 	name = if module.prebuilding then runtime_section else library_section
 	# a library module's: where its own items start (what it was built behind), how many closures it makes, its class
-	# structs, the linked program's own of their names and definitions, and the host's builders it exports (a program
+	# structs, the linked program's own of their names and definitions, and the host's builders it exports by index (a program
 	# linking it exports its own)
 	classes = module.gc_order[#gc_names ..]
-	behind = if module.prebuilding then [] else vector(module.own_from.map(uleb)) + vector(module.closures.map(made => name_bytes(made#1) + uleb(made#2) + name_bytes(closure_shown(made#1, made#2)))) + vector(classes.map(name => name_bytes(name) + name_bytes(struct_written(name)))) + vector(module.builders.map(f => name_bytes(f.name))) + vector(c_imports().map(entry => name_bytes(entry#2)))
+	behind = if module.prebuilding then [] else vector(module.own_from.map(uleb)) + vector(module.closures.map(made => name_bytes(made#1) + uleb(made#2) + name_bytes(closure_shown(made#1, made#2)))) + vector(classes.map(name => name_bytes(name) + name_bytes(struct_written(name)))) + vector(module.builders.map(f => uleb(f.index))) + vector(c_imports().map(entry => name_bytes(entry#2)))
 	section(section_ids.custom, name_bytes(name) + counts + names + globals + words + behind) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
 }
 # a word's signature in warp.runtime, what a call of it reads (named arguments, defaults, a rest parameter, the declared

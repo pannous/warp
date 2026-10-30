@@ -3,18 +3,17 @@
 # 2026-10-30: a library change needs no compiler rebuild). Hello runs with WARP_LIB=<worktree>/lib, which reads every
 # changed module and sugar rule anew:
 #   - lib/ only: no build; the installed compilers are cloned into the worktree's lib/ (copy-on-write, ignored files)
-#   - core/, or a lib/ file the compiler reads at its own build (BAKED: prelude, aliases, math's typed lines, rule
-#     words): said loudly with the files, then `scripts/rebuild.sh pure <worktree>` first (core/: run
+#   - core/, or a lib/ file the compiler reads at its own build (BAKED, compiler-inputs.sh --baked-files): said loudly with the files, then `scripts/rebuild.sh pure <worktree>` first (core/: run
 #     `scripts/self-check.sh <worktree>` too)
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
 set -uo pipefail
 INSTALLED=$HOME/dev/bin/warp
-BAKED='^(core/|lib/prelude\.warp$|lib/aliases\.warp$|lib/math\.warp$|lib/rule_words\.warp$)'
 COMPILERS=(warp.wasm warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
 EXPECTED=Hello
 
 tree=$(cd "${1:?usage: smoke.sh <worktree>}" && pwd) || exit 2
 scripts=$(cd "$(dirname "$0")" && pwd)
+BAKED="^(core/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --baked-files | sed 's/\./\\./g')))"
 installed=$(dirname "$(readlink -f "$INSTALLED")")
 base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED")

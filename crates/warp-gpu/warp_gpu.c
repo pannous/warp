@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "warp_node.h"
 
 #define FULL_IMAGE_VERTICES "\n@vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> @builtin(position) vec4f {\n" \
 	"\treturn vec4f(f32(corner / 2u) * 4.0 - 1.0, f32(corner % 2u) * 4.0 - 1.0, 0.0, 1.0);\n}"
@@ -214,18 +215,73 @@ static void mapped(WGPUMapAsyncStatus status, WGPUStringView message, void* done
 	*(int*)done = status == WGPUMapAsyncStatus_Success ? 1 : -1;
 }
 
-static WGPUBindGroup bindings_of(WGPURenderPipeline pipeline, const WGPUBindGroupEntry* entry) {
+static WGPUBindGroup bindings_of(WGPURenderPipeline pipeline, const WGPUBindGroupEntry* entries, size_t count) {
 	WGPUBindGroupDescriptor group = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
 	group.layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0);
-	group.entryCount = 1;
-	group.entries = entry;
+	group.entryCount = count;
+	group.entries = entries;
 	WGPUBindGroup bindings = wgpuDeviceCreateBindGroup(device, &group);
 	wgpuBindGroupLayoutRelease(group.layout);
 	return bindings;
 }
-// --- a drawing: the shader's pipeline for a target format, its values' uniform bound, the full image drawn
-typedef struct { WGPURenderPipeline pipeline; WGPUBuffer uniform; WGPUBindGroup bindings; } Drawing;
-static int drawing_made(const char* shader, const char* values, WGPUTextureFormat format, Drawing* drawing) {
+static WGPUTexture texture_of(int32_t width, int32_t height, WGPUTextureUsage usage) {
+	WGPUTextureDescriptor descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
+	descriptor.size = (WGPUExtent3D){(uint32_t)width, (uint32_t)height, 1};
+	descriptor.format = WGPUTextureFormat_RGBA8Unorm;
+	descriptor.usage = usage;
+	return wgpuDeviceCreateTexture(device, &descriptor);
+}
+
+// --- `$previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size,
+// black before the first, kept on the GPU, as web/playground/host-gpu.js PREVIOUS_FRAME keeps it
+#define PREVIOUS_HOLE VALUES_NAME ".previous"
+#define PREVIOUS_FUNCTION "warp_previous"
+#define PREVIOUS_FRAME "\n@group(0) @binding(1) var warp_previous_frame: texture_2d<f32>;\n" \
+	"fn " PREVIOUS_FUNCTION "(at: vec2f) -> vec4f {\n" \
+	"\tlet last = vec2i(textureDimensions(warp_previous_frame)) - vec2i(1);\n" \
+	"\treturn textureLoad(warp_previous_frame, clamp(vec2i(at), vec2i(0), last), 0);\n}"
+enum { PREVIOUS_FRAME_BINDING = 1 };
+static char* previous_code;
+static WGPUTexture previous_image;
+static int32_t previous_width, previous_height;
+static int name_char(char c) { return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); }
+static int reads_previous(const char* shader) {
+	for (const char* at = strstr(shader, PREVIOUS_HOLE); at; at = strstr(at + 1, PREVIOUS_HOLE))
+		if (!name_char(at[strlen(PREVIOUS_HOLE)])) return 1;
+	return 0;
+}
+// the shader with each values.previous a call of warp_previous
+static char* previous_called(const char* shader) {
+	char* code = malloc(strlen(shader) + 1);
+	char* into = code;
+	for (const char* at = shader; *at;) {
+		if (!strncmp(at, PREVIOUS_HOLE, strlen(PREVIOUS_HOLE)) && !name_char(at[strlen(PREVIOUS_HOLE)])) {
+			into += sprintf(into, PREVIOUS_FUNCTION);
+			at += strlen(PREVIOUS_HOLE);
+		} else *into++ = *at++;
+	}
+	*into = 0;
+	return code;
+}
+// the frame this shader drew last at this size, else a black one, kept as previous_image
+static WGPUTexture previous_frame(const char* code, int32_t width, int32_t height) {
+	if (previous_image && previous_width == width && previous_height == height && !strcmp(previous_code, code)) return previous_image;
+	if (previous_image) wgpuTextureRelease(previous_image);
+	free(previous_code);
+	previous_code = strdup(code);
+	previous_width = width;
+	previous_height = height;
+	return previous_image = texture_of(width, height, WGPUTextureUsage_TextureBinding);
+}
+// the image just drawn becomes the shader's previous frame
+static void previous_kept(WGPUTexture image) {
+	if (previous_image) wgpuTextureRelease(previous_image);
+	previous_image = image;
+}
+
+// --- a drawing: the shader's pipeline for a target format, its values' uniform and its previous frame bound
+typedef struct { WGPURenderPipeline pipeline; WGPUBuffer uniform; WGPUBindGroup bindings; WGPUTextureView previous; int reads_previous; } Drawing;
+static int drawing_made(const char* shader, const char* values, WGPUTextureFormat format, int32_t width, int32_t height, Drawing* drawing) {
 	*drawing = (Drawing){0};
 	failure[0] = 0;
 	if (!device_ready()) return 0;
@@ -234,31 +290,45 @@ static int drawing_made(const char* shader, const char* values, WGPUTextureForma
 	layout.members = 0;
 	layout.declarations[0] = 0;
 	if (!values_laid_out(values, &layout)) return 0;
-	size_t code_size = strlen(shader) + sizeof FULL_IMAGE_VERTICES + MOST_DECLARATIONS + 128;
+	drawing->reads_previous = reads_previous(shader);
+	char* body = drawing->reads_previous ? previous_called(shader) : strdup(shader);
+	size_t code_size = strlen(body) + sizeof FULL_IMAGE_VERTICES + sizeof PREVIOUS_FRAME + MOST_DECLARATIONS + 128;
 	char* code = malloc(code_size);
-	snprintf(code, code_size, "%s%s", shader, FULL_IMAGE_VERTICES);
+	snprintf(code, code_size, "%s%s", body, FULL_IMAGE_VERTICES);
+	free(body);
 	if (layout.members) {
 		size_t used = strlen(code);
 		snprintf(code + used, code_size - used, "\nstruct WarpValues { %s }\n@group(0) @binding(%d) var<uniform> " VALUES_NAME ": WarpValues;",
 			layout.declarations, VALUES_BINDING);
 	}
+	if (drawing->reads_previous) strcat(code, PREVIOUS_FRAME);
 	drawing->pipeline = pipeline_of(code, format);
+	WGPUBindGroupEntry entries[2];
+	size_t count = 0;
+	if (drawing->pipeline && layout.members) {
+		uint64_t size = layout.count * sizeof(float);
+		drawing->uniform = buffer_of(size, WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst);
+		wgpuQueueWriteBuffer(queue, drawing->uniform, 0, layout.floats, size);
+		entries[count] = (WGPUBindGroupEntry)WGPU_BIND_GROUP_ENTRY_INIT;
+		entries[count].binding = VALUES_BINDING;
+		entries[count].buffer = drawing->uniform;
+		entries[count++].size = size;
+	}
+	if (drawing->pipeline && drawing->reads_previous) {
+		drawing->previous = wgpuTextureCreateView(previous_frame(code, width, height), NULL);
+		entries[count] = (WGPUBindGroupEntry)WGPU_BIND_GROUP_ENTRY_INIT;
+		entries[count].binding = PREVIOUS_FRAME_BINDING;
+		entries[count++].textureView = drawing->previous;
+	}
 	free(code);
 	if (!drawing->pipeline) return 0;
-	if (!layout.members) return 1;
-	uint64_t size = layout.count * sizeof(float);
-	drawing->uniform = buffer_of(size, WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst);
-	wgpuQueueWriteBuffer(queue, drawing->uniform, 0, layout.floats, size);
-	WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
-	entry.binding = VALUES_BINDING;
-	entry.buffer = drawing->uniform;
-	entry.size = size;
-	drawing->bindings = bindings_of(drawing->pipeline, &entry);
+	if (count) drawing->bindings = bindings_of(drawing->pipeline, entries, count);
 	return 1;
 }
 static void drawing_released(Drawing* drawing) {
 	if (drawing->bindings) wgpuBindGroupRelease(drawing->bindings);
 	if (drawing->uniform) wgpuBufferRelease(drawing->uniform);
+	if (drawing->previous) wgpuTextureViewRelease(drawing->previous);
 }
 // the drawing's full image drawn into the view, by the encoder
 static void drawn(WGPUCommandEncoder encoder, WGPUTextureView view, const Drawing* drawing) {
@@ -282,19 +352,25 @@ static void submitted(WGPUCommandEncoder encoder) {
 	wgpuCommandBufferRelease(commands);
 	wgpuCommandEncoderRelease(encoder);
 }
+// the drawing drawn into an image of its own (RGBA8), by the encoder; one a later frame reads as previous can be bound
+static WGPUTexture image_drawn(WGPUCommandEncoder encoder, const Drawing* drawing, int32_t width, int32_t height) {
+	WGPUTexture image = texture_of(width, height, WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc | WGPUTextureUsage_TextureBinding);
+	WGPUTextureView view = wgpuTextureCreateView(image, NULL);
+	drawn(encoder, view, drawing);
+	wgpuTextureViewRelease(view);
+	return image;
+}
+// the image kept as the drawing's previous frame, else let go
+static void image_done(const Drawing* drawing, WGPUTexture image) {
+	if (drawing->reads_previous) previous_kept(image); else wgpuTextureRelease(image);
+}
 
 // the shader's pixels, row by row as 0xAARRGGBB, into `pixels` (width × height); 0, else -1 and warp_gpu_failure()
 int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_t height, uint32_t* pixels) {
 	Drawing drawing;
-	if (!drawing_made(shader, values, WGPUTextureFormat_RGBA8Unorm, &drawing)) return -1;
-	WGPUTextureDescriptor texture_descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
-	texture_descriptor.size = (WGPUExtent3D){(uint32_t)width, (uint32_t)height, 1};
-	texture_descriptor.format = WGPUTextureFormat_RGBA8Unorm;
-	texture_descriptor.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc;
-	WGPUTexture image = wgpuDeviceCreateTexture(device, &texture_descriptor);
-	WGPUTextureView image_view = wgpuTextureCreateView(image, NULL);
+	if (!drawing_made(shader, values, WGPUTextureFormat_RGBA8Unorm, width, height, &drawing)) return -1;
 	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
-	drawn(encoder, image_view, &drawing);
+	WGPUTexture image = image_drawn(encoder, &drawing, width, height);
 
 	uint32_t row_bytes = (width * PIXEL_BYTES + ROW_ALIGNMENT - 1) / ROW_ALIGNMENT * ROW_ALIGNMENT;
 	WGPUBuffer readback = buffer_of((uint64_t)row_bytes * height, WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst);
@@ -304,7 +380,8 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 	into.buffer = readback;
 	into.layout.bytesPerRow = row_bytes;
 	into.layout.rowsPerImage = (uint32_t)height;
-	wgpuCommandEncoderCopyTextureToBuffer(encoder, &from, &into, &texture_descriptor.size);
+	WGPUExtent3D extent = {(uint32_t)width, (uint32_t)height, 1};
+	wgpuCommandEncoderCopyTextureToBuffer(encoder, &from, &into, &extent);
 	submitted(encoder);
 
 	int done = 0;
@@ -328,8 +405,7 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 	}
 	wgpuBufferRelease(readback);
 	drawing_released(&drawing);
-	wgpuTextureViewRelease(image_view);
-	wgpuTextureRelease(image);
+	image_done(&drawing, image);
 	return done > 0 ? 0 : -1;
 }
 
@@ -361,19 +437,19 @@ static int surface_ready(void* layer, int32_t width, int32_t height) {
 	}
 	return 1;
 }
-// the drawing shown in the window's surface, waiting for the display's next refresh (vsync); a window out of sight
-// (hidden, minimized, covered) shows nothing and is no failure
-static int presented(const Drawing* drawing) {
+// the drawing shown in the window's surface, by the encoder, waiting for the display's next refresh (vsync); a window
+// out of sight (hidden, minimized, covered) shows nothing and is no failure
+static int presented(WGPUCommandEncoder encoder, const Drawing* drawing) {
 	WGPUSurfaceTexture current = WGPU_SURFACE_TEXTURE_INIT;
 	wgpuSurfaceGetCurrentTexture(surface, &current);
-	if (current.status == (WGPUSurfaceGetCurrentTextureStatus)WGPUSurfaceGetCurrentTextureStatus_Occluded) return 1;
+	if (current.status == (WGPUSurfaceGetCurrentTextureStatus)WGPUSurfaceGetCurrentTextureStatus_Occluded) return submitted(encoder), 1;
 	if (current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal && current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
 		snprintf(failure, sizeof failure, "the window's surface gave no image to draw (status %d)", (int)current.status);
 		surface_width = 0;
+		submitted(encoder);
 		return 0;
 	}
 	WGPUTextureView view = wgpuTextureCreateView(current.texture, NULL);
-	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
 	drawn(encoder, view, drawing);
 	submitted(encoder);
 	wgpuSurfacePresent(surface);
@@ -381,41 +457,249 @@ static int presented(const Drawing* drawing) {
 	wgpuTextureRelease(current.texture);
 	return 1;
 }
-// the shader shown in the window's layer at width × height; 0, else -1 and warp_gpu_failure()
+#define PICTURE_SHADER "@group(0) @binding(0) var picture: texture_2d<f32>;\n" \
+	"@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f { return textureLoad(picture, vec2i(position.xy), 0); }\n"
+// the picture (an RGBA8 texture) shown in the window's surface, after what the encoder holds
+static int picture_presented(WGPUCommandEncoder encoder, WGPUTexture picture, int32_t width, int32_t height) {
+	Drawing drawing;
+	if (!drawing_made(PICTURE_SHADER, "", SURFACE_FORMAT, width, height, &drawing)) return submitted(encoder), 0;
+	WGPUTextureView picture_view = wgpuTextureCreateView(picture, NULL);
+	WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
+	entry.binding = 0;
+	entry.textureView = picture_view;
+	drawing.bindings = bindings_of(drawing.pipeline, &entry, 1);
+	int shown = presented(encoder, &drawing);
+	drawing_released(&drawing);
+	wgpuTextureViewRelease(picture_view);
+	return shown;
+}
+// the shader shown in the window's layer at width × height; 0, else -1 and warp_gpu_failure(). A shader reading its
+// previous frame draws into an image of its own first, kept for the next frame, then shown
 int warp_gpu_show(const char* shader, const char* values, void* layer, int32_t width, int32_t height) {
 	Drawing drawing;
-	if (!drawing_made(shader, values, SURFACE_FORMAT, &drawing) || !surface_ready(layer, width, height)) return -1;
-	int shown = presented(&drawing);
+	int reading = reads_previous(shader);
+	if (!drawing_made(shader, values, reading ? WGPUTextureFormat_RGBA8Unorm : SURFACE_FORMAT, width, height, &drawing) || !surface_ready(layer, width, height)) return -1;
+	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
+	int shown;
+	if (reading) {
+		WGPUTexture image = image_drawn(encoder, &drawing, width, height);
+		shown = picture_presented(encoder, image, width, height);
+		image_done(&drawing, image);
+	} else shown = presented(encoder, &drawing);
 	drawing_released(&drawing);
 	return shown ? 0 : -1;
 }
-#define PICTURE_SHADER "@group(0) @binding(0) var picture: texture_2d<f32>;\n" \
-	"@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f { return textureLoad(picture, vec2i(position.xy), 0); }\n"
 // pixels (RGBA, a byte each, row by row) shown in the window's layer at width × height; 0, else -1
 int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int32_t height) {
-	Drawing drawing;
-	if (!drawing_made(PICTURE_SHADER, "", SURFACE_FORMAT, &drawing) || !surface_ready(layer, width, height)) return -1;
-	WGPUTextureDescriptor texture_descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
-	texture_descriptor.size = (WGPUExtent3D){(uint32_t)width, (uint32_t)height, 1};
-	texture_descriptor.format = WGPUTextureFormat_RGBA8Unorm;
-	texture_descriptor.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
-	WGPUTexture picture = wgpuDeviceCreateTexture(device, &texture_descriptor);
+	if (!surface_ready(layer, width, height)) return -1;
+	WGPUTexture picture = texture_of(width, height, WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst);
 	WGPUTexelCopyTextureInfo into = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
 	into.texture = picture;
 	WGPUTexelCopyBufferLayout rows = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
 	rows.bytesPerRow = (uint32_t)width * PIXEL_BYTES;
 	rows.rowsPerImage = (uint32_t)height;
-	wgpuQueueWriteTexture(queue, &into, pixels, (size_t)width * height * PIXEL_BYTES, &rows, &texture_descriptor.size);
-	WGPUTextureView picture_view = wgpuTextureCreateView(picture, NULL);
-	WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
-	entry.binding = 0;
-	entry.textureView = picture_view;
-	drawing.bindings = bindings_of(drawing.pipeline, &entry);
-	int shown = presented(&drawing);
-	drawing_released(&drawing);
-	wgpuTextureViewRelease(picture_view);
+	WGPUExtent3D extent = {(uint32_t)width, (uint32_t)height, 1};
+	wgpuQueueWriteTexture(queue, &into, pixels, (size_t)width * height * PIXEL_BYTES, &rows, &extent);
+	int shown = picture_presented(wgpuDeviceCreateCommandEncoder(device, NULL), picture, width, height);
 	wgpuTextureRelease(picture);
 	return shown ? 0 : -1;
+}
+
+// --- gpu_compute(shader, arrays, workgroups) (card host-word): a WGSL compute shader, its entry point `main`, run over
+// storage arrays as host-gpu.js gpuComputedArrays runs it. `arrays` a map of named lists, each bound where the shader
+// declares the storage array of that name, f32 unless array<i32> or array<u32>; the arrays it left come back as a map,
+// in the order given. `arrays` a list: the numbers at @binding(0), they come back as a list
+enum { MOST_ARRAYS = 8 };
+typedef struct { char name[NAME_BYTES]; int binding; char element; double* numbers; size_t count; } StorageArray;
+// the storage arrays the shader declares: `@binding(1) var<storage, read_write> counts: array<i32>`
+static int storage_arrays(const char* shader, StorageArray* arrays) {
+	int found = 0;
+	for (const char* at = strstr(shader, "var<storage"); at && found < MOST_ARRAYS; at = strstr(at + 1, "var<storage")) {
+		const char* binding = NULL;
+		for (const char* back = at; back > shader && back > at - 64; back--) if (!strncmp(back, "@binding(", 9)) { binding = back + 9; break; }
+		const char* name = strchr(at, '>');
+		if (!name || !binding) continue;
+		name = spaces_skipped(name + 1);
+		StorageArray* array = &arrays[found];
+		*array = (StorageArray){0};
+		int length = 0;
+		while (name[length] && name[length] != ':' && name[length] != ' ' && length < NAME_BYTES - 1) { array->name[length] = name[length]; length++; }
+		array->name[length] = 0;
+		array->binding = atoi(binding);
+		const char* element = strstr(name, "array<");
+		array->element = element && (!strncmp(element + 6, "i32", 3) || !strncmp(element + 6, "u32", 3)) ? element[6] : 'f';
+		found++;
+	}
+	return found;
+}
+// the numbers of a list given, as doubles
+static double* numbers_of(warp_values* values, const wasmtime_anyref_t* list, size_t* count) {
+	*count = warp_list_length(values, list);
+	double* numbers = malloc((*count ? *count : 1) * sizeof *numbers);
+	for (size_t i = 0; i < *count; i++) {
+		wasmtime_anyref_t item = warp_list_item(values, list, i);
+		numbers[i] = warp_node_float(values, &item);
+		wasmtime_anyref_unroot(&item);
+	}
+	return numbers;
+}
+static StorageArray* array_named(StorageArray* arrays, int count, const char* name) {
+	for (int i = 0; i < count; i++) if (!strcmp(arrays[i].name, name)) return &arrays[i];
+	return NULL;
+}
+static int given_failed(warp_values* values, const char* message, const char* name) {
+	char said[NAME_BYTES + 128];
+	snprintf(said, sizeof said, message, name);
+	warp_failed(values, said);
+	return 0;
+}
+// the given arrays read into the declared ones, in the order given (order); 0 and a failure where they do not fit
+static int arrays_given(warp_values* values, const wasmtime_anyref_t* given, StorageArray* declared, int declared_count, int* order) {
+	int64_t kind = warp_kind_field(values, given);
+	if (kind != WARP_MARKED_MAP) {
+		StorageArray* first = NULL;
+		for (int i = 0; i < declared_count; i++) if (declared[i].binding == 0) first = &declared[i];
+		if ((kind & WARP_KIND_MASK) != WARP_KIND_LIST) return given_failed(values, "gpu_compute takes a list of numbers or a map of named lists%s", "");
+		if (!first) return given_failed(values, "gpu_compute of a list: the shader declares no storage array at @binding(0)%s", "");
+		first->numbers = numbers_of(values, given, &first->count);
+		order[0] = (int)(first - declared);
+		return 1;
+	}
+	int given_count = (int)warp_list_length(values, given);
+	if (given_count > MOST_ARRAYS) return given_failed(values, "gpu_compute binds at most 8 arrays%s", "");
+	for (int i = 0; i < given_count; i++) {
+		wasmtime_anyref_t entry = warp_list_item(values, given, (size_t)i);
+		wasmtime_anyref_t key = warp_key_left(values, &entry);
+		wasmtime_anyref_t list = warp_key_right(values, &entry);
+		char* name = warp_text_bytes(values, &key, NULL);
+		StorageArray* array = array_named(declared, declared_count, name);
+		if (array) {
+			array->numbers = numbers_of(values, &list, &array->count);
+			order[i] = (int)(array - declared);
+		}
+		wasmtime_anyref_unroot(&list);
+		wasmtime_anyref_unroot(&key);
+		wasmtime_anyref_unroot(&entry);
+		if (!array) { given_failed(values, "the shader declares no storage array %s", name); free(name); return 0; }
+		free(name);
+		if (!array->count) return given_failed(values, "%s is empty: a storage array holds at least one number", array->name);
+	}
+	for (int i = 0; i < declared_count; i++)
+		if (!declared[i].numbers) return given_failed(values, "the shader's array %s has no numbers", declared[i].name);
+	return values->failure[0] ? 0 : given_count;
+}
+static void element_written(const StorageArray* array, uint8_t* bytes) {
+	for (size_t i = 0; i < array->count; i++) {
+		if (array->element == 'f') ((float*)bytes)[i] = (float)array->numbers[i];
+		else if (array->element == 'u') ((uint32_t*)bytes)[i] = (uint32_t)array->numbers[i];
+		else ((int32_t*)bytes)[i] = (int32_t)array->numbers[i];
+	}
+}
+// the shader run over the arrays, the arrays it left in `left` (the caller frees them): 0 and failure where it fails
+static int arrays_computed(const char* shader, const StorageArray* declared, const int* order, int count, int64_t workgroups, uint8_t** left) {
+	int read = 0;
+	{
+		wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
+		WGPUShaderSourceWGSL source = WGPU_SHADER_SOURCE_WGSL_INIT;
+		source.code = view_of(shader);
+		WGPUShaderModuleDescriptor module_descriptor = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
+		module_descriptor.nextInChain = &source.chain;
+		WGPUShaderModule module = wgpuDeviceCreateShaderModule(device, &module_descriptor);
+		WGPUComputePipelineDescriptor descriptor = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
+		descriptor.compute.module = module;
+		descriptor.compute.entryPoint = view_of("main");
+		WGPUComputePipeline pipeline = wgpuDeviceCreateComputePipeline(device, &descriptor);
+		wgpuShaderModuleRelease(module);
+		if (scope_clean()) {
+			WGPUBuffer storages[MOST_ARRAYS], readbacks[MOST_ARRAYS];
+			WGPUBindGroupEntry entries[MOST_ARRAYS];
+			for (int a = 0; a < count; a++) {
+				const StorageArray* array = &declared[order[a]];
+				uint64_t size = array->count * 4;
+				uint8_t* bytes = malloc(size);
+				element_written(array, bytes);
+				storages[a] = buffer_of(size, WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc | WGPUBufferUsage_CopyDst);
+				wgpuQueueWriteBuffer(queue, storages[a], 0, bytes, size);
+				free(bytes);
+				readbacks[a] = buffer_of(size, WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst);
+				entries[a] = (WGPUBindGroupEntry)WGPU_BIND_GROUP_ENTRY_INIT;
+				entries[a].binding = (uint32_t)array->binding;
+				entries[a].buffer = storages[a];
+				entries[a].size = size;
+			}
+			WGPUBindGroupDescriptor group = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+			group.layout = wgpuComputePipelineGetBindGroupLayout(pipeline, 0);
+			group.entryCount = (size_t)count;
+			group.entries = entries;
+			WGPUBindGroup bindings = wgpuDeviceCreateBindGroup(device, &group);
+			wgpuBindGroupLayoutRelease(group.layout);
+			WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
+			WGPUComputePassEncoder pass = wgpuCommandEncoderBeginComputePass(encoder, NULL);
+			wgpuComputePassEncoderSetPipeline(pass, pipeline);
+			wgpuComputePassEncoderSetBindGroup(pass, 0, bindings, 0, NULL);
+			wgpuComputePassEncoderDispatchWorkgroups(pass, (uint32_t)workgroups, 1, 1);
+			wgpuComputePassEncoderEnd(pass);
+			wgpuComputePassEncoderRelease(pass);
+			for (int a = 0; a < count; a++) wgpuCommandEncoderCopyBufferToBuffer(encoder, storages[a], 0, readbacks[a], 0, declared[order[a]].count * 4);
+			submitted(encoder);
+			read = 1;
+			for (int a = 0; a < count; a++) {
+				size_t size = declared[order[a]].count * 4;
+				int done = 0;
+				WGPUBufferMapCallbackInfo map_info = WGPU_BUFFER_MAP_CALLBACK_INFO_INIT;
+				map_info.mode = WGPUCallbackMode_AllowProcessEvents;
+				map_info.callback = mapped;
+				map_info.userdata1 = &done;
+				wgpuBufferMapAsync(readbacks[a], WGPUMapMode_Read, 0, size, map_info);
+				while (!done) { wgpuDevicePoll(device, 1, NULL); wgpuInstanceProcessEvents(instance); }
+				left[a] = malloc(size);
+				if (done > 0) { memcpy(left[a], wgpuBufferGetConstMappedRange(readbacks[a], 0, size), size); wgpuBufferUnmap(readbacks[a]); }
+				else read = 0;
+			}
+			for (int a = 0; a < count; a++) { wgpuBufferRelease(storages[a]); wgpuBufferRelease(readbacks[a]); }
+			wgpuBindGroupRelease(bindings);
+		}
+		if (pipeline) wgpuComputePipelineRelease(pipeline);
+	}
+	return read;
+}
+// the arrays the shader left as warp values: a map in the order given, else (a list given) the one list
+static wasmtime_anyref_t arrays_written(warp_values* values, const StorageArray* declared, const int* order, int count, int as_map, uint8_t** left) {
+	wasmtime_anyref_t lists[MOST_ARRAYS];
+	for (int a = 0; a < count; a++) {
+		const StorageArray* array = &declared[order[a]];
+		wasmtime_anyref_t* numbers = malloc(array->count * sizeof *numbers);
+		for (size_t i = 0; i < array->count; i++) {
+			if (array->element == 'f') numbers[i] = warp_float(values, ((float*)left[a])[i]);
+			else if (array->element == 'u') numbers[i] = warp_int(values, ((uint32_t*)left[a])[i]);
+			else numbers[i] = warp_int(values, ((int32_t*)left[a])[i]);
+		}
+		lists[a] = warp_list(values, WARP_MARKED_SQUARELIST, numbers, array->count);
+		free(numbers);
+		if (as_map) lists[a] = warp_entry(values, array->name, lists[a]);
+	}
+	return as_map ? warp_list(values, WARP_MARKED_MAP, lists, (size_t)count) : lists[0];
+}
+// gpu_compute(shader, arrays, workgroups), bound by the driver (lib/native/foreign.c library_word)
+wasm_trap_t* warp_word_gpu_compute(void* engine, wasmtime_caller_t* caller, const wasmtime_val_t* given, size_t given_count, wasmtime_val_t* results, size_t result_count) {
+	(void)given_count, (void)result_count;
+	warp_values values = warp_values_of(engine, caller, &given[1].of.anyref);
+	wasmtime_anyref_t answer;
+	wasmtime_anyref_set_null(&answer);
+	char* shader = warp_text_bytes(&values, &given[0].of.anyref, NULL);
+	StorageArray declared[MOST_ARRAYS];
+	int order[MOST_ARRAYS];
+	int declared_count = storage_arrays(shader, declared);
+	int count = values.failure[0] ? 0 : arrays_given(&values, &given[1].of.anyref, declared, declared_count, order);
+	uint8_t* left[MOST_ARRAYS] = {0};
+	failure[0] = 0;
+	if (count && device_ready() && arrays_computed(shader, declared, order, count, given[2].of.i64, left))
+		answer = arrays_written(&values, declared, order, count, warp_kind_field(&values, &given[1].of.anyref) == WARP_MARKED_MAP, left);
+	else if (count) warp_failed(&values, failure);
+	for (int a = 0; a < count; a++) free(left[a]);
+	for (int i = 0; i < declared_count; i++) free(declared[i].numbers);
+	free(shader);
+	return warp_answered(&values, answer, results);
 }
 
 // why the last warp_gpu_paint or warp_gpu_show failed
