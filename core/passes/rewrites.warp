@@ -1352,7 +1352,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 	outer = rule_binding
 	outer_defining = rule_defining
 	rule_binding = rule_binding + bound_by_definition(n)
-	rule_defining = defined_word(n) ?? ""
+	rule_defining = head_word(key_of(n))
 	walked = children(n, x => placed_map_scoped(x, f, inner))
 	rule_binding = outer
 	rule_defining = outer_defining
