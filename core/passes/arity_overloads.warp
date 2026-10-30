@@ -160,11 +160,13 @@ resolved(n: Node, overloaded: map, called: map): Node := {
 		Symbol(name): bare_variant(n, overloaded)
 		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded, called), Op.Dot, variant_call(children(method, x => resolved(x, overloaded, called)), overloaded, 1))
 		Key(target, Op.Assign, value): Key(if target is symbol then target else resolved(target, overloaded, called), Op.Assign, resolved(value, overloaded, called))
-		Key(label, Op.Colon, value): Key(label, Op.Colon, resolved(value, unbound(overloaded, pattern_names(label)), called))
+		Key(label, Op.Colon, value): Key(calls_renamed(label, overloaded, called), Op.Colon, resolved(value, unbound(overloaded, pattern_names(label)), called))
 		Key(parameters, Op.Arrow, body): Key(parameters, Op.Arrow, resolved(body, unbound(overloaded, parameters_of(parameters)), called))
 		_: resolved_parts(variant_call(passed_variants(n, overloaded, called), overloaded, 0), overloaded, called)
 	}
 }
+# a label's calls named by their variants, its bare words as written: `def tested(a, b, c): Node`, `Symbol(name)`
+calls_renamed(n: Node, overloaded: map, called: map): Node := if n is symbol then n else children(variant_call(passed_variants(n, overloaded, called), overloaded, 0), x => calls_renamed(x, overloaded, called))
 # a call's arguments resolved, its head as the call named it
 resolved_parts(n: Node, overloaded: map, called: map): Node := {
 	if is_call_form(n) and #n > 0 and n#1 is symbol { return group_like(n, [n#1] + items_of(n)[1 ..].map(x => resolved(x, overloaded, called))) }
