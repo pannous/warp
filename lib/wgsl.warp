@@ -624,7 +624,7 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 
 # --- GPU lists (decision gpu-bound-floats; core/runtime/gpu_lists.warp): a list the program makes for the GPU is
 # packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
-# rules ask gpu_bound of each assignment and write gpu_packed in place of the creating form
+# rule packs the creating forms of the program's (lib/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
 GPU_LIST_WORDS = ["gpu_compute"]
 # the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø]
 class GpuLists { program: Node; uses: map }
@@ -691,17 +691,19 @@ gpu_creating(v: Node): bool := gpu_zeros_count(v) != ø or gpu_comprehension(v) 
 gpu_zeros_count(v: Node): Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) == "float" then value_of(v) else ø
 gpu_comprehension(v: Node): bool := is_group(v) and bracket_of(v) == "[" and #v == 2 and is_group(v#2) and #(v#2) == 5 and v#2#1 is symbol and name_of(v#2#1) == "for"
 gpu_literal(v: Node): bool := is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)
-# the creating form written to make the GPU list itself: `float[n]` its zeros, a literal its items written into them
-# one by one, a comprehension each item as it is computed (lib/prelude.warp gpu_mapped)
-gpu_packed(v: Node): Node := {
-	count = gpu_zeros_count(v)
-	if count != ø { return plain_node(parsed("gpu_zeros((${count}) - 1)")) }
+# the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
+# one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
+gpu_packed(v: Node): Node := plain_node(parsed(gpu_packed_code(v)))
+gpu_packed_code(v: Node): text := {
+	if not gpu_creating(v) { return "gpu_list_of(" + as_code(v) + ")" }
+	shifted = gpu_zeros_count(v)
+	if shifted != ø { return "gpu_zeros((" + as_code(shifted) + ") - 1)" }
 	if gpu_comprehension(v) {
-		loop = v#2
-		return plain_node(parsed("gpu_mapped(${loop#4}, ${loop#2} => ${v#1})"))
+		each = v#2
+		over = "for " + as_code(each#2) + " in " + as_code(each#4)
+		return "{ gpu_count = 0; " + over + " { gpu_count += 1 }; gpu_made = gpu_zeros(gpu_count); gpu_at = 1; " + over + " { gpu_made#gpu_at = " + as_code(v#1) + "; gpu_at += 1 }; gpu_made }"
 	}
-	items = items_of(v)
-	written = "gpu_zeros(${#items})"
-	for i in 1 to #items { written = "gpu_put(" + written + ", ${i}, ${items#i})" }
-	plain_node(parsed(written))
+	written = "gpu_zeros(" + #v + ")"
+	for i in 1 to #v { written = "gpu_put(" + written + ", " + i + ", " + as_code(v#i) + ")" }
+	written
 }

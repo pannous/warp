@@ -198,16 +198,12 @@ rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol a
 rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
 rewrite paint($s) => paint($s, view_width(), view_height(), $filled) where $s is symbol and $filled = shader_values_of($s, $program)
 // a list the program makes for the GPU (gpu_compute takes it) is made as a GPU list [f32] (decision gpu-bound-floats,
-// lib/wgsl.warp gpu_bound): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks
+// lib/rule_words.warp gpu_lists_packed): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks
 // for one outright
-rewrite $xs = $v => $xs = $packed where $xs is symbol and gpu_bound($xs, $program) and $packed = gpu_packed($v)
-rewrite $xs: [f32] = $v => $xs = $packed where $packed = gpu_packed($v)
-// a comprehension's GPU list, each item written as it is computed
-gpu_mapped(xs, f) := {
-	out = gpu_zeros(#xs)
-	for i in 1 to #xs { out#i = f(xs#i) }
-	out
-}
+rewrite $p => $q where program and $q = gpu_lists_packed($p)
+// (this rule needs gpu_compute, so the prelude's rules, the one above too, come with any program calling it)
+rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
+rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed($v)
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)

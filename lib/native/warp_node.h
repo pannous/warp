@@ -131,7 +131,10 @@ static inline float* warp_floats(warp_values* values, const wasmtime_anyref_t* n
 	int64_t packed = warp_boxed_number(values, &box).of.i64;
 	wasmtime_anyref_unroot(&box);
 	wasmtime_extern_t memory;
-	if (!wasmtime_caller_export_get(values->caller, "memory", 6, &memory) || memory.kind != WASMTIME_EXTERN_MEMORY) return NULL;
+	if (!wasmtime_caller_export_get(values->caller, "memory", 6, &memory) || memory.kind != WASMTIME_EXTERN_MEMORY) {
+		warp_failed(values, "a GPU list [f32] given by a module without its memory exported");
+		return NULL;
+	}
 	*count = (size_t)(packed & 0xFFFFFFFF);
 	return (float*)(wasmtime_memory_data(values->context, &memory.of.memory) + (packed >> 32));
 }

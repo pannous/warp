@@ -8,6 +8,21 @@ List arithmetic on large number lists runs as WebGPU compute (wgpu natively, Web
 threshold, on the CPU below it and without an adapter; tests compare GPU and CPU results. The GPU path reuses the
 gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.js, notes/web_framework.md "web-apis: WebGPU").
 
+## In warp now (the Rust paths below are the snapshot on branch rust-bootstrap)
+- gpu_compute(shader, arrays, workgroups) is a host word libwarp_gpu answers directly (crates/warp-gpu/warp_gpu.c
+  warp_word_gpu_compute, decision library-direct-refs), reading and building warp values through lib/native/warp_node.h.
+- GPU lists `[f32]` (decision gpu-bound-floats, core/runtime/gpu_lists.warp): f32 cells in linear memory from their
+  creation, a square List $Node marked KindUnit.GpuList whose Int is (address << 32) + count. `xs: [f32] = …` asks for
+  one; a list the program makes once (literal, comprehension, `float[n]`) at its main level and uses only by #, xs#i,
+  xs#i = v, for, print and gpu_compute is one by itself (lib/rule_words.warp gpu_lists_packed, lib/wgsl.warp
+  gpu_bound), as is a creating form written in a gpu_compute call. libwarp_gpu binds the cells as the storage buffer
+  and writes results back into them (warp_node.h warp_floats): samples/gpu/gpu_million.warp went 852 + 1686 ms → 138 +
+  20 ms. Other list words refuse a `[f32]` list today; card f32-gpu gives reads a boxed copy (one function, which
+  xs-map-gpu replaces by a kernel) and growth (a [count, capacity, cells] header, vector doubling). Linear memory is
+  never freed yet (card packed-f32-memory).
+- Not yet in warp: automatic switching above GPU_AUTO_MIN_COUNT, `@gpu`/`@cpu` maps and reductions (card xs-map-gpu,
+  lib/wgsl.warp wgsl_kernel), kept buffers. The design below stands for them.
+
 ## The language side
 - `xs * 2` is an error by decision (D3: repeat or multiply?), `xs + ys` concatenates. Element-wise is the dotted form
   (P166): `[1 2 3] .* 2` → `[2 4 6]`; `xs * ys` of two lists is their inner product, `dot(xs, ys)`.

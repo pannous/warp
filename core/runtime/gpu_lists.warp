@@ -23,9 +23,11 @@ gpu_zeros(count: int): Node := {
 	with_kind(fresh_int_node(shifted_left(before * page_bytes(), 32) + count), gpu_list_kind())
 }
 # a GPU list of a list's numbers: what a GPU word gives back (lib/wgsl.warp packs a list where it is made)
-gpu_list_of(xs: list): Node := {
-	out = gpu_zeros(#xs)
-	for i in 1 to #xs { gpu_list_set(out, i, xs#i) }
+gpu_list_of(xs: Node): Node := {
+	if is_gpu_list(xs) { return xs }
+	items = unboxed_list(xs)
+	out = gpu_zeros(#items)
+	for i in 1 to #items { gpu_list_set(out, i, items#i) }
 	out
 }
 # the list with its index-th number set: a literal's items written one by one (lib/wgsl.warp gpu_packed)
