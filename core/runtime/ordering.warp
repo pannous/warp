@@ -45,9 +45,9 @@ sorted_like(xs: Node, keys: list): Node := {
 sortable_items(xs: Node): list := if kind_code(xs) == Kind.Text then text_graphemes(unboxed_text(xs)) else unboxed_list(xs)
 # the characters of chars joined into one text
 characters_text(chars: list): text := {
-	out = ""
-	for i in 1 to #chars { out += node_text(chars#i) }
-	out
+	parts = []
+	for i in 1 to #chars { parts += [node_text(chars#i)] }
+	texts_joined(parts, "")
 }
 # what each item sorts by: its key as far as keys go, the item itself after
 sort_ranks(items: list, keys: list): list := {

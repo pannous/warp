@@ -5,21 +5,22 @@
 # web-ocean simulates its waves by FFT on a quadtree mesh over several passes; here they are a sum of wind waves, each one dragging the next along (cheap, and the crests stay sharp)
 use math
 use keys
+use units
 width = 960
 height = 540
 global time = 0.0
 
 # the settings of web-ocean's panel (H), with its defaults
-wind_speed = 7 # m/s: longer, higher waves as it rises
-wind_direction = 28 # degrees off the line of sight, the waves roll toward the camera
-swell_height = 1.8 # metres, significant wave height
+wind_speed = 7 # todo m/s: longer, higher waves as it rises
+wind_direction = 28° # off the line of sight, the waves roll toward the camera
+swell_height = 1.8 # todo metres, significant wave height
 swell_length = 120 # metres
-swell_direction = -4 # degrees off the line of sight
+swell_direction = -4° # off the line of sight
 choppiness = 1.25
 turbidity = 1.6 # how bright and green the water body is (coastal sediment, plankton)
 foam_amount = 1.0
-sun_elevation = 4.6 # degrees above the horizon
-sun_azimuth = 4 # degrees to the right of the view
+sun_elevation = 4.6° # above the horizon
+sun_azimuth = 4° # to the right of the view
 haze = 1.0
 cloud_cover = 0.4
 exposure = 1.0
@@ -28,29 +29,30 @@ exposure = 1.0
 # W A S D move, Space or E up, Q or C down, drag the mouse to look around, Escape ends
 global camera_x = 0.0
 global camera_z = 0.0
-global camera_height = 2.4 # todo can we use m unit (and drop in shader?)
-global yaw = 0.0 # degrees to the right # todo °?
-global pitch = -3.0 # degrees up # todo °?
-field_of_view = 60 # todo can we use ° unit (and drop in shader?)
+# Angles are plain numbers of radians, `60°` is 1.0472 (decision degree-constant). The shader reads plain numbers only,
+# so the lengths it reads stay numbers of metres; units are only for the values the flying alone reads (decision
+# no-units-in-shaders)
+global camera_height = 2.4 # metres
+global yaw = 0° # to the right
+global pitch = -3° # up
+field_of_view = 60°
 # the angle one pixel spans (radians)
-pixel_angle = tangent(to_radians(field_of_view) / 2) / (height / 2)
-flying_speed = 6 # m/s # todo can we use unit (and drop in shader?)
-looking_speed = 0.2 # degrees per pixel the mouse moves # todo °/px ?
-lowest = 0.8 # metres above the calm sea # todo m?
+pixel_angle = tangent(field_of_view / 2) / (height / 2)
+flying_speed = 6 # m/s todo 6 m/s once a unit word is no Key case here (card use-keys)
+looking_speed = 0.2° # a pixel the mouse moves
+lowest = 0.8 # metres above the calm sea, todo 0.8 m (card use-keys)
 
 geometry_waves = 12
 detail_waves = 32
 drag = 0.28
+# how far the wind waves fan out around the wind
+wind_spread = 70°
 far_away = 20000.0
 # how far the facets of the waves smear the mirrored sky, as a share of their roughness
 reflection_blur = 0.2
 
-# the direction toward a point elevation degrees above the horizon, azimuth degrees to the right
-direction_of(elevation, azimuth) := {
-	up = to_radians(elevation)
-	around = to_radians(azimuth)
-	[sine(around) * cosine(up), sine(up), cosine(around) * cosine(up)]
-}
+# the direction toward a point elevation above the horizon, azimuth to the right
+direction_of(elevation, azimuth) := [sine(azimuth) * cosine(elevation), sine(elevation), cosine(azimuth) * cosine(elevation)]
 sun = direction_of(sun_elevation, sun_azimuth)
 sun_light = [1.0, 0.68, 0.45] .* 9
 zenith_blue = [0.09, 0.13, 0.22] # todo .13 MUST work too!!
@@ -82,8 +84,8 @@ clouds_noise(p, octaves) := {
 	sum
 }
 
-# a wave's direction of travel on the water, degrees off the line of sight, rolling toward the camera
-heading(degrees) := [sine(to_radians(degrees)), -cosine(to_radians(degrees))]
+# a wave's direction of travel on the water, an angle off the line of sight, rolling toward the camera
+heading(angle) := [sine(angle), -cosine(angle)]
 
 # one sharp-crested wave, an exp(sin − 1) profile, at p after time: [height, slope along x, slope along z, rise]
 wave_at(p, direction, length, amplitude) := {
@@ -111,7 +113,7 @@ waves(p, count, footprint) := {
 	hidden_slopes = 0.0
 	at = p
 	for wave in 0..count {
-		direction = heading(wind_direction + 70 * sine(wave * 2.39996))
+		direction = heading(wind_direction + wind_spread * sine(wave * 2.39996))
 		seen = smoothstep(4 * footprint, 12 * footprint, length)
 		one = wave_at(at, direction, length, amplitude * seen)
 		surface = surface .+ one.xyz
@@ -264,8 +266,8 @@ film(color, x, y) := {
 
 # the camera's ray through the pixel at column x, row y
 ray_through(x, y) := {
-	turn = to_radians(yaw)
-	tilt = to_radians(pitch)
+	turn = yaw
+	tilt = pitch
 	forward = [sine(turn) * cosine(tilt), sine(tilt), cosine(turn) * cosine(tilt)]
 	right = normalize(cross([0, 1, 0], forward))
 	up = cross(forward, right)
@@ -284,10 +286,10 @@ ocean(x, y) := {
 	film(color, x, y)
 }
 
-# the free camera, one step of seconds long
-fly(seconds) := {
-	turn = to_radians(yaw)
-	way = flying_speed * seconds
+# the free camera, one step of that many seconds
+fly(step) := {
+	turn = yaw
+	way = flying_speed * step
 	if held_key == "w" { camera_x += sine(turn) * way; camera_z += cosine(turn) * way }
 	if held_key == "s" { camera_x -= sine(turn) * way; camera_z -= cosine(turn) * way }
 	if held_key == "d" { camera_x += cosine(turn) * way; camera_z -= sine(turn) * way }
@@ -309,7 +311,7 @@ on frame {
 	last_frame = now
 	if mouse_down {
 		yaw += (mouse_x - last_x) * looking_speed
-		pitch = clamp(pitch - (mouse_y - last_y) * looking_speed, -89, 89)
+		pitch = clamp(pitch - (mouse_y - last_y) * looking_speed, -89°, 89°)
 	}
 	last_x = mouse_x
 	last_y = mouse_y

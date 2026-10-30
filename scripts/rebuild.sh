@@ -45,7 +45,7 @@ logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>
 copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 # The machine's few build slots, shared by every session (user 2026-10-30: six rebuilds at once took the Mac): a build
 # runs in the first free slot of <store>/build-slots and waits for one when all are taken. WARP_BUILD_SLOTS names how many
-build_slots=${WARP_BUILD_SLOTS:-2}
+build_slots=${WARP_BUILD_SLOTS:-5}
 lock_held_elsewhere=75
 in_build_slot() {
 	command -v lockf >/dev/null || { "$@"; return; }
@@ -103,11 +103,30 @@ self_passed() { mkdir -p "$store/self-tested" && inputs_line >"$store/self-teste
 promoted_untested() {
 	local file=$compilers/warp-self.wasm part
 	[ -f "$compilers/warp.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp.wasm.inputs" 2>/dev/null)" = "$hash" ] || return 1
-	for part in "" .driver.cwasm .driver.cwasm.key; do
+	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
 		[ -f "$compilers/warp.wasm$part" ] && copied "$compilers/warp.wasm$part" "$file$part"
 	done
 	inputs_line >"$file.inputs"
 	publish "$file"
+}
+# the build lock of a compiler of this hash taken (a folder holding the builder's pid); no when a live builder holds
+# it, a dead one's taken over. Released when the build ends, by the exit trap when this run is killed
+building() {
+	local lock=$store/$hash/$1.building holder
+	mkdir -p "$store/$hash"
+	if ! mkdir "$lock" 2>/dev/null; then
+		holder=$(cat "$lock/pid" 2>/dev/null)
+		[ -n "$holder" ] || { sleep 2; holder=$(cat "$lock/pid" 2>/dev/null); }  # its pid written a moment after
+		[ -n "$holder" ] && kill -0 "$holder" 2>/dev/null && return 1
+		rm -rf "$lock" && mkdir "$lock" 2>/dev/null || return 1
+	fi
+	echo $$ >"$lock/pid"
+	trap 'released '"$1" EXIT
+}
+# the build lock let go, if it is still this run's
+released() {
+	local lock=$store/$hash/$1.building
+	[ "$(cat "$lock/pid" 2>/dev/null)" = $$ ] && rm -rf "$lock"
 }
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
 one() {
@@ -130,19 +149,29 @@ one() {
 		promoted_untested && logged "$name" hit-baked && return 0
 	fi
 	if [ -n "$check" ]; then logged "$name" miss; return 3; fi
+	# one build of a hash at a time: a second tree waits for the first and takes its result from the store
+	if ! building "$name"; then
+		local holder
+		holder=$(cat "$store/$hash/$name.building/pid" 2>/dev/null)
+		logged "$name" "waiting-for-$holder"
+		while [ -d "$store/$hash/$name.building" ] && kill -0 "$holder" 2>/dev/null; do sleep 10; done
+		one "$@"
+		return
+	fi
 	logged "$name" miss-building
 	local lane=pure
 	[ "$name" = warp-self ] && lane=self
 	built=$(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash in_build_slot "$warp" rebuild $lane 2>&1)
 	status=$?
-	[ $status = 0 ] || { echo "$built" | tail -5 >&2; set_aside "$name"; logged "$name" build-failed; return 1; }
+	[ $status = 0 ] || { released "$name"; echo "$built" | tail -5 >&2; set_aside "$name"; logged "$name" build-failed; return 1; }
 	local path
 	path=$(echo "$built" | sed -n 's/^built //p' | tail -1)
 	[ -n "$path" ] && [ "$path" != "$file" ] && [ -f "$path" ] && copied "$path" "$file"
-	[ -f "$file" ] || { echo "rebuild.sh: warp rebuild said no file ($built)" >&2; return 1; }
+	[ -f "$file" ] || { released "$name"; echo "rebuild.sh: warp rebuild said no file ($built)" >&2; return 1; }
 	inputs_line >"$file.inputs"
 	publish "$file"
 	for companion in $(companions "$name" "$compilers"); do publish "$compilers/$companion" "$companion"; done
+	released "$name"
 	[ "$name" = warp-self ] && self_passed
 	logged "$name" built
 }
