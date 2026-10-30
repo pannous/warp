@@ -452,8 +452,6 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	if operator == Op.Not { return PrimitiveCode(BOOL_TYPE, mvp_condition(f, right) + [op.i32_eqz]) }
 	if operator == Op.Sub and left === ø { return mvp_arithmetic(f, Key(0, Op.Sub, right), "sub", expected) }
 	if operator == Op.Inc or operator == Op.Dec { return mvp_assigned(f, left, Key(left, if operator == Op.Inc then Op.Add else Op.Sub, 1), n) }
-	spelled = prefix_word_of(operator)
-	if left === ø and spelled != "" and primitive_callee(spelled) != ø { return mvp_call(f, symbol(spelled), [right], n) }
 	operation = mvp_operation_of(operator)
 	if operation in integer_comparisons { return mvp_compared(f, left, operation, right) }
 	if operation in integer_arithmetic { return mvp_arithmetic(f, n, operation, expected) }
@@ -462,13 +460,6 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	primitive_refusal(n, form_of(n))
 }
 
-# `sqrt(x)` read as `√x`: a call of the function of that name the file declares (`sqrt(x: f64): f64 from "c"`)
-prefix_word_of(op: Op): text := match op {
-	Op.Sqrt: "sqrt"
-	Op.Cbrt: "cbrt"
-	Op.Abs: "abs"
-	_: ""
-}
 mvp_operation_of(op: Op): text := match op {
 	Op.Add: "add"
 	Op.Sub: "sub"

@@ -9,7 +9,7 @@
 // an op as written (":", "=", "#"), a bracket by its opening ("{" "[" "(" "<", "" for none, both glyphs for another
 // pair), a separator as written ("," ";" "\n" "\t" " ", "" for none)
 
-prefix_operators = ["-", "+", "not", "√", "∛", "‖", "#", "if", "while"]
+prefix_operators = ["-", "+", "not", "#", "if", "while"]
 suffix_operators = ["++", "--", "²", "³"]
 yes_text = "yes"
 no_text = "no"
