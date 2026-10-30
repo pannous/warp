@@ -1,6 +1,9 @@
 # Floor division (notes/layers.md, sugar): `a /! b` (also `a div b`, `a ÷ b`, lib/aliases.warp) is the call
 # floor_quotient(a, b)
 rewrite $a /! $b => floor_quotient($a, $b)
+# Factorial (decision operators-are-functions): a number's `!` is its factorial (lib/math.warp), `24!`; on a name
+# `x!` keeps its own meaning
+rewrite $n! => factorial($n) where $n is literal
 # Compound assignment (decision op-assign-general): `x op= y` is `x = x op y` for every operator, `x ^= 3`, `x &&= y`,
 # `x and= y`, `x /!= b`, and the word of a function, `x max= 5` x = max(x, 5); the list and index of an element, the
 # object of a field, are evaluated once (decision op-assign-target-once). The parser keeps += -= *= /= themselves, alike but faster
