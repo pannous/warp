@@ -1,8 +1,8 @@
 // The standard library module sound (card basic-sound): `play(440Hz, 0.5s)`, `play(C4)`, `play([C4 E4 G4])` (a chord, as
 // in Sonic Pi), `play note("C#4")` (a Note), `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers. The samples are made
-// here and become a WAV file here (sounded; silent under tests and WARP_NO_WINDOW), in the browser WebAudio. Loaded when
-// a program calls one of its words (rust-harness:src/modules.rs SOUND_WORDS)
+// here and natively go straight to the audio device (sounded; silent under tests and WARP_NO_WINDOW), in the browser to
+// WebAudio. Loaded when a program calls one of its words (rust-harness:src/modules.rs SOUND_WORDS)
 use units
 use reals
 use os
@@ -640,10 +640,13 @@ sound(samples) := {
 	sounded(speakers, sample_rate, if pan == 0 then 1 else 2)
 }
 
-// The sound files (card sound-native-library): a sound's samples as a 16-bit PCM WAV in the system's temporary folder,
-// warp-sound/sound-<process id>-<handle>.wav (sound-<process id>.wav the first), and its line on stderr: `sound 0.55 s:
-// <file>`. A run's first sound sweeps the files of runs that ended, so none pile up
+// A sound heard goes from memory straight to libwarp_sound's device, Core Audio on macOS (card sound-direct): no file,
+// no line. Else, a silent run's, one for WARP_SOUND_PLAYER's or the system's player (card sound-native-library), its
+// samples become a 16-bit PCM WAV in the system's temporary folder, warp-sound/sound-<process id>-<handle>.wav
+// (sound-<process id>.wav the first), with its line on stderr: `sound 0.55 s: <file>`. A run's first file sweeps the
+// files of runs that ended, so none pile up
 global sounds_made = 0
+global sound_files_made = 0
 getpid(): i32 from 'c'
 fdopen(fd: i32, mode: text): handle from 'c'
 fputs(s: text, file: handle): i32 from 'c'
@@ -656,43 +659,54 @@ PCM_FORMAT = 1
 BITS_PER_SAMPLE = 16
 // the sound's handle: its number in the run, for stop_sound(handle)
 sounded(speakers, rate, channels) := {
-	if sounds_made == 0 { swept_sound_files() }
 	sounds_made = sounds_made + 1
 	seconds = count(speakers) / channels / rate
 	start_and_place = scheduled(seconds)
 	recorded = recorded + [RecordedSound(start_and_place#2, rate, channels, speakers)]
+	waited_till(start_and_place#1)
+	if not heard_directly(speakers, rate, channels) { played(sound_file(speakers, rate, channels, seconds)) }
+	sounds_made
+}
+sound_file(speakers, rate, channels, seconds) := {
+	if sound_files_made == 0 { swept_sound_files() }
+	sound_files_made = sound_files_made + 1
 	file = sound_folder() + "/" + sound_file_name(getpid(), sounds_made)
 	write_bytes(file, wav_bytes(speakers, rate, channels))
 	said("sound " + hundredths(seconds) + " s: " + file)
-	played(file, start_and_place#1)
-	sounds_made
+	file
 }
+waited_till(start) := if start > clock() { sleep_ms(start - clock()) }
 
-// Playing (decision sound-system-player): the WAV through the system's player, started when its voice reaches it (the
-// clock paces the program till then): WARP_SOUND_PLAYER, else the first of afplay (macOS), paplay, aplay (Linux) that
+// Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
+// then). libwarp_sound beside warp plays it in the process (decision sound-plays: miniaudio, crates/warp-sound), the
+// run waiting at its end till its sounds are heard out; under WARP_NO_WINDOW or CI on a silent device. Without it, or
+// with WARP_SOUND_PLAYER set, the WAV goes to that player, else the first of afplay (macOS), paplay, aplay (Linux) that
 // starts. Under WARP_NO_WINDOW or CI only an explicit WARP_SOUND_PLAYER plays
-// Before them libwarp_sound beside warp plays it in the process (decision sound-plays: miniaudio,
-// crates/warp-sound), the run waiting at its end till its sounds are heard out; under WARP_NO_WINDOW or CI on a silent device
 posix_spawnp(process: out, file: text, actions: handle, attributes: handle, arguments: texts, environment: texts): i32 from 'c'
 warp_sound_play(path: text): i32 from 'warp_sound'
+warp_sound_play_samples(samples: bytes, size: length, rate: i32, channels: i32): i32 from 'warp_sound'
 dlopen(path: text, mode: i32): handle from 'c'
 // where lib/native/foreign.c finds warp's own libraries, beside the executable
 SOUND_LIBRARY_FILES = ["@executable_path/libwarp_sound.dylib", "$ORIGIN/libwarp_sound.so"]
 RTLD_NOW = 2
 global sound_library_state = ø
 sound_library_loads() := {
-	if sound_library_state == ø { sound_library_state = SOUND_LIBRARY_FILES.any(file => dlopen(file, RTLD_NOW) != 0) }
+	if sound_library_state == ø {
+		sound_library_state = SOUND_LIBRARY_FILES.any(file => dlopen(file, RTLD_NOW) != 0)
+		if not sound_library_state { said("libwarp_sound is not beside warp: sounds go to the system's player as WAV files") }
+	}
 	sound_library_state
 }
+quiet_run() := env("WARP_NO_WINDOW") != ø or env("CI") != ø
+heard_directly(speakers, rate, channels) := env("WARP_SOUND_PLAYER") == ø and not quiet_run() and sound_library_loads() and warp_sound_play_samples(pcm_bytes(speakers), rate, channels) == 0
 SYSTEM_PLAYERS = ["afplay", "paplay", "aplay"]
 sound_players() := {
 	chosen = env("WARP_SOUND_PLAYER")
 	if chosen != ø { return [chosen] }
-	if env("WARP_NO_WINDOW") != ø or env("CI") != ø { return [] }
+	if quiet_run() { return [] }
 	SYSTEM_PLAYERS
 }
-played(file, start) := {
-	if start > clock() { sleep_ms(start - clock()) }
+played(file) := {
 	if env("WARP_SOUND_PLAYER") == ø and sound_library_loads() and warp_sound_play(file) == 0 { return ø }
 	players = sound_players()
 	if count(players) == 0 { return ø }
@@ -775,11 +789,12 @@ swept_sound_files() := {
 sound_file_process(name) := if starts_with(name, "sound-") then int(name[6..].split("-")[0].split(".")[0]) else 0
 // RIFF, its fmt chunk and its data chunk of little-endian samples
 wav_bytes(speakers, rate, channels) := {
-	data = [byte for sample in speakers for byte in little_endian(pcm_sample(sample), 2)]
+	data = pcm_bytes(speakers)
 	block = 2 * channels
 	format = little_endian(PCM_FORMAT, 2) + little_endian(channels, 2) + little_endian(rate, 4) + little_endian(rate * block, 4) + little_endian(block, 2) + little_endian(BITS_PER_SAMPLE, 2)
 	codes("RIFF") + little_endian(36 + count(data), 4) + codes("WAVEfmt ") + little_endian(count(format), 4) + format + codes("data") + little_endian(count(data), 4) + data
 }
+pcm_bytes(speakers) := [byte for sample in speakers for byte in little_endian(pcm_sample(sample), 2)]
 // a sample crossing as amplitude + 32768, as the 16 bits of the signed amplitude
 pcm_sample(sample) := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
 little_endian(n, width) := [(n / (256 ** i)) as int % 256 for i in 0..width]
@@ -861,7 +876,7 @@ play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), play(tone, duratio
 play_file(path) := {
 	if not exists(path) { raise "no sound file " + path }
 	said("sound file: " + path)
-	played(path, clock())
+	played(path)
 }
 // play gives the sound's handle: h = play(C4, 2s); stop_sound(h) stops that one alone, stop_sound (handle 0) all
 global stop_sound(handle = 0) := std_io("sound", "stop", [handle])
@@ -921,7 +936,27 @@ class Sample {
 	channels: int
 	frames: [int]
 }
-sample(path: text) := wav_sample(read_bytes(path), path)
+// decoded by libwarp_sound, else (the playground) read here as a 16-bit WAV
+sample(path: text) := if sound_library_loads() then decoded_sample(path) else wav_sample(read_bytes(path), path)
+decoded_sample(path: text) := {
+	file = decoded_sound(path, 0, 0)
+	channels = warp_sound_decoded_channels(file)
+	Sample(warp_sound_decoded_rate(file), channels, [warp_sound_decoded_value(file, at) + sample_offset for at in 0..(warp_sound_decoded_frames(file) * channels)])
+}
+// Audio files decoded by libwarp_sound (miniaudio: wav, mp3, flac), each once a run: its number there for that rate
+// and channel count (0: the file's own), its values read one by one as the run needs them
+warp_sound_decode(path: text, rate: i32, channels: i32): i32 from 'warp_sound'
+warp_sound_decoded_frames(file: i32): i64 from 'warp_sound'
+warp_sound_decoded_rate(file: i32): i32 from 'warp_sound'
+warp_sound_decoded_channels(file: i32): i32 from 'warp_sound'
+warp_sound_decoded_value(file: i32, at: i64): i32 from 'warp_sound'
+decoded_sound(path: text, rate, channels) := {
+	if not exists(path) { raise path + ": no such sound file" }
+	if not sound_library_loads() { raise path + ": decoding a sound file needs libwarp_sound beside warp" }
+	file = warp_sound_decode(path, rate, channels)
+	if file < 0 { raise path + ": not decoded, miniaudio error " + str(file) + " (it reads wav, mp3 and flac)" }
+	file
+}
 // a 16-bit PCM WAV's chunks: fmt's channels and rate, data's samples (the formats beside it: card sound-native-files)
 wav_sample(bytes, path) := {
 	if count(bytes) < 12 or bytes[0..4] != codes("RIFF") or bytes[8..12] != codes("WAVE") { raise path + ": not a WAV file (other audio files are not in the native warp yet)" }
@@ -1121,7 +1156,7 @@ read_midi(path) := {
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
 // audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
 // band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
-// Goertzel's recurrence: of samples in warp, the same natively and in the playground; of a file by the host
+// Goertzel's recurrence in warp, of samples or of a file's decoded by libwarp_sound
 global band_low = 60
 global band_high = 5000
 // the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
@@ -1129,12 +1164,23 @@ spectrum_window = 512
 // the band whose middle frequency is nearest in pitch
 nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
 // how many seconds an audio file sounds: sound_seconds("song.mp3")
-sound_seconds(path: text) := std_io("sound", "file_seconds", [path])
-spectrum(file: text, seconds, bands) := std_io("sound", "file_spectrum", [file, seconds, spectrum_window / sample_rate, bands, band_low, band_high])
+sound_seconds(path: text) := {
+	file = decoded_sound(path, sample_rate, 1)
+	warp_sound_decoded_frames(file) / (sample_rate as float)
+}
+spectrum(file: text, seconds, bands) := {
+	decoded = decoded_sound(file, sample_rate, 1)
+	window = spectrum_span(seconds, warp_sound_decoded_frames(decoded))
+	band_levels([warp_sound_decoded_value(decoded, at) for at in window], bands)
+}
 def spectrum(samples, seconds, bands) {
-	start = min(round(seconds * sample_rate) as int, count(samples))
-	window = samples[start..min(start + spectrum_window, count(samples))]
-	band_levels([x - sample_offset for x in window], bands)
+	window = spectrum_span(seconds, count(samples))
+	band_levels([samples[at] - sample_offset for at in window], bands)
+}
+// the places of the samples a spectrum at that moment looks at, among that many
+spectrum_span(seconds, total) := {
+	start = min(round(seconds * sample_rate) as int, total)
+	start..min(start + spectrum_window, total)
 }
 // the levels of the bands in amplitudes around 0, all 0 for fewer than 2
 band_levels(amplitudes, bands) := {
