@@ -82,12 +82,9 @@ list_text(xs: list): text := "[" + joined_items(xs, ", ") + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
 items_text(xs: list): text := joined_items(xs, " ")
 joined_items(xs: list, joiner: text): text := {
-	inner = ""
-	for x in xs {
-		if #inner > 0 { inner += joiner }
-		inner += node_code(x)
-	}
-	inner
+	parts = []
+	for x in xs { parts += [node_code(x)] }
+	texts_joined(parts, joiner)
 }
 # `a: 1`; a class instance as its class's show() gives it (decision show-hook), else `Point{x: 1, y: 2}`, its fields a map
 key_text(entry: Node): text := {
