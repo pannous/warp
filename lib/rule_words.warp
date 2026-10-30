@@ -208,6 +208,39 @@ comment_above(source: text, word: text): text := {
 defines_function(line: text, word: text): bool := ["fun ", "def "].any(keyword => line.starts_with(keyword + word + "(") or line.starts_with(keyword + word + " ")) or ((line.starts_with(word + "(") or line.starts_with(word + " ")) and (line.contains(":=") or line.contains("=>")))
 is_comment_line(line: text): bool := line.starts_with("//") or line == "#" or line.starts_with("# ")
 comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1) ..].trim()
+# `area(width: int, height: int) := width * height`: the function's definition as code to paste (decision
+# reflection-definition); ø when the program defines no such function
+definition_text(name: Node, program: Node, source: text): any := {
+	definition = function_definition(name, program)
+	if definition == ø { return ø }
+	written_definition(source, "${name}") ?? serialize(view_of(definition))
+}
+# the definition as the source writes it: from its head to the end of its statement, a `;` or a line's end outside
+# brackets and texts; ø when no statement of the source defines the word
+written_definition(source: text, word: text): any := {
+	start = definition_start(source, word)
+	if start == ø { return ø }
+	depth = 0
+	at = start
+	while at < #source and not (depth == 0 and (source[at] == ";" or source[at] == "\n")) {
+		c = source[at]
+		if c == "(" or c == "[" or c == "{" { depth += 1 }
+		if c == ")" or c == "]" or c == "}" { depth -= 1 }
+		at = if c == "\"" or c == "'" then quoted_end(source, at + 1, c, #source) else at + 1
+	}
+	source[start ..< at].trim()
+}
+# where the statement defining the word starts: at the source's start, a line's or after a `;`, its blanks skipped
+definition_start(source: text, word: text): any := {
+	for at in 0 ..< #source {
+		if at == 0 or source[at - 1] == "\n" or source[at - 1] == ";" {
+			start = at
+			while start < #source and (source[start] == " " or source[start] == "\t") { start += 1 }
+			if defines_function(source[start ..].split("\n")#1, word) { return start }
+		}
+	}
+	ø
+}
 # `twice.description`: a word a function has none of, the compile refused with the word it means
 misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
@@ -240,9 +273,9 @@ first_parameter_type(word: text, definition: text): text := {
 	first = definition[#word + 1 ..].split(")")#1.split(",")#1
 	if first.contains(":") then first.split(":")#2.trim() else ""
 }
-# `dir(v)` of a value only the run knows: the words of a list and of a text, the prelude's dir_of_value's arguments
+# `dir(v)` of a value only the run knows: the words of a list, a text and a map, the prelude's dir_of_value's arguments
 # after v
-value_dir_words(program: Node): any := if owns_dir(program) then ø else List([module_dir("list"), module_dir("text")], Bracket.Square, Separator.Comma)
+value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
 
 # `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's) the program doesn't bind, else ø
 module_named(module: Node, program: Node): any := if "${module}" in names_bound_in(program) or used_module_text("${module}".lower()) == "" then ø else module
@@ -261,6 +294,10 @@ VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUES_NAME = "values"
 # a painted function's color: three numbers from 0 to 1
 COLOR_WIDTH = 3
+# a painted number or yes/no is ink where it is not 0, paper where it is, as the native PNG writer shades it
+# (core/native/driver.warp INK 29, PAPER 250 of 255)
+INK_GRAY = "vec3f(0.11372549)"
+PAPER_GRAY = "vec3f(0.98039216)"
 # translations of a function until its variables' widths settle: one assigned a number, later a vector
 MOST_ATTEMPTS = 3
 # the words WGSL keeps: a program's name among them gets a `_` after it
@@ -337,7 +374,9 @@ wgsl_painted_call(f: Node, program: Node): text := {
 	shading.refusal = ""
 	shading.calling = []
 	called = wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
-	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], ${f} gives " + wgsl_type(called#2)) }
+	if called#2 == 0 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + ")" }
+	if called#2 == 1 { return "select(" + PAPER_GRAY + ", " + INK_GRAY + ", " + called#1 + " != 0.0)" }
+	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
 	called#1
 }
 
@@ -720,6 +759,11 @@ wgsl_statement(n: Node, scope: WgslScope, depth: int) := {
 	else if n == symbol("break") { scope.wgsl_lines += [indent + "break;"] }
 	else if wgsl_is_return(n) { wgsl_return(n#2, scope, depth) }
 	else if wgsl_is_loop(n) { wgsl_loop(n, scope, depth) }
+	else if is_key(n, Op.Do) and is_key(key_of(n), Op.While) {
+		scope.wgsl_lines += [indent + "while (" + wgsl_condition(value_of(key_of(n)), scope) + ") {"]
+		wgsl_block(value_of(n), scope, depth + 1)
+		scope.wgsl_lines += [indent + "}"]
+	}
 	else if is_key(n, Op.Else) and is_key(key_of(n), Op.Then) and is_key(key_of(key_of(n)), Op.If) {
 		scope.wgsl_lines += [indent + "if (" + wgsl_condition(value_of(key_of(key_of(n))), scope) + ") {"]
 		wgsl_block(value_of(key_of(n)), scope, depth + 1)
@@ -794,4 +838,4 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}
+rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting}

@@ -45,6 +45,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"byte_at": TypedCode(ValueKind.Int, converted(values#1, ValueKind.Text) + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc_type(gc.text)]) + [op.i64_extend_i32_u])
 		"kind_code": TypedCode(ValueKind.Int, kind_code_of(values#1.code))
 		"unboxed_int": TypedCode(ValueKind.Int, unboxed(values#1.code, gc_type(gc.int_box)))
+		"fresh_int_node": TypedCode(ValueKind.Node, fresh_int_code(converted(values#1, ValueKind.Int)))
 		"marked_kind": TypedCode(ValueKind.Int, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]))
 		"unboxed_list": TypedCode(ValueKind.List, payload(values#1.code, gc_type(gc.list)))
 		"unboxed_text": TypedCode(ValueKind.Text, payload(values#1.code, gc_type(gc.text)))
@@ -155,11 +156,11 @@ intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, same_list: 2, same_node: 2, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, same_list: 2, same_node: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop", list_insert: "list_insert",
-	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
+	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values", keys: "map_keys", values: "map_values", has: "collection_contains", get: "map_get_or",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",

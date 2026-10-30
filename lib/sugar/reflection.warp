@@ -1,5 +1,6 @@
 # A function's own words (cards name-params, doc-signature): `f.name` the text it is named by, `f.params` (also
-# `f.parameters`) the names of its parameters, `f.body` the code it computes, `f.doc` its doc text, `f.signature` and
+# `f.parameters`) the names of its parameters, `f.body` the code it computes, `f.definition` its whole definition as
+# code to paste (lib/rule_words.warp definition_text), `f.doc` its doc text, `f.signature` and
 # `f.return_type` as the analyzer infers them (lib/rule_words.warp parameters_named, body_of, doc_of, signature_text,
 # return_kind); a word it has none of but another one means is refused naming that one
 rewrite $f.name => $n where $f is symbol and $f is function and $n = spelled($f)
@@ -12,10 +13,11 @@ rewrite $f.return_type => $r where $f is symbol and $f is function and $r = retu
 rewrite $f.description => $refused where $f is symbol and $f is function and $refused = misnamed($f, description, doc)
 rewrite $f.returns => $refused where $f is symbol and $f is function and $refused = misnamed($f, returns, return_type)
 rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)
-rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, body)
+rewrite $f.definition => $d where $f is symbol and $f is function and $d = definition_text($f, $program, $source)
+rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
 
 # `dir(time)`, `dir text`: the words of a module or type named as written (lib/rule_words.warp dir_words); `dir(v)` of
-# a value only the run knows: a map's keys, a list's or a text's words, none of a number (lib/prelude.warp
+# a value only the run knows: a map's keys then its words, a list's or a text's words, none of a number (lib/prelude.warp
 # dir_of_value). A program's own dir wins
 rewrite dir $x => dir($x)
 rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)

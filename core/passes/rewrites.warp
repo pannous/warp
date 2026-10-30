@@ -170,6 +170,9 @@ global rule_vector_scope = ""
 # being walked (the right of `x.f(…)`), else ø; the names the definitions around it bind
 global rule_method_part = ø
 global rule_binding = []
+# the word whose definition the rules walk inside: a rule producing that word leaves its definition as written, so
+# frames' `listen(data frame, …) => frame_listened(…)` never makes frame_listened call itself (card frame-self-rule)
+global rule_defining = ""
 # the code the rule being tried matched, for the context conditions; ø for a run of statements
 global rule_matched = ø
 
@@ -508,7 +511,7 @@ rule_needs(source: text): list := {
 			parts = rule.split(" " + where_word + " ")
 			origin = if #parts > 1 then parts#2.split("=") else []
 			# (a hole a rule word binds, `$names = path_parameters($path)`, is no origin)
-			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not rule_words.has(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
+			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not is_rule_word(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
 			needs += if word != "" then [word] else listed_in_text(rule)
 		}
@@ -800,13 +803,34 @@ is_condition(condition: Node): bool := {
 }
 
 # `routed($program)`: a call of a word of lib/rule_words.warp, run at compile time (decision computed-hole)
-is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and rule_words.has(name_of(n#1))
+is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
+# a word of lib/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
+# newer compiler, card rule-whose), one the library's file defines, read only then
+is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
+global library_rule_words = ø
+library_rule_word_names(): map := {
+	if library_rule_words == ø {
+		library_rule_words = {}
+		for cut in definition_slices(used_module_text("rule_words")) { library_rule_words[cut#1] = yes }
+	}
+	library_rule_words
+}
+# a rule word this compiler lacks: the rules calling it don't fire, said once a word
+global skipped_rule_words = {}
+skipped_rule_word(word: text): any := {
+	if not skipped_rule_words.has(word) {
+		warn "the rule word " + word + " is not in this compiler (an older seed): its rules are skipped"
+		skipped_rule_words[word] = yes
+	}
+	ø
+}
 # `$names = path_parameters($path)`: a hole bound to a rule word's result
 is_computed_binding(n: Node): bool := is_key(n, Op.Assign) and (rule_hole(key_of(n)) != ø or rest_hole_name(key_of(n)) != ø) and is_rule_word_call(value_of(n))
 # the rule word's result for the code its arguments' holes bound, `$program` the whole program, `$source` its text
 program_hole = "$program"
 source_hole = "$source"
 computed(call: Node, bound: map): any := {
+	if not rule_words.has(name_of(call#1)) { return skipped_rule_word(name_of(call#1)) }
 	word = rule_words[name_of(call#1)]
 	given = items_of(call)[1 ..].map(argument => if argument == symbol(program_hole) then rule_program else if argument == symbol(source_hole) then rule_source else rule_spliced(argument, bound, argument))
 	if #given == 0 { return word() }
@@ -1347,9 +1371,12 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		return f(walked)
 	}
 	outer = rule_binding
+	outer_defining = rule_defining
 	rule_binding = rule_binding + bound_by_definition(n)
+	rule_defining = head_word(key_of(n))
 	walked = children(n, x => placed_map_scoped(x, f, inner))
 	rule_binding = outer
+	rule_defining = outer_defining
 	rule_maps = maps
 	f(walked)
 }
@@ -1618,6 +1645,7 @@ with_rightmost(n: Node, words: list): Node := {
 
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: map, n: Node): Node := {
+	if rule_defining != "" and first_word_of(rule.template) == rule_defining { return ø }
 	bound = {}
 	if rule_matches(rule.pattern, n, bound) and conditions_hold_at(rule, origin, bound, n) { return fired(rule, rule_spliced(rule.template, bound, n)) }
 	if not (is_group(rule.pattern) and bracket_of(rule.pattern) == "" and is_curly_group(n)) { return ø }
@@ -1628,7 +1656,8 @@ rule_applied(rule: Rule, origin: map, n: Node): Node := {
 }
 
 fired(rule: Rule, result: Node): Node := {
-	if rule.module != "" { fired_modules += [rule.module] }
+	# (the prelude is in every program already: a use of it once more is none, card prelude-rule)
+	if rule.module != "" and rule.module != "prelude" { fired_modules += [rule.module] }
 	if rule.alias { diagnose(call_of("alias_word", [symbol(first_word_of(rule.pattern)), symbol(first_word_of(rule.template))]), result) }
 	result
 }

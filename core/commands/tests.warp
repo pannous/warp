@@ -18,6 +18,10 @@ EXPECTED_RUN = "e"
 LISTED = "cases"
 TIMED_OUT = "timeout"
 CASE_SECONDS = 30
+# a case slower than this is no part of `warp test` (decision no-slow-tests): said with its time, it belongs in
+# test/slow/<topic>/, run only when named
+SLOW_MILLISECONDS = 1000
+SLOW_MARK = "⏱ "
 use "../emitter/serializer.warp"
 
 class TestCase { file: text, line: int, code: text, expected: any }
@@ -46,7 +50,8 @@ test_listed(work: text, words: list) := {
 places_of(cases: list): text := cases.map(case => case.file + ":" + case.line + " " + case.code).join("\n")
 
 # `warp test-verdicts <work folder> [--each] [folder or file…]`: a ✗ line for each failed case (`--each`: a ✓ line
-# for each passed one too) and the total; `<work folder>/failed` the count failed
+# for each passed one too), a ⏱ line with the seconds of each case over SLOW_MILLISECONDS, and the total;
+# `<work folder>/failed` the count failed
 test_verdicts(work: text, words: list) := {
 	each = EACH_FLAG in words
 	cases = test_cases_of(words)
@@ -60,6 +65,8 @@ test_verdicts(work: text, words: list) := {
 		described = case.file + ":" + case.line + " " + debug_quoted(case.code) + " " + serialize(case.expected)
 		if why != "" { print "✗ " + described + ": " + why } else if each { print "✓ " + described }
 		if why != "" { failed += 1 }
+		took = run_milliseconds(work, "" + n) + run_milliseconds(work, n + EXPECTED_RUN)
+		if took > SLOW_MILLISECONDS { print SLOW_MARK + described + ": " + took / 100 / 10.0 + " s" }
 	}
 	skipped = test_files_of(words).map(file => #skipped_pairs(read(file))).sum()
 	total = if failed > 0 then "" + failed + " of " + #cases + " failed" else "✓ " + #cases + " tests passed"
@@ -91,6 +98,8 @@ run_result(work: text, run: text): any := {
 	parts = (try read(at + ".out") else "").split(VALUE_MARK + "\n")
 	if #parts < 2 then ø else value_view(parts.last().trim())
 }
+# how long a run took, 0 for a run there was none of
+run_milliseconds(work: text, run: text): int := int(try read(work + "/" + run + ".ms") else "0")
 last_line_of(t: text): text := t.trim().split("\n").last() ?? ""
 value_view(printed: text): any := literals_folded(view_of(plain_node(parsed(printed))))
 # a float printed with an exponent, `9.007199254740994e15`, parses as `… as float`: the number it is
