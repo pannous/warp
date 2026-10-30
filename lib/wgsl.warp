@@ -72,8 +72,10 @@ WGSL_MEANINGS = {"round": "sign($1) * floor(abs($1) + 0.5)", "remainder": "$1 - 
 OPERATOR_MEANINGS = [[Op.Mod, "$1 - abs($2) * floor($1 / abs($2))"], [Op.Rem, "$1 - $2 * trunc($1 / $2)"],
 	[Op.FloorDiv, "floor($1 / $2)"]]
 # `x op= v` is `x = x op v` (decision op-assign-general): the operators the parser keeps as their own assignments
-COMPOUND_OPERATORS = [[Op.AddAssign, Op.Add], [Op.SubAssign, Op.Sub], [Op.MulAssign, Op.Mul], [Op.DivAssign, Op.Div],
-	[Op.FloorDivAssign, Op.FloorDiv], [Op.ModAssign, Op.Mod], [Op.PowAssign, Op.Pow]]
+COMPOUND_OPERATORS = [[Op.AddAssign, "+"], [Op.SubAssign, "-"], [Op.MulAssign, "*"], [Op.DivAssign, "/"],
+	[Op.FloorDivAssign, "/!"], [Op.ModAssign, "%"], [Op.PowAssign, "^"]]
+# warp's operators as written (in `x %= 3`), beside the ones it writes as WGSL does (WGSL_OPERATORS)
+SPELLED_OPERATORS = [["%", Op.Mod], ["rem", Op.Rem], ["/!", Op.FloorDiv], ["^", Op.Pow], ["and", Op.And], ["or", Op.Or]]
 COMPOUND_MARK = "="
 # yes and no as WGSL writes them
 WGSL_TRUE = "true"
@@ -227,13 +229,10 @@ wgsl_operator(op: Op): text := {
 }
 # the operator warp spells so, `%` of `x %= 2`; ø for a word (`x max= 5`) or a spelling WGSL has no operator for
 wgsl_spelled_operator(spelled: text): any := {
-	for pair in WGSL_OPERATORS { if wgsl_op_spelling(pair#1) == spelled { return pair#1 } }
-	for meaning in OPERATOR_MEANINGS { if wgsl_op_spelling(meaning#1) == spelled { return meaning#1 } }
-	if wgsl_op_spelling(Op.Pow) == spelled { return Op.Pow }
+	for pair in WGSL_OPERATORS { if pair#2 == spelled { return pair#1 } }
+	for pair in SPELLED_OPERATORS { if pair#1 == spelled { return pair#2 } }
 	ø
 }
-# `%` of Op.Mod: an operator as warp spells it
-wgsl_op_spelling(op: Op): text := "${op}"
 # `a op b` of an operator or a word as written: `.*` element-wise, `%`, `max` the call max(a, b)
 wgsl_combined(left: Node, spelled: text, right: Node, n: Node, scope: WgslScope): list := {
 	if ELEMENT_WISE.has(spelled) {
@@ -676,7 +675,7 @@ wgsl_changed(parts: list, n: Node, scope: WgslScope, depth: int) := {
 # the parts [target, operator as written, value] of a compound assignment: the parser's own (`x += 1`) or another
 # operator's or word's, which it leaves as written (`x %= 3`, `x max= 5`); [] for any other code
 wgsl_compound(n: Node): list := {
-	for pair in COMPOUND_OPERATORS { if is_key(n, pair#1) { return [key_of(n), wgsl_op_spelling(pair#2), value_of(n)] } }
+	for pair in COMPOUND_OPERATORS { if is_key(n, pair#1) { return [key_of(n), pair#2, value_of(n)] } }
 	if not is_group(n) or bracket_of(n) != "" or #n != 3 or not (n#2 is symbol) { return [] }
 	written = name_of(n#2)
 	if #written < 2 or not written.ends_with(COMPOUND_MARK) { return [] }
