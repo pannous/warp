@@ -13,6 +13,8 @@ MINIAUDIO_SHA256=6b2029714f8634c4d7c70cc042f45074e0565766113fc064f20cd27c986be9c
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 sound_build=${WARP_SOUND_TARGET:-/opt/cargo/warp-sound}
 WGPU_VERSION=29.0.1.1
+STB_COMMIT=6e9f34d5429cf16790ec43c9bac3f1ee4ad1f760
+STB_TRUETYPE_SHA256=ecd30b05e0dd4fea3a13c26810dd9e1992dc379049482c393d5a19e6b5090aab
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
 window_build=${WARP_WINDOW_TARGET:-/opt/cargo/warp-window}
 (cd "$checkout/crates/wasmtime-capi" && nice -n 19 cargo build --release --locked -q)
@@ -97,15 +99,24 @@ gpu_library_built() {
 }
 gpu_library_built
 
-# SDL3 as the system installs it (brew install sdl3, apt install libsdl3-dev), linked as a library of its own
+# SDL3 as the system installs it (brew install sdl3, apt install libsdl3-dev), linked as a library of its own, with
+# stb_truetype's one header (text_coverage), fetched once at its pinned commit and checked
 window_library_built() {
   flags=$(pkg-config --cflags --libs sdl3 2>/dev/null) || return 0
   mkdir -p "$window_build"
+  header=$window_build/stb-$STB_COMMIT/stb_truetype.h
+  if [ ! -f "$header" ]; then
+    mkdir -p "$(dirname "$header")"
+    curl -sSfL -o "$header.new" "https://raw.githubusercontent.com/nothings/stb/$STB_COMMIT/stb_truetype.h"
+    echo "$STB_TRUETYPE_SHA256  $header.new" | shasum -a 256 -c - >/dev/null
+    mv "$header.new" "$header"
+  fi
   source=$checkout/crates/warp-window/warp_window.c
   built=$window_build/$window_library
-  [ "$built" -nt "$source" ] && return
+  # shellcheck disable=SC2086 # the headers are words
+  current "$built" "$source" "$header" $value_headers && return
   # shellcheck disable=SC2086 # the flags are words
-  nice -n 19 cc -O2 -shared -fPIC -o "$built.new" "$source" $flags
+  nice -n 19 cc -O2 -shared -fPIC -I "$(dirname "$header")" -o "$built.new" "$source" $flags $value_libraries
   mv -f "$built.new" "$built"
 }
 window_library_built

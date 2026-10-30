@@ -20,8 +20,8 @@ typedef struct {
 	wasm_engine_t* engine;
 	wasmtime_caller_t* caller;
 	wasmtime_context_t* context;
-	// the module's types: a $Node, a $list and its $items (recursive or holding anyrefs, so taken from given values),
-	// the boxes and $text (made: a type of its own is the module's by structure)
+	// the module's types: a $Node (recursive, so taken from a given node), the others made (a type of its own is the
+	// module's by structure)
 	wasmtime_struct_ref_pre_t *node, *list, *int_box, *float_box;
 	wasmtime_array_ref_pre_t *items, *text;
 	char failure[WARP_FAILURE_ROOM];
@@ -200,7 +200,7 @@ static inline wasmtime_anyref_t warp_instance_field(warp_values* values, const w
 	return field;
 }
 
-// the module's types, the recursive ones from the given values: a node, and a list wherever one comes (warp_list_known)
+// the module's types: a $Node's from a given one
 static inline wasmtime_struct_ref_pre_t* warp_struct_of(warp_values* values, const wasmtime_anyref_t* ref) {
 	wasmtime_structref_t structure;
 	if (!wasmtime_anyref_as_struct(values->context, ref, &structure)) return NULL;
@@ -210,44 +210,45 @@ static inline wasmtime_struct_ref_pre_t* warp_struct_of(warp_values* values, con
 	wasmtime_structref_unroot(&structure);
 	return pre;
 }
-static inline wasmtime_array_ref_pre_t* warp_array_of(warp_values* values, const wasmtime_anyref_t* ref) {
-	wasmtime_arrayref_t array;
-	if (!wasmtime_anyref_as_array(values->context, ref, &array)) return NULL;
-	wasmtime_array_type_t* type = wasmtime_arrayref_type(values->context, &array);
-	wasmtime_array_ref_pre_t* pre = wasmtime_array_ref_pre_new(values->context, type);
-	wasmtime_array_type_delete(type);
-	wasmtime_arrayref_unroot(&array);
-	return pre;
-}
-static inline wasmtime_struct_ref_pre_t* warp_box_type(warp_values* values, wasm_valkind_t kind) {
-	wasmtime_field_type_t field = {.mutable_ = false, .storage = {.kind = WASMTIME_STORAGE_TYPE_KIND_VALTYPE, .valtype = wasm_valtype_new(kind)}};
-	wasmtime_struct_type_t* type = wasmtime_struct_type_new(values->engine, &field, 1);
+static inline wasmtime_struct_ref_pre_t* warp_struct_type(warp_values* values, const wasmtime_field_type_t* fields, size_t count) {
+	wasmtime_struct_type_t* type = wasmtime_struct_type_new(values->engine, fields, count);
 	wasmtime_struct_ref_pre_t* pre = wasmtime_struct_ref_pre_new(values->context, type);
 	wasmtime_struct_type_delete(type);
+	return pre;
+}
+static inline wasmtime_field_type_t warp_field_type(bool mutable_, wasm_valtype_t* valtype) {
+	return (wasmtime_field_type_t){.mutable_ = mutable_, .storage = {.kind = WASMTIME_STORAGE_TYPE_KIND_VALTYPE, .valtype = valtype}};
+}
+// an $i64box or $f64box: struct (field kind)
+static inline wasmtime_struct_ref_pre_t* warp_box_type(warp_values* values, wasm_valkind_t kind) {
+	wasmtime_field_type_t field = warp_field_type(false, wasm_valtype_new(kind));
+	wasmtime_struct_ref_pre_t* pre = warp_struct_type(values, &field, 1);
 	wasm_valtype_delete(field.storage.valtype);
 	return pre;
 }
-// a list's types learnt from a given list node, the first one seen
-static inline void warp_list_known(warp_values* values, const wasmtime_anyref_t* node) {
-	if (values->list) return;
-	wasmtime_anyref_t list = warp_field_ref(values, node, WARP_NODE_DATA);
-	wasmtime_anyref_t items = warp_field_ref(values, &list, WARP_LIST_ITEMS);
-	values->list = warp_struct_of(values, &list);
-	values->items = warp_array_of(values, &items);
-	wasmtime_anyref_unroot(&items);
-	wasmtime_anyref_unroot(&list);
+// $text: array (mut i8); $items: array (mut anyref); $list: struct (mut i32 length, mut (ref $items))
+static inline void warp_types_made(warp_values* values) {
+	values->int_box = warp_box_type(values, WASM_I64);
+	values->float_box = warp_box_type(values, WASM_F64);
+	wasmtime_field_type_t byte = {.mutable_ = true, .storage = {.kind = WASMTIME_STORAGE_TYPE_KIND_I8}};
+	wasmtime_array_type_t* text = wasmtime_array_type_new(values->engine, &byte);
+	values->text = wasmtime_array_ref_pre_new(values->context, text);
+	wasmtime_array_type_delete(text);
+	wasmtime_valtype_t any = {.kind = WASMTIME_VALTYPE_KIND_REF, .reftype = {.nullable = true, .heaptype = {.kind = WASMTIME_HEAPTYPE_KIND_ANY}}};
+	wasmtime_field_type_t item = warp_field_type(true, wasmtime_valtype_to_wasm(values->engine, &any));
+	wasmtime_array_type_t* items = wasmtime_array_type_new(values->engine, &item);
+	values->items = wasmtime_array_ref_pre_new(values->context, items);
+	wasmtime_valtype_t items_ref = {.kind = WASMTIME_VALTYPE_KIND_REF, .reftype = {.nullable = false, .heaptype = {.kind = WASMTIME_HEAPTYPE_KIND_CONCRETE_ARRAY, .of.concrete_array = items}}};
+	wasmtime_field_type_t fields[2] = {warp_field_type(true, wasm_valtype_new(WASM_I32)), warp_field_type(true, wasmtime_valtype_to_wasm(values->engine, &items_ref))};
+	values->list = warp_struct_type(values, fields, 2);
+	for (size_t i = 0; i < 2; i++) wasm_valtype_delete(fields[i].storage.valtype);
+	wasm_valtype_delete(item.storage.valtype);
+	wasmtime_array_type_delete(items);
 }
 static inline warp_values warp_values_of(void* engine, wasmtime_caller_t* caller, const wasmtime_anyref_t* node) {
 	warp_values values = {.engine = engine, .caller = caller, .context = wasmtime_caller_context(caller)};
 	values.node = warp_struct_of(&values, node);
-	values.int_box = warp_box_type(&values, WASM_I64);
-	values.float_box = warp_box_type(&values, WASM_F64);
-	wasmtime_field_type_t byte = {.mutable_ = true, .storage = {.kind = WASMTIME_STORAGE_TYPE_KIND_I8}};
-	wasmtime_array_type_t* text = wasmtime_array_type_new(values.engine, &byte);
-	values.text = wasmtime_array_ref_pre_new(values.context, text);
-	wasmtime_array_type_delete(text);
-	int kind = warp_node_kind(&values, node);
-	if (kind == WARP_KIND_LIST || kind == WARP_KIND_BLOCK) warp_list_known(&values, node);
+	warp_types_made(&values);
 	return values;
 }
 static inline void warp_values_done(warp_values* values) {
@@ -307,7 +308,6 @@ static inline wasmtime_anyref_t warp_symbol(warp_values* values, const char* nam
 static inline wasmtime_anyref_t warp_list(warp_values* values, int64_t kind, wasmtime_anyref_t* items, size_t count) {
 	wasmtime_anyref_t none;
 	wasmtime_anyref_set_null(&none);
-	if (!values->items) { warp_failed(values, "a list built by a word given none"); return none; }
 	wasmtime_val_t null_item = warp_anyref(none);
 	wasmtime_arrayref_t array;
 	wasmtime_error_t* error = wasmtime_arrayref_new(values->context, values->items, &null_item, (uint32_t)count, &array);
