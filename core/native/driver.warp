@@ -791,10 +791,30 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
+	if same_text(module, RULE_WORDS) { return rule_word_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs
 	# a live loop's cycle starts: only the playground hands loops over between runs
 	if same_text(module, "sound") and same_text(member, "live_cycle") { return guest_call(caller, context, "new_empty", 0, 0, results) }
 	guest_error(caller, context, lacking(module, member), results)
+}
+# std_io("rule_words", word, [code]), the compiler calling a word of lib/rule_words.warp (core/passes/rewrites.warp
+# module_word_result): its prebuilt program modules/rule_words.wasm run with the word and the code in a file, the
+# answer it wrote the module's text
+RULE_WORDS = "rule_words"
+rule_word_answered(caller: handle, context: handle, word: text, listed: pointer, results: pointer): nothing := {
+	given = joined(compiled_path(), ".given")
+	answer = joined(compiled_path(), ".answer")
+	write_file(given, shown(caller, context, item_of(caller, context, listed, 1)))
+	program = joined(joined(joined(library_folder(), "/modules/"), RULE_WORDS), ".wasm")
+	running = compiler_arguments(program)
+	added(running, word)
+	added(running, given)
+	added(running, answer)
+	file_ran(program, running)
+	answered = read_file(answer)
+	unlink(given)
+	unlink(answer)
+	guest_text_of(caller, context, answered, results)
 }
 # the Error message of a std_io or std_pure member the driver lacks
 lacking(module: text, member: text): text := joined(joined(joined(joined("the host word ", module), "."), member), " is not in warp yet")
