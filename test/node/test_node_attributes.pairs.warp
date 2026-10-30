@@ -1,0 +1,5 @@
+# a node carries the words a pass marks it with, as it carries its position (card let-inside)
+'n = symbol("x"); m = with_attribute(n, symbol("let")); [attributes_of(m) == [symbol("let")], attributes_of(n) == []]'	[yes, yes]
+'m = with_attribute(with_attribute(symbol("x"), symbol("let")), symbol("own")); attributes_of(m) == [symbol("let"), symbol("own")]'	yes
+'n = symbol("x"); with_attribute(n, symbol("let")) == n'	yes
+'line_of(with_attribute(symbol("x"), symbol("let")))'	ø

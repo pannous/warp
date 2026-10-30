@@ -96,8 +96,16 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
 			part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
 			code = values#1.code + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, ValueKind.Int) + converted(values#3, ValueKind.Int)
-			TypedCode(ValueKind.Node, code + [ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
+			TypedCode(ValueKind.Node, code + [ref_null, gc_type(gc.node), ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
 		}
+		# meta_with_attributes(m, attributes): the $MetaNode m, its attributes these (a list's $Node)
+		"meta_with_attributes": {
+			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+			part = i => held + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), i])
+			code = values#1.code + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + part(3) + part(4) + part(5) + boxed(values#2)
+			TypedCode(ValueKind.Node, code + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
+		}
+		"meta_attributes": TypedCode(ValueKind.Node, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 6]))
 		"is_meta": TypedCode(ValueKind.Bool, values#1.code + gc_code(gc_ops.ref_test, [gc_type(gc.meta_node)]))
 		"meta_line": TypedCode(ValueKind.Int, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 3]))
 		"meta_column": TypedCode(ValueKind.Int, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 4]))
@@ -156,13 +164,13 @@ intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, same_list: 2, same_node: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, meta_with_attributes: 2, meta_attributes: 1, same_text: 2, same_list: 2, same_node: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop", list_insert: "list_insert",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
+	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", attributes_of: "attributes_of", with_attribute: "with_attribute", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
 	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment"}
