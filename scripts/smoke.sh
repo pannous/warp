@@ -24,6 +24,8 @@ if [ -n "$baked" ]; then
 	way="its own build"
 else
 	for part in "${COMPILERS[@]}"; do
+		# the 512 MB heap's machine code is made at the first compile of the compiler, so an install may have none yet
+		[[ $part == *.build.cwasm* && ! -e $installed/$part ]] && continue
 		rm -rf "${tree:?}/lib/$part" && cp -Rc "$installed/$part" "$tree/lib/$part" || exit 1
 	done
 	for library in "$installed"/lib*warp_*.*; do cp -c "$library" "$tree/lib/" 2>/dev/null; done
