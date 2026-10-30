@@ -1,7 +1,7 @@
 // The standard module frames (decision on-frame-headless): `on frame {…}` (lib/sugar/events.warp) runs each frame of
-// the window. Without a window, as the native warp runs every program, the frame runs once after the program, the
-// window a small one, so a program painting each frame paints one PNG at that size (the prelude's paint_each samples a
-// painted function down to it)
+// the window, the native warp's (crates/warp-window) until it closes, its paintings shown in it. Without a window
+// (WARP_NO_WINDOW, CI, no libwarp_window) the frame runs once after the program, the window a small one, so a program
+// painting each frame paints one PNG at that size (the prelude's paint_each samples a painted function down to it)
 HEADLESS_FRAME_WIDTH = 240
 HEADLESS_FRAME_HEIGHT = 135
 rewrite listen(data frame, $listener, $once) => frame_listened($listener, $once)
@@ -9,8 +9,13 @@ rewrite listen(data frame, $listener, $once) => frame_listened($listener, $once)
 rewrite $p => $q where program and $q = framed($p)
 
 frame_listened(listener: function, once: bool): int := listen(data frame, listener, once)
-// the frames after the program, its last value kept: one without a window
+// the frames after the program, its last value kept: each of the window's while it is open, one without a window
 frames_end(value: any = ø) := {
+	set_system_value("window_open", 1)
+	if window_open() {
+		while window_open() { emitted(data frame, ø) }
+		return value
+	}
 	set_system_value("window_width", HEADLESS_FRAME_WIDTH)
 	set_system_value("window_height", HEADLESS_FRAME_HEIGHT)
 	painting_headless_frame = yes

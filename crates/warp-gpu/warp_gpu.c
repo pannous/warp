@@ -27,7 +27,12 @@ static WGPUQueue queue;
 static char failure[1024];
 // the last shader's pipeline, so a frame loop compiles once
 static char* compiled_code;
+static WGPUTextureFormat compiled_format;
 static WGPURenderPipeline compiled_pipeline;
+// the window's surface a shader shows in (warp_gpu_show), configured at the size of what it shows
+static WGPUSurface surface;
+static void* surface_layer;
+static uint32_t surface_width, surface_height;
 
 static WGPUStringView view_of(const char* text) { return (WGPUStringView){text, WGPU_STRLEN}; }
 static void failed(const char* what, WGPUStringView message) {
@@ -165,8 +170,8 @@ static int scope_clean(void) {
 	waited(&scope.done);
 	return !scope.failed;
 }
-static WGPURenderPipeline pipeline_of(const char* code) {
-	if (compiled_code && !strcmp(compiled_code, code)) return compiled_pipeline;
+static WGPURenderPipeline pipeline_of(const char* code, WGPUTextureFormat format) {
+	if (compiled_code && compiled_format == format && !strcmp(compiled_code, code)) return compiled_pipeline;
 	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
 	WGPUShaderSourceWGSL source = WGPU_SHADER_SOURCE_WGSL_INIT;
 	source.code = view_of(code);
@@ -174,7 +179,7 @@ static WGPURenderPipeline pipeline_of(const char* code) {
 	module_descriptor.nextInChain = &source.chain;
 	WGPUShaderModule module = wgpuDeviceCreateShaderModule(device, &module_descriptor);
 	WGPUColorTargetState target = WGPU_COLOR_TARGET_STATE_INIT;
-	target.format = WGPUTextureFormat_RGBA8Unorm;
+	target.format = format;
 	WGPUFragmentState fragment = WGPU_FRAGMENT_STATE_INIT;
 	fragment.module = module;
 	fragment.entryPoint = view_of(FRAGMENT_ENTRY_POINT);
@@ -193,6 +198,7 @@ static WGPURenderPipeline pipeline_of(const char* code) {
 	if (compiled_pipeline) wgpuRenderPipelineRelease(compiled_pipeline);
 	free(compiled_code);
 	compiled_code = strdup(code);
+	compiled_format = format;
 	compiled_pipeline = pipeline;
 	return pipeline;
 }
@@ -208,15 +214,26 @@ static void mapped(WGPUMapAsyncStatus status, WGPUStringView message, void* done
 	*(int*)done = status == WGPUMapAsyncStatus_Success ? 1 : -1;
 }
 
-// the shader's pixels, row by row as 0xAARRGGBB, into `pixels` (width × height); 0, else -1 and warp_gpu_failure()
-int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_t height, uint32_t* pixels) {
+static WGPUBindGroup bindings_of(WGPURenderPipeline pipeline, const WGPUBindGroupEntry* entry) {
+	WGPUBindGroupDescriptor group = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+	group.layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0);
+	group.entryCount = 1;
+	group.entries = entry;
+	WGPUBindGroup bindings = wgpuDeviceCreateBindGroup(device, &group);
+	wgpuBindGroupLayoutRelease(group.layout);
+	return bindings;
+}
+// --- a drawing: the shader's pipeline for a target format, its values' uniform bound, the full image drawn
+typedef struct { WGPURenderPipeline pipeline; WGPUBuffer uniform; WGPUBindGroup bindings; } Drawing;
+static int drawing_made(const char* shader, const char* values, WGPUTextureFormat format, Drawing* drawing) {
+	*drawing = (Drawing){0};
 	failure[0] = 0;
-	if (!device_ready()) return -1;
+	if (!device_ready()) return 0;
 	static Layout layout;
 	layout.count = 0;
 	layout.members = 0;
 	layout.declarations[0] = 0;
-	if (!values_laid_out(values, &layout)) return -1;
+	if (!values_laid_out(values, &layout)) return 0;
 	size_t code_size = strlen(shader) + sizeof FULL_IMAGE_VERTICES + MOST_DECLARATIONS + 128;
 	char* code = malloc(code_size);
 	snprintf(code, code_size, "%s%s", shader, FULL_IMAGE_VERTICES);
@@ -225,47 +242,59 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 		snprintf(code + used, code_size - used, "\nstruct WarpValues { %s }\n@group(0) @binding(%d) var<uniform> " VALUES_NAME ": WarpValues;",
 			layout.declarations, VALUES_BINDING);
 	}
-	WGPURenderPipeline pipeline = pipeline_of(code);
+	drawing->pipeline = pipeline_of(code, format);
 	free(code);
-	if (!pipeline) return -1;
-
-	WGPUTextureDescriptor texture_descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
-	texture_descriptor.size = (WGPUExtent3D){(uint32_t)width, (uint32_t)height, 1};
-	texture_descriptor.format = WGPUTextureFormat_RGBA8Unorm;
-	texture_descriptor.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc;
-	WGPUTexture image = wgpuDeviceCreateTexture(device, &texture_descriptor);
-	WGPUTextureView image_view = wgpuTextureCreateView(image, NULL);
-	WGPUBuffer uniform = NULL;
-	WGPUBindGroup bindings = NULL;
-	if (layout.members) {
-		uint64_t size = layout.count * sizeof(float);
-		uniform = buffer_of(size, WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst);
-		wgpuQueueWriteBuffer(queue, uniform, 0, layout.floats, size);
-		WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
-		entry.binding = VALUES_BINDING;
-		entry.buffer = uniform;
-		entry.size = size;
-		WGPUBindGroupDescriptor group = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
-		group.layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0);
-		group.entryCount = 1;
-		group.entries = &entry;
-		bindings = wgpuDeviceCreateBindGroup(device, &group);
-		wgpuBindGroupLayoutRelease(group.layout);
-	}
-	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
+	if (!drawing->pipeline) return 0;
+	if (!layout.members) return 1;
+	uint64_t size = layout.count * sizeof(float);
+	drawing->uniform = buffer_of(size, WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst);
+	wgpuQueueWriteBuffer(queue, drawing->uniform, 0, layout.floats, size);
+	WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
+	entry.binding = VALUES_BINDING;
+	entry.buffer = drawing->uniform;
+	entry.size = size;
+	drawing->bindings = bindings_of(drawing->pipeline, &entry);
+	return 1;
+}
+static void drawing_released(Drawing* drawing) {
+	if (drawing->bindings) wgpuBindGroupRelease(drawing->bindings);
+	if (drawing->uniform) wgpuBufferRelease(drawing->uniform);
+}
+// the drawing's full image drawn into the view, by the encoder
+static void drawn(WGPUCommandEncoder encoder, WGPUTextureView view, const Drawing* drawing) {
 	WGPURenderPassColorAttachment attachment = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
-	attachment.view = image_view;
+	attachment.view = view;
 	attachment.loadOp = WGPULoadOp_Clear;
 	attachment.storeOp = WGPUStoreOp_Store;
 	WGPURenderPassDescriptor pass_descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
 	pass_descriptor.colorAttachmentCount = 1;
 	pass_descriptor.colorAttachments = &attachment;
 	WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &pass_descriptor);
-	wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-	if (bindings) wgpuRenderPassEncoderSetBindGroup(pass, 0, bindings, 0, NULL);
+	wgpuRenderPassEncoderSetPipeline(pass, drawing->pipeline);
+	if (drawing->bindings) wgpuRenderPassEncoderSetBindGroup(pass, 0, drawing->bindings, 0, NULL);
 	wgpuRenderPassEncoderDraw(pass, TRIANGLE_CORNERS, 1, 0, 0);
 	wgpuRenderPassEncoderEnd(pass);
 	wgpuRenderPassEncoderRelease(pass);
+}
+static void submitted(WGPUCommandEncoder encoder) {
+	WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
+	wgpuQueueSubmit(queue, 1, &commands);
+	wgpuCommandBufferRelease(commands);
+	wgpuCommandEncoderRelease(encoder);
+}
+
+// the shader's pixels, row by row as 0xAARRGGBB, into `pixels` (width × height); 0, else -1 and warp_gpu_failure()
+int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_t height, uint32_t* pixels) {
+	Drawing drawing;
+	if (!drawing_made(shader, values, WGPUTextureFormat_RGBA8Unorm, &drawing)) return -1;
+	WGPUTextureDescriptor texture_descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
+	texture_descriptor.size = (WGPUExtent3D){(uint32_t)width, (uint32_t)height, 1};
+	texture_descriptor.format = WGPUTextureFormat_RGBA8Unorm;
+	texture_descriptor.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc;
+	WGPUTexture image = wgpuDeviceCreateTexture(device, &texture_descriptor);
+	WGPUTextureView image_view = wgpuTextureCreateView(image, NULL);
+	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
+	drawn(encoder, image_view, &drawing);
 
 	uint32_t row_bytes = (width * PIXEL_BYTES + ROW_ALIGNMENT - 1) / ROW_ALIGNMENT * ROW_ALIGNMENT;
 	WGPUBuffer readback = buffer_of((uint64_t)row_bytes * height, WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst);
@@ -276,10 +305,7 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 	into.layout.bytesPerRow = row_bytes;
 	into.layout.rowsPerImage = (uint32_t)height;
 	wgpuCommandEncoderCopyTextureToBuffer(encoder, &from, &into, &texture_descriptor.size);
-	WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
-	wgpuQueueSubmit(queue, 1, &commands);
-	wgpuCommandBufferRelease(commands);
-	wgpuCommandEncoderRelease(encoder);
+	submitted(encoder);
 
 	int done = 0;
 	WGPUBufferMapCallbackInfo map_info = WGPU_BUFFER_MAP_CALLBACK_INFO_INIT;
@@ -301,12 +327,96 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 		wgpuBufferUnmap(readback);
 	}
 	wgpuBufferRelease(readback);
-	if (bindings) wgpuBindGroupRelease(bindings);
-	if (uniform) wgpuBufferRelease(uniform);
+	drawing_released(&drawing);
 	wgpuTextureViewRelease(image_view);
 	wgpuTextureRelease(image);
 	return done > 0 ? 0 : -1;
 }
 
-// why the last warp_gpu_paint failed
+// --- a window's surface (libwarp_window's Metal layer): what is shown there stays on the GPU, no pixel read back.
+// The surface is as big as the painting, the layer scales it to the window; a format without sRGB, so the window
+// shows the colors a PNG of the same painting holds
+static const WGPUTextureFormat SURFACE_FORMAT = WGPUTextureFormat_BGRA8Unorm;
+static int surface_ready(void* layer, int32_t width, int32_t height) {
+	if (!device_ready()) return 0;
+	if (surface && surface_layer != layer) { wgpuSurfaceRelease(surface); surface = NULL; }
+	if (!surface) {
+		WGPUSurfaceSourceMetalLayer source = WGPU_SURFACE_SOURCE_METAL_LAYER_INIT;
+		source.layer = layer;
+		WGPUSurfaceDescriptor descriptor = WGPU_SURFACE_DESCRIPTOR_INIT;
+		descriptor.nextInChain = &source.chain;
+		surface = wgpuInstanceCreateSurface(instance, &descriptor);
+		if (!surface) return snprintf(failure, sizeof failure, "the window offers no surface to show on"), 0;
+		surface_layer = layer;
+		surface_width = surface_height = 0;
+	}
+	if (surface_width != (uint32_t)width || surface_height != (uint32_t)height) {
+		WGPUSurfaceConfiguration configuration = WGPU_SURFACE_CONFIGURATION_INIT;
+		configuration.device = device;
+		configuration.format = SURFACE_FORMAT;
+		configuration.width = surface_width = (uint32_t)width;
+		configuration.height = surface_height = (uint32_t)height;
+		configuration.presentMode = WGPUPresentMode_Fifo;
+		wgpuSurfaceConfigure(surface, &configuration);
+	}
+	return 1;
+}
+// the drawing shown in the window's surface, waiting for the display's next refresh (vsync); a window out of sight
+// (hidden, minimized, covered) shows nothing and is no failure
+static int presented(const Drawing* drawing) {
+	WGPUSurfaceTexture current = WGPU_SURFACE_TEXTURE_INIT;
+	wgpuSurfaceGetCurrentTexture(surface, &current);
+	if (current.status == (WGPUSurfaceGetCurrentTextureStatus)WGPUSurfaceGetCurrentTextureStatus_Occluded) return 1;
+	if (current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal && current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
+		snprintf(failure, sizeof failure, "the window's surface gave no image to draw (status %d)", (int)current.status);
+		surface_width = 0;
+		return 0;
+	}
+	WGPUTextureView view = wgpuTextureCreateView(current.texture, NULL);
+	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
+	drawn(encoder, view, drawing);
+	submitted(encoder);
+	wgpuSurfacePresent(surface);
+	wgpuTextureViewRelease(view);
+	wgpuTextureRelease(current.texture);
+	return 1;
+}
+// the shader shown in the window's layer at width × height; 0, else -1 and warp_gpu_failure()
+int warp_gpu_show(const char* shader, const char* values, void* layer, int32_t width, int32_t height) {
+	Drawing drawing;
+	if (!drawing_made(shader, values, SURFACE_FORMAT, &drawing) || !surface_ready(layer, width, height)) return -1;
+	int shown = presented(&drawing);
+	drawing_released(&drawing);
+	return shown ? 0 : -1;
+}
+#define PICTURE_SHADER "@group(0) @binding(0) var picture: texture_2d<f32>;\n" \
+	"@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f { return textureLoad(picture, vec2i(position.xy), 0); }\n"
+// pixels (RGBA, a byte each, row by row) shown in the window's layer at width × height; 0, else -1
+int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int32_t height) {
+	Drawing drawing;
+	if (!drawing_made(PICTURE_SHADER, "", SURFACE_FORMAT, &drawing) || !surface_ready(layer, width, height)) return -1;
+	WGPUTextureDescriptor texture_descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
+	texture_descriptor.size = (WGPUExtent3D){(uint32_t)width, (uint32_t)height, 1};
+	texture_descriptor.format = WGPUTextureFormat_RGBA8Unorm;
+	texture_descriptor.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
+	WGPUTexture picture = wgpuDeviceCreateTexture(device, &texture_descriptor);
+	WGPUTexelCopyTextureInfo into = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+	into.texture = picture;
+	WGPUTexelCopyBufferLayout rows = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
+	rows.bytesPerRow = (uint32_t)width * PIXEL_BYTES;
+	rows.rowsPerImage = (uint32_t)height;
+	wgpuQueueWriteTexture(queue, &into, pixels, (size_t)width * height * PIXEL_BYTES, &rows, &texture_descriptor.size);
+	WGPUTextureView picture_view = wgpuTextureCreateView(picture, NULL);
+	WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
+	entry.binding = 0;
+	entry.textureView = picture_view;
+	drawing.bindings = bindings_of(drawing.pipeline, &entry);
+	int shown = presented(&drawing);
+	drawing_released(&drawing);
+	wgpuTextureViewRelease(picture_view);
+	wgpuTextureRelease(picture);
+	return shown ? 0 : -1;
+}
+
+// why the last warp_gpu_paint or warp_gpu_show failed
 const char* warp_gpu_failure(void) { return failure; }

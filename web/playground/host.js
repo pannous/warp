@@ -174,6 +174,8 @@ function programImports(holder, hooks) {
 			// the dots per inch px count in; the display's sides read only
 			set_system_value: (name, value) => {
 				const side = decode(cString(name));
+				// lib/frames.warp asks for a native window; the page's canvas is the window already
+				if (side === "window_open") return;
 				if (side === "display_dpi") {
 					if (value <= 0n) throw new Error(`display.dpi = ${value} dpi: a display has a positive number of dots per inch`);
 					holder.displayDpi = Number(value);
