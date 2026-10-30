@@ -1,0 +1,14 @@
+# decision nat-and-int: nat is a whole number of any size, rational an exact number, both declarable
+'5 is nat'	yes
+'2^70 is nat'	yes
+'x = 1/2; x is nat'	no
+'1.5 is nat'	no
+'n: nat = 2^64; n * 2'	36893488147419103232
+'n: nat = 3; n = n * 4; n'	12
+'r: rational = 1/3; r * 3'	1
+'f: fraction = 1/4; f + f'	0.5
+'type(3)'	nat
+'x: int = 3; type(x)'	int
+'x: int? = 3; type(x)'	int
+'x: int? = 9223372036854775807; x + 1'	-9223372036854775808
+'(3037000500*3037000500) as! int'	-9223372036709301616

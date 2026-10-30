@@ -63,6 +63,14 @@ invalid_number(): int := {
 	fail()
 	0
 }
+not_a_whole_number(): int := {
+	fail()
+	0
+}
+not_an_exact_number(): int := {
+	fail()
+	0
+}
 an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
@@ -86,6 +94,14 @@ returned_error(): int := {
 no_length(): int := {
 	fail()
 	0
+}
+too_big_for_int(): int := {
+	fail()
+	0
+}
+too_big_for_int_of(value: Node): int := {
+	global trap_detail = value
+	too_big_for_int()
 }
 no_length_of(value: Node): int := {
 	global trap_detail = value

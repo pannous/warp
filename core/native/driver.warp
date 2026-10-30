@@ -84,6 +84,10 @@ wasm_engine_new_with_config(config: handle): handle from "warp_wasmtime"
 wasmtime_store_new(engine: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
 wasmtime_store_context(store: handle): handle from "warp_wasmtime"
 wasmtime_linker_new(engine: handle): handle from "warp_wasmtime"
+wasmtime_store_delete(store: handle) from "warp_wasmtime"
+wasmtime_linker_delete(linker: handle) from "warp_wasmtime"
+wasmtime_module_delete(module: handle) from "warp_wasmtime"
+wasm_engine_delete(engine: handle) from "warp_wasmtime"
 wasmtime_linker_define_wasi(linker: handle): handle from "warp_wasmtime"
 wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle): handle from "warp_wasmtime"
 wasmtime_linker_define_func(linker: handle, module: text, module_size: i64, name: text, size: i64, type: handle, callback: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
@@ -531,7 +535,8 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
 	engine = wasm_engine_new_with_config(warp_config(fuel > 0, heap_bytes))
-	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
+	store = wasmtime_store_new(engine, 0, 0)
+	context = wasmtime_store_context(store)
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
 	linker = wasmtime_linker_new(engine)
 	# wasmtime writes it only on a trap; a run inside a host word (parse_code) gets arena bytes an earlier one used
@@ -567,6 +572,12 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
 	if results_count > 0 { print_result(results) }
 	crash_context_restored(outer)
+	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
+	# behind the last (it peaked at 4.8 GB with all of them kept)
+	wasmtime_store_delete(store)
+	wasmtime_linker_delete(linker)
+	wasmtime_module_delete(compiled)
+	wasm_engine_delete(engine)
 }
 # what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
 # engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
