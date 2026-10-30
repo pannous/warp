@@ -110,7 +110,8 @@ mutable = 1
 # value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box; an exact
 # rational an Int $Node holding a $Ratio(numerator, denominator) of two $i64box (rust-harness:src/run/wasm_reader.rs read_payload);
 # a positioned node a $MetaNode, the final subtype (79, one supertype) of the open $Node (80, none) adding its line,
-# column and comment (rust-harness:src/wasm_emitter/type_manager.rs emit_meta_node_type); an integer beyond 64 bits an Int $Node
+# column and comment (rust-harness:src/wasm_emitter/type_manager.rs emit_meta_node_type) and the attributes a pass marks it
+# with (runtime fields.warp attributes_of); an integer beyond 64 bits an Int $Node
 # holding a $BigInt(negative, limbs), its magnitude little-endian base 2^32 limbs in a $Limbs array of i32, no leading
 # zero one (Rust's $BigInt, read back by read_payload; runtime/extended/big_ints.warp).
 # A module declares a type only once its code uses it, as it compiles a runtime word on its first call (decision
@@ -119,9 +120,9 @@ mutable = 1
 gc = {text: "text", items: "items", list: "list", node: "Node", int_box: "i64box", float_box: "f64box", ratio: "Ratio", meta_node: "MetaNode", limbs: "Limbs", big_int: "BigInt"}
 node_fields = [126, 0, 110, 0, 99, gc.node, 0]
 gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
-	[79, 1, gc.node, 95, 6] + node_fields + [126, 0, 126, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0]]
+	[79, 1, gc.node, 95, 7] + node_fields + [126, 0, 126, 0, 99, gc.node, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0]]
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
-	["MetaNode", ["kind", "data", "value", "line", "column", "comment"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]]]
+	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]]]
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 # a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
 references = {text: [99, gc.text], list: [99, gc.list], node: [110], time: [110]}

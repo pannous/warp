@@ -27,6 +27,10 @@ UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 - Run sound probes under WARP_NO_WINDOW=1: otherwise sound plays on the user's Mac. Under tests, CI and
   WARP_NO_WINDOW nothing plays; a `sound 0.50 s: <path>` line goes to stderr and the WAVs are still collected for
   render_sound.
+- Checking that a run is silent without listening: `/usr/bin/log stream --style compact --predicate 'process ==
+  "coreaudiod"'` beside the run; a run that sounds shows `on behalf of <its pid>` (coreaudiod's power assertion), a
+  silent one never does (`log` alone is a zsh builtin). Verified 2026-10-30: the sound tests and samples under
+  `warp test` / WARP_NO_WINDOW show no warp pid, a normal run does.
 - probes/sound/sound_words.warp exercises the words; probes/music_go/ the `play`/`melody` phrases;
   probes/music_outlives_file.py that the player stops with warp.
 - A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word.
@@ -45,7 +49,7 @@ UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
   macOS cpal dependency is declared).
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio at its
   `at`; a new run silences what still plays. Audio starts only after a gesture: the run on page load stays silent.
-- Music files: `play "song.mp3"` / `play ./mozart.mp3` / `play_file(path)` play wav, mp3, ogg, flac, aiff or m4a in
+- Music files: `play "song.mp3"` / `play ./tune.mp3` / `play_file(path)` play wav, mp3, ogg, flac, aiff or m4a in
   the background (format by its first bytes). Natively the first player the system has for the format: afplay (no
   ogg), paplay (no mp3), ffplay, mpv; the file is decoded first by ffprobe or afinfo (a broken one fails play, also
   headless), a player failing within 0.3 s fails play, a later failure prints `sound file <path>: <player> failed

@@ -152,7 +152,7 @@ native_built() {
 		mv "$1/compiler/native/warp" "$1/warp"
 }
 install_native() {
-	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got
+	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got made
 	rm -rf "$folder.new" && mkdir -p "$folder.new" || return 1
 	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { red "native warp: lib/ did not copy" --urgent; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
@@ -160,6 +160,7 @@ install_native() {
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
+	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { red "native warp: ${made:0:200}" --urgent; rm -rf "$folder"; return 1; }
 	linked "$folder/warp" "$MAIN_WARP" && linked "$folder" "$MAIN_LIB" || return 1
 	pruned
 	say "native warp of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
@@ -187,9 +188,13 @@ watch() {
 }
 
 # the samples that run, the gap to 2.0 (decision night-samples-modules): test/samples.txt committed on main when it
-# changed, so its git log is the history and git diff names the samples that changed (user 2026-10-29)
+# changed, so its git log is the history and git diff names the samples that changed (user 2026-10-29); at most once
+# every SAMPLES_HOURS, never on every push (the sweep with the rest loaded the machine to 109, 2026-10-30)
+SAMPLES_HOURS=4
 samples_committed() {
-	local count report=test/samples.txt
+	local count report=test/samples.txt last=$state/samples-at
+	[ -f "$last" ] && [ $(($(date +%s) - $(cat "$last"))) -lt $((SAMPLES_HOURS * 3600)) ] && return
+	date +%s >"$last"
 	count=$("$scripts/samples.sh" "$TREE" | head -1 | sed -n 's/^samples: \([0-9]* of [0-9]*\) run.*/\1/p')
 	cp "$TREE/$report" "$MAIN_CHECKOUT/$report" || return
 	# the slow tree stays clean for its next checkout

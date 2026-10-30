@@ -101,6 +101,8 @@ bracket_of(n): any from emitter
 separator_of(n): any from emitter
 line_of(n): any from emitter
 column_of(n): any from emitter
+attributes_of(n): list from emitter
+with_attribute(n, word): any from emitter
 bracketed(n, bracket): list from emitter
 separated(n, separator): list from emitter
 string(x): text from emitter
