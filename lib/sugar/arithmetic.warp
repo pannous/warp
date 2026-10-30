@@ -19,4 +19,3 @@ rewrite $x as! $t => $x as !$t
 # Trailing percent (decision Trailing percent): `10%` is 1/10, exact; `50 % of 200` is 100; infix `%` stays the remainder
 rewrite $n % of $w => $n / 100 * $w
 rewrite $n % => $n / 100
-||||||| afa97e3f5d
