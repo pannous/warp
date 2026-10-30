@@ -1,0 +1,3 @@
+'x = 5; "a ${clamp(x, 0, 3)}"'	"a 3"
+'"gcd ${gcd(12, 8)}"'	"gcd 4"
+'"the word clamp"'	"the word clamp"
