@@ -1,9 +1,8 @@
 #!/usr/bin/env warp
-# A sunset sea, after web-ocean (github.com/Noniv/web-ocean, MIT): waves, sun glitter, whitecaps, a warm sky with two
-# cloud layers, aerial perspective and AgX tone mapping, all warp functions that paint(ocean, width, height) compiles
-# to one fragment shader. Each pixel casts a ray from the camera: it marches down onto the waves or goes up into the sky.
-# web-ocean simulates its waves by FFT on a quadtree mesh over several passes; here they are a sum of wind waves, each
-# one dragging the next along (cheap, and the crests stay sharp)
+# A sunset sea, after web-ocean (github.com/Noniv/web-ocean, MIT): waves, sun glitter, whitecaps, a warm sky with two cloud layers, aerial perspective and AgX tone mapping, 
+# all pur warp functions that paint(ocean, width, height) compiles to one fragment shader. 
+# Each pixel casts a ray from the camera: it marches down onto the waves or goes up into the sky.
+# web-ocean simulates its waves by FFT on a quadtree mesh over several passes; here they are a sum of wind waves, each one dragging the next along (cheap, and the crests stay sharp)
 use math
 use keys
 width = 960
@@ -29,13 +28,13 @@ exposure = 1.0
 # W A S D move, Space or E up, Q or C down, drag the mouse to look around, Escape ends
 global camera_x = 0.0
 global camera_z = 0.0
-global camera_height = 2.4
-global yaw = 0.0 # degrees to the right
-global pitch = -3.0 # degrees up
-field_of_view = 60
-flying_speed = 6 # m/s
-looking_speed = 0.2 # degrees per pixel the mouse moves
-lowest = 0.8 # metres above the calm sea
+global camera_height = 2.4 # todo can we use m unit (and drop in shader?)
+global yaw = 0.0 # degrees to the right # todo °?
+global pitch = -3.0 # degrees up # todo °?
+field_of_view = 60 # todo can we use ° unit (and drop in shader?)
+flying_speed = 6 # m/s # todo can we use unit (and drop in shader?)
+looking_speed = 0.2 # degrees per pixel the mouse moves # todo °/px ?
+lowest = 0.8 # metres above the calm sea # todo m?
 
 geometry_waves = 12
 detail_waves = 32
@@ -50,11 +49,11 @@ direction_of(elevation, azimuth) := {
 }
 sun = direction_of(sun_elevation, sun_azimuth)
 sun_light = [1.0, 0.78, 0.55] .* 9
-zenith_blue = [0.09, 0.13, 0.22]
+zenith_blue = [0.09, 0.13, 0.22] # todo .13 MUST work too!!
 horizon_gold = [1.0, 0.58, 0.2]
 
 # a number in 0 … 1 per lattice point: sin-hashes stripe in f32 for big arguments, so the point is wrapped first
-hash(p) := fract(sine(dot(p .- 289 .* floor(p ./ 289), [127.1, 311.7])) * 43758.547)
+hash(p) := fract(sine(dot(p .- 289 .* floor(p ./ 289), [127.1, 311.7])) * 43758.547) # todo dot => ·
 
 # smooth value noise: the corner hashes of the lattice cell, blended
 noise(p) := {
@@ -126,7 +125,8 @@ air(direction) := {
 	up = max(direction.y, 0)
 	toward_sun = max(dot(direction, sun), 0)
 	gradient = mix(horizon_gold, zenith_blue, smoothstep(0, 0.5, up) ^ 0.6)
-	glow = [1.0, 0.55, 0.25] .* (0.4 * toward_sun ^ 8 + 2.0 * toward_sun ^ 120 + 6 * toward_sun ^ 2000) .* (1 - up) ^ 3
+	factor = (0.4 * toward_sun ^ 8 + 2.0 * toward_sun ^ 120 + 6 * toward_sun ^ 2000) .* (1 - up) ^ 3
+	glow = [1.0, 0.55, 0.25] .* factor
 	gradient .+ glow .* haze
 }
 
