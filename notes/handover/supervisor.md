@@ -16,7 +16,7 @@ Language-meaning questions that would go to the Interviewer go there too.
 | session | card / task |
 |---|---|
 | warp-speed | compile slowdown, TOP PRIORITY (decision compile-speed-first): self-compile profile; building lib-hash-rebake (user OK) |
-| warp-rule-words-removal | where-cheap-first: the rewrite engine evaluates where-conditions cheapest first (rule-words-removal parked) |
+| warp-rule-words-removal | is-value-scope: `$x is value` in rule conditions sees function parameters and locals (core, OK'd at night) |
 | warp-shaders | angle-type-alias → units-ignored-by-shaders → use-keys → ocean m/s todos (ocean landed fc2ed2681c; dot-product is Codex's) |
 | warp-integrator | full suites held tonight for warp-speed's measurements; seed refresh after lib-hash-rebake lands |
 | Codex (cron 02/07/12/17/22:35) | notes/agents/codex_worker.sh, 4 rounds per firing; typed-parse and dot-product parked on their branches |
