@@ -50,11 +50,76 @@ int32_t gpu_paints(void) {
 	}
 	return gpu_paint && gpu_failure;
 }
+int32_t library_system_value(char* name, int64_t* value);
+static int64_t library_value(const char* name) {
+	int64_t value = 0;
+	return library_system_value((char*)name, &value) ? value : 0;
+}
+// the holes every shader has, filled where the shader reads them and the program gave none, as the playground fills
+// them (web/playground/host-gpu.js builtinValues): the image's size, seconds since the first painting, the paintings
+// before, the pointer and key over the window (0 without one)
+enum { MOST_VALUES_TEXT = 65536 };
+static const char* BUILTIN_HOLES[] = {"width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"};
+static int32_t reads_hole(const char* text, const char* name) {
+	size_t length = strlen(name);
+	for (const char* at = strstr(text, "values."); at; at = strstr(at + 1, "values.")) {
+		const char* field = at + strlen("values.");
+		char after = field[length];
+		int boundary = !(after == '_' || (after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z') || (after >= '0' && after <= '9'));
+		if (!strncmp(field, name, length) && boundary) return 1;
+	}
+	return 0;
+}
+static int32_t given_hole(const char* values, const char* name) {
+	size_t length = strlen(name);
+	for (const char* at = strstr(values, name); at; at = strstr(at + 1, name))
+		if ((at == values || at[-1] == '{' || at[-1] == ' ' || at[-1] == ',') && at[length] == ':') return 1;
+	return 0;
+}
+static double seconds_now(void) {
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return now.tv_sec + now.tv_nsec / 1e9;
+}
+static void hole_written(char* into, const char* name, int64_t width, int64_t height, double time, int64_t frame) {
+	size_t used = strlen(into);
+	char* at = into + used;
+	size_t room = MOST_VALUES_TEXT - used;
+	if (!strcmp(name, "width")) snprintf(at, room, "width: %lld", (long long)width);
+	else if (!strcmp(name, "height")) snprintf(at, room, "height: %lld", (long long)height);
+	else if (!strcmp(name, "size")) snprintf(at, room, "size: [%lld, %lld]", (long long)width, (long long)height);
+	else if (!strcmp(name, "time")) snprintf(at, room, "time: %.6f", time);
+	else if (!strcmp(name, "frame")) snprintf(at, room, "frame: %lld", (long long)frame);
+	else if (!strcmp(name, "mouse")) snprintf(at, room, "mouse: [%lld, %lld]", (long long)library_value("mouse_x"), (long long)library_value("mouse_y"));
+	else if (!strcmp(name, "key")) snprintf(at, room, "key: %lld", (long long)library_value("key code held"));
+	else snprintf(at, room, "%s: %lld", name, (long long)library_value(name));
+}
+// the program's values with the built-in holes its shader reads; the caller frees it
+static char* values_filled(const char* shader, const char* values, int64_t width, int64_t height) {
+	static double first_painting;
+	static int64_t paintings;
+	if (!first_painting) first_painting = seconds_now();
+	char* filled = calloc(MOST_VALUES_TEXT, 1);
+	const char* given = values[0] == '{' ? values : "{}";
+	size_t given_length = strlen(given);
+	snprintf(filled, MOST_VALUES_TEXT, "%.*s", (int)(given_length - 1), given);
+	int members = strcmp(given, "{}") != 0;
+	for (size_t i = 0; i < sizeof BUILTIN_HOLES / sizeof *BUILTIN_HOLES; i++) {
+		if (!reads_hole(shader, BUILTIN_HOLES[i]) || given_hole(given, BUILTIN_HOLES[i])) continue;
+		if (members++) strncat(filled, ", ", MOST_VALUES_TEXT - strlen(filled) - 1);
+		hole_written(filled, BUILTIN_HOLES[i], width, height, seconds_now() - first_painting, paintings);
+	}
+	strncat(filled, "}", MOST_VALUES_TEXT - strlen(filled) - 1);
+	paintings++;
+	return filled;
+}
 // the shader's pixels, as 0xAARRGGBB ints of 8 bytes (driver.warp png_written); 0, else -1, the GPU's reason told
-int32_t gpu_painted(char* shader, char* values, int64_t width, int64_t height, int64_t* pixels) {
+int32_t gpu_painted(char* shader, char* given_values, int64_t width, int64_t height, int64_t* pixels) {
 	if (!gpu_paints()) return fprintf(stderr, "paint of a shader: libwarp_gpu is not beside warp\n"), -1;
 	uint32_t* colors = malloc(width * height * sizeof *colors);
+	char* values = values_filled(shader, given_values, width, height);
 	int32_t failed = gpu_paint(shader, values, (int32_t)width, (int32_t)height, colors);
+	free(values);
 	if (failed) fprintf(stderr, "paint of a shader: %s\n", gpu_failure());
 	else for (int64_t i = 0; i < width * height; i++) pixels[i] = colors[i];
 	free(colors);
@@ -102,12 +167,15 @@ static int32_t shown_or_told(int32_t failed) {
 	if (failed) fprintf(stderr, "paint into the window: %s\n", gpu_failure());
 	return failed ? -1 : 1;
 }
-int32_t shader_shown(char* shader, char* values, int64_t width, int64_t height) {
+int32_t shader_shown(char* shader, char* given_values, int64_t width, int64_t height) {
 	void* layer = window_layer(width, height);
 	if (!layer) return 0;
 	static int32_t (*show)(const char*, const char*, void*, int32_t, int32_t);
 	if (!show) show = (int32_t (*)(const char*, const char*, void*, int32_t, int32_t))library_function("warp_gpu", "warp_gpu_show");
-	return shown_or_told(show(shader, values, layer, (int32_t)width, (int32_t)height));
+	char* values = values_filled(shader, given_values, width, height);
+	int32_t shown = shown_or_told(show(shader, values, layer, (int32_t)width, (int32_t)height));
+	free(values);
+	return shown;
 }
 // the pixels as driver.warp png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
 enum { PAPER = 250, INK = 29, COLOR_FROM = 16777216 };

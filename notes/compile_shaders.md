@@ -63,3 +63,18 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
   behaviour from a file (test/native/test_frame_file.sh)
 - native GPU: crates/warp-gpu over wgpu-native, lazily bound by lib/native/foreign.c (gpu_paints; WARP_GPU=off for
   the CPU); ocean 960×540 about 30 ms a frame headless incl. readback and PNG, ~160 s on the CPU
+
+## Meanings, lists, holes, the window (cards gpu-arrays-samples, ocean-native-window)
+- A warp word WGSL lacks, or has with another meaning, goes in WGSL_MEANINGS as an expression ($1, $2 the arguments,
+  all of one width): round is sign(x) * floor(abs(x) + 0.5) because WGSL's round goes to even. Same-meaning words
+  stay in WGSL_WORDS.
+- A program list (comprehension, more than four numbers, list of lists) is a uniform array; its translated width is
+  negative (-item width), and `levels#b` reads values.levels[i / 4][i % 4], numbers packed four to a vec4f as
+  warp_gpu.c member_laid_out lays them. A comprehension giving four numbers or fewer is laid out as a vector:
+  mismatch, loud at validation.
+- `$name` holes: plain_node strips the parser's shader_hole_names attribute before rules, so shader_values reads the
+  holes from the text's values.name. A new rule word must also join the `rule_words` map at the end of
+  rule_words.warp, otherwise "not in this compiler (an older seed)". Do not name a rule word like a core word
+  (assigned_value clashed with the analyzer's).
+- Natively, built-in holes (time, mouse, size …) are filled in lib/native/foreign.c values_filled, and $previous in
+  warp_gpu.c. The first painting opens libwarp_window's window; a still picture stays shown until closed.

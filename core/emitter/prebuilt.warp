@@ -335,11 +335,18 @@ def link_libraries(images: list, own_names: list) {
 	module.linked_words = {}
 	module.linked_closures_shown = {}
 	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
-	for image in images { for word in image.functions { if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) { module.linked_words[word.name] = word } } }
+	for image in images { for word in image.functions { if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) { module.linked_words[word.name] = (module.linked_words.get(word.name) ?? []) + [word] } } }
 }
-# a module's word a program may call: not one of the builders it exports for the host (its `show` is the host's, not
-# draw's), which a program linking it exports its own of
-linkable(image: LibraryImage, word: Function): bool := word.name not in image.builders
+# a module's word a program may call: not one of the builders it exports for the host (its show(x) is the host's,
+# beside draw's own show()), which a program linking it exports its own of
+linkable(image: LibraryImage, word: Function): bool := word.index not in image.builders
+# the variant of a linked name that takes that many values (card module-export-arity), ø for none
+linked_variant(name: text, parameters: int): any := {
+	fitting = (module.linked_words.get(name) ?? []).filter(word => #word.kinds == parameters)
+	if #fitting == 0 then ø else fitting#1
+}
+# a call of a linked name with a count of values none of its variants takes: refused naming theirs, never another's
+linked_arity_refusal(name: text, parameters: int): text := name + " of " + parameters + " values is no word of its linked module, whose " + name + " takes " + module.linked_words[name].map(word => "" + #word.kinds).join(" or ") + " values"
 # the program's own definitions, as parsed (a line holding several, `use units; m(x) := 7; m(1)`, the source's slices
 # miss): never a linked module's word
 def own_words_unlinked(names: list) {
@@ -394,7 +401,8 @@ def library_image_of(name: text, wasm: list): any {
 	for i in 0..<read_number(layout) { closures += [[read_name(layout), read_number(layout), read_name(layout)]] }
 	classes = []
 	for i in 0..<read_number(layout) { classes += [[read_name(layout), read_name(layout)]] }
-	builders = read_names(layout)
+	builders = []
+	for i in 0..<read_number(layout) { builders += [read_number(layout)] }
 	# the C functions it imports behind the runtime's imports, which its runtime functions follow
 	c_functions = read_names(layout)
 	runtime_behind = [behind#1 - #c_functions] + behind[1 ..]
@@ -434,7 +442,7 @@ def bind_library_words() {
 			word = image.functions[k]
 			if image.closures.any(made => made#1 == word.name) { module.functions[linked_closure_name(image, word.name)] = linked_function(word, linked_index(image, k)) }
 			f = module.functions.get(word.name)
-			if f != ø and f.kinds == ø and linkable(image, word) and word.name in module.linked_words {
+			if f != ø and f.kinds == ø and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word {
 				f.index = linked_index(image, k)
 				f.kinds = word.kinds
 				f.result = word.result

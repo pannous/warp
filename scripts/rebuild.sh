@@ -39,6 +39,7 @@ warp=${WARP_BINARY:-$main_warp}
 seed_beside() { local folder; for folder in "$(dirname "$warp")" "$(dirname "$(readlink -f "$warp" 2>/dev/null || echo "$warp")")"; do [ -f "$folder/warp-seed.wasm" ] && { echo "$folder/warp-seed.wasm"; return; }; done; }
 export WARP_SEED=${WARP_SEED:-$(seed_beside)}
 hash=$("$scripts/compiler-inputs.sh" "$lib") || exit 1
+baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -77,6 +78,19 @@ set_aside() {
 		echo "rebuild.sh: ${file#"$tree"/} moved aside to $(basename "$file").stale: lib/ has no compiler of these sources" >&2
 	done
 }
+# a self test passed for the baked inputs (compiler-inputs.sh --baked): another lib/ of them, a library change, compiles
+# compiler.warp as well, so its warp.wasm is promoted without the compile (zero builds for a pushed library change)
+self_tested() { [ -f "$store/self-tested/$baked" ]; }
+self_passed() { mkdir -p "$store/self-tested" && inputs_line >"$store/self-tested/$baked"; }
+promoted_untested() {
+	local file=$compilers/warp-self.wasm part
+	[ -f "$compilers/warp.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp.wasm.inputs" 2>/dev/null)" = "$hash" ] || return 1
+	for part in "" .driver.cwasm .driver.cwasm.key; do
+		[ -f "$compilers/warp.wasm$part" ] && copied "$compilers/warp.wasm$part" "$file$part"
+	done
+	inputs_line >"$file.inputs"
+	publish "$file"
+}
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
 one() {
 	local name=$1 file=$compilers/$1.wasm built status old
@@ -94,6 +108,9 @@ one() {
 		logged "$name" hit-store
 		return 0
 	fi
+	if [ -z "$force" ] && [ "$name" = warp-self ] && self_tested; then
+		promoted_untested && logged "$name" hit-baked && return 0
+	fi
 	if [ -n "$check" ]; then logged "$name" miss; return 3; fi
 	logged "$name" miss-building
 	local lane=pure
@@ -108,6 +125,7 @@ one() {
 	inputs_line >"$file.inputs"
 	publish "$file"
 	for companion in $(companions "$name" "$compilers"); do publish "$compilers/$companion" "$companion"; done
+	[ "$name" = warp-self ] && self_passed
 	logged "$name" built
 }
 

@@ -778,7 +778,7 @@ Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_vis
 
 ### Music files
 
-`play` plays a music file in the background. A sample names its neighbours by name (`play "tune.mp3"` in samples/sound/play_mp3.warp); here the file goes by its path.
+`play` plays a music file in the background. A relative name is relative to the current folder, so the samples name their files from the repository's root, as here.
 
 ```warp
 play "samples/sound/tune.mp3"
