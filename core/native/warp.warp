@@ -99,7 +99,7 @@ rebaked(built: text, compiler: text, library: text): nothing := {
 # compilers-delivered), the warp that built it, lib/'s commit, then when it was built. `warp version` shows it
 stamped(file: text, library: text): nothing := {
 	commit = command_output(joined(joined("git -C '", library), "' rev-parse HEAD 2>/dev/null"))
-	built = command_output("date '+%Y-%m-%d %H:%M'")
+	built = local_minute(milliseconds_now() / 1000)
 	data = joined(joined(joined(joined(library, "\n\nthe native warp\n"), commit), "\n"), built)
 	name = "warp.build"
 	header = allocate(16)
@@ -167,9 +167,9 @@ copied(from: text, to: text): nothing := {
 	write_file(aside, read_file(from))
 	rename(c_string(aside), c_string(to))
 }
-# `warp rebuild [pure|self|seed]`
-rebuild_command(): nothing := {
-	which = if arg_count() > 2 then arg(2) else "pure"
+# `warp rebuild [pure|self|seed]`, its word at `at`
+rebuild_command(at: int): nothing := {
+	which = if arg_count() > at + 1 then arg(at + 1) else "pure"
 	if same_text(which, "pure") { rebuilt() } else {
 		if same_text(which, "self") { promoted() } else {
 			if same_text(which, "seed") { seed_shipped() } else {
@@ -232,9 +232,28 @@ versioned(compiler: text): nothing := {
 	given = compiler_arguments(compiler)
 	added(given, "version")
 	file_ran(compiler, given)
-	print(joined("the native warp · built ", command_output(joined(joined("date -r '", executable_path()), "' '+%Y-%m-%d %H:%M'"))))
+	print(joined("the native warp · built ", built_minute()))
 	self_compiler = joined(library_folder(), "/warp-self.wasm")
 	print(joined(joined(compiler_stamp(compiler_path(), "warp.wasm", "pure"), ", "), compiler_stamp(self_compiler, "warp-self.wasm", "self")))
+}
+# when this executable was built, as `warp build native` baked it (primitive.warp built_function, cc's `Oct 30 2026
+# 12:07:33`), shown as the stamps are: `2026-10-30 12:07`
+warp_built(): text from "c"
+built_minute(): text := {
+	said = warp_built()
+	months = "JanFebMarAprMayJunJulAugSepOctNovDec"
+	month = 0
+	while month < 11 and memcmp(months.address + (month * 3) as u32, said.address, 3) != 0 { month = month + 1 }
+	shown = allocate(16)
+	memcpy(shown, native_pointer(said.address + 7), 4)
+	byte_at(shown + 4).value = 45
+	memcpy(shown + 5, native_pointer("010203040506070809101112".address + (month * 2) as u32), 2)
+	byte_at(shown + 7).value = 45
+	memcpy(shown + 8, native_pointer(said.address + 4), 2)
+	if byte_at(shown + 8).value == 32 { byte_at(shown + 8).value = 48 }
+	byte_at(shown + 10).value = 32
+	memcpy(shown + 11, native_pointer(said.address + 12), 5)
+	text_from(shown, 16)
 }
 # a compiler's build stamp (stamped): `warp.wasm of 1792a05d8a · built 2026-10-28 20:25`
 compiler_stamp(file: text, name: text, rebuild: text): text := {
@@ -268,7 +287,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	word = arg(first)
 	if ends_with(word, ".wasm") { return module_ran(first) }
 	if not prefixed {
-		if same_text(word, "rebuild") { return rebuild_command() }
+		if same_text(word, "rebuild") { return rebuild_command(first) }
 		if same_text(word, "test") { return tests_run(compiler, flagged("--self")) }
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
@@ -294,11 +313,27 @@ documentation_opened(): nothing := {
 	command_output("open https://github.com/pannous/warp/ 2>/dev/null || xdg-open https://github.com/pannous/warp/ 2>/dev/null")
 }
 
+# the options warp takes before or after its command word (wiki/cli.md), each a setting of the environment the
+# compiler reads: `--no-hints` is WARP_HINTS=0 (wiki/warning.md). Words after the file or code are the program's
+option_set(word: text): bool := {
+	if same_text(word, "--no-hints") {
+		setenv(c_string("WARP_HINTS"), c_string("0"), 1)
+		return yes
+	}
+	no
+}
+# the first word from `at` on that is no option, the options before it set
+past_options(at: int): int := {
+	i = at
+	while i < arg_count() and option_set(arg(i)) { i = i + 1 }
+	i
+}
 # `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
-counting = arg_count() > 3 and same_text(arg(1), "fuel")
-if counting { setenv(c_string("WARP_FUEL"), c_string(arg(2)), 1) }
-prefixed = counting or (arg_count() > 1 and is_prefix(arg(1)))
-first = if counting then 3 else if prefixed then 2 else 1
+start = past_options(1)
+counting = arg_count() > start + 2 and same_text(arg(start), "fuel")
+if counting { setenv(c_string("WARP_FUEL"), c_string(arg(start + 1)), 1) }
+prefixed = counting or (arg_count() > start and is_prefix(arg(start)))
+first = past_options(if counting then start + 2 else if prefixed then start + 1 else start)
 # warp.wasm's own commands (build) read the same lib/ as this executable, and its stable name, the run path of the
 # executables `warp build native` makes (commands.warp native_links); WARP_LIB names it resolved, as the module's WASI
 # reaches it (no link to an absolute path)
@@ -306,5 +341,5 @@ setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
 setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
-if prefixed and same_text(arg(1), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
-dispatched(if prefixed and same_text(arg(1), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)
+if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
+dispatched(if prefixed and same_text(arg(start), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)

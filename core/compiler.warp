@@ -81,7 +81,8 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	# the warnings once the module is made, as Rust's pure lane says them
 	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
 	# and its hints: `A4 is sound's; fix: use sound`, the use warp beautify writes
-	for said in said_at(found, Level.Hint, module.program_file) { hint said }
+	# unless the run asked for none (`warp --no-hints`, WARP_HINTS=0: wiki/warning.md)
+	if env("WARP_HINTS") != "0" { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
 	made
 }
 

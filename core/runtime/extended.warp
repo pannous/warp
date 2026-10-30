@@ -39,6 +39,7 @@ extended_truncated(n: Node): int := {
 	made_case(Made.BigInt, big_exact_truncated(n))
 	int_quotient(exact_numerator(n), exact_denominator(n))
 }
+extended_wrapped(n: Node): int := int_of_magnitude(n, big_int_negative(n))
 extended_ratio(n: int, d: int): Node := exact_ratio(n, d)
 extended_zeros(count: int): text := zeros(count)
 extended_warned(message: text): Node := warned(message)

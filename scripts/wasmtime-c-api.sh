@@ -13,6 +13,8 @@ MINIAUDIO_SHA256=6b2029714f8634c4d7c70cc042f45074e0565766113fc064f20cd27c986be9c
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 sound_build=${WARP_SOUND_TARGET:-/opt/cargo/warp-sound}
 WGPU_VERSION=29.0.1.1
+STB_COMMIT=6e9f34d5429cf16790ec43c9bac3f1ee4ad1f760
+STB_TRUETYPE_SHA256=ecd30b05e0dd4fea3a13c26810dd9e1992dc379049482c393d5a19e6b5090aab
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
 window_build=${WARP_WINDOW_TARGET:-/opt/cargo/warp-window}
 (cd "$checkout/crates/wasmtime-capi" && nice -n 19 cargo build --release --locked -q)
@@ -26,6 +28,26 @@ wasmtime_library=${prefix}warp_wasmtime.$suffix
 sound_library=${prefix}warp_sound.$suffix
 gpu_library=${prefix}warp_gpu.$suffix
 window_library=${prefix}warp_window.$suffix
+
+# a library owning host words reads and builds warp values in place (lib/native/warp_node.h) through warp's wasmtime:
+# its headers, it linked, and the value layout as the compiler has it (scripts/node_layout.warp), checked when a warp
+# is at hand: the committed header differing fails the build
+wasmtime_include=$(ls -d "$CARGO_TARGET_DIR"/release/build/wasmtime-c-api-impl-*/out/include 2>/dev/null | head -1)
+case $(uname -s) in
+  Darwin) loader_path=@loader_path ;;
+  *) loader_path='$ORIGIN' ;;
+esac
+value_libraries="-I $checkout/lib/native -I $wasmtime_include -L $CARGO_TARGET_DIR/release -lwarp_wasmtime -Wl,-rpath,$loader_path"
+value_headers="$checkout/lib/native/warp_node.h $checkout/lib/native/warp_layout.h"
+if command -v warp >/dev/null; then
+  layout=$(cd "$checkout" && WARP_NO_WINDOW=1 warp scripts/node_layout.warp)
+  if [ "$layout" != "$(cat "$checkout/lib/native/warp_layout.h")" ]; then
+    echo "wasmtime-c-api: the value layout changed: warp scripts/node_layout.warp > lib/native/warp_layout.h, and commit it" >&2
+    exit 1
+  fi
+fi
+# a library is current when newer than each of its sources
+current() { local target=$1 each; shift; for each in "$@"; do [ "$target" -nt "$each" ] || return 1; done; }
 
 # miniaudio's one header, fetched once at its pinned version and checked
 sound_library_built() {
@@ -69,22 +91,32 @@ gpu_library_built() {
   fi
   source=$checkout/crates/warp-gpu/warp_gpu.c
   built=$gpu_build/$gpu_library
-  [ "$built" -nt "$source" ] && [ "$built" -nt "$archive" ] && return
+  # shellcheck disable=SC2086 # the headers are words
+  current "$built" "$source" "$archive" $value_headers && return
   # shellcheck disable=SC2086 # the system libraries are words
-  nice -n 19 cc -O2 -shared -fPIC -I "$release/include" -o "$built.new" "$source" "$archive" $gpu_libraries
+  nice -n 19 cc -O2 -shared -fPIC -I "$release/include" -o "$built.new" "$source" "$archive" $gpu_libraries $value_libraries
   mv -f "$built.new" "$built"
 }
 gpu_library_built
 
-# SDL3 as the system installs it (brew install sdl3, apt install libsdl3-dev), linked as a library of its own
+# SDL3 as the system installs it (brew install sdl3, apt install libsdl3-dev), linked as a library of its own, with
+# stb_truetype's one header (text_coverage), fetched once at its pinned commit and checked
 window_library_built() {
   flags=$(pkg-config --cflags --libs sdl3 2>/dev/null) || return 0
   mkdir -p "$window_build"
+  header=$window_build/stb-$STB_COMMIT/stb_truetype.h
+  if [ ! -f "$header" ]; then
+    mkdir -p "$(dirname "$header")"
+    curl -sSfL -o "$header.new" "https://raw.githubusercontent.com/nothings/stb/$STB_COMMIT/stb_truetype.h"
+    echo "$STB_TRUETYPE_SHA256  $header.new" | shasum -a 256 -c - >/dev/null
+    mv "$header.new" "$header"
+  fi
   source=$checkout/crates/warp-window/warp_window.c
   built=$window_build/$window_library
-  [ "$built" -nt "$source" ] && return
+  # shellcheck disable=SC2086 # the headers are words
+  current "$built" "$source" "$header" $value_headers && return
   # shellcheck disable=SC2086 # the flags are words
-  nice -n 19 cc -O2 -shared -fPIC -o "$built.new" "$source" $flags
+  nice -n 19 cc -O2 -shared -fPIC -I "$(dirname "$header")" -o "$built.new" "$source" $flags $value_libraries
   mv -f "$built.new" "$built"
 }
 window_library_built

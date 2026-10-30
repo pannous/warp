@@ -771,8 +771,11 @@ native_main(header: text, library: text): text := {
 	includes.map(file => "#include " + file + "\n").join("") + libraries.map(l => "struct " + wasm2c_name(l) + " { struct " + wasm2c_name(WASI_LIBRARY) + " wasi; };\n").join("") +
 		foreign.map(c_function_glue).join("") +
 		"void instantiate(w2c_program* program, struct " + wasm2c_name(WASI_LIBRARY) + "* wasi) { wasm2c_program_instantiate(program, " + instances.join(", ") + "); }\n" +
-		"void run_main(w2c_program* program) { " + printed_main[main_value_kind()] + " }\n"
+		"void run_main(w2c_program* program) { " + printed_main[main_value_kind()] + " }\n" +
+		built_function
 }
+# when the executable was built, by the C compiler's clock: `Oct 30 2026 12:07:33`, found as the C function warp_built
+built_function = "char* warp_built(void) { return __DATE__ \" \" __TIME__; }\n"
 c_functions_imported(): list := primitive_functions.keys.map(name => primitive_functions[name]).filter(f => f.library and f.library != WASI_LIBRARY)
 # the C libraries of the imports, which a native build links
 c_libraries(foreign: list): list := {

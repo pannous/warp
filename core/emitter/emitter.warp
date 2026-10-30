@@ -1119,7 +1119,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.DivAssign and left is symbol and name_of(left) in body.declared and body.declared[name_of(left)] == ValueKind.Int {
 		return assignment(body, left, runtime_call("floor_quotient", [expression_code(body, left), whole(expression_code(body, right))]))
 	}
-	if operator in compiled_compound_ops { return assignment(body, left, operation_code(body, compiled_compound_ops[operator], expression_code(body, left), expression_code(body, right))) }
+	if operator in compiled_compound_ops { return assignment(body, left, arithmetic(body, compiled_compound_ops[operator], left, right)) }
 	if operator in steps and right == ø {
 		stepped = expression_code(body, left)
 		step = code_point_steps[operator]
@@ -1202,7 +1202,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 		other = if is_case(body, right) then left else right
 		return tested_as(operator, runtime_call("case_equal", [TypedCode(ValueKind.Node, boxed(expression_code(body, other))), expression_code(body, case)]))
 	}
-	operation_code(body, operator, expression_code(body, left), expression_code(body, right))
+	arithmetic(body, operator, left, right)
 }
 # `xs#i` of a list whose elements analyzer.warp knows: the element as that kind, else as a node
 def analyzed_element(body: Body, list: Node, index: Node): TypedCode {
@@ -1421,10 +1421,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.class_structs = {}
 	module.relocations = []
 	module.runtime_types = 0
-	if module.prebuilding or prepended() {
-		canonical_type_entries()
-		for kind in Made.keys { module.made[kind] = yes }
-	}
+	if module.prebuilding or prepended() { canonical_type_entries() }
+	if module.prebuilding { for kind in Made.keys { module.made[kind] = yes } }
 	if prepended() { behind_runtime() }
 	module.aliases = type_synonyms()
 	collect_types(program)
@@ -1432,6 +1430,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	declare_class_structs()
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	reached = reached_words(program)
+	# behind a prepended runtime, the kinds of values the runtime words reached make (big_int_of on an overflow)
+	if prepended() { for kind in Made.keys { if made_makers[kind].any(maker => maker in reached) { module.made[kind] = yes } } }
 	# a print, or a runtime word reached that writes to stdout or stderr (a field check failing, card text-field; a
 	# warning, card declared-class)
 	prints = module.prebuilding or "print" in reached or "write_output" in reached or "fd_write" in reached

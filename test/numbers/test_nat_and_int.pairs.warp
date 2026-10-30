@@ -1,0 +1,7 @@
+# decision nat-and-int: a whole number grows past 64 bits, a declared int wraps as wasm's i64
+'x: int = 9223372036854775807; x + 1'	-9223372036854775808
+'f(n: int) := n * n; f(3037000500)'	-9223372036709301616
+'s: int = 0; for i in 1..11 { s += i * i }; s'	385
+'s = 0; for i in 1..11 { s += i * i }; s'	385
+'x = 9223372036854775807; x + 1'	9223372036854775808
+'xs = [5, 6, 7]; t = 0; for x in xs { t += x }; t'	18
