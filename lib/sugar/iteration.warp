@@ -10,5 +10,5 @@ rewrite for $i in reverse($a to $b) {$body...} => ($i = $b; $end = $a; while $i 
 # for-over-iterator)
 rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $o is instance
 # A map is walked by its keys, as in Python; any other iterable item by item: a list, a text.
-rewrite for $k in $m {$body...} => ($items = map_keys($m); $index = 0; while $index < #$items { $k = $items#($index + 1); $body...; loop··step: $index++ }) where $k is symbol and $m is map
+rewrite for $k in $m {$body...} => ($items = keys($m); $index = 0; while $index < #$items { $k = $items#($index + 1); $body...; loop··step: $index++ }) where $k is symbol and $m is map
 rewrite for $x in $xs {$body...} => ($items = $xs; $index = 0; while $index < #$items { $x = $items#($index + 1); $body...; loop··step: $index++ }) where $x is symbol

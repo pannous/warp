@@ -359,7 +359,7 @@ is_value_definition(statement: Node): bool := {
 	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 }
 
-# `alias keys = map_keys` of a module: the word by each alias (Rust: rust-harness:src/modules/declarations.rs, an alias declares
+# `alias size = count` of a module: the word by each alias (Rust: rust-harness:src/modules/declarations.rs, an alias declares
 # nothing, its calls call the word)
 module_aliases(source: text): any := {
 	aliases = {}
@@ -380,7 +380,7 @@ with_call_forms(aliases: map, names: list): any := {
 	}
 	aliases
 }
-# `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
+# `size(xs)` as `count(xs)`: a call of an alias calls the word unless the program defines that name, as a variable
 # or a function taking as many arguments (shadowing is per arity, Rust's library_words.rs word_for_unless: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
 # `x.f(a)` counts its receiver
@@ -388,7 +388,7 @@ aliased(n: Node, aliases: map, own: map): any := if class_view(n) != ø then wit
 	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own)), aliases, own, 1))
 	_: children(aliased_call(n, aliases, own, 0), x => aliased(x, aliases, own))
 }
-# a method's body aliased, its head named by an alias as a call on its instance is (`has(x)` as collection_contains(x),
+# a method's body aliased, its head named by an alias as a call on its instance is (`contains(x)` as has(x),
 # as `s.has(x)` calls it), but an operator's (`times(k) := …` stays the class's own `*`) or a word another arity
 # varies (`sum()`), never a field (`m: map = {}`)
 aliased_member(member: Node, aliases: map, own: map): any := if is_key(member, Op.Define) and is_group(key_of(member)) then Key(aliased_head(key_of(member), aliases, own), Op.Define, aliased(value_of(member), aliases, own)) else member

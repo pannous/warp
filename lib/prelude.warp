@@ -16,15 +16,15 @@ join(xs: list, separator: text): text from warp
 chars(t: text): list of text from warp
 code_point_list(t: text): list of int from warp
 ord(c: codepoint): int from warp
-map_keys(m: map): list from warp
-map_values(m: map): list from warp
+keys(m: map): list from warp
+values(m: map): list from warp
 map_entries(m: map): list from warp
 map_without(m: map, key): list from warp
 map_of_entry(entry): same as entry from warp
-map_get_or(m: map, key, default = ø): value of m from warp
-collection_contains(xs: list, x): bool from warp
-collection_contains(t: text, part): bool from warp
-collection_contains(m: map, key): bool from warp
+get(m: map, key, default = ø): value of m from warp
+has(xs: list, x): bool from warp
+has(t: text, part): bool from warp
+has(m: map, key): bool from warp
 collection_position(xs: list, x): int from warp
 collection_position(t: text, part): int from warp
 slice(xs: list, start, end = ø): list from warp
@@ -108,12 +108,8 @@ string(x): text from emitter
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
 alias tuple = list
-alias keys = map_keys
-alias values = map_values
-alias contains = collection_contains
-alias has = collection_contains
-alias includes = collection_contains
-alias get = map_get_or
+alias contains = has
+alias includes = has
 // P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 alias index_of = collection_position
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:

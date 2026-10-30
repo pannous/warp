@@ -144,7 +144,7 @@ map_entries(m: Node): Node := {
 	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
 	out
 }
-map_keys(m: Node): list := {
+keys(m: Node): list := {
 	# `{}` is the empty value: its keys are the empty value too, as Rust's
 	if is_null(m) { return m }
 	out = new_list(0)
@@ -152,7 +152,7 @@ map_keys(m: Node): list := {
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
-map_values(m: Node): list := {
+values(m: Node): list := {
 	# `{}` is the empty value: its values are the empty value too, as Rust's
 	if is_null(m) { return m }
 	out = new_list(0)
@@ -164,7 +164,7 @@ map_values(m: Node): list := {
 # map_key_name)
 name_text(key: Node): text := if kind_code(key) == Kind.Symbol then unboxed_text(key) else node_text(key)
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
-collection_contains(c: Node, x: Node): bool := {
+has(c: Node, x: Node): bool := {
 	if is_null(c) { return no } # `[]` is the null node
 	# ø names no entry: `ø in m` is no (card pure-nil-in-any-map: name_text(ø) trapped on the null node)
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return not is_null(x) and map_index(c, name_text(x)) > 0 }
@@ -187,7 +187,7 @@ collection_position(c: Node, x: Node): int := {
 }
 # `c.remove(key)` gives this: of a map the key's value (ø when absent), of a list the list itself, which map_without
 # then changes (Rust twin: fields_and_keys.rs removed_value)
-removed_value(c: Node, key: Node): Node := if marked_kind(c) == Marked.Map then map_get_or(c, key) else c
+removed_value(c: Node, key: Node): Node := if marked_kind(c) == Marked.Map then get(c, key) else c
 # `c.remove(key)` stores this in c: a map without the key's entry, a list without its first item equal to key, in place
 # so every holder sees it (Rust twin: fields_and_keys.rs map_without)
 map_without(c: Node, key: Node): Node := {
@@ -233,8 +233,8 @@ with_entries_of(m: Node, more: Node): Node := {
 	if not is_null(more) { list_append(unboxed_list(fields_of(m)), unboxed_list(fields_of(more))) }
 	m
 }
-# `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none
-map_get_or(m: Node, key: Node, fallback: Node = ø): Node := {
+# `get(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none
+get(m: Node, key: Node, fallback: Node = ø): Node := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
 	if at == 0 { return fallback }

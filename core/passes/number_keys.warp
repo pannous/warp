@@ -10,7 +10,7 @@ use "scope.warp"
 # the word that makes a key of a value known only at run time
 key_text_word = "string"
 # the words `word(map, key, …)` that find an entry by its key
-key_words = ["collection_contains", "collection_position", "map_get_or", "map_without", "removed_value"]
+key_words = ["has", "collection_position", "get", "map_without", "removed_value"]
 # the declared types a map variable may carry, `m: map = {}`
 map_type_words = ["map", "dict"]
 

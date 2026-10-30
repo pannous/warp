@@ -14,14 +14,14 @@ rewrite $xs.pop() => list_pop($xs) where $xs is not instance
 # `x.json`: the JSON text of any value (lib/json.warp json_text), a map's field json where it has one
 rewrite $x.json => json_text($x)
 
-# `x in xs` (a list's item, a map's key, a text's part) is the runtime word collection_contains(xs, x); `xs contains x`,
+# `x in xs` (a list's item, a map's key, a text's part) is the runtime word has(xs, x); `xs contains x`,
 # `xs has x`, `xs includes x` the same written the other way round. Rust twin: library_words.rs membership
-rewrite ($x in $xs) => collection_contains($xs, $x)
-rewrite ($xs contains $x) => collection_contains($xs, $x)
-rewrite ($xs has $x) => collection_contains($xs, $x)
-rewrite ($xs includes $x) => collection_contains($xs, $x)
+rewrite ($x in $xs) => has($xs, $x)
+rewrite ($xs contains $x) => has($xs, $x)
+rewrite ($xs has $x) => has($xs, $x)
+rewrite ($xs includes $x) => has($xs, $x)
 # `count(2 in xs)` counts a yes/no question: refused, naming `xs.count(2)` (lib/rule_words.warp counted_question)
-rewrite count(collection_contains($xs, $x)) => $refused where $refused = counted_question($xs, $x)
+rewrite count(has($xs, $x)) => $refused where $refused = counted_question($xs, $x)
 # `x.upper!`, `sort xs!` (the parser's unwrap of a marked call): a function's bang assigns its result back to the
 # variable it was called on, as `upper(x)!` does (test/operators/test_mutating_bang.pairs.warp)
 # (a printing word prints the forced value and keeps the variable: `print friends!`, test_print_bang.pairs.warp)

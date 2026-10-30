@@ -5,7 +5,7 @@ rewrite $e::$c => $e.$c where $c is case of $e
 rewrite case.$c => $c where $c is case
 
 # `c is Coin` (type_tests.warp's is_type(c, "Coin")) of an enum: c is one of its cases
-rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is enum
+rewrite is_type($v, $e) => has([cases of $e], $v) where $e is enum
 
 # A case's number: `Coin.Dime as int` (also `as index`) its index from 0, as C counts, `as position` its position from
 # 1, as `xs#p` counts; of a name holding a case too (`c = Coin.Dime`, `c: Coin`)

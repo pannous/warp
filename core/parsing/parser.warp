@@ -1447,7 +1447,7 @@ UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "code
 
 // An operand follows `width` characters on: blanks, then no end of the expression
 // Rust twin: scanning.rs operand_after
-// `alias contains = collection_contains`: an assignment's `=` (no `==`) after the blanks at `at`
+// `alias contains = has`: an assignment's `=` (no `==`) after the blanks at `at`
 def assigned_at(p: Parser, at: int): bool {
 	sign = blank_end(p, at)
 	is_at(p.code, sign, '=', p.n) and not is_at(p.code, sign + 1, '=', p.n)

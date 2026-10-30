@@ -93,7 +93,7 @@ typed_lines = runtime_lines + emitter_lines
 alias_pairs = prelude_text.split("\n").filter(line => line.starts_with(alias_start)).map(line => line.remove_prefix(alias_start).split("=").map(word => word.trim()))
 
 # the library word a word names: its canonical word (lib/aliases.warp: `size` is count), through the prelude's
-# `alias keys = map_keys` lines
+# `alias size = count` lines
 unaliased(written: text): text := {
 	word = canonical_word(written) ?? written
 	for pair in alias_pairs { if pair#1 == word { return pair#2 } }
@@ -122,7 +122,7 @@ emitted_call_kind(word: text, arguments: int): text? := {
 }
 
 # the argument a word's result follows, and how: `field_with(object, name, value): same as object` → ["same", 1],
-# `map_get_or(m, key, default): value of m` → ["element", 1]; ø for a result of its own
+# `get(m, key, default): value of m` → ["element", 1]; ø for a result of its own
 argument_result(word: text): list? := {
 	lines = lines_of(typed_lines, unaliased(word))
 	if #lines == 0 { return ø }

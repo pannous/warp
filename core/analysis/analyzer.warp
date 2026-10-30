@@ -373,7 +373,7 @@ list_type(n: Node, scope: Scope): TypeWord := {
 	if is_group(n) and (bracket_of(n) == "(" or bracket_of(n) == "{") and (separator_of(n) == ";" or separator_of(n) == "\n") and #n > 0 { return list_type(n#(#n), scope) }
 	name = head_name(n)
 	if name == "zero_fill" and #n == 3 { return "list of " + type_word(n#3, scope) }
-	if name == "map_keys" and #n == 2 { return "list of text" }
+	if name == "keys" and #n == 2 { return "list of text" }
 	if (name == "sort" or name == "reverse") and #n == 2 and bracket_of(n) == "(" { return list_type(n#2, scope) }
 	if name == "split" { return "list of text" }
 	if name == "chars" { return "list of codepoint" }
@@ -561,7 +561,7 @@ kind_tested(n: Node): Name := if is_group(n) and #n == 3 and head_name(n) == "is
 called_closure(n: Node): Name := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then name_of(n#2) else ""
 
 cell_words = {cell_new: 1, cell_get: 1, cell_set: 1, signal_new: 1, signal_listeners: 1, signal_listeners_set: 1}
-map_words = {map_keys: 1, map_values: 1, map_entries: 1, collection_contains: 1, collection_position: 1, map_get_or: 1, map_without: 1, map_of_entry: 1, field_with: 1}
+map_words = {keys: 1, values: 1, map_entries: 1, has: 1, collection_position: 1, get: 1, map_without: 1, map_of_entry: 1, field_with: 1}
 
 # `(word map …)`: a map word reads map as a map (a sequence), a cell word as a cell
 record_word_call(n: Node, used: Usages) := {
