@@ -139,8 +139,12 @@ air(direction) := {
 	gradient .+ glow .* haze
 }
 
-# the sun's disc, about two degrees wide as a low sun looks (the true half degree reads as a dot on a screen)
-sun_disc(direction) := sun_light .* (40 * smoothstep(0.99982, 0.99988, dot(direction, sun)))
+# the sun's disc, about three degrees wide, and its bloom blurring the rim, as a low sun looks through the haze (the
+# true half degree reads as a dot on a screen)
+sun_disc(direction) := {
+	facing = dot(direction, sun)
+	sun_light .* (40 * smoothstep(0.9996, 0.99985, facing) + 3 * exponential(-(1 - facing) * 2500))
+}
 
 # one flat cloud layer at altitude metres: coverage cuts the fractal noise, the side facing the sun is lit. A look
 # blur radians wide (a pixel, or the spread of the facets of rough water) softens the cloud edges by how much of the
