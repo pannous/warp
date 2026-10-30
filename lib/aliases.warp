@@ -13,6 +13,7 @@
 add { operator: "+", symbol: Op.Add, aliases: [plus] }
 subtract { operator: "-", symbol: Op.Sub, aliases: [minus, "‐", "‑", "‒", "–", "—", "―"] }
 multiply { operator: "*", symbol: Op.Mul, aliases: [times, "×", "⋅"] }
+dot { operator: "∘", aliases: ["·", "•"] }
 divide { operator: "/", symbol: Op.Div }
 div { operator: "/!", symbol: Op.FloorDiv, aliases: ["÷"], infix: yes }
 modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes }
