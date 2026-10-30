@@ -86,10 +86,16 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Testing
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
-- Only the pure pipeline counts. Check .warp changes with the shared binary from your worktree:
-  `scripts/rebuild.sh pure <worktree>` (it publishes the build to the shared store, so the install after your push
-  reuses it), then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test <folders>`.
-  Never rebuild in the main checkout. A core change also runs `scripts/self-check.sh <worktree>`.
+- Only the pure pipeline counts. Check .warp changes with the shared binary from your worktree. Rebuild only for what
+  the compiler bakes in (user 2026-10-30: a library change needs no rebuild):
+  - lib/ only (modules, lib/sugar/ rules): no rebuild, no self-check. `scripts/lib-smoke.sh <worktree>` clones the
+    installed compilers into your lib/ and runs hello with `WARP_LIB=<worktree>/lib`, which reads each changed module
+    and rule anew (seconds); then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test <folders>`.
+  - core/, or a lib/ file the compiler reads at its own build: prelude.warp, aliases.warp, math.warp (its typed
+    lines), rule_words.warp (lib-smoke.sh refuses those and names them): `scripts/rebuild.sh pure <worktree>` (it
+    publishes the build to the shared store, so the install after your push reuses it), then the same runs. A core
+    change also runs `scripts/self-check.sh <worktree>`.
+  Never rebuild in the main checkout. One heavy job (rebuild, self-check) of yours at a time.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
@@ -115,7 +121,7 @@ before asking a question). After a context swap, this file and your role file be
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
 - Landing, by the worker itself (no Integrator gate; user 2026-10-26): `data/warp format` on the .warp files you
   wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
-  change; on that merge run the smoke test (core/ changes: smoke + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; AGENTS.md "Testing");
+  change; on that merge run the smoke test (lib/ only: `scripts/lib-smoke.sh <worktree>`; core/ changes: smoke + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; AGENTS.md "Testing");
   `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
   smoke test only if the new commits touch core/ or lib/; push. At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
