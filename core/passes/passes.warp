@@ -101,6 +101,7 @@ global kept_comprehension_sugar = []
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	brought_names = {}
+	defined_origins = {}
 	own = early_sugared(interpolation(with_uses(program, folder)))
 	bindings = rule_bindings(own)
 	kept_first_sugar = sugar_rules(bindings, first_sugar_module_names)

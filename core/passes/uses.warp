@@ -130,6 +130,7 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 		if file != ø and file not in seen {
 			seen += [file]
 			used = statements_in(with_module_directory(file_parsed(file), folder_of(file)))
+			note_file_origins(file, file_text(file))
 			inner = declarations_used(used, folder_of(file), seen, claimed)
 			seen = inner#2
 			# a primitive file's foreign lines are its imports, declared as its functions are (primitive.warp declare_import)
