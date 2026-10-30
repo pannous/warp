@@ -1,0 +1,4 @@
+# Card typed-parse: reject invalid JSON against declared classes with a useful field path.
+'class User { id: number; name: string }; try { parse("{\\"id\\":7}", User) } catch e { e.message }'	'name is required'
+'class User { id: number; name: string }; try { parse("{\\"id\\":7,\\"name\\":\\"Ada\\",\\"extra\\":true}", User) } catch e { e.message }'	'unknown field extra'
+'class Address { city: string }; class User { address: Address }; try { parse("{\\"address\\":{\\"city\\":7}}", User) } catch e { e.message }'	'address.city must be text, received number'
