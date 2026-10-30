@@ -303,6 +303,16 @@ declared_local(declaration: Node): Node := {
 # the words by name, as a rule's `where` calls them
 rule_words = {typed_json: typed_json, spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
 
+# A field annotation can still be a Type node when the early rewrite runs.
+typed_json_field_type(member: Node): text? := match member {
+	Key(left, Op.Assign, right): typed_json_field_type(left)
+	Key(left, Op.Colon, right): match right {
+		Type(name, body): name_of(name)
+		_: type_named(right)
+	}
+	_: ø
+}
+
 # Generate typed JSON parsing from the class declared in the program.
 typed_json(source: Node, type_name: Node, program: Node): Node := {
 	for statement in program_statements(program) {
@@ -310,7 +320,13 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 		if view != ø and declared_type_name(view#2) == name_of(type_name) {
 			declared = class_declared(statement, view)
 			fields = declared.fields
-			checks = fields.map(field => "if not (typed·json[\"" + field + "\"] is " + declared.field_types[field] + ") { raise \"" + field + " must be " + declared.field_types[field] + "\" }")
+			members = view#3[3..].map(member_read)
+			field_types = {}
+			for member in members {
+				field = field_name(member)
+				if field != ø { field_types[field] = typed_json_field_type(member) }
+			}
+			checks = fields.map(field => "if not (typed·json[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
 			arguments = fields.map(field => field + ": typed·json[\"" + field + "\"]")
 			return plain_node(parsed("(typed·json = json(" + as_code(source) + "); " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "})"))
 		}
