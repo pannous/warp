@@ -1,0 +1,6 @@
+# a bare word naming a word overloaded by arity is its variant of no arguments, called (decision saved-words, card bare-overloaded-word)
+'f() := 7; f(a) := a; x = f; x'	7
+'f() := 7; f(a) := a; g(f) := f + 1; g(2)'	3
+'use sound; x = sound; type of x'	Recording
+'use draw; x = canvas; type of x'	Picture
+'f(a) := a; f(a, b) := b; x = f; 1'	error

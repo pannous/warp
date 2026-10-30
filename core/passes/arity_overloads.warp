@@ -147,22 +147,48 @@ passed_variant(argument: Node, key: text, overloaded: map, called: map): Node :=
 	if #fitting == 1 then symbol(variant_name(name_of(argument), fitting#1#2)) else argument
 }
 
-# top-down, so a definition is renamed by its own parameters and a method call counts its receiver
+# top-down, so a definition is renamed by its own parameters and a method call counts its receiver; in a body its
+# parameters and the variables it assigns, in a lambda its own, are no overloaded word's
 resolved(n: Node, overloaded: map, called: map): Node := {
 	call = definition_call(n)
-	if call != ø and name_of(call#1) in overloaded {
-		return Key(renamed_target(key_of(n), variant_name(name_of(call#1), arity_of(call)#2)), Op.Define, resolved(value_of(n), overloaded, called))
+	if call != ø {
+		body = resolved(value_of(n), unbound(overloaded, parameters_in(items_of(call)[1 ..]) + names_assigned(value_of(n))), called)
+		target = if name_of(call#1) in overloaded then renamed_target(key_of(n), variant_name(name_of(call#1), arity_of(call)#2)) else key_of(n)
+		return Key(target, Op.Define, body)
 	}
 	match n {
+		Symbol(name): bare_variant(n, overloaded)
 		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded, called), Op.Dot, variant_call(children(method, x => resolved(x, overloaded, called)), overloaded, 1))
-		_: children(variant_call(passed_variants(n, overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
+		Key(target, Op.Assign, value): Key(if target is symbol then target else resolved(target, overloaded, called), Op.Assign, resolved(value, overloaded, called))
+		Key(parameters, Op.Arrow, body): Key(parameters, Op.Arrow, resolved(body, unbound(overloaded, parameters_of(parameters)), called))
+		_: resolved_parts(variant_call(passed_variants(n, overloaded, called), overloaded, 0), overloaded, called)
 	}
 }
+# a call's arguments resolved, its head as the call named it
+resolved_parts(n: Node, overloaded: map, called: map): Node := {
+	if is_call_form(n) and #n > 0 and n#1 is symbol { return group_like(n, [n#1] + items_of(n)[1 ..].map(x => resolved(x, overloaded, called))) }
+	children(n, x => resolved(x, overloaded, called))
+}
+# a bare word naming a word with a variant of no arguments is that variant, which the bare-call rule calls (decision
+# saved-words: `x = sound`, `save canvas as: …`); without one, which variant is meant is not known: refused naming them
+bare_variant(n: Node, overloaded: map): Node := {
+	name = name_of(n)
+	if name not in overloaded { return n }
+	bare = overloaded[name].filter(span => span#1 == 0)
+	if #bare == 1 { return symbol(variant_name(name, bare#1#2)) }
+	raise name + " as a value: it takes " + overloaded[name].map(span => "" + span#2).join(" or ") + " values, say which by calling it"
+}
 
+# the variables the main program assigns, not those of its definitions' bodies
+main_assigned(program: Node): list := {
+	found = []
+	for statement in (if is_group(program) then items_of(program) else [program]) { if definition_call(statement) == ø { found += names_assigned(statement) } }
+	found
+}
 arity_overloads(program: Node): Node := {
 	program = result_overloads(program)
 	overloaded = overloaded_arities(program)
-	typed_overloads(if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program)))
+	typed_overloads(if #overloaded == 0 then program else resolved(program, unbound(overloaded, main_assigned(program)), called_parameters(program)))
 }
 
 # --- by parameter types (card pure-lane-refuses; Rust: overloads.rs lower_parameter_overloads) ---
