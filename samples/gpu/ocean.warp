@@ -18,7 +18,7 @@ swell_direction = -4 # degrees off the line of sight
 choppiness = 1.25
 turbidity = 1.6 # how bright and green the water body is (coastal sediment, plankton)
 foam_amount = 1.0
-sun_elevation = 2.6 # degrees above the horizon
+sun_elevation = 4.6 # degrees above the horizon
 sun_azimuth = 4 # degrees to the right of the view
 haze = 1.0
 cloud_cover = 0.4
@@ -52,7 +52,7 @@ direction_of(elevation, azimuth) := {
 	[sine(around) * cosine(up), sine(up), cosine(around) * cosine(up)]
 }
 sun = direction_of(sun_elevation, sun_azimuth)
-sun_light = [1.0, 0.78, 0.55] .* 9
+sun_light = [1.0, 0.68, 0.45] .* 9
 zenith_blue = [0.09, 0.13, 0.22] # todo .13 MUST work too!!
 horizon_gold = [1.0, 0.58, 0.2]
 
