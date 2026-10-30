@@ -41,15 +41,17 @@ number_node(n: Node): Node := {
 marked_int(value: Node, kind: int): Node := with_kind(value, kind)
 # the kind field telling a value's int type, `x is Color`; 0 for ø
 int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
+# an Int node's int, a big one's low 64 bits
+whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
 int_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
-	unboxed_int(n)
+	whole_int(n)
 }
 # a value known only at run time given to a variable declared int: a float or a fraction is no whole number, as Rust's
 int_admitted(n: Node): int := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { not_an_int() }
 	if kind_code(n) == Kind.Float or is_ratio(n) { an_int_must_be_a_whole_number() }
-	unboxed_int(n)
+	whole_int(n)
 }
 # … given to a variable declared list: ø or a list (a map is kind 8 in curly braces, no list), kept as it is, as Rust's
 list_admitted(n: Node): Node := {
@@ -136,7 +138,7 @@ truncated_int(n: Node): int := {
 	if textual_node(n) { return text_as_int(text_of_node(n)) }
 	if not is_null(n) and kind_code(n) == Kind.Float { return truncated(unboxed_float(n)) }
 	if is_null(n) or kind_code(n) != Kind.Int { fail() }
-	if is_ratio(n) then extended_truncated(n) else unboxed_int(n)
+	if is_ratio(n) then extended_truncated(n) else whole_int(n)
 }
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int): text := {

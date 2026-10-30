@@ -98,7 +98,24 @@ def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
-grown_words = {"-": "grown_difference", "*": "grown_product"}
+grown_words = {"+": "grown_sum", "-": "grown_difference", "*": "grown_product"}
+# `a + b`, `a - b`, `a * b` of two ints (decision nat-and-int): a whole number may grow past 64 bits, so the grown
+# words give it boxed, a big int past i64; two fast ints wrap as wasm's i64, as do the runtime's own words
+def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
+	a = expression_code(body, left)
+	b = expression_code(body, right)
+	if symbol in grown_words and a.kind == ValueKind.Int and b.kind == ValueKind.Int and not wraps(body, left, right) { return runtime_call(grown_words[symbol], [a, b]) }
+	operation_code(body, symbol, a, b)
+}
+# a literal beside a fast int takes the int side: `i + 1` of a counter wraps
+wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
+# a fast int: a variable or parameter declared int (a loop's counter is), `#xs`, + - * of fast ints
+fast_int(body: Body, n: Node): bool := {
+	if n is symbol { return declared_int(body, name_of(n)) }
+	if is_key(n, Op.Hash) and key_of(n) == ø { return yes }
+	type(n) is key and op_of(n) in grown_words and key_of(n) != ø and wraps(body, key_of(n), value_of(n))
+}
+declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int)
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod", "rem": "exact_rem"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
