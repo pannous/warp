@@ -21,7 +21,11 @@ before asking a question). After a context swap, this file and your role file be
 - Never degrade the input to suit a tool (compiler stage, parser, harness): fix or card the tool. Warp source, the
   compiler's included, uses the full language and reads like a good sample program.
 - Word choices are aliases: the recommended word is canonical, the others work with a got-it note (notes/fixits.md).
-  Only differences in meaning go to the Interviewer.
+  Only differences in meaning go to the Interviewer. Everything warp prints (errors, shown results, `warp format`,
+  docs) uses the canonical word (user 2026-10-30, canonical-output).
+- Refuse, never guess (user 2026-10-30): where code reads two ways or a form is unknown, the compiler refuses with a
+  fix-it naming the readings; a plausible wrong value is the worst bug. A reading decided by spacing or by a
+  parameter's type is printed explicitly by `warp format` and in compiler notes (`[a -1]` → `[a, -1]`).
 - The compiler is warp; the only Rust left is the harness (src/, crates/warp-runtime: host, runtime, CLI), changed
   rarely and through the interviewer. A card that needs Rust work is redone as warp work. The old Rust compiler is the
   snapshot on branch `rust-bootstrap`; do not port its code, write the clean version in warp.
