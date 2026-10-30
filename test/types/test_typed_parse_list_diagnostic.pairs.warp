@@ -1,0 +1,2 @@
+# Card typed-parse: a list element mismatch reports its one-based path.
+'class User { scores: list of number }; try { parse("{\\"scores\\":[1,\\"2\\"]}", User) } catch e { e.message }'	'scores[2] must be number, received text'
