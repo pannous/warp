@@ -1,0 +1,56 @@
+#!/usr/bin/env warp
+# A scene of signed distance functions after Inigo Quilez (iquilezles.org/articles/distfunctions, MIT): a sphere and
+# a rounded box melted together by a smooth union over a floor, sphere-traced from a camera, lit by the sun with a
+# soft shadow. paint(render, width, height) compiles the warp functions to one fragment shader
+use math
+width = 640
+height = 360
+
+sphere(p, radius) := norm(p) - radius
+box(p, size) := {
+	q = abs(p) .- size
+	norm(max(q, 0)) + min(max(q.x, max(q.y, q.z)), 0)
+}
+smooth_union(a, b, k) := {
+	h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1)
+	mix(b, a, h) - k * h * (1 - h)
+}
+scene(p) := min(smooth_union(sphere(p .- [-0.4, 0.5, 0], 0.5), box(p .- [0.4, 0.4, 0], [0.3, 0.3, 0.3]), 0.25), p.y)
+normal(p) := {
+	e = 0.001
+	normalize([scene(p .+ [e, 0, 0]) - scene(p .- [e, 0, 0]), scene(p .+ [0, e, 0]) - scene(p .- [0, e, 0]), scene(p .+ [0, 0, e]) - scene(p .- [0, 0, e])])
+}
+soft_shadow(origin, direction) := {
+	light = 1.0
+	t = 0.02
+	for i in 0..32 {
+		h = scene(origin .+ direction .* t)
+		light = min(light, 8 * h / t)
+		t += clamp(h, 0.02, 0.2)
+		if h < 0.001 or t > 6 { break }
+	}
+	clamp(light, 0, 1)
+}
+march(origin, direction) := {
+	t = 0.0
+	for i in 0..100 {
+		h = scene(origin .+ direction .* t)
+		if h < 0.001 or t > 20 { break }
+		t += h
+	}
+	t
+}
+render(x, y) := {
+	uv = [(2 * x - width) / height, (height - 2 * y) / height]
+	origin = [0, 1, -3]
+	direction = normalize([uv.x, uv.y - 0.3, 1.6])
+	t = march(origin, direction)
+	if t > 20 { return [0.6, 0.75, 0.9] .- direction.y * 0.3 }
+	p = origin .+ direction .* t
+	n = normal(p)
+	sun = normalize([0.6, 0.7, -0.4])
+	diffuse = clamp(dot(n, sun), 0, 1) * soft_shadow(p .+ n .* 0.002, sun)
+	color = [0.9, 0.85, 0.7] .* diffuse .+ [0.1, 0.15, 0.2]
+	color .^ (1 / 2.2)
+}
+paint(render, width, height)
