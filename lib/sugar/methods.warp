@@ -13,6 +13,8 @@ rewrite $xs.insert($i, $v) => list_insert($xs, $i, $v) where $xs is not instance
 rewrite $xs.pop() => list_pop($xs) where $xs is not instance
 # `x.json`: the JSON text of any value (lib/json.warp json_text), a map's field json where it has one
 rewrite $x.json => json_text($x)
+# `json.parse(t)`: lib/json.warp's parse_json, JSON5 read (the module names it so beside the core's parse)
+rewrite json.parse($t) => parse_json($t)
 
 # `x in xs` (a list's item, a map's key, a text's part) is the runtime word collection_contains(xs, x); `xs contains x`,
 # `xs has x`, `xs includes x` the same written the other way round. Rust twin: library_words.rs membership

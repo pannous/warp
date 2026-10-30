@@ -20,4 +20,6 @@ in_dist './warp "$PWD/hello.warp"' | grep -q "$EXPECTED"
 in_dist 'rm -f hello hello.*wasm && ./warp build "$PWD/hello.warp" >/dev/null && ./hello' | grep -q "$EXPECTED"
 [ -x "$dist/data/native/driver" ] || { echo "native_dist: warp build put no driver in $dist/data/native (card native-install-paths)" >&2; exit 1; }
 rm -f "$dist"/hello "$dist"/hello.*
+# no first use builds a part of warp more (an installed /usr/lib/warp is read-only)
+scripts/prebuilt-parts.sh "$dist"
 echo "native_dist: $dist ready, its warp and a program it built print $EXPECTED"
