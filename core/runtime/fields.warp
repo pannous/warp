@@ -24,8 +24,13 @@ has_field(m: Node, name: text): bool := {
 positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
 # `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, which a field never shadows
 # (`.line` of the code `line = 1` is 1; card node-part-clash, Rust's node_api.rs PART_READERS)
-node_line(n: Node): Node := if is_meta(n) then meta_line(n) else ø
-node_column(n: Node): Node := if is_meta(n) then meta_column(n) else ø
+# (line 0: a node marked by a pass but never written anywhere, with_attribute)
+node_line(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_line(n) else ø
+node_column(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_column(n) else ø
+# the words a pass marked n with, `let` of a name declared inside a lambda (passes lambdas.warp): carried on the node
+# itself, as its position is, through every pass that keeps the node
+attributes_of(n: Node): list := if is_meta(n) and not is_null(meta_attributes(n)) then unboxed_list(meta_attributes(n)) else []
+with_attribute(n: Node, word: Node): Node := meta_with_attributes(if is_meta(n) then n else meta_node(n, 0, 0), attributes_of(n) + [word])
 # `e.message` of an Error e
 is_error_message(m: Node, name: text): bool := node_is_error(m) and same_bytes(name, "message")
 is_position_part(m: Node, name: text): bool := {
