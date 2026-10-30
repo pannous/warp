@@ -365,7 +365,7 @@ module_ran(at: int): nothing := {
 		complain(joined("no module at ", arg(at)))
 		exit(1)
 	}
-	run(module, program_arguments(arg(at), at + 1), "")
+	run(module, program_arguments(arg(at), at + 1), "", PROGRAM_GC_HEAP_BYTES)
 }
 
 # what main gave, printed as its kind is
@@ -386,9 +386,13 @@ struct Single { value: f32 }
 float_at(address: pointer): Double := address
 single_at(address: pointer): Single := address
 
-# The GC heap a run starts with, as rust-harness:crates/warp-runtime engine.rs: reserved, committed lazily; one starting small
-# collects at each of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild)
-GC_HEAP_INITIAL_BYTES = 536870912
+# The GC heap a run starts with, as rust-harness:crates/warp-runtime engine.rs: reserved, committed lazily, growing as the
+# run needs (decision heap-per-run). A compiler's starts large: one starting small collects at each of its many growths
+# (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild; at 128 MB 698 -> 1408 s); its machine code
+# holds the size, so every compiler has the one. A program's own starts small: one making much garbage collects early
+# (300 lists of 20000 texts: 551 -> 103 MB, as fast)
+COMPILER_GC_HEAP_BYTES = 536870912
+PROGRAM_GC_HEAP_BYTES = 67108864
 # A program's fuel when it counts steps (decision fuel-metering, rust-harness:crates/warp-runtime fuel.rs): wasmtime burns about one
 # a WASM instruction; counting makes calls about four times slower, so only runs that ask for it count
 DEFAULT_FUEL = 100000000000
@@ -425,11 +429,11 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 # warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
 # warp.wasm's beside it (compiled_module); compiled on one thread with WARP_ONE_THREAD (a `warp test` case: its slot
 # is one core, else every case compiles on all of them, a load of 200 on 16 cores)
-warp_config(fuel: bool): handle := {
+warp_config(fuel: bool, heap_bytes: i64): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
 	wasmtime_config_parallel_compilation_set(config, getenv("WARP_ONE_THREAD").length == 0)
-	warp_config_gc_heap_initial_size_set(config, GC_HEAP_INITIAL_BYTES)
+	warp_config_gc_heap_initial_size_set(config, heap_bytes)
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)
 	wasmtime_config_wasm_exceptions_set(config, yes)
@@ -503,11 +507,12 @@ word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing 
 	checked(wasmtime_linker_define_func(linker, from, from.length, name, name.length, type, c_function("warp_host_callback"), word, 0), trap)
 }
 
-# the module run with the arguments; its machine code kept in the file `machine_code` when one is named
-run(module: text, given: Arguments, machine_code: text): nothing := {
+# the module run with the arguments and a GC heap starting at `heap_bytes`; its machine code kept in the file
+# `machine_code` when one is named
+run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothing := {
 	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
-	engine = wasm_engine_new_with_config(warp_config(fuel > 0))
+	engine = wasm_engine_new_with_config(warp_config(fuel > 0, heap_bytes))
 	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
 	linker = wasmtime_linker_new(engine)
@@ -620,7 +625,7 @@ file_ran(path: text, given: Arguments): nothing := {
 		complain(joined("no module at ", path))
 		exit(1)
 	}
-	run(module, given, machine_code_file(path))
+	run(module, given, machine_code_file(path), COMPILER_GC_HEAP_BYTES)
 }
 # the module warp.wasm wrote to `output` run, named `name`, with this executable's arguments from `first` on
 written_run(output: text, name: text, first: int): nothing := {
@@ -630,7 +635,7 @@ written_run(output: text, name: text, first: int): nothing := {
 		complain(joined("warp.wasm wrote no module of ", name))
 		exit(1)
 	}
-	run(program, program_arguments(name, first), "")
+	run(program, program_arguments(name, first), "", PROGRAM_GC_HEAP_BYTES)
 }
 
 ## machine code
@@ -658,7 +663,7 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 machine_code_kept(path: text): nothing := {
 	trap = allocate(8)
 	long_at(trap).value = 0
-	compiled_module(wasm_engine_new_with_config(warp_config(no)), read_file(path), machine_code_file(path), trap)
+	compiled_module(wasm_engine_new_with_config(warp_config(no, COMPILER_GC_HEAP_BYTES)), read_file(path), machine_code_file(path), trap)
 }
 # where a module's machine code is kept: beside it, else (an installed lib/ this user can't write) in the user's cache
 # folder under the module's whole path; "" when neither can be written: compiled anew each run, never failing
@@ -1712,7 +1717,7 @@ guest_bytes_built(caller: handle, context: handle, bytes: handle, length: i64, b
 }
 
 appended = appended_module()
-if appended.length > 0 { run(appended, given_from(0), "") } else {
+if appended.length > 0 { run(appended, given_from(0), "", PROGRAM_GC_HEAP_BYTES) } else {
 	if arg_count() < 2 {
 		complain("usage: driver <app.warp | app.wasm> [arguments…]")
 		exit(2)
