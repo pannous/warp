@@ -81,10 +81,16 @@ fi
 cp "$chosen" "$seed" && echo "refresh-seed: replaced $seed"
 # the old seed's runtime.wasm and machine code go with it: the native warp writes warp-seed.runtime.wasm only when it is
 # missing, so a stale one kept the old runtime words (the new seed's build failed: no field built_spelled_list, 2026-10-29)
-rm -f "${seed%.wasm}.runtime.wasm" "${seed%.wasm}.runtime.wasm.cwasm" "$seed.cwasm" "$seed.driver.cwasm" "$seed.driver.cwasm.key"
+rm -f "${seed%.wasm}.runtime.wasm" "${seed%.wasm}.runtime.wasm.cwasm" "$seed.cwasm" "$seed.driver.cwasm" "$seed.driver.cwasm.key" "$seed.driver.build.cwasm" "$seed.driver.build.cwasm.key"
 release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
-gh release create "$release" "$seed" --repo pannous/warp --prerelease --title "$release" \
-  --notes "The seed compiler: core/compiler.warp of $(git -C "$tree" rev-parse --short HEAD) compiled by a stage that compiles itself once more." &&
+# the release's tag on the very commit the seed was built from, and seed.lock committed beside it, so every later commit
+# names its seed and any commit's compiler can be built again (scripts/seed.sh, user 2026-10-30)
+source_commit=$(git -C "$tree" rev-parse HEAD)
+gh release create "$release" "$seed" --repo pannous/warp --prerelease --title "$release" --target "$source_commit" \
+  --notes "The seed compiler: core/compiler.warp of ${source_commit:0:10} compiled by a stage that compiles itself once more." &&
   echo "refresh-seed: published $release"
+echo "$release $(shasum -a 256 "$seed" | cut -d' ' -f1)" >"$tree/seed.lock"
+git -C "$tree" add seed.lock && git -C "$tree" commit -q -m "chore: seed.lock names $release, built from ${source_commit:0:10}" -- seed.lock &&
+  echo "refresh-seed: seed.lock committed in $tree: push it with the tree"
 # its machine code beside it, for the engine runs use (card precompiled-compilers): no build JIT-compiles the seed
 (cd "$tree" && "$warp" rebuild seed)

@@ -4,7 +4,8 @@
 # background right after its push (notes/agents/common.md "Done"); a cron runs it with --if-moved every 2 minutes as the
 # safety net, which returns at once when main is the tip handled last. In its own tree at main's tip: the compilers of
 # its lib (scripts/rebuild.sh both: the pusher's smoke build of the same inputs, in the store, is reused), hello through
-# them, both moved beside the binary, the user's checkout pulled; then promote-self.sh and tiers 1-2 (gate.sh) of what
+# them, both moved beside the binary (in two stages when they must be built: the native warp first, with the last
+# install's compilers, then the compilers beside it), the user's checkout pulled; then promote-self.sh and tiers 1-2 (gate.sh) of what
 # changed since the tip installed before. What goes red becomes a card in Now naming the commits pushed since (a red
 # smoke test: urgent). One run at a time (a lock): a second one returns, and the running one loops while main moved
 # past what it handled, installing the newest tip first. The slow tiers never hold an install: `--slow` runs them in a
@@ -151,19 +152,33 @@ native_built() {
 	(cd "$1/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$1 "$2" build native warp.warp >/dev/null 2>&1) &&
 		mv "$1/compiler/native/warp" "$1/warp"
 }
+# install_native [early]: early, before the tip's compilers are built, with the tree's compilers of the last install
+# (stage one: a driver fix reaches the user in minutes, never hours behind a compiler build; user 2026-10-30). Its
+# failure is only said: stage two installs the native warp again with the tip's compilers
+# the tip an ancestor of the installed native warp's (its folder native-<commit>[.anything], an install by hand too):
+# a link to it would take the user back (2026-10-30: an install undid the user's newer .express one)
+older_than_installed() {
+	local installed
+	installed=$(basename "$(dirname "$(readlink "$MAIN_WARP")")" | sed "s/^$NATIVE_PREFIX//; s/\..*//")
+	[ -n "$installed" ] && ! git -C "$TREE" merge-base --is-ancestor "$installed" "$tip" 2>/dev/null &&
+		git -C "$TREE" merge-base --is-ancestor "$tip" "$installed" 2>/dev/null
+}
+early_failed() { say "stage one: $1; the native warp follows with its compilers"; }
 install_native() {
-	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got made
+	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got made failed=(red) early=${1-}
+	[ -n "$early" ] && failed=(early_failed)
 	rm -rf "$folder.new" && mkdir -p "$folder.new" || return 1
-	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { red "native warp: lib/ did not copy" --urgent; return 1; }
+	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
-		{ red "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
+		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
-	[[ $got == *$EXPECTED* ]] || { red "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
-	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { red "native warp: ${made:0:200}" --urgent; rm -rf "$folder"; return 1; }
+	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
+	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; rm -rf "$folder"; return 1; }
+	older_than_installed && { say "native warp of ${tip:0:10} not linked: the installed one is newer"; return 2; }
 	linked "$folder/warp" "$MAIN_WARP" && linked "$folder" "$MAIN_LIB" || return 1
 	pruned
-	say "native warp of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
+	say "native warp of ${tip:0:10} installed${early:+ (its compilers follow)}: $MAIN_WARP -> $folder/warp"
 }
 
 # watch <commit>: install its compilers, then (unless main moved on meanwhile) the slow tiers
@@ -177,10 +192,14 @@ watch() {
 	# lib/ gets it from rebuild.sh
 	"$scripts/wasmtime-c-api.sh" "$MAIN_CHECKOUT/lib" ||
 		red "wasmtime C API: scripts/wasmtime-c-api.sh failed" --urgent
+	# stage one: the native warp at once, when the tip's compilers are not in the store yet
+	local early=
+	"$scripts/rebuild.sh" --check pure "$TREE" >/dev/null || { install_native early && early=1; }
 	"$scripts/rebuild.sh" both "$TREE" || { red "rebuild pure failed" --urgent; return 1; }
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
-	install_native
+	# stage two: its compilers beside it, else the whole native warp
+	if [ -n "$early" ]; then install_compilers; else install_native; fi
 	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
 	echo "$tip" >"$state/watched"
 	"$0" --slow </dev/null &
@@ -222,7 +241,10 @@ slow_tiers() {
 	say "slow tiers of ${tip:0:10} done"
 }
 
+# the slow tiers paused until the time in this file (seconds since 1970), for someone's quiet CPU (a profile, a timing)
+SLOW_PAUSE=$HOME/.cache/warp/slow-tiers-paused-until
 if [ -n "$slow" ]; then
+	[ "$(cat "$SLOW_PAUSE" 2>/dev/null || echo 0)" -gt "$(date +%s)" ] && { say "slow tiers paused until $(date -r "$(cat "$SLOW_PAUSE")" +%H:%M)"; exit 0; }
 	git -C "$TREE" fetch -q origin || exit 1
 	installed=$(cat "$installed_state/watched")
 	[ "$installed" = "$(cat "$state/tested" 2>/dev/null)" ] || slow_tiers "$installed"

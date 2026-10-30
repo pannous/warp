@@ -152,10 +152,10 @@ passive_segment = 1
 no_value = 64
 # opcodes (WebAssembly core spec, section 5.4)
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, br_table: 14, return: 15, call: 16, drop: 26, select: 27,
-	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, i32_load8_u: 45, i32_store: 54, i32_store8: 58,
+	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, f32_load: 42, i32_load8_u: 45, i32_store: 54, f32_store: 56, i32_store8: 58, memory_grow: 64,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_add: 106, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_trunc: 157, f64_nearest: 158, f64_sub: 161, f64_mul: 162, f64_div: 163, f64_abs: 153, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
-	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
+	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125, i64_mul: 126}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast: 22, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -432,7 +432,7 @@ def defined_arities(program: Node): map {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; marks: map = {} }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; marks: map = {} }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -512,6 +512,14 @@ def instance_number(n: Node, value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Node and float_converting_word in module.functions { return instance_cast(n, value, ValueKind.Float) }
 	value
 }
+# `x as! int` (decision cast-checks): converted no matter what, a whole number past 64 bits to its low 64 bits, where
+# `x as int` raises "too big for int"
+def forced_cast(body: Body, subject: Node, type: Node): TypedCode {
+	value = expression_code(body, subject)
+	if value.kind == ValueKind.Node and type is symbol and names_int(name_of(type)) { return runtime_call("wrapped_int", [value]) }
+	expression_code(body, Key(subject, Op.As, type))
+}
+names_int(word: text): bool := core_type_words.get(word) == "int" or word in int_spellings
 def cast(value: TypedCode, to: ValueKind): TypedCode {
 	if value.kind == ValueKind.Text { return runtime_call(text_reader(to), [value]) }
 	# '7' as int is 7, the text it is
@@ -747,11 +755,14 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 
 # `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_check: int_admitted,
 # bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
+# `n: nat = v`, `r: rational = v`: a whole number of any size, an exact number, held boxed (decision nat-and-int)
+admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
+	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if is_union(type_name) { return union_declaration(body, name, type_name, value) }
@@ -771,6 +782,7 @@ def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 # `x: int or text = v` (decision union-or): x holds a node, a value of a kind no member takes is refused
 def union_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
 	if not fits_union(type_name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
+	if union_members(type_name).any(member => aliased_type(member.remove_suffix("?")) == "int") { body.boxed_ints[name] = yes }
 	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
 }
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
@@ -786,6 +798,7 @@ def optional_declaration(body: Body, name: text, type_name: text, value: TypedCo
 	value = texted(type_name, value)
 	kind = value.kind
 	if kind != ValueKind.Node and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind_spelling(kind) + " given to a variable declared " + type_name + "?") }
+	if declared_kinds[type_name] == ValueKind.Int { body.boxed_ints[name] = yes }
 	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
 }
 # a value as the declared kind takes it: an int widened to a float, a char (a one-character text) to a text, a value known only at run time checked (a list
@@ -1012,7 +1025,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(instance_number(n#2, expression_code(body, n#2))) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in magnitude_words and name_of(n#1) not in module.functions { return magnitude(body, name_of(n#1), expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in byte_count_words { return byte_size_code(expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("type") { return type_value_of(body, expression_code(body, n#2)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("type") { return type_value_of(body, n#2) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ord") { return code_point(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("chr") { return TypedCode(ValueKind.Char, converted(expression_code(body, n#2), ValueKind.Int) + [op.i32_wrap_i64]) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in bit_casts { return bit_cast(expression_code(body, n#2), bit_casts[name_of(n#1)]) }
@@ -1159,7 +1172,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
 	# `type(x).name`
-	if operator == Op.Dot and right == symbol("name") and is_type_call(left) { return TypedCode(ValueKind.Text, payload(type_value_of(body, expression_code(body, left#2)).code, gc_type(gc.text))) }
+	if operator == Op.Dot and right == symbol("name") and is_type_call(left) { return TypedCode(ValueKind.Text, payload(type_value_of(body, left#2).code, gc_type(gc.text))) }
 	if operator == Op.Dot and right is symbol and member_word(name_of(right)) != ø {
 		word = member_word(name_of(right))
 		value = expression_code(body, left)
@@ -1190,6 +1203,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.As and right is symbol and name_of(right) == "rational" {
 		return as_rational(expression_code(body, left))
 	}
+	if operator == Op.As and is_key(right, Op.Not) and key_of(right) == ø { return forced_cast(body, left, value_of(right)) }
 	# `t as codepoint`, `x as integer`: a type word's other names are its kind's; `255 as byte`, `5 as hex` an int's
 	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else if name_of(right) in int_spellings then ValueKind.Int else name_of(right)
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }

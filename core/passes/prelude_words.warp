@@ -326,8 +326,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	for slice in slices { if slice#2 in reached { brought += reached[slice#2] } }
 	# a value the program reaches, `online := system_value("online") != 0`, holds before the program reads it; a
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
-	values = brought.filter(is_value_definition)
-	functions = brought.filter(statement => not is_value_definition(statement))
+	values = brought.filter(goes_in_front)
+	functions = brought.filter(statement => not goes_in_front(statement))
 	for statement in functions {
 		name = declared_name(statement)
 		if name != ø { brought_names[name] = yes }
@@ -351,6 +351,10 @@ declared_only(n: Node): Node := {
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
+# a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's
+# last
+goes_in_front(statement: Node): bool := is_value_definition(statement) or is_type_naming(statement)
+is_type_naming(statement: Node): bool := is_key(statement, Op.Assign) and is_key(key_of(statement), Op.Colon) and key_of(key_of(statement)) == opaque_symbol
 is_value_definition(statement: Node): bool := {
 	if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") { return is_value_definition(value_of(statement)) }
 	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol

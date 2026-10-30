@@ -5,15 +5,20 @@ set -uo pipefail
 
 DEFAULT_REPO=/Users/me/dev/angles/warp
 DEFAULT_MODEL=gpt-6.1-terra
+DEFAULT_EFFORT=high # ~/.codex/config.toml says low, which ends a run after one look at the card
 SUPERVISOR=warp-supervisor
-CODEX_BOSS="Warp Boss"
+CODEX_BOSS="Warp Handler"
+CODEX_APP_SOCKET=/Users/me/.codex/app-server-control/app-server-control.sock
 DEFAULT_TURN_TIMEOUT_SECONDS=16200
 EXEC_EXIT_GRACE_SECONDS=30
 RELAY_TIMEOUT_SECONDS=60
+MAX_ROUNDS=4 # runs of Codex per timer firing while a card stays parked
+CAPACITY_PAUSE_SECONDS=600
 POLL_SECONDS=1
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${CODEX_REPO:-$DEFAULT_REPO}
 export CODEX_MODEL=${CODEX_MODEL:-$DEFAULT_MODEL}
+CODEX_EFFORT=${CODEX_EFFORT:-$DEFAULT_EFFORT}
 CARD_LIST=$REPO/notes/agents/codex_cards.txt
 LOG_DIR=$REPO/data/agents/codex${CODEX_PROBE_PROMPT:+/probe}
 LOCK=$LOG_DIR/running.pid
@@ -21,7 +26,7 @@ TURN_TIMEOUT_SECONDS=${CODEX_TURN_TIMEOUT_SECONDS:-$DEFAULT_TURN_TIMEOUT_SECONDS
 export PATH=/Users/me/.local/bin:/Users/me/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/sbin:/usr/bin:/bin:$PATH
 
 mkdir -p "$LOG_DIR"
-if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
+if [ -f "$LOCK" ] && [ "$(cat "$LOCK")" != $$ ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
 	echo "$(date +%FT%T) Codex run $(cat "$LOCK") still going; skipping this one"
 	exit 0
 fi
@@ -48,7 +53,12 @@ relay() {
 	return 1
 }
 
+# The Codex app is a second audience only when it runs; the Supervisor always gets the outcome (claude-relay.sh)
 tell_boss() {
+	if [ ! -S "$CODEX_APP_SOCKET" ]; then
+		echo "$(date +%FT%T) Codex app not running, $CODEX_BOSS not told: ${1%%$'\n'*}"
+		return
+	fi
 	relay codex-notify.sh "$CODEX_BOSS" "$1"
 }
 
@@ -127,6 +137,10 @@ handle_signal() {
 	exit "$FINAL_EXIT"
 }
 
+blocks() {
+	awk -v start="^$1" '$0 ~ start{keep=1} keep{print} /^END/{keep=0}' "$2" 2>/dev/null
+}
+
 trap 'finish $?' EXIT
 trap 'handle_signal SIGINT' INT
 trap 'handle_signal SIGTERM' TERM
@@ -140,18 +154,50 @@ if ! GH_TOKEN=$(cat /Users/me/.config/gh/cron-token); then
 fi
 export GH_TOKEN
 
+PREVIOUS_RESULT=$(ls -t "$LOG_DIR"/*.last.md 2>/dev/null | head -1)
+PARKED_BEFORE=$([ -n "$PREVIOUS_RESULT" ] && blocks PARKED "$PREVIOUS_RESULT")
+
 PROMPT="You are a warp worker session named codex, started by a timer; nobody watches this run. Read AGENTS.md and
 notes/agents/common.md and follow them, with these differences: you cannot use SendMessage, ListAgents or ask anyone,
 so never wait for input, and make undoable default choices yourself (note them in your final message).
 
-YOUR TASK: take one or two cards from the Supervisor's list $CARD_LIST, in its order (user, 2026-10-26: library work
+FIRST, finish what earlier runs left (user 2026-10-30: a run continues the previous one when it was not finished and
+cleaned up): every card whose Agent is codex (\`todo list Now\`), every PARKED card below, and every codex branch on
+origin not merged into main, each with its notes/handover/<card>.md. Reuse the worktree if it still exists, otherwise
+\`cowtree add\` it from the pushed branch; merge origin/main and carry on from the handover's next step. A leftover
+worktree with nothing new against main is removed, its branch deleted (local and remote).
+${PARKED_BEFORE:+Parked by the previous run:
+$PARKED_BEFORE
+}
+THEN, with time left, take one or two cards from the Supervisor's list $CARD_LIST, in its order (user, 2026-10-26: library work
 that does not disturb the sessions working on the compiler). Skip a card that already names an agent, whose branch
-exists on origin, or that is no longer on the board (\`todo show <card>\`). None free: stop with nothing taken. Work in
-lib/ (and samples/, test/, wiki/); never change core/ or the Rust harness: a card that needs them gets
-\`todo note <card> \"needs core: …\"\` and is released. Claim each with \`todo take <card> codex\`. Per card: its own
-branch and worktree (\`cowtree add\`, as in common.md), a test first in test/<topic>/, then common.md \"Done\": format,
-merge origin/main, smoke test (\`scripts/rebuild.sh pure <worktree>\`, then hello), \`warp test\` on the folders you
-touched, push to main yourself, \`todo done <card> <commit>\`. Never change existing tests unless common.md allows it.
+exists on origin, that is no longer on the board (\`todo show <card>\`) or whose notes already say \"needs core\". None
+free on the list: take the next lib-only card from \`todo pick\` instead; stop empty-handed only when there is none. Work
+in lib/ (and samples/, test/, wiki/); never change core/ or the Rust harness. Claim each with \`todo take <card> codex\`.
+
+Reproduce before you judge: run the card's example with WARP_NO_WINDOW=1 /Users/me/dev/bin/warp '<code>'; an old
+investigation on the card is a hint, not a verdict. A card that truly needs core is not a dead end: look for the
+library way first (common.md Principles: a function, enum, overload or lib/sugar rule); only when there is none, write
+the smallest core shape into \`todo note <card> \"needs core: <files, functions, why in 3 lines>\"\`, release it and
+take the next card.
+
+You have hours: use them on real work. Investigating, reproducing and writing a handover are the start of a card,
+never its result: do not end your turn while a card is open and untried. Progress is a pushed commit that adds a test
+or changes lib/, samples/ or wiki/; a run whose only commit is a handover has failed. When a choice is open (coercion,
+optional fields, a name), take the recommended default, write it into the handover and keep going. End your turn only
+when every card you took is landed, parked with such a commit, or released as needing core.
+
+Per card: its own branch and worktree (\`cowtree add\`, as in common.md), a test first in test/<topic>/, then common.md
+\"Done\": format, merge origin/main, \`scripts/smoke.sh <worktree>\`, \`warp test\` on the folders you touched, push to
+main yourself, \`todo done <card> <commit>\`. Never change existing tests unless common.md allows it. A working part of a
+card may land on its own (smoke green), the rest stays on the card.
+
+Leave something usable at every point, since a run can end any minute (timeout, usage limit):
+- commit after each step that works (a test, a rule, a fix), small commits with clear messages, and push the branch
+  (\`git push origin <card>\`) right after each commit;
+- after each push, \`todo note <card> \"progress: <what works, what is next> (tip <sha>)\"\`;
+- keep notes/handover/<card>.md on the branch up to date (state, what works, what fails with the exact command and
+  output, next step, defaults you chose) and commit it with the work.
 
 Your FINAL message must contain, for every card landed on main, one block exactly like this:
 LANDED
@@ -159,8 +205,14 @@ card: <card key>
 commit: <sha on main>
 changes: <what it does, defaults chosen, existing tests touched and why>
 END
-A card you could not finish: push its branch, then \`todo release <card> \"done: …; left: …; branch: …\"\`, say why in
-the final message, and put no block for it."
+and for every card you worked on but did not finish (branch pushed, handover written; the card stays taken by codex
+so the next run continues it) one block exactly like this:
+PARKED
+card: <card key>
+branch: <branch> <tip sha>
+handover: notes/handover/<card>.md
+left: <what is missing, in one line>
+END"
 
 [ -n "${CODEX_PROBE_PROMPT:-}" ] && PROMPT=$CODEX_PROBE_PROMPT
 
@@ -189,7 +241,7 @@ if [ "$FINAL_EXIT" -eq 2 ]; then
 	echo "$(date +%FT%T) $RUN_DETAIL"
 	tell_boss "Codex run active through codex exec, NOT visible in the Codex app: \"$THREAD_NAME\", log $RUN.jsonl" ||
 		RUN_DETAIL="$RUN_DETAIL; fallback start notice failed"
-	codex exec --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" >> "$RUN.jsonl" 2>&1 &
+	codex exec --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c model_reasoning_effort="$CODEX_EFFORT" -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" >> "$RUN.jsonl" 2>&1 &
 	APP_PID=$!
 	local_deadline=$((SECONDS + TURN_TIMEOUT_SECONDS))
 	while process_is_running "$APP_PID" && [ "$SECONDS" -lt "$local_deadline" ]; do
@@ -215,21 +267,40 @@ if [ "$FINAL_EXIT" -eq 2 ]; then
 fi
 
 ensure_artifact
-CARDS=$(grep -oE 'todo take [A-Za-z0-9_-]+' "$RUN.jsonl" 2>/dev/null | cut -d' ' -f3 | sort -u | paste -sd, - || true)
-LANDINGS=""
-if [ "$RUN_STATUS" = completed ]; then
-	LANDINGS=$(awk '/^LANDED/{keep=1} keep{print} /^END/{keep=0}' "$RUN.last.md")
+CARDS=$(grep -oE 'todo take [A-Za-z0-9][A-Za-z0-9_-]*' "$RUN.jsonl" 2>/dev/null | cut -d' ' -f3 | sort -u | paste -sd, - || true)
+LANDINGS=$(blocks LANDED "$RUN.last.md")
+PARKED=$(blocks PARKED "$RUN.last.md")
+card_keys() {
+	grep '^card:' <<< "$1" | cut -d' ' -f2 | paste -sd, -
+}
+OUTCOME="landed: $(card_keys "$LANDINGS"); parked: $(card_keys "$PARKED") (run status $RUN_STATUS)"
+if [ -z "$LANDINGS$PARKED" ]; then
+	OUTCOME="nothing landed or parked (run status $RUN_STATUS, cards taken: ${CARDS:-none}; see $RUN.last.md)"
 fi
-if [ -z "$LANDINGS" ]; then
-	OUTCOME="nothing landed (run status $RUN_STATUS)"
-elif relay claude-relay.sh "$SUPERVISOR" "The timed Codex worker landed (log $RUN.jsonl):
-$LANDINGS"; then
-	OUTCOME="$(grep -c '^LANDED' <<< "$LANDINGS") card(s) landed, reported to $SUPERVISOR (cards $(grep '^card:' <<< "$LANDINGS" | cut -d' ' -f2 | paste -sd, -))"
-else
-	OUTCOME="RELAY FAILED (see $RUN.relay.log): the landings in $RUN.last.md never reached $SUPERVISOR"
+if ! relay claude-relay.sh "$SUPERVISOR" "The timed Codex worker ended: $OUTCOME. Log $RUN.jsonl
+$LANDINGS
+$PARKED"; then
+	OUTCOME="RELAY FAILED (see $RUN.relay.log): $OUTCOME never reached $SUPERVISOR"
 	[ "$FINAL_EXIT" -eq 0 ] && FINAL_EXIT=1
 fi
 
 echo "$(date +%FT%T) Codex run ended: $RUN_STATUS (exit $FINAL_EXIT)"
 echo "$(date +%FT%T) $OUTCOME"
+
+# Codex ends its turn after a few minutes even with hours left: a parked card that needs no core gets another round,
+# which continues from the handover (PARKED_BEFORE); exec keeps the pid, so the lock stays ours
+# A round the model's capacity cut short (its pushed commits survive) continues after a pause, as a parked one does
+ROUND=${CODEX_ROUND:-1}
+continuable=""
+if [ -n "$PARKED" ] && ! grep -qi 'needs core' <<< "$PARKED"; then
+	continuable="parked $(card_keys "$PARKED")"
+elif tail -3 "$RUN.jsonl" 2>/dev/null | grep -q 'at capacity'; then
+	continuable="cut short by the model's capacity"
+	sleep "$CAPACITY_PAUSE_SECONDS"
+fi
+if [ -z "${CODEX_PROBE_PROMPT:-}" ] && [ -n "$continuable" ] && [ "$ROUND" -lt "$MAX_ROUNDS" ]; then
+	echo "$(date +%FT%T) round $ROUND $continuable; round $((ROUND + 1)) of $MAX_ROUNDS continues it"
+	trap - EXIT INT TERM HUP
+	CODEX_ROUND=$((ROUND + 1)) exec "$0"
+fi
 exit "$FINAL_EXIT"

@@ -19,6 +19,7 @@ command_help = [
 	["parse <code|file>", "Show the parsed program"],
 	["data <file>", "Read untrusted data without evaluating it"],
 	["parse-code <code> <file>", "The parsed code into the file, encoded for the native warp to rebuild (its parse_code)"],
+	["rebake <file>", "The compiler at the file with its baked library tables made anew by this compiler, written over their segments (warp rebuild)"],
 	["baked-current <file>", "yes into the file when the library baked in is cut and parsed as this compiler does, else no (warp rebuild)"],
 	["lower <code|file>", "Show the program after the lowering passes"],
 	["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],

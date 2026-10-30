@@ -92,8 +92,13 @@ before asking a question). After a context swap, this file and your role file be
   make it say REBUILDING and run `scripts/rebuild.sh pure <worktree>` first (published to the shared store, so the
   install after your push reuses it). Then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test
   <folders>`. A core change also runs `scripts/self-check.sh <worktree>`. Never rebuild in the main checkout. One
-  heavy job (rebuild, self-check) of yours at a time. Machine-wide, rebuild.sh runs at most 2 compiler builds at once
-  (<store>/build-slots, WARP_BUILD_SLOTS); "all 2 build slots taken, waiting" is normal, never work around it.
+  heavy job (rebuild, self-check) of yours at a time. Machine-wide, rebuild.sh runs at most 5 compiler builds at once
+  (<store>/build-slots, WARP_BUILD_SLOTS); "all 5 build slots taken, waiting" is normal, never work around it.
+- A compiler is built once per inputs hash, machine-wide (ea5cb68f6b): `scripts/rebuild.sh` asks the store
+  /Volumes/Build/compilers/<hash>/ first and copies a hit in seconds, whoever built it; while another tree builds the
+  same hash (lock <store>/<hash>/warp.building, its pid) it logs `waiting-for-<pid>` and takes that result. So
+  never copy compilers by hand, never rebuild "to be sure", never use --force to get past a wait, and never kill
+  another session's build. Every hit, miss and wait is a line of <store>/rebuilds.log.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or

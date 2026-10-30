@@ -63,17 +63,17 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	used_c_functions = {}
 	program = checked_program(foreign#1, folder, prelude_source)
 	c_functions = with_linked_c_functions(with_used_c_functions(foreign#2), library_folder)
-	found = diagnosed_since(known)
-	# an error the checks diagnosed fails the compile with Rust's text (card pure-self-ignores-errors)
-	failing = first_error(found, module.program_file)
-	if failing { throw failing }
+	found = checked_facts(known)
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, c_functions), emitter_kinds(program))
 	# a linked module whose words won't take the program's values: said, and the program compiled with its source
 	if made is text and #module.linked_images > 0 {
-		warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source"
+		# (a method clash is the linking's own gap, card class-method-linking, nothing the program's author did)
+		if not made.contains(LINKED_METHOD_CLASH) { warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source" }
 		link_libraries([], [])
+		relinked = #diagnosed
 		program = checked_program(foreign#1, folder, prelude_source)
+		checked_facts(relinked)
 		made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, with_used_c_functions(foreign#2)), emitter_kinds(program))
 	}
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
@@ -84,6 +84,15 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	# unless the run asked for none (`warp --no-hints`, WARP_HINTS=0: wiki/warning.md)
 	if env("WARP_HINTS") != "0" { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
 	made
+}
+
+# what the checks diagnosed past the first `known` facts; an error among them fails the compile with Rust's text (card
+# pure-self-ignores-errors), the program compiled from source after a linked module didn't bind too
+checked_facts(known: int): list := {
+	found = diagnosed_since(known)
+	failing = first_error(found, module.program_file)
+	if failing { throw failing }
+	found
 }
 
 # the standard modules the source uses, each prebuilt beside runtime.wasm (`warp rebuild`) and linked behind it
@@ -237,6 +246,7 @@ match command {
 	"parse": show_parsed()
 	"parse-code": write_parse_code(args#2, args#3)
 	"baked-current": write_baked_current(args#2)
+	"rebake": write_rebaked(args#2)
 	"data": show_data()
 	"lower": show_lowered()
 	"uses": show_uses()

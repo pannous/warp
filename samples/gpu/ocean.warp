@@ -11,9 +11,9 @@ height = 540
 global time = 0.0
 
 # the settings of web-ocean's panel (H), with its defaults
-wind_speed = 7 # m/s: longer, higher waves as it rises
+wind_speed = 7 # todo m/s: longer, higher waves as it rises
 wind_direction = 28° # off the line of sight, the waves roll toward the camera
-swell_height = 1.8 # metres, significant wave height
+swell_height = 1.8 # todo metres, significant wave height
 swell_length = 120 # metres
 swell_direction = -4° # off the line of sight
 choppiness = 1.25
@@ -55,7 +55,7 @@ reflection_blur = 0.2
 direction_of(elevation, azimuth) := [sine(azimuth) * cosine(elevation), sine(elevation), cosine(azimuth) * cosine(elevation)]
 sun = direction_of(sun_elevation, sun_azimuth)
 sun_light = [1.0, 0.68, 0.45] .* 9
-zenith_blue = [0.09, 0.13, 0.22] # todo .13 MUST work too!!
+zenith_blue = [0.09, .13, 0.22]
 horizon_gold = [1.0, 0.58, 0.2]
 
 # a number in 0 … 1 per lattice point: sin-hashes stripe in f32 for big arguments, so the point is wrapped first

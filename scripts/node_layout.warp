@@ -29,6 +29,7 @@ table_defined("kind", assigned(kinds_file, "Kind"))
 table_defined("marked", assigned(kinds_file, "Marked"))
 table_defined("bracket", assigned(kinds_file, "BracketCode"))
 defined("info_unit", assigned(kinds_file, "KindUnit").Info)
+defined("gpu_list_mark", assigned(kinds_file, "KindUnit").GpuList)
 for type in assigned("core/emitter/emitter.warp", "gc_names") { fields_defined(type#1, type#2) }
 instance = assigned("core/emitter/instances.warp", "instance_fields")
 fields_defined("instance", instance)
