@@ -172,8 +172,6 @@ nanosleep(wanted: pointer, left: pointer): i32 from "c"
 clock_gettime(clock: i32, time: pointer): i32 from "c"
 localtime_r(seconds: pointer, fields: pointer): handle from "c"
 strftime(buffer: pointer, size: i64, format: pointer, fields: pointer): i64 from "c"
-stat(path: pointer, fields: pointer): i32 from "c"
-uname(fields: pointer): i32 from "c"
 drand48(): f64 from "c"
 srand48(seed: i64) from "c"
 sqrt(x: f64): f64 from "c"
@@ -1005,22 +1003,6 @@ local_minute(since_epoch: i64): text := {
 	localtime_r(seconds, fields)
 	shown = allocate(32)
 	text_from(shown, strftime(shown, 32, c_string("%Y-%m-%d %H:%M"), fields) as u32)
-}
-# struct stat's size and where st_mtime lies in it: macOS 48, Linux 88 on x86_64 (utsname's machine at 260), else 72
-STAT_BYTES = 256
-UTSNAME_BYTES = 1280
-LINUX_MACHINE_AT = 260
-modified_at(): u32 := {
-	if not on_linux() { return 48 }
-	names = allocate(UTSNAME_BYTES)
-	uname(names)
-	if starts_with(text_from(names + LINUX_MACHINE_AT, c_length(names + LINUX_MACHINE_AT)), "x86_64") then 88 else 72
-}
-# when the file at path was last written, in seconds since 1970; 0 when it is missing
-modified_seconds(path: text): i64 := {
-	fields = allocate(STAT_BYTES)
-	if stat(c_string(path), fields) != 0 { return 0 }
-	long_at(fields + modified_at()).value
 }
 # a C text argument (c_text) of the module, copied out of its memory
 guest_c_text(caller: handle, context: handle, address: i64): text := {

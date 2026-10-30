@@ -36,13 +36,13 @@ ascii_case(t: text, first: int, last: int, shift: int): text := {
 }
 # each code point of t as the table's ranges map it: six ints a range (start, last, stride, delta, second, third)
 table_case(t: text, ranges: list): text := {
-	out = ""
+	parts = []
 	at = 0
 	while at < byte_count(t) {
-		out += case_mapped(ranges, code_point_at(t, at))
+		parts += [case_mapped(ranges, code_point_at(t, at))]
 		at += code_point_width(byte_at(t, at))
 	}
-	out
+	texts_joined(parts, "")
 }
 # the ints of a text of them, a space apart
 table_ints(t: text): list := {
