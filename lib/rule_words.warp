@@ -240,8 +240,9 @@ first_parameter_type(word: text, definition: text): text := {
 	first = definition[#word + 1 ..].split(")")#1.split(",")#1
 	if first.contains(":") then first.split(":")#2.trim() else ""
 }
-# `dir(v)` of a value only the run knows: the words of a list and of a text, for the prelude's dir_of_value
-value_dir_words(kind: Node, program: Node): any := if owns_dir(program) then ø else module_dir("${kind}")
+# `dir(v)` of a value only the run knows: the words of a list and of a text, the prelude's dir_of_value's arguments
+# after v
+value_dir_words(program: Node): any := if owns_dir(program) then ø else List([module_dir("list"), module_dir("text")], Bracket.Square, Separator.Comma)
 
 # --- warp functions as one WGSL shader (lib/sugar/shaders.warp's rules) ---
 

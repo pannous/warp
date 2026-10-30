@@ -19,4 +19,4 @@ rewrite $f.dump => $refused where $f is symbol and $f is function and $refused =
 # dir_of_value). A program's own dir wins
 rewrite dir $x => dir($x)
 rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)
-rewrite dir($x) => dir_of_value($x, [$list_words...], [$text_words...]) where $list_words = value_dir_words(list, $program) and $text_words = value_dir_words(text, $program)
+rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
