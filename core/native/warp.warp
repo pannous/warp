@@ -232,9 +232,28 @@ versioned(compiler: text): nothing := {
 	given = compiler_arguments(compiler)
 	added(given, "version")
 	file_ran(compiler, given)
-	print(joined("the native warp · built ", local_minute(modified_seconds(executable_path()))))
+	print(joined("the native warp · built ", built_minute()))
 	self_compiler = joined(library_folder(), "/warp-self.wasm")
 	print(joined(joined(compiler_stamp(compiler_path(), "warp.wasm", "pure"), ", "), compiler_stamp(self_compiler, "warp-self.wasm", "self")))
+}
+# when this executable was built, as `warp build native` baked it (primitive.warp built_function, cc's `Oct 30 2026
+# 12:07:33`), shown as the stamps are: `2026-10-30 12:07`
+warp_built(): text from "c"
+built_minute(): text := {
+	said = warp_built()
+	months = "JanFebMarAprMayJunJulAugSepOctNovDec"
+	month = 0
+	while month < 11 and memcmp(months.address + (month * 3) as u32, said.address, 3) != 0 { month = month + 1 }
+	shown = allocate(16)
+	memcpy(shown, native_pointer(said.address + 7), 4)
+	byte_at(shown + 4).value = 45
+	memcpy(shown + 5, native_pointer("010203040506070809101112".address + (month * 2) as u32), 2)
+	byte_at(shown + 7).value = 45
+	memcpy(shown + 8, native_pointer(said.address + 4), 2)
+	if byte_at(shown + 8).value == 32 { byte_at(shown + 8).value = 48 }
+	byte_at(shown + 10).value = 32
+	memcpy(shown + 11, native_pointer(said.address + 12), 5)
+	text_from(shown, 16)
 }
 # a compiler's build stamp (stamped): `warp.wasm of 1792a05d8a · built 2026-10-28 20:25`
 compiler_stamp(file: text, name: text, rebuild: text): text := {
