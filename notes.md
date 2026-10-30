@@ -25,3 +25,6 @@
   each byte a boxed Int Node + i64box via text_byte_list), warp.runtime decode 8.2 MB, module_rules_of 1.6 MB/24 calls
   (no disk read without WARP_LIB: file_text = parser.warp file_source). Int boxing has one site, emitter.warp:626;
   Node fields are immutable, so small Int nodes could be shared (shape sent)
+- shared small ints landed (194b3d1e70, runtime nodes.warp int_node, -128..1023): hello 192.6 -> 176.2 MB, read_bytes of
+  runtime.wasm 245.7 -> 214.8. Traps: runtime files take no top-level constants (zero-argument words instead); a Node
+  global's zero value is a constant expression, so module_layout.warp zero_code_of keeps fresh_int_code, no call

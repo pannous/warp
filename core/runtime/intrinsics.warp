@@ -75,6 +75,8 @@ set_byte(t: text, at: int, byte: int) from runtime
 same_text(a: text, b: text): int from runtime
 same_list(a: list, b: list): int from runtime
 same_node(a: Node, b: Node): bool from runtime
+# a new Int node of n, never a shared one (nodes.warp int_node shares the small ones)
+fresh_int_node(n: int): Node from runtime
 code_of(c: char): int from runtime
 char_of(code: int): char from runtime
 # lists: their item array, its room and count
