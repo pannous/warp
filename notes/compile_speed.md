@@ -40,5 +40,18 @@ CPU seconds between phase markers:
 A rule word or pass helper that reads the whole program (`$program`, names_bound_in, file reads, parses) must compute
 once per program, never per node or call site. Cheap `where` guards don't save a rule whose guard passes broadly.
 
-## Left (230 s)
-with_uses 44 s, emit 41 s, called_only 24 s, baked LIBRARY_SLICES 17 s, index_positions 14 s, lambdas (pass 23) 11 s.
+4. called_only (warp-quality, 94a0dfeea8): each called word scanned all statements, the pending list was copied per
+   step: 24 → 1.1 s.
+
+## Left (main 8a45e5…: lowering 176 s up to checked_program, emit ~40 s)
+The parser is the biggest single cost, ~62 s:
+- the used core files: 30.9 s, linear (parser.warp 4819 lines 5.6 s, ~19 µs per byte; card compiler-parse-timing)
+- SLICE_PARSES 18.6 s: every library definition parsed again, one by one, after LIBRARY_PARSES (12.4 s) parsed each
+  whole file (card slice-parses-definitions)
+Then index_positions 17 s, lambdas (pass 23) 11 s, sugar (pass 22) 8 s; emit (card emit-cpu-profile, warp-quality).
+with_uses did not regress on main: 65 s, as before; a measurement beside other builds inflated it to 75–93 s.
+`warp parse` printing a big tree is quadratic (×4 the file: 353 s, card parse-print-quadratic); the parse itself isn't.
+
+## Marker pitfalls
+- A marker must stand before the work it names: `f(label, computed)` prints after `computed` ran (timed_bake did).
+- phase_times stops only at `emit done`; without that marker the rebuild's tail lands in the last label.
