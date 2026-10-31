@@ -1,0 +1,5 @@
+# a spaced unit converts with as and in: its amount goes with it first
+'str(3 km as m)'	'3000m'
+'x = 3 km as m; x == 3000 m'	true
+'x = 2 hours in minutes; x == 120 minutes'	true
+'s = "abc"; "b" in s'	true
