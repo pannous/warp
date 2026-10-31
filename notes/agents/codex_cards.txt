@@ -1,9 +1,7 @@
 # Cards for the timed Codex worker (notes/agents/codex_worker.sh), in order; the Supervisor keeps this list.
 # Library work only (lib/, samples/, test/, wiki/), away from the sessions changing core/ (user 2026-10-26).
-# Refreshed 2026-10-30: the old top two (list-word-methods, canvas-paint-arity) need core and were released every run.
-alias-arc-cosine            # alias acos = arc_cosine in lib/aliases.warp
-linear-hint-warp            # prefer xs = float[n] over linear: the hint, in lib
-typed-parse                 # parse<T>(json) checks the data against T: lib/json.warp
-sum-element-type            # type the prelude sum as sum(xs: list)
-plural-type-words-are-lists # plural type words are list types: a rule in lib/sugar
-as-list-of-rule             # ["1","2"] as list of int: the lib/sugar/lists.warp rule does not fire
+# Refreshed 2026-10-31: the earlier list is done or needs core; Codex found no lib-only card twice.
+# `retired: <card>`: taken back from Codex, never continued even when parked (codex_worker.sh RETIRED)
+retired: datetime-arithmetic-fail  # field/unit collision is core: warp-shaders' use-sound
+retired: sample-gaps-types         # bits/xor, dates, reflection need core (parked 6 times on 2026-10-31)
+program-using               # a program's top-level shown(…) beside units' Quantity.shown(): keep a method out of a free function's clauses, lib side first

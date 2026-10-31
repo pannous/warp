@@ -73,9 +73,17 @@ pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multip
 
 # a node after every pure pass, in order
 lowered_node(n: Node): Node := {
-	for pass in pure_passes { n = pass(n) }
+	for pass in pure_passes {
+		timed("pass " + "${pass}")
+		n = pass(n)
+	}
+	timed("called_only, checks")
 	n
 }
+# WARP_TIMES set: `§T <milliseconds> <label>` printed where a phase of the compile starts, so a build's log (its
+# record's build.log) holds its phases; scripts/phase-times.py sums the spans (notes/compile_speed.md). Silent unset
+TIMES = env("WARP_TIMES") ?? ""
+def timed(label: text) := { if TIMES != "" { print "§T " + "${clock()}" + " " + label } }
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
@@ -103,14 +111,31 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	brought_names = {}
 	defined_origins = {}
 	local_declarations = {}
-	own = early_sugared(interpolation(with_uses(program, folder)))
+	timed("with_uses")
+	used = with_uses(program, folder)
+	timed("interpolation, early sugar")
+	own = early_sugared(interpolation(used))
+	timed("sugar rules kept")
 	bindings = rule_bindings(own)
 	kept_first_sugar = sugar_rules(bindings, first_sugar_module_names)
 	kept_sugar = sugar_rules(bindings, sugar_module_names())
 	kept_iteration_sugar = sugar_rules(bindings, iteration_sugar_module_names)
 	kept_late_sugar = sugar_rules(bindings, late_sugar_module_names)
 	kept_comprehension_sugar = sugar_rules(bindings, comprehension_sugar_module_names)
-	with_reached(with_used_modules(with_expected_type_uses(with_type_module_uses(property_accessors(index_positions(rewritten_program(own, source)))), prelude), folder), prelude, no, [std_module_path("prelude")])
+	timed("rewritten_program")
+	rewritten = rewritten_program(own, source)
+	timed("index_positions")
+	positioned = index_positions(rewritten)
+	timed("property_accessors")
+	accessed = property_accessors(positioned)
+	timed("type module uses")
+	type_used = with_type_module_uses(accessed)
+	timed("expected type uses")
+	expected = with_expected_type_uses(type_used, prelude)
+	timed("used modules")
+	modules_used = with_used_modules(expected, folder)
+	timed("with_reached")
+	with_reached(modules_used, prelude, no, [std_module_path("prelude")])
 }
 # the words code will say once the sugar the program keeps rewrote it: `twice {…}` says the prelude's times, a module's
 # `a .+ b` element_wise_any
