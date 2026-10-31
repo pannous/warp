@@ -1,0 +1,1 @@
+'p = [1, 2]; t = match p { [1, t] => t; _ => 0 }; describe(v) := match v { t: text => t + "!"; _ => "?" }; describe("hi")'	'hi!'
