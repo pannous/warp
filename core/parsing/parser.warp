@@ -17,7 +17,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: list; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: map; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): list := view_of(parsed(source))
@@ -235,7 +235,7 @@ def written_tree(written: text, uses: text = ""): Node := {
 	source = expanded_entities(written)
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
-	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), operators: scanned_operators(source + uses), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), word_types: word_types, line_starts: line_starts_of(source)}
+	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), operators: scanned_operators(source + uses), aliases: by_first_character(operator_aliases(source) + math_operator_aliases()), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), word_types: word_types, line_starts: line_starts_of(source)}
 	items_until(p, Bracket.None, ItemsEnd.Source)
 }
 
@@ -451,7 +451,18 @@ def longest_first(pairs: list): list {
 // The canonical name of the operator an alias spells, else ""
 def canonical_operator(target: text): text := symbol_operator(target) ?? word_operator(target) ?? ALIAS_TARGET_NAMES.get(target) ?? ""
 // The alias written at the parser's position as [spelling, target], a word one as a whole word, the longest, else []
-def alias_at(p: Parser): list := longest_spelled_at(p, p.aliases, alias => alias#1) ?? []
+def alias_at(p: Parser): list := if p.at >= p.n then [] else longest_spelled_at(p, aliases_starting(p, p.code[p.at]), alias => alias#1) ?? []
+// The [spelling, target] aliases by the character each spelling starts with: a position tries only those written
+// there (trying every alias at every token was 55% of a parse, card compiler-parse-timing)
+def by_first_character(aliases: list): map {
+	starting = {}
+	for alias in aliases {
+		first = "$(alias#1[0])"
+		starting[first] = (starting.get(first) ?? []) + [alias]
+	}
+	starting
+}
+def aliases_starting(p: Parser, c: text): list := p.aliases.get("$(c)") ?? []
 // Of `candidates`, each spelled as `spelling` gives, the one written at the parser's position with the longest spelling,
 // a word one as a whole word, else ø
 def longest_spelled_at(p: Parser, candidates: list, spelling: function): any {
@@ -3500,8 +3511,8 @@ FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '�
 def is_free_symbol(p: Parser, c: text): bool {
 	glyph = "$(c)"
 	// a declared operator calls as declared: `prefix operator ∆` makes `print ∆ 5` print ∆(5), no free infix
-	if glyph.length != 1 or p.aliases.any(alias => alias#1 == glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or declared_level(p.operators, glyph) >= 0 { return false }
-	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2) and not p.aliases.any(alias => alias#1 == glyph)
+	if glyph.length != 1 or aliases_starting(p, glyph).any(alias => alias#1 == glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or declared_level(p.operators, glyph) >= 0 { return false }
+	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2) and not aliases_starting(p, glyph).any(alias => alias#1 == glyph)
 }
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;
 // `[↯ ↯]` and `print ↯` read the glyph as a value
