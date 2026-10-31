@@ -5,21 +5,16 @@
 // nor compare (a DimensionError); `quantity("5 km")` and `quantity(5, "km")` read a unit given as data
 // (notes/units_runtime.md)
 
-// a dimension packs the power of each base quantity, one byte each (length + 256·mass + 65536·duration …), so
-// multiplying quantities adds their dimensions
-length_dimension() := 1
-mass_dimension() := 256
-duration_dimension() := 65536
-temperature_dimension() := 16777216
-pixels_dimension() := 4294967296
+use unit_names
 
 class Quantity {
 	amount: number
 	dims: int
 	unit: text
 	scale: number
-	+(other) := measured(amount + same_quantity(this, other, "add").amount, dims, unit, scale)
-	-(other) := measured(amount - same_quantity(this, other, "subtract").amount, dims, unit, scale)
+	// the right side of a sum or a difference is a difference: `20°C + 5°C` is 25°C, counting one zero
+	+(other) := measured(amount + same_quantity(this, other, "add").amount - unit_zero(other.unit), dims, unit, scale)
+	-(other) := measured(amount - same_quantity(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
 	*(other) := if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_product(unit, other.unit), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
@@ -29,7 +24,7 @@ class Quantity {
 	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, u, target.scale) }
 	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
 	in(u) := to(u).shown()
-	shown() := amount / scale
+	shown() := (amount - unit_zero(unit)) / scale
 	// its amount in SI base units as a plain float: what a shader reads of it (decision no-units-in-shaders)
 	float() := amount as float
 	text() := quantity_text(this)
@@ -72,41 +67,8 @@ quantity_text(q: Quantity) := str(q.shown()) + q.unit
 unit_product(first: text, second: text) := if first == second then unit_power(first, 2) else first + "·" + second
 unit_power(u: text, power: int) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
 
-// the units by symbol, each [its SI amount, its dimension]; no unit is written in another, so a program's own `s` or
-// `m` leaves every unit as it is
-unit_table(): map := {
-	"m": [1, length_dimension],
-	"kg": [1, mass_dimension],
-	"s": [1, duration_dimension],
-	"K": [1, temperature_dimension],
-	"px": [1, pixels_dimension],
-	"mm": [1/1000, length_dimension],
-	"cm": [1/100, length_dimension],
-	"dm": [1/10, length_dimension],
-	"km": [1000, length_dimension],
-	"inch": [254/10000, length_dimension],
-	"ft": [12 * 254/10000, length_dimension],
-	"yd": [36 * 254/10000, length_dimension],
-	"mi": [1760 * 36 * 254/10000, length_dimension],
-	"g": [1/1000, mass_dimension],
-	"mg": [1/1000000, mass_dimension],
-	"lb": [45359237/100000000, mass_dimension],
-	"ms": [1/1000, duration_dimension],
-	"µs": [1/1000000, duration_dimension],
-	"ns": [1/1000000000, duration_dimension],
-	"min": [60, duration_dimension],
-	"h": [3600, duration_dimension],
-	"day": [86400, duration_dimension],
-	"Hz": [1, 0 - duration_dimension],
-	"kHz": [1000, 0 - duration_dimension],
-	"N": [1, mass_dimension + length_dimension - 2 * duration_dimension],
-	"L": [1/1000, 3 * length_dimension],
-	"ml": [1/1000000, 3 * length_dimension],
-	"ha": [10000, 2 * length_dimension],
-	"dpi": [10000/254, pixels_dimension - length_dimension]
-}
 // the unit of that symbol, shown by it: `known_unit("km")` is the Length of 1000 m shown in km
-known_unit(symbol: text) := { entry = unit_table()[symbol]; measured(entry#1, entry#2, symbol, entry#1) }
+known_unit(symbol: text) := { entry = unit_entry_of(symbol); measured(entry#1, entry#2, symbol, entry#1) }
 
 m() := known_unit("m")
 kg() := known_unit("kg")
@@ -130,6 +92,11 @@ ns() := known_unit("ns")
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is
 rewrite $n $u => $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
 rewrite ($x = $n) $u => $x = $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
+// every other unit a word after a number spells, prefixed or plural, a word the program binds nothing to (`1 Gs`,
+// `3 kilometers`, glued `212°F`): the quantity of it, `quantity(1, "Gs")` (lib/unit_names.warp)
+rewrite $n $u => quantity($n, $symbol) where $n is number and $u is unbound and $symbol = unit_spelled($u)
+rewrite ($x = $n) $u => $x = quantity($n, $symbol) where $n is number and $u is unbound and $symbol = unit_spelled($u)
+rewrite $n * $u => quantity($n, $symbol) where $n is number and $u is unbound and $symbol = unit_spelled($u)
 // an angle is a number of radians, as SI's radian is dimensionless (decision degree-constant), marked as an Angle that
 // shows in degrees (decision marks-survive-arithmetic): `60°` is 1.0472 to sine and the GPU and prints 60°,
 // `30° * 2` too
@@ -154,14 +121,6 @@ ml() := known_unit("ml")
 ha() := known_unit("ha")
 dpi() := known_unit("dpi")
 
-// the long names a text may give a unit (`quantity(2, "hours")`), by its symbol
-long_unit_names(): map := {
-	"meter": "m", "meters": "m", "metre": "m", "kilogram": "kg", "second": "s", "seconds": "s",
-	"kilometer": "km", "kilometers": "km", "inches": "inch", "foot": "ft", "feet": "ft", "yard": "yd", "mile": "mi",
-	"miles": "mi", "gram": "g", "grams": "g", "pound": "lb", "lbs": "lb", "millisecond": "ms", "minute": "min",
-	"minutes": "min", "hour": "h", "hours": "h", "days": "day", "litre": "L"
-}
-
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {
 	if u.contains("/") {
@@ -175,13 +134,14 @@ unit_named(u: text) := {
 	}
 	if u.ends_with("²") or u.ends_with("^2") { return unit_named(u.replace("^2", "").replace("²", "")) ^ 2 }
 	if u.ends_with("³") or u.ends_with("^3") { return unit_named(u.replace("^3", "").replace("³", "")) ^ 3 }
-	symbol = long_unit_names().get(u) ?? u
-	if not unit_table().has(symbol) { raise "unknown unit: " + u }
+	symbol = unit_symbol(u)
+	if symbol == ø { raise "unknown unit: " + u }
 	known_unit(symbol)
 }
 
-// `quantity(5, "km")`: amount of the unit u, shown in it; `quantity("5 km")`, `quantity("2.5km/h")`: read from text
-quantity(amount: number, u: text) := { one = unit_named(u); measured(amount * one.amount, one.dims, u, one.amount) }
+// `quantity(5, "km")`: amount of the unit u, shown in its symbol, `quantity(3, "kilometers")` is 3km; `212°F` counts
+// from its scale's zero; `quantity("5 km")`, `quantity("2.5km/h")`: read from text
+quantity(amount: number, u: text) := { one = unit_named(u); measured(amount * one.amount + unit_zero(one.unit), one.dims, one.unit, one.amount) }
 quantity(t: text) := {
 	var amount_text = ""
 	var u = ""

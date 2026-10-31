@@ -4,6 +4,8 @@
 # holes bound, `$program` the whole program, and runs inside the compiler.
 # warp functions as one WGSL shader (lib/prelude.warp paint rules) are lib/wgsl.warp's words
 use wgsl
+# the unit spellings (lib/units.warp's rules)
+use unit_names
 
 # where a path parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
 parameter_ends = ":(?*+"
@@ -21,6 +23,10 @@ path_parameter(part: text): text := {
 
 # `users` → "users": a name as the text it is spelled by
 spelled(name: Node): text := "${name}"
+
+# `kilograms` → "kg", `Gs` → "Gs": the symbol of a unit a word after a number spells, prefixed or plural
+# (lib/unit_names.warp); ø when it spells none
+unit_spelled(word: Node): text? := if word is symbol then unit_symbol("${word}") else ø
 
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
