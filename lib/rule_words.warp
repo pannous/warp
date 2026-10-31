@@ -335,7 +335,7 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			}
 			checks = fields.map(field => "if not (typed_json_value[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
 			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
-			source_code = if source is text then quoted_text("${source}") else as_code(source)
+			source_code = if source is text then to_json("${source}") else as_code(source)
 			return plain_node(parsed("(typed_json_value => { " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })(json(" + source_code + "))"))
 		}
 	}
