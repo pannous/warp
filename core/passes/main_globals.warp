@@ -86,7 +86,9 @@ declares_local(body: Node, name: text): bool := nodes_in(body).any(n => is_group
 fresh_mention = "fresh"
 read_mention = "read"
 first_mention(n: Node, name: text): text := {
-	if is_operator(n, "=") and key_of(n) == symbol(name) { return if mentions(value_of(n), name) then read_mention else fresh_mention }
+	# `n: int = 0` declares it as fresh as `n = 0` does (a range loop's counter is declared so)
+	bound = if is_operator(n, "=") and is_operator(key_of(n), ":") then key_of(key_of(n)) else if is_operator(n, "=") then key_of(n) else ø
+	if bound == symbol(name) { return if mentions(value_of(n), name) then read_mention else fresh_mention }
 	if n == symbol(name) { return read_mention }
 	for part in parts_of(n) {
 		mention = first_mention(part, name)
