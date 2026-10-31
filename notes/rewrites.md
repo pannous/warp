@@ -293,10 +293,18 @@ rewrites.warp operator_rules makes it rules of the operator, `$x | $g => $g($x)`
 `is <kind>`; any → none). Overloads of one glyph are ordered most specific first (fewer `any`), an arm whose body is the
 operator itself (`|(a: type, b: type) := a | b`) before the others as specific; it emits no rule but adds to every later
 rule `not <its condition>` for one of its typed operands (one rule per operand), so the built-in stays where it fits.
-Names the body's lambdas and assignments introduce are template holes, fresh at each firing. Only glyph spellings
-(no letters: the parser names a declared operator as written, `|` not `or`), so prelude's `add(xs, x)` stays a function;
-an operand typed by a class leaves it to class_methods.warp. Dispatch is the rule engine's, so it costs no run time;
+Names the body's lambdas and assignments introduce are template holes, fresh at each firing. The parser names a
+declared overload `operator_<spelling>` (`operator_|`, `operator_as`; the class method glyphs `+ - * / % < > ≈ ~ #`
+stay bare), and only a name spelling a built-in operator (symbol_operator, word_operator) is one, so prelude's
+`add(xs, x)` stays a function; a built-in word (`as`, `mod`, `to` …) after `infix operator` overloads it, never
+declares a new operator (declared_operator). Kinds also `enum` (`is enum`). An operand typed by a class leaves it to
+class_methods.warp. Dispatch is the rule engine's, so it costs no run time;
 operands whose kind only the run time knows get the built-in, as the hand rules did.
 - the seed-built warp.wasm packs lib rules with the stage that has operator_rules, so a sugar file's overloads are baked
 - a std module holding only overloads (no `rewrite` line) is neither packed nor in rule_needs: add a rewrite line or
   extend those scans when one appears
+- a new overload in lib/ is read by the seed while it builds: a seed older than the parser form fails ("text of node"
+  of `infix operator as(…)` in lib/sugar/enums.warp), so such a lib change waits for a seed refresh
+- what stays a rule (card rewrite-rules' conclusion): forms that are not two operands around an operator (broadcasting's
+  `$f($x) where $x is vector`, phrases `$f each $xs`), and rules led by syntax rather than kinds (`??`/`?:` of a name,
+  ranges' `is not missing`, `$v as int where $v is case of $e`, the lambda composition `($it => $body) | $g`)

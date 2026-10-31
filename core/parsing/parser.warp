@@ -296,7 +296,8 @@ def operator_alias(words: list): list {
 	prefix = words.length > 0 and words#1 == "prefix"
 	if prefix { words = words[1 .. words.length] }
 	if not (words.length == 4 and words#1 == "operator" and words#3 == ":=") { return [] }
-	if is_operator_spelling(words#4) or (prefix and is_name_start(words#4#1)) then [words#2, words#4] else []
+	// a prefix alias names a function, the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
+	if is_operator_spelling(words#4) or (prefix and is_name_start(words#4#1) and name_end(words#4, 0, words#4.length) == words#4.length) then [words#2, words#4] else []
 }
 // An alias spelling a function, `√` of sqrt, no operator
 def spells_function(alias: list): bool := is_name_start(alias#2#1) and not is_operator_spelling(alias#2)
