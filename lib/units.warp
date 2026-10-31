@@ -30,6 +30,8 @@ class Quantity {
 	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
 	in(u) := to(u).shown()
 	shown() := amount / scale
+	// its amount in SI base units as a plain float: what a shader reads of it (decision no-units-in-shaders)
+	float() := amount as float
 	text() := quantity_text(this)
 	show() := quantity_text(this)
 }

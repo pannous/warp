@@ -181,6 +181,7 @@ instance_field_at_name = "instance_field_at"
 instance_place_name = "instance_place"
 is_class_instance_name = "is_class_instance"
 instance_show_name = "instance_show"
+instance_float_name = "instance_float"
 def class_depth(class_name: text): int { if class_name in module.parents then 1 + class_depth(module.parents[class_name]) else 0 }
 def made_classes(): list {
 	made = module.classes.keys.filter(class_name => instance_struct_prefix + class_name in module.class_structs)
@@ -296,9 +297,14 @@ def is_class_instance_code(f: Function) {
 }
 # instance_show(m): the text m's class shows it as by its show() (decision show-hook), ø when the program's classes
 # give none (class_methods.warp show·shown)
-def instance_show_code(f: Function) {
-	shown = module.functions.get(instance_show_word)
-	f.code = if shown == ø then [ref_null, gc_type(gc.node)] else boxed(call_values(shown, [TypedCode(ValueKind.Node, [op.local_get, 0])]))
+def instance_show_code(f: Function) { f.code = instance_converted_code(instance_show_word) }
+# instance_float(m): m as its class's float() gives it (`sin(2km)`), ø when the program's classes give none
+# (class_methods.warp float·hooked)
+def instance_float_code(f: Function) { f.code = instance_converted_code(HiddenWord.FloatHooked as text) }
+# the parameter as the program's conversion dispatcher named gives it, boxed; ø without that dispatcher
+def instance_converted_code(dispatcher: text): list {
+	converting = module.functions.get(dispatcher)
+	if converting == ø then [ref_null, gc_type(gc.node)] else boxed(call_values(converting, [TypedCode(ValueKind.Node, [op.local_get, 0])]))
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }
