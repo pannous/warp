@@ -1730,7 +1730,8 @@ operand_run(rule: Rule, origin: map, items: list): list? := {
 	if result == ø { return ø }
 	[#items, with_rightmost(with_leftmost(last, as_value(result)), items[#rule.pattern ..])]
 }
-is_infix_operation(n: Node): bool := n is key and key_of(n) != ø and (op_of(n) in arithmetic_operators or op_of(n) in ordering_operators)
+# a power binds tighter than a spaced unit: `4 m²` is 4 (m²), never (4 m)² (card str-str)
+is_infix_operation(n: Node): bool := n is key and key_of(n) != ø and op_of(n) != Op.Pow and (op_of(n) in arithmetic_operators or op_of(n) in ordering_operators)
 leftmost_operand(n: Node): Node := if is_infix_operation(n) then leftmost_operand(key_of(n)) else n
 with_leftmost(n: Node, operand: Node): Node := if is_infix_operation(n) then placed(Key(with_leftmost(key_of(n), operand), op_of(n), value_of(n)), n) else operand
 with_rightmost(n: Node, words: list): Node := {
