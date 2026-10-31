@@ -320,6 +320,12 @@ generic_typed_json(head: Node, source: Node, program: Node): Node? := {
 	typed_json(source, symbol(name[#prefix..]), program)
 }
 
+typed_json_source(source: Node): text := {
+	if not (source is text) { return as_code(source) }
+	text = "${source}"
+	"\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
+}
+
 # Generate typed JSON parsing from the class declared in the program.
 typed_json(source: Node, type_name: Node, program: Node): Node := {
 	for statement in program_statements(program) {
@@ -335,7 +341,7 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			}
 			checks = fields.map(field => "if not (typed_json_value[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
 			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
-			source_code = if source is text then to_json("${source}") else as_code(source)
+			source_code = typed_json_source(source)
 			return plain_node(parsed("(typed_json_value => { " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })(json(" + source_code + "))"))
 		}
 	}
