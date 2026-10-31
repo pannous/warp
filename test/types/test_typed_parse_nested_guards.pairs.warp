@@ -1,0 +1,3 @@
+# Typed JSON recursively rejects unknown fields and constructors.
+'class Address { city: text }; class User { address: Address }; try { parse("{address:{city:Ada, extra:1}}", User) } catch e { e.message }'	'unknown field address.extra'
+'class Address { city: text; init() {} }; class User { address: Address }; try { parse("{address:{city:Ada}}", User); false } catch e { true }'	'true'
