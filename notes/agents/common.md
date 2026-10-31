@@ -107,6 +107,11 @@ before asking a question). After a context swap, this file and your role file be
   (<hash>/stage-two.passed or .failed/; `self-check.sh --rebuild` runs it again). So never copy compilers by hand,
   never rebuild "to be sure", never use --force to get past a wait, and never kill another session's build. Every
   hit, miss, wait and failure is a line of <store>/rebuilds.log.
+  Only core/**, the BAKED files (compiler-inputs.sh) and the seed are a compiler's code; the rest of lib/ is data it
+  carries. A lib/-only change compiles nothing: rebuild.sh takes the stored compiler of the same code
+  (<store>/code/<baked hash>), rebakes lib/ into it and makes its runtime and modules (`miss-rebaking-<hash>`, about a
+  minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
+  costs no compiler build, a core one does.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
