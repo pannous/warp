@@ -19,6 +19,7 @@ Language-meaning questions that would go to the Interviewer go there too.
 | warp-quality | full-suite regressions, groups from "2 × T{n: 'x'}" on (emit-wasmtime landed 5044e2a7af) |
 | warp-shaders | use-sound (128 red suite lines; field vs outer word of the same name, Codex repro on branch datetime-arithmetic-fail) |
 | warp-units | units failing tests (lib/), scripts-self; units-rewrite-assign (core one-liner) waits for the user |
+| warp-operators (spawned 15:5x, tmux warp-operators) | rewrite-rules + union-later-member: rules whose meaning depends on operand kinds become typed operators, carefully, one at a time against a test baseline |
 | warp-integrator | seed e02b1cff (rebuild 446 → 225 s), full suite 302b5481cd: 3488/11643 failing |
 | Codex (cron 02/07/12/17/22:35) | notes/agents/codex_cards.txt; `retired:` lines are never continued (781e839056) |
 

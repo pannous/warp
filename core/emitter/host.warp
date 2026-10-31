@@ -114,10 +114,13 @@ def host_argument(value: TypedCode, kind: ValueKind): list {
 	if kind == ValueKind.Int { return host_int(value) }
 	converted(value, kind)
 }
-# `x!`, Rust's unwrap: a number or text is itself; a node may be data Rust runs as code (blocks.rs), which the core
+# `x!`, Rust's unwrap: a number or text is itself, and so is what a function taking nothing gives, `f!` of
+# `f := {1+2}` (a node where a sum may grow); any other node may be data Rust runs as code (blocks.rs), which the core
 # can't yet
-def unwrapped(value: TypedCode): TypedCode {
-	if value.kind == ValueKind.Node { return refuse("running a node as code (`x!`)") }
+def unwrapped(body: Body, n: Node): TypedCode {
+	value = expression_code(body, n)
+	called = n is symbol and name_of(n) not in body.names and name_of(n) in module.functions and #module.functions[name_of(n)].signature.parameters == 0
+	if value.kind == ValueKind.Node and not called { return refuse("running a node as code (`x!`)") }
 	value
 }
 

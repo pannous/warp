@@ -9,8 +9,8 @@ JSON_NUMBER_CHARACTERS = "+-0123456789.eE"
 JSON_ESCAPED = {"n": "\n", "t": "\t", "r": "\r", "b": chr(8), "f": chr(12)}
 JSON_ESCAPES = {"\"": "\\\"", "\\": "\\\\", "\n": "\\n", "\t": "\\t", "\r": "\\r"}
 JSON_LITERALS = {"true": yes, "false": no, "null": ø}
-// the types of a key that is no instance of a class
-KEY_TYPES = ["code", "key"]
+// the types of a key that is no instance of a class: code, an operation inside code (`b + 1` of `a * (b + 1)`)
+KEY_TYPES = ["code", "key", "operation"]
 // the operators of code that are entries of an object, `{a: 1+2}` is {"a":{"+":[1,2]}}
 JSON_ENTRY_OPERATORS = ["", ":", "=", ":="]
 HEX_DIGITS = "0123456789abcdef"

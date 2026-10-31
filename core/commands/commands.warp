@@ -6,7 +6,7 @@ use os
 use file
 
 # warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
-VERSION = "1.5.2"
+VERSION = "1.6.0"
 REPL_PROMPT = "warp> "
 NATIVE = "the native warp"
 HELP_COLUMN = 38
