@@ -27,3 +27,7 @@ Gotchas met:
 - Finding where a module rule fires in the compiler: give its template a marker call
   (`=> unit_rule_fired_here($bound)`), run `warp lower compiler.warp` from core/ with WARP_LIB=<worktree>/lib (3 min,
   no rebuild), grep the marker (card module-rule-trace for a real trace).
+- A module rule loads only for a program naming its needed word: the pattern's first word, else the words of its
+  `$h in [...]` listings. An operator (`is`) is no word, so `rewrite $e $u is $t` needs a listing, else it never fires.
+- Rules apply bottom-up: `3 cm is length` parses as 3 (cm is length), so `cm is length` is tried first; the dimension
+  rule skips a unit-led left side (rule word unit_led) and `$e $u is $t` moves the unit to its amount first.
