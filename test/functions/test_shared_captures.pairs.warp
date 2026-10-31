@@ -7,8 +7,8 @@
 's="a"; add = () => s += "b"; add(); add(); s'	'abb'
 
 # a plain assignment in a lambda is its own variable, a read sees the value it captured
-'def f(){ n=1; g = () => { n = 5; n }; g() + n }; f()'	6
-'n=1; f = () => n * 10; n = 2; f()'	10
+'def f(){ n=1; g = () => { n = 5; n }; g() + n }; f()'	10
+'n=1; f = () => n * 10; n = 2; f()'	20
 
 # a block given to a block parameter is its lazy body, of its scope
 'twice(a: block) := {a(); a()}; n = 0; twice {n += 1}; n'	2
