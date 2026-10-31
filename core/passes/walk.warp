@@ -110,18 +110,24 @@ global marked_names = {}
 marked(attribute: any, n: Node): Node := {
 	name = if n is symbol then name_of(n) else if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ø
 	if attribute in read_attributes and name != ø { marked_names[attribute] = (marked_names.get(attribute) ?? []) + [name] }
-	# `function f`, `&f` (parser.warp function_reference): the function as a value, also where a group would call it, `(function f)`
-	if attribute == function_reference_mark and n is symbol and not name_of(n).starts_with("$") { return call_of(closure_word, [n]) }
 	n
 }
 function_reference_mark = "function_reference"
+# `(function f)`: the function named alone in a group, its value as `function f` is (parser.warp function_reference),
+# never the call `(f)` the group would make without its mark
+# (a rule's `(function $d)` keeps its group: its hole alone would match anything)
+is_referenced_alone(n: Node): bool := {
+	if not (is_group(n) and bracket_of(n) == "(" and #n == 1 and type(n#1) is key and key_of(n#1) == symbol(attribute_word)) { return no }
+	marking = value_of(n#1)
+	marking#1 == function_reference_mark and marking#3 is symbol and not name_of(marking#3).starts_with("$")
+}
 plain_parts(n: Node): Node := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) { return marked(right#1, plain_node(right#3)) }
 		if left == opaque_symbol { return if is_empty_group(right) and right#2 not in ["{", "["] then ø else n }
 		Key(plain_node(left), op, plain_node(right))
 	}
-	List(items, bracket, separator): List(items.map(plain_node), bracket, separator)
+	List(items, bracket, separator): if is_referenced_alone(n) then plain_node(items#1) else List(items.map(plain_node), bracket, separator)
 	// lowering reads a one-character literal as a text, as node_of does
 	Char(c): "" + c
 	_: n

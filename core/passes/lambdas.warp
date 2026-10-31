@@ -238,7 +238,7 @@ passed_value(argument: Node, at: int, callee: Node, locals: list, lowering: Lowe
 # `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name; a call
 # of any other expression calls the function value it gives: `(x => x*2)(5)`, `adder(5)(1)`, `fs[0](3)`
 lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
-	if #call == 0 or call#1 == symbol(closure_word) { return n }
+	if #call == 0 { return n }
 	given = arguments_of(call)
 	arguments = (1 to #given).map(at => passed_value(given#at, at, call#1, locals, lowering))
 	signature = call#1
