@@ -6,8 +6,10 @@ use "bridge.warp"
 use "lists.warp"
 use "show.warp"
 use "types.warp"
-# `a + b` of values known only at run time: lists and texts join, numbers add
-node_add(a: Node, b: Node): Node := {
+use "nodes.warp"
+# `a + b` of values known only at run time: lists and texts join, numbers add, a marked number's mark kept
+node_add(a: Node, b: Node): Node := marks_kept(node_sum(a, b), a, b)
+node_sum(a: Node, b: Node): Node := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
 	# `+=` growing the sum in place leaves the list untouched; beside a text "ø"; beside a number Rust fails
 	if is_null(a) and is_null(b) { return a }
@@ -20,6 +22,18 @@ node_add(a: Node, b: Node): Node := {
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_sum(a, b) }
 	float_of_node(a) + float_of_node(b)
 }
+# the result of arithmetic on boxed values keeps a marked operand's mark (decision marks-survive-arithmetic): the left
+# one's, else the right one's, where it marks a number of the result's Kind; a type's mark lies above a yes/no's,
+# which never carries
+marks_kept(result: Node, a: Node, b: Node): Node := {
+	mark = type_mark(a)
+	if mark == 0 or mark % KindUnit.Info != kind_code(result) { mark = type_mark(b) }
+	kept_mark(result, mark)
+}
+# the value's type mark (its marked kind), 0 for none: a type's mark lies above a yes/no's, which never carries
+type_mark(x: Node): int := if is_null(x) or code_bit(x) != 0 or info_byte(x) * KindUnit.Info + Kind.Int <= Marked.Bool then 0 else marked_kind(x)
+# the result marked so where the mark is of its Kind and it is a plain number, never a ratio or a big int
+kept_mark(result: Node, mark: int): Node := if mark == 0 or is_null(result) or mark % KindUnit.Info != kind_code(result) or not (kind_code(result) == Kind.Float or is_plain_int(result)) then result else with_kind(result, mark)
 # a + b, a - b, a * b of two plain ints held boxed (nats): past 64 bits the big int they make (D16, the extended runtime's exact words)
 grown_sum(a: int, b: int): Node := if sum_overflows(a, b) then extended_sum(a, b) else a + b
 grown_difference(a: int, b: int): Node := if difference_overflows(a, b) then extended_difference(a, b) else a - b

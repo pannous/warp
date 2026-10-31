@@ -52,6 +52,9 @@ def default_value(body: Body, f: Function, i: int, count: int): TypedCode {
 	expression_code(body, default#1)
 }
 def call_values(f: Function, values: list): TypedCode {
+	# a marked number given an unannotated parameter is given boxed, where its static mark runs out (decision
+	# marks-unboxed-first): `k(x) := x` of an Angle keeps it an Angle
+	values = range_list(#values).map(i => if values[i].mark != 0 and i < #f.signature.parameters and f.signature.parameters[i].type_name == "" then TypedCode(ValueKind.Node, boxed(values[i])) else values[i])
 	if f.kinds == ø { compile_function(f, values.map(v => v.kind)) }
 	# a function still compiling gives the kind it declares; without one its result is not known yet, and the caller
 	# is read again once every function is compiled
@@ -62,7 +65,7 @@ def call_values(f: Function, values: list): TypedCode {
 		widen_parameter(f, i, values[i]#1)
 		code += passed(f, i, values[i])
 	}
-	TypedCode(result, code + call_code(f.index))
+	TypedCode(result, code + call_code(f.index), if result == ValueKind.Node then 0 else declared_mark(f))
 }
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module). A reading that widened
@@ -110,7 +113,13 @@ widen_parameter(f: Function, i: int, kind: ValueKind) := {
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_body(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [], {})
-	for i in 0..<#f.signature.parameters { local_index(scope, parameter_local_name(scope, f.signature.parameters[i].name, i), f.kinds[i]) }
+	for i in 0..<#f.signature.parameters {
+		parameter = f.signature.parameters[i]
+		name = parameter_local_name(scope, parameter.name, i)
+		local_index(scope, name, f.kinds[i])
+		# a parameter of a marked type, `a: Angle`, holds the number unboxed, its mark known (decision marks-unboxed-first)
+		if parameter.type_name in module.marks and f.kinds[i] != ValueKind.Node { scope.marks[name] = module.marks[parameter.type_name] }
+	}
 	scope
 }
 # every parameter has a local of its own: a name given twice, `middle(_, value, _)`, names only the first
@@ -140,16 +149,29 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
 # `… as text`, or the block `{the result: text = …; the result}` (definitions.warp result_held)
-declared_result(f: Function): any := cast_kind(f.body)
-cast_kind(n: Node): any := {
-	if is_key(n, Op.As) and value_of(n) is symbol {
-		kind = annotated_kind(name_of(value_of(n)))
+declared_result(f: Function): any := {
+	declaration = result_declared(f.body)
+	if declaration == ø { return ø }
+	if is_key(declaration, Op.As) {
+		kind = annotated_kind(name_of(value_of(declaration)))
 		return if is_held_kind(kind) then kind else ValueKind.Node
 	}
+	result_type_kind(held_result_type(declaration))
+}
+# the mark of a number type the definition declares it gives, `f(c: Color): Color := c`, so its caller holds the
+# result unboxed with its mark; 0 for any other result
+declared_mark(f: Function): int := {
+	declaration = result_declared(f.body)
+	if declaration == ø { return 0 }
+	type = if is_key(declaration, Op.As) then name_of(value_of(declaration)) else held_result_type(declaration)
+	module.marks.get(type) ?? 0
+}
+# the part of a body that declares its result: `… as T`, or `the result: T = …` of a block, ø when none does
+result_declared(n: Node): Node? := {
+	if is_key(n, Op.As) and value_of(n) is symbol { return n }
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
-	held = held_result_type(n#1)
-	if held != ø { return result_type_kind(held) }
-	cast_kind(n#(#n))
+	if held_result_type(n#1) != ø { return n#1 }
+	result_declared(n#(#n))
 }
 # `T` of `the result: T = …`, else ø
 held_result_type(n: Node): any := {
@@ -293,7 +315,8 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f.name, i) in f.widened then f.widened[parameter_key(f.name, i)] else parameter_kinds[i])
 		f.result = pending
 		first = new_body(f)
-		result = expression_code(first, statements_block(f.body)).kind
+		given = expression_code(first, statements_block(f.body))
+		result = given.kind
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø and (result == pending or held_as(result, analyzed_result_kind(f))) { result = analyzed_result_kind(f) }
@@ -301,6 +324,9 @@ function_compiled(f: Function, argument_kinds: list): any := {
 	# gave in a first reading of a cycle
 	if result != no_kind and declared_result(f) != ø { result = declared_result(f) }
 	if result == ValueKind.Mixed { return refuse(f.name + " giving a " + kind_spelling(result)) }
+	# a body giving a number of a marked type gives it boxed, so its mark survives the call (decision
+	# marks-unboxed-first: no inference of the result's mark)
+	if given.mark != 0 and declared_result(f) == ø { result = ValueKind.Node }
 	# a body ending in a statement (a loop, a print) gives ø, as Rust's does; one giving only the result of a call
 	# still compiling gives a node
 	f.result = if result == no_kind or result == pending then ValueKind.Node else result
@@ -314,7 +340,7 @@ function_compiled(f: Function, argument_kinds: list): any := {
 body_code(f: Function) := {
 	scope = new_body(f)
 	value = expression_code(scope, statements_block(f.body))
-	value = TypedCode(value.kind, position_code(scope, f.body) + value.code)
+	value = TypedCode(value.kind, position_code(scope, f.body) + value.code, value.mark)
 	f.code = if f.gives_nothing then value.code + [ref_null, gc_type(gc.node)] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order

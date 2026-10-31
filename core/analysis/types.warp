@@ -14,5 +14,6 @@ enum ValueKind { Unknown = "", Int = "int", Float = "float", Text = "text", Code
 type View = list or int or float or bool
 # a type word, one naming the elements of a list or map as well: `int`, `list of int`, `map of text`
 type TypeWord = text
-# a value's code in the emitter: its kind and its wasm bytes, `TypedCode(ValueKind.Int, [op.i64_const, 7])`
-class TypedCode { kind: ValueKind; code: list }
+# a value's code in the emitter: its kind and its wasm bytes, `TypedCode(ValueKind.Int, [op.i64_const, 7])`; a number
+# of a marked type (`type Angle = float`, int_types.warp) held unboxed carries its marked kind, stamped when boxed
+class TypedCode { kind: ValueKind; code: list; mark: int = 0 }
