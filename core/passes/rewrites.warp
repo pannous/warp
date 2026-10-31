@@ -1148,8 +1148,8 @@ list_giving_words = ["element_wise_any", "each_any", "map"]
 may_be_list(code: Node, scope: text, vectors: list): bool := {
 	if code is symbol { return vectors#1.has(scoped_name(scope, name_of(code))) }
 	if is_group(code) and bracket_of(code) == "[" { return yes }
-	# a range, `1 to 4`, `1..4`, is a list of its numbers
-	if is_key(code, Op.To) or is_key(code, Op.Range) { return yes }
+	# a range, `1 to 4`, `1..4`, is a list of its numbers; `xs...`, read `xs to ø`, is a rest parameter's mark
+	if (is_key(code, Op.To) or is_key(code, Op.Range)) and rest_name(code) == ø { return yes }
 	if is_key(code, Op.Dot) and value_of(code) is symbol { return is_swizzle_word(name_of(value_of(code))) }
 	# a value in parentheses, `sqrt([4, 9])`: as the value
 	if is_round(code) and #code == 1 and may_be_list(code#1, scope, vectors) { return yes }

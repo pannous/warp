@@ -706,7 +706,31 @@ def heads_block(p: Parser, found: list): bool {
 	if found.length == 0 or is_block(found#(found.length)#1) or found#(found.length)#2 != Separator.Space { return false }
 	first = found.length
 	while first > 1 and found#(first - 1)#2 == Separator.Space { first = first - 1 }
-	found#first#1 is symbol and BLOCK_HEADS.has(name_of(found#first#1))
+	found#first#1 is symbol and BLOCK_HEADS.has(name_of(found#first#1)) and body_follows(p)
+}
+// whether the statement goes on to a body, `{` or `:` outside brackets and texts before its end: without one a block
+// head is an ordinary call, the program's own `twice square 3` of a twice(f, x) beside the prelude's twice(body: block)
+def body_follows(p: Parser): bool {
+	depth = 0
+	at = p.at
+	while at < p.n {
+		c = p.code[at]
+		if c == '"' or c == '\'' {
+			at = at + 1
+			while at < p.n and p.code[at] != c { at = at + 1 }
+		} else if depth == 0 and (c == '{' or c == ':') {
+			return true
+		} else if c == '(' or c == '[' {
+			depth = depth + 1
+		} else if c == ')' or c == ']' {
+			if depth == 0 { return false }
+			depth = depth - 1
+		} else if depth == 0 and (c == '\n' or c == ';' or c == '}') {
+			return false
+		}
+		at = at + 1
+	}
+	false
 }
 def head_item(p: Parser): Node := if body_word_width(p) == 1 then listed(Bracket.Curly, Separator.Semicolon, [colon_body(p, 1)]) else header_expression(p, CONDITION_POWER)
 def follows_clause_word(found: list): bool := found.length > 0 and ends_with_clause_word(found#(found.length)#1)

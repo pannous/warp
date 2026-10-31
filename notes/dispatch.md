@@ -140,3 +140,13 @@ as a list keeps no item type at run time. An empty list fits every variant and t
 (the overload strips the cast: card cast-list). The plural of a declared type is a list of it as
 `ints` is of int. `xs: list of int` and `xs: int list` in a head fold to the one parameter `xs:"list of int"` early
 (declaration_forms lower_list_parameters), so arity, overloads and the analyzer see one parameter.
+
+## Class-method dispatchers and argument kinds (card use-sound, 2026-10-31)
+A function compiles once, with the kinds of its first call. A class's routed method (position, index, float, a word
+named like a library word) is first called from its dispatcher's instance branch, so the dispatcher decides its kinds:
+a dispatcher with a fallback takes `any` in every place (class_methods.warp method_dispatcher), or `m[name] = v` of a
+map beside a class's `position(p, v)` compiled that method with a text p and refused the program. An element read
+`xs#p` is no operation of numbers: position dispatchers take no promotion nor float contagion, which indexed by a
+float once Quantity got float(). Both showed up only as `use sound` failing, far from the cause: bisect such a case by
+swapping lib files under a store compiler (/Volumes/Build/compilers/<hash>) rather than shrinking the program, because a
+shrunk library auto-loads the full module again for every word it lost.
