@@ -33,7 +33,7 @@ def instance_value(body: Body, class_name: text, fields: list): TypedCode {
 def positional_instance(body: Body, class_name: text, arguments: list): TypedCode {
 	field_names = if class_name in module.classes then module.classes[class_name].keys else []
 	slots = placed_arguments(field_names, arguments)
-	if not (slots is list) { return refuse("an instance of " + class_name + " given more values than fields") }
+	if slots == ø { return refuse("an instance of " + class_name + " given more values than fields") }
 	given = range_list(#slots).filter(i => slots[i] != ø)
 	instance_of_fields(body, class_name, given.map(i => field_names[i]), given.map(i => slots[i]#1))
 }
