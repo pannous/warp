@@ -102,6 +102,15 @@ ns() := known_unit("ns")
 rewrite $e $u => $bound where $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °] and $bound = unit_bound($e, $u)
 // `3km as m`: the quantity shown in that unit
 rewrite $q as $u => $q.to($u.unit) where $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
+// `unit furlong := 201.168m`: a program's own unit, the quantity of one of it shown by its name (`1km as furlong` waits
+// for card module-rule-unnamed), `quantity(1, "furlong")` (decision unit-definitions)
+rewrite (unit $name := $value $u) => (unit $name := ($value $u))
+rewrite (unit $name := $value) => $name = defined_unit($written, $value) where $name is symbol and $written = spelled($name)
+global program_units = {}
+defined_unit(name: text, one: Quantity) := {
+	program_units[name] = one
+	measured(one.amount, one.dims, name, one.amount)
+}
 // an angle is a number of radians, as SI's radian is dimensionless (decision degree-constant), marked as an Angle that
 // shows in degrees (decision marks-survive-arithmetic): `60°` is 1.0472 to sine and the GPU and prints 60°,
 // `30° * 2` too
@@ -139,6 +148,7 @@ unit_named(u: text) := {
 	}
 	if u.ends_with("²") or u.ends_with("^2") { return unit_named(u.replace("^2", "").replace("²", "")) ^ 2 }
 	if u.ends_with("³") or u.ends_with("^3") { return unit_named(u.replace("^3", "").replace("³", "")) ^ 3 }
+	if program_units.has(u) { return defined_unit(u, program_units[u]) }
 	symbol = unit_symbol(u)
 	if symbol == ø { raise "unknown unit: " + u }
 	known_unit(symbol)
