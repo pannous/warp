@@ -105,6 +105,8 @@ rewrite $xs $u => $xs.map(item => item * $u) where $xs is list and $u is symbol 
 // after an expression belongs to its last amount, through comparisons, sums and assignments: `x > 1500 m` is
 // x > 1500m (wiki/unit.md, lib/rule_words.warp unit_bound). A unit is a word, never the char 's' of `f(at + 1, 's')`
 rewrite $e $u => $bound where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $bound = unit_bound($e, $u)
+// `4 m²`, `2 m³`: a number before a unit's power multiplies the power
+rewrite $e $u^$n => $e * $u^$n where $e is number and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `3km as m`: the quantity shown in that unit; `3 km as m`, parsed 3 (km as m), takes its amount first
 rewrite $q as $u => $q.to($u.unit) where not unit_led($q) and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 rewrite $e $u as $t => ($e $u) as $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
