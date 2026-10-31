@@ -47,7 +47,7 @@ hum 3 each: 4' 12
 
 # a_call_without_brackets_names_arguments
 is! 'f(a, b) := a - b
-f b=1 a=5' 4
+f b: 1 a: 5' 4
 is! 'f(a, b) := a - b
 f b:1 a:5' 4
 
