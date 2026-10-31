@@ -51,6 +51,19 @@ runs the rest; a success removes the record. That is for a fix outside the input
 read-only disk): a fix of the sources changes the hash, and the earlier steps' artifacts bake those sources in, so that
 build starts at the seed.
 
+## Build records (card build-keeps, user 2026-10-31)
+
+Every build is self-contained and measured: <store>/<hash>/<compiler>.record/ (a failed build's in its .failed/record/,
+self-check's stage two in <hash>/stage-two.record/) holds
+- inputs.txt: hash, baked hash, tree, commit and branch, uncommitted core/lib files, the seed (sha, kept in
+  <store>/seeds/), the warp binary (sha, path), the sha of every input file; sources.tar.gz: those files themselves
+- build.log: the whole output
+- time: `/usr/bin/time -l` of the compile (CPU, wall, peak memory); rebuilds.log's `built` line carries its CPU
+- profile.txt, sample.gz, perf.map: the function profile of the whole run (WARP_PROFILE=perfmap and macOS sample every
+  10 ms through scripts/profile.sh -a, from scripts/build-slot.sh WARP_BUILD_RECORD): no CPU cost, a few % wall.
+So a build's time and hotspots are read from its record, never by building again; a lib-only rebake is recorded too.
+Records start with build-keeps (2026-10-31); older store entries have only their one-line .inputs.
+
 ## The inputs hash (scripts/compiler-inputs.sh <lib> [<rust fingerprint>])
 
 16 hex digits. Paths are hashed relative to lib/, so the same inputs give the same hash in any tree. It covers:
