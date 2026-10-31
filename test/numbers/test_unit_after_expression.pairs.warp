@@ -1,0 +1,8 @@
+# a unit after an expression belongs to its last amount, binding tighter than a comparison; `as` converts
+# (wiki/unit.md "Runs today", card work-down)
+'x = 2 km; x > 1500 m'	true
+'x = 2 km; x = x + 500 m; x == 2500 m'	true
+'x = 3 m; y = x * 2; y < 7 m'	true
+'distance := 42 km; str(distance)'	'42km'
+'str(3km as m)'	'3000m'
+'str(2500m as km)'	'2.5km'
