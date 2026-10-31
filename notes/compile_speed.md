@@ -76,6 +76,9 @@ peak RSS 942 -> 625 MB (-34%), all from two walks:
 - index_positions copied every name the program assigns (most counting nothing) into each function's scope: a scope
   now passes on only the names that count (a function's own `i = t.find(x)` counts, its local): index_positions
   17.9 -> 1.4 s (stage two of 9a845e21fccdf599, on a loaded machine).
+- type_tests and plain_enums copied the whole program's scope into each function: a function gets only the
+  entries its own names ask for (scope.warp names_seen): type_tests 10.0 -> 0.9 s, plain_enums 10.7 -> 3.5 s; stage two
+  166 s CPU, 580 MB (2efb9b98f2f3eca9).
 def-first (every definition starting with `def`) gained nothing measurable and is parked on branch
 function-definition-core; its two collection passes were not built (the collectors they'd replace are <0.5% each, the
 definition gatherers ~1-1.7%; a table collected after with_used goes stale as later passes add, rename and lift
