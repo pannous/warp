@@ -10,6 +10,12 @@ CPU seconds between phase markers:
 | with_expected_type_uses fixed (9b01b1bb2a) | 230 s |
 
 ## How to measure
+- Profiling, first: `scripts/profile.sh [-s <seconds>] <warp words…>`, e.g. `scripts/profile.sh -s 90 rebuild pure`
+  (WARP_LIB/WARP_SEED as for any run). The run gets WARP_PROFILE=perfmap (the native driver writes
+  /tmp/perf-<pid>.map), macOS's sample takes its main thread's stacks, and the script prints each wasm function's own
+  samples and those with its callees: no rebuild, no markers. `-r <pid>` reports a kept data/profile/<pid>.sample
+  again. sample manages ~30 ms a sample on wasmtime's threads, so profile a minute or more. Its first find: 55% of a
+  parse in alias_at → longest_spelled_at, 39% in operator_at → spelled_operator_at (2026-10-31).
 - Phase markers: a compiler built with `timed(label)` calls (`print "§T " + label` when WARP_TIMES is set) in
   passes.warp lowered_node (per pass index), with_used, compiler.warp; branch compile-times (scratch, never landed).
 - `data/phase_times.py <command…>` (in that branch) reads the process's CPU (ps) at each marker and prints the spans,
