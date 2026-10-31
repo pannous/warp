@@ -15,12 +15,12 @@ Language-meaning questions that would go to the Interviewer go there too.
 ## Sessions
 | session | card / task |
 |---|---|
-| warp-speed (fresh 06:55, the old one ran out of context; handover notes/handover/warp-speed.md) | function-definition-core (def-first) → phase-markers |
-| warp-quality (was warp-rule-words-removal) | use-os → test-modules → hotspots from warp-speed (programs-read landed 70a9bfa89a) |
-| warp-units (spawned by warp-shaders at the user's request; https://claude.ai/code/session_018Xoawk8furRW4NM9fgYtUc) | units-unknown-name, lib/units.warp only: plurals, mph, SI prefixes, °F, ppi/dot; asks before the min/extrema ambiguity |
-| warp-shaders | sample-gaps-sound, lib/ only (compiler-parse-timing landed 60c420b39c); core/ left quiet for warp-speed |
-| warp-integrator | full suites held tonight for warp-speed's measurements; seed refresh after lib-hash-rebake lands |
-| Codex (cron 02/07/12/17/22:35) | notes/agents/codex_worker.sh, 4 rounds per firing; typed-parse and dot-product parked on their branches |
+| warp-speed | speed work stopped by the user at 166 s (820 at the start of 10-31); full-suite regressions, groups down to "3 × ø" (notes/full_suite_2026-10-31.md) |
+| warp-quality | full-suite regressions, groups from "2 × T{n: 'x'}" on (emit-wasmtime landed 5044e2a7af) |
+| warp-shaders | use-sound (128 red suite lines; field vs outer word of the same name, Codex repro on branch datetime-arithmetic-fail) |
+| warp-units | units failing tests (lib/), scripts-self; units-rewrite-assign (core one-liner) waits for the user |
+| warp-integrator | seed e02b1cff (rebuild 446 → 225 s), full suite 302b5481cd: 3488/11643 failing |
+| Codex (cron 02/07/12/17/22:35) | notes/agents/codex_cards.txt; `retired:` lines are never continued (781e839056) |
 
 Retired tonight: warp-fixer, warp-wgsl, warp-exact-decimal-big, warp-cards, warp-diff-core, warp-build-failed-store
 (landed 06d61d3be1), warp-interviewer (archived by the user).
