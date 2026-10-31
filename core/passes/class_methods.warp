@@ -123,7 +123,7 @@ methods_lifted(program: Node): Node := {
 		owner.methods = owner.methods + [as_operator_method(definition)]
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
-	for name in classes.keys { classes[name].methods = equality_derived(positions_derived(classes[name].methods, operator_table), operator_table) }
+	for name in classes.keys { classes[name].methods = equality_derived(name, positions_derived(classes[name].methods, operator_table), operator_table) }
 	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 and not respelled { return program }
@@ -432,12 +432,14 @@ position_named(method: Node, operator_table: map): Node := {
 	name = if #method_parameters(method) == 2 then word + "·assigned" else word
 	Key(call_of(name, method_parameters(method)), Op.Define, value_of(method))
 }
-# a class ordering by compare(other) and spelling no == is equal where compare gives 0: `equal(other) := self.compare(other) == 0`
-equality_derived(methods: list, operator_table: map): list := {
+# a class ordering by compare(other) and spelling no == is equal where compare gives 0, to an instance of its own:
+# `equal(other) := other is C and self.compare(other) == 0` (`time == now` is no, not a compare of a type value)
+equality_derived(class_name: text, methods: list, operator_table: map): list := {
 	words = methods.map(defined_word)
 	if ordering_method not in words or words.any(word => spells_operator(word, "==", operator_table)) { return methods }
 	other = symbol("other")
-	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0))]
+	compared = Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0)
+	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(Key(other, Op.Is, symbol(class_name)), Op.And, compared))]
 }
 owns_operator(declared: Declared, glyph: text, operator_table: map): bool := declared.methods.any(method => spells_operator(defined_word(method), glyph, operator_table))
 spells_operator(word: any, glyph: text, operator_table: map): bool := word is text and spelled_operator(operator_table, word) != ø and operator_table[word]#2 == glyph

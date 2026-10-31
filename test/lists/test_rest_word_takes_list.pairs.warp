@@ -1,0 +1,4 @@
+# a word taking any number of values takes a list as one value, never each of its items
+'xs = [1, 2]; print(xs)'	ø
+'xs = [1, 2]; str(xs)'	'[1, 2]'
+'xs = [1, 4]; sqrt(xs)'	[1, 2]

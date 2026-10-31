@@ -44,12 +44,13 @@ formula and release build set CARGO_NET_OFFLINE=false.
 
 ## At a release
 1. Bump `version` in Cargo.toml, commit, push main.
-2. `git tag v<version> && git push origin v<version>`: the Release workflow builds the binaries, then (job
-   `compilers`, by the linux binary from the tag's lib/) the warp-written compiler warp.wasm and warp-self.wasm
-   (the bootstrap seed, user 2026-10-22; also release assets), then (job `tarballs`) one tarball per platform holding
-   the binaries, both compilers and lib/ side by side; Rust CI tests the tag. An installed warp finds lib/ and the
-   compilers next to its binary or in <prefix>/share/warp (Homebrew's pkgshare, deb/rpm's /usr/share/warp, the wheel's
-   data) and never builds a compiler (card installed-compilers).
+2. `git tag v<version> && git push origin v<version>`: the Release workflow (.github/workflows/release.yml) makes a
+   draft release, builds the compilers from the tag's lib/ by the newest seed (job `compilers`), then one tarball per
+   platform (job `native`: the native warp, the compilers and lib/ side by side), then the .deb and .rpm. Each job's
+   warp is the previous release's native warp rebuilt from the tag's core/native first (scripts/release-bootstrap.sh,
+   run from the workflow's own commit, so an existing tag gets a fixed bootstrap: `gh workflow run release.yml -f
+   tag=v<version> [-f dry=true]`, never a moved tag). An installed warp finds lib/ and the compilers next to its binary
+   or in <prefix>/share/warp and never builds a compiler (card installed-compilers).
 3. When the Release run is green (all binaries uploaded): `packaging/homebrew/update_formula.sh <version>` writes the
    version and each binary's sha256 into the formula and copies it to the local tap; commit here, push the tap.
 4. Test: `HOMEBREW_NO_AUTO_UPDATE=1 brew reinstall pannous/tap/warp && brew test pannous/tap/warp && brew style pannous/tap/warp`,
