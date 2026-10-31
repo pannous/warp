@@ -339,6 +339,8 @@ decimal_text(numerator: int, denominator: int) := {
 	}
 	text
 }
+// `x as decimal` (lib/sugar/arithmetic.warp): the decimal digits of x, its period overlined
+as_decimal(x: number) := decimal_text(numerator(x), denominator(x))
 // x as a fraction, by its continued fraction (rust-harness:src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
