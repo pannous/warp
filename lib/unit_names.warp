@@ -1,7 +1,7 @@
 // The units by name (lib/units.warp's table, card units-unknown-name): each symbol's SI amount and dimension, the SI
 // prefixes any SI unit takes (`Gs`, `µg`, `dam`, `kK`), the long names (`kilometer`) and one plural rule (`inches`).
-// Plain data and text words, so the compiler reads them too: lib/rule_words.warp's unit_spelled tells at compile
-// time which words after a number are units
+// Plain data and text words: `quantity(3, "kilograms")` is 3kg, `quantity(212, "°F")` 100°C. Written as literals
+// (`1 Gs`, `3 kilometers`) they wait for card headless-module-rules (branch headless-module-rules)
 
 // a dimension packs the power of each base quantity, one byte each (length + 256·mass + 65536·duration …), so
 // multiplying quantities adds their dimensions

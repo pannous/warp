@@ -99,11 +99,6 @@ ns() := known_unit("ns")
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is
 rewrite $n $u => $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
 rewrite ($x = $n) $u => $x = $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
-// every other unit a word after a number spells, prefixed or plural, a word the program binds nothing to (`1 Gs`,
-// `3 kilometers`, glued `212°F`): the quantity of it, `quantity(1, "Gs")` (lib/unit_names.warp)
-rewrite $n $u => quantity($n, $written) where $n is number and $u is unbound and $written = unit_spelled($u)
-rewrite ($x = $n) $u => $x = quantity($n, $written) where $n is number and $u is unbound and $written = unit_spelled($u)
-rewrite $n * $u => quantity($n, $written) where $n is number and $u is unbound and $written = unit_spelled($u)
 // an angle is a number of radians, as SI's radian is dimensionless (decision degree-constant), marked as an Angle that
 // shows in degrees (decision marks-survive-arithmetic): `60°` is 1.0472 to sine and the GPU and prints 60°,
 // `30° * 2` too

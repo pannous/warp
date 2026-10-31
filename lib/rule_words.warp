@@ -4,8 +4,6 @@
 # holes bound, `$program` the whole program, and runs inside the compiler.
 # warp functions as one WGSL shader (lib/prelude.warp paint rules) are lib/wgsl.warp's words
 use wgsl
-# the unit spellings (lib/units.warp's rules)
-use unit_names
 
 # where a path parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
 parameter_ends = ":(?*+"
@@ -23,14 +21,6 @@ path_parameter(part: text): text := {
 
 # `users` → "users": a name as the text it is spelled by
 spelled(name: Node): text := "${name}"
-
-# `kilograms` → "kg", `Gs` → "Gs": the symbol of a unit a word after a number spells, prefixed or plural
-# (lib/unit_names.warp); ø when it spells none or lib/units.warp defines the word itself (`km`, its rules' own)
-unit_spelled(word: Node): text? := {
-	written = "${word}"
-	if not (word is symbol) or "units" in (word_index(word_index_file()).get(written) ?? []) { return ø }
-	unit_symbol(written)
-}
 
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
@@ -311,7 +301,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_spelled: unit_spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {

@@ -11,7 +11,7 @@
 # seed, the rest of lib/ left out: two lib/ trees of one baked hash compile compiler.warp alike, so a self test passed
 # for one holds for the other (scripts/rebuild.sh self). --baked-files: BAKED, one a line (scripts/smoke.sh).
 set -euo pipefail
-BAKED=(prelude.warp aliases.warp math.warp rule_words.warp wgsl.warp unit_names.warp)
+BAKED=(prelude.warp aliases.warp math.warp rule_words.warp wgsl.warp)
 [ "${1-}" = --baked-files ] && { printf '%s\n' "${BAKED[@]}"; exit 0; }
 lib=$(cd "${1:?usage: scripts/compiler-inputs.sh <lib> [-v] [--baked] | --baked-files}" && pwd)
 shift

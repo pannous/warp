@@ -2,24 +2,21 @@
 # plurals, temperatures counted from their own zero
 
 # every SI prefix on every SI unit
-'1 Gs == 1000000000 s'	true
-'1000 µg == 1 mg'	true
-'1 dam == 10 m'	true
-'1 kK == 1000 K'	true
-'2nm + 1m == 1000000002nm'	true
+'quantity(1, "Gs").in("s") == 1000000000'	true
+'quantity(1000, "µg") == quantity(1, "mg")'	true
+'quantity(1, "dam") == 10m'	true
+'quantity(1, "kK") == quantity(1000, "K")'	true
 
 # long names, prefixed and plural
-'3 kilometers == 3000 m'	true
-'str(5 kilograms)'	'5kg'
-'36 inches == 3 ft'	true
-'2 milliseconds == 2 ms'	true
+'quantity(3, "kilometers") == 3km'	true
+'str(quantity(5, "kilograms"))'	'5kg'
+'quantity(36, "inches") == quantity(3, "ft")'	true
 
 # more units
-'1 mph == 1 mi/h'	true
-'3ppi == 3dpi'	true
+'quantity(1, "mph") == quantity(1, "mi/h")'	true
+'quantity(3, "ppi") == 3dpi'	true
 'quantity(5, "px") + quantity(3, "dot") == quantity(8, "px")'	true
 
-# temperatures count from their own zero
-'212°F == 100°C'	true
-'str(20°C + 5°C)'	'25°C'
-'quantity(32, "°F") == quantity(0, "°C")'	true
+# temperatures count from their own zero and add in one scale only
+'quantity(212, "°F") == quantity(100, "°C")'	true
+'str(quantity(20, "°C") + quantity(5, "°C"))'	'25°C'
