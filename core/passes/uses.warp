@@ -108,7 +108,6 @@ packed_slice_parses(files: map): map := {
 			for index in 0 ..< #spans {
 				owned = held.get("${index}") ?? []
 				cut = if #owned == 1 then owned#1 else separated(bracketed(owned, ""), ";")
-				check_slice_cut(path, source[spans[index]#2 ..< spans[index]#3], use_lines(source), cut)
 				parses[slice_key(path, "${spans[index]#2}")] = pack(cut)
 			}
 		}
@@ -149,10 +148,6 @@ span_lines(source: text, spans: list): list := {
 	}
 	ranges
 }
-# TEMPORARY (card slice-parses-definitions): the cut against the slice parsed alone, said where they differ
-check_slice_cut(path: text, slice: text, uses: text, cut: Node) := {
-	alone = plain_node(parsed(slice, uses))
-	if "${alone}" != "${cut}" { print "§slice " + path + ": " + slice.split("\n")#1 + "\n  alone: " + "${alone}" + "\n  cut:   " + "${cut}" }
 }
 # each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
 baked_slices(files: map): map := {
