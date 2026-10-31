@@ -1,0 +1,9 @@
+# index counts from 0, position from 1, a text's find answering by the declared type (decision index-position,
+# index-units; notes/index_position.md); a function's own assignment counts as its own, a variable of the same name
+# around it notwithstanding (local-variable rule, supervisor 2026-10-31)
+'position p = "a👍🏽b".find("b"); p'	3
+'index i = "a👍🏽b".find("b"); i'	2
+'byte index b = "a👍🏽b".find("b"); b'	9
+'position p = 3; index i = p; i'	2
+'f(t: text) := { position p = t.find("b"); i = p; index j = i; j }; f("abc")'	1
+'i = 5; f(t: text) := { position p = t.find("b"); i = p; index j = i; j }; f("abc")'	1

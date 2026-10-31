@@ -641,9 +641,10 @@ defined_call_head(statement: Node): Node? := {
 is_keyword_definition(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords and is_group(n#2) and #(n#2) > 0
 # variable → the type of the values assigned to it, "" where they differ or are not known: by name across the
 # program, as arity_overloads.warp's assigned_kinds
-assigned_types(statements: list, classes: map): map := {
+assigned_types(statements: list, classes: map): map := assigned_types_in(statements.flat_map(nodes_in), classes)
+assigned_types_in(nodes: list, classes: map): map := {
 	types = {}
-	for n in statements.flat_map(nodes_in) {
+	for n in nodes {
 		if is_key(n, Op.Assign) and key_of(n) is symbol {
 			name = name_of(key_of(n))
 			type = written_type(value_of(n), classes) ?? ""
