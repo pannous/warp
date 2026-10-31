@@ -1545,7 +1545,8 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 		if is_element_list(n) { n = group_like(n, items_of(n).map(element => at_place(element, Place.Element, rules, origins))) }
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
-		runs = with_runs(if phrase then words_of_all(items) else items, rules, origins)
+		# runs of words side by side, never across commas: `[1, s]` holds none (card match-rest-item-pattern)
+		runs = if separator_of(n) != "," then with_runs(if phrase then words_of_all(items) else items, rules, origins) else items
 		if phrase and runs == words_of_all(items) { runs = items }
 		# a phrase all one run takes the place the phrase stands in: a statement's template of statements stays the
 		# statements (`$f(x) := …` defines f where the phrase stood), a value's turns into its block (as_value) there
@@ -1760,7 +1761,13 @@ fired(rule: Rule, result: Node): Node := {
 }
 
 # the rule's `where` conditions hold of what its holes bound
-conditions_hold(rule: Rule, origin: map, bound: map): bool := origin_holds(rule, origin, bound) and rule.conditions.all(condition => condition_holds(condition, bound))
+# in order, the first that fails ending it: a later computed binding (`$refused = misnamed(…)`, which throws) runs only
+# where the tests before it hold (a `.all` the seed lowers calls every one)
+conditions_hold(rule: Rule, origin: map, bound: map): bool := {
+	if not origin_holds(rule, origin, bound) { return no }
+	for condition in rule.conditions { if not condition_holds(condition, bound) { return no } }
+	yes
+}
 
 # the conditions hold of the code n the rule matched, which the context conditions ask where it stands
 conditions_hold_at(rule: Rule, origin: map, bound: map, n: Node): bool := {

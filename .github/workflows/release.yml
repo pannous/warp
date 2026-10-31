@@ -130,6 +130,10 @@ jobs:
         gh release download "version_$BINARYEN" --repo WebAssembly/binaryen --pattern "binaryen-version_$BINARYEN-${{ matrix.binaryen }}.tar.gz"
         tar -xzf "binaryen-version_$BINARYEN-${{ matrix.binaryen }}.tar.gz" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/binaryen-version_$BINARYEN/bin" >>"$GITHUB_PATH"
+        if [ "$RUNNER_OS" = macOS ]; then # the gate's scripts run GNU timeout, macOS has none
+          brew install coreutils && mkdir -p "$RUNNER_TEMP/gnu" && ln -s "$(brew --prefix)/bin/gtimeout" "$RUNNER_TEMP/gnu/timeout"
+          echo "$RUNNER_TEMP/gnu" >>"$GITHUB_PATH"
+        fi
         if [ "${{ matrix.wabt }}" = brew ]; then brew install wabt; exit; fi
         gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-${{ matrix.wabt }}.tar.gz"
         tar -xzf "wabt-$WABT-${{ matrix.wabt }}.tar.gz" -C "$RUNNER_TEMP"
