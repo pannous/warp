@@ -148,7 +148,6 @@ span_lines(source: text, spans: list): list := {
 	}
 	ranges
 }
-}
 # each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
 baked_slices(files: map): map := {
 	slices = {}
