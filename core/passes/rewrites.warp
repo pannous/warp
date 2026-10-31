@@ -271,11 +271,13 @@ enums_declared(program: Node): Node := {
 sugared(program: Node, rules: list): Node := stored(sugar_applied(program, rules))
 sugar_applied(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
-	rule_scope = scope_of(program)
-	first_parameter_types = typed_first_parameters(program)
-	rule_signatures = definitions_signatures(program)
-	rule_case_holders = case_holders_of(program)
-	rule_instances = instance_names_of(program)
+	# the program's nodes listed once for all that its rules ask of it (each listing them anew was ~6% of a compile)
+	nodes = nodes_in(program)
+	rule_scope = scope_with({}, nodes)
+	first_parameter_types = typed_first_parameters_in(nodes)
+	rule_signatures = definitions_signatures_in(nodes)
+	rule_case_holders = case_holders_in(nodes)
+	rule_instances = instance_names_in(program, nodes)
 	rule_classes = class_names_of(program)
 	rule_program = program
 	rule_varying_known = no
@@ -877,9 +879,10 @@ library_first_type(word: text): text? := {
 }
 
 # `f(x: int, y) := …`: f → the signature of each definition of the program
-definitions_signatures(program: Node): map := {
+definitions_signatures(program: Node): map := definitions_signatures_in(nodes_in(program))
+definitions_signatures_in(nodes: list): map := {
 	signatures = {}
-	for n in nodes_in(program) {
+	for n in nodes {
 		call = definition_call(n)
 		if call != ø {
 			word = name_of(call#1)
@@ -889,9 +892,10 @@ definitions_signatures(program: Node): map := {
 	signatures
 }
 # `f(x: int) := …`: f → "int", for each definition of the program with a typed first parameter
-typed_first_parameters(program: Node): map := {
+typed_first_parameters(program: Node): map := typed_first_parameters_in(nodes_in(program))
+typed_first_parameters_in(nodes: list): map := {
 	types = {}
-	for n in nodes_in(program) {
+	for n in nodes {
 		if is_key(n, Op.Define) and is_round(key_of(n)) and #key_of(n) >= 2 and key_of(n)#1 is symbol {
 			parameter = key_of(n)#2
 			if is_key(parameter, Op.Colon) and value_of(parameter) is symbol { types[name_of(key_of(n)#1)] = name_of(value_of(parameter)) }
@@ -1081,12 +1085,13 @@ class_names_of(program: Node): map := {
 	}
 	classes
 }
-# the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type)
-instance_names_of(program: Node): map := {
+# the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type), of its
+# nodes as the caller listed them
+instance_names_in(program: Node, nodes: list): map := {
 	classes = class_names_of(program)
 	found = {}
 	if #classes == 0 { return found }
-	types = assigned_types(statements_in(program), classes)
+	types = assigned_types_in(nodes, classes)
 	for name in types.keys { if types[name] in classes { found[name] = yes } }
 	found
 }
@@ -1383,10 +1388,11 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
 # is a case of one enum (`c = Coin.Dime`, `c = Dime`); a name also given anything else holds no case for sure
-case_holders_of(program: Node): map := {
+case_holders_of(program: Node): map := case_holders_in(nodes_in(program))
+case_holders_in(nodes: list): map := {
 	holders = {}
 	others = {}
-	for n in nodes_in(program) {
+	for n in nodes {
 		if is_key(n, Op.Assign) and key_of(n) is symbol {
 			name = name_of(key_of(n))
 			enum_name = enum_of_case(value_of(n))
