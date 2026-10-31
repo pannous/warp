@@ -1,10 +1,8 @@
 # A path through a link to an absolute path (a repo's data -> /Volumes/…) reaches the file as the shell does (card
-# programs-read): test/fixtures/root_link -> /; a case runs in its test file's folder
+# programs-read); the link made in /tmp, leading to /
 
 # reading_through_an_absolute_link
-'count(read("../fixtures/root_link/etc/hosts")) > 0'	yes
-'exists("../fixtures/root_link/etc/hosts")'	yes
-'list_files("../fixtures/root_link/etc").contains("hosts")'	yes
+'use file; use os; link = "/tmp/warp_root_link_read"; command("ln -sfn / " + link); [count(read(link + "/etc/hosts")) > 0, exists(link + "/etc/hosts"), list_files(link + "/etc").contains("hosts")]'	[yes yes yes]
 
 # writing_through_an_absolute_link
-'place = (env("TMPDIR") ?? "/tmp/") + "/warp_linked_write.txt"; write("../fixtures/root_link" + place, "ok"); read(place)'	'ok'
+'use file; use os; link = "/tmp/warp_root_link_written"; command("ln -sfn / " + link); write(link + "/tmp/warp_linked_write.txt", "ok"); read("/tmp/warp_linked_write.txt")'	'ok'
