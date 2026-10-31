@@ -783,7 +783,8 @@ def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 # `x: int or text = v` (decision union-or): x holds a node, a value of a kind no member takes is refused
 def union_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
 	if not fits_union(type_name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
-	if union_members(type_name).any(member => aliased_type(member.remove_suffix("?")) == "int") { body.boxed_ints[name] = yes }
+	# an int only where every member is one: `x: int|float = 1.5` holds a float
+	if union_members(type_name).all(member => aliased_type(member.remove_suffix("?")) == "int") { body.boxed_ints[name] = yes }
 	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
 }
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
