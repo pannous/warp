@@ -87,17 +87,22 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 					child.started = milliseconds_now()
 					child.lock = lock
 					next = next + 1
+					# a failed fork's -1 is no child: kill(-1) would end every process of the user
+					if child.pid < 0 {
+						run_ended(work, field(runs, child.run, NEWLINE), "fork failed", child)
+						done = done + 1
+					}
 				}
 			}
 		}
 		ended = waitpid(-1, status, NOT_WAITING)
 		for k in 0..slots {
 			child = child_at(children + k * CHILD_BYTES)
-			if child.pid != 0 and child.pid == ended {
+			if child.pid > 0 and child.pid == ended {
 				run_ended(work, field(runs, child.run, NEWLINE), exit_status(word_at(status).value as i32), child)
 				done = done + 1
 			}
-			if child.pid != 0 and milliseconds_now() - child.started > CASE_MILLISECONDS {
+			if child.pid > 0 and milliseconds_now() - child.started > CASE_MILLISECONDS {
 				kill(child.pid, KILLED)
 				waitpid(child.pid, status, 0)
 				run_ended(work, field(runs, child.run, NEWLINE), "timeout", child)

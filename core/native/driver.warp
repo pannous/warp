@@ -571,8 +571,7 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	context = wasmtime_store_context(store)
 	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
 	linker = wasmtime_linker_new(engine)
-	# wasmtime writes it only on a trap; a run inside a host word (parse_code) gets arena bytes an earlier one used
-	trap = zeroed(8)
+	trap = allocate(8)
 	checked(wasmtime_linker_define_wasi(linker), trap)
 	config = wasi_config_new()
 	wasi_config_set_argv(config, given.count, given.pointers)
@@ -617,8 +616,8 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 raised_message(context: handle, instance: pointer, failed: pointer): text := {
 	function = allocate(EXTERN_BYTES)
 	memory = allocate(EXTERN_BYTES)
-	code = zeroed(8)
-	argument = zeroed(VALUE_BYTES)
+	code = allocate(8)
+	argument = allocate(VALUE_BYTES)
 	byte_at(argument).value = KIND_I64
 	long_at(argument + VALUE_OFFSET).value = if long_at(failed).value != 0 and wasmtime_trap_code(long_at(failed).value, code) then byte_at(code).value as i64 else -1
 	result = allocate(VALUE_BYTES)
@@ -1708,9 +1707,9 @@ failed_call(message: text): nothing := {
 c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
 	name = text_from(c.name, c.name_length)
 	if c.function == 0 { failed_call(joined(joined("no C function ", name), " in its library, or the library not found")) }
-	integers = zeroed(REGISTERS * 8)
-	floats = zeroed(REGISTERS * 8)
-	out = zeroed(8)
+	integers = allocate(REGISTERS * 8)
+	floats = allocate(REGISTERS * 8)
+	out = allocate(8)
 	integer_count = 0
 	float_count = 0
 	passed = 0
@@ -1734,12 +1733,6 @@ c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: p
 	if (c.failure == FAILURE_NOT_NULL and returned != 0) or (c.failure == FAILURE_FALSE and returned % 256 == 0) { failed_call(joined(joined(name, " failed, C result "), text_of(returned))) }
 	if c.pointee_length > 0 and long_at(out).value == 0 { failed_call(joined(joined(joined(joined(name, " gave no "), text_from(c.pointee, c.pointee_length)), ", C status "), text_of(returned % 4294967296))) }
 	if results_count > 0 { c_result(caller, context, c, if c.pointee_length > 0 then long_at(out).value else returned, results) }
-}
-# allocated bytes, all zero
-zeroed(size: i32): pointer := {
-	bytes = allocate(size)
-	for i in 0..size { byte_at(bytes + i).value = 0 }
-	bytes
 }
 # the register of a parameter that is no float: a number, a text's C copy, a handle's pointer, an out-pointer's slot
 c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointer, out: pointer): i64 := {
@@ -1767,7 +1760,7 @@ c_strings(caller: handle, context: handle, list: pointer): pointer := {
 	counted = allocate(VALUE_BYTES)
 	guest_call(caller, context, "item_count", list, 1, counted)
 	count = long_at(counted + VALUE_OFFSET).value
-	array = zeroed(((count + 1) * 8) as i32)
+	array = allocate(((count + 1) * 8) as i32)
 	for i in 0..count { long_at(array + i * 8).value = native_pointer(c_string(shown(caller, context, item_of(caller, context, list, i + 1)))) }
 	array
 }
