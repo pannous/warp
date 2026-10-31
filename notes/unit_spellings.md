@@ -22,7 +22,8 @@ Gotchas met:
   units rule change needs scripts/self-check.sh, not only smoke. A `$u in [s, …]` listing also takes the char 's'
   (card char-literal-matching), so unit rules guard with `$u is symbol`.
 - `rewrite (… :=` on one line reads as a definition of the word rewrite (prelude_words.warp name_defined_in), so the
-  word index sends every rewrite to that module (card units-rewrite-assign, core one-liner on its branch).
+  word index sent every rewrite to that module; fixed in core: a line led by `rewrite` defines no word (card
+  units-rewrite-assign).
 - Finding where a module rule fires in the compiler: give its template a marker call
   (`=> unit_rule_fired_here($bound)`), run `warp lower compiler.warp` from core/ with WARP_LIB=<worktree>/lib (3 min,
   no rebuild), grep the marker (card module-rule-trace for a real trace).
