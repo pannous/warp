@@ -96,14 +96,20 @@ lb() := known_unit("lb")
 ms() := known_unit("ms")
 µs() := known_unit("µs")
 ns() := known_unit("ns")
+// `2 hours in minutes`: `in` is a word of the phrase, so the run is taken whole, before `2 hours` alone (rules try
+// a phrase's runs in their order)
+rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+// `[3, 4] cm`: a unit after a list measures each of its items
+rewrite $xs $u => $xs.map(item => item * $u) where $xs is list and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is; a unit
 // after an expression belongs to its last amount, through comparisons, sums and assignments: `x > 1500 m` is
 // x > 1500m (wiki/unit.md, lib/rule_words.warp unit_bound). A unit is a word, never the char 's' of `f(at + 1, 's')`
-// `[3, 4] cm`: a unit after a list measures each of its items
-rewrite $xs $u => $xs.map(item => item * $u) where $xs is list and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
-rewrite $e $u => $bound where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °] and $bound = unit_bound($e, $u)
-// `3km as m`: the quantity shown in that unit
-rewrite $q as $u => $q.to($u.unit) where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
+rewrite $e $u => $bound where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $bound = unit_bound($e, $u)
+// `3km as m`: the quantity shown in that unit; `3 km as m`, parsed 3 (km as m), takes its amount first
+rewrite $q as $u => $q.to($u.unit) where not unit_led($q) and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+rewrite $e $u as $t => ($e $u) as $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+// `2 hours in minutes`: the same, spelled with in
+rewrite $q in $u => $q.to($u.unit) where not unit_led($q) and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `3 cm is Length` and `2 km/h is speed` parse as 3 (cm is Length): the unit goes with its amount first
 rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, Quantity, Length, Mass, Time, Temperature, Pixels]
 // `3 cm is length`, `2 km/h is speed`: a quantity measures a named dimension, after its unit went with its amount (no
@@ -143,6 +149,7 @@ L() := known_unit("L")
 ml() := known_unit("ml")
 ha() := known_unit("ha")
 dpi() := known_unit("dpi")
+ppi() := known_unit("ppi")
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {
