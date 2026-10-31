@@ -183,13 +183,9 @@ rewritten_program(program: Node, source: text): Node := {
 	stored(own_rules_applied(program, source))
 }
 own_rules_applied(program: Node, source: text): Node := {
-	rules = []
-	kept = []
-	for statement in statements_in(program) {
-		rule = rule_of(statement, "", source)
-		if rule == ø { kept += [statement] } else { rules += [rule] }
-	}
-	if #rules > 0 { program = separated(bracketed(kept, ""), ";") }
+	ruled = statements_ruled(statements_in(program), "", source)
+	rules = ruled#1
+	if #rules > 0 { program = separated(bracketed(ruled#2, ""), ";") }
 	mentioned = word_set(symbol_words(program))
 	module_rules = []
 	needs = rule_needs_by_module()
@@ -558,7 +554,96 @@ written_rules(path: text, source: text, module: text): list := {
 	if #rules < #rule_lines { throw dropped_rules(path, lines, rule_lines, rules, module) }
 	rules
 }
-rules_parsed(parse: Node, module: text, source: text): list := statements_in(parse).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+rules_parsed(parse: Node, module: text, source: text): list := statements_ruled(statements_in(parse), module, source)#1
+# [the rules the statements declare, the other statements]: each `rewrite` line's, and in place of the first overload
+# of a built-in operator those of all its overloads (operator_rules)
+statements_ruled(statements: list, module: text, source: text): list := {
+	rules = []
+	kept = []
+	overloads = statements.map(operator_overload)
+	ruled = {}
+	for at in 1 to #statements {
+		overload = overloads#at
+		if overload != ø {
+			glyph = overload.glyph
+			if not ruled.has(glyph) {
+				ruled[glyph] = yes
+				rules += operator_rules(overloads.filter(other => other != ø and other.glyph == glyph), module)
+			}
+		} else {
+			rule = rule_of(statements#at, module, source)
+			if rule == ø { kept += [statements#at] } else { rules += [rule] }
+		}
+	}
+	[rules, kept]
+}
+
+# Overloads of a built-in operator by its operands' kinds (decision rules-to-typed-operators, user OK 2026-10-31):
+# `infix operator |(x: any, g: function) := g(x)` is the rule `$x | $g => $g($x)`, its parameter types its conditions
+# (overload_conditions), so dispatch costs nothing at run time. The overloads of one operator are tried most specific
+# first (fewer `any`), one whose body is the operator itself, `infix operator |(a: type, b: type) := a | b`, keeps the
+# built-in where it fits (the later ones hold only where it doesn't), and where none fits the built-in stays. A
+# class's operand (`+(a: Vec, b: Vec)`) leaves the definition to class_methods.warp
+class OperatorOverload { glyph: text; names: list; types: list; pattern: Node; template: Node; builtin: bool }
+# each kind's alternative conditions, each a list of conditions joined by `and`; `any` none
+overload_conditions = {any: [[]], function: [["is function"], ["takes one"]], block: [["is function"], ["takes one"]], type: [["is type"]], text: [["is text"]], symbol: [["is symbol"]], list: [["is list"]], map: [["is map"]], int: [["is int"]], number: [["is number"]]}
+
+# the definition `glyph(a: T, b: U) := body` of a built-in operator spelled by a glyph, as its overload, else ø
+operator_overload(statement: Node): OperatorOverload? := {
+	if not is_key(statement, Op.Define) or not is_round(key_of(statement)) or #key_of(statement) != 3 or not (key_of(statement)#1 is symbol) { return ø }
+	glyph = name_of(key_of(statement)#1)
+	if first_alphabetic_word(glyph) != "" { return ø }
+	parameters = items_of(key_of(statement))[1 ..]
+	types = parameters.map(parameter => if parameter is symbol then any_word else if is_key(parameter, Op.Colon) and value_of(parameter) is symbol then name_of(value_of(parameter)) else "")
+	if not types.all(type => overload_conditions.has(type)) { return ø }
+	names = parameters.map(parameter_name)
+	pattern = statements_in(plain_node(parsed(hole_word(names#1) + " " + glyph + " " + hole_word(names#2))))#1
+	if not (pattern is key and key_of(pattern) == symbol(hole_word(names#1)) and value_of(pattern) == symbol(hole_word(names#2))) { return ø }
+	template = holes_for(plain_node(value_of(statement)), names + introduced_names(value_of(statement)))
+	OperatorOverload(glyph, names, types, pattern, template, same_view(template, pattern))
+}
+hole_word(name: text): text := rule_hole_mark + name
+# the body with each of the names a hole: the parameters, also the names its lambdas and assignments introduce, fresh
+# at each firing (a key of a map it writes stays a key)
+holes_for(body: Node, names: list): Node := bottom_up(body, part => if part is symbol and name_of(part) in names then placed(symbol(hole_word(name_of(part))), part) else part)
+introduced_names(body: Node): list := nodes_in(body).flat_map(n => if is_key(n, Op.Arrow) then parameters_of(key_of(n)) else if is_key(n, Op.Assign) and key_of(n) is symbol then [name_of(key_of(n))] else [])
+
+# the rules of one operator's overloads, most specific first, a built-in arm before the overloads as specific as it:
+# each alternative of a variant's operands (a function, or a library word of one value), held only where no earlier
+# arm fits, one of the arm's typed operands failing its kind
+operator_rules(overloads: list, module: text): list := {
+	ordered = (0 to 2).flat_map(untyped => [yes, no].flat_map(builtin => overloads.filter(overload => overload.builtin == builtin and #overload.types.filter(type => type == any_word) == untyped)))
+	rules = []
+	arms = []
+	for overload in ordered {
+		if overload.builtin { arms += [overload] } else {
+			unfitting = [[]]
+			for arm in arms { unfitting = unfitting.flat_map(guards => arm_misfits(arm, overload).map(misfit => guards + misfit)) }
+			for alternative in operand_alternatives(overload) {
+				for guards in unfitting { rules += [Rule(overload.pattern, overload.template, ø, ø, alternative + guards, Place.Anywhere, module, no, no, pattern_head(overload.pattern))] }
+			}
+		}
+	}
+	rules
+}
+# the conditions a kind's alternatives make of the overload's operand holes, as `where` parses them (rule_of), each
+# alternative of each operand, combined
+operand_alternatives(overload: OperatorOverload): list := {
+	combined = [[]]
+	for at in 1 to 2 {
+		combined = combined.flat_map(before => overload_conditions[overload.types#at].map(alternative => before + parsed_conditions(overload.names#at, alternative)))
+	}
+	combined
+}
+# the ways the arm's operands may not fit, in the holes of `named`: one typed operand failing each of its kind's
+# alternatives (each one condition)
+arm_misfits(arm: OperatorOverload, named: OperatorOverload): list := (1 to 2).filter(at => arm.types#at != any_word).map(at => overload_conditions[arm.types#at].flat_map(alternative => parsed_conditions(named.names#at, alternative)).map(condition => Key(ø, Op.Not, condition)))
+parsed_conditions(name: text, alternative: list): list := {
+	if #alternative == 0 { return [] }
+	hole = hole_word(name)
+	rule = rule_of(statements_in(plain_node(parsed(rewrite_word + " " + hole + " => " + hole + " " + where_word + " " + alternative.map(condition => hole + " " + condition).join(" " + and_word + " "))))#1, "", "")
+	rule.conditions
+}
 # the rule lines of a module the parse of the whole lost, each by its file and line
 dropped_rules(path: text, lines: list, rule_lines: list, rules: list, module: text): text := {
 	patterns = rules.map(rule => rule.pattern)
