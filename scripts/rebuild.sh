@@ -20,6 +20,9 @@
 # is a new hash, whose build starts at the seed.
 # The warp binary building: WARP_BINARY, else the shared native warp (~/dev/bin/warp on the Mac, warp on the PATH elsewhere).
 # Every hit and miss is a line of <store>/rebuilds.log: time, tree, hash, compiler, hit or miss.
+# Every build keeps its record beside its compilers, <store>/<hash>/<compiler>.record/ (a failed one in its .failed/
+# record/): inputs.txt and sources.tar.gz (all it started from, recorded_inputs), build.log, time (CPU, wall, peak
+# memory) and its function profile (profile.txt, sample.gz, perf.map: scripts/build-slot.sh WARP_BUILD_RECORD).
 set -uo pipefail
 STEPS=(seed stage-two optimize runtime modules)  # core/native/warp.warp rebuilt, in order
 SHOWN_LINES=60  # of a failed step's output, printed before its log's path
@@ -108,6 +111,43 @@ resumed_step() {
 	echo "$step"
 }
 
+sha() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-64; }
+# recorded_inputs <record>: all a build of this hash starts from (user 2026-10-31: a build is self-contained, never
+# built twice): inputs.txt (tree, commit, uncommitted files, seed, warp binary, every input file's sha), the input
+# files themselves (sources.tar.gz) and the seed, kept once per seed in <store>/seeds/
+recorded_inputs() {
+	local record=$1 file binary seed=$WARP_SEED
+	mkdir -p "$record" "$store/seeds"
+	binary=$(readlink -f "$warp" 2>/dev/null || echo "$warp")
+	# a fetched seed is in the store already (scripts/seed.sh); any other is kept there under its sha
+	if [ "$(dirname "$(readlink -f "$seed")")" != "$(readlink -f "$store/seeds")" ]; then
+		seed=$store/seeds/$(sha "$WARP_SEED").wasm
+		[ -f "$seed" ] || copied "$WARP_SEED" "$seed"
+	fi
+	"$scripts/compiler-inputs.sh" "$lib" -v 2>"$record/files" >/dev/null
+	{
+		echo "hash $hash"
+		echo "baked $baked"
+		echo "tree $tree"
+		echo "commit $(git -C "$tree" rev-parse HEAD 2>/dev/null) $(git -C "$tree" branch --show-current 2>/dev/null)"
+		echo "seed $(sha "$WARP_SEED") $seed"
+		echo "warp $(sha "$binary") $binary"
+		echo "uncommitted:"
+		git -C "$tree" status --short -- core lib 2>/dev/null
+		echo "input files (sha256, path in lib/):"
+		while IFS= read -r file; do echo "$(sha "$lib/$file") $file"; done <"$record/files"
+	} >"$record/inputs.txt"
+	tar -C "$lib" -czhf "$record/sources.tar.gz" -T "$record/files" 2>/dev/null
+	rm -f "$record/files"
+}
+# kept_record <name> <record> <log>: the build's record, its log in it, beside its compilers (write-once)
+kept_record() {
+	local kept=$store/$hash/$1.record
+	[ -d "$2" ] || return 0
+	[ -f "$3" ] && mv "$3" "$2/build.log"
+	if [ -d "$kept" ]; then rm -rf "$2"; else mv "$2" "$kept"; fi
+}
+
 # the store's main link to this hash, when the tree is origin/main and its core unchanged
 mark_main() {
 	local head remote
@@ -177,8 +217,9 @@ rebaked_stored() {
 	copied "$stored" "$new" || return 1
 	echo "rebuild step rebake" >"$log"
 	local said rebake_status
-	said=$(cd "$tree" && WARP_LIB=$lib "$warp" "$new" rebake "$new" 2>&1)
+	(cd "$tree" && WARP_LIB=$lib WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log.said" "$warp" "$new" rebake "$new")
 	rebake_status=$?
+	said=$(cat "$log.said" 2>/dev/null); rm -f "$log.said"
 	echo "$said" >>"$log"
 	[ $rebake_status = 0 ] || { rm -f "$new" "$new".*; return 2; }
 	# a compiler a seed older than lib-hash-rebake built bakes some tables as code, no segment the rebake can rewrite:
@@ -212,6 +253,7 @@ published() {
 # build_failed <name> <log> <status>: the failure kept in the store and said, the build lock released
 build_failed() {
 	kept_failure "$1" "$2" "$3"
+	[ -d "${record-}" ] && mv "$record" "$(failure "$1")/record"
 	released "$1"
 	set_aside "$1"
 	logged "$1" build-failed
@@ -248,19 +290,20 @@ one() {
 		one "$@"
 		return
 	fi
-	local lane=(pure) from log=$store/$hash/$name.building/log
+	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
+	recorded_inputs "$record"
 	if [ -z "$force" ] && [ "$name" = warp ]; then
 		rebaked_stored "$log"
 		status=$?
 		[ $status = 2 ] && { build_failed "$name" "$log" $status; return 1; }
-		[ $status = 0 ] && { published "$name"; released "$name"; logged "$name" built-rebaked; return 0; }
+		[ $status = 0 ] && { published "$name"; kept_record "$name" "$record" "$log"; released "$name"; logged "$name" built-rebaked; return 0; }
 	fi
 	[ "$name" = warp-self ] && lane=(self)
 	from=$(resumed_step "$name")
 	[ -n "$from" ] && lane=(from "$from")
 	logged "$name" "miss-building${from:+-from-$from}"
 	: >"$log"
-	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash WARP_COMPILER_STORE=$store "$scripts/build-slot.sh" "$log" "$warp" rebuild "${lane[@]}")
+	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash WARP_COMPILER_STORE=$store WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log" "$warp" rebuild "${lane[@]}")
 	status=$?
 	[ $status != 0 ] && { build_failed "$name" "$log" $status; return 1; }
 	[ -f "$file" ] || { cat "$log" >&2; released "$name"; echo "rebuild.sh: warp rebuild wrote no $file" >&2; return 1; }
@@ -268,9 +311,10 @@ one() {
 	published "$name"
 	[ "$name" = warp ] && code_kept
 	rm -rf "$(failure "$name")"
+	kept_record "$name" "$record" "$log"
 	released "$name"
 	[ "$name" = warp-self ] && self_passed
-	logged "$name" built
+	logged "$name" "built cpu=$(awk '$1=="user"{print $2 "s"}' "$store/$hash/$name.record/time" 2>/dev/null)"
 }
 
 # warp's wasmtime C API in lib/, which `warp build native` links the driver from (card wasmtime-bundled); a no-op when current;

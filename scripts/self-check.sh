@@ -86,15 +86,16 @@ $said"; return 1; }
 # by warp.wasm failed `-- runtime` with "list of node" while this check, running the copy, passed). Its compiles take
 # a build slot (scripts/build-slot.sh) like every compiler build, and its outcome is kept under warp.wasm's inputs hash
 # (<store>/<hash>/stage-two.passed, stage-two.failed/ with build.log and message), so a check of that hash runs it once;
+# the compile is measured and profiled (stage-two.record/, failed: stage-two.failed/record/: time, profile.txt, build.log);
 # --rebuild runs it again
 stage_two() {
   local stage=$scratch/lib native=$warp  # the checked native warp: WARP_LIB first, nothing beside it wins
   local hash=${$(cut -d' ' -f1 $worktree/lib/warp.wasm.inputs 2>/dev/null):-unhashed}
-  local record=$store/$hash/stage-two log=$scratch/stage-two.log
+  local record=$store/$hash/stage-two log=$scratch/stage-two.log measured=$scratch/stage-two.record
   if [[ -z $rebuild && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
   if [[ -z $rebuild && -d $record.failed ]]; then verdict="SELF CHECK RED: $(<$record.failed/message)"; return 1; fi
   mkdir -p $stage && ln -s $worktree/lib/*(N) $stage/ && rm -f $stage/warp.wasm* $stage/warp-self.wasm* $stage/runtime.wasm*
-  WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/build-slot.sh $log $native $worktree/lib/warp.wasm -- \
+  WARP_BUILD_RECORD=$measured WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/build-slot.sh $log $native $worktree/lib/warp.wasm -- \
     $worktree/lib/compiler/compiler.warp $stage/warp.wasm $worktree/lib/compiler $worktree/lib $worktree/lib/runtime.wasm
   [[ -s $stage/warp.wasm ]] || { stage_two_failed "warp.wasm does not build stage 2"; return 1; }
   $worktree/scripts/build-slot.sh $log.runtime $native $stage/warp.wasm -- runtime $stage/runtime.wasm
@@ -104,12 +105,14 @@ stage_two() {
     { stage_two_failed "stage 2 (compiler.warp built by warp.wasm) does not build runtime.wasm"; return 1; }
   said=$(WARP_LIB=$stage $native samples/hello/hello.warp 2>&1 | tail -1)
   [[ $said == *$expected* ]] || { print -r -- "hello said: $said" >>$log; stage_two_failed "stage 2's hello said: $said"; return 1; }
-  mkdir -p ${record:h} && print -r -- "$hash commit=$(git -C $worktree rev-parse --short HEAD) passed=$(date '+%Y-%m-%dT%H:%M:%S%z')" >$record.passed
+  mkdir -p ${record:h} && mv $log $measured/build.log && { [[ -d $record.record ]] || mv $measured $record.record }
+  print -r -- "$hash commit=$(git -C $worktree rev-parse --short HEAD) passed=$(date '+%Y-%m-%dT%H:%M:%S%z')" >$record.passed
   verdict="SELF CHECK ok: $said (stage 2 built runtime.wasm and ran hello)"
 }
 # stage_two_failed <what>: the failure kept beside its hash's compilers, its output and the log's path in the verdict
 stage_two_failed() {
   rm -rf $record.failed.new-$$ && mkdir -p $record.failed.new-$$ && mv $log $record.failed.new-$$/build.log
+  [[ -d $measured ]] && mv $measured $record.failed.new-$$/record
   print -r -- "$1 (output: the last $shown_lines lines; log $record.failed/build.log; scripts/self-check.sh --rebuild runs it again)
 $(tail -$shown_lines $record.failed.new-$$/build.log)" >$record.failed.new-$$/message
   rm -rf $record.failed && mv $record.failed.new-$$ $record.failed
