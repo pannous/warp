@@ -1,0 +1,4 @@
+# the sound samples' words (card sample-gaps-sound): a linear array is a block of samples, a pattern plays its steps
+'use sound; linear b = float[4]; f(t) := { b#2 = 1.5; 0 }; f(0); [#b, b#2]'	[4, 1.5]
+'use sound; linear b = float[512]; hum(t) := for i in 1 to #b { b#i = 0.1 }; play_blocks(hum, linear_address(b), 0.1s); round(save(sound(), "gap_blocks.wav") * 100)'	10
+'use sound; pattern("c4 e4", 1s); round(save(sound(), "gap_pattern.wav") * 10)'	10

@@ -1,0 +1,2 @@
+# a function declared to give an int gives an int, not a nat (decision declared-int-result)
+'f(): int := 3; type(f())'	'int'
