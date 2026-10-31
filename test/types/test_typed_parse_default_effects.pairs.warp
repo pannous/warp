@@ -1,0 +1,3 @@
+# Decision D4: supplied fields do not evaluate class defaults; omitted defaults run once.
+'global hits = 0; next_default() := { hits = hits + 1; 9 }; class Counter { value: number = next_default() }; parse("{value:7}", Counter); hits'	0
+'global hits = 0; next_default() := { hits = hits + 1; 9 }; class Counter { value: number = next_default() }; parse("{}", Counter); hits'	1
