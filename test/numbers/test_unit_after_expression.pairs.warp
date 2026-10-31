@@ -1,0 +1,13 @@
+# a unit after an expression belongs to its last amount, binding tighter than a comparison; `as` converts
+# (wiki/unit.md "Runs today", card work-down)
+'x = 2 km; x > 1500 m'	true
+'x = 2 km; x = x + 500 m; x == 2500 m'	true
+'x = 3 m; y = x * 2; y < 7 m'	true
+'distance := 42 km; str(distance)'	'42km'
+'str(3km as m)'	'3000m'
+'str(2500m as km)'	'2.5km'
+
+# a program's own unit (decision unit-definitions)
+'unit furlong := 201.168 m; quantity(1, "furlong").in("m")'	201.168
+'unit furlong := 201.168m; str(furlong)'	'1furlong'
+'unit hand := 4inch; x = 2 * hand; str(x.to("cm"))'	'20.32cm'
