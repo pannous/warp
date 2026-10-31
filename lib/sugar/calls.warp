@@ -30,11 +30,13 @@ rewrite (type $x $more...) => type(($x $more...))
 
 # Pipes (wiki/pipe.md, decision D6): `x | f` is the call f(x) of a function of the program or a library word of one
 # value, `3 | inc | dbl` is dbl(inc(3)); between two functions `|` composes them, `inc | dbl` is `x => x | inc | dbl`,
-# and a composition piped on composes, `inc | dbl | square`; between values `|` stays the logical or. Rust twin: pipes.rs
+# and a composition piped on composes, `inc | dbl | square`; between values `|` stays the logical or. After a type `|`
+# (also `or`) is the union, `text or int`, `Point | text`, though the later member converts as a function does
+# (decision union-or). Rust twin: pipes.rs
 rewrite ($it => $body) | $g => $it => $body | $g where $g is function
-rewrite $f | $g => $it => $it | $f | $g where $f is function and $g is function
-rewrite $x | $f => $f($x) where $f is function
-rewrite $x | $f => $f($x) where $f takes one
+rewrite $f | $g => $it => $it | $f | $g where $f is not type and $f is function and $g is function
+rewrite $x | $f => $f($x) where $x is not type and $f is function
+rewrite $x | $f => $f($x) where $x is not type and $f takes one
 
 # A block reading `it` applied to the value beside it: `{it*2} 5` and `{it*2}(5)` are (it => {it*2}) 5, called as a
 # lambda before its argument is (lambdas.warp lowered_phrase); a block of data `{1 2} 3` stays data (card
