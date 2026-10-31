@@ -12,9 +12,9 @@ class Quantity {
 	dims: int
 	unit: text
 	scale: number
-	// the right side of a sum or a difference is a difference: `20°C + 5°C` is 25°C, counting one zero
-	+(other) := measured(amount + same_quantity(this, other, "add").amount - unit_zero(other.unit), dims, unit, scale)
-	-(other) := measured(amount - same_quantity(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
+	// a sum or a difference of temperatures counts one zero: `20°C + 5°C` is 25°C
+	+(other) := measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
+	-(other) := measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
 	*(other) := if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_product(unit, other.unit), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
@@ -57,6 +57,13 @@ quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then a
 same_quantity(q: Quantity, other: any, action: text) := {
 	if not (other is Quantity) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and the plain number " + str(other) }
 	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }
+	other
+}
+
+// other when it adds to q: of its quantity and, for temperatures, of its scale (`20°C + 50°F` asks to convert one)
+summand(q: Quantity, other: any, action: text) := {
+	same_quantity(q, other, action)
+	if unit_zero(q.unit) != unit_zero(other.unit) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) + ", temperatures of two scales: convert one first (`" + quantity_text(other) + " as " + q.unit + "`)" }
 	other
 }
 

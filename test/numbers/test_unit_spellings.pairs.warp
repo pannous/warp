@@ -1,0 +1,25 @@
+# unit spellings by rule (wiki/unit.md, card units-unknown-name): SI prefixes on any SI unit, long names and their
+# plurals, temperatures counted from their own zero
+
+# every SI prefix on every SI unit
+'1 Gs == 1000000000 s'	true
+'1000 µg == 1 mg'	true
+'1 dam == 10 m'	true
+'1 kK == 1000 K'	true
+'2nm + 1m == 1000000002nm'	true
+
+# long names, prefixed and plural
+'3 kilometers == 3000 m'	true
+'str(5 kilograms)'	'5kg'
+'36 inches == 3 ft'	true
+'2 milliseconds == 2 ms'	true
+
+# more units
+'1 mph == 1 mi/h'	true
+'3ppi == 3dpi'	true
+'quantity(5, "px") + quantity(3, "dot") == quantity(8, "px")'	true
+
+# temperatures count from their own zero
+'212°F == 100°C'	true
+'str(20°C + 5°C)'	'25°C'
+'quantity(32, "°F") == quantity(0, "°C")'	true
