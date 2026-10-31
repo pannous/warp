@@ -329,16 +329,22 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			fields = declared.fields
 			members = view#3[3..].map(member_read)
 			field_types = {}
+			required_fields = []
 			for member in members {
 				field = field_name(member)
-				if field != ø { field_types[field] = typed_json_field_type(member) }
+				if field != ø {
+					field_type = typed_json_field_type(member)
+					field_types[field] = field_type
+					if not is_key(member, Op.Assign) and field_type != ø and not field_type.ends_with("?") { required_fields = required_fields + [field] }
+				}
 			}
+			required_checks = required_fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
 			checks = fields.map(field => "if not (typed_json_value[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
 			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
-			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
+			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
 			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
 		}
 	}
