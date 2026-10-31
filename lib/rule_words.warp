@@ -320,6 +320,17 @@ generic_typed_json(head: Node, source: Node, program: Node): Node? := {
 	typed_json(source, symbol(name[#prefix..]), program)
 }
 
+typed_json_check(field: text, field_type: text): text := {
+	optional = field_type.ends_with("?")
+	base_type = if optional then field_type[0..#field_type-1] else field_type
+	expected = if base_type == "string" then "text" else base_type
+	value = "typed_json_value[\"" + field + "\"]"
+	wrong_type = "not (" + value + " is " + base_type + ")"
+	if optional { wrong_type = "not (" + value + " is ø) and " + wrong_type }
+	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
+	"if keys(typed_json_value).contains(\"" + field + "\") and " + wrong_type + " { raise \"" + field + " must be " + expected + ", received \" + " + received + " }"
+}
+
 # Generate typed JSON parsing from the class declared in the program.
 typed_json(source: Node, type_name: Node, program: Node): Node := {
 	for statement in program_statements(program) {
@@ -339,12 +350,12 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 				}
 			}
 			required_checks = required_fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
-			checks = fields.map(field => "if not (typed_json_value[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
-			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
+			checks = fields.map(field => typed_json_check(field, field_types[field]))
+			assignments = fields.map(field => "if keys(typed_json_value).contains(\"" + field + "\") { typed_json_result." + field + " = typed_json_value[\"" + field + "\"] }")
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
-			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
+			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; typed_json_result = " + name_of(type_name) + "{}; " + assignments.join("; ") + "; typed_json_result })"))
 			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
 		}
 	}
