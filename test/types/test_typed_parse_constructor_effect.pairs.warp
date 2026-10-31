@@ -1,0 +1,2 @@
+# Decision D4 and class construction: a typed parse constructs its result once.
+'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; parse("{value:7}", Counter); hits'	1
