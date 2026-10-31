@@ -176,7 +176,20 @@ rebaked_stored() {
 	logged warp "miss-rebaking-$(basename "$(readlink "$store/code/$baked")")"
 	copied "$stored" "$new" || return 1
 	echo "rebuild step rebake" >"$log"
-	if ! (cd "$tree" && export WARP_LIB=$lib && "$warp" "$new" rebake "$new" && "$warp" "$new" baked-current "$new.baked" &&
+	local said rebake_status
+	said=$(cd "$tree" && WARP_LIB=$lib "$warp" "$new" rebake "$new" 2>&1)
+	rebake_status=$?
+	echo "$said" >>"$log"
+	[ $rebake_status = 0 ] || { rm -f "$new" "$new".*; return 2; }
+	# a compiler a seed older than lib-hash-rebake built bakes some tables as code, no segment the rebake can rewrite:
+	# none of this code to rebake, compiled anew
+	if [[ $said == *"left as it is"* ]]; then
+		echo "rebuild.sh: ${said##*$'\n'}: compiling it" >&2
+		logged warp "rebake-incomplete-$(basename "$(readlink "$store/code/$baked")")"
+		rm -f "$new" "$new".* "$store/code/$baked"
+		return 1
+	fi
+	if ! (cd "$tree" && export WARP_LIB=$lib && "$warp" "$new" baked-current "$new.baked" &&
 		{ [ "$(cat "$new.baked")" = yes ] || { echo "rebake: the tables are still not current: $(cat "$new.baked")"; false; }; } &&
 		rm -f "$new.baked" "$compilers/runtime.wasm.cwasm" && "$warp" "$new" runtime "$compilers/runtime.wasm" &&
 		mkdir -p "$compilers/modules" && "$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then

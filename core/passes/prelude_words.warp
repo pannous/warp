@@ -641,11 +641,16 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	definitions = definitions_by_name([prelude_slices] + modules.values)
 	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	wanted = []
+	# each called word's definition heads, parsed once a word and only for an argument naming an unknown word
+	heads = {}
 	for call in calls {
+		name = name_of(call#1)
 		arguments = items_of(call)[1 ..]
 		for i in 0 ..< #arguments {
 			words = symbol_words(arguments[i]).filter(is_unknown)
-			for type in parameter_types(definitions.get(name_of(call#1)) ?? [], i) {
+			if #words == 0 { continue }
+			if not heads.has(name) { heads[name] = (definitions.get(name) ?? []).map(definition_text_head) }
+			for type in parameter_types(heads[name], i) {
 				module = classes.get(type) ?? ""
 				defines = word => modules[module].any(slice => slice#1 == word)
 				if module and module not in wanted and module not in used and words.any(defines) { wanted += [module] }
@@ -673,11 +678,12 @@ definitions_by_name(slice_lists: list): map := {
 	for slices in slice_lists { for slice in slices { definitions[slice#1] = (definitions.get(slice#1) ?? []) + [slice#2] } }
 	definitions
 }
-# the types written for parameter `at` (from 0) of each definition, `[Time]` of `sleep(duration: Time)`
-parameter_types(definitions: list, at: int): list := {
+# the head of a definition's text, `sleep(duration: Time)` of `sleep(duration: Time) := …`
+definition_text_head(definition: text): Node? := definition_head_of(statements_in(plain_node(parsed(definition)))#1)
+# the types written for parameter `at` (from 0) of each definition head, `[Time]` of `sleep(duration: Time)`
+parameter_types(heads: list, at: int): list := {
 	types = []
-	for definition in definitions {
-		head = definition_head_of(statements_in(plain_node(parsed(definition)))#1)
+	for head in heads {
 		parameter = if head != ø and at + 1 < #head then head#(at + 2) else ø
 		if parameter != ø and is_key(parameter, Op.Colon) and value_of(parameter) is symbol { types += [name_of(value_of(parameter))] }
 	}
