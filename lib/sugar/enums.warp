@@ -12,6 +12,7 @@ rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is en
 rewrite $v as int => collection_position([cases of $e], $v) - 1 where $v is case of $e
 rewrite $v as index => collection_position([cases of $e], $v) - 1 where $v is case of $e
 rewrite $v as position => collection_position([cases of $e], $v) where $v is case of $e
-# the case at an index, `2 as Coin`, `Coin(2)`; an index no case has is an error
-rewrite $n as $e => ($k = $n; $cs = [cases of $e]; if $k >= 0 and $k < count($cs) then $cs#($k + 1) else raise "" + $k + " is no case: the cases count from 0 to " + (count($cs) - 1)) where $e is enum
+# the case at an index, `2 as Coin`, `Coin(2)`; an index no case has is an error. A typed operator of `as` (decision
+# rules-to-typed-operators): its body is spliced in, so `cases of e` lists the cases of the enum e names
+infix operator as(n: any, e: enum) := (k = n; cs = [cases of e]; if k >= 0 and k < count(cs) then cs#(k + 1) else raise "" + k + " is no case: the cases count from 0 to " + (count(cs) - 1))
 rewrite $e($n) => $n as $e where $e is enum
