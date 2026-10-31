@@ -7,8 +7,9 @@ name: Release
 # `warp build native`) and our libwarp_wasmtime beside it (packaging/native_dist.sh). The Homebrew formula
 # (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs it; .deb and .rpm (warp-lang) repackage
 # it; notes/packaging.md. A dry run (workflow_dispatch, dry) builds and gates everything and publishes nothing.
-# Bootstrap: warp from warp. The previous release's native warp (its tarball for the runner's platform) runs the seed
-# that builds the compilers, and builds the new native warp with them; no Rust but our wasmtime C API (cargo).
+# Bootstrap: warp from warp. The previous release's native warp (its tarball for the runner's platform), rebuilt from the
+# tag's core/native first (scripts/release-bootstrap.sh), runs the seed that builds the compilers, and builds the new
+# native warp with them; no Rust but our wasmtime C API (cargo).
 on:
   push:
     tags: [ "v*" ]
@@ -63,14 +64,19 @@ jobs:
     - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
-    - name: the previous release's native warp
-      run: scripts/release-bootstrap.sh x86_64-unknown-linux-gnu "$RUNNER_TEMP/bootstrap"
-    - name: build
-      # the rebuild optimizes warp.wasm with the wasm-opt on the PATH, as every local build does
+    - name: wabt and binaryen
+      # the bootstrap's `warp build native` runs wasm2c, the rebuild optimizes warp.wasm with wasm-opt, as locally
       run: |
         gh release download "version_$BINARYEN" --repo WebAssembly/binaryen --pattern "binaryen-version_$BINARYEN-x86_64-linux.tar.gz"
         tar -xzf "binaryen-version_$BINARYEN-x86_64-linux.tar.gz" -C "$RUNNER_TEMP"
-        export PATH=$RUNNER_TEMP/binaryen-version_$BINARYEN/bin:$PATH
+        echo "$RUNNER_TEMP/binaryen-version_$BINARYEN/bin" >>"$GITHUB_PATH"
+        gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-linux-x64.tar.gz"
+        tar -xzf "wabt-$WABT-linux-x64.tar.gz" -C "$RUNNER_TEMP"
+        echo "$RUNNER_TEMP/wabt-$WABT/bin" >>"$GITHUB_PATH"
+    - name: the previous release's native warp, brought up to the tag's host words
+      run: scripts/release-bootstrap.sh x86_64-unknown-linux-gnu "$RUNNER_TEMP/bootstrap" .
+    - name: build
+      run: |
         seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
         gh release download "$seed" --repo pannous/warp --pattern warp-seed.wasm --dir "$RUNNER_TEMP/bootstrap" --clobber
         export WARP_LIB=$PWD/lib
@@ -128,8 +134,8 @@ jobs:
       # them beside itself
       run: |
         WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_SOUND_TARGET="$RUNNER_TEMP/warp-sound" scripts/wasmtime-c-api.sh lib
-    - name: the previous release's native warp
-      run: scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap"
+    - name: the previous release's native warp, brought up to the tag's host words
+      run: scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
     - name: the native warp
       run: WARP_LIB=$PWD/lib "$RUNNER_TEMP/bootstrap/warp" build native core/native/warp.warp
     - name: the release folder, gated
