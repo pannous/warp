@@ -161,11 +161,12 @@ declared_result(f: Function): any := {
 }
 # the mark of a number type the definition declares it gives, `f(c: Color): Color := c`, so its caller holds the
 # result unboxed with its mark; 0 for any other result
-declared_mark(f: Function): int := {
+declared_mark(f: Function): int := module.marks.get(declared_result_word(f) ?? "") ?? 0
+# the type word a definition declares it gives, `int` of `f(): int := …`; ø when it declares none
+declared_result_word(f: Function): text? := {
 	declaration = result_declared(f.body)
-	if declaration == ø { return 0 }
-	type = if is_key(declaration, Op.As) then name_of(value_of(declaration)) else held_result_type(declaration)
-	module.marks.get(type) ?? 0
+	if declaration == ø { return ø }
+	if is_key(declaration, Op.As) then name_of(value_of(declaration)) else held_result_type(declaration)
 }
 # the part of a body that declares its result: `… as T`, or `the result: T = …` of a block, ø when none does
 result_declared(n: Node): Node? := {

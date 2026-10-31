@@ -133,12 +133,15 @@ boxed_int_slot(body: Body, n: Node): bool := n is symbol and name_of(n) in body.
 unboxed_int_slot(body: Body, n: Node, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and boxed_int_slot(body, n) then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
 # a literal beside a fast int takes the int side: `i + 1` of a counter wraps
 wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
-# a fast int: a variable or parameter declared int (a loop's counter is), `#xs`, + - * of fast ints
+# a fast int: a variable or parameter declared int (a loop's counter is), a call of a function declared int, `#xs`, + - * of fast ints
 fast_int(body: Body, n: Node): bool := {
 	if n is symbol { return declared_int(body, name_of(n)) }
 	if is_key(n, Op.Hash) and key_of(n) == ø { return yes }
+	if is_round(n) and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return gives_declared_int(module.functions[name_of(n#1)]) }
 	type(n) is key and op_of(n) in grown_words and key_of(n) != ø and wraps(body, key_of(n), value_of(n))
 }
+# a call of a function declared to give an int, `f(): int := 3` (decision declared-int-result)
+gives_declared_int(f: Function): bool := declared_kinds.get(aliased_type(declared_result_word(f) ?? "")) == ValueKind.Int
 declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int)
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod", "rem": "exact_rem"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
