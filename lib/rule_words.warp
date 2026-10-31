@@ -351,11 +351,11 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			}
 			required_checks = required_fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
 			checks = fields.map(field => typed_json_check(field, field_types[field]))
-			assignments = fields.map(field => "if keys(typed_json_value).contains(\"" + field + "\") { typed_json_result." + field + " = typed_json_value[\"" + field + "\"] }")
+			arguments = fields.map(field => field + ": if keys(typed_json_value).contains(\"" + field + "\") then typed_json_value[\"" + field + "\"] else typed_json_defaults." + field)
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
-			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; typed_json_result = " + name_of(type_name) + "{}; " + assignments.join("; ") + "; typed_json_result })"))
+			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; typed_json_defaults = " + name_of(type_name) + "{}; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
 			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
 		}
 	}
