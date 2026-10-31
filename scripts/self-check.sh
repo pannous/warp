@@ -8,8 +8,8 @@
 rebuild=
 [[ ${1-} == --rebuild ]] && { rebuild=1; shift; }
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
-# main's native warp
-main_warp=/Users/me/dev/bin/warp
+# the native warp checked with: WARP_BINARY (a branch changing the driver brings its own build), else the shared one
+main_warp=${WARP_BINARY:-/Users/me/dev/bin/warp}
 main_checkout=/Users/me/dev/angles/warp
 store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}  # scripts/rebuild.sh's, where stage 2's outcome is kept too
 shown_lines=60  # of a failed stage 2's output
@@ -88,7 +88,7 @@ $said"; return 1; }
 # (<store>/<hash>/stage-two.passed, stage-two.failed/ with build.log and message), so a check of that hash runs it once;
 # --rebuild runs it again
 stage_two() {
-  local stage=$scratch/lib native=/Users/me/dev/bin/warp  # the native warp: WARP_LIB first, nothing beside it wins
+  local stage=$scratch/lib native=$warp  # the checked native warp: WARP_LIB first, nothing beside it wins
   local hash=${$(cut -d' ' -f1 $worktree/lib/warp.wasm.inputs 2>/dev/null):-unhashed}
   local record=$store/$hash/stage-two log=$scratch/stage-two.log
   if [[ -z $rebuild && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
