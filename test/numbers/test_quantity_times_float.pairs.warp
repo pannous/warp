@@ -1,0 +1,7 @@
+# A quantity times or divided by any plain number keeps its unit, whatever produced the number: a class's own operator
+# takes a float itself, float contagion only fills in where a class leaves the operator to the builtin (card
+# quantity-times-float)
+'use units; q = 3m; "" + q * sin(0.5)'	"1.438276615812609m"
+'use units; "" + sin(0.5) * 3m'	"1.438276615812609m"
+'use units; f(x) := x * 2.0; q = 4m; "" + q / f(1)'	"2m"
+'use units; x = sqrt(2.0); "" + x * 1km'	"1414.213562373095m"
