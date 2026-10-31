@@ -670,3 +670,6 @@ the original questions 1–41: test edits and housekeeping done.
 - member-after-dot (user 2026-10-31): `m.ms` always reads the member, also when the program defines a nullary ms(); the compile-time trap ("index out of range") is fixed in core (warp-quality)
 - pinned-tests-update-2 (user 2026-10-31, "Only (a) and (c)"): the shared-capture lines (nonlocal_lambdas:8, shared_captures:10/:11) and the 3 nat lines take the decided readings; `square N < N` stays red: math's square gets a type instead so the comparison reads one way; `if exists profile` reads AGENTS.md instead of the deleted Cargo.toml
 - declared-int-result (user 2026-10-31): a result declared int reports int (`f(): int := 3; type(f())` is int, not nat)
+- shown-separator (user 2026-10-31, speech: "The space is canonical then, should be stored in the node but I don't care"): a shown list/map keeps the separator its source wrote (the List node's Separator), the space form `[6 7]` `{a:1 b:2}` where none is kept; the tests pinning the space form stay; low priority
+- pinned-tests-update-3 (user 2026-10-31): tests pinning pre-glued-negative and pre-exact-roots readings take the decided ones
+- root-dispatch-float (user 2026-10-31): with f(int) and f(float), an irrational exact root (sqrt(2)) picks the float variant; a whole root (√9) counts as int
