@@ -169,6 +169,11 @@ worktree with nothing new against main is removed, its branch deleted (local and
 ${PARKED_BEFORE:+Parked by the previous run:
 $PARKED_BEFORE
 }
+Supervisor direction 2026-10-31 for typed-parse: land the passing first slice (flat class fields and field-path
+errors, with their passing tests). Split nested objects, optional values and generic parse<T> spelling into cards
+typed-parse-nested, typed-parse-optional and typed-parse-generic; preserve unfinished work and avoid duplicate cards.
+Do not run warp test until warp-test-timeout is installed: follow the hold in common.md and use single CLI runs.
+
 THEN, with time left, take one or two cards from the Supervisor's list $CARD_LIST, in its order (user, 2026-10-26: library work
 that does not disturb the sessions working on the compiler). Skip a card that already names an agent, whose branch
 exists on origin, that is no longer on the board (\`todo show <card>\`) or whose notes already say \"needs core\". None
@@ -188,7 +193,7 @@ optional fields, a name), take the recommended default, write it into the handov
 when every card you took is landed, parked with such a commit, or released as needing core.
 
 Per card: its own branch and worktree (\`cowtree add\`, as in common.md), a test first in test/<topic>/, then common.md
-\"Done\": format, merge origin/main, \`scripts/smoke.sh <worktree>\`, \`warp test\` on the folders you touched, push to
+\"Done\": format, merge origin/main, \`scripts/smoke.sh <worktree>\`, follow the current testing rules, push to
 main yourself, \`todo done <card> <commit>\`. Never change existing tests unless common.md allows it. A working part of a
 card may land on its own (smoke green), the rest stays on the card.
 
