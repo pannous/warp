@@ -493,9 +493,11 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
 	fallback = if not falls_back then ø else if operated then reflected else builtin_call(spellings#1, call_arguments)
-	# an operator's operands are any values: a number reaches the builtin, an instance its class's method; a routed
-	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
-	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters
+	# a dispatcher with a fallback takes any values in every place: a number reaches the builtin, an instance its class's
+	# method, compiled for any values, never for the kinds of a call no instance makes (`m[name] = v` of a map beside a
+	# class's position(p, v), whose `p` would be a text); so a list `[3, 1].sort()` passes none of the owners' methods
+	# its kind (their `self.n`)
+	head = if falls_back then call_arguments.map(argument => Key(argument, Op.Colon, symbol("any"))) else [self_node] + parameters
 	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback)
 	# a class with its own method of the operator takes a float itself (`q * sin(x)` keeps q's unit, π's `*` gives the
 	# float): contagion only for the classes that leave the operator to the builtin
