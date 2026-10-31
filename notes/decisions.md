@@ -674,3 +674,8 @@ the original questions 1–41: test edits and housekeeping done.
 - pinned-tests-update-3 (user 2026-10-31): tests pinning pre-glued-negative and pre-exact-roots readings take the decided ones
 - root-dispatch-float (user 2026-10-31): with f(int) and f(float), an irrational exact root (sqrt(2)) picks the float variant; a whole root (√9) counts as int
 - rules-to-typed-operators (user 2026-10-31, speech, tentative): "as many as rules as possible should be reverted [rewritten] as typed operators: infix operator pipe (any x, function g):= f(x)  operator pipe (type a, type b):= a or b  idk ..." — a rewrite rule whose meaning depends on its operands' kinds becomes typed operator overloads, dispatch decides (`text | int` a union, `x | f` a call); first case: the pipe rule in lib/sugar/calls.warp (card union-later-member, warp-speed)
+- core-lines-in-questions (user 2026-10-31): every question about a core/ change shows how many core lines it changes (in the question and in each option that changes core); rule in notes/agents/interviewer.md, the Supervisor follows it too
+- named-args-colon (user 2026-10-31, "Change the test"): named arguments are written `f b: 1 a: 5`; `f b=1` after a word stays op-assign-general's compound; test_preposition_calls:49 follows
+- call-negative-plus-test (user 2026-10-31): test_minus_after_callable:11 takes call-takes-right's reading (`f -2 + 1` is f(-1))
+- unit-runs-spaced-only (user 2026-10-31, core one-liner): phrase rules try runs only in a space-separated group, never across comma items (`[1, s]` stays two items)
+- unit-binds-below-power (user 2026-10-31, core one-liner): a spaced unit binds looser than ^ and tighter than + and comparisons: `4 m²` is 4*(m²)
