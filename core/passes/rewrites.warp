@@ -1454,7 +1454,8 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 		if is_element_list(n) { n = group_like(n, items_of(n).map(element => at_place(element, Place.Element, rules, origins))) }
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
-		runs = with_runs(if phrase then words_of_all(items) else items, rules, origins)
+		# runs of words side by side, never across commas: `[1, s]` holds none (card match-rest-item-pattern)
+		runs = if separator_of(n) != "," then with_runs(if phrase then words_of_all(items) else items, rules, origins) else items
 		if phrase and runs == words_of_all(items) { runs = items }
 		# a phrase all one run takes the place the phrase stands in: a statement's template of statements stays the
 		# statements (`$f(x) := …` defines f where the phrase stood), a value's turns into its block (as_value) there
