@@ -56,14 +56,14 @@ once per program, never per node or call site. Cheap `where` guards don't save a
    Found with warp-quality's WARP_PROFILE=perfmap (scripts/profile.sh) on `warp parse-code "<2000 lines>" out.bin`;
    a parser timing needs no `warp parse` (its print is quadratic) and no compiler build per probe.
 
-## Left (main 8a45e5…: lowering 176 s up to checked_program, emit ~40 s)
-The parser is the biggest single cost, ~62 s:
-- the used core files: 30.9 s, linear (parser.warp 4819 lines 5.6 s, ~19 µs per byte), about halved by 5.
-- SLICE_PARSES 18.6 s: every library definition parsed again, one by one, after LIBRARY_PARSES (12.4 s) parsed each
-  whole file (card slice-parses-definitions)
-Then index_positions 17 s, lambdas (pass 23) 11 s, sugar (pass 22) 8 s; emit (card emit-cpu-profile, warp-quality).
-with_uses did not regress on main: 65 s, as before; a measurement beside other builds inflated it to 75–93 s.
-`warp parse` printing a big tree is quadratic (×4 the file: 353 s, card parse-print-quadratic); the parse itself isn't.
+## Left (main 42a19df29a, stage two 2efb9b98f2f3eca9: 166 s CPU, 580 MB; was 820 s this morning)
+No single fix of 5 s or more is left without a design change (cards):
+- emit 46 s (27%): wasmtime's is_subtype libcall and GC (warp-quality, card emit-wasmtime).
+- nodes_in lists (card builds-list): keep_nodes 13% of the compile across ~60 callers, none over 8%; half GC.
+- rule tries (card sugar): rewritten_program 8.7 s, sugar 9.7 s, each kept rule tried at each node.
+- LIBRARY_PARSES 7 s per compiler build (card library-parses-cost): the bake parses every std module anew.
+- then lambdas 7.5 s, arity_overloads 6.2 s (mostly nodes_in), first/late/iteration/comprehension sugar 4–5 s each.
+`warp parse` printing a big tree is quadratic (card parse-print-quadratic); the parse itself isn't.
 
 ## Three walks (2026-10-31, found on the def-first measurement)
 Self-check's stage two (compiler.warp compiled by the tree's own warp.wasm), both on the GC growth fix (1cd7a5c2e3:
