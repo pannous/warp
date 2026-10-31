@@ -323,6 +323,8 @@ class Note {
 	octave() := floor(key / 12) as int - 1
 	name() := note_names[key % 12]
 	text() := name() + string(octave()) + cents_text(cents)
+	// a run's value shows as written, E4 or C#4 (decision show-hook)
+	show() := text()
 	// a part of a semitone moves the cents: note(C4) + 2.25 is D4+25c
 	plus(semitones) := if semitones is int then Note(key + semitones, cents) else nearest_note(hertz() * 2 ^ (semitones / 12.0))
 	minus(semitones) := plus(-semitones)
