@@ -17,6 +17,7 @@ EXPECTED_RUN = "e"
 # the work folder's file of the listed cases' places
 LISTED = "cases"
 TIMED_OUT = "timeout"
+NEVER_RAN = "·never ran"
 CASE_SECONDS = 30
 # a case slower than this is no part of `warp test` (decision no-slow-tests): said with its time, it belongs in
 # test/slow/<topic>/, run only when named
@@ -89,10 +90,11 @@ case_failure(case: TestCase, got: any, expected_run: text): text := {
 }
 
 # the value a run gave as a view: what it printed after the value mark, ø when it printed none, an error with its
-# message when it failed; a text for a run that timed out
+# message when it failed; a text for a run that timed out or never ran (no status written: the runner's fault, said so)
 run_result(work: text, run: text): any := {
 	at = work + (if run == "" then "" else "/" + run)
-	status = (try read(at + ".status") else TIMED_OUT).trim()
+	status = (try read(at + ".status") else NEVER_RAN).trim()
+	if status == NEVER_RAN { return "never ran: the runner wrote no " + at + ".status" }
 	if status == TIMED_OUT { return "timed out after " + CASE_SECONDS + " s" }
 	if status != "0" { return ["error", ["text", last_line_of(try read(at + ".err") else "")]] }
 	parts = (try read(at + ".out") else "").split(VALUE_MARK + "\n")

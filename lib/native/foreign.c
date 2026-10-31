@@ -352,6 +352,9 @@ void* warp_host_callback(void* word, void* caller, const void* values, size_t co
 	memcpy(at(wasi, given), values, count * VALUE_BYTES);
 	answer(wasi->program, (u64)(uintptr_t)word, (u64)(uintptr_t)caller, given, count, answered, results_count);
 	memcpy(results, at(wasi, answered), results_count * VALUE_BYTES);
+	// given back zeroed: the arena past its top stays as fresh memory is, so an allocate after a host word (warp test's
+	// slots after test-list ran) never starts with an earlier word's bytes
+	memset(at(wasi, before), 0, *top - before);
 	*top = before;
 	return NULL;
 }
