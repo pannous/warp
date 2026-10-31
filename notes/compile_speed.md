@@ -16,6 +16,9 @@ CPU seconds between phase markers:
   samples and those with its callees: no rebuild, no markers. `-r <pid>` reports a kept data/profile/<pid>.sample
   again. sample manages ~30 ms a sample on wasmtime's threads, so profile a minute or more. Its first find: 55% of a
   parse in alias_at → longest_spelled_at, 39% in operator_at → spelled_operator_at (2026-10-31).
+  Cost (2026-10-31, bench.warp on parser.warp, ~94 s CPU): WARP_PROFILE=perfmap alone changes nothing (93.3 vs 93.5 s
+  CPU); `sample` attached for the whole run keeps CPU the same (94.0 s) and adds ~10–15% wall (108 vs 94–95 s) while
+  it pauses the thread. On that run it took 76 k main-thread samples in 108 s, ~1.4 ms each.
 - Phase markers: a compiler built with `timed(label)` calls (`print "§T " + label` when WARP_TIMES is set) in
   passes.warp lowered_node (per pass index), with_used, compiler.warp; branch compile-times (scratch, never landed).
 - `data/phase_times.py <command…>` (in that branch) reads the process's CPU (ps) at each marker and prints the spans,
