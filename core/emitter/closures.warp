@@ -37,9 +37,15 @@ def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
 	callee = expression_code(body, arguments#1)
 	# `(2)(3)`, `(a + b)(c)`: a number glued to a group multiplies it, as `3(4)` does; a variable keeps its call
-	numeric = callee.kind == ValueKind.Int or callee.kind == ValueKind.Float
+	numeric = callee.kind == ValueKind.Int or callee.kind == ValueKind.Float or grows(arguments#1)
 	if numeric and arity == 1 and not (arguments#1 is symbol) { return expression_code(body, Key(arguments#1, Op.Mul, arguments#2)) }
 	call_values(dispatcher(arity), [callee] + arguments[1..].map(a => expression_code(body, a)))
+}
+# `(a + b)`: a sum, difference or product, held boxed where a whole number may grow (operators.warp arithmetic), a
+# number all the same
+grows(n: Node): bool := {
+	inner = if is_group(n) and bracket_of(n) == "(" and #n == 1 then n#1 else n
+	type(inner) is key and op_of(inner) in grown_words and key_of(inner) != ø
 }
 # the name of a dispatcher's argument i, from 0
 dispatcher_argument(i: int): text := "argument" + (i + 1)
