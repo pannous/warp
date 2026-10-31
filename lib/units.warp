@@ -52,6 +52,9 @@ measured(amount: number, dims: int, unit: text, scale: number) := {
 	if dims == pixels_dimension { return Pixels(amount, dims, unit, scale) }
 	Quantity(amount, dims, unit, scale)
 }
+// a plain number as the dimensionless quantity it is: an operator meeting a number and a quantity promotes the number
+// (decision as-promotes), so `2.0 / 4m` is 0.5/m and `1.0 - 4m` a DimensionError, never a plain number
+n: number as Quantity := measured(n, 0, "", 1)
 // `6km / 2000m` of one dimension is the plain number 3; `90km / h` a speed
 quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, above.unit + "/" + below.unit, above.scale / below.scale)
 
