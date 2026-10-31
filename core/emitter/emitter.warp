@@ -1216,6 +1216,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 		if target == ValueKind.List and value.kind == ValueKind.Text { return runtime_call("text_chars", [value]) }
 		# `65 as codepoint` is 'A', `2 as char` the digit '2'
 		if target == ValueKind.Char and value.kind == ValueKind.Int { return TypedCode(ValueKind.Char, runtime_call("cast_code_point", [value]).code + [op.i32_wrap_i64]) }
+		# `(d + 87) as char` of a nat, a node at run time
+		if target == ValueKind.Char and value.kind == ValueKind.Node { return TypedCode(ValueKind.Char, runtime_call("node_code_point", [value]).code + [op.i32_wrap_i64]) }
 		if target == ValueKind.Bool and (value.kind == ValueKind.Node or value.kind == ValueKind.Text) { return runtime_call("bool_cast", [TypedCode(ValueKind.Node, boxed(value))]) }
 		return TypedCode(target, converted(value, target))
 	}
