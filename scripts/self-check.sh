@@ -88,7 +88,7 @@ $said"; return 1; }
 # (<store>/<hash>/stage-two.passed, stage-two.failed/ with build.log and message), so a check of that hash runs it once;
 # --rebuild runs it again
 stage_two() {
-  local stage=$scratch/lib native=/Users/me/dev/bin/warp  # the native warp: WARP_LIB first, nothing beside it wins
+  local stage=$scratch/lib native=$warp  # the checked native warp: WARP_LIB first, nothing beside it wins
   local hash=${$(cut -d' ' -f1 $worktree/lib/warp.wasm.inputs 2>/dev/null):-unhashed}
   local record=$store/$hash/stage-two log=$scratch/stage-two.log
   if [[ -z $rebuild && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
