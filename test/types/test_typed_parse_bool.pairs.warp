@@ -1,0 +1,3 @@
+# Card typed-parse: JSON booleans are checked as booleans without numeric coercion.
+'class Settings { enabled: bool }; parse("{enabled:true}", Settings).enabled'	yes
+'class Settings { enabled: bool }; try { parse("{enabled:1}", Settings) } catch e { e.message }'	'enabled must be bool, received number'
