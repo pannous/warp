@@ -5,3 +5,5 @@ Branch `typed-parse-flat` isolates required flat class fields from the unfinishe
 `warp format yes` left the two implementation files unchanged but replaced the required tab in each new `.pairs.warp` test with a space. Restored the authored tab-separated test content; card format-pairs tracks the formatter issue. Do not format pair files until that is fixed.
 
 The original branch's constructor guard passed its focused outcome and smoke. The flat slice smoke is running in `data/typed-parse-flat/smoke.log`; a computed-source outcome was added while it builds, without changing compiler inputs.
+
+Early feedback against the preserved branch compiler (not the flat slice build): 11 outcomes in the library, bool, falsy, root, computed-source and flat-diagnostics files passed via `WARP_NO_WINDOW=1 WARP_LIB=/Volumes/Worktrees/typed-parse/lib /Users/me/dev/bin/warp test` with the six absolute file paths. The flat slice and its new field-shape guards still require their own build and tests.
