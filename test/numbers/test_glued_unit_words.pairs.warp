@@ -1,0 +1,7 @@
+# a unit word glued to its number is the program's word, its module used without saying it (decision implicit-standard-words)
+'"" + 3km'	"3km"
+'3km == 3000m'	yes
+'x = 3km; "" + x'	"3km"
+'"" + 0.25km'	"0.25km"
+'sleep(3ms); 1'	1
+'x3km = 2; x3km'	2
