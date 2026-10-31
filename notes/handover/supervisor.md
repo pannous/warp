@@ -16,7 +16,7 @@ Language-meaning questions that would go to the Interviewer go there too.
 | session | card / task |
 |---|---|
 | warp-speed | compile slowdown, TOP PRIORITY (decision compile-speed-first): self-compile profile; building lib-hash-rebake (user OK) |
-| warp-rule-words-removal | is-value-scope: `$x is value` in rule conditions sees function parameters and locals (core, OK'd at night) |
+| warp-rule-words-removal | programs-read: real_path host import so files behind absolute symlinks read (format-missing done 46915c7a18) |
 | warp-shaders | angle-type-alias → units-ignored-by-shaders → use-keys → ocean m/s todos (ocean landed fc2ed2681c; dot-product is Codex's) |
 | warp-integrator | full suites held tonight for warp-speed's measurements; seed refresh after lib-hash-rebake lands |
 | Codex (cron 02/07/12/17/22:35) | notes/agents/codex_worker.sh, 4 rounds per firing; typed-parse and dot-product parked on their branches |
@@ -25,6 +25,5 @@ Retired tonight: warp-fixer, warp-wgsl, warp-exact-decimal-big, warp-cards, warp
 (landed 06d61d3be1), warp-interviewer (archived by the user).
 
 ## Waiting
-- format-missing (Next): `warp format` can't read hello.warp, so the Done step's format is broken; first card for a free worker.
 - codex-cron: 4 rounds per firing now; check data/agents/codex/*.last.md of the 23:5x run and the 02:35 run.
 - Promise: tell the user what warp-speed's profile finds and when lib-hash-rebake lands.
