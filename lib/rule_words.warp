@@ -320,15 +320,29 @@ generic_typed_json(head: Node, source: Node, program: Node): Node? := {
 	typed_json(source, symbol(name[#prefix..]), program)
 }
 
+typed_json_value_check(value: text, path: text, value_type: text, depth: int): text := {
+	list_prefix = "list of "
+	is_list = value_type.starts_with(list_prefix)
+	tested_type = if is_list then "list" else value_type
+	expected = if tested_type == "string" then "text" else tested_type
+	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
+	check = "if not (" + value + " is " + tested_type + ") { raise " + path + " + \" must be " + expected + ", received \" + " + received + " }"
+	if is_list {
+		index = "typed_json_index_" + depth
+		item = "typed_json_item_" + depth
+		item_path = "(" + path + " + \"[\" + " + index + " + \"]\")"
+		check += "; for " + index + " in 1 to #" + value + " { " + item + " = " + value + "#" + index + "; " + typed_json_value_check(item, item_path, value_type[#list_prefix..], depth + 1) + " }"
+	}
+	check
+}
+
 typed_json_check(field: text, field_type: text): text := {
 	optional = field_type.ends_with("?")
 	base_type = if optional then field_type[0..#field_type-1] else field_type
-	expected = if base_type == "string" then "text" else base_type
 	value = "typed_json_value[\"" + field + "\"]"
-	wrong_type = "not (" + value + " is " + base_type + ")"
-	if optional { wrong_type = "not (" + value + " is ø) and " + wrong_type }
-	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
-	"if keys(typed_json_value).contains(\"" + field + "\") and " + wrong_type + " { raise \"" + field + " must be " + expected + ", received \" + " + received + " }"
+	present = "keys(typed_json_value).contains(\"" + field + "\")"
+	if optional { present += " and not (" + value + " is ø)" }
+	"if " + present + " { " + typed_json_value_check(value, "\"" + field + "\"", base_type, 0) + " }"
 }
 
 # Generate typed JSON parsing from the class declared in the program.
