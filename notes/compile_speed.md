@@ -74,7 +74,8 @@ peak RSS 942 -> 625 MB (-34%), all from two walks:
   the compile): each name's last assignment is gathered once (lambdas 18.8 -> 7.2 s).
 - each sugar step listed the program's nodes five times for its rule lookups, now once (sugar steps, type_tests -8 s).
 - index_positions copied every name the program assigns (most counting nothing) into each function's scope: a scope
-  now passes on only the names that count (a function's own `i = t.find(x)` counts, its local).
+  now passes on only the names that count (a function's own `i = t.find(x)` counts, its local): index_positions
+  17.9 -> 1.4 s (stage two of 9a845e21fccdf599, on a loaded machine).
 def-first (every definition starting with `def`) gained nothing measurable and is parked on branch
 function-definition-core; its two collection passes were not built (the collectors they'd replace are <0.5% each, the
 definition gatherers ~1-1.7%; a table collected after with_used goes stale as later passes add, rename and lift
@@ -93,4 +94,6 @@ definitions; user: discuss later). Left: emit 44 s (22%), index_positions 18 s, 
 
 ## Marker pitfalls
 - A marker must stand before the work it names: `f(label, computed)` prints after `computed` ran (timed_bake did).
-- phase_times stops only at `emit done`; without that marker the rebuild's tail lands in the last label.
+- phase-times.py stops at a log's first `emit done`.
+- The marks are printed (stdout): WARP_TIMES set for a test or gate run makes every case's output differ; set it only
+  for the build or self-check measured.
