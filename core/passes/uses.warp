@@ -28,7 +28,7 @@ with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_own_alias
 # loader.rs with_module_directory)
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: Node, folder: text): any := {
-	statements = statements_in(program)
+	statements = flat_statements(program)
 	brought = declarations_used(statements, folder, [], {})
 	if #brought#1 == 0 { return program }
 	kept = statements.filter(s => file_used(s, folder) == ø)
@@ -194,7 +194,7 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 		file = file_used(statement, folder)
 		if file != ø and file not in seen {
 			seen += [file]
-			used = statements_in(with_module_directory(file_parsed(file), folder_of(file)))
+			used = flat_statements(with_module_directory(file_parsed(file), folder_of(file)))
 			note_file_origins(file, file_text(file))
 			inner = declarations_used(used, folder_of(file), seen, claimed)
 			seen = inner#2

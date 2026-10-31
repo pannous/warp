@@ -271,6 +271,9 @@ fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
 # a program's statements: a sequence's, by `;` or by lines, else the one statement it is
 is_statement_sequence(program: Node): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
 statements_in(program: Node): list := if is_statement_sequence(program) then items_of(program) else [program]
+# the statements of a program, those of its nested sequences among them: a `;` line among lines (`use os; x = 1⏎…`
+# uses os), an included module
+flat_statements(program: Node): list := if is_statement_sequence(program) then items_of(program).flat_map(flat_statements) else [program]
 
 # a node with f applied to each of its children; n itself when every child came back the very same node, so a pass
 # makes new nodes only on the path from a change to the root (decision shared-subtrees)
