@@ -201,7 +201,7 @@ Principles and Talking live only in common.md.
 - Forward crunch: land a branch once it builds and its smoke test passes; tests failing in its own area don't hold
   it back: the Integrator's background tiers card them and you fix forward. More than ~20 failing tests of yours:
   fix those before new work.
-- Before landing: `data/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
+- Before landing: `warp format yes <files>` on the .warp files you wrote or changed (notes/warp_format.md),
   and commit what it moved. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
 - Landing (self-landing, user 2026-10-26: no merge queue, no Ready column; common.md "Done"):
   1. Targeted tests, commit, formatted.
