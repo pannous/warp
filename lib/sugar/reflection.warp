@@ -24,3 +24,4 @@ rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $pr
 rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
 
 rewrite parse($source, $type) => $result where $type is type and $result = typed_json($source, $type, $program)
+rewrite $head ($source) => $result where $head is symbol and $result = generic_typed_json($head, $source, $program)
