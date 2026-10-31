@@ -67,7 +67,13 @@ with_uses did not regress on main: 65 s, as before; a measurement beside other b
 - 26% of emit is wasmtime's is_subtype libcall (StoreOpaque::is_subtype_cached): a `ref.test`/`ref.cast` whose
   types are not the same takes it, a failing test always. The runtime's number and node type tests do so on every
   call: node_type_test 24% with callees, ratio_node 27%, number_byte 20% (a value tested for a ratio, a box…).
-  Card emit-wasmtime: types declared final (`sub final`) or a test on the kind field first.
+  Fixed (card emit-wasmtime): wasmtime tests a final type by index equality, an open one of another type through the
+  libcall; every class struct was open, so instance_place / instance_field_at tested each class in turn and
+  is_class_instance the open $Instance (55% of the libcall). A class nobody extends now has a final struct and
+  is_class_instance tests each class's: stage 3 (the compiler compiling itself through code its own emitter wrote)
+  is_subtype 8.5% → 1.4%, 254.6 → 242.2 s CPU. The rest is the cast to the open $Node of a $MetaNode or an instance
+  (node_equal, node_text). Measure an emitter change at stage 3: stage 2 runs the seed's code, and the store's
+  warp-self.wasm is a copy of warp.wasm (data/emit-wasmtime/measure.sh).
 - 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
   initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
 - The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
