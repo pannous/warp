@@ -338,6 +338,8 @@ type_word(n: Node, scope: Scope): TypeWord := {
 # the type word of one element: ø, a literal number's (int, rational, float), else its kind
 element_type_word(n: Node, scope: Scope): TypeWord := {
 	if is_empty(n) { return "ø" }
+	# an item as data_items.warp shows a written one, `data·item: 1/2`, is the item's own type
+	if is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.DataItem as text) { return element_type_word(value_of(n), scope) }
 	if n is number { return if n is int then "int" else if number_kind(n) == ValueKind.Int then (if n % 1 == 0 then "int" else "rational") else "float" }
 	if is_key(n, Op.Div) and key_of(n) is int and value_of(n) is int and value_of(n) != 0 { return if key_of(n) % value_of(n) == 0 then "int" else "rational" }
 	kind_spelling(inferred_kind(n, scope))
