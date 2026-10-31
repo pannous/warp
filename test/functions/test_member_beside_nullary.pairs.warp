@@ -1,0 +1,4 @@
+# a member after a dot reads the field, though a function taking nothing has its name (decision member-after-dot)
+'ms() := 7; m = {ms: 5}; m.ms'	5
+'ms() := 7; class Moment {ms: int}; Moment(5).ms'	5
+'ms() := 7; m = {ms: 5}; ms + m.ms'	12
