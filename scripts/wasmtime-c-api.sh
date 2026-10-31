@@ -17,6 +17,33 @@ STB_COMMIT=6e9f34d5429cf16790ec43c9bac3f1ee4ad1f760
 STB_TRUETYPE_SHA256=ecd30b05e0dd4fea3a13c26810dd9e1992dc379049482c393d5a19e6b5090aab
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
 window_build=${WARP_WINDOW_TARGET:-/opt/cargo/warp-window}
+WASMTIME_VERSION=50.0.0
+WASMTIME_SHA256=2d93539aae382faee7b19650fd966f1f8185599b9cc4adc0a5a8b8f768c11ba9
+
+# fetched <file> <url> <sha256>: the file downloaded once and checked
+fetched() {
+  [ -f "$1" ] && return
+  mkdir -p "$(dirname "$1")"
+  curl -sSfL -o "$1.new" "$2"
+  echo "$3  $1.new" | shasum -a 256 -c - >/dev/null
+  mv "$1.new" "$1"
+}
+
+# wasmtime with warp's patches (crates/wasmtime-capi/patches/, its Cargo.toml [patch.crates-io]): the crate from
+# crates.io, unpacked into crates/wasmtime-capi/patched/wasmtime and patched anew whenever the patches change
+patched_wasmtime() {
+  local crate=$checkout/crates/wasmtime-capi stamp
+  local patched=$crate/patched
+  stamp=$(cat "$crate"/patches/*.patch | shasum -a 256 | cut -d' ' -f1)
+  [ "$(cat "$patched/wasmtime/.patches" 2>/dev/null)" = "$stamp" ] && return
+  fetched "$CARGO_TARGET_DIR/wasmtime-$WASMTIME_VERSION.crate" "https://static.crates.io/crates/wasmtime/wasmtime-$WASMTIME_VERSION.crate" "$WASMTIME_SHA256"
+  rm -rf "$patched/wasmtime" "$patched/wasmtime-$WASMTIME_VERSION" && mkdir -p "$patched"
+  tar -xzf "$CARGO_TARGET_DIR/wasmtime-$WASMTIME_VERSION.crate" -C "$patched"
+  mv "$patched/wasmtime-$WASMTIME_VERSION" "$patched/wasmtime"
+  for patch in "$crate"/patches/*.patch; do patch -s -p1 -d "$patched/wasmtime" <"$patch"; done
+  echo "$stamp" >"$patched/wasmtime/.patches"
+}
+patched_wasmtime
 (cd "$checkout/crates/wasmtime-capi" && nice -n 19 cargo build --release --locked -q)
 case $(uname -s) in
   Darwin) suffix=dylib; prefix=lib; system_libraries=""
@@ -32,7 +59,9 @@ window_library=${prefix}warp_window.$suffix
 # a library owning host words reads and builds warp values in place (lib/native/warp_node.h) through warp's wasmtime:
 # its headers, it linked, and the value layout as the compiler has it (scripts/node_layout.warp), checked when a warp
 # is at hand: the committed header differing fails the build
-wasmtime_include=$(ls -d "$CARGO_TARGET_DIR"/release/build/wasmtime-c-api-impl-*/out/include 2>/dev/null | head -1)
+# (cargo's build folder of the C API, <package>-<hash>/out or, newer, <package>/<hash>/out)
+wasmtime_include=$(find "$CARGO_TARGET_DIR/release/build" -path '*wasmtime-c-api-impl*/out/include' -type d -print -quit)
+[ -n "$wasmtime_include" ] || { echo "wasmtime-c-api.sh: no wasmtime C API headers under $CARGO_TARGET_DIR/release/build" >&2; exit 1; }
 case $(uname -s) in
   Darwin) loader_path=@loader_path ;;
   *) loader_path='$ORIGIN' ;;
@@ -53,12 +82,7 @@ current() { local target=$1 each; shift; for each in "$@"; do [ "$target" -nt "$
 sound_library_built() {
   mkdir -p "$sound_build"
   header=$sound_build/miniaudio-$MINIAUDIO_VERSION/miniaudio.h
-  if [ ! -f "$header" ]; then
-    mkdir -p "$(dirname "$header")"
-    curl -sSfL -o "$header.new" "https://raw.githubusercontent.com/mackron/miniaudio/$MINIAUDIO_VERSION/miniaudio.h"
-    echo "$MINIAUDIO_SHA256  $header.new" | shasum -a 256 -c - >/dev/null
-    mv "$header.new" "$header"
-  fi
+  fetched "$header" "https://raw.githubusercontent.com/mackron/miniaudio/$MINIAUDIO_VERSION/miniaudio.h" "$MINIAUDIO_SHA256"
   source=$checkout/crates/warp-sound/warp_sound.c
   built=$sound_build/$sound_library
   [ "$built" -nt "$source" ] && [ "$built" -nt "$header" ] && return
@@ -84,10 +108,8 @@ gpu_library_built() {
   release=$gpu_build/wgpu-$WGPU_VERSION
   archive=$release/lib/libwgpu_native.a
   if [ ! -f "$archive" ]; then
-    mkdir -p "$release"
-    curl -sSfL -o "$release.zip" "https://github.com/gfx-rs/wgpu-native/releases/download/v$WGPU_VERSION/wgpu-$platform-release.zip"
-    echo "$sha256  $release.zip" | shasum -a 256 -c - >/dev/null
-    (cd "$release" && unzip -oq "$release.zip") && rm "$release.zip"
+    fetched "$release.zip" "https://github.com/gfx-rs/wgpu-native/releases/download/v$WGPU_VERSION/wgpu-$platform-release.zip" "$sha256"
+    mkdir -p "$release" && (cd "$release" && unzip -oq "$release.zip") && rm "$release.zip"
   fi
   source=$checkout/crates/warp-gpu/warp_gpu.c
   built=$gpu_build/$gpu_library
@@ -105,12 +127,7 @@ window_library_built() {
   flags=$(pkg-config --cflags --libs sdl3 2>/dev/null) || return 0
   mkdir -p "$window_build"
   header=$window_build/stb-$STB_COMMIT/stb_truetype.h
-  if [ ! -f "$header" ]; then
-    mkdir -p "$(dirname "$header")"
-    curl -sSfL -o "$header.new" "https://raw.githubusercontent.com/nothings/stb/$STB_COMMIT/stb_truetype.h"
-    echo "$STB_TRUETYPE_SHA256  $header.new" | shasum -a 256 -c - >/dev/null
-    mv "$header.new" "$header"
-  fi
+  fetched "$header" "https://raw.githubusercontent.com/nothings/stb/$STB_COMMIT/stb_truetype.h" "$STB_TRUETYPE_SHA256"
   source=$checkout/crates/warp-window/warp_window.c
   built=$window_build/$window_library
   # shellcheck disable=SC2086 # the headers are words
