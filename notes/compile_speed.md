@@ -36,10 +36,18 @@ once per program, never per node or call site. Cheap `where` guards don't save a
 
 4. called_only (warp-quality, 94a0dfeea8): each called word scanned all statements, the pending list was copied per
    step: 24 → 1.1 s.
+5. The parser's per-token cost (card compiler-parse-timing): every token tried every operator alias in turn
+   (alias_at → longest_spelled_at, 55% of a parse), and each operand found superscripts by walking the superscript
+   table text (position_in, ~25% of what was left). Fix: the aliases, truth glyphs, negated spellings and test words
+   indexed by first character once (parser.warp by_first_character, starting_here), the superscript tables as maps
+   (character_index). The 117 core files under 60 KB parse to the same trees, 30.4 → 16.0 s CPU; compiler.warp
+   compiled by warp.wasm 616 → 556 s CPU, back to back on a loaded machine.
+   Found with warp-quality's WARP_PROFILE=perfmap (scripts/profile.sh) on `warp parse-code "<2000 lines>" out.bin`;
+   a parser timing needs no `warp parse` (its print is quadratic) and no compiler build per probe.
 
 ## Left (main 8a45e5…: lowering 176 s up to checked_program, emit ~40 s)
 The parser is the biggest single cost, ~62 s:
-- the used core files: 30.9 s, linear (parser.warp 4819 lines 5.6 s, ~19 µs per byte; card compiler-parse-timing)
+- the used core files: 30.9 s, linear (parser.warp 4819 lines 5.6 s, ~19 µs per byte), about halved by 5.
 - SLICE_PARSES 18.6 s: every library definition parsed again, one by one, after LIBRARY_PARSES (12.4 s) parsed each
   whole file (card slice-parses-definitions)
 Then index_positions 17 s, lambdas (pass 23) 11 s, sugar (pass 22) 8 s; emit (card emit-cpu-profile, warp-quality).
