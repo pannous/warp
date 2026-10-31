@@ -5,7 +5,7 @@
 # /tmp/perf-<pid>.map (core/native/driver.warp warp_config); macOS's sample takes the main thread's stacks for <seconds>
 # (else until it ends; asked every millisecond, it took one each ~1.4 ms on a compile), each frame named through
 # that map: a table of own time, one with the callees. The raw sample lands in data/profile/<pid>.sample; `-r <pid>`
-# reports that one again; `-f <function>` counts only the stacks through that function (e.g. typed_wasm_module, the
+# reports that one again; `-f <function>` counts only the stacks through that function and names its callers (e.g. typed_wasm_module, the
 # emit). Example: scripts/profile.sh -s 60 rebuild pure
 # -a <pid> -o <dir>: attach to a running warp of WARP_PROFILE=perfmap until it ends (scripts/build-slot.sh does, for
 # every build): <dir>/profile.txt the report, sample.gz the raw sample, perf.map the function map; no output.
@@ -79,12 +79,14 @@ for line in open(samples):
 	if not found: continue
 	if len(found.group(1)) <= 4: in_main = "main-thread" in found.group(3); continue
 	if in_main: frames.append((len(found.group(1)), int(found.group(2)), found.group(3)))
-own, within = {}, {}
+own, within, called_from = {}, {}, {}
 callers = []
 for k, (depth, count, frame) in enumerate(frames):
 	children = 0
 	child_depth = frames[k + 1][0] if k + 1 < len(frames) else 0
-	for later_depth, later_count, _ in frames[k + 1:]:
+	# (by index: a slice of the frames after each one copied them all, quadratic on a long run's sample)
+	for later in range(k + 1, len(frames)):
+		later_depth, later_count, _ = frames[later]
 		if later_depth <= depth: break
 		if later_depth == child_depth: children += later_count
 	name = named(frame)
@@ -93,6 +95,11 @@ for k, (depth, count, frame) in enumerate(frames):
 	if focused: own[name] = own.get(name, 0) + count - children
 	# with its callees: each stack counted once for a function, however often it recurses in it
 	if focused and all(caller != name for _, caller in callers): within[name] = within.get(name, 0) + count
+	# the warp functions calling the focused one, two deep, at its outermost calls
+	if name == focus and all(caller != name for _, caller in callers):
+		named_callers = [caller for _, caller in callers if not caller.startswith(("_R", "wasm[", "closure_"))][-2:]
+		chain = " < ".join(reversed(named_callers))
+		called_from[chain] = called_from.get(chain, 0) + count
 	callers.append((depth, name))
 total = sum(own.values()) or 1
 def table(title, counts):
@@ -101,4 +108,5 @@ def table(title, counts):
 		print(f"{count:8d} {100 * count / total:5.1f}%  {name}")
 table(f"{total} samples of the main thread{' through ' + focus if focus else ''}; each function's own:", own)
 table("\nwith its callees:", within)
+if focus: table(f"\ncalled from (the two warp functions above {focus}):", called_from)
 PYTHON

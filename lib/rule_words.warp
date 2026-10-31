@@ -26,7 +26,7 @@ spelled(name: Node): text := "${name}"
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no number, or starts with a unit
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
-	if is_number_literal(amounted) { return Key(amounted, Op.Mul, unit) }
+	if is_number_literal(amounted) or is_big_number_view(amounted) { return Key(amounted, Op.Mul, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
 	if right == ø then ø else Key(key_of(amounted), op_of(amounted), right)
