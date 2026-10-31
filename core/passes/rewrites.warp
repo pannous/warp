@@ -1602,28 +1602,27 @@ rewritten_again(result: Node, rules: list, origins: list): Node := {
 }
 
 # [the length of a run starting the items that a phrase rule matches, its rewrite], else ø; a run starting with `x = v`
-# or `x: v` rewrites v
+# or `x: v`, also bound again (`global: x = v`, the parser's `global x = 7 m/s`), rewrites v
 run_at(items: list, rules: list, origins: list): list? := {
 	for index in 0 ..< #rules {
 		rule = rules[index]
 		if rule.place == Place.Anywhere and matches_runs(rule) and #items >= #rule.pattern {
 			run = items[0 ..< #rule.pattern]
 			first = run#1
-			target = ø
-			if is_key(first, Op.Assign) or (is_key(first, Op.Colon) and not is_big_number_view(first)) {
-				target = first
-				run = [value_of(first)] + run[1 ..]
-			}
+			run = [bound_value(first)] + run[1 ..]
 			result = rule_applied(rule, origins[index], rule_phrase(run))
-			if result != ø {
-				return [#rule.pattern, if target == ø then result else placed(Key(key_of(target), op_of(target), as_value(result)), target)]
-			}
+			if result != ø { return [#rule.pattern, rebound(first, result)] }
 			split = operand_run(rule, origins[index], run + items[#rule.pattern ..])
-			if split != ø { return [split#1, if target == ø then split#2 else placed(Key(key_of(target), op_of(target), as_value(split#2)), target)] }
+			if split != ø { return [split#1, rebound(first, split#2)] }
 		}
 	}
 	ø
 }
+holds_binding(n: Node): bool := is_key(n, Op.Assign) or (is_key(n, Op.Colon) and not is_big_number_view(n))
+# the value innermost in the bindings `x = v`, `global: x = v`, else the node
+bound_value(n: Node): Node := if holds_binding(n) then bound_value(value_of(n)) else n
+# the bindings with the value innermost in them changed (bound_value)
+rebound(n: Node, value: Node): Node := if not holds_binding(n) then value else placed(Key(key_of(n), op_of(n), if holds_binding(value_of(n)) then rebound(value_of(n), value) else as_value(value)), n)
 # `2 km + 500 m`, which the parser keeps as `2 (km + 500) m`: a run whose last word stands as the leftmost operand of
 # an arithmetic or ordering operation; the run's rewrite takes that operand's place, and the words after the operation
 # join its rightmost operand: `(2 * km) + (500 m)` (card int-text)
