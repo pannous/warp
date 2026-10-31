@@ -1,0 +1,5 @@
+# sample-gaps-types
+
+Reproduced 2026-10-31 using `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp <sample>` on installed main. Both return_polymorphism samples now pass. data_structures failed `unknown name company`; using assignment for the top-level maps then revealed that round named pairs are a list, not a field-readable map (`no field y`). Changed those bindings to maps; the sample now prints `"Dave 11 20"`. Added a passing nested-map outcome backed by wiki/map.md; no existing tests or comments changed. Default: use ordinary maps where the sample reads named fields.
+
+Other current failures: bits: `a float where a int is needed` in reals.warp real_of; dates: `index out of range`; reflection: `area.dump is no word of a function: did you mean area.definition?`; types: `an assignment to a type`. Next investigate each and land the working sample slice after format, merged-main smoke and verification; split unresolved issues into cards or document the core shape. Reflection's current decision is `reflection-definition`, but existing comments must be preserved.
