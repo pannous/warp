@@ -351,6 +351,7 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 		view = class_view(statement)
 		if view != ø and declared_type_name(view#2) == name_of(type_name) {
 			declared = class_declared(statement, view)
+			if constructor_of(declared) != ø { return plain_node(parsed("raise \"typed JSON does not support class constructors yet\"")) }
 			fields = declared.fields
 			members = view#3[3..].map(member_read)
 			field_types = {}
