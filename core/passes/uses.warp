@@ -84,20 +84,76 @@ is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "("
 # each file's parse, packed (parser.warp LIBRARY_PARSES), made here: never the building compiler's own baked one
 packed_parses(files: map): map := {
 	parses = {}
-	for path in files.keys { parses[path] = pack(plain_node(parsed(rules_ended(files[path])))) }
+	for path in files.keys { parses[path] = pack(file_parse(path, files[path])) }
 	parses
 }
-# each top-level module's slices parsed, packed, by their place (prelude_words.warp SLICE_PARSES, slice_key)
+# a library file's parse, parsed once for both tables of parses
+global file_parses = {}
+file_parse(path: text, source: text): Node := {
+	kept = file_parses.get(path)
+	if kept != ø and kept#1 == source { return kept#2 }
+	tree = plain_node(parsed(rules_ended(source)))
+	file_parses[path] = [source, tree]
+	tree
+}
+# each top-level module's slices, by their place (prelude_words.warp SLICE_PARSES, slice_key): its statements cut
+# from the file's parse, so the file is parsed once and a definition keeps its line in the file
 packed_slice_parses(files: map): map := {
 	parses = {}
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			source = files[path]
-			uses = use_lines(source)
-			for span in slice_spans(source) { parses[slice_key(path, "${span#2}")] = pack(plain_node(parsed(source[span#2 ..< span#3], uses))) }
+			spans = slice_spans(source)
+			held = statements_by_slice(statements_in(file_parse(path, source)), spans, span_lines(source, spans))
+			for index in 0 ..< #spans {
+				owned = held.get("${index}") ?? []
+				cut = if #owned == 1 then owned#1 else separated(bracketed(owned, ""), ";")
+				check_slice_cut(path, source[spans[index]#2 ..< spans[index]#3], use_lines(source), cut)
+				parses[slice_key(path, "${spans[index]#2}")] = pack(cut)
+			}
 		}
 	}
 	parses
+}
+# each slice's statements of the file's parse, by the slice's index: a statement declaring a name goes to the next
+# slice of that name (a class's node is placed where the statement before it ended, so its line misleads), another
+# to the slice its line falls in
+statements_by_slice(statements: list, spans: list, ranges: list): map := {
+	slices_named = {}
+	for index in 0 ..< #spans { slices_named[spans[index]#1] = (slices_named.get(spans[index]#1) ?? []) + [index] }
+	taken = {}
+	held = {}
+	for statement in statements {
+		name = declared_name(statement) ?? aliased_type_name(statement)
+		named = if name is text then slices_named.get(name) ?? [] else []
+		used = if name is text then taken.get(name) ?? 0 else 0
+		owner = if used < #named then named[used] else slice_holding(ranges, (written_at(statement) ?? [0])#1)
+		if used < #named { taken[name] = used + 1 }
+		if owner != ø { held["${owner}"] = (held.get("${owner}") ?? []) + [statement] }
+	}
+	held
+}
+# the index of the slice whose lines hold the line, ø for none
+slice_holding(ranges: list, wanted_line: int): int? := {
+	for index in 0 ..< #ranges { if ranges[index]#1 <= wanted_line and wanted_line <= ranges[index]#2 { return index } }
+	ø
+}
+# [first, last] line of each slice in its file
+span_lines(source: text, spans: list): list := {
+	ranges = []
+	first_line = 1
+	at = 0
+	for span in spans {
+		first_line += #source[at ..< span#2].split("\n") - 1
+		at = span#2
+		ranges += [[first_line, first_line + #source[span#2 ..< span#3].split("\n") - 1]]
+	}
+	ranges
+}
+# TEMPORARY (card slice-parses-definitions): the cut against the slice parsed alone, said where they differ
+check_slice_cut(path: text, slice: text, uses: text, cut: Node) := {
+	alone = plain_node(parsed(slice, uses))
+	if "${alone}" != "${cut}" { print "§slice " + path + ": " + slice.split("\n")#1 + "\n  alone: " + "${alone}" + "\n  cut:   " + "${cut}" }
 }
 # each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
 baked_slices(files: map): map := {
