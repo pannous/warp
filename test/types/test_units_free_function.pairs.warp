@@ -1,0 +1,2 @@
+# Decision units-as-values: quantity methods coexist with program functions.
+'use units; shown(part: any): text := "${part}"; x = 3 km; shown(5)'	"5"
