@@ -1,0 +1,4 @@
+# Typed JSON validates and constructs nested classes with field paths.
+'class Address { city: text }; class User { address: Address }; parse("{address:{city:\\"Berlin\\"}}", User).address.city'	'Berlin'
+'class Address { city: text }; class User { address: Address }; try { parse("{address:{city:7}}", User) } catch e { e.message }'	'address.city must be text, received number'
+'class Address { city: text }; class User { address: Address }; try { parse("{address:{}}", User) } catch e { e.message }'	'address.city is required'
