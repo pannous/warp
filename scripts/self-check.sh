@@ -11,6 +11,8 @@ worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds 
 # main's native warp
 main_warp=/Users/me/dev/bin/warp
 main_checkout=/Users/me/dev/angles/warp
+store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}  # scripts/rebuild.sh's, where stage 2's outcome is kept too
+shown_lines=60  # of a failed stage 2's output
 expected="Hello"
 
 # trees to check live on /Volumes/Worktrees (cowtree) or, for throwaway lib/ copies, /Volumes/Junk: a copy under the
@@ -66,7 +68,7 @@ fi
 case $? in
   0) ;;
   3) print -r -- "self-check: REBUILD NEEDED: no pair for these compiler inputs in lib/ nor the store; checking the existing pair (scripts/self-check.sh --rebuild builds it)" ;;
-  *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree: $(print -r -- $pair | tail -3)"; exit 1 ;;
+  *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree (its step and log in the store):"; print -r -- $pair; exit 1 ;;
 esac
 print -r -- $pair
 # the self test itself (AGENTS.md "Testing"): warp.wasm compiles compiler.warp and that build, promoted to warp-self.wasm,
@@ -74,25 +76,44 @@ print -r -- $pair
 # when the compile fails: the self lane was red unnoticed for hours while it was skipped here (card self-check-compile)
 self_lane() {
   said=$(WARP_BINARY=$warp WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/rebuild.sh self $worktree 2>&1) || {
-    verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
+    verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp:
+$said"; return 1; }
   check_lane self && stage_two
 }
 # stage 2 for real, as the next seed's stage will be: warp-self.wasm is only a copy of warp.wasm, so the compiler
 # warp.wasm builds from compiler.warp is built here, builds runtime.wasm, then compiles and runs hello behind it, from
 # a lib/ of links whose warp.wasm and runtime.wasm are stage 2's (cards compiler-built, compiler-built-wasm: a build
-# by warp.wasm failed `-- runtime` with "list of node" while this check, running the copy, passed)
+# by warp.wasm failed `-- runtime` with "list of node" while this check, running the copy, passed). Its compiles take
+# a build slot (scripts/build-slot.sh) like every compiler build, and its outcome is kept under warp.wasm's inputs hash
+# (<store>/<hash>/stage-two.passed, stage-two.failed/ with build.log and message), so a check of that hash runs it once;
+# --rebuild runs it again
 stage_two() {
   local stage=$scratch/lib native=/Users/me/dev/bin/warp  # the native warp: WARP_LIB first, nothing beside it wins
+  local hash=${$(cut -d' ' -f1 $worktree/lib/warp.wasm.inputs 2>/dev/null):-unhashed}
+  local record=$store/$hash/stage-two log=$scratch/stage-two.log
+  if [[ -z $rebuild && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
+  if [[ -z $rebuild && -d $record.failed ]]; then verdict="SELF CHECK RED: $(<$record.failed/message)"; return 1; fi
   mkdir -p $stage && ln -s $worktree/lib/*(N) $stage/ && rm -f $stage/warp.wasm* $stage/warp-self.wasm* $stage/runtime.wasm*
-  said=$(WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $native $worktree/lib/warp.wasm -- $worktree/lib/compiler/compiler.warp \
-    $stage/warp.wasm $worktree/lib/compiler $worktree/lib $worktree/lib/runtime.wasm 2>&1)
-  [[ -s $stage/warp.wasm ]] || { verdict="SELF CHECK RED: warp.wasm does not build stage 2: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
-  said=$($native $stage/warp.wasm -- runtime $stage/runtime.wasm 2>&1)
-  [[ $? == 0 && -s $stage/runtime.wasm && $said != *Error* ]] || {
-    verdict="SELF CHECK RED: stage 2 (compiler.warp built by warp.wasm) does not build runtime.wasm: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
+  WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/build-slot.sh $log $native $worktree/lib/warp.wasm -- \
+    $worktree/lib/compiler/compiler.warp $stage/warp.wasm $worktree/lib/compiler $worktree/lib $worktree/lib/runtime.wasm
+  [[ -s $stage/warp.wasm ]] || { stage_two_failed "warp.wasm does not build stage 2"; return 1; }
+  $worktree/scripts/build-slot.sh $log.runtime $native $stage/warp.wasm -- runtime $stage/runtime.wasm
+  local built=$?
+  cat $log.runtime >>$log
+  [[ $built == 0 && -s $stage/runtime.wasm ]] && ! grep -q Error $log.runtime ||
+    { stage_two_failed "stage 2 (compiler.warp built by warp.wasm) does not build runtime.wasm"; return 1; }
   said=$(WARP_LIB=$stage $native samples/hello/hello.warp 2>&1 | tail -1)
-  [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: stage 2's hello said: $said"; return 1; }
+  [[ $said == *$expected* ]] || { print -r -- "hello said: $said" >>$log; stage_two_failed "stage 2's hello said: $said"; return 1; }
+  mkdir -p ${record:h} && print -r -- "$hash commit=$(git -C $worktree rev-parse --short HEAD) passed=$(date '+%Y-%m-%dT%H:%M:%S%z')" >$record.passed
   verdict="SELF CHECK ok: $said (stage 2 built runtime.wasm and ran hello)"
+}
+# stage_two_failed <what>: the failure kept beside its hash's compilers, its output and the log's path in the verdict
+stage_two_failed() {
+  rm -rf $record.failed.new-$$ && mkdir -p $record.failed.new-$$ && mv $log $record.failed.new-$$/build.log
+  print -r -- "$1 (output: the last $shown_lines lines; log $record.failed/build.log; scripts/self-check.sh --rebuild runs it again)
+$(tail -$shown_lines $record.failed.new-$$/build.log)" >$record.failed.new-$$/message
+  rm -rf $record.failed && mv $record.failed.new-$$ $record.failed
+  verdict="SELF CHECK RED: $(<$record.failed/message)"
 }
 check_lane pure && self_lane
 passed=$?

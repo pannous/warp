@@ -195,7 +195,11 @@ watch() {
 	# stage one: the native warp at once, when the tip's compilers are not in the store yet
 	local early=
 	"$scripts/rebuild.sh" --check pure "$TREE" >/dev/null || { install_native early && early=1; }
-	"$scripts/rebuild.sh" both "$TREE" || { red "rebuild pure failed" --urgent; return 1; }
+	built=$("$scripts/rebuild.sh" both "$TREE" 2>&1)
+	status=$?
+	echo "$built"
+	# the card names the failed step and its log in the store (rebuild.sh), so nobody builds the hash again to read it
+	[ $status = 0 ] || { red "rebuild pure failed: $(echo "$built" | tail -1)" --urgent; return 1; }
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
 	# stage two: its compilers beside it, else the whole native warp
