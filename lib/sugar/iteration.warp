@@ -2,10 +2,14 @@
 # `loop··step`, hidden glue), so a `continue` still runs it, and the loop's hidden names are fresh, so two loops of one
 # variable keep their own.
 # Counting over a range: `a..b` leaves b out, `a to b` takes it, `b down to a` (the parser's `reverse(a to b)`) counts
-# down; the far end is computed once, before the loop, and the variable is past it afterwards.
-rewrite for $i in $a..$b {$body...} => ($i: int = $a; $end = $b; while $i < $end { $body...; loop··step: $i++ }) where $i is symbol
-rewrite for $i in $a to $b {$body...} => ($i: int = $a; $end = $b; while $i <= $end { $body...; loop··step: $i++ }) where $i is symbol
-rewrite for $i in reverse($a to $b) {$body...} => ($i: int = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol
+# down; the far end is computed once, before the loop, and the variable is past it afterwards. A counter from a
+# whole number is a declared int, which wraps (decision nat-and-int); from anything else, `'b' to 'd'`, plain.
+rewrite for $i in $a..$b {$body...} => ($i: int = $a; $end = $b; while $i < $end { $body...; loop··step: $i++ }) where $i is symbol and $a is int
+rewrite for $i in $a..$b {$body...} => ($i = $a; $end = $b; while $i < $end { $body...; loop··step: $i++ }) where $i is symbol
+rewrite for $i in $a to $b {$body...} => ($i: int = $a; $end = $b; while $i <= $end { $body...; loop··step: $i++ }) where $i is symbol and $a is int
+rewrite for $i in $a to $b {$body...} => ($i = $a; $end = $b; while $i <= $end { $body...; loop··step: $i++ }) where $i is symbol
+rewrite for $i in reverse($a to $b) {$body...} => ($i: int = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol and $b is int
+rewrite for $i in reverse($a to $b) {$body...} => ($i = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol
 # An object whose class has next() is walked by it until it gives ø: `for x in Countdown(3)` (decision
 # for-over-iterator)
 rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $o is instance
