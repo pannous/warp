@@ -31,9 +31,10 @@ host_words = {
 	sound_samples: [[ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Int], []]
 	run_block: [[ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
 	parse_code: [[ValueKind.Node], [ValueKind.Node]]
-	# a path with the links on its way followed (libc realpath; a file not there yet, its folder's): what the runtime's file
-	# words open (runtime/extended/wasi.warp opened_entry); the path itself where the host has no links (the browser)
-	real_path: [[ValueKind.Node], [ValueKind.Node]]
+	# the path at path_at with the links on its way followed (libc realpath; a file not there yet, its folder's), written
+	# at result_at, its length the result, -1 for the path itself (the browser's, without links): what the runtime's
+	# file words open (runtime/extended/wasi.warp opened_entry)
+	real_path: [[ValueKind.I32, ValueKind.I32, ValueKind.I32, ValueKind.I32], [ValueKind.I32]]
 	"block·value": [[ValueKind.Int], [ValueKind.Node]]
 	foreign_call: [[ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
 	sleep_ms: [[ValueKind.Int], []]

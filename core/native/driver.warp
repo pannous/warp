@@ -340,9 +340,21 @@ resolved_path(path: text): text := {
 	free(resolved)
 	copy
 }
-# real_path(path), what the runtime's file words open (core/runtime/extended/wasi.warp opened_entry): the path with
-# the links on its way followed, as WASI follows none to an absolute path; a file not there yet at its folder's real
-# path; the path itself when neither resolves
+# real_path(path_at, length, result_at, room) of the runtime's file words (core/runtime/extended/wasi.warp
+# opened_entry), its memory's path at path_at: its real path written at result_at, its length the result; -1 for the
+# path itself
+real_path_written(caller: handle, context: handle, given: pointer, results: pointer): nothing := {
+	memory = guest_memory(caller, context)
+	path = native_copy(memory + word_at(given + VALUE_OFFSET).value as i64, word_at(given + VALUE_BYTES + VALUE_OFFSET).value as i64)
+	real = real_path_of(path)
+	room = word_at(given + 3 * VALUE_BYTES + VALUE_OFFSET).value
+	written = if same_text(real, path) or real.length > room then -1 else real.length as i32
+	if written >= 0 { memmove(memory + word_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value as i64, native_pointer(real.address), real.length as i64) }
+	byte_at(results).value = KIND_I32
+	word_at(results + VALUE_OFFSET).value = written as u32
+}
+# the path with the links on its way followed, as WASI follows none to an absolute path; a file not there yet at its
+# folder's real path; the path itself when neither resolves
 real_path_of(path: text): text := {
 	whole = resolved_path(path)
 	if not same_text(whole, path) { return whole }
@@ -801,7 +813,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word == PARSE_CODE_WORD { return code_parsed(caller, wasmtime_caller_context(caller), given, results) }
-	if word == REAL_PATH_WORD { return guest_text_of(caller, context, real_path_of(shown(caller, context, given)), results) }
+	if word == REAL_PATH_WORD { return real_path_written(caller, context, given, results) }
 	if word == SET_SYSTEM_VALUE_WORD { return system_value_set(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64), long_at(given + VALUE_BYTES + VALUE_OFFSET).value) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)

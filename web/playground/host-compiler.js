@@ -153,7 +153,7 @@ addHostPart({
 			return buildValue(module, report.result);
 		},
 		// the path a file word opens, its links followed (core/runtime/extended/wasi.warp opened_entry): the browser's
-		// files have no links, the path is itself
-		real_path: path => path,
+		// files have no links, -1 says the path is itself
+		real_path: () => -1,
 	}),
 });
