@@ -65,6 +65,20 @@ Then index_positions 17 s, lambdas (pass 23) 11 s, sugar (pass 22) 8 s; emit (ca
 with_uses did not regress on main: 65 s, as before; a measurement beside other builds inflated it to 75–93 s.
 `warp parse` printing a big tree is quadratic (×4 the file: 353 s, card parse-print-quadratic); the parse itself isn't.
 
+## def-first (card function-definition-core, 2026-10-31)
+Measured on self-check's stage two (compiler.warp compiled by the tree's own warp.wasm), both on the GC growth fix
+(1cd7a5c2e3: wasmtime grew a copying heap only when its active half was full; that run was 831 -> 227 s and ~80% GC
+before), same base, records /Volumes/Build/compilers/{2cd7795a6e4464f8,044362cbf97a7d00}/stage-two.record:
+- CPU 214.2 -> 194.9 s (-9.0%), peak RSS 942 -> 625 MB (-34%).
+- Every definition starting with `def` gains nothing measurable. A table of classes and functions collected once after
+  with_used (decision def-first's two passes) was not built: the collectors it would replace are <0.5% each, the
+  definition gatherers ~1-1.7% each, and such a table goes stale as later passes add, rename and lift definitions.
+- The whole gain is two walks found in the profile: lambdas' captures_assigned_later gathered, for every statement,
+  the assignments of all later ones (quadratic, 10% of the compile; lambdas 18.8 -> 7.2 s), and each sugar step listed
+  the program's nodes five times for its rule lookups (now once: the sugar steps and type_tests -8 s).
+- Left: emit 44 s (22%), index_positions 18 s, plain_enums 9 s, LIBRARY_PARSES 7 s.
+- Callers of a hot function from a record: data/profile/callers.py in phase-markers (sample.gz + perf.map).
+
 ## Marker pitfalls
 - A marker must stand before the work it names: `f(label, computed)` prints after `computed` ran (timed_bake did).
 - phase_times stops only at `emit done`; without that marker the rebuild's tail lands in the last label.
