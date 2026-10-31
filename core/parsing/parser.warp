@@ -1706,14 +1706,16 @@ def operator_at(p: Parser): list {
 	if written != "" and assigns_after(p, written.length) and (if spelled.length == 0 then not declares_before(p) else computes(spelled#2)) { return [written + "=", COMPOUND_ASSIGNMENT] }
 	spelled
 }
-// the word before the operand is one declaring it, `const x=5`, `let n=5`: its `x=` an assignment, no `x max= 5`
+// the word before the operand is one declaring it, `const x=5`, `let n=5`, or its type, `int i=2*3`: its `x=` an
+// assignment, no `x max= 5`
 DECLARING_WORDS = ["let", "var", "global", "export", "import", "const", "constant", "final", "mutable", "mut", "val", "static"]
 def declares_before(p: Parser): bool {
 	end = p.at
 	while end > 0 and is_blank(p.code[end - 1]) { end = end - 1 }
 	start = end
 	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
-	p.code[start ..< end] in DECLARING_WORDS
+	word = p.code[start ..< end]
+	word in DECLARING_WORDS or (end < p.at and known_type(word, p.types))
 }
 // `=` alone (no `==`) right after `width` characters
 def assigns_after(p: Parser, width: int): bool := peek(p.code, p.at + width, p.n) == '=' and peek(p.code, p.at + width + 1, p.n) != '='

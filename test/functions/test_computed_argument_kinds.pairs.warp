@@ -3,6 +3,6 @@
 'f(x: int) := "int"; f(x: float) := "float"; f(sqrt(2))'	'float'
 'f(x: int) := "int"; f(x: number) := "number"; f(sqrt(2))'	'number'
 'f(x: int) := "int"; f(x: float) := "float"; f(2 + √2)'	'float'
-'f(x: int) := "int"; f(x: float) := "float"; f(-sqrt(9))'	'float'
+'f(x: int) := "int"; f(x: float) := "float"; f(-sqrt(9))'	'int'
 'f(x: int) := "int"; f(x: float) := "float"; f(2 * -3)'	'int'
 'f(x: int) := "int"; f(x: float) := "float"; f(floor(2.5))'	'float'
