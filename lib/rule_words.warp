@@ -306,7 +306,10 @@ rule_words = {typed_json: typed_json, generic_typed_json: generic_typed_json, sp
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
 	Key(left, Op.Assign, right): typed_json_field_type(left)
-	Key(left, Op.Colon, right): if kind_of(right) == "type" then name_of(right#2) else type_named(right)
+	Key(left, Op.Colon, right): {
+		view = view_of(right)
+		if kind_of(view) == "type" then declared_type_name(view#2) else type_named(right)
+	}
 	_: ø
 }
 
@@ -332,7 +335,8 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			}
 			checks = fields.map(field => "if not (typed_json_value[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
 			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
-			return plain_node(parsed("(typed_json_value => { " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })(json(" + as_code(source) + "))"))
+			source_code = if source is text then quoted_text("${source}") else as_code(source)
+			return plain_node(parsed("(typed_json_value => { " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })(json(" + source_code + "))"))
 		}
 	}
 	plain_node(parsed("raise \"typed JSON requires a declared class\""))
