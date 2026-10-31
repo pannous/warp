@@ -32,7 +32,7 @@ def takes_arguments(f: Function, arguments: list): bool {
 	if f.signature.parameters.any(parameter => parameter.rest) { return takes(f.signature, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments)
 	parameters = f.signature.parameters
-	slots is list and range_list(#parameters).all(i => (i < #slots and slots[i] != ø) or parameters[i].defaulted_to != ø)
+	slots != ø and range_list(#parameters).all(i => (i < #slots and slots[i] != ø) or parameters[i].defaulted_to != ø)
 }
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: list): TypedCode {

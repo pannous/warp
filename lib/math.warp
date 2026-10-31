@@ -172,7 +172,7 @@ bit_or(a: int, b: int) := (a xor b) + bit_and(a, b)
 // Each broadcasts, decided at run time (prelude each_any): binary_log([1, 8]) is [0 3], as a list may reach a word of
 // a module, where the program's broadcasting rules (lib/sugar/broadcasting.warp) don't look
 
-square(x) := x * x
+square(x: number) := x * x
 square_root(x) := each_any(x, e -> sqrt(e))
 cube_root(x) := ∛x
 alias pow = power
