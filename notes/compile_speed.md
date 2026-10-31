@@ -63,6 +63,17 @@ Then index_positions 17 s, lambdas (pass 23) 11 s, sugar (pass 22) 8 s; emit (ca
 with_uses did not regress on main: 65 s, as before; a measurement beside other builds inflated it to 75–93 s.
 `warp parse` printing a big tree is quadratic (×4 the file: 353 s, card parse-print-quadratic); the parse itself isn't.
 
+### Emit (~42 s; warp-quality 2026-10-31, profile.sh -f typed_wasm_module on rebuild pure, 39053 samples)
+- 26% of emit is wasmtime's is_subtype libcall (StoreOpaque::is_subtype_cached): a `ref.test`/`ref.cast` whose
+  types are not the same takes it, a failing test always. The runtime's number and node type tests do so on every
+  call: node_type_test 24% with callees, ratio_node 27%, number_byte 20% (a value tested for a ratio, a box…).
+  Card emit-wasmtime: types declared final (`sub final`) or a test on the kind field first.
+- 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
+  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
+- The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
+  forwarded_kinds → no_field_unshared → call_values (60%), field·class_defaults 44%, emitter_kind 46%; one widening
+  round only. By markers: 2975 functions, median 4.4 ms; a one-line function ~1.5 ms, a lambda ~0.3 ms.
+
 ## Marker pitfalls
 - A marker must stand before the work it names: `f(label, computed)` prints after `computed` ran (timed_bake did).
 - phase_times stops only at `emit done`; without that marker the rebuild's tail lands in the last label.
