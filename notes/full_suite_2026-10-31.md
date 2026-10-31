@@ -240,3 +240,14 @@ Raw list: data/full-suite/regressed.txt in the Integrator's checkout. Groups, la
 
 ## 1 × [ø, ø]
 - `test/welcoming/test_welcoming_print.pairs.warp:9 "xs=[1,2]; print(xs)" ø: got [ø, ø]`
+
+## Tests to update (user OK needed)
+
+These pin readings that were decided otherwise since (`a -1` is a list by spacing, decision canonical-output / refuse-never-guess; `5!` is the factorial, card factorial-bang). Changed only with the user's OK:
+
+- `test/control/test_run_time_blocks.pairs.warp:29 "5!" 5: got 120`
+- `test/lists/test_list_literal_sign.pairs.warp:15 "a=5; a -1" 4: got [5, -1]`
+- `test/lists/test_signed_operand_list.pairs.warp:14 "x=5;x -1" 4: got [5, -1]`
+- `test/operators/test_minus_after_callable.pairs.warp:19 "x=5; x -2" 3: got [5, -2]`
+- `test/operators/test_minus_after_callable.pairs.warp:21 "int = 3; int -1" 2: got [3, -1]`
+- `test/operators/test_negated_call_operand.pairs.warp:15 "x=5; x -1" 4: got [5, -1]`
