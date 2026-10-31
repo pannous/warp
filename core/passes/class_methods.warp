@@ -488,7 +488,8 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
 	for i in 0..<#owners { called[owners[i]] = owned_name(spellings[i], owners[i]) }
-	operated = falls_back and operator != ø and #call_arguments == 2
+	# an element read `xs#p` is no operation of numbers: no promotion nor float contagion, which would index by a float
+	operated = falls_back and operator != ø and #call_arguments == 2 and spellings#1 not in position_words
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin

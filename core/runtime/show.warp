@@ -51,9 +51,9 @@ node_code(n: Node): text := match n {
 	Text(_): text_code(unboxed_text(n))
 	_: node_text(n)
 }
-# a value as `warp test` reads it back (WARP_VALUE_AS_DATA): as a list shows it, a type value as the symbol naming it,
-# as Rust reads one back
-value_code(n: Node): text := if names_a_type(n) then unboxed_text(n) else node_code(n)
+# a value as `warp test` reads it back (WARP_VALUE_AS_DATA): as a list shows it, a type value as the text naming it,
+# which compares as the symbol does (the bare word `empty` would read back as ø)
+value_code(n: Node): text := if names_a_type(n) then quoted_text(unboxed_text(n)) else node_code(n)
 # a one-character text reads as the character it is (rust-harness:src/node/serialization.rs)
 text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
