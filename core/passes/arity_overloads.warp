@@ -438,7 +438,12 @@ takes_widened(type: text): bool := type == "float" or type == "number"
 run_time_test(argument: Node, type: text): Node := {
 	if is_union(type) { return union_members(type).map(member => run_time_test(argument, member)).fold(ø, (tests, test) => if tests == ø then test else Key(tests, Op.Or, test)) }
 	element = element_of(type)
-	if element == ø { return call_of("is_type", [argument, if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type]) }
+	if element == ø {
+		word = if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type
+		test = call_of("is_type", [argument, word])
+		# an instance converting itself to a float takes a float or number variant: √2 picks f(x: float)
+		return if word == "float" or word == "number" then Key(test, Op.Or, call_of(HiddenWord.FloatConvertible as text, [argument])) else test
+	}
 	no_items = Key(call_of("count", [argument]), Op.Eq, 0)
 	first_item = run_time_test(Key(argument, Op.Hash, 1), element)
 	Key(call_of("is_type", [argument, "list"]), Op.And, Key(no_items, Op.Or, first_item))
