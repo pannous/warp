@@ -679,3 +679,5 @@ the original questions 1–41: test edits and housekeeping done.
 - call-negative-plus-test (user 2026-10-31): test_minus_after_callable:11 takes call-takes-right's reading (`f -2 + 1` is f(-1))
 - unit-runs-spaced-only (user 2026-10-31, core one-liner): phrase rules try runs only in a space-separated group, never across comma items (`[1, s]` stays two items)
 - unit-binds-below-power (user 2026-10-31, core one-liner): a spaced unit binds looser than ^ and tighter than + and comparisons: `4 m²` is 4*(m²)
+- word-operator-overloads (user 2026-10-31, ~5 core lines): `infix operator <built-in word>(…)` (as, each, in, to …) overloads that built-in word instead of declaring a new operator (warp-operators, card rewrite-rules)
+- loop-scoped-it (user 2026-10-31): a for loop's implicit `it` is its own, gone after the loop (`for 1..3 {…}` then `for "ab" {…}` works)

@@ -1891,7 +1891,9 @@ def declared_operator(infix: bool, words: list): text {
 	if not is_name_start(head#1) { while end < head.length and head[end] != '(' { end = end + 1 } }
 	word = head[0 .. end]
 	operator = (is_name_start(head#1) and word != "operator") or is_operator_glyph(word)
-	if operator and (end == head.length or head[end] == '(') then word else ""
+	// a built-in word, `infix operator as(n: any, e: enum) := …`, is no new operator: an overload of it
+	// (operator_method_definition)
+	if operator and (end == head.length or head[end] == '(') and word_operator(word) == ø then word else ""
 }
 
 // `operator × := *`: another spelling of a built-in operator, no function
@@ -2164,17 +2166,19 @@ def group_items(declared: Node): list {
 METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "≈", "~", "#"]
 
 // `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
-// plus, no count `#`; ø where no `:=` follows the parentheses
+// plus, no count `#`; ø where no `:=` follows the parentheses. After the keyword (`infix operator |(x: any, g:
+// function) := …`, `infix operator as(…)`, `declared`) any built-in operator, its function named as written
+// (`operator_|`): an overload by its operands' kinds (rewrites.warp operator_rules)
 // Rust twin: operators.rs try_parse_operator_method_head
-def operator_method_head(p: Parser): Node {
+def operator_method_head(p: Parser, declared: bool = false): Node {
 	op = operator_at(p)
-	if op.length == 0 or not METHOD_OPERATORS.contains(op#2) { return ø }
+	if op.length == 0 or not (declared or METHOD_OPERATORS.contains(op#2)) { return ø }
 	open = p.at + op#1.length
 	if not is_at(p.code, open, '(', p.n) { return ø }
 	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n)), p.n) { return ø }
 	p.at = open
 	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
-	call_of([symbol(op#2)] + parameters)
+	call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
 }
 
 // `operator #(n) := …`, `infix operator +(a: V, b: V) := …`: the method of a built-in operator, its keywords
@@ -2188,7 +2192,7 @@ def operator_method_definition(p: Parser, word: text): Node {
 		p.at = p.at + 8
 		skip_spaces(p)
 	}
-	head = operator_method_head(p)
+	head = operator_method_head(p, true)
 	if head == ø {
 		p.at = start
 		return ø
