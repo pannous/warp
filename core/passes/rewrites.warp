@@ -952,8 +952,10 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 takes_only_numbers(word: text, arity: int?): bool := {
 	defined = if rule_signatures.has(word) then rule_signatures[word] else if word_lines().has(word) then word_lines()[word].map(line => line.signature) else []
 	fitting = defined.filter(signature => arity == ø or takes(signature, arity))
-	#fitting > 0 and fitting.all(signature => #signature.parameters > 0 and signature.parameters.filter(parameter => not parameter.rest).all(parameter => parameter.type_name in numeric_parameter_types))
+	#fitting > 0 and fitting.all(signature => takes_numbers(signature.parameters.filter(parameter => not parameter.rest)))
 }
+# fixed parameters, at least one, all numbers: a word of a rest alone, `print(values...)`, takes a list as it is
+takes_numbers(fixed: list): bool := #fixed > 0 and fixed.all(parameter => parameter.type_name in numeric_parameter_types)
 # how many arguments the call the rule matched passes the word, ø when it matched no call of it
 matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 

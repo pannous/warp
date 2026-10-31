@@ -1,0 +1,4 @@
+'g(age) := match age { 0 to 12 => "child"; 13 to 19 => "teen"; 65.. => "senior"; other => "adult" }; [g(5), g(15), g(70), g(40)]'	["child", "teen", "senior", "adult"]
+'r(path) := match path { name + ".html" => name; _ => "?" }; [r("about.html"), r("x.txt")]'	["about", "?"]
+'n(t) := match t { "0x" + h => from_base(h, 16); _ => 0 }; [n("0xff"), n("12")]'	[255, 0]
+'[from_base("ff", 16), from_base("101", 2), from_base("Zz", 36)]'	[255, 5, 1295]

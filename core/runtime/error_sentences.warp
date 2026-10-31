@@ -60,7 +60,7 @@ error_sentence(name: text): text := {
 	if is_null(trap_detail) { return error_words(name) }
 	if name == "returned_error" { return detail_text(trap_detail) }
 	if name == "missing_field" { return "no field " + detail_text(trap_detail) }
-	if name == "index_out_of_range" and node_length(trap_detail) == 2 {
+	if name == "index_out_of_range" and kind_code(trap_detail) == Kind.List and node_length(trap_detail) == 2 {
 		count = unboxed_int(node_at(trap_detail, 2))
 		range = if count == 0 then "an empty list" else "1…" + int_text(count)
 		return error_words(name) + ": " + int_text(unboxed_int(node_at(trap_detail, 1))) + " not in " + range
