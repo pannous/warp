@@ -1,0 +1,3 @@
+# decisions binary-int and marks-survive-arithmetic: binary marks survive arithmetic and control display
+'str(5 as binary)'	'0b101'
+'str(0b101 + 1)'	'0b110'
