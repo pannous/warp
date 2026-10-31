@@ -313,11 +313,30 @@ typed_json_field_type(member: Node): text? := match member {
 	_: ø
 }
 
+typed_json_supported_type(field_type: text): bool := {
+	if field_type.starts_with("list of ") { return typed_json_supported_type(field_type[#"list of "..]) }
+	field_type in ["number", "int", "float", "string", "text", "bool"]
+}
+
+typed_json_value_check(value: text, path: text, value_type: text, depth: int): text := {
+	list_prefix = "list of "
+	is_list = value_type.starts_with(list_prefix)
+	tested_type = if is_list then "list" else value_type
+	expected = if tested_type == "string" then "text" else tested_type
+	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
+	validation = "if not (" + value + " is " + tested_type + ") { raise " + path + " + \" must be " + expected + ", received \" + " + received + " }"
+	if is_list {
+		index = "typed_json_index_" + depth
+		item = "typed_json_item_" + depth
+		item_path = "(" + path + " + \"[\" + " + index + " + \"]\")"
+		validation = validation + "; for " + index + " in 1 to #" + value + " { " + item + " = " + value + "#" + index + "; " + typed_json_value_check(item, item_path, value_type[#list_prefix..], depth + 1) + " }"
+	}
+	validation
+}
+
 typed_json_check(field: text, field_type: text): text := {
 	value = "typed_json_value[\"" + field + "\"]"
-	expected = if field_type == "string" then "text" else field_type
-	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
-	"if not (" + value + " is " + field_type + ") { raise \"" + field + " must be " + expected + ", received \" + " + received + " }"
+	typed_json_value_check(value, "\"" + field + "\"", field_type, 0)
 }
 
 # Generate typed JSON parsing from the class declared in the program.
@@ -334,7 +353,7 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 				field = field_name(member)
 				if field != ø {
 					field_type = typed_json_field_type(member)
-					if field_type == ø or field_type not in ["number", "int", "float", "string", "text", "bool"] or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
+					if field_type == ø or not typed_json_supported_type(field_type) or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
 					field_types[field] = field_type
 				}
 			}

@@ -1,3 +1,7 @@
+# typed-parse flat slice
+
+Land required flat field validation with loud refusal for unsupported shapes. Keep the original typed-parse branch and its unfinished tests for the follow-up cards.
+
 # typed-parse-nested plan
 
 Add outcome coverage for typed numeric lists and their element diagnostics, then reuse the existing typed JSON generator to validate and construct them. Preserve the earlier experimental branch for nested classes and other follow-ups. Run focused outcomes and merged-main smoke before landing.
