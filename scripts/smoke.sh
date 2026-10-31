@@ -16,7 +16,7 @@ scripts=$(cd "$(dirname "$0")" && pwd)
 BAKED="^(core/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --baked-files | sed 's/\./\\./g')))"
 installed=$(dirname "$(readlink -f "$INSTALLED")")
 base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
-baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED")
+baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 if [ -n "$baked" ]; then
 	echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
 	# a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
