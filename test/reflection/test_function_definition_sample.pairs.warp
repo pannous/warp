@@ -1,0 +1,2 @@
+# A function definition is copyable source, including its annotations
+'area(width: int, height: int) := width * height; area.definition'	'area(width: int, height: int) := width * height'
