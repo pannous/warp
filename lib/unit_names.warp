@@ -1,0 +1,99 @@
+// The units by name (lib/units.warp's table, card units-unknown-name): each symbol's SI amount and dimension, the SI
+// prefixes any SI unit takes (`Gs`, `µg`, `dam`, `kK`), the long names (`kilometer`) and one plural rule (`inches`).
+// Plain data and text words: `quantity(3, "kilograms")` is 3kg, `quantity(212, "°F")` 100°C. Written as literals
+// (`1 Gs`, `3 kilometers`) they wait for card headless-module-rules (branch headless-module-rules)
+
+// a dimension packs the power of each base quantity, one byte each (length + 256·mass + 65536·duration …), so
+// multiplying quantities adds their dimensions
+length_dimension() := 1
+mass_dimension() := 256
+duration_dimension() := 65536
+temperature_dimension() := 16777216
+pixels_dimension() := 4294967296
+
+// the units that take an SI prefix, each [its SI amount, its dimension]
+si_units(): map := {
+	"m": [1, length_dimension],
+	"g": [1/1000, mass_dimension],
+	"s": [1, duration_dimension],
+	"K": [1, temperature_dimension],
+	"Hz": [1, 0 - duration_dimension],
+	"N": [1, mass_dimension + length_dimension - 2 * duration_dimension],
+	"L": [1/1000, 3 * length_dimension]
+}
+inch_amount() := 254/10000
+mile_amount() := 1760 * 36 * inch_amount
+// the other units, which take none: `kh` is no unit
+other_units(): map := {
+	"kg": [1, mass_dimension],
+	"px": [1, pixels_dimension],
+	"dot": [1, pixels_dimension],
+	"inch": [inch_amount, length_dimension],
+	"ft": [12 * inch_amount, length_dimension],
+	"yd": [36 * inch_amount, length_dimension],
+	"mi": [mile_amount, length_dimension],
+	"mph": [mile_amount / 3600, length_dimension - duration_dimension],
+	"lb": [45359237/100000000, mass_dimension],
+	"min": [60, duration_dimension],
+	"h": [3600, duration_dimension],
+	"day": [86400, duration_dimension],
+	"ml": [1/1000000, 3 * length_dimension],
+	"ha": [10000, 2 * length_dimension],
+	"dpi": [1 / inch_amount, pixels_dimension - length_dimension],
+	"ppi": [1 / inch_amount, pixels_dimension - length_dimension],
+	"°C": [1, temperature_dimension],
+	"°F": [5/9, temperature_dimension]
+}
+// where a temperature scale starts, in kelvin: 0°C is 273.15 K, 0°F 459.67 °F below absolute zero
+unit_zeros(): map := { "°C": 27315/100, "°F": 45967/100 * 5/9 }
+unit_zero(symbol: text): number := unit_zeros().get(symbol) ?? 0
+
+// the SI prefixes by symbol, each its factor; both mu signs are micro
+si_prefixes(): map := {
+	"Q": 10^30, "R": 10^27, "Y": 10^24, "Z": 10^21, "E": 10^18, "P": 10^15, "T": 10^12, "G": 10^9, "M": 10^6,
+	"k": 1000, "h": 100, "da": 10, "d": 1/10, "c": 1/100, "m": 1/1000, "µ": 1/10^6, "μ": 1/10^6, "n": 1/10^9,
+	"p": 1/10^12, "f": 1/10^15, "a": 1/10^18, "z": 1/10^21, "y": 1/10^24, "r": 1/10^27, "q": 1/10^30
+}
+// the prefixes spelled out, by their symbol: `kilometer` is km
+long_prefixes(): map := {
+	"giga": "G", "mega": "M", "kilo": "k", "hecto": "h", "deca": "da", "deka": "da", "deci": "d", "centi": "c",
+	"milli": "m", "micro": "µ", "nano": "n"
+}
+// the units spelled out, by their symbol
+long_unit_names(): map := {
+	"meter": "m", "metre": "m", "gram": "g", "second": "s", "kelvin": "K", "hertz": "Hz", "newton": "N",
+	"liter": "L", "litre": "L", "inch": "inch", "foot": "ft", "feet": "ft", "yard": "yd", "mile": "mi", "pound": "lb",
+	"lbs": "lb", "minute": "min", "hour": "h", "day": "day", "hectare": "ha", "pixel": "px"
+}
+
+// the symbol of a unit as written: `kilograms` → "kg", `µg` → "µg", `Gs` → "Gs"; ø when it names no unit
+unit_symbol(written: text): text? := {
+	if unit_entry_of(written) != ø { return written }
+	for name in [written, without_ending(written, "s"), without_ending(written, "es")] {
+		symbol = long_symbol(name)
+		if symbol != ø { return symbol }
+	}
+	ø
+}
+// one plural rule: `inches` is inch, `meters` meter
+without_ending(word: text, ending: text): text := if word.ends_with(ending) then word[0 ..< #word - #ending] else ""
+// `kilometer` → "km": a long name, prefixed by a long prefix where it is an SI unit's
+long_symbol(name: text): text? := {
+	if long_unit_names().has(name) { return long_unit_names()[name] }
+	for prefix in long_prefixes().keys {
+		symbol = if name.starts_with(prefix) then long_unit_names().get(name[#prefix ..]) else ø
+		if symbol != ø and si_units().has(symbol) { return long_prefixes()[prefix] + symbol }
+	}
+	ø
+}
+
+// [SI amount, dimension] of a unit symbol, an SI unit's prefixed too (`kK`, `dam`); ø when it is none
+unit_entry_of(symbol: text): list? := {
+	known = other_units().get(symbol) ?? si_units().get(symbol)
+	if known != ø { return known }
+	for prefix in si_prefixes().keys {
+		base = if symbol.starts_with(prefix) then si_units().get(symbol[#prefix ..]) else ø
+		if base != ø { return [si_prefixes()[prefix] * base#1, base#2] }
+	}
+	ø
+}

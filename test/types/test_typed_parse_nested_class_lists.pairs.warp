@@ -1,0 +1,3 @@
+# Typed JSON constructs classes inside lists and reports paths within them.
+'class Address { city: text }; class User { addresses: list of Address }; parse("{addresses:[{city:\\\"Berlin\\\"}]}", User).addresses#1.city'	'Berlin'
+'class Address { city: text }; class User { addresses: list of Address }; try { parse("{addresses:[{city:\\\"Berlin\\\"},{city:7}]}", User) } catch e { e.message }'	'addresses[2].city must be text, received number'

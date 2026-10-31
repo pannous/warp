@@ -22,6 +22,18 @@ path_parameter(part: text): text := {
 # `users` → "users": a name as the text it is spelled by
 spelled(name: Node): text := "${name}"
 
+# `x > 1500` and m → `x > 1500 * m`: a unit after an expression multiplies its last amount, through the operators
+# a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no number, or starts with a unit
+# word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
+unit_bound(amounted: Node, unit: Node): any := {
+	if is_number_literal(amounted) { return Key(amounted, Op.Mul, unit) }
+	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
+	right = unit_bound(value_of(amounted), unit)
+	if right == ø then ø else Key(key_of(amounted), op_of(amounted), right)
+}
+starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_binding_ops then starts_with_unit(key_of(code)) else code is symbol and "units" in (word_index(word_index_file()).get("${code}") ?? [])
+unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
+
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
 # `get` → "GET": a route's method as HTTP spells it
@@ -301,7 +313,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
@@ -313,11 +325,57 @@ typed_json_field_type(member: Node): text? := match member {
 	_: ø
 }
 
-typed_json_check(field: text, field_type: text): text := {
-	value = "typed_json_value[\"" + field + "\"]"
-	expected = if field_type == "string" then "text" else field_type
-	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
-	"if not (" + value + " is " + field_type + ") { raise \"" + field + " must be " + expected + ", received \" + " + received + " }"
+typed_json_class(type_name: text, program: Node): Node? := {
+	for statement in program_statements(program) {
+		view = class_view(statement)
+		if view != ø and declared_type_name(view#2) == type_name { return statement }
+	}
+	ø
+}
+
+typed_json_value(value: text, path: text, value_type: text, depth: int, program: Node, ancestors: list): text? := {
+	list_prefix = "list of "
+	if value_type.starts_with(list_prefix) {
+		item = "typed_json_item_" + depth
+		index = "typed_json_index_" + depth
+		item_path = "(" + path + " + \"[\" + " + index + " + \"]\")"
+		converted = typed_json_value(item, item_path, value_type[#list_prefix..], depth + 1, program, ancestors)
+		if converted == ø { return ø }
+		return "({ if not (" + value + " is list) { raise " + path + " + \" must be list, received \" + type(" + value + ").name }; " + index + " = 0; " + value + ".map(" + item + " => { " + index + " = " + index + " + 1; " + converted + " }) })"
+	}
+	if value_type in ["number", "int", "float", "string", "text", "bool"] {
+		expected = if value_type == "string" then "text" else value_type
+		received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
+		return "({ if not (" + value + " is " + value_type + ") { raise " + path + " + \" must be " + expected + ", received \" + " + received + " }; " + value + " })"
+	}
+	statement = typed_json_class(value_type, program)
+	if statement == ø or ancestors.contains(value_type) { return ø }
+	view = class_view(statement)
+	declared = class_declared(statement, view)
+	if constructor_of(declared) != ø { return ø }
+	fields = declared.fields
+	members = view#3[3..].map(member_read)
+	field_types = {}
+	for member in members {
+		field = field_name(member)
+		if field != ø {
+			field_type = typed_json_field_type(member)
+			if field_type == ø or is_key(member, Op.Assign) { return ø }
+			field_types[field] = field_type
+		}
+	}
+	field_names = fields.map(field => "\"" + field + "\"").join(", ")
+	checks = []
+	arguments = []
+	for field in fields {
+		field_path = "(" + path + " + \".\" + \"" + field + "\")"
+		field_value = value + "[\"" + field + "\"]"
+		converted = typed_json_value(field_value, field_path, field_types[field], depth + 1, program, ancestors + [value_type])
+		if converted == ø { return ø }
+		checks = checks + ["if not keys(" + value + ").contains(\"" + field + "\") { raise " + field_path + " + \" is required\" }"]
+		arguments = arguments + [field + ": " + converted]
+	}
+	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + value_type + "{" + arguments.join(", ") + "} })"
 }
 
 # Generate typed JSON parsing from the class declared in the program.
@@ -334,17 +392,22 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 				field = field_name(member)
 				if field != ø {
 					field_type = typed_json_field_type(member)
-					if field_type == ø or field_type not in ["number", "int", "float", "string", "text", "bool"] or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
+					if field_type == ø or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
 					field_types[field] = field_type
 				}
 			}
 			required_checks = fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
-			checks = fields.map(field => typed_json_check(field, field_types[field]))
-			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
+			arguments = []
+			for field in fields {
+				value = "typed_json_value[\"" + field + "\"]"
+				converted = typed_json_value(value, "\"" + field + "\"", field_types[field], 0, program, [name_of(type_name)])
+				if converted == ø { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
+				arguments = arguments + [field + ": " + converted]
+			}
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
-			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
+			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
 			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
 		}
 	}

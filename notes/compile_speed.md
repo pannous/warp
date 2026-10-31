@@ -65,7 +65,7 @@ Then index_positions 17 s, lambdas (pass 23) 11 s, sugar (pass 22) 8 s; emit (ca
 with_uses did not regress on main: 65 s, as before; a measurement beside other builds inflated it to 75–93 s.
 `warp parse` printing a big tree is quadratic (×4 the file: 353 s, card parse-print-quadratic); the parse itself isn't.
 
-## Two walks (2026-10-31, found on the def-first measurement)
+## Three walks (2026-10-31, found on the def-first measurement)
 Self-check's stage two (compiler.warp compiled by the tree's own warp.wasm), both on the GC growth fix (1cd7a5c2e3:
 wasmtime grew a copying heap only when its active half was full; that run was 831 -> 227 s CPU and ~80% GC before),
 records /Volumes/Build/compilers/{2cd7795a6e4464f8,044362cbf97a7d00}/stage-two.record: CPU 214.2 -> 194.9 s (-9.0%),
@@ -73,10 +73,23 @@ peak RSS 942 -> 625 MB (-34%), all from two walks:
 - lambdas' captures_assigned_later gathered, for every statement, the assignments of all later ones (quadratic, 10% of
   the compile): each name's last assignment is gathered once (lambdas 18.8 -> 7.2 s).
 - each sugar step listed the program's nodes five times for its rule lookups, now once (sugar steps, type_tests -8 s).
+- index_positions copied every name the program assigns (most counting nothing) into each function's scope: a scope
+  now passes on only the names that count (a function's own `i = t.find(x)` counts, its local).
 def-first (every definition starting with `def`) gained nothing measurable and is parked on branch
 function-definition-core; its two collection passes were not built (the collectors they'd replace are <0.5% each, the
 definition gatherers ~1-1.7%; a table collected after with_used goes stale as later passes add, rename and lift
 definitions; user: discuss later). Left: emit 44 s (22%), index_positions 18 s, plain_enums 9 s, LIBRARY_PARSES 7 s.
+
+### Emit (~42 s; warp-quality 2026-10-31, profile.sh -f typed_wasm_module on rebuild pure, 39053 samples)
+- 26% of emit is wasmtime's is_subtype libcall (StoreOpaque::is_subtype_cached): a `ref.test`/`ref.cast` whose
+  types are not the same takes it, a failing test always. The runtime's number and node type tests do so on every
+  call: node_type_test 24% with callees, ratio_node 27%, number_byte 20% (a value tested for a ratio, a box…).
+  Card emit-wasmtime: types declared final (`sub final`) or a test on the kind field first.
+- 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
+  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
+- The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
+  forwarded_kinds → no_field_unshared → call_values (60%), field·class_defaults 44%, emitter_kind 46%; one widening
+  round only. By markers: 2975 functions, median 4.4 ms; a one-line function ~1.5 ms, a lambda ~0.3 ms.
 
 ## Marker pitfalls
 - A marker must stand before the work it names: `f(label, computed)` prints after `computed` ran (timed_bake did).

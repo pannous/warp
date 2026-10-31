@@ -18,7 +18,7 @@ Language-meaning questions that would go to the Interviewer go there too.
 | warp-speed (fresh 06:55, the old one ran out of context; handover notes/handover/warp-speed.md) | function-definition-core (def-first) → phase-markers |
 | warp-quality (was warp-rule-words-removal) | use-os → test-modules → hotspots from warp-speed (programs-read landed 70a9bfa89a) |
 | warp-units (spawned by warp-shaders at the user's request; https://claude.ai/code/session_018Xoawk8furRW4NM9fgYtUc) | units-unknown-name, lib/units.warp only: plurals, mph, SI prefixes, °F, ppi/dot; asks before the min/extrema ambiguity |
-| warp-shaders | idle (compiler-parse-timing landed 60c420b39c, parse 30.4 → 16.0 s); core/ left quiet for warp-speed; its open cards: units-unknown-name, parse-code, warp-test-relative-paths |
+| warp-shaders | sample-gaps-sound, lib/ only (compiler-parse-timing landed 60c420b39c); core/ left quiet for warp-speed |
 | warp-integrator | full suites held tonight for warp-speed's measurements; seed refresh after lib-hash-rebake lands |
 | Codex (cron 02/07/12/17/22:35) | notes/agents/codex_worker.sh, 4 rounds per firing; typed-parse and dot-product parked on their branches |
 

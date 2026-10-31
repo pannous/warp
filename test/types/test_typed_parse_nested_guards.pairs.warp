@@ -1,0 +1,3 @@
+# Typed JSON recursively rejects unknown fields and constructors.
+'class Address { city: text }; class User { address: Address }; try { parse("{address:{city:7, extra:1}}", User) } catch e { e.message }'	'unknown field address.extra'
+'global hits = 0; class Address { city: text; init() { hits = hits + 1 } }; class User { address: Address }; try { parse("{address:{city:7}}", User) } catch e { e.message }'	'typed JSON supports only required flat fields yet'

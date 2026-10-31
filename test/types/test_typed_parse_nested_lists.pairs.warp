@@ -1,0 +1,3 @@
+# Card typed-parse-nested: typed JSON validates list elements without coercion.
+'class User { scores: list of number }; parse("{\\"scores\\":[1,2]}", User).scores#2'	2
+'class User { scores: list of number }; try { parse("{\\"scores\\":[1,\\"2\\"]}", User) } catch e { e.message }'	'scores[2] must be number, received text'

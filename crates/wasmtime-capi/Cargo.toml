@@ -1,7 +1,7 @@
 # warp's wasmtime C API (card wasmtime-bundled, notes/native_rebuild_speed.md): wasmtime's own C API with the copying
 # collector, which Collector::Auto then picks, and the setters its C API lacks. The native warp (core/native/driver.warp)
 # and built executables load it beside warp as libwarp_wasmtime (@rpath). Its own workspace: wasmtime 50 here, the
-# harness's 49 elsewhere. Built per platform by .github/workflows/wasmtime-c-api.yml, locally by scripts/wasmtime-c-api.sh
+# harness's 49 elsewhere. Built by scripts/wasmtime-c-api.sh, locally and per platform by .github/workflows/release.yml
 [package]
 name = "warp-wasmtime"
 version = "50.0.0"
@@ -17,6 +17,11 @@ crate-type = ["cdylib"]
 [dependencies]
 wasmtime-c-api = { version = "=50.0.0", package = "wasmtime-c-api-impl", default-features = false, features = ["wasi", "cache", "parallel-compilation", "gc", "gc-drc", "gc-copying", "cranelift"] }
 wasmtime = { version = "=50.0.0", default-features = false }
+
+# wasmtime with warp's patches (patches/), unpacked and patched by scripts/wasmtime-c-api.sh: a copying heap grows
+# once half of its active half is live (patches/copying-heap-growth.patch)
+[patch.crates-io]
+wasmtime = { path = "patched/wasmtime" }
 
 [profile.release]
 strip = "debuginfo"
