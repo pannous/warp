@@ -286,7 +286,14 @@ called_only(program: Node): Node := {
 with_reached(program: Node, module: text, in_front: bool, files: list = []): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
-	aliases = with_call_forms(module_aliases(module), definition_slices(module).map(slice => slice#1) + own.keys)
+	module_names = definition_slices(module).map(slice => slice#1)
+	# a program's function of another arity adds to the module's word, never hides it: `clamp(x) := 9` beside math's
+	# clamp(x, lo, hi), a call of three, also the module's own, is the module's (its library_word); a module brought in
+	# front replaces the prelude's word as it is
+	own_arities = {}
+	for name in own.keys { if is_group(own[name]) and name in module_names and not brought_names.has(name) { own_arities[name] = name } }
+	aliases = with_call_forms(module_aliases(module), module_names + own.keys)
+	for name in own_arities.keys { if name not in aliases { aliases[name] = name } }
 	program = aliased(program, aliases, own)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
@@ -295,7 +302,6 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
-	module_names = definition_slices(module).map(slice => slice#1)
 	program_globals = statements_in(program).filter(is_global_declaration).map(declared_name).filter(name => name != ø and name not in module_names)
 	# [name, text, the name written] of each slice: a replaced one under its library_word, for an alias's call
 	slices = definition_slices(module).map(slice => if kept(slice) then slice + [slice#1] else [library_word(slice#1), slice#2, slice#1])
@@ -317,6 +323,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 				baked = SLICE_PARSES.get(key ?? "")
 				if baked == ø and uses == ø { uses = use_lines(module) }
 				slice_node = early_sugared(if baked != ø then unpack(baked) else plain_node(parsed(slice#2, uses)))
+				if #own_arities > 0 { slice_node = aliased(slice_node, own_arities, own) }
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
 				else if slice#2 in declared { slice_node = declared_only(slice_node) }
@@ -444,13 +451,11 @@ arity_variant(name: text, count: int): any := {
 }
 
 # whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
-# function when it takes them (a parameter `b = 1` may be left out)
+# function when it takes them (a parameter `b = 1` may be left out, a rest one takes any more)
 shadows(own: map, name: text, count: int): bool := {
 	if name not in own { return no }
 	head = own[name]
-	if not is_group(head) { return yes }
-	parameters = items_of(head)[1 ..]
-	count >= #parameters.filter(parameter => not is_key(parameter, Op.Assign)) and count <= #parameters
+	not is_group(head) or takes(signature_of(items_of(head)), count)
 }
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
