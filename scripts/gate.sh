@@ -94,7 +94,10 @@ if wants 1; then
 fi
 
 from=$(git merge-base "$base" HEAD 2>/dev/null)
-if wants 2; then
+# `warp test` held machine-wide while this file exists, its text the reason (2026-10-31: the runner killed garbage pids)
+TEST_HOLD=$HOME/.cache/warp/warp-test-held
+if wants 2 && [ -f "$TEST_HOLD" ]; then echo "tier 2 held: $(cat "$TEST_HOLD") (remove $TEST_HOLD to run it)"
+elif wants 2; then
 	t2=$(date +%s)
 	files=$(git diff --name-only --diff-filter=AMR "$from" HEAD -- 'test/*.warp' 2>/dev/null)
 	if [[ -z $files ]]; then echo "tier 2 (pure warp test of the changed tests): none changed since $base"
