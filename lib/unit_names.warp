@@ -21,8 +21,8 @@ si_units(): map := {
 	"N": [1, mass_dimension + length_dimension - 2 * duration_dimension],
 	"L": [1/1000, 3 * length_dimension]
 }
-inch_amount = 254/10000
-mile_amount = 1760 * 36 * inch_amount
+inch_amount() := 254/10000
+mile_amount() := 1760 * 36 * inch_amount
 // the other units, which take none: `kh` is no unit
 other_units(): map := {
 	"kg": [1, mass_dimension],
