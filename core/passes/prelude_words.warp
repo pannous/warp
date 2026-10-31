@@ -546,9 +546,14 @@ definition_arities(module: text, word: text): list := {
 runtime_words_of_math = module_source("math").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
 # a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
+# read once a module: a rule word asks it at each call site it tries (lib/rule_words.warp module_named)
+global used_module_texts = {}
 used_module_text(module: text): text := {
-	native = native_path(run_library(), module)
-	file_text(std_module_path(module)) ?? (if native == ø then "" else file_text(native) ?? "")
+	if not used_module_texts.has(module) {
+		native = native_path(run_library(), module)
+		used_module_texts[module] = file_text(std_module_path(module)) ?? (if native == ø then "" else file_text(native) ?? "")
+	}
+	used_module_texts[module]
 }
 # the names the prelude defines, read once
 global prelude_definition_names = ø
@@ -724,6 +729,17 @@ names_bound_in(n: Node): any := {
 		}
 	}
 	found
+}
+# names_bound_in of the node last asked, kept: a rule word asks it of the one $program at each call site it tries
+# (lib/rule_words.warp module_named at each `xs.f()`), which walked the whole program each time
+global bound_names_node = Node.Empty
+global bound_names_found = {}
+names_bound_in_kept(program: Node): any := {
+	if not same_node(program, bound_names_node) {
+		bound_names_found = names_bound_in(program)
+		bound_names_node = program
+	}
+	bound_names_found
 }
 # the names in a view, `["attribute", "variants", ["list", ["symbol", "red"]], ["symbol", "Color"]]`'s red and Color
 view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
