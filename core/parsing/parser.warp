@@ -1981,17 +1981,24 @@ def used_modules(source: text): list {
 }
 // the use lines of a source, as a slice of it reads them (written_tree's `uses`)
 def use_lines(source: text): text := used_modules(source).map(module => "\nuse " + module).join("")
-// whether the code names the word, not as a part of a longer name: `play` in `play(A4)`, not in `display`
+// whether the code names the word, not as a part of a longer name: `play` in `play(A4)`, not in `display`; glued to a
+// number it is its own (`km` in `3km`, a number times km), as no name starts with a digit
 def mentions_word(code: text, word: text): bool {
 	parts = code.split(word)
 	i = 1
 	while i < #parts {
 		before = parts#i
 		after = parts#(i + 1)
-		if (#before == 0 or not is_name_char(before[#before - 1])) and (#after == 0 or not is_name_char(after[0])) { return yes }
+		if not ends_in_name(before) and (#after == 0 or not is_name_char(after[0])) { return yes }
 		i = i + 1
 	}
 	no
+}
+// whether the text ends in a name, its last run of name characters starting as a name does, not as a number (`3`)
+def ends_in_name(t: text): bool {
+	start = #t
+	while start > 0 and is_name_char(t[start - 1]) { start = start - 1 }
+	start < #t and is_name_start(t[start])
 }
 
 // The statements of a source's code, outside comments and texts, split at line ends and `;`
