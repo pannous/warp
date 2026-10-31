@@ -105,7 +105,7 @@ class Function:
 			params = ", ".join(f"{n}: {warp_types.get(t, 'int' if HANDLE.match(t) else 'any')}" for n, t in self.params)
 			args = ", ".join(n for n, _ in self.params)
 			take = "texts" if self.result == "list" else "bytes"
-			lines.append(f"{self.name}({params}) := {self.library}_take_{take}({self.c_name()}({args}))")
+			lines.append(f"def {self.name}({params}) := {self.library}_take_{take}({self.c_name()}({args}))")
 		return lines
 
 	def owner(self):
@@ -229,10 +229,10 @@ class Manifest:
 			f"{lib}_bytes_count(bytes: handle): i64 from '{lib}'", f"{lib}_bytes_at(bytes: handle, index: i64): i32 from '{lib}'",
 			f"{lib}_bytes_free(bytes: handle): void from '{lib}'",
 			"// a list or bytes result the shim kept as a handle: a warp list, the handle freed",
-			f"{lib}_take_texts(list: int) := {{",
+			f"def {lib}_take_texts(list: int) := {{",
 			"\tfound = []", "\ti = 0", f"\twhile i < {lib}_list_count(list) {{", f"\t\tfound += [{lib}_list_text(list, i)]", "\t\ti += 1", "\t}",
 			f"\t{lib}_list_free(list)", "\tfound", "}",
-			f"{lib}_take_bytes(bytes: int) := {{",
+			f"def {lib}_take_bytes(bytes: int) := {{",
 			"\tfound = []", "\ti = 0", f"\twhile i < {lib}_bytes_count(bytes) {{", f"\t\tfound += [{lib}_bytes_at(bytes, i)]", "\t\ti += 1", "\t}",
 			f"\t{lib}_bytes_free(bytes)", "\tfound", "}"]
 

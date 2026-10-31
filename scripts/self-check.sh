@@ -29,7 +29,7 @@ core=($worktree/core/runtime.warp $worktree/core/runtime/*.warp(.))
 core=(${${core:#*/runtime/extended.warp}:#*/runtime/durations.warp})
 extended=($worktree/core/runtime/extended/*.warp $worktree/core/runtime/durations.warp)
 extended=(${extended:#*/hooks.warp})
-extended_words=$(grep -hv ' from runtime$' $extended | sed -n 's/^\([a-z_][a-z_0-9]*\)(.*:=.*/\1/p' | sort -u | paste -sd'|' -)
+extended_words=$(grep -hv ' from runtime$' $extended | sed -n 's/^\(def \)\{0,1\}\([a-z_][a-z_0-9]*\)(.*:=.*/\2/p' | sort -u | paste -sd'|' -)
 core_uses_extended=$(grep -HnE "^use .*extended|(^|[^a-z_0-9.])($extended_words)\(" $core)
 if [[ -z $extended_words || -n $core_uses_extended ]]; then
   echo "SELF CHECK RED: the core runtime uses the extended runtime, not through runtime/bridge.warp: $core_uses_extended"
