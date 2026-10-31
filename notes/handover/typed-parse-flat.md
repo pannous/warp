@@ -13,3 +13,5 @@ Flat slice smoke passed on compiler hash 4bcf9f67268231bb (`Hello 🌍2026`); al
 Removed unreachable optional/default and recursive-list generator code from the flat slice; the original branch retains those experiments. This cleanup is unverified until a fresh merged-main smoke and the same 14 outcomes pass.
 
 The cleanup rebuild is running after merging origin/main. Check `/Volumes/Worktrees/typed-parse-flat/data/typed-parse-flat/smoke-clean.log` and its build-store result before starting another build. On success rerun the eight focused files named above, fetch and merge current origin/main, smoke if compiler or library inputs changed, then push HEAD to main and mark typed-parse done. The original typed-parse branch is the preserved source for follow-up cards.
+
+Cleanup build hash 574a02e9f1fb18ec passed smoke (`Hello 🌍2026`) and all 14 outcomes in the eight focused files passed on that compiler. The slice is ready to merge current main and land; retain `origin/typed-parse` and its handover for the four follow-up cards.
