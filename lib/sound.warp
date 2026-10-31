@@ -833,15 +833,20 @@ play(tone, for duration) := if is_signal(tone) then play_signal(tone, duration) 
 // the blocks one after another; class Sample is a clip, a list of them `list of Sample`
 play(fill: (samples, float) -> any, for duration) := {
 	block = new_samples(block_size)
+	played_blocks(t => fill(block, t), [block], duration)
+}
+// fill(t) writes the speakers' blocks, one mono, [left, right] interleaved in stereo, once a block
+played_blocks(fill, speakers, duration) := {
 	wanted = round(si_amount(duration) * sample_rate) as int
+	length = count(speakers[0])
 	amplitudes = []
 	first = 0
 	while first < wanted {
-		fill(block, first / sample_rate)
-		amplitudes = amplitudes + [block#i for i in 1 to min(block_size, wanted - first)]
-		first = first + block_size
+		fill(first / sample_rate)
+		amplitudes = amplitudes + [block#i for i in 1 to min(length, wanted - first) for block in speakers]
+		first = first + length
 	}
-	signal_sound(amplitudes, 1)
+	signal_sound(amplitudes, count(speakers))
 }
 block_size() := 512
 // a block of samples in linear memory, where the host reads and the program writes them in place: [count: i64][count
@@ -896,8 +901,10 @@ signal_sound(amplitudes, channels) := sounded(clamped_samples([a * loudest_sampl
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
-// The address until a library function takes a linear array (card linear-parameters)
-play_blocks(fill: (float) -> float, blocks, seconds) := std_io("sound", "blocks", [fill, blocks, si_amount(seconds), sample_rate])
+// A linear array is a module's block of samples, its address the block itself (card linear-parameters)
+rewrite (linear $name = float#$shifted) => ($name = new_samples($shifted - 1)) where $name is symbol
+linear_address(block: samples) := block
+play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blocks is list then blocks else [blocks], seconds)
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
