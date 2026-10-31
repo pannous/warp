@@ -16,11 +16,12 @@ CPU seconds between phase markers:
   samples and those with its callees: no rebuild, no markers. `-r <pid>` reports a kept data/profile/<pid>.sample
   again. sample manages ~30 ms a sample on wasmtime's threads, so profile a minute or more. Its first find: 55% of a
   parse in alias_at → longest_spelled_at, 39% in operator_at → spelled_operator_at (2026-10-31).
-- Phase markers: a compiler built with `timed(label)` calls (`print "§T " + label` when WARP_TIMES is set) in
-  passes.warp lowered_node (per pass index), with_used, compiler.warp; branch compile-times (scratch, never landed).
-- `data/phase_times.py <command…>` (in that branch) reads the process's CPU (ps) at each marker and prints the spans,
-  biggest first; it stops after `emit done`. Run: build the marked compiler, then
-  `WARP_TIMES=1 WARP_SEED=<marked warp.wasm> python3 data/phase_times.py warp rebuild pure`.
+- Phase markers (card phase-markers): `timed(label)` (core/passes/passes.warp) prints `§T <label>` when WARP_TIMES is
+  set, silent otherwise, where a phase starts: compiler.warp's compile (implicit uses, checked_program, emit, emit
+  done), with_used's steps, with_uses' (used files, module texts, each file's parse), each baked table's computing,
+  each pure pass by name. `scripts/phase-times.py <command…>` reads the process's CPU (ps) at each marker and prints
+  the spans per label, biggest first; it stops after `emit done`. Run, on a built tree:
+  `WARP_TIMES=1 WARP_SEED=<tree>/lib/warp.wasm scripts/phase-times.py warp rebuild pure`.
 - A synthetic program at 100/200/400/1600 statements shows superlinear terms quickly with the installed warp
   (`/usr/bin/time -p`, user CPU): `def gN(xs: list): int := xs.f(N) + 1` against `f(N) + 1`.
 - Rules in lib/sugar/ are not baked: switching one off in a worktree's lib (WARP_LIB) needs no rebuild, so a rule's

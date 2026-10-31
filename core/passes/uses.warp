@@ -23,7 +23,13 @@ module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
-with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_own_aliases(with_module_directory(program, folder)), folder), module_text)
+with_uses(program: Node, folder: text): Node := {
+	directed = with_own_aliases(with_module_directory(program, folder))
+	timed("uses: used files")
+	brought = used_in(directed, folder)
+	timed("uses: module texts")
+	bottom_up(brought, module_text)
+}
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
 # loader.rs with_module_directory)
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
@@ -61,19 +67,25 @@ aliased(n: Node, aliases: list): any := {
 	n
 }
 
+# the empty call `library_sources()` … of the baked table `name`, its computing marked (WARP_TIMES)
+def is_baking(n: Node, word: text, name: text): bool := {
+	if not is_empty_call(n, word) { return no }
+	timed("computing " + name)
+	yes
+}
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time as rust-harness:src/lowering/words/library_words.rs
 # writes it out (the std modules are lib/<name>.warp); `module_source("compiler/analysis/errors.data")`, a name with an
 # extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES), `library_parses()`
 # their parses (LIBRARY_PARSES), `slice_parses()` their definitions' parses (SLICE_PARSES). A compiled
 # compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
 module_text(n: Node): any := {
-	if is_empty_call(n, "library_sources") { return baked_literal("LIBRARY_FILES", library_texts(run_library(), "")) }
-	if is_empty_call(n, "library_parses") { return baked_literal("LIBRARY_PARSES", packed_parses(library_texts(run_library(), ""))) }
-	if is_empty_call(n, "library_slices") { return baked_literal("LIBRARY_SLICES", baked_slices(library_texts(run_library(), ""))) }
-	if is_empty_call(n, "std_rule_needs") { return baked_literal("STD_RULE_NEEDS", scanned_rule_needs()) }
-	if is_empty_call(n, "library_rules") { return baked_literal("LIBRARY_RULES", packed_rules(library_texts(run_library(), ""))) }
-	if is_empty_call(n, "block_heads") { return baked_literal("BLOCK_HEADS", block_heads_in(library_texts(run_library(), ""))) }
-	if is_empty_call(n, "slice_parses") { return baked_literal("SLICE_PARSES", packed_slice_parses(library_texts(run_library(), ""))) }
+	if is_baking(n, "library_sources", "LIBRARY_FILES") { return baked_literal("LIBRARY_FILES", library_texts(run_library(), "")) }
+	if is_baking(n, "library_parses", "LIBRARY_PARSES") { return baked_literal("LIBRARY_PARSES", packed_parses(library_texts(run_library(), ""))) }
+	if is_baking(n, "library_slices", "LIBRARY_SLICES") { return baked_literal("LIBRARY_SLICES", baked_slices(library_texts(run_library(), ""))) }
+	if is_baking(n, "std_rule_needs", "STD_RULE_NEEDS") { return baked_literal("STD_RULE_NEEDS", scanned_rule_needs()) }
+	if is_baking(n, "library_rules", "LIBRARY_RULES") { return baked_literal("LIBRARY_RULES", packed_rules(library_texts(run_library(), ""))) }
+	if is_baking(n, "block_heads", "BLOCK_HEADS") { return baked_literal("BLOCK_HEADS", block_heads_in(library_texts(run_library(), ""))) }
+	if is_baking(n, "slice_parses", "SLICE_PARSES") { return baked_literal("SLICE_PARSES", packed_slice_parses(library_texts(run_library(), ""))) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
@@ -266,11 +278,13 @@ file_parsed(file: text): Node := {
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
 checked_parse(file: text, source: text): Node := {
+	timed("parse " + working_relative(file))
 	tree = plain_node(parsed(source))
 	for n in nodes_in(tree) {
 		message = parse_error_message(n)
 		if message != ø { raise working_relative(file) + ": " + message }
 	}
+	timed("after parsing")
 	tree
 }
 
