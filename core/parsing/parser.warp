@@ -451,17 +451,20 @@ def longest_first(pairs: list): list {
 // The canonical name of the operator an alias spells, else ""
 def canonical_operator(target: text): text := symbol_operator(target) ?? word_operator(target) ?? ALIAS_TARGET_NAMES.get(target) ?? ""
 // The alias written at the parser's position as [spelling, target], a word one as a whole word, the longest, else []
-def alias_at(p: Parser): list := if p.at >= p.n then [] else longest_spelled_at(p, aliases_starting(p, p.code[p.at]), alias => alias#1) ?? []
-// The [spelling, target] aliases by the character each spelling starts with: a position tries only those written
-// there (trying every alias at every token was 55% of a parse, card compiler-parse-timing)
-def by_first_character(aliases: list): map {
+def alias_at(p: Parser): list := longest_spelled_at(p, starting_here(p.aliases, p, p.at), alias => alias#1) ?? []
+// Spellings (or [spelling, …] entries) by the character each starts with, in their order: a position tries only those
+// that can be written there (trying every alias at every token was 55% of a parse, card compiler-parse-timing)
+def by_first_character(entries: list): map {
 	starting = {}
-	for alias in aliases {
-		first = "$(alias#1[0])"
-		starting[first] = (starting.get(first) ?? []) + [alias]
+	for entry in entries {
+		first = "$(spelling_of(entry)[0])"
+		starting[first] = (starting.get(first) ?? []) + [entry]
 	}
 	starting
 }
+def spelling_of(entry: any): text := if entry is list then entry#1 else entry
+// the entries of such an index that start with the character at `at`
+def starting_here(index: map, p: Parser, at: int): list := if at >= p.n then [] else index.get("$(p.code[at])") ?? []
 def aliases_starting(p: Parser, c: text): list := p.aliases.get("$(c)") ?? []
 // Of `candidates`, each spelled as `spelling` gives, the one written at the parser's position with the longest spelling,
 // a word one as a whole word, else ø
@@ -1439,7 +1442,8 @@ def opens_block(p: Parser, width: int): bool {
 // `not (x is 4)`, Python's `x not in xs` `not (x in xs)`
 // Rust twin: spellings.rs NEGATED_SPELLINGS
 NEGATED_SPELLINGS = {"nand": "and", "¬&": "and", "⊼": "and", "is not": "is", "isn't": "is", "isn’t": "is", "not in": "in", "∉": "in"}
-def negated_at(p: Parser): text := NEGATED_SPELLINGS.keys.find(written => keyword_at(p, written)) ?? ""
+NEGATED_STARTS = by_first_character(NEGATED_SPELLINGS.keys)
+def negated_at(p: Parser): text := starting_here(NEGATED_STARTS, p, p.at).find(written => keyword_at(p, written)) ?? ""
 
 // how tightly `x in xs` binds on its left and right
 MEMBERSHIP_POWERS = [115, 116]
@@ -1514,12 +1518,13 @@ def labelled_argument(p: Parser): Node := {
 // operator word does
 // Rust twin: conditions.rs try_parse_test_word
 TEST_WORDS = ["empty", "missing", "absent", "unknown", "undefined", "failed"]
+TEST_WORD_STARTS = by_first_character(TEST_WORDS)
 NOT_POWER = 105
 def test_word_at(p: Parser, min_power: int): list {
 	if min_power > NOT_POWER { return [] }
 	after_is = keyword_at(p, "is")
 	start = if after_is then blank_end(p, p.at + 2) else p.at
-	word = TEST_WORDS.find(candidate => keyword_at_position(p, candidate, start)) ?? ""
+	word = starting_here(TEST_WORD_STARTS, p, start).find(candidate => keyword_at_position(p, candidate, start)) ?? ""
 	if word == "" { return [] }
 	end = start + word.length
 	after = blank_end(p, end)
@@ -3494,8 +3499,9 @@ def bare_atom(p: Parser): Node := {
 // Rust twin: literals/constants.rs TRUTH_GLYPHS
 TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", "🗸", "🗹"]
 FALSE_GLYPHS = ["⊥", "❌", "✗"]
+TRUTH_GLYPH_STARTS = by_first_character(TRUE_GLYPHS + FALSE_GLYPHS)
 def truth_glyph_at(p: Parser): text {
-	for glyph in TRUE_GLYPHS + FALSE_GLYPHS { if starts_at(p.code, glyph, p.at, p.n) { return glyph } }
+	for glyph in starting_here(TRUTH_GLYPH_STARTS, p, p.at) { if starts_at(p.code, glyph, p.at, p.n) { return glyph } }
 	""
 }
 
@@ -3897,13 +3903,13 @@ def raised_terms(p: Parser): list {
 		start = if is_at(p.code, at, '⁻', p.n) or is_at(p.code, at, '⁺', p.n) then at + 1 else at
 		end = start
 		letters = ""
-		while end < p.n and position_in(SUPERSCRIPT_LETTERS, p.code[end]) < SUPERSCRIPT_LETTERS.length {
-			letters = letters + RAISED_LETTERS[position_in(SUPERSCRIPT_LETTERS, p.code[end])]
+		while end < p.n and SUPERSCRIPT_LETTER_INDEX.has("$(p.code[end])") {
+			letters = letters + RAISED_LETTERS[SUPERSCRIPT_LETTER_INDEX["$(p.code[end])"]]
 			end = end + 1
 		}
 		value = 0
-		while letters is empty and end < p.n and position_in(SUPERSCRIPT_DIGITS, p.code[end]) < 10 {
-			value = value * 10 + position_in(SUPERSCRIPT_DIGITS, p.code[end])
+		while letters is empty and end < p.n and SUPERSCRIPT_DIGIT_INDEX.has("$(p.code[end])") {
+			value = value * 10 + SUPERSCRIPT_DIGIT_INDEX["$(p.code[end])"]
 			end = end + 1
 		}
 		if end == start { return terms }
@@ -3913,8 +3919,19 @@ def raised_terms(p: Parser): list {
 	terms
 }
 
-// Where the character c stands in `table`, else the table's length
-def position_in(table: text, c: text): int := index_of(table, c, 0, table.length)
+// Each superscript letter and digit → where it stands in its table, read once: finding a character in the table text
+// walked the table at each operand (a quarter of a parse, card compiler-parse-timing)
+SUPERSCRIPT_LETTER_INDEX = character_index(SUPERSCRIPT_LETTERS)
+SUPERSCRIPT_DIGIT_INDEX = character_index(SUPERSCRIPT_DIGITS)
+def character_index(table: text): map {
+	index = {}
+	at = 0
+	for c in table {
+		index["$(c)"] = at
+		at = at + 1
+	}
+	index
+}
 
 ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 
