@@ -116,7 +116,7 @@ name_defined_in(line: text): text := {
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1.glyph }
 	leading = leading_name(line)
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
-	if leading is empty { return "" }
+	if leading is empty or leading == rewrite_word { return "" }
 	following = line[#leading ..].trim()
 	converted = conversion_target(following)
 	if converted != "" { return converted }
