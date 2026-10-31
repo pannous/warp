@@ -259,7 +259,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # program defines itself, never the module's; linked_words: each linked module word by name, its kinds and result,
 # which the program declares (prelude_words.warp declared_only) and the analyzer takes as they are
 # Every compile starts with a fresh Module (fresh_module): nothing of one compile reaches the next
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; linked_closures_shown: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; case_spellings: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0; runtime_image: any = ø; runtime_calls: any = ø; runtime_sites: any = ø; relocates_program: bool = no; shakes_runtime: bool = no; shaking: any = ø; linked_images: list = []; linked_own_names: list = []; linked_words: map = {}; linked_closures_shown: map = {}; marks: map = {}; global_marks: map = {} }
 
 module = Module({}, [])
 # a new compile's module, emitting the same file
@@ -431,7 +431,8 @@ def defined_arities(program: Node): map {
 # continuable: whether each takes a continue (continued_safely)
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {} }
+# marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; marks: map = {} }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -628,6 +629,9 @@ def boxed(value: TypedCode): list {
 	if kind == ValueKind.Text { return node(Kind.Text, code) }
 	if kind == ValueKind.List { return node(Marked.SquareList, code) }
 	if kind == ValueKind.Char { return node(Kind.Codepoint, code + gc_code(gc_ops.ref_i31, [])) }
+	# a number of a marked type boxed with its mark (decision marks-unboxed-first)
+	if value.mark != 0 and kind == ValueKind.Float { return node(value.mark, code + gc_code(gc_ops.struct_new, [gc_type(gc.float_box)])) }
+	if value.mark != 0 and kind == ValueKind.Int { return node(value.mark, code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])) }
 	if kind == ValueKind.Float { return node(Kind.Float, code + gc_code(gc_ops.struct_new, [gc_type(gc.float_box)])) }
 	if kind == ValueKind.Bool { return node(Marked.Bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])) }
 	if kind != ValueKind.Int and kind != pending { refuse("a " + kind_spelling(kind) + " as a value") }
@@ -655,7 +659,7 @@ def local_value(body: Body, n: Node): TypedCode {
 	name = name_of(n)
 	if is_global(body, name) {
 		entry = module.globals[global_key(body, name)]
-		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1))
+		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1), module.global_marks.get(global_key(body, name)) ?? 0)
 	}
 	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
 	# enum-identity)
@@ -667,7 +671,7 @@ def local_value(body: Body, n: Node): TypedCode {
 	if name not in body.names and name in module.functions and #module.functions[name].signature.parameters == 0 { return call(body, module.functions[name], []) }
 	if name not in body.names { return refuse("the unknown name " + name + module_hint(name)) }
 	index = body.names[name]
-	TypedCode(body.kinds#(index + 1), [op.local_get] + uleb(index))
+	TypedCode(body.kinds#(index + 1), [op.local_get] + uleb(index), body.marks.get(name) ?? 0)
 }
 # a rem b of floats, the sign of a as with ints: a - trunc(a / b) * b (wasm has no f64 remainder)
 def float_remainder(body: Body, a: list, b: list): TypedCode {
@@ -737,8 +741,16 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 		}
 		kind = held
 	}
+	# a local holding numbers of one marked type unboxed keeps their mark; values of another mark, or none, hold it
+	# boxed, each value with its own (decision marks-unboxed-first)
+	if name in body.names and kind != ValueKind.Node and (body.marks.get(name) ?? 0) != value.mark {
+		body.function.widened[name] = ValueKind.Node
+		body.kinds[body.names[name]] = ValueKind.Node
+		return TypedCode(kind, [op.unreachable])
+	}
+	if name not in body.names and value.mark != 0 { body.marks[name] = value.mark }
 	index = uleb(local_index(body, name, kind))
-	TypedCode(kind, converted(value, kind) + [op.local_tee] + index)
+	TypedCode(kind, converted(value, kind) + [op.local_tee] + index, if kind == ValueKind.Node then 0 else value.mark)
 }
 
 # `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_check: int_admitted,
@@ -829,6 +841,7 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	declare_global(global_key(body, name_of(key_of(declaration))), expression_code(body, value_of(declaration)))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
+	if name not in module.globals and value.mark != 0 { module.global_marks[name] = value.mark }
 	declared_global(name, value.kind)
 	global_assignment(name, value)
 }
@@ -983,6 +996,13 @@ def group_expression(body: Body, n: Node): TypedCode {
 		word = library_words[name_of(n#1)]
 		if word in sort_words and orders_instances() { return refuse("a sort where instances order through compare") }
 		if word == "symbol_node" and #n == 2 and n#2 is text { return interned_symbol(body, n#2) }
+		# `x as Angle`: the number held unboxed as its type's number, an exact 0.5 as the float an Angle is, with its
+		# mark, carried statically (decision marks-unboxed-first)
+		if word == "marked_int" and #n == 3 and n#3 is int {
+			mark = n#3 as int
+			held = if mark % KindUnit.Info == Kind.Float then ValueKind.Float else ValueKind.Int
+			return TypedCode(held, converted(expression_code(body, n#2), held), mark)
+		}
 		# `str(p)` shows p as print does, an instance by its class's text(); not inside that dispatcher, whose fallback it is
 		if word == "node_text" and #n == 2 and body.function.name != instance_text_word { return shown_text(expression_code(body, n#2)) }
 		# `a /! b` of a ratio, a float or a value known only at run time floors the quotient as Rust does;
@@ -1244,7 +1264,7 @@ def as_rational(value: TypedCode): TypedCode {
 
 # -value; a value known only at run time as 0 - value
 def negation(body: Body, value: TypedCode): TypedCode {
-	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Float, value.code + [op.f64_neg]) }
+	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Float, value.code + [op.f64_neg], value.mark) }
 	if value.kind != ValueKind.Int and value.kind != ValueKind.Node { refuse("the negation of a " + kind_spelling(value.kind)) }
 	# 0 - x, checked as a subtraction: -(-2^63) traps as 2^63 - 1 + 1 does, never wraps to itself
 	operation_code(body, "-", number_value(0), value)
@@ -1439,6 +1459,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	if module.prebuilding { for kind in Made.keys { module.made[kind] = yes } }
 	if prepended() { behind_runtime() }
 	module.aliases = type_synonyms()
+	module.marks = int_type_kinds(statements_in(program))
+	module.global_marks = {}
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
 	declare_class_structs()

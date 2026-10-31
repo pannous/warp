@@ -1,5 +1,20 @@
 # Operators (emitter.warp's part): arithmetic and comparisons on numbers and on boxed values, equality, ø tests
+# `30° * 2`: arithmetic keeps a marked operand's mark (decision marks-survive-arithmetic), the left one's, else the
+# right one's, where it marks a number of the result's kind; a boxed operand's by the runtime's marks_kept
 def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+	marked(symbol, unmarked_operation(body, symbol, a, b), a, b)
+}
+# an arithmetic result with the mark of its operands: unboxed, carried statically; boxed (an int's grown or exact
+# result), stamped by the runtime's kept_mark
+def marked(symbol: text, result: TypedCode, a: TypedCode, b: TypedCode): TypedCode {
+	if symbol in comparisons or (a.mark == 0 and b.mark == 0) or result.mark != 0 { return result }
+	if result.kind == ValueKind.Node and module.runtime.has("kept_mark") { return runtime_call("kept_mark", [result, number_value(if a.mark != 0 then a.mark else b.mark)]) }
+	mark = if marks_kind(a.mark, result.kind) then a.mark else if marks_kind(b.mark, result.kind) then b.mark else 0
+	if mark != 0 { return TypedCode(result.kind, result.code, mark) }
+	result
+}
+marks_kind(mark: int, kind: ValueKind): bool := mark != 0 and ((kind == ValueKind.Int and mark % KindUnit.Info == Kind.Int) or (kind == ValueKind.Float and mark % KindUnit.Info == Kind.Float))
+def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 	# an element of a recursive call's result the first reading does not know yet: its index says nothing of its kind
 	if symbol == "#" and a.kind == pending { return element(body, TypedCode(ValueKind.Node, a.code), b) }
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
@@ -80,6 +95,8 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	integers = plain_int_test(left.code) + plain_int_test(right.code) + [op.i32_and] + if_else_code(kind, ints, exact)
 	numbers = both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats)
 	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
+	# (a runtime built before marks_kept, the seed's, keeps none)
+	if symbol not in comparisons and module.runtime.has("marks_kept") { return runtime_call("marks_kept", [TypedCode(kind, code + numbers), left, right]) }
 	if symbol not in comparisons { return TypedCode(kind, code + numbers) }
 	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
@@ -108,7 +125,7 @@ def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 		a = unboxed_int_slot(body, left, a)
 		b = unboxed_int_slot(body, right, b)
 	}
-	if symbol in grown_words and a.kind == ValueKind.Int and b.kind == ValueKind.Int and not wraps(body, left, right) { return runtime_call(grown_words[symbol], [a, b]) }
+	if symbol in grown_words and a.kind == ValueKind.Int and b.kind == ValueKind.Int and not wraps(body, left, right) { return marked(symbol, runtime_call(grown_words[symbol], [a, b]), a, b) }
 	operation_code(body, symbol, a, b)
 }
 # a variable declared int in an optional or union slot holds a node, an int still (boxing is the layout, not the type)
