@@ -330,9 +330,9 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 				field = field_name(member)
 				if field != ø { field_types[field] = typed_json_field_type(member) }
 			}
-			checks = fields.map(field => "if not (typed·json[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
-			arguments = fields.map(field => field + ": typed·json[\"" + field + "\"]")
-			return plain_node(parsed("(typed·json = json(" + as_code(source) + "); " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "})"))
+			checks = fields.map(field => "if not (typed_json_value[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
+			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
+			return plain_node(parsed("(typed_json_value => { " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })(json(" + as_code(source) + "))"))
 		}
 	}
 	plain_node(parsed("raise \"typed JSON requires a declared class\""))
