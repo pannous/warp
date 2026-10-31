@@ -115,16 +115,15 @@ packed_slice_parses(files: map): map := {
 	}
 	parses
 }
-# each slice's statements of the file's parse, by the slice's index: a statement declaring a name goes to the next
-# slice of that name (a class's node is placed where the statement before it ended, so its line misleads), another
-# to the slice its line falls in
+# each slice's statements of the file's parse, by the slice's index: a statement goes to the slice its line falls in,
+# a class to the next slice of its name (its node is placed where the statement before it ended, so its line misleads)
 statements_by_slice(statements: list, spans: list, ranges: list): map := {
 	slices_named = {}
 	for index in 0 ..< #spans { slices_named[spans[index]#1] = (slices_named.get(spans[index]#1) ?? []) + [index] }
 	taken = {}
 	held = {}
 	for statement in statements {
-		name = declared_name(statement) ?? aliased_type_name(statement)
+		name = aliased_type_name(statement)
 		named = if name is text then slices_named.get(name) ?? [] else []
 		used = if name is text then taken.get(name) ?? 0 else 0
 		owner = if used < #named then named[used] else slice_holding(ranges, (written_at(statement) ?? [0])#1)
