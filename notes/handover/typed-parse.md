@@ -1,5 +1,7 @@
 # typed-parse
 
+2026-10-31 codex: merged origin/main at 70df885c00. The supervisor requested landing the flat-field slice and splitting nested, optional and generic work; do not land the current generator unchanged because the existing constructor-effects outcome demonstrates that it silently skips `init`. `warp test` is on hold in notes/agents/common.md: its runner can kill unrelated processes. Individual CLI outcomes with `WARP_NO_WINDOW=1 WARP_LIB=/Volumes/Worktrees/typed-parse/lib /Users/me/dev/bin/warp` verified a matrix of numbers returns `4`, and a nested list mismatch returns `rows[2][2] must be number, received text`; these outcomes are now in test/types/test_typed_parse_nested_lists.pairs.warp. The worktree compiler is from the earlier passing smoke, and the merge changed notes only. Next find a safe construction or explicitly refuse unsupported class shapes, then isolate the flat slice without deleting existing tests, split the remaining work into cards, smoke the merged tip, and run the focused tests only once the hold is lifted. Defaults remain no coercion, reject unknown and missing required fields, accept optional/null and defaults.
+
 State: the new outcome test is committed; implementation remains. No existing tests changed.
 
 Default: no coercion; reject missing required and unknown fields, allow optional or defaulted fields (decision D4). A new outcome test covers valid input and the motivating type mismatch. Existing rewrite rule words can inspect `$program`; `class_view` and `class_declared` provide the declarations and field types.

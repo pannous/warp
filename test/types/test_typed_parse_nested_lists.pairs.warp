@@ -1,0 +1,3 @@
+# Card typed-parse: validate list elements recursively with their field paths.
+'class Matrix { rows: list of list of number }; parse("{rows:[[1,2],[3,4]]}", Matrix).rows#2#2'	4
+'class Matrix { rows: list of list of number }; try { parse("{rows:[[1,2],[3,\"x\"]]}", Matrix) } catch e { e.message }'	'rows[2][2] must be number, received text'
