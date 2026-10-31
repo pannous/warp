@@ -79,6 +79,7 @@ host_words = {
 	fd_prestat_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_prestat_dir_name: [["i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	path_open: [["i32", "i32", "i32", "i32", "i32", "int", "int", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	path_readlink: [["i32", "i32", "i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_read: [["i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_close: [["i32"], ["i32"], "wasi_snapshot_preview1"]
 	# a folder's fd, where its entries go and their room, the cookie to go on from (an i64), where the bytes used go

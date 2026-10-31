@@ -22,6 +22,7 @@ path_open(dir: int, lookup: int, path_at: int, length: int, open: int, rights: i
 fd_read(fd: int, iovecs_at: int, count: int, read_at: int): int from runtime
 fd_close(fd: int): int from runtime
 fd_readdir(fd: int, entries_at: int, room: int, cookie: int, used_at: int): int from runtime
+path_readlink(dir: int, path_at: int, length: int, target_at: int, room: int, used_at: int): int from runtime
 fd_write(fd: int, iovecs_at: int, count: int, written_at: int): int from runtime
 
 # the scratch area: a prestat or a count pair, an iovec, the count a call wrote, an fd, then the bytes
@@ -94,13 +95,54 @@ preopened_place(path: text): list := {
 	best
 }
 # the fd of the file opened, or the negated error code
-opened_file(path: text, open: int): int := {
+opened_file(path: text, open: int): int := opened_entry(path, open, if open == 0 then wasi_read_rights() else wasi_write_rights())
+# the fd of the file or folder opened so, or the negated error code; a path WASI cannot open through a link on its way
+# opened at the path the link leads to (linked_path)
+opened_entry(path: text, open: int, rights: int): int := {
 	place = preopened_place(path)
 	if place#1 < 0 { return 0 - wasi_no_entry() }
 	put_scratch_bytes(scratch_bytes(), place#2)
-	rights = if open == 0 then wasi_read_rights() else wasi_write_rights()
 	error = path_open(place#1, wasi_follow_links(), output_address() + scratch_bytes(), byte_count(place#2), open, rights, rights, 0, output_address() + scratch_fd())
-	if error != 0 then 0 - error else scratch_word(scratch_fd())
+	if error == 0 { return scratch_word(scratch_fd()) }
+	linked = linked_path(path)
+	if is_null(linked) then 0 - error else opened_entry(linked, open, rights)
+}
+# the path with the links on its way followed by the runtime itself, as WASI follows none leading to an absolute path
+# (`data -> /Volumes/Junk/data`, macOS's `/etc -> /private/etc`) wherever it lies; ø when no link is on the way
+linked_path(path: text): Node := {
+	parts = path_parts(path)
+	walked = if text_starts_with(path, "/") then "/" else "."
+	followed = 0
+	at = 0
+	while at < #parts {
+		step = if walked == "/" then "/" + parts[at] else walked + "/" + parts[at]
+		target = link_target(step)
+		if is_null(target) {
+			walked = step
+			at += 1
+		} else {
+			# (a loop of links ends as WASI's own lookup does, unresolved)
+			followed += 1
+			if followed > most_links_followed() { return ø }
+			if text_starts_with(target, "/") { walked = "/" }
+			parts = path_parts(target) + parts[at + 1 ..]
+			at = 0
+		}
+	}
+	if followed == 0 then ø else walked
+}
+most_links_followed(): int := 40
+# the path's names between its slashes, none empty
+path_parts(path: text): list := split_text(path, "/").filter(part => byte_count(part) > 0)
+# where the link at path leads, ø when path names no link
+link_target(path: text): Node := {
+	place = preopened_place(path)
+	if place#1 < 0 { return ø }
+	put_scratch_bytes(scratch_bytes(), place#2)
+	target_at = scratch_bytes() + byte_count(place#2)
+	room = wasi_chunk() - byte_count(place#2)
+	if path_readlink(place#1, output_address() + scratch_bytes(), byte_count(place#2), output_address() + target_at, room, output_address() + scratch_count()) != 0 { return ø }
+	scratch_text(target_at, scratch_word(scratch_count()))
 }
 file_failure(word: text, path: text, error: int): Node := {
 	reason = if error == wasi_no_entry() then "No such file or directory" else "WASI error " + error
@@ -142,12 +184,8 @@ std_file_exists(path: Node): bool := {
 # the Error of why not
 std_file_list(path: Node): Node := {
 	t = text_of_textual(path)
-	place = preopened_place(t)
-	if place#1 < 0 { return file_failure("list", t, wasi_no_entry()) }
-	put_scratch_bytes(scratch_bytes(), place#2)
-	error = path_open(place#1, wasi_follow_links(), output_address() + scratch_bytes(), byte_count(place#2), wasi_directory(), wasi_readdir_right(), wasi_readdir_right(), 0, output_address() + scratch_fd())
-	if error != 0 { return file_failure("list", t, error) }
-	fd = scratch_word(scratch_fd())
+	fd = opened_entry(t, wasi_directory(), wasi_readdir_right())
+	if fd < 0 { return file_failure("list", t, 0 - fd) }
 	names = []
 	cookie = 0
 	more = yes
