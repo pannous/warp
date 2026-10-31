@@ -4,7 +4,7 @@ def call(body: Body, f: Function, arguments: list): TypedCode {
 	if parameters and parameters.last.rest { return rest_call(body, f, arguments) }
 	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments, f.signature.parameters.map(p => p.label))
-	if not (slots is list) { return refuse_arguments(f, #arguments) }
+	if slots == ø { return refuse_arguments(f, #arguments) }
 	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression_code(body, slots[i]#1))
 	call_values(f, defaulted(body, f, given, #arguments))
 }
@@ -26,7 +26,8 @@ is_named_argument(argument: Node, names: list): bool := type(argument) is key an
 # the place a named argument names, by a parameter's name or its label (`with: "coffee"` of `with new`)
 named_place(name: text, names: list, labels: list): int := range_list(#names).filter(i => names[i] == name or (labels and labels[i] == name))#1
 # the arguments in the places of `names`: the positional ones first, each named one (`f(b=2, a=7)`) in its name's place,
-# [argument] each, ø for a place left out; ø when a name is given twice. (The values are computed in the places'
+# [argument] each, ø for a place left out; ø when a name is given twice or more are given than places (test
+# `slots == ø`: `ø is list` holds, so a nullary f took `m.f`'s receiver; card member-read). (The values are computed in the places'
 # order, not as written: P216 wants written order, which differs only for arguments with effects)
 placed_arguments(names: list, arguments: list, labels: list = []): any := {
 	slots = []
@@ -160,11 +161,12 @@ declared_result(f: Function): any := {
 }
 # the mark of a number type the definition declares it gives, `f(c: Color): Color := c`, so its caller holds the
 # result unboxed with its mark; 0 for any other result
-declared_mark(f: Function): int := {
+declared_mark(f: Function): int := module.marks.get(declared_result_word(f) ?? "") ?? 0
+# the type word a definition declares it gives, `int` of `f(): int := …`; ø when it declares none
+declared_result_word(f: Function): text? := {
 	declaration = result_declared(f.body)
-	if declaration == ø { return 0 }
-	type = if is_key(declaration, Op.As) then name_of(value_of(declaration)) else held_result_type(declaration)
-	module.marks.get(type) ?? 0
+	if declaration == ø { return ø }
+	if is_key(declaration, Op.As) then name_of(value_of(declaration)) else held_result_type(declaration)
 }
 # the part of a body that declares its result: `… as T`, or `the result: T = …` of a block, ø when none does
 result_declared(n: Node): Node? := {
