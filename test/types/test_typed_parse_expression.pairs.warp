@@ -1,0 +1,3 @@
+# Typed JSON accepts a computed text expression without coercing its fields.
+'class User { id: number }; source = "{id:7}"; parse(source, User).id'	7
+'class User { id: number }; source = "{id:7}"; parse<User>(source).id'	7
