@@ -111,7 +111,7 @@ marked(attribute: any, n: Node): Node := {
 	name = if n is symbol then name_of(n) else if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ø
 	if attribute in read_attributes and name != ø { marked_names[attribute] = (marked_names.get(attribute) ?? []) + [name] }
 	# `function f`, `&f` (parser.warp function_reference): the function as a value, also where a group would call it, `(function f)`
-	if attribute == function_reference_mark and n is symbol { return call_of(closure_word, [n]) }
+	if attribute == function_reference_mark and n is symbol and not name_of(n).starts_with("$") { return call_of(closure_word, [n]) }
 	n
 }
 function_reference_mark = "function_reference"
