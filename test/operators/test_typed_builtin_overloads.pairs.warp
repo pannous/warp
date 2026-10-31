@@ -1,0 +1,8 @@
+# decision rules-to-typed-operators (wiki/operator.md "Operator overloading"): a built-in operator overloaded by its
+# operands' kinds, chosen at compile time; where no overload fits the built-in stays
+'infix operator +(a: text, b: int) := 7; ["a" + 3, 2 + 3, "a" + "b"]'	[7, 5, 'ab']
+'infix operator *(a: list, b: function) := a.map(b); [1, 2] * (x => x + 1)'	[2, 3]
+'infix operator -(a: text, b: text) := a.replace(b, ""); "banana" - "an"'	'ba'
+# an overload whose body is the operator itself keeps the built-in where its kinds fit
+'infix operator |(a: type, b: type) := a | b; infix operator |(x: any, g: function) := g(x); inc(x: int) := x + 1; x: text | int = 3; [3 | inc, x]'	[4, 3]
+'infix operator |(f: function, g: function) := x => x | f | g; inc(x: int) := x + 1; dbl(x: int) := 2 * x; h = inc | dbl; h(3)'	8

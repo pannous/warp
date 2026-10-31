@@ -833,15 +833,20 @@ play(tone, for duration) := if is_signal(tone) then play_signal(tone, duration) 
 // the blocks one after another; class Sample is a clip, a list of them `list of Sample`
 play(fill: (samples, float) -> any, for duration) := {
 	block = new_samples(block_size)
+	played_blocks(t => fill(block, t), [block], duration)
+}
+// fill(t) writes the speakers' blocks, one mono, [left, right] interleaved in stereo, once a block
+played_blocks(fill, speakers, duration) := {
 	wanted = round(si_amount(duration) * sample_rate) as int
+	length = count(speakers[0])
 	amplitudes = []
 	first = 0
 	while first < wanted {
-		fill(block, first / sample_rate)
-		amplitudes = amplitudes + [block#i for i in 1 to min(block_size, wanted - first)]
-		first = first + block_size
+		fill(first / sample_rate)
+		amplitudes = amplitudes + [block#i for i in 1 to min(length, wanted - first) for block in speakers]
+		first = first + length
 	}
-	signal_sound(amplitudes, 1)
+	signal_sound(amplitudes, count(speakers))
 }
 block_size() := 512
 // a block of samples in linear memory, where the host reads and the program writes them in place: [count: i64][count
@@ -896,8 +901,10 @@ signal_sound(amplitudes, channels) := sounded(clamped_samples([a * loudest_sampl
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
-// The address until a library function takes a linear array (card linear-parameters)
-play_blocks(fill: (float) -> float, blocks, seconds) := std_io("sound", "blocks", [fill, blocks, si_amount(seconds), sample_rate])
+// A linear array is a module's block of samples, its address the block itself (card linear-parameters)
+rewrite (linear $name = float#$shifted) => ($name = new_samples($shifted - 1)) where $name is symbol
+linear_address(block: samples) := block
+play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blocks is list then blocks else [blocks], seconds)
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
@@ -1022,18 +1029,20 @@ pattern_item(kind, payload) := [kind, payload, 1, 1.0 as float]
 pattern_note(word) := if word == "~" then pattern_item(1, []) else pattern_item(1, [note_hertz(upper(word[0]) + word[1..]) for word in split(word, ",")])
 // k notes over n steps as evenly as possible: step i sounds when (i * k) mod n < k
 pattern_euclid(item, k, n) := pattern_item(0, [if (i * k) % n < k then item else pattern_item(1, []) for i in 0..n])
-pattern_end(text: text, from: int, stops: text) := {
+// `steps`, not `text`: lib/sugar/lists.warp reads a module's `text[i]` as i empty texts unless the program binds text
+// (card lists-text-rewrite)
+pattern_end(steps: text, from: int, stops: text) := {
 	i = from
-	while i < count(text) and not (text[i] in stops) { i = i + 1 }
+	while i < count(steps) and not (steps[i] in stops) { i = i + 1 }
 	i
 }
 global pattern_stops = " []<>*(?@_"
 // the steps from `from` to the closing bracket (or the end), and the place after it
-def parse_pattern(text: text, from: int) {
+def parse_pattern(steps: text, from: int) {
 	items = []
 	i = from
-	while i < count(text) {
-		c = text[i]
+	while i < count(steps) {
+		c = steps[i]
 		if c == " " { i = i + 1 }
 		else if c == "]" or c == ">" { return [items, i + 1] }
 		else if c == "_" {
@@ -1043,29 +1052,29 @@ def parse_pattern(text: text, from: int) {
 		} else {
 			item = pattern_item(1, [])
 			if c == "[" or c == "<" {
-				inner = parse_pattern(text, i + 1)
+				inner = parse_pattern(steps, i + 1)
 				item = pattern_item(if c == "[" then 0 else 2, inner[0])
 				i = inner[1]
 			} else {
-				stop = pattern_end(text, i, pattern_stops)
-				item = pattern_note(text[i..stop])
+				stop = pattern_end(steps, i, pattern_stops)
+				item = pattern_note(steps[i..stop])
 				i = stop
 			}
-			while i < count(text) and text[i] in "*(?@" {
-				if text[i] == "*" {
-					stop = pattern_end(text, i + 1, pattern_stops)
-					item = pattern_item(0, [item for x in 0..number(text[i + 1..stop])])
-				} else if text[i] == "(" {
-					stop = pattern_end(text, i + 1, ")")
-					arguments = split(text[i + 1..stop], ",")
+			while i < count(steps) and steps[i] in "*(?@" {
+				if steps[i] == "*" {
+					stop = pattern_end(steps, i + 1, pattern_stops)
+					item = pattern_item(0, [item for x in 0..number(steps[i + 1..stop])])
+				} else if steps[i] == "(" {
+					stop = pattern_end(steps, i + 1, ")")
+					arguments = split(steps[i + 1..stop], ",")
 					item = pattern_euclid(item, number(arguments[0]), number(arguments[1]))
 					stop = stop + 1
-				} else if text[i] == "@" {
-					stop = pattern_end(text, i + 1, pattern_stops)
-					item[2] = number(text[i + 1..stop])
+				} else if steps[i] == "@" {
+					stop = pattern_end(steps, i + 1, pattern_stops)
+					item[2] = number(steps[i + 1..stop])
 				} else {
-					stop = pattern_end(text, i + 1, pattern_stops)
-					item[3] = if stop > i + 1 then float(text[i + 1..stop]) else 0.5 as float
+					stop = pattern_end(steps, i + 1, pattern_stops)
+					item[3] = if stop > i + 1 then float(steps[i + 1..stop]) else 0.5 as float
 				}
 				i = stop
 			}

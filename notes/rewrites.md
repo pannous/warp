@@ -284,3 +284,19 @@ template's `$l $op $r` (bare or in parentheses) becomes the operation, a functio
 - a hole marked as an operator only when the affix bound it, else every phrase template `match $x {…}` became a call
 - rules_reaching only tries a rule whose operator the code holds: the operator inside `/!=` counts (operated_within)
 - the sugar loader drops a rule after a comment with an odd apostrophe (`operator's`)
+
+## Typed overloads of built-in operators (decision rules-to-typed-operators, card rewrite-rules)
+
+`infix operator |(x: any, g: function) := g(x)` (in a lib/sugar file, a rule module or a program) is not a function:
+rewrites.warp operator_rules makes it rules of the operator, `$x | $g => $g($x)`, its parameter types the conditions
+(overload_conditions: function → `is function` or `takes one`, one rule each; type/text/list/map/int/number/symbol →
+`is <kind>`; any → none). Overloads of one glyph are ordered most specific first (fewer `any`), an arm whose body is the
+operator itself (`|(a: type, b: type) := a | b`) before the others as specific; it emits no rule but adds to every later
+rule `not <its condition>` for one of its typed operands (one rule per operand), so the built-in stays where it fits.
+Names the body's lambdas and assignments introduce are template holes, fresh at each firing. Only glyph spellings
+(no letters: the parser names a declared operator as written, `|` not `or`), so prelude's `add(xs, x)` stays a function;
+an operand typed by a class leaves it to class_methods.warp. Dispatch is the rule engine's, so it costs no run time;
+operands whose kind only the run time knows get the built-in, as the hand rules did.
+- the seed-built warp.wasm packs lib rules with the stage that has operator_rules, so a sugar file's overloads are baked
+- a std module holding only overloads (no `rewrite` line) is neither packed nor in rule_needs: add a rewrite line or
+  extend those scans when one appears

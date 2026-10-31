@@ -19,11 +19,14 @@ wall_clock_ms() := {
 class Instant {
 	ms: int
 	compare(other) := ms - other.ms
-	minus(other) := if other is Instant then ms - other.ms else Instant(ms - other)
-	plus(duration) := Instant(ms + duration)
+	minus(other) := if other is Instant then ms - other.ms else Instant(ms - milliseconds_of(other))
+	plus(duration) := Instant(ms + milliseconds_of(duration))
 	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
 	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
 }
+// a duration as milliseconds: a plain number is one already; lib/units overloads it for its quantities, `2 seconds`
+// and `1h` counted in ms, one of another dimension a DimensionError
+milliseconds_of(duration: any) := duration
 // ".692", ".69", ".5", or nothing on a whole second
 millis_fraction(millis) := {
 	if millis == 0 then return ""
