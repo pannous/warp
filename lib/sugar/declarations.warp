@@ -39,3 +39,6 @@ rewrite (val $d) => $own where $own = declared_local($d)
 # `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which parser.warp
 # bundled_declarations reads off the module's text); as code, the definition itself
 rewrite global: $d => $d where $d is definition
+# `global x = 7 m/s`: the words after a global's assignment are its value's, as they are of `x = 7 m/s` (the parser
+# closes the declaration at its first value)
+rewrite (global: ($x = $v)) $rest => global: ($x = $v $rest)

@@ -1,0 +1,4 @@
+# a global's value is every word after its assignment, as for a plain assignment: `global x = 7 m/s` is 7m/s, not 7
+'use units; global x = 7 m/s; "" + x'	"7m/s"
+'use units; global d = 3 km; f() := d * 2; "" + f()'	"6km"
+'global n = 2 + 3; n'	5
