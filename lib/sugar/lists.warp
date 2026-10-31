@@ -4,6 +4,10 @@
 rewrite int#$n => zero_fill($n - 1, 0)
 rewrite float#$n => zero_fill($n - 1, 0 as float)
 rewrite text#$n => zero_fill($n - 1, "")
+# `640000*int`, `n*int`: the count times the type, n zeros of it; `x : 1000 int` declares x so
+rewrite $n * int => zero_fill($n, 0)
+rewrite $n * float => zero_fill($n, 0 as float)
+rewrite $x : $n int => $x = zero_fill($n, 0)
 
 # A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
 rewrite $v as list of $t => $v.map($x => $x as $t)

@@ -7,4 +7,4 @@ print help(sound)
 for trick in dir(sound):
 	print "sound trick: " + trick
 	print help(trick)
-	print function(trick).dump
+	print function(trick).definition

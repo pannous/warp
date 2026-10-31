@@ -1,0 +1,3 @@
+# a text's character outside 1…count is the index error, named in full where the run fails
+'w = ""; w[0]'	error
+'try { w = ""; w[0] } catch e { e.message }'	"index out of range"

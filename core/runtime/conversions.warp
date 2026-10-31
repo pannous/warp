@@ -8,6 +8,9 @@ use "lists.warp"
 use "text_numbers.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
+# whether n converts itself to a float, an instance whose class gives float() (an exact root √2, 2km): a call
+# dispatched on float or number takes it (user 2026-10-31: an irrational exact root counts as a float)
+converts_to_float(n: Node): bool := is_class_instance(n) and not is_null(instance_float(n))
 # a boxed int (kind code 1), exact rational or float as a float
 # an instance as its class's float() gives it (decision no-units-in-shaders: `sin(2km)` of the amount in metres)
 float_of_node(n: Node): float := {
