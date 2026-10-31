@@ -5,17 +5,20 @@
 # /tmp/perf-<pid>.map (core/native/driver.warp warp_config); macOS's sample takes the main thread's stacks for <seconds>
 # (else until it ends; asked every millisecond, it manages ~30 ms on wasmtime's many threads), each frame named through
 # that map: a table of own time, one with the callees. The raw sample lands in data/profile/<pid>.sample; `-r <pid>`
-# reports that one again. Example: scripts/profile.sh -s 60 rebuild pure
+# reports that one again; `-f <function>` counts only the stacks through that function (e.g. typed_wasm_module, the
+# emit). Example: scripts/profile.sh -s 60 rebuild pure
 set -euo pipefail
 seconds=3600
 top=40
 reported=
-while getopts "s:n:r:" option; do
+focus=
+while getopts "s:n:r:f:" option; do
 	case $option in
 		s) seconds=$OPTARG ;;
 		n) top=$OPTARG ;;
 		r) reported=$OPTARG ;;
-		*) sed -n '2,8p' "$0" >&2; exit 2 ;;
+		f) focus=$OPTARG ;;
+		*) sed -n '2,9p' "$0" >&2; exit 2 ;;
 	esac
 done
 shift $((OPTIND - 1))
@@ -23,7 +26,7 @@ checkout=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$checkout/data/profile"
 run=$reported
 if [ -z "$run" ]; then
-	[ $# -gt 0 ] || { sed -n '2,8p' "$0" >&2; exit 2; }
+	[ $# -gt 0 ] || { sed -n '2,9p' "$0" >&2; exit 2; }
 	WARP_PROFILE=perfmap WARP_NO_WINDOW=1 "${WARP_BINARY:-warp}" "$@" >/dev/null &
 	run=$!
 	/usr/bin/sample "$run" "$seconds" 1 -mayDie -file "$checkout/data/profile/$run.sample" >/dev/null 2>&1 || true
@@ -31,9 +34,9 @@ if [ -z "$run" ]; then
 	wait "$run" 2>/dev/null || true
 fi
 samples="$checkout/data/profile/$run.sample"
-python3 - "$samples" "/tmp/perf-$run.map" "$top" <<'PYTHON'
+python3 - "$samples" "/tmp/perf-$run.map" "$top" "$focus" <<'PYTHON'
 import bisect, re, sys
-samples, perf_map, top = sys.argv[1], sys.argv[2], int(sys.argv[3])
+samples, perf_map, top, focus = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 starts, ends, names = [], [], []
 for line in open(perf_map):
 	start, size, name = line.rstrip("\n").split(" ", 2)
@@ -68,16 +71,17 @@ for k, (depth, count, frame) in enumerate(frames):
 		if later_depth <= depth: break
 		if later_depth == child_depth: children += later_count
 	name = named(frame)
-	own[name] = own.get(name, 0) + count - children
-	# with its callees: each stack counted once for a function, however often it recurses in it
 	while callers and callers[-1][0] >= depth: callers.pop()
-	if all(caller != name for _, caller in callers): within[name] = within.get(name, 0) + count
+	focused = not focus or name == focus or any(caller == focus for _, caller in callers)
+	if focused: own[name] = own.get(name, 0) + count - children
+	# with its callees: each stack counted once for a function, however often it recurses in it
+	if focused and all(caller != name for _, caller in callers): within[name] = within.get(name, 0) + count
 	callers.append((depth, name))
 total = sum(own.values()) or 1
 def table(title, counts):
 	print(title)
 	for name, count in sorted(counts.items(), key=lambda item: -item[1])[:top]:
 		print(f"{count:8d} {100 * count / total:5.1f}%  {name}")
-table(f"{total} samples of the main thread; each function's own:", own)
+table(f"{total} samples of the main thread{' through ' + focus if focus else ''}; each function's own:", own)
 table("\nwith its callees:", within)
 PYTHON
