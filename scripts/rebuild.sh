@@ -164,6 +164,46 @@ released() {
 	local lock=$store/$hash/$1.building
 	[ "$(cat "$lock/pid" 2>/dev/null)" = $$ ] && rm -rf "$lock"
 }
+# A compiler's code is core/**, BAKED and the seed (the --baked hash); the rest of lib/ is data baked into its segments
+# (uses.warp baked_tables). <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change
+# rebakes that compiler with this lib/ (warp.wasm rebake, ~1 min) and makes its runtime and modules anew instead of
+# compiling compiler.warp (decision lib-hash-rebake)
+code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$baked"; }
+# rebaked_stored <log>: 0 rebaked, 1 no stored compiler of this code, 2 failed (its output in the log, step rebake)
+rebaked_stored() {
+	local log=$1 stored=$store/code/$baked/warp.wasm new=$compilers/rebaking-$$.wasm
+	[ -f "$stored" ] || return 1
+	logged warp "miss-rebaking-$(basename "$(readlink "$store/code/$baked")")"
+	copied "$stored" "$new" || return 1
+	echo "rebuild step rebake" >"$log"
+	if ! (cd "$tree" && export WARP_LIB=$lib && "$warp" "$new" rebake "$new" && "$warp" "$new" baked-current "$new.baked" &&
+		{ [ "$(cat "$new.baked")" = yes ] || { echo "rebake: the tables are still not current: $(cat "$new.baked")"; false; }; } &&
+		rm -f "$new.baked" "$compilers/runtime.wasm.cwasm" && "$warp" "$new" runtime "$compilers/runtime.wasm" &&
+		mkdir -p "$compilers/modules" && "$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
+		rm -f "$new" "$new".*
+		return 2
+	fi
+	local part
+	for part in "" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key; do
+		[ -f "$new$part" ] && mv -f "$new$part" "$file$part"
+	done
+	inputs_line >"$file.inputs"
+	code_kept
+}
+# published <name>: lib/<name>.wasm and its companions into the store
+published() {
+	publish "$compilers/$1.wasm"
+	local companion
+	for companion in $(companions "$1" "$compilers"); do publish "$compilers/$companion" "$companion"; done
+}
+# build_failed <name> <log> <status>: the failure kept in the store and said, the build lock released
+build_failed() {
+	kept_failure "$1" "$2" "$3"
+	released "$1"
+	set_aside "$1"
+	logged "$1" build-failed
+	failure_said "$1"
+}
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
 one() {
 	local name=$1 file=$compilers/$1.wasm built status old
@@ -196,6 +236,12 @@ one() {
 		return
 	fi
 	local lane=(pure) from log=$store/$hash/$name.building/log
+	if [ -z "$force" ] && [ "$name" = warp ]; then
+		rebaked_stored "$log"
+		status=$?
+		[ $status = 2 ] && { build_failed "$name" "$log" $status; return 1; }
+		[ $status = 0 ] && { published "$name"; released "$name"; logged "$name" built-rebaked; return 0; }
+	fi
 	[ "$name" = warp-self ] && lane=(self)
 	from=$(resumed_step "$name")
 	[ -n "$from" ] && lane=(from "$from")
@@ -203,18 +249,11 @@ one() {
 	: >"$log"
 	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash WARP_COMPILER_STORE=$store "$scripts/build-slot.sh" "$log" "$warp" rebuild "${lane[@]}")
 	status=$?
-	if [ $status != 0 ]; then
-		kept_failure "$name" "$log" $status
-		released "$name"
-		set_aside "$name"
-		logged "$name" build-failed
-		failure_said "$name"
-		return 1
-	fi
+	[ $status != 0 ] && { build_failed "$name" "$log" $status; return 1; }
 	[ -f "$file" ] || { cat "$log" >&2; released "$name"; echo "rebuild.sh: warp rebuild wrote no $file" >&2; return 1; }
 	inputs_line >"$file.inputs"
-	publish "$file"
-	for companion in $(companions "$name" "$compilers"); do publish "$compilers/$companion" "$companion"; done
+	published "$name"
+	[ "$name" = warp ] && code_kept
 	rm -rf "$(failure "$name")"
 	released "$name"
 	[ "$name" = warp-self ] && self_passed
