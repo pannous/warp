@@ -586,13 +586,14 @@ statements_ruled(statements: list, module: text, source: text): list := {
 # class's operand (`+(a: Vec, b: Vec)`) leaves the definition to class_methods.warp
 class OperatorOverload { glyph: text; names: list; types: list; pattern: Node; template: Node; builtin: bool }
 # each kind's alternative conditions, each a list of conditions joined by `and`; `any` none
-overload_conditions = {any: [[]], function: [["is function"], ["takes one"]], block: [["is function"], ["takes one"]], type: [["is type"]], text: [["is text"]], symbol: [["is symbol"]], list: [["is list"]], map: [["is map"]], int: [["is int"]], number: [["is number"]]}
+overload_conditions = {any: [[]], function: [["is function"], ["takes one"]], block: [["is function"], ["takes one"]], type: [["is type"]], enum: [["is enum"]], text: [["is text"]], symbol: [["is symbol"]], list: [["is list"]], map: [["is map"]], int: [["is int"]], number: [["is number"]]}
 
-# the definition `glyph(a: T, b: U) := body` of a built-in operator spelled by a glyph, as its overload, else ø
+# the definition `operator_|(a: T, b: U) := body` (also `+(a: T, b: U)`, the method form) of a built-in operator, as
+# its overload, else ø
 operator_overload(statement: Node): OperatorOverload? := {
 	if not is_key(statement, Op.Define) or not is_round(key_of(statement)) or #key_of(statement) != 3 or not (key_of(statement)#1 is symbol) { return ø }
-	glyph = name_of(key_of(statement)#1)
-	if first_alphabetic_word(glyph) != "" { return ø }
+	glyph = overloaded_spelling(name_of(key_of(statement)#1))
+	if glyph == ø { return ø }
 	parameters = items_of(key_of(statement))[1 ..]
 	types = parameters.map(parameter => if parameter is symbol then any_word else if is_key(parameter, Op.Colon) and value_of(parameter) is symbol then name_of(value_of(parameter)) else "")
 	if not types.all(type => overload_conditions.has(type)) { return ø }
@@ -601,6 +602,11 @@ operator_overload(statement: Node): OperatorOverload? := {
 	if not (pattern is key and key_of(pattern) == symbol(hole_word(names#1)) and value_of(pattern) == symbol(hole_word(names#2))) { return ø }
 	template = holes_for(plain_node(value_of(statement)), names + introduced_names(value_of(statement)))
 	OperatorOverload(glyph, names, types, pattern, template, same_view(template, pattern))
+}
+# the built-in operator a definition's name spells: `operator_|` |, `operator_as` as, the method form's `+`; else ø
+overloaded_spelling(name: text): text? := {
+	spelling = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else if first_alphabetic_word(name) == "" then name else ""
+	if symbol_operator(spelling) != ø or word_operator(spelling) != ø then spelling else ø
 }
 hole_word(name: text): text := rule_hole_mark + name
 # the body with each of the names a hole: the parameters, also the names its lambdas and assignments introduce, fresh
@@ -946,8 +952,10 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 takes_only_numbers(word: text, arity: int?): bool := {
 	defined = if rule_signatures.has(word) then rule_signatures[word] else if word_lines().has(word) then word_lines()[word].map(line => line.signature) else []
 	fitting = defined.filter(signature => arity == ø or takes(signature, arity))
-	#fitting > 0 and fitting.all(signature => #signature.parameters > 0 and signature.parameters.filter(parameter => not parameter.rest).all(parameter => parameter.type_name in numeric_parameter_types))
+	#fitting > 0 and fitting.all(signature => takes_numbers(signature.parameters.filter(parameter => not parameter.rest)))
 }
+# fixed parameters, at least one, all numbers: a word of a rest alone, `print(values...)`, takes a list as it is
+takes_numbers(fixed: list): bool := #fixed > 0 and fixed.all(parameter => parameter.type_name in numeric_parameter_types)
 # how many arguments the call the rule matched passes the word, ø when it matched no call of it
 matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 
@@ -1539,7 +1547,8 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 		if is_element_list(n) { n = group_like(n, items_of(n).map(element => at_place(element, Place.Element, rules, origins))) }
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
-		runs = with_runs(if phrase then words_of_all(items) else items, rules, origins)
+		# runs of words side by side, never across commas: `[1, s]` holds none (card match-rest-item-pattern)
+		runs = if separator_of(n) != "," then with_runs(if phrase then words_of_all(items) else items, rules, origins) else items
 		if phrase and runs == words_of_all(items) { runs = items }
 		# a phrase all one run takes the place the phrase stands in: a statement's template of statements stays the
 		# statements (`$f(x) := …` defines f where the phrase stood), a value's turns into its block (as_value) there
@@ -1724,7 +1733,8 @@ operand_run(rule: Rule, origin: map, items: list): list? := {
 	if result == ø { return ø }
 	[#items, with_rightmost(with_leftmost(last, as_value(result)), items[#rule.pattern ..])]
 }
-is_infix_operation(n: Node): bool := n is key and key_of(n) != ø and (op_of(n) in arithmetic_operators or op_of(n) in ordering_operators)
+# a power binds tighter than a spaced unit: `4 m²` is 4 (m²), never (4 m)² (card str-str)
+is_infix_operation(n: Node): bool := n is key and key_of(n) != ø and op_of(n) != Op.Pow and (op_of(n) in arithmetic_operators or op_of(n) in ordering_operators)
 leftmost_operand(n: Node): Node := if is_infix_operation(n) then leftmost_operand(key_of(n)) else n
 with_leftmost(n: Node, operand: Node): Node := if is_infix_operation(n) then placed(Key(with_leftmost(key_of(n), operand), op_of(n), value_of(n)), n) else operand
 with_rightmost(n: Node, words: list): Node := {
@@ -1753,7 +1763,13 @@ fired(rule: Rule, result: Node): Node := {
 }
 
 # the rule's `where` conditions hold of what its holes bound
-conditions_hold(rule: Rule, origin: map, bound: map): bool := origin_holds(rule, origin, bound) and rule.conditions.all(condition => condition_holds(condition, bound))
+# in order, the first that fails ending it: a later computed binding (`$refused = misnamed(…)`, which throws) runs only
+# where the tests before it hold (a `.all` the seed lowers calls every one)
+conditions_hold(rule: Rule, origin: map, bound: map): bool := {
+	if not origin_holds(rule, origin, bound) { return no }
+	for condition in rule.conditions { if not condition_holds(condition, bound) { return no } }
+	yes
+}
 
 # the conditions hold of the code n the rule matched, which the context conditions ask where it stands
 conditions_hold_at(rule: Rule, origin: map, bound: map, n: Node): bool := {

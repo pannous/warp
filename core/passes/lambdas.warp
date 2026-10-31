@@ -134,8 +134,9 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 		"map": statements([set_to(result, gathered), each_of(item, list, [grown(result, called)]), result])
 		"filter": statements([set_to(result, gathered), each_of(item, list, [if_block(called, [grown(result, item)])]), result])
 		"find": statements([set_to(result, ø), set_to(searching, yes), each_of(item, list, [if_block(Key(searching, Op.And, called), [set_to(result, item), set_to(searching, no)])]), result])
-		"any": statements([set_to(result, no), each_of(item, list, [if_block(called, [set_to(result, yes)])]), result])
-		"all": statements([set_to(result, yes), each_of(item, list, [if_block(Key(ø, Op.Not, called), [set_to(result, no)])]), result])
+		# the answer once known, f is called no more: `[1, 0].all(x => 10 / x < 3)` never divides by 0
+		"any": statements([set_to(result, no), each_of(item, list, [if_block(Key(Key(ø, Op.Not, result), Op.And, called), [set_to(result, yes)])]), result])
+		"all": statements([set_to(result, yes), each_of(item, list, [if_block(Key(result, Op.And, Key(ø, Op.Not, called)), [set_to(result, no)])]), result])
 		_: statements([set_to(result, ø), each_of(item, list, [set_to(result, called)]), result])
 	}
 }

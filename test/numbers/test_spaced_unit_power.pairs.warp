@@ -1,0 +1,5 @@
+# a number before a unit's power multiplies the power: 4 m² is four square metres
+'str(4 m²)'	'4m²'
+'str(2 m³)'	'2m³'
+'str(2 m² + 3 m²)'	'5m²'
+'str(2 km + 500 m)'	'2.5km'
