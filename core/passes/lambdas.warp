@@ -483,14 +483,21 @@ declared_locally(n: Node): list := {
 # statement of its scope assigns is shared (decision captured-same-variable); a read-only capture stays a copy
 captures_assigned_later(statements: list): list := {
 	shared = []
+	last = last_assignments(statements)
 	for at in 1 to #statements {
-		later = statements[at ..].flat_map(statement => assigned_names(statement, assigning_operators))
 		for lambda in nodes_in(statements#at).filter(is_lambda) {
 			own = lambda_parameter_names(lambda_of(lambda))
-			shared += nodes_in(arrow_result(lambda)).filter(part => part is symbol and name_of(part) in later and name_of(part) not in own).map(name_of)
+			shared += nodes_in(arrow_result(lambda)).filter(part => part is symbol and (last.get(name_of(part)) ?? 0) > at and name_of(part) not in own).map(name_of)
 		}
 	}
 	shared
+}
+# name → the last of the statements that assigns it: a statement after `at` assigns the names whose last is beyond at,
+# gathered in one walk (each statement gathering its later ones' was quadratic: 10% of compiling compiler.warp)
+last_assignments(statements: list): map := {
+	last = {}
+	for at in 1 to #statements { for name in assigned_names(statements#at, assigning_operators) { last[name] = at } }
+	last
 }
 # the names a node changes with one of the operators, `n += …`, `n++`
 assigned_names(n: Node, operators: list): list := nodes_in(n).filter(part => part is key and (op_of(part) in operators or op_of(part) in counting_steps) and key_of(part) is symbol).map(part => name_of(key_of(part)))
