@@ -103,8 +103,9 @@ rewrite $e $u => $bound where $u is symbol and $u in [m, kg, s, K, px, mm, cm, d
 // `3km as m`: the quantity shown in that unit
 rewrite $q as $u => $q.to($u.unit) where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
 // `unit furlong := 201.168m`: a program's own unit, the quantity of one of it shown by its name (`1km as furlong` waits
-// for card module-rule-unnamed), `quantity(1, "furlong")` (decision unit-definitions). Its rules wait for card
-// units-rewrite-assign: `rewrite (… :=` on one line reads as a definition of the word rewrite
+// for card module-rule-unnamed), `quantity(1, "furlong")` (decision unit-definitions)
+rewrite (unit $name := $value $u) => (unit $name := ($value $u))
+rewrite (unit $name := $value) => $name = defined_unit($written, $value) where $name is symbol and $written = spelled($name)
 global program_units = {}
 defined_unit(name: text, one: Quantity) := {
 	program_units[name] = one
