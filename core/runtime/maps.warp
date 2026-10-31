@@ -13,7 +13,7 @@ use "types.warp"
 # a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry, as Rust's); a class instance `Point{x:1}`
 # is its class's struct, whose fields read as such a map (instance_entries: a new one at each call, for iteration,
 # printing and comparison); any other key `n:20` is the map of itself, as Rust's keys(n:20) is [n]
-fields_of(m: Node): Node := {
+def fields_of(m: Node): Node := {
 	if marked_kind(m) != Marked.Instance { return m }
 	entries = instance_entries(m)
 	if not is_null(entries) { return entries }
@@ -22,7 +22,7 @@ fields_of(m: Node): Node := {
 }
 # the place of m's entry named `name`, counted from 1; 0 when it has none. A class instance's is its struct's
 # (instance_place), its entries never built for one lookup (card instance-words-build)
-map_index(m: Node, name: text): int := {
+def map_index(m: Node, name: text): int := {
 	if is_class_instance(m) { return instance_place(m, name) }
 	entries = unboxed_list(fields_of(m))
 	if #entries < index_least() {
@@ -34,10 +34,10 @@ map_index(m: Node, name: text): int := {
 # A map with fewer entries is walked: an object like `{x: 1, y: 2}` read field by field needs no index (Rust's
 # MIN_INDEXED_ENTRIES); a bigger one is looked up through its index (lists.warp index_slot), so `b[k] = a[k]` in a
 # loop over a's keys takes linear time, not quadratic
-index_least(): int := 16
+def index_least(): int := 16
 # the table of the entries' index, brought up to their count: the slot holding it, else the least recent one; a table
 # kept at most half full, made anew when the entries outgrew it or fewer are left than it covers
-map_table(entries: list): list := {
+def map_table(entries: list): list := {
 	slot = index_slot(entries)
 	if slot == 0 {
 		slot = least_recent_slot()
@@ -59,7 +59,7 @@ map_table(entries: list): list := {
 # where a name's probe starts in a table: the hash of its bytes, mixed by Knuth's multiplier (below 2^32, so the
 # product of a hash below 2^30 stays in an i64) before it picks a slot: names a last letter apart ("text 41", "text
 # 42") hash next to each other, and their runs of neighbouring slots made each probe walk a long cluster
-name_hash(name: text, size: int): int := {
+def name_hash(name: text, size: int): int := {
 	h = 5381
 	i = 0
 	while i < byte_count(name) {
@@ -69,7 +69,7 @@ name_hash(name: text, size: int): int := {
 	int_remainder(int_remainder(h * 2654435761, 4294967291), size)
 }
 # the entry at place goes in the table, unless it is no key or an earlier entry has its name (map_index finds the first)
-add_place(entries: list, table: list, place: int): int := {
+def add_place(entries: list, table: list, place: int): int := {
 	entry = entries#place
 	if kind_code(entry) != Kind.Key { return 0 }
 	name = entry_name(entry)
@@ -82,7 +82,7 @@ add_place(entries: list, table: list, place: int): int := {
 	0
 }
 # the place of the entry named name by the table, 0 when it has none
-hashed_place(entries: list, table: list, name: text): int := {
+def hashed_place(entries: list, table: list, name: text): int := {
 	at = name_hash(name, #table)
 	while not is_null(table#(at + 1)) {
 		place = unboxed_int(table#(at + 1))
@@ -93,27 +93,27 @@ hashed_place(entries: list, table: list, name: text): int := {
 }
 # an entry's name as a text: a symbol's or a text's own, without node_text's match over every kind (map_index runs it
 # for each entry it passes); another name as key_name shows it
-entry_name(entry: Node): text := {
+def entry_name(entry: Node): text := {
 	name = entry_key(entry)
 	plain = not is_null(name) and (kind_code(name) == Kind.Symbol or kind_code(name) == Kind.Text) and not names_a_type(name)
 	if plain then unboxed_text(name) else key_name(entry)
 }
 # 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
-has_fields(m: Node): bool := not is_null(m) and (is_class_instance(m) or (not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List))
+def has_fields(m: Node): bool := not is_null(m) and (is_class_instance(m) or (not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List))
 # a class instance's extra fields (instance_place, instance_field_at): the place of one after the `count` declared
 # ones, 0 when it has none; the value at a place past them, ø past them all
-extra_place(extra: Node, name: text, count: int): int := {
+def extra_place(extra: Node, name: text, count: int): int := {
 	at = if is_null(extra) then 0 else map_index(extra, name)
 	if at == 0 then 0 else count + at
 }
-extra_value_at(extra: Node, at: int, count: int): Node := {
+def extra_value_at(extra: Node, at: int, count: int): Node := {
 	if is_null(extra) or at <= count or at - count > #unboxed_list(fields_of(extra)) { return ø }
 	key_value(unboxed_list(fields_of(extra))#(at - count))
 }
 # the value of m's entry at a place map_index gave: a class instance's from its struct
-value_at(m: Node, at: int): Node := if is_class_instance(m) then instance_field_at(m, at) else key_value(unboxed_list(fields_of(m))#at)
+def value_at(m: Node, at: int): Node := if is_class_instance(m) then instance_field_at(m, at) else key_value(unboxed_list(fields_of(m))#at)
 # `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
-map_get(m: Node, name: text): Node := {
+def map_get(m: Node, name: text): Node := {
 	if is_position_part(m, name) { return position_part(m, name) }
 	if is_list_part(m, name) { return list_part(m, name) }
 	# a symbol's name, a type value's too: `type(3).name` is int, as written without its `class ` (Rust: TYPE_VALUE_PREFIX)
@@ -134,9 +134,9 @@ map_get(m: Node, name: text): Node := {
 	value_at(m, at)
 }
 # `Person{name: "A"}`: an entry whose value holds the field
-is_tagged_field(m: Node, name: text): bool := is_entry(m) and not is_null(key_value(m)) and kind_code(key_value(m)) == Kind.List and map_index(key_value(m), name) > 0
+def is_tagged_field(m: Node, name: text): bool := is_entry(m) and not is_null(key_value(m)) and kind_code(key_value(m)) == Kind.List and map_index(key_value(m), name) > 0
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
-map_entries(m: Node): Node := {
+def map_entries(m: Node): Node := {
 	# an instance walks its fields
 	n = fields_of(m)
 	if marked_kind(n) != Marked.Map { return n }
@@ -144,7 +144,7 @@ map_entries(m: Node): Node := {
 	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
 	out
 }
-map_keys(m: Node): list := {
+def map_keys(m: Node): list := {
 	# `{}` is the empty value: its keys are the empty value too, as Rust's
 	if is_null(m) { return m }
 	out = new_list(0)
@@ -152,7 +152,7 @@ map_keys(m: Node): list := {
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
-map_values(m: Node): list := {
+def map_values(m: Node): list := {
 	# `{}` is the empty value: its values are the empty value too, as Rust's
 	if is_null(m) { return m }
 	out = new_list(0)
@@ -162,9 +162,9 @@ map_values(m: Node): list := {
 }
 # the name a key looks up an entry by: a symbol's letters, so the type value `float` names the entry `float:` (Rust:
 # map_key_name)
-name_text(key: Node): text := if kind_code(key) == Kind.Symbol then unboxed_text(key) else node_text(key)
+def name_text(key: Node): text := if kind_code(key) == Kind.Symbol then unboxed_text(key) else node_text(key)
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
-collection_contains(c: Node, x: Node): bool := {
+def collection_contains(c: Node, x: Node): bool := {
 	if is_null(c) { return no } # `[]` is the null node
 	# ø names no entry: `ø in m` is no (card pure-nil-in-any-map: name_text(ø) trapped on the null node)
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return not is_null(x) and map_index(c, name_text(x)) > 0 }
@@ -174,7 +174,7 @@ collection_contains(c: Node, x: Node): bool := {
 }
 # `c.index_of(x)`: a list's 1-based position of its first item equal to x, a text's character position, 1 for
 # a map's entry named x; 0 when absent (Rust's collection_position, rust-harness:src/lowering/words/library_words.rs)
-collection_position(c: Node, x: Node): int := {
+def collection_position(c: Node, x: Node): int := {
 	if is_null(c) { return 0 }
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return if not is_null(x) and map_index(c, name_text(x)) > 0 then 1 else 0 }
 	if kind_code(c) == Kind.Text { return text_find(unboxed_text(c), node_text(x)) }
@@ -187,10 +187,10 @@ collection_position(c: Node, x: Node): int := {
 }
 # `c.remove(key)` gives this: of a map the key's value (ø when absent), of a list the list itself, which map_without
 # then changes (Rust twin: fields_and_keys.rs removed_value)
-removed_value(c: Node, key: Node): Node := if marked_kind(c) == Marked.Map then map_get_or(c, key) else c
+def removed_value(c: Node, key: Node): Node := if marked_kind(c) == Marked.Map then map_get_or(c, key) else c
 # `c.remove(key)` stores this in c: a map without the key's entry, a list without its first item equal to key, in place
 # so every holder sees it (Rust twin: fields_and_keys.rs map_without)
-map_without(c: Node, key: Node): Node := {
+def map_without(c: Node, key: Node): Node := {
 	at = if marked_kind(c) == Marked.Map then map_index(c, name_text(key)) else collection_position(c, key)
 	if at == 0 { return c }
 	items = unboxed_list(fields_of(c))
@@ -200,13 +200,13 @@ map_without(c: Node, key: Node): Node := {
 	c
 }
 # `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
-node_get(n: Node, key: Node): Node := {
+def node_get(n: Node, key: Node): Node := {
 	if kind_code(key) == Kind.Int and marked_kind(n) != Marked.Map { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, name_text(key))
 }
 # `n[key] = value` of a value known only at run time: an int key sets the item key+1, any other key the entry named
 # by its text (field_with); n, or the map made of ø
-node_put(n: Node, key: Node, value: Node): Node := {
+def node_put(n: Node, key: Node, value: Node): Node := {
 	if kind_code(key) == Kind.Int {
 		node_set_at(n, unboxed_int(key) + 1, value)
 		return n
@@ -215,7 +215,7 @@ node_put(n: Node, key: Node, value: Node): Node := {
 }
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry
-field_with(m: Node, name: text, value: Node): Node := {
+def field_with(m: Node, name: text, value: Node): Node := {
 	if is_null(m) { return map_of([new_key(name, value)]) }
 	# an instance's field in its struct; a field its class does not declare among its extra fields, said once a write
 	if marked_kind(m) == Marked.Instance {
@@ -229,12 +229,12 @@ field_with(m: Node, name: text, value: Node): Node := {
 	m
 }
 # the map m with the entries of another, ø, after its own (an instance's declared fields, then its extra ones)
-with_entries_of(m: Node, more: Node): Node := {
+def with_entries_of(m: Node, more: Node): Node := {
 	if not is_null(more) { list_append(unboxed_list(fields_of(m)), unboxed_list(fields_of(more))) }
 	m
 }
 # `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none
-map_get_or(m: Node, key: Node, fallback: Node = ø): Node := {
+def map_get_or(m: Node, key: Node, fallback: Node = ø): Node := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
 	if at == 0 { return fallback }

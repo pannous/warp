@@ -23,11 +23,11 @@ module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
-with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_own_aliases(with_module_directory(program, folder)), folder), module_text)
+def with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_own_aliases(with_module_directory(program, folder)), folder), module_text)
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
 # loader.rs with_module_directory)
-with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
-used_in(program: Node, folder: text): any := {
+def with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
+def used_in(program: Node, folder: text): any := {
 	statements = flat_statements(program)
 	brought = declarations_used(statements, folder, [], {})
 	if #brought#1 == 0 { return program }
@@ -38,7 +38,7 @@ used_in(program: Node, folder: text): any := {
 # `alias deque = Deque` (wiki/alias.md): the program's alias lines taken out, each alias naming its word wherever the
 # program declares nothing of that name, as Rust's modules.rs with_own_aliases
 alias_keyword = "alias"
-with_own_aliases(program: Node): Node := {
+def with_own_aliases(program: Node): Node := {
 	statements = statements_in(program)
 	aliases = statements.map(word_alias).filter(pair => pair != ø)
 	if #aliases == 0 { return program }
@@ -48,14 +48,14 @@ with_own_aliases(program: Node): Node := {
 	bottom_up(separated(bracketed(kept, ""), ";"), n => aliased(n, renamed))
 }
 # [alias, word] of an alias line, ø for another statement (Rust twin: rust-harness:src/modules/declarations.rs word_alias)
-word_alias(statement: Node): any := {
+def word_alias(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 == symbol(alias_keyword)) { return ø }
 	match statement#2 {
 		Key(alias, op, word): if op == Op.Assign and alias is symbol and word is symbol then [name_of(alias), name_of(word)] else ø
 		_: ø
 	}
 }
-aliased(n: Node, aliases: list): any := {
+def aliased(n: Node, aliases: list): any := {
 	if not (n is symbol) { return n }
 	for pair in aliases { if name_of(n) == pair#1 { return symbol(pair#2) } }
 	n
@@ -66,7 +66,7 @@ aliased(n: Node, aliases: list): any := {
 # extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES), `library_parses()`
 # their parses (LIBRARY_PARSES), `slice_parses()` their definitions' parses (SLICE_PARSES). A compiled
 # compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
-module_text(n: Node): any := {
+def module_text(n: Node): any := {
 	if is_empty_call(n, "library_sources") { return baked_literal("LIBRARY_FILES", library_texts(run_library(), "")) }
 	if is_empty_call(n, "library_parses") { return baked_literal("LIBRARY_PARSES", packed_parses(library_texts(run_library(), ""))) }
 	if is_empty_call(n, "library_slices") { return baked_literal("LIBRARY_SLICES", baked_slices(library_texts(run_library(), ""))) }
@@ -80,16 +80,16 @@ module_text(n: Node): any := {
 	source = try read(path) else ø
 	if source == ø then n else source
 }
-is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(name)
+def is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(name)
 # each file's parse, packed (parser.warp LIBRARY_PARSES), made here: never the building compiler's own baked one
-packed_parses(files: map): map := {
+def packed_parses(files: map): map := {
 	parses = {}
 	for path in files.keys { parses[path] = pack(file_parse(path, files[path])) }
 	parses
 }
 # a library file's parse, parsed once for both tables of parses
 global file_parses = {}
-file_parse(path: text, source: text): Node := {
+def file_parse(path: text, source: text): Node := {
 	kept = file_parses.get(path)
 	if kept != ø and kept#1 == source { return kept#2 }
 	tree = plain_node(parsed(rules_ended(source)))
@@ -98,7 +98,7 @@ file_parse(path: text, source: text): Node := {
 }
 # each top-level module's slices, by their place (prelude_words.warp SLICE_PARSES, slice_key): its statements cut
 # from the file's parse, so the file is parsed once and a definition keeps its line in the file
-packed_slice_parses(files: map): map := {
+def packed_slice_parses(files: map): map := {
 	parses = {}
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
@@ -116,7 +116,7 @@ packed_slice_parses(files: map): map := {
 }
 # each slice's statements of the file's parse, by the slice's index: a statement goes to the slice its line falls in,
 # a class to the next slice of its name (its node is placed where the statement before it ended, so its line misleads)
-statements_by_slice(statements: list, spans: list, ranges: list): map := {
+def statements_by_slice(statements: list, spans: list, ranges: list): map := {
 	slices_named = {}
 	for index in 0 ..< #spans { slices_named[spans[index]#1] = (slices_named.get(spans[index]#1) ?? []) + [index] }
 	taken = {}
@@ -132,12 +132,12 @@ statements_by_slice(statements: list, spans: list, ranges: list): map := {
 	held
 }
 # the index of the slice whose lines hold the line, ø for none
-slice_holding(ranges: list, wanted_line: int): int? := {
+def slice_holding(ranges: list, wanted_line: int): int? := {
 	for index in 0 ..< #ranges { if ranges[index]#1 <= wanted_line and wanted_line <= ranges[index]#2 { return index } }
 	ø
 }
 # [first, last] line of each slice in its file
-span_lines(source: text, spans: list): list := {
+def span_lines(source: text, spans: list): list := {
 	ranges = []
 	first_line = 1
 	at = 0
@@ -149,7 +149,7 @@ span_lines(source: text, spans: list): list := {
 	ranges
 }
 # each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
-baked_slices(files: map): map := {
+def baked_slices(files: map): map := {
 	slices = {}
 	for path in files.keys { slices[path] = slice_spans(files[path]).map(span => "${span#1} ${span#2} ${span#3}").join("\n") }
 	slices
@@ -157,25 +157,25 @@ baked_slices(files: map): map := {
 # `baked-current <file>`: yes when the library baked into this compiler is cut and parsed as this very compiler cuts
 # and parses it, else no. One built by an older compiler (the seed) carries that one's slices and parses, so `warp
 # rebuild` builds it once more by itself: the baked library is always the built compiler's (card once-seed)
-write_baked_current(file: text) := {
+def write_baked_current(file: text) := {
 	stale = baked_tables().filter(table => not same_texts(table#2, table#3)).map(table => table#1)
 	write(file, if #stale == 0 then "yes" else "no: " + stale.join(", "))
 }
 # [name, baked in, as this compiler makes it of lib/ as it lies now] of each table module_text bakes from the library:
 # `rebake` writes the third over the second, so a lib/-only change needs no compile (decision lib-hash-rebake); a new
 # baked table joins here
-baked_tables(): list := {
+def baked_tables(): list := {
 	files = library_texts(run_library(), "")
 	[["LIBRARY_FILES", LIBRARY_FILES, files], ["BLOCK_HEADS", BLOCK_HEADS, block_heads_in(files)], ["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(files)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(files)], ["SLICE_PARSES", SLICE_PARSES, packed_slice_parses(files)], ["LIBRARY_RULES", LIBRARY_RULES, packed_rules(files)], ["STD_RULE_NEEDS", STD_RULE_NEEDS, scanned_rule_needs()]]
 }
 # a baked table as the code of its read: one segment of its own (baked_segment_text) that `rebake` can write anew
-baked_literal(name: text, table: map): Node := List([symbol("unbaked_table"), List([symbol("baked_segment"), baked_segment_text(name, table)], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
+def baked_literal(name: text, table: map): Node := List([symbol("unbaked_table"), List([symbol("baked_segment"), baked_segment_text(name, table)], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
 # a baked table's segment: its body's byte count in BAKED_LENGTH_DIGITS digits, the line `warp.baked <name>` padded to
 # BAKED_HEADER_BYTES, then the body, its entries packed
 BAKED_LENGTH_DIGITS = 10
 BAKED_HEADER_BYTES = 42
 BAKED_MARK = "warp.baked "
-baked_segment_text(name: text, table: map): text := {
+def baked_segment_text(name: text, table: map): text := {
 	body: text = pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
 	body_bytes: int = byte_size(body)
 	count_text: text = "${body_bytes}"
@@ -184,7 +184,7 @@ baked_segment_text(name: text, table: map): text := {
 	spaces: int = BAKED_HEADER_BYTES - 1 - #head
 	head + (" " * spaces) + "\n" + body
 }
-unbaked_table(body: text): map := {
+def unbaked_table(body: text): map := {
 	table = {}
 	for entry in items_of(unpack(body)) {
 		key: text = key_of(entry)
@@ -195,7 +195,7 @@ unbaked_table(body: text): map := {
 # `rebake <file>`: the compiler at file with each baked table as this compiler makes it (baked_tables), written over
 # its segment: code and numbering stay, so `warp rebuild` needs no second compile where the seed cut and parsed the
 # library otherwise (decision rebake-tables). A compiler whose tables are no segments (built by an older seed) stays
-write_rebaked(file: text) := {
+def write_rebaked(file: text) := {
 	wasm = read_bytes(file)
 	place = section_place(wasm, section_ids.data)
 	made = {}
@@ -220,7 +220,7 @@ write_rebaked(file: text) := {
 	}
 }
 # the baked table a data segment holds (its mark after the digits), ø for any other segment
-baked_name(segment: list, names: list): text? := {
+def baked_name(segment: list, names: list): text? := {
 	size = uleb_read(segment, 1)
 	bytes_at = size#2 + BAKED_LENGTH_DIGITS
 	for name in names {
@@ -229,15 +229,15 @@ baked_name(segment: list, names: list): text? := {
 	}
 	ø
 }
-same_texts(a: map, b: map): bool :=#a == #b and a.keys.all(key => b.get(key) == a[key])
+def same_texts(a: map, b: map): bool :=#a == #b and a.keys.all(key => b.get(key) == a[key])
 # a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
-library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
+def library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
-module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
+def module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
 
 # [the declarations, the files read]: those of each file the statements use, not yet among `seen`; each file's own
 # declarations claim their signatures in `claimed` (claim_signatures)
-declarations_used(statements: list, folder: text, seen: list, claimed: map): list := {
+def declarations_used(statements: list, folder: text, seen: list, claimed: map): list := {
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
@@ -258,14 +258,14 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 }
 
 # a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
-file_parsed(file: text): Node := {
+def file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
 	checked_parse(file, without_primitive_mark(source))
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
-checked_parse(file: text, source: text): Node := {
+def checked_parse(file: text, source: text): Node := {
 	tree = plain_node(parsed(source))
 	for n in nodes_in(tree) {
 		message = parse_error_message(n)
@@ -278,7 +278,7 @@ checked_parse(file: text, source: text): Node := {
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
 # both is one
 # Rust twin: rust-harness:src/modules/loader.rs claim_signatures
-claim_signatures(declarations: list, file: text, claimed: map) := {
+def claim_signatures(declarations: list, file: text, claimed: map) := {
 	for declaration in declarations {
 		signature = declared_signature(declaration)
 		if signature == ø { continue }
@@ -297,19 +297,19 @@ claim_signatures(declarations: list, file: text, claimed: map) := {
 # `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
 # another statement
 # Rust twin: rust-harness:src/modules/declarations.rs declared_signature, parameter_type
-declared_signature(statement: Node): any := {
+def declared_signature(statement: Node): any := {
 	name = declared_name(statement)
 	if name == ø { return ø }
 	head = declared_head(statement)
 	if head == ø { return name }
 	name + "(" + items_of(head)[1..].map(parameter_type).join(", ") + ")"
 }
-parameter_type(parameter: Node): text := match parameter {
+def parameter_type(parameter: Node): text := match parameter {
 	Key(typed, op, kind): if op == Op.Colon then type_text(kind) else if op == Op.Assign then parameter_type(typed) else "any"
 	_: "any"
 }
 # the head `(f x y)` of a function declaration, as declared_name finds its name; ø for a value
-declared_head(statement: Node): any := match statement {
+def declared_head(statement: Node): any := match statement {
 	Key(left, op, right): {
 		if assigns_or_defines(op) { return call_head(left) }
 		if op != Op.Colon { return ø }
@@ -318,17 +318,17 @@ declared_head(statement: Node): any := match statement {
 	_: if is_keyword_group(statement) then call_head(statement#2) else ø
 }
 # `(f x)`, also typed `f(x): int` or before its block, `(f x) {…}`
-call_head(n: Node): any := {
+def call_head(n: Node): any := {
 	if n is key { return call_head(key_of(n)) }
 	if not (is_group(n) and #n > 0) { return ø }
 	if n#1 is symbol then (if bracket_of(n) == "(" then n else ø) else call_head(n#1)
 }
 
 # lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
-std_module_path(name: text): text := run_library() + "/" + name + module_extension
+def std_module_path(name: text): text := run_library() + "/" + name + module_extension
 
 # what a `use` statement names, ø for another statement
-use_target(statement: Node): any := {
+def use_target(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
 	# a quoted name without an extension is the bare one: `use "list"` is `use list`, a file of the folder or a std module
 	if statement#2 is text and not statement#2.contains(".") { return symbol(statement#2) }
@@ -336,7 +336,7 @@ use_target(statement: Node): any := {
 }
 
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
-file_used(statement: Node, folder: text): any := {
+def file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
 	if module is text { return path_in(folder, module) }
 	if not (module is symbol) { return ø }
@@ -344,14 +344,14 @@ file_used(statement: Node, folder: text): any := {
 	if file_text(path) == ø then ø else path
 }
 # a file as Rust's messages name it (loader.rs relative_path): below the working folder relative to it, else as found
-working_relative(file: text): text := {
+def working_relative(file: text): text := {
 	below = cwd + "/"
 	if file.starts_with(below) then file.replace(below, "") else file
 }
-path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
+def path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
 # the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
 # runtime/text.warp, card runtime-split)
-without_steps_up(path: text): text := {
+def without_steps_up(path: text): text := {
 	kept = []
 	for part in path.split("/") {
 		if part == ".." and #kept > 0 and kept#(#kept) != ".." { kept = kept[0 ..< #kept - 1] } else { kept += [part] }
@@ -360,12 +360,12 @@ without_steps_up(path: text): text := {
 }
 # a file of lib/ comes as parser.warp file_source gives it: from the disk under WARP_LIB, else from the bundle, whose
 # texts are lib/ as it was when the compiler was built (a module changed since must be read)
-file_text(path: text): any := file_source(path)
+def file_text(path: text): any := file_source(path)
 
 # what a used file brings, as rust-harness:src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named
 # pattern; not its main-level statements
-is_declaration(statement: Node): bool := match statement {
+def is_declaration(statement: Node): bool := match statement {
 	Key(left, op, right): {
 		if left == opaque_symbol { return kind_of(right) == "type" }
 		if assigns_or_defines(op) { return yes }
@@ -374,14 +374,14 @@ is_declaration(statement: Node): bool := match statement {
 	}
 	_: declared_enum(statement) != ø or is_keyword_group(statement) or is_pattern_definition(statement)
 }
-assigns_or_defines(op: Op): bool := op == Op.Assign or op == Op.Define
-is_declaration_keyword(n: Node): bool := n is symbol and name_of(n) in declaration_keywords
+def assigns_or_defines(op: Op): bool := op == Op.Assign or op == Op.Define
+def is_declaration_keyword(n: Node): bool := n is symbol and name_of(n) in declaration_keywords
 # `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
-is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
+def is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
 
 # the name a declaration defines, as rust-harness:src/modules/declarations.rs name_declared_by: `f(x) := …`, `x = …`,
 # `def f(x) …`, `def f(x): T {…}`, `global x = 0`, a foreign line `f(x): T from "c"`; ø for another statement
-declared_name(statement: Node): any := match statement {
+def declared_name(statement: Node): any := match statement {
 	Key(left, op, right): {
 		if assigns_or_defines(op) { return aliased_type_name(left) ?? leftmost_name(left) }
 		if op != Op.Colon { return ø }
@@ -391,10 +391,10 @@ declared_name(statement: Node): any := match statement {
 	_: if is_keyword_group(statement) or is_pattern_definition(statement) then leftmost_name(statement#2) else if is_foreign_line(statement) then leftmost_name(statement#1) else ø
 }
 # `sqrt(x: f64): f64 from "c"`: a foreign line, whose word is the program's own (a library's sqrt is not the one called)
-is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
+def is_foreign_line(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from")
 # `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø
-aliased_type_name(left: Node): text? := if is_key(left, Op.Colon) and key_of(left) == opaque_symbol and kind_of(value_of(left)) == "type" then declared_type_name(value_of(left)#2) else ø
-leftmost_name(n: Node): any := {
+def aliased_type_name(left: Node): text? := if is_key(left, Op.Colon) and key_of(left) == opaque_symbol and kind_of(value_of(left)) == "type" then declared_type_name(value_of(left)#2) else ø
+def leftmost_name(n: Node): any := {
 	if n is symbol { return name_of(n) }
 	if n is key { return leftmost_name(key_of(n)) }
 	if is_group(n) and #n > 0 { return leftmost_name(n#1) }

@@ -27,48 +27,48 @@ fd_readdir(fd: int, entries_at: int, room: int, cookie: int, used_at: int): int 
 fd_write(fd: int, iovecs_at: int, count: int, written_at: int): int from runtime
 
 # the scratch area: a prestat or a count pair, an iovec, the count a call wrote, an fd, then the bytes
-scratch_pair(): int := 0
-scratch_iovec(): int := 8
-scratch_count(): int := 16
-scratch_fd(): int := 20
-scratch_bytes(): int := 32
+def scratch_pair(): int := 0
+def scratch_iovec(): int := 8
+def scratch_count(): int := 16
+def scratch_fd(): int := 20
+def scratch_bytes(): int := 32
 # the bytes one call moves at most, below the one page of memory
-wasi_chunk(): int := 32768
+def wasi_chunk(): int := 32768
 # path_open's flags: follow symlinks; create, truncate; the rights asked for: a file read (read, seek), one written
 # (read, seek, write): a read-only file opened to write fails (EACCES), so reading asks no more than it needs
-wasi_follow_links(): int := 1
-wasi_create_new(): int := 9
-wasi_read_rights(): int := 6
-wasi_write_rights(): int := 70
-wasi_stdin(): int := 0
-wasi_stderr(): int := 2
-wasi_first_preopen(): int := 3
-wasi_no_entry(): int := 44
-wasi_not_a_folder(): int := 54
+def wasi_follow_links(): int := 1
+def wasi_create_new(): int := 9
+def wasi_read_rights(): int := 6
+def wasi_write_rights(): int := 70
+def wasi_stdin(): int := 0
+def wasi_stderr(): int := 2
+def wasi_first_preopen(): int := 3
+def wasi_no_entry(): int := 44
+def wasi_not_a_folder(): int := 54
 # path_open's flag for a folder, and the right to read its entries
-wasi_directory(): int := 2
-wasi_readdir_right(): int := 16384
+def wasi_directory(): int := 2
+def wasi_readdir_right(): int := 16384
 # a folder entry's bytes before its name: the next entry's cookie (u64), the inode (u64), the name's length (u32), the
 # type (u8) and padding
-wasi_entry_head(): int := 24
+def wasi_entry_head(): int := 24
 
 # the 4-byte little-endian word at a scratch offset, written and read
-store_scratch_word(at: int, value: int) := {
+def store_scratch_word(at: int, value: int) := {
 	rest = value
 	for i in 0..<4 {
 		output_byte(at + i, rest % 256)
 		rest = floor_quotient(rest, 256)
 	}
 }
-scratch_word(at: int): int := {
+def scratch_word(at: int): int := {
 	address = output_address() + at
 	memory_byte(address) + 256 * (memory_byte(address + 1) + 256 * (memory_byte(address + 2) + 256 * memory_byte(address + 3)))
 }
-put_scratch_bytes(at: int, t: text) := { for i in 0..<byte_count(t) { output_byte(at + i, byte_at(t, i)) } }
-scratch_text(at: int, length: int): text := text_from_memory(output_address() + at, length)
+def put_scratch_bytes(at: int, t: text) := { for i in 0..<byte_count(t) { output_byte(at + i, byte_at(t, i)) } }
+def scratch_text(at: int, length: int): text := text_from_memory(output_address() + at, length)
 
 # the preopened folders: [fd, name] each
-preopened_folders(): list := {
+def preopened_folders(): list := {
 	found = []
 	fd = wasi_first_preopen()
 	while fd_prestat_get(fd, output_address() + scratch_pair()) == 0 {
@@ -80,7 +80,7 @@ preopened_folders(): list := {
 	found
 }
 # [folder fd, the path inside it] of a path, -1 for no folder holding it
-preopened_place(path: text): list := {
+def preopened_place(path: text): list := {
 	best = [-1, path]
 	longest = -1
 	for dir in preopened_folders() {
@@ -96,11 +96,11 @@ preopened_place(path: text): list := {
 	best
 }
 # the fd of the file opened, or the negated error code
-opened_file(path: text, open: int): int := opened_entry(path, open, if open == 0 then wasi_read_rights() else wasi_write_rights())
+def opened_file(path: text, open: int): int := opened_entry(path, open, if open == 0 then wasi_read_rights() else wasi_write_rights())
 # the fd of the file or folder opened so, or the negated error code; at its real path, the links on its way followed
 # by the host (real_path): WASI follows none leading to an absolute path (`data -> /Volumes/Junk/data`), wherever
 # it lies (card programs-read)
-opened_entry(path: text, open: int, rights: int): int := {
+def opened_entry(path: text, open: int, rights: int): int := {
 	place = preopened_place(real_file_path(path))
 	if place#1 < 0 { return 0 - wasi_no_entry() }
 	put_scratch_bytes(scratch_bytes(), place#2)
@@ -108,19 +108,19 @@ opened_entry(path: text, open: int, rights: int): int := {
 	if error != 0 then 0 - error else scratch_word(scratch_fd())
 }
 # the path at its real path (real_path), for the runtime's WASI calls
-real_file_path(path: text): text := {
+def real_file_path(path: text): text := {
 	put_scratch_bytes(scratch_bytes(), path)
 	result_at = scratch_bytes() + byte_count(path)
 	length = real_path(output_address() + scratch_bytes(), byte_count(path), output_address() + result_at, wasi_chunk() - byte_count(path))
 	if length < 0 then path else scratch_text(result_at, length)
 }
-file_failure(word: text, path: text, error: int): Node := {
+def file_failure(word: text, path: text, error: int): Node := {
 	reason = if error == wasi_no_entry() then "No such file or directory" else "WASI error " + error
 	error_of(word + " " + path + " failed: " + reason)
 }
 
 # `read(path)`: the file's text, or the Error of why not
-read_file(path: Node): Node := {
+def read_file(path: Node): Node := {
 	t = text_of_textual(path)
 	fd = opened_file(t, 0)
 	if fd < 0 { return file_failure("read", t, 0 - fd) }
@@ -138,13 +138,13 @@ read_file(path: Node): Node := {
 }
 
 # `use file; read_bytes(path)`: the file's bytes, ints 0 to 255; the Error of why not
-std_file_read_bytes(path: Node): Node := {
+def std_file_read_bytes(path: Node): Node := {
 	content = read_file(path)
 	if kind_code(content) == Kind.Error then content else text_byte_list(unboxed_text(content))
 }
 # `use file; exists(path)`: whether there is a file or folder at path, which a failure but "no such entry" or "not a
 # folder" on the way also says (a folder opened as a file, a file not to be read)
-std_file_exists(path: Node): bool := {
+def std_file_exists(path: Node): bool := {
 	fd = opened_file(text_of_textual(path), 0)
 	if fd >= 0 { fd_close(fd) }
 	fd >= 0 or (0 - fd != wasi_no_entry() and 0 - fd != wasi_not_a_folder())
@@ -152,7 +152,7 @@ std_file_exists(path: Node): bool := {
 
 # `use file; list_files(folder)`: the names of the folder's entries without . and .., in the order WASI gives them;
 # the Error of why not
-std_file_list(path: Node): Node := {
+def std_file_list(path: Node): Node := {
 	t = text_of_textual(path)
 	fd = opened_entry(t, wasi_directory(), wasi_readdir_right())
 	if fd < 0 { return file_failure("list", t, 0 - fd) }
@@ -178,7 +178,7 @@ std_file_list(path: Node): Node := {
 	names
 }
 # the texts WASI lists: the environment's NAME=value lines, else the command line's arguments
-wasi_list(environment: bool): list := {
+def wasi_list(environment: bool): list := {
 	if environment then environ_sizes_get(output_address() + scratch_pair(), output_address() + scratch_pair() + 4) else args_sizes_get(output_address() + scratch_pair(), output_address() + scratch_pair() + 4)
 	count = scratch_word(scratch_pair())
 	size = scratch_word(scratch_pair() + 4)
@@ -195,18 +195,18 @@ wasi_list(environment: bool): list := {
 }
 # wasi_environment() (lib/prelude.warp, Rust's wasi_emitter.rs): the environment as WASI gives it, each NAME=value line
 # ended by a zero byte, which lib/wagi.warp splits by chr(0)
-wasi_environment(): text := {
+def wasi_environment(): text := {
 	joined = ""
 	for line in wasi_list(yes) { joined = joined + line + chr(0) }
 	joined
 }
 # `use os; args`: the arguments after the program, as `warp prog.warp a b` gives ["a" "b"]
-std_os_args(): list := {
+def std_os_args(): list := {
 	given = wasi_list(no)
 	if #given > 0 then given[1..] else []
 }
 # `use os; env(name)`: the variable's value, ø when unset
-std_os_env(name: Node): Node := {
+def std_os_env(name: Node): Node := {
 	prefix = text_of_textual(name) + "="
 	for line in wasi_list(yes) {
 		if text_starts_with(line, prefix) { return bytes_between(line, byte_count(prefix), byte_count(line)) }
@@ -215,10 +215,10 @@ std_os_env(name: Node): Node := {
 }
 # `use os; cwd`: the folder the program started in, as its environment's PWD says; "." without one (WASI has no
 # working folder of its own, relative paths are the preopened "."'s)
-std_os_cwd(): Node := std_os_env("PWD") ?? "."
+def std_os_cwd(): Node := std_os_env("PWD") ?? "."
 # `use os; input(prompt)`: the prompt written, then a line of stdin without its newline; ø at the end of the input. A
 # byte a read, so no byte of the next line is taken. `input()` gives no prompt: os.warp's input() calls this with none
-std_os_input(prompt: Node = ø): Node := {
+def std_os_input(prompt: Node = ø): Node := {
 	if prompt is text { print_text(prompt) }
 	line = ""
 	while yes {
@@ -232,17 +232,17 @@ std_os_input(prompt: Node = ø): Node := {
 }
 
 # the first count scratch bytes, written to the open file
-written_bytes(fd: int, count: int) := {
+def written_bytes(fd: int, count: int) := {
 	store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
 	store_scratch_word(scratch_iovec() + 4, count)
 	fd_write(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 }
 # `warn "careful"`: "warning: careful" on stderr, as the Rust lane says a runtime warning
-warned(message: Node): Node := said_on_stderr("warning: " + text_of_textual(message))
+def warned(message: Node): Node := said_on_stderr("warning: " + text_of_textual(message))
 # `hint "…"`: "hint: …" on stderr, the compiler's hints (`A4 is sound's; fix: use sound`)
-hinted(message: Node): Node := said_on_stderr("hint: " + text_of_textual(message))
+def hinted(message: Node): Node := said_on_stderr("hint: " + text_of_textual(message))
 # the line on stderr, a chunk at a time
-said_on_stderr(words: text): Node := {
+def said_on_stderr(words: text): Node := {
 	t = words + "\n"
 	start = 0
 	while start < byte_count(t) {
@@ -254,16 +254,16 @@ said_on_stderr(words: text): Node := {
 	ø
 }
 # `use file; write_bytes(path, bytes)`: the file made anew of the bytes (ints 0 to 255); ø, or the Error of why not
-std_file_write_bytes(path: Node, bytes: Node): Node := {
+def std_file_write_bytes(path: Node, bytes: Node): Node := {
 	items = unboxed_list(bytes)
 	content = new_text(#items)
 	for i in 0..<#items { set_byte(content, i, unboxed_int(items#(i + 1))) }
 	written_file(text_of_textual(path), content)
 }
 # `use file; write(path, text)`: the file made anew of the text; ø, or the Error of why not
-std_file_write(path: Node, content: Node): Node := written_file(text_of_textual(path), text_of_textual(content))
+def std_file_write(path: Node, content: Node): Node := written_file(text_of_textual(path), text_of_textual(content))
 # the file at path made anew of the bytes of content, a chunk a call
-written_file(path: text, content: text): Node := {
+def written_file(path: text, content: text): Node := {
 	fd = opened_file(path, wasi_create_new())
 	if fd < 0 { return file_failure("write", path, 0 - fd) }
 	start = 0

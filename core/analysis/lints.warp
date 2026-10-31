@@ -6,7 +6,7 @@ use "../passes/kind_changes.warp"
 use "diagnostics.warp"
 
 # the facts of one node: each warning it gives
-lints_of(n: Node): any := {
+def lints_of(n: Node): any := {
 	and_or(n)
 	negative_modulo(n)
 	float_equality(n)
@@ -16,17 +16,17 @@ lints_of(n: Node): any := {
 }
 
 # `done and "done" or "open"` can't go wrong: its middle is written out and never falsy (card done-done)
-and_or(n: Node): any := {
+def and_or(n: Node): any := {
 	if not is_operator(n, "or") or not is_operator(key_of(n), "and") { return ø }
 	condition = key_of(key_of(n))
 	middle = value_of(key_of(n))
 	if is_truthy_literal(middle) { return ø }
 	diagnose(call_of("and_or", [as_written(condition), as_written(middle), as_written(value_of(n))]), n)
 }
-is_truthy_literal(n: Node): bool := (n is number or n is text or n is codepoint or n == yes) and n != 0 and n != ""
+def is_truthy_literal(n: Node): bool := (n is number or n is text or n is codepoint or n == yes) and n != 0 and n != ""
 
 # `%` is Euclidean (0 ≤ r < |b|); C, Java, JS and Rust truncate, Python floors
-negative_modulo(n: Node): any := {
+def negative_modulo(n: Node): any := {
 	if not is_operator(n, "%") { return ø }
 	left = key_of(n)
 	right = value_of(n)
@@ -36,27 +36,27 @@ negative_modulo(n: Node): any := {
 	}
 	diagnose(call_of("negative_modulo", [as_written(left), as_written(right)]), n)
 }
-is_negative(n: Node): bool := {
+def is_negative(n: Node): bool := {
 	if n is number { return n < 0 }
 	if is_operator(n, "-") { return key_of(n) == ø }
 	is_group(n) and #n == 1 and is_negative(n#1)
 }
 
 # `0.1f + 0.2 == 0.3` is false: decimals are floats, which `==` compares bit for bit (decision exact-default)
-float_equality(n: Node): any := {
+def float_equality(n: Node): any := {
 	if not is_operator(n, "==") and not is_operator(n, "!=") { return ø }
 	if not is_float_value(key_of(n)) and not is_float_value(value_of(n)) { return ø }
 	diagnose(call_of(if is_operator(n, "==") then "float_equality" else "float_inequality", [as_written(key_of(n)), as_written(value_of(n))]), n)
 }
 # a value written as a float: decimals are exact, `0.1 as float`, `0.1:float` and arithmetic of them are floats
-is_float_value(n: Node): bool := {
+def is_float_value(n: Node): bool := {
 	if is_operator(n, "as") or is_operator(n, ":") { return type_kind(value_of(n)) == "Float" }
 	if n is key and op_of(n) in arithmetic_operators { return is_float_value(key_of(n)) or is_float_value(value_of(n)) }
 	is_group(n) and #n == 1 and is_float_value(n#1)
 }
 
 # `a * b as T` converts the whole `a * b`, not only b
-arithmetic_conversion(n: Node): any := {
+def arithmetic_conversion(n: Node): any := {
 	if not is_operator(n, "as") { return ø }
 	whole = key_of(n)
 	if whole is not key or op_of(whole) not in arithmetic_operators { return ø }
@@ -70,7 +70,7 @@ arithmetic_conversion(n: Node): any := {
 # loop that cost is named once for each such literal (decision exact-decimal-big)
 looping_words = ["for", "each", "while", "until", "repeat", "loop"]
 global big_decimals_warned = []
-big_decimal_in_loop(n: Node): any := {
+def big_decimal_in_loop(n: Node): any := {
 	if not is_loop_statement(n) { return ø }
 	for literal in nodes_in(n).filter(is_big_decimal) {
 		place = written_at(literal)
@@ -81,8 +81,8 @@ big_decimal_in_loop(n: Node): any := {
 	}
 	ø
 }
-is_loop_statement(n: Node): bool := (is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in looping_words) or (is_key(n, Op.Do) and is_key(key_of(n), Op.While))
-is_big_decimal(n: Node): bool := is_big_number_view(n) and value_of(n)#2.contains(".")
+def is_loop_statement(n: Node): bool := (is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in looping_words) or (is_key(n, Op.Do) and is_key(key_of(n), Op.While))
+def is_big_decimal(n: Node): bool := is_big_number_view(n) and value_of(n)#2.contains(".")
 
 # a node as the warnings quote it
-as_written(n: Node): text := "${n}".trim()
+def as_written(n: Node): text := "${n}".trim()

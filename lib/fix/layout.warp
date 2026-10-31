@@ -17,7 +17,7 @@ operand_starts = chars("_([{\"'`#.$ø-!√")
 closing_brackets = [")", "]"]
 
 # the line's new text by the rule
-laid_out(rule: text, line: Scanned): text := {
+def laid_out(rule: text, line: Scanned): text := {
 	if rule == "# comment" { return hash_comment(line) }
 	if rule == "trailing whitespace" { return without_trailing_blanks(line) }
 	if rule == "spaces" { return single_spaces(line) }
@@ -28,7 +28,7 @@ laid_out(rule: text, line: Scanned): text := {
 }
 
 # `// text` → `# text`, `/// doc` → `## doc`; `//!` stays
-hash_comment(line: Scanned): text := {
+def hash_comment(line: Scanned): text := {
 	if line.comment < 0 { return line.text }
 	cs = chars(line.text)
 	code = piece(cs, 0, line.comment)
@@ -49,7 +49,7 @@ hash_comment(line: Scanned): text := {
 }
 
 # the blanks at the line's end go, unless a text or a block comment owns them
-without_trailing_blanks(line: Scanned): text := {
+def without_trailing_blanks(line: Scanned): text := {
 	if line.ends_inside != in_code { return line.text }
 	cs = chars(line.text)
 	end = #cs
@@ -58,7 +58,7 @@ without_trailing_blanks(line: Scanned): text := {
 }
 
 # at most one blank line in a row, none at the start or the end: whether each line goes
-deleted_blank_lines(lines: list): list := {
+def deleted_blank_lines(lines: list): list := {
 	blank = lines.map(line => line.text.trim() == "" and line.starts_inside == in_code)
 	last_content = -1
 	for k in 0 ..< #lines { if not blank[k] { last_content = k } }
@@ -70,7 +70,7 @@ deleted_blank_lines(lines: list): list := {
 }
 
 # the blanks a line starts with, its indentation: none when it starts inside a text or a comment
-indentation_length(line: Scanned): int := {
+def indentation_length(line: Scanned): int := {
 	if line.starts_inside != in_code { return 0 }
 	cs = chars(line.text)
 	n = 0
@@ -80,7 +80,7 @@ indentation_length(line: Scanned): int := {
 
 # runs of blanks become one; none just inside `(…)` and `[…]`, before a comma or a semicolon or at the end; the blanks
 # before a trailing comment stay
-single_spaces(line: Scanned): text := {
+def single_spaces(line: Scanned): text := {
 	cs = chars(line.text)
 	start = indentation_length(line)
 	written = piece(cs, 0, start)
@@ -108,7 +108,7 @@ single_spaces(line: Scanned): text := {
 }
 
 # `a,b` → `a, b`, `a=1;b=2` → `a=1; b=2`
-separator_spacing(line: Scanned): text := {
+def separator_spacing(line: Scanned): text := {
 	cs = chars(line.text)
 	written = ""
 	for i in 0 ..< #cs {
@@ -124,7 +124,7 @@ separator_spacing(line: Scanned): text := {
 
 # `name:value` → `name: value`, a parameter's type too; `::`, `:=`, `://`, a colon before a closer or the end, and one
 # between digits (`12:30`, `xs[1:3]`) stay
-colon_spacing(line: Scanned): text := {
+def colon_spacing(line: Scanned): text := {
 	cs = chars(line.text)
 	written = ""
 	for i in 0 ..< #cs {
@@ -140,25 +140,25 @@ colon_spacing(line: Scanned): text := {
 	written
 }
 
-is_operand_end(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c in operand_ends)
-is_operand_start(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c in operand_starts)
+def is_operand_end(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c in operand_ends)
+def is_operand_start(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c in operand_starts)
 
 # the nearest character before index i that is no blank, "" when none
-character_before(cs: list, i: int): text := {
+def character_before(cs: list, i: int): text := {
 	k = i - 1
 	while k >= 0 and is_blank_character(at(cs, k)) { k -= 1 }
 	at(cs, k)
 }
 
 # the nearest character from index i on that is no blank
-character_from(cs: list, i: int): text := {
+def character_from(cs: list, i: int): text := {
 	k = i
 	while k < #cs and is_blank_character(at(cs, k)) { k += 1 }
 	at(cs, k)
 }
 
 # the spaced operator at index i, between two operands and glued to no other operator character; "" when none
-operator_at(line: Scanned, cs: list, i: int): text := {
+def operator_at(line: Scanned, cs: list, i: int): text := {
 	if not is_code(line, i) { return "" }
 	for operator in spaced_operators {
 		n = #operator
@@ -185,7 +185,7 @@ operator_at(line: Scanned, cs: list, i: int): text := {
 
 # the `-` at index i is one of a date's, `2024-02-29`: four digits before and two after it, or two before it that a
 # `-` precedes
-in_a_date(cs: list, i: int): bool := {
+def in_a_date(cs: list, i: int): bool := {
 	before = 0
 	while is_digit_character(at(cs, i - 1 - before)) { before += 1 }
 	after = 0
@@ -194,7 +194,7 @@ in_a_date(cs: list, i: int): bool := {
 }
 
 # `<div id=x>`: a line with a tag keeps its operators as written
-has_tag(line: Scanned): bool := {
+def has_tag(line: Scanned): bool := {
 	cs = chars(line.text)
 	for i in 0 ..< #cs {
 		next = at(cs, i + 1)
@@ -204,7 +204,7 @@ has_tag(line: Scanned): bool := {
 }
 
 # `x=1+2` → `x = 1 + 2`
-operator_spacing(line: Scanned): text := {
+def operator_spacing(line: Scanned): text := {
 	if has_tag(line) { return line.text }
 	cs = chars(line.text)
 	written = ""

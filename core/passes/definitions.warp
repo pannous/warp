@@ -14,30 +14,30 @@ use "lambdas.warp"
 use "data_blocks.warp"
 
 # `f(x, y)`, `f(x: int, y)`: a name applied to parameter names, each maybe typed
-is_head(n: Node): bool := match n {
+def is_head(n: Node): bool := match n {
 	# todo Separator.None => Separator.Any / _ !?! Otherwise comma shouldn't match? 
 	List(call, Bracket.Round, Separator.None): #call > 0 and is_name(call#1) and call[1..].all(is_parameter)
 	_: no
 }
-is_parameter(n: Node): bool := match n {
+def is_parameter(n: Node): bool := match n {
 	Key(name, Op.Colon, _): is_name(name)
 	_: is_name(n)
 }
 
-definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
+def definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
 	List(parts, Bracket.None, Separator.Space): typed_definition_held(n)
 	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(phrased_head(head), Op.Define, body) else typed_definition_held(n) }
 	Key(head, Op.Define, body): typed_definition_held(Key(phrased_head(head), Op.Define, body))
 	_: n
 }
 # `f(xs: list of int)`: a parameter's type phrase is one type, as a class field's (sugar.warp with_type_phrases)
-phrased_head(head: Node): Node := {
+def phrased_head(head: Node): Node := {
 	if is_call(head) { return call_node(head#1, with_type_phrases(arguments_of(head))) }
 	if is_key(head, Op.Colon) and is_call(key_of(head)) then Key(phrased_head(key_of(head)), Op.Colon, value_of(head)) else head
 }
 
 # A definition with a declared result type, its result held as that type (result_held), else n as it is
-typed_definition_held(n: Node): Node := {
+def typed_definition_held(n: Node): Node := {
 	typed = declared_result_form(n)
 	if typed == ø { return n }
 	if not is_key(key_of(typed), Op.Colon) { return typed }
@@ -49,8 +49,8 @@ typed_definition_held(n: Node): Node := {
 # before the name, `T f(x) = e` or `T f(x) := e`; ø for any other statement. `f(x): T := e` itself may name any T, the
 # other forms a type word, collection, class or any (`f(x): y = e` assigns y)
 # `void`, which the parser reads as ø
-is_no_result(n: Node): bool := n == Node.Empty
-declared_result_form(n: Node): Node := match n {
+def is_no_result(n: Node): bool := n == Node.Empty
+def declared_result_form(n: Node): Node := match n {
 	# `f(x) as pdf := e`: in a definition's head `as` names the result, any type the program has, as `:` does
 	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else if is_key(target, Op.As) and is_call(key_of(target)) and value_of(target) is symbol then Key(Key(key_of(target), Op.Colon, value_of(target)), Op.Define, body) else typed_by_word(target, body)
 	Key(target, Op.Assign, body): typed_by_word(target, body)
@@ -66,7 +66,7 @@ declared_result_form(n: Node): Node := match n {
 	}
 	_: ø
 }
-typed_by_word(target: Node, body: Node): Node := match target {
+def typed_by_word(target: Node, body: Node): Node := match target {
 	Key(head, Op.Colon, result_type): if is_call(head) and is_result_type(result_type) then Key(target, Op.Define, body) else ø
 	Key(head, Op.As, result_type): if is_call(head) and is_result_type(result_type) then Key(Key(head, Op.Colon, result_type), Op.Define, body) else ø
 	_: ø
@@ -74,22 +74,22 @@ typed_by_word(target: Node, body: Node): Node := match target {
 
 # a word naming a result type: a built-in type, a collection, a class, or any, each also optional, `int?` (Rust twin:
 # function_heads.rs is_result_type)
-is_result_type(n: Node): bool := n is symbol and names_result_type(required_type(name_of(n)))
-names_result_type(word: text): bool := is_type_word_or_any(word) or word in collection_words or is_capitalized(word)
+def is_result_type(n: Node): bool := n is symbol and names_result_type(required_type(name_of(n)))
+def names_result_type(word: text): bool := is_type_word_or_any(word) or word in collection_words or is_capitalized(word)
 
 # `is_null(x: any): bool from runtime` (decision bodiless-imports): an intrinsic the emitter supplies, declared only;
 # the line goes (Rust twin: lowering/foreign/foreign_lines.rs runtime_line, whose Rust lane traps when it is called).
 # So do `floor(x: number): int from warp` and `count(xs: list): int from emitter` (decision foreign-signature): words
 # the compiler supplies itself, whose signatures it reads from the prelude (builtin_signatures.warp)
 compiler_libraries = ["runtime", "warp", "emitter"]
-is_runtime_declaration(n: Node): bool := {
+def is_runtime_declaration(n: Node): bool := {
 	words = if is_key(n, Op.Colon) and is_group(value_of(n)) then value_of(n) else n
 	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 is symbol and name_of(words#3) in compiler_libraries
 }
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
 result_word = "the result"
-result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
+def result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
 		if not is_call(head) { return n }
 		result = symbol(result_word)
@@ -102,7 +102,7 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 }
 
 # T of a definition holding its result, `f(k) := {the result: T = …; the result}`; ø of another node
-held_result(n: Node): Node? := {
+def held_result(n: Node): Node? := {
 	first = if is_key(n, Op.Define) and is_group(value_of(n)) and #value_of(n) > 0 then value_of(n)#1 else ø
 	if first != ø and is_key(first, Op.Assign) and is_key(key_of(first), Op.Colon) and key_of(key_of(first)) == symbol(result_word) then value_of(key_of(first)) else ø
 }
@@ -111,7 +111,7 @@ held_result(n: Node): Node? := {
 # the `?` as its fix and holds its result as an `int?`, so the ø reaches the caller unchanged (Rust twin:
 # type_name_matching.rs optional_when_answering_empty). A list result gives [] for ø instead, with no warning (user
 # 2026-10-22, card list-result-autocast: "ø can autocast to []")
-optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
+def optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
 	written = name_of(result_type)
 	if not written or holds_empty(written) or is_list_type(written) or not can_answer_empty(body, optional_functions) { return result_type }
 	diagnose(call_of("optional_result", [name_of(head#1), written]), result_type)
@@ -120,7 +120,7 @@ optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node :
 
 # an optional result of `if c then x` without `else`, or of a loop, is ø when nothing gave a value, not the kind's zero
 # (Rust twin: type_name_matching.rs as_type)
-with_empty_otherwise(value: Node): Node := match value {
+def with_empty_otherwise(value: Node): Node := match value {
 	Key(then, Op.Else, otherwise): Key(then, Op.Else, with_empty_otherwise(otherwise))
 	Key(_, Op.Then, _): Key(value, Op.Else, ø)
 	Key(_, Op.Do, _): List([value, ø], Bracket.Curly, Separator.Semicolon)
@@ -134,14 +134,14 @@ with_empty_otherwise(value: Node): Node := match value {
 
 # `for x in xs {…}`, `each x in xs {…}` before lib/sugar/iteration.warp lowers them; `while c {…}` is a `do` key already
 loop_words = ["for", "each"]
-is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
+def is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 
 # a bare `return`, or ø as its value, returned or last: ø itself, an `if` without `else`, a loop, a choice with such a
 # branch, a call of a function in `optional`, or a variable assigned such a value other than a call; the definitions
 # and lambdas inside answer for themselves
-can_answer_empty(body: Node, optional: list): bool := returns_empty(body, body, optional) or value_can_be_empty(body, body, optional, [])
+def can_answer_empty(body: Node, optional: list): bool := returns_empty(body, body, optional) or value_can_be_empty(body, body, optional, [])
 
-returns_empty(n: Node, body: Node, optional: list): bool := {
+def returns_empty(n: Node, body: Node, optional: list): bool := {
 	if is_word(n, "return") { return yes }
 	if is_group(n) and #n == 2 and is_word(n#1, "return") { return value_can_be_empty(n#2, body, optional, []) }
 	# `op.return` names a member, no return
@@ -152,7 +152,7 @@ returns_empty(n: Node, body: Node, optional: list): bool := {
 # the functions of a program whose result can be ø: those declared `T?`, and those declared `T` whose body can answer
 # ø, a call of another such function included (Rust twin: type_name_matching.rs optional_functions)
 global optional_functions = []
-optional_functions_of(program: Node): list := {
+def optional_functions_of(program: Node): list := {
 	typed = typed_definitions(program)
 	optional = []
 	more = ["start"]
@@ -162,19 +162,19 @@ optional_functions_of(program: Node): list := {
 	}
 	optional
 }
-result_can_be_empty(candidate: list, optional: list): bool := {
+def result_can_be_empty(candidate: list, optional: list): bool := {
 	written = candidate#2
 	written.ends_with("?") or (not holds_empty(written) and can_answer_empty(candidate#3, optional))
 }
 # `T?`, `any` and `Node` hold ø already: a result of theirs never warns
-holds_empty(written: text): bool := written.ends_with("?") or written in ["any", "Node"]
+def holds_empty(written: text): bool := written.ends_with("?") or written in ["any", "Node"]
 # each definition with a declared result in n, `def f(x): T {…}` and `f(x): T := e`: its name, its type and its body
-typed_definitions(n: Node): list := {
+def typed_definitions(n: Node): list := {
 	inner = parts_of(n).flat_map(typed_definitions)
 	typed = typed_definition(declared_result_form(n) ?? n)
 	if typed then [typed] + inner else inner
 }
-typed_definition(n: Node): list? := match n {
+def typed_definition(n: Node): list? := match n {
 	Key(Key(head, Op.Colon, result_type), Op.Define, body): { if is_call(head) then [name_of(head#1), name_of(result_type), body] else ø }
 	Key(head, Op.Colon, typed_body): {
 		if not is_call(head) or separator_of(typed_body) != " " or #typed_body != 2 or bracket_of(typed_body#2) != "{" { return ø }
@@ -185,7 +185,7 @@ typed_definition(n: Node): list? := match n {
 
 # a value given back by `body`, whose assignments give its variables their values; the functions `optional` can answer
 # ø, the variables `looked_up` are being followed already
-value_can_be_empty(value: Node, body: Node, optional: list, looked_up: list): bool := {
+def value_can_be_empty(value: Node, body: Node, optional: list, looked_up: list): bool := {
 	can_be_empty = part => value_can_be_empty(part, body, optional, looked_up)
 	match value {
 		Key(then, Op.Else, otherwise): is_key(then, Op.Then) and (can_be_empty(value_of(then)) or can_be_empty(otherwise))
@@ -209,16 +209,16 @@ value_can_be_empty(value: Node, body: Node, optional: list, looked_up: list): bo
 
 # `f = { it * 2 }` defines a function as `f := { it * 2 }` does: a name assigned a block that reads `it`; other blocks
 # are data (Rust twin: warp_parser/definitions/functions.rs is_function_block)
-is_function_block(name: Node, body: Node): bool := name is symbol and bracket_of(body) == "{" and mentions(body, implicit_parameter)
+def is_function_block(name: Node, body: Node): bool := name is symbol and bracket_of(body) == "{" and mentions(body, implicit_parameter)
 
 # `f(x: int, y)`: a name applied to parameters
-is_call(n: Node): bool := match n {
+def is_call(n: Node): bool := match n {
 	List(call, Bracket.Round, Separator.None): #call > 0 and is_name(call#1)
 	_: no
 }
 
 # (a class's methods first become functions of the program: class_methods.warp; its conversions too, below)
-definitions(program: Node): Node := {
+def definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
 	# then data written as data (data_blocks.warp), once the definitions say which functions take it
 	data_blocks(bottom_up(conversions(int_types(methods_lifted(statics_hoisted(program)))), definition))
@@ -233,15 +233,15 @@ definitions(program: Node): Node := {
 
 # `as·text`: the function converting to the target, a name no program can write; its parameter, which a body's `it`
 # (or the name `text(p: Person)` gives) is renamed to (lambdas.warp renamed)
-conversion_name(target: text): text := "as·" + target
+def conversion_name(target: text): text := "as·" + target
 converted_value = HiddenWord.ConvertedValue as text
 
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
-names_type(n: Node, scope: map): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
+def names_type(n: Node, scope: map): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
 
 # [source, target, body, the body's name of the value] of `A as B := body` with A and B types, of `n: A as B := body`
 # naming the value, also of `text(p: A) := body`, else ø
-conversion_of(n: Node, scope: map): list? := {
+def conversion_of(n: Node, scope: map): list? := {
 	if not is_key(n, Op.Define) { return ø }
 	head = key_of(n)
 	if is_key(head, Op.Colon) and key_of(head) is symbol and is_key(value_of(head), Op.As) {
@@ -258,11 +258,11 @@ conversion_of(n: Node, scope: map): list? := {
 # the words showing a value as text, which show it through a program's conversion to text
 showing_words = ["print", "str", "text", "text_form"]
 # x as the program's conversion to text shows it; a text as it is
-shown_converted(x: Node): Node := if x is text then x else call_of(conversion_name("text"), [x])
+def shown_converted(x: Node): Node := if x is text then x else call_of(conversion_name("text"), [x])
 
 # every `x as B` of a target B the program converts to as the call of its conversion; `x as B = v` and `f(x) as B := …`
 # declare and stay
-converting_uses(n: Node, targets: map): Node := {
+def converting_uses(n: Node, targets: map): Node := {
 	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and is_key(key_of(n), Op.As) {
 		return Key(key_of(n), op_of(n), converting_uses(value_of(n), targets))
 	}
@@ -281,7 +281,7 @@ converting_uses(n: Node, targets: map): Node := {
 
 # the conversion to `target`: a typed function of each source type, `as·text·Person(p: Person) := body`, and the one
 # trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
-conversion_functions(target: text, written: list, targets: map, scope: map): list := {
+def conversion_functions(target: text, written: list, targets: map, scope: map): list := {
 	it = symbol(converted_value)
 	# a class's own instance stays itself, a value of no source type is refused: no built-in conversion makes one
 	refused = call_of(raise_word, ["no conversion to " + target + " of that value"])
@@ -298,7 +298,7 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
 # as calls
-conversions(program: Node): Node := {
+def conversions(program: Node): Node := {
 	scope = scope_of(program)
 	targets = {}
 	order = []

@@ -8,7 +8,7 @@ use "types.warp"
 use "../emitter/byte_codes.warp"
 # whether `m.name` reads a field: m a map, an instance or a list of entries (a tag's `{…}`) with an entry so
 # named, an entry's key, value, name or the fields of its value, a symbol's or a function's name
-has_field(m: Node, name: text): bool := {
+def has_field(m: Node, name: text): bool := {
 	if is_null(m) { return no }
 	if is_position_part(m, name) { return is_meta(m) }
 	if is_list_part(m, name) { return yes }
@@ -21,42 +21,42 @@ has_field(m: Node, name: text): bool := {
 }
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
 # node_api.rs POSITIONED); any other node without a field of that name has no field line
-positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
+def positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
 # `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, which a field never shadows
 # (`.line` of the code `line = 1` is 1; card node-part-clash, Rust's node_api.rs PART_READERS)
 # (line 0: a node marked by a pass but never written anywhere, with_attribute)
-node_line(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_line(n) else ø
-node_column(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_column(n) else ø
+def node_line(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_line(n) else ø
+def node_column(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_column(n) else ø
 # the words a pass marked n with, `let` of a name declared inside a lambda (passes lambdas.warp): carried on the node
 # itself, as its position is, through every pass that keeps the node
-attributes_of(n: Node): list := if is_meta(n) and not is_null(meta_attributes(n)) then unboxed_list(meta_attributes(n)) else []
-with_attribute(n: Node, word: Node): Node := meta_with_attributes(if is_meta(n) then n else meta_node(n, 0, 0), attributes_of(n) + [word])
+def attributes_of(n: Node): list := if is_meta(n) and not is_null(meta_attributes(n)) then unboxed_list(meta_attributes(n)) else []
+def with_attribute(n: Node, word: Node): Node := meta_with_attributes(if is_meta(n) then n else meta_node(n, 0, 0), attributes_of(n) + [word])
 # `e.message` of an Error e
-is_error_message(m: Node, name: text): bool := node_is_error(m) and same_bytes(name, "message")
-is_position_part(m: Node, name: text): bool := {
+def is_error_message(m: Node, name: text): bool := node_is_error(m) and same_bytes(name, "message")
+def is_position_part(m: Node, name: text): bool := {
 	if not same_bytes(name, "line") and not same_bytes(name, "column") { return no }
 	not ((marked_kind(m) == Marked.Map or marked_kind(m) == Marked.Instance) and map_index(m, name) > 0)
 }
-position_part(m: Node, name: text): int := if same_bytes(name, "line") then meta_line(m) else meta_column(m)
+def position_part(m: Node, name: text): int := if same_bytes(name, "line") then meta_line(m) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
-is_entry(n: Node): bool := kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
+def is_entry(n: Node): bool := kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
 # `n.bracket`, `n.separator` of any node: a list's own, ø of any other node (Rust's node_api.rs); a map's entry or a
 # key's name of that name wins
-is_list_part(m: Node, name: text): bool := {
+def is_list_part(m: Node, name: text): bool := {
 	if not same_bytes(name, "bracket") and not same_bytes(name, "separator") { return no }
 	if is_entry(m) and same_bytes(key_name(m), name) { return no }
 	not ((marked_kind(m) == Marked.Map or marked_kind(m) == Marked.Instance) and map_index(m, name) > 0)
 }
-list_part(m: Node, name: text): Node := {
+def list_part(m: Node, name: text): Node := {
 	if not is_plain_list(m) { return ø }
 	if same_bytes(name, "bracket") then list_bracket(m) else list_separator(m)
 }
 # a tag's `{…}` of entries, `Person{name: "A"}`'s, which answers its fields
-is_entry_block(n: Node): bool := kind_code(n) == Kind.List and bracket_info(n) == BracketCode.Curly
+def is_entry_block(n: Node): bool := kind_code(n) == Kind.List and bracket_info(n) == BracketCode.Curly
 # a list that is no map
-is_plain_list(n: Node): bool := kind_code(n) == Kind.List and marked_kind(n) != Marked.Map
+def is_plain_list(n: Node): bool := kind_code(n) == Kind.List and marked_kind(n) != Marked.Map
 # a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
-swizzle_fits(p: Node, letters: text): bool := {
+def swizzle_fits(p: Node, letters: text): bool := {
 	if is_null(p) or kind_code(p) != Kind.List or marked_kind(p) == Marked.Map { return no }
 	items = unboxed_list(p)
 	if #items < 2 or #items > 4 { return no }
@@ -65,9 +65,9 @@ swizzle_fits(p: Node, letters: text): bool := {
 	yes
 }
 # the place, counted from 1, of the component a letter picks: x 1, y 2, z 3, w 4
-letter_component(b: int): int := if b == Ascii.LowerW then 4 else b - Ascii.LowerW
-swizzled_one(p: Node, letter: text): Node := unboxed_list(p)#letter_component(byte_at(letter, 0))
-swizzled(p: Node, letters: text): list := {
+def letter_component(b: int): int := if b == Ascii.LowerW then 4 else b - Ascii.LowerW
+def swizzled_one(p: Node, letter: text): Node := unboxed_list(p)#letter_component(byte_at(letter, 0))
+def swizzled(p: Node, letters: text): list := {
 	items = unboxed_list(p)
 	out = new_list(0)
 	for i in 0..byte_count(letters) { out += [items#letter_component(byte_at(letters, i))] }

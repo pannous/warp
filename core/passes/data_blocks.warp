@@ -12,15 +12,15 @@ data_type = symbol("data")
 for_word = symbol("for")
 in_word = symbol("in")
 
-data_blocks(program: Node): Node := {
+def data_blocks(program: Node): Node := {
 	scope = scope_of(program)
 	positions = data_positions_of(nodes_in(program))
 	bottom_up(program, n => data_argued(with_loops_as_items(n, scope), positions))
 }
 
-is_data_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) == data_type
+def is_data_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) == data_type
 # the positions of each function's data parameters, by its name
-data_positions_of(written: list): map := {
+def data_positions_of(written: list): map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
@@ -28,9 +28,9 @@ data_positions_of(written: list): map := {
 	}
 	found
 }
-spliced(argument: Node): Node := List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
+def spliced(argument: Node): Node := List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
 # `f{…}` and `f(a, b)` of an f taking data: those arguments spliced quotes
-data_argued(n: Node, positions: map): Node := {
+def data_argued(n: Node, positions: map): Node := {
 	if is_key(n, Op.Colon) and key_of(n) is symbol and positions.has(name_of(key_of(n))) and is_curly_group(value_of(n)) {
 		n = call_node(key_of(n), [value_of(n)])
 	}
@@ -40,14 +40,14 @@ data_argued(n: Node, positions: map): Node := {
 }
 
 # `div{…}` of a word the program gives no value, function or type
-is_free_tag(n: Node, scope: map): bool := {
+def is_free_tag(n: Node, scope: map): bool := {
 	if not ((is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))) { return no }
 	name = name_of(key_of(n))
 	not (binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type))
 }
-with_loops_as_items(n: Node, scope: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), items_of(value_of(n)).map(loop_as_items))) else n
+def with_loops_as_items(n: Node, scope: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), items_of(value_of(n)).map(loop_as_items))) else n
 # `for g in guests { li{g} }` → `[li{g} for g in guests]`, any other item as it is
-loop_as_items(item: Node): Node := {
+def loop_as_items(item: Node): Node := {
 	if not (is_group(item) and bracket_of(item) == "" and #item >= 5 and item#1 == for_word and item#3 == in_word and is_curly_group(item#(#item))) { return item }
 	block = item#(#item)
 	value = if #block == 1 then block#1 else block

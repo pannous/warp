@@ -7,14 +7,14 @@ use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "instructions.warp"
 use "nodes.warp"
-packed_node(n: Node): text := {
+def packed_node(n: Node): text := {
 	whole = new_text(node_written(n, yes, new_text(0), 0))
 	node_written(n, yes, whole, 0)
 	whole
 }
 # n written into `out` from `at`, where its bytes end: a text of no room only measures, so one walk sizes the text and
 # the next fills it
-node_written(n: Node, positioned: bool, out: text, at: int): int := {
+def node_written(n: Node, positioned: bool, out: text, at: int): int := {
 	if is_null(n) { return varint_written(NodeShape.Empty, out, at) }
 	if positioned and is_meta(n) {
 		place = varint_written(meta_line(n), out, varint_written(NodeShape.Meta, out, at))
@@ -45,7 +45,7 @@ node_written(n: Node, positioned: bool, out: text, at: int): int := {
 	at
 }
 # the shape of a node's payload, by its kind; a closure, a pointer or an uncertain value fails
-shape_of(n: Node): int := {
+def shape_of(n: Node): int := {
 	kind = kind_code(n)
 	if kind == Kind.Int { return if is_ratio(n) then NodeShape.Ratio else if is_big_int(n) then NodeShape.BigInt else NodeShape.Int }
 	if kind == Kind.Time { return NodeShape.Int }
@@ -59,7 +59,7 @@ shape_of(n: Node): int := {
 }
 # an int as ASCII bytes from `at` (where a text of no room only measures), where they end: zigzag, so a small negative
 # one is small too, 6 bits a byte, low ones first, 64 marking a byte that more follow
-varint_written(value: int, out: text, at: int): int := {
+def varint_written(value: int, out: text, at: int): int := {
 	rest = bits_xor(shifted_left(value, 1), shifted_right_signed(value, 63))
 	while shifted_right(rest, 6) != 0 {
 		if byte_count(out) > 0 { set_byte(out, at, bits_and(rest, 63) + 64) }
@@ -72,11 +72,11 @@ varint_written(value: int, out: text, at: int): int := {
 
 # where unpacked_node reads next in its text
 global bytes_read = 0
-unpacked_node(t: text): Node := {
+def unpacked_node(t: text): Node := {
 	bytes_read = 0
 	read_node(t)
 }
-read_node(t: text): Node := {
+def read_node(t: text): Node := {
 	shape = read_varint(t)
 	if shape == NodeShape.Empty { return ø }
 	if shape == NodeShape.Meta {
@@ -99,7 +99,7 @@ read_node(t: text): Node := {
 	with_kind(payload_read(t, shape), kind)
 }
 # the value a payload of that shape holds, its kind field set by the caller
-payload_read(t: text, shape: int): Node := {
+def payload_read(t: text, shape: int): Node := {
 	if shape == NodeShape.Int { return held(read_varint(t)) }
 	if shape == NodeShape.Float { return held(float_of_bits(read_varint(t))) }
 	if shape == NodeShape.Codepoint { return held(char_of(read_varint(t))) }
@@ -120,7 +120,7 @@ payload_read(t: text, shape: int): Node := {
 	bytes_read += size
 	symbol_of(part)
 }
-read_varint(t: text): int := {
+def read_varint(t: text): int := {
 	rest = 0
 	shift = 0
 	byte = byte_at(t, bytes_read)

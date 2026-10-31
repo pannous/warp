@@ -8,22 +8,22 @@ class Interval {
 	value: float
 	low: float
 	high: float
-	plus(o: any): Interval := { b = as_interval(o); Interval(value + b.value, low + b.low, high + b.high) }
-	minus(o: any): Interval := { b = as_interval(o); Interval(value - b.value, low - b.high, high - b.low) }
-	times(o: any): Interval := { b = as_interval(o); interval_spanned(value * b.value, [low * b.low, low * b.high, high * b.low, high * b.high]) }
-	divide(o: any): Interval := { b = as_interval(o); interval_spanned(value / b.value, [low / b.low, low / b.high, high / b.low, high / b.high]) }
+	def plus(o: any): Interval := { b = as_interval(o); Interval(value + b.value, low + b.low, high + b.high) }
+	def minus(o: any): Interval := { b = as_interval(o); Interval(value - b.value, low - b.high, high - b.low) }
+	def times(o: any): Interval := { b = as_interval(o); interval_spanned(value * b.value, [low * b.low, low * b.high, high * b.low, high * b.high]) }
+	def divide(o: any): Interval := { b = as_interval(o); interval_spanned(value / b.value, [low / b.low, low / b.high, high / b.low, high / b.high]) }
 	// `y < x` certainly: the whole interval below (P224b); possibly_less for some of it
-	less(o: any): bool := high < as_interval(o).low
-	more(o: any): bool := low > as_interval(o).high
-	possibly_less(o: any): bool := low < as_interval(o).high
-	possibly_more(o: any): bool := high > as_interval(o).low
+	def less(o: any): bool := high < as_interval(o).low
+	def more(o: any): bool := low > as_interval(o).high
+	def possibly_less(o: any): bool := low < as_interval(o).high
+	def possibly_more(o: any): bool := high > as_interval(o).low
 	// `a ≈ b`: the intervals overlap
-	approximately(o: any): bool := { b = as_interval(o); low <= b.high and b.low <= high }
-	equals(o: any): bool := o is Interval and value == o.value and low == o.low and high == o.high
+	def approximately(o: any): bool := { b = as_interval(o); low <= b.high and b.low <= high }
+	def equals(o: any): bool := o is Interval and value == o.value and low == o.low and high == o.high
 	// the ± part: how far the interval reaches from the value, on its farther side
-	uncertainty(): float := max(high - value, value - low)
-	scaled(factor: float): Interval := Interval(value * factor, low * factor, high * factor)
-	text(): text := uncertain_text(value, uncertainty(), 0)
+	def uncertainty(): float := max(high - value, value - low)
+	def scaled(factor: float): Interval := Interval(value * factor, low * factor, high * factor)
+	def text(): text := uncertain_text(value, uncertainty(), 0)
 }
 
 // One independent Gaussian's share of another's deviation: ∂/∂that · its σ
@@ -37,58 +37,58 @@ class Contribution {
 class Gaussian {
 	value: float
 	contributions: list
-	plus(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value + b.value, this, 1.0, b, 1.0) }
-	minus(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value - b.value, this, 1.0, b, -1.0) }
-	times(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value * b.value, this, b.value, b, value) }
-	divide(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value / b.value, this, 1.0 / b.value, b, -value / (b.value * b.value)) }
-	less(o: any): bool := high() < as_gaussian(o).low()
-	more(o: any): bool := low() > as_gaussian(o).high()
-	approximately(o: any): bool := { b = as_gaussian(o); low() <= b.high() and b.low() <= high() }
-	equals(o: any): bool := o is Gaussian and value == o.value and deviation() == o.deviation()
+	def plus(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value + b.value, this, 1.0, b, 1.0) }
+	def minus(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value - b.value, this, 1.0, b, -1.0) }
+	def times(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value * b.value, this, b.value, b, value) }
+	def divide(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value / b.value, this, 1.0 / b.value, b, -value / (b.value * b.value)) }
+	def less(o: any): bool := high() < as_gaussian(o).low()
+	def more(o: any): bool := low() > as_gaussian(o).high()
+	def approximately(o: any): bool := { b = as_gaussian(o); low() <= b.high() and b.low() <= high() }
+	def equals(o: any): bool := o is Gaussian and value == o.value and deviation() == o.deviation()
 	// σ: √(Σ contribution²)
-	deviation(): float := sqrt(sum([c.amount * c.amount for c in contributions]))
-	uncertainty(): float := deviation()
-	low(): float := value - deviation()
-	high(): float := value + deviation()
-	scaled(factor: float): Gaussian := gaussian_combined(value * factor, this, factor, exact_gaussian(0.0), 0.0)
-	text(): text := uncertain_text(value, deviation(), 1)
+	def deviation(): float := sqrt(sum([c.amount * c.amount for c in contributions]))
+	def uncertainty(): float := deviation()
+	def low(): float := value - deviation()
+	def high(): float := value + deviation()
+	def scaled(factor: float): Gaussian := gaussian_combined(value * factor, this, factor, exact_gaussian(0.0), 0.0)
+	def text(): text := uncertain_text(value, deviation(), 1)
 }
 
 // each Gaussian made by `gaussian` is independent of all others: its own id
 global gaussian_count = 0
 
-plus_minus(value: float, radius: float): Interval := {
+def plus_minus(value: float, radius: float): Interval := {
 	if radius < 0.0 { raise "an uncertainty must not be negative" }
 	Interval(value, value - radius, value + radius)
 }
 
-gaussian(value: float, deviation: float): Gaussian := {
+def gaussian(value: float, deviation: float): Gaussian := {
 	if deviation < 0.0 { raise "an uncertainty must not be negative" }
 	gaussian_count += 1
 	Gaussian(value, [Contribution(gaussian_count, deviation)])
 }
 
 // the value of the extreme corners: least and greatest of the endpoint results
-interval_spanned(value: float, corners: list): Interval := Interval(value, min(corners), max(corners))
+def interval_spanned(value: float, corners: list): Interval := Interval(value, min(corners), max(corners))
 
 // a plain number as the interval [n, n]; a Gaussian with an interval does not mix
-as_interval(o: any): Interval := {
+def as_interval(o: any): Interval := {
 	if o is Interval { return o }
 	if o is Gaussian { raise "an interval and a gaussian do not mix" }
 	Interval(o as float, o as float, o as float)
 }
 
-as_gaussian(o: any): Gaussian := {
+def as_gaussian(o: any): Gaussian := {
 	if o is Gaussian { return o }
 	if o is Interval { raise "an interval and a gaussian do not mix" }
 	exact_gaussian(o as float)
 }
 
 // a number as a Gaussian without contributions
-exact_gaussian(value: float): Gaussian := Gaussian(value, [])
+def exact_gaussian(value: float): Gaussian := Gaussian(value, [])
 
 // the Gaussian `value` whose contributions are a's times ∂a and b's times ∂b, those of one id summed
-gaussian_combined(value: float, a: Gaussian, da: float, b: Gaussian, db: float): Gaussian := {
+def gaussian_combined(value: float, a: Gaussian, da: float, b: Gaussian, db: float): Gaussian := {
 	merged = [Contribution(c.id, c.amount * da) for c in a.contributions]
 	for c in b.contributions {
 		merged = contribution_added(merged, Contribution(c.id, c.amount * db))
@@ -97,7 +97,7 @@ gaussian_combined(value: float, a: Gaussian, da: float, b: Gaussian, db: float):
 }
 
 // the contributions with one more: summed into the entry of the same id, else appended
-contribution_added(contributions: list, extra: Contribution): list := {
+def contribution_added(contributions: list, extra: Contribution): list := {
 	found = no
 	out = []
 	for c in contributions {

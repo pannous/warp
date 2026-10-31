@@ -4,10 +4,10 @@
 // `m = load_wasm("lib.wasm")`: a core module (instantiated beside the program, with the same imports) or a component
 // (by its header, WIT types), its handle {wasm: 1, path: "lib.wasm", kind: "module"}; a path is loaded once per run,
 // bytes (read_bytes, compile_wasm) each time anew
-load_wasm(module: any) := std_io("wasm", "load", [module])
+def load_wasm(module: any) := std_io("wasm", "load", [module])
 // `wasm_call(m, "twice", [21])`: an export called, the arguments as its types want them, its result a warp value;
 // m may be a handle or a path. Numbers cross as numbers, a component's strings, lists, records, options, results and
 // enums by its WIT types; a trap or a result's err is an Error
-wasm_call(module: any, name: any, arguments: any) := std_io("wasm", "call", [module, name, arguments])
+def wasm_call(module: any, name: any, arguments: any) := std_io("wasm", "call", [module, name, arguments])
 // `wasm_exports(m)`: each export's name and type, {twice: "func(i64) -> i64"}
-wasm_exports(module: any) := std_io("wasm", "exports", [module])
+def wasm_exports(module: any) := std_io("wasm", "exports", [module])

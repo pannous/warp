@@ -7,11 +7,11 @@
 
 // a dimension packs the power of each base quantity, one byte each (length + 256·mass + 65536·duration …), so
 // multiplying quantities adds their dimensions
-length_dimension() := 1
-mass_dimension() := 256
-duration_dimension() := 65536
-temperature_dimension() := 16777216
-pixels_dimension() := 4294967296
+def length_dimension() := 1
+def mass_dimension() := 256
+def duration_dimension() := 65536
+def temperature_dimension() := 16777216
+def pixels_dimension() := 4294967296
 
 class Quantity {
 	amount: number
@@ -22,18 +22,18 @@ class Quantity {
 	-(other) := measured(amount - same_quantity(this, other, "subtract").amount, dims, unit, scale)
 	*(other) := if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_product(unit, other.unit), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
-	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
-	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
-	compare(other) := amount - same_quantity(this, other, "compare").amount
+	def power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
+	def equal(other) := other is Quantity and dims == other.dims and amount == other.amount
+	def compare(other) := amount - same_quantity(this, other, "compare").amount
 	// the same quantity shown in another unit of its kind: `q.to("m")`
-	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, u, target.scale) }
+	def to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, u, target.scale) }
 	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
-	in(u) := to(u).shown()
-	shown() := amount / scale
+	def in(u) := to(u).shown()
+	def shown() := amount / scale
 	// its amount in SI base units as a plain float: what a shader reads of it (decision no-units-in-shaders)
-	float() := amount as float
-	text() := quantity_text(this)
-	show() := quantity_text(this)
+	def float() := amount as float
+	def text() := quantity_text(this)
+	def show() := quantity_text(this)
 }
 
 // the dimensions, each a class of its own: a parameter `duration: Time` takes a duration only
@@ -44,7 +44,7 @@ class Temperature extends Quantity {}
 class Pixels extends Quantity {}
 
 // a quantity as the class of its dimension, a plain Quantity for a compound one (speed, area …)
-measured(amount: number, dims: int, unit: text, scale: number) := {
+def measured(amount: number, dims: int, unit: text, scale: number) := {
 	if dims == length_dimension { return Length(amount, dims, unit, scale) }
 	if dims == mass_dimension { return Mass(amount, dims, unit, scale) }
 	if dims == duration_dimension { return Time(amount, dims, unit, scale) }
@@ -56,25 +56,25 @@ measured(amount: number, dims: int, unit: text, scale: number) := {
 // (decision as-promotes), so `2.0 / 4m` is 0.5/m and `1.0 - 4m` a DimensionError, never a plain number
 n: number as Quantity := measured(n, 0, "", 1)
 // `6km / 2000m` of one dimension is the plain number 3; `90km / h` a speed
-quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, above.unit + "/" + below.unit, above.scale / below.scale)
+def quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, above.unit + "/" + below.unit, above.scale / below.scale)
 
 // other when it measures what q measures, else the loud DimensionError
-same_quantity(q: Quantity, other: any, action: text) := {
+def same_quantity(q: Quantity, other: any, action: text) := {
 	if not (other is Quantity) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and the plain number " + str(other) }
 	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }
 	other
 }
 
 // "5km": the amount in its own unit
-quantity_text(q: Quantity) := str(q.shown()) + q.unit
+def quantity_text(q: Quantity) := str(q.shown()) + q.unit
 
 // `m·m` is `m²`, `m²·m` `m³`
-unit_product(first: text, second: text) := if first == second then unit_power(first, 2) else first + "·" + second
-unit_power(u: text, power: int) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
+def unit_product(first: text, second: text) := if first == second then unit_power(first, 2) else first + "·" + second
+def unit_power(u: text, power: int) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
 
 // the units by symbol, each [its SI amount, its dimension]; no unit is written in another, so a program's own `s` or
 // `m` leaves every unit as it is
-unit_table(): map := {
+def unit_table(): map := {
 	"m": [1, length_dimension],
 	"kg": [1, mass_dimension],
 	"s": [1, duration_dimension],
@@ -106,27 +106,27 @@ unit_table(): map := {
 	"dpi": [10000/254, pixels_dimension - length_dimension]
 }
 // the unit of that symbol, shown by it: `known_unit("km")` is the Length of 1000 m shown in km
-known_unit(symbol: text) := { entry = unit_table()[symbol]; measured(entry#1, entry#2, symbol, entry#1) }
+def known_unit(symbol: text) := { entry = unit_table()[symbol]; measured(entry#1, entry#2, symbol, entry#1) }
 
-m() := known_unit("m")
-kg() := known_unit("kg")
-s() := known_unit("s")
+def m() := known_unit("m")
+def kg() := known_unit("kg")
+def s() := known_unit("s")
 K() := known_unit("K")
-px() := known_unit("px")
-mm() := known_unit("mm")
-cm() := known_unit("cm")
-dm() := known_unit("dm")
-km() := known_unit("km")
-inch() := known_unit("inch")
-ft() := known_unit("ft")
-yd() := known_unit("yd")
-mi() := known_unit("mi")
-g() := known_unit("g")
-mg() := known_unit("mg")
-lb() := known_unit("lb")
-ms() := known_unit("ms")
+def px() := known_unit("px")
+def mm() := known_unit("mm")
+def cm() := known_unit("cm")
+def dm() := known_unit("dm")
+def km() := known_unit("km")
+def inch() := known_unit("inch")
+def ft() := known_unit("ft")
+def yd() := known_unit("yd")
+def mi() := known_unit("mi")
+def g() := known_unit("g")
+def mg() := known_unit("mg")
+def lb() := known_unit("lb")
+def ms() := known_unit("ms")
 µs() := known_unit("µs")
-ns() := known_unit("ns")
+def ns() := known_unit("ns")
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is
 rewrite $n $u => $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
 rewrite ($x = $n) $u => $x = $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, °]
@@ -136,26 +136,26 @@ rewrite ($x = $n) $u => $x = $n * $u where $n is number and $u in [m, kg, s, K, 
 type Angle = float
 ° = 0.017453292519943295 as Angle # π / 180, a float as the GPU reads it (π is the exact Real of lib/reals)
 // 60°, rounded to 12 digits so that 60° shows no 59.99999999999999°
-show(a: Angle) := "${round(float(a) / 0.017453292519943295 * 1e12) / 1e12}°"
+def show(a: Angle) := "${round(float(a) / 0.017453292519943295 * 1e12) / 1e12}°"
 // `min` stays the function min(a, b)
-minute() := known_unit("min")
-minutes() := known_unit("min")
-second() := known_unit("s")
-seconds() := known_unit("s")
-hour() := known_unit("h")
-hours() := known_unit("h")
-h() := known_unit("h")
-day() := known_unit("day")
+def minute() := known_unit("min")
+def minutes() := known_unit("min")
+def second() := known_unit("s")
+def seconds() := known_unit("s")
+def hour() := known_unit("h")
+def hours() := known_unit("h")
+def h() := known_unit("h")
+def day() := known_unit("day")
 Hz() := known_unit("Hz")
-kHz() := known_unit("kHz")
+def kHz() := known_unit("kHz")
 N() := known_unit("N")
 L() := known_unit("L")
-ml() := known_unit("ml")
-ha() := known_unit("ha")
-dpi() := known_unit("dpi")
+def ml() := known_unit("ml")
+def ha() := known_unit("ha")
+def dpi() := known_unit("dpi")
 
 // the long names a text may give a unit (`quantity(2, "hours")`), by its symbol
-long_unit_names(): map := {
+def long_unit_names(): map := {
 	"meter": "m", "meters": "m", "metre": "m", "kilogram": "kg", "second": "s", "seconds": "s",
 	"kilometer": "km", "kilometers": "km", "inches": "inch", "foot": "ft", "feet": "ft", "yard": "yd", "mile": "mi",
 	"miles": "mi", "gram": "g", "grams": "g", "pound": "lb", "lbs": "lb", "millisecond": "ms", "minute": "min",
@@ -163,7 +163,7 @@ long_unit_names(): map := {
 }
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
-unit_named(u: text) := {
+def unit_named(u: text) := {
 	if u.contains("/") {
 		parts = u.split("/")
 		return unit_named(parts#1) / unit_named(parts#2)
@@ -181,8 +181,8 @@ unit_named(u: text) := {
 }
 
 // `quantity(5, "km")`: amount of the unit u, shown in it; `quantity("5 km")`, `quantity("2.5km/h")`: read from text
-quantity(amount: number, u: text) := { one = unit_named(u); measured(amount * one.amount, one.dims, u, one.amount) }
-quantity(t: text) := {
+def quantity(amount: number, u: text) := { one = unit_named(u); measured(amount * one.amount, one.dims, u, one.amount) }
+def quantity(t: text) := {
 	var amount_text = ""
 	var u = ""
 	for c in t.trim() {
@@ -193,7 +193,7 @@ quantity(t: text) := {
 }
 
 // "-2.5" as the exact -5/2 (`as number` would read a float)
-exact_decimal(t: text) := {
+def exact_decimal(t: text) := {
 	if not t.contains(".") { return t as int }
 	parts = t.replace("-", "").replace("+", "").split(".")
 	var denominator = 1
@@ -204,4 +204,4 @@ exact_decimal(t: text) := {
 
 // a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
-sleep(duration) := sleep_ms((if duration is Time then duration.amount else duration) * 1000)
+def sleep(duration) := sleep_ms((if duration is Time then duration.amount else duration) * 1000)

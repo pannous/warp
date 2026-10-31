@@ -41,7 +41,7 @@ SQLITE_FLOAT = 2
 SQLITE_NULL = 5
 
 // a column of the current row as its warp value: an Int, a float, a text, ø for null
-column_value(statement: int, column: int) := {
+def column_value(statement: int, column: int) := {
 	kind = sqlite3_column_type(statement, column)
 	if kind == SQLITE_INTEGER { return sqlite3_column_int64(statement, column) }
 	if kind == SQLITE_FLOAT { return sqlite3_column_double(statement, column) }
@@ -50,7 +50,7 @@ column_value(statement: int, column: int) := {
 }
 
 // the rows `query` gives on the database `db`, each the list of its columns' values
-rows(db: int, query: text) := {
+def rows(db: int, query: text) := {
 	statement = sqlite3_prepare_v2(db, query, -1)
 	found = []
 	while sqlite3_step(statement) == SQLITE_ROW {
@@ -67,10 +67,10 @@ rows(db: int, query: text) := {
 }
 
 // runs `query` on `db` for what it does; the count of the rows it changed
-run_query(db: int, query: text) := run_bound(db, query, [])
+def run_query(db: int, query: text) := run_bound(db, query, [])
 // runs `query` with its `?`s bound to `values` in order, each an int (a yes/no as 1 or 0), a float, a text or ø (null),
 // so no value is spliced into SQL; the count of the rows it changed
-run_bound(db: int, query: text, values: list) := {
+def run_bound(db: int, query: text, values: list) := {
 	statement = sqlite3_prepare_v2(db, query, -1)
 	for i in 1 to count(values) { bound(statement, i, values#i) }
 	stepped = sqlite3_step(statement)
@@ -80,7 +80,7 @@ run_bound(db: int, query: text, values: list) := {
 }
 // sqlite3_bind_text's SQLITE_TRANSIENT: SQLite copies the text, whose C copy lasts only the call
 SQLITE_TRANSIENT = -1
-bound(statement: int, index: int, value: any) := {
+def bound(statement: int, index: int, value: any) := {
 	if value == ø { return sqlite3_bind_null(statement, index) }
 	if value is bool { return sqlite3_bind_int64(statement, index, if value then 1 else 0) }
 	if value is int { return sqlite3_bind_int64(statement, index, value) }

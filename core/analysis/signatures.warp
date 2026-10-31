@@ -14,7 +14,7 @@ class Signature { parameters: list = []; result: text = "" }
 # class Signature { Parameters = []; result: text = "" } as shortform for : list[Parameter] (card capitalized-field-list)
 
 # `x`, `x: T`, `x = 1`, `x: T = 1`, `with new x` (label words before the name, Rust parameter_head); `*xs` the rest
-parameter_of(written: Node): Parameter := {
+def parameter_of(written: Node): Parameter := {
 	if rest_name(written) != ø { return Parameter(name: rest_name(written), rest: yes) }
 	declared = if is_key(written, Op.Assign) then key_of(written) else written
 	defaulted_to = if is_key(written, Op.Assign) then [value_of(written)] else ø
@@ -27,33 +27,33 @@ parameter_of(written: Node): Parameter := {
 	Parameter(name: parameter_name(key_of(declared)), type_name: type_text(value_of(declared)), defaulted_to: defaulted_to, label: label_of(key_of(declared)))
 }
 # `with` of `with new`: the label word before a parameter's name, "" when it has none
-label_of(named: Node): text := if is_group(named) and #named > 1 and named#1 is symbol and name_of(named#1) in label_words then name_of(named#1) else ""
+def label_of(named: Node): text := if is_group(named) and #named > 1 and named#1 is symbol and name_of(named#1) in label_words then name_of(named#1) else ""
 # the name of a rest parameter or a spread argument, `*xs` (the parser's `...xs`, `vararg xs` too) and `xs...` (read
 # as `xs to ø`), else ø
-rest_name(written: Node): any := {
+def rest_name(written: Node): any := {
 	if written is symbol and #name_of(written) > 1 and name_of(written).starts_with("*") and not name_of(written).starts_with("**") { return name_of(written)[1..] }
 	if is_key(written, Op.To) and key_of(written) is symbol and value_of(written) == ø { return name_of(key_of(written)) }
 	ø
 }
 # symbol first: `type(symbol("key")) is key` (card type-symbol)
-parameter_name(named: Node): text := {
+def parameter_name(named: Node): text := {
 	if named is symbol { return name_of(named) }
 	if named is key { return parameter_name(key_of(named)) }
 	# `with new x`: the label words before the name; a pattern clause's literal, `f(0) := 1`, names nothing
 	if is_group(named) and #named > 0 then parameter_name(named.last) else ""
 }
 # `int` of `x: int`; a type form Rust checks at each call (`xs: [int]`) as written
-type_text(type: any): text := if type is symbol then name_of(type) else "${type}"
+def type_text(type: any): text := if type is symbol then name_of(type) else "${type}"
 
 # the head `f(a, b: int)` of a definition (its name first)
-signature_of(head: list): Signature := Signature(parameters: head[1..].map(parameter_of))
-taken_names(signature: Signature): list := signature.parameters.map(parameter => parameter.name)
+def signature_of(head: list): Signature := Signature(parameters: head[1..].map(parameter_of))
+def taken_names(signature: Signature): list := signature.parameters.map(parameter => parameter.name)
 # [how many arguments a call must pass, how many it may]: a defaulted parameter may be left out
-arity(signature: Signature): list := [#signature.parameters.filter(parameter => parameter.defaulted_to == ø), #signature.parameters]
+def arity(signature: Signature): list := [#signature.parameters.filter(parameter => parameter.defaulted_to == ø), #signature.parameters]
 # a function's parameter by its index, `bottom_up·2`, the key of what the stages learn about it
-parameter_key(function: text, index: int): text := function + "·" + index
+def parameter_key(function: text, index: int): text := function + "·" + index
 # whether a call of `arguments` values fits: the parameters without a default at least, any more after a rest one
-takes(signature: Signature, arguments: int): bool := {
+def takes(signature: Signature, arguments: int): bool := {
 	rest = signature.parameters.any(parameter => parameter.rest)
 	arguments >= arity(signature)#1 - (if rest then 1 else 0) and (rest or arguments <= #signature.parameters)
 }

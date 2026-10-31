@@ -1,7 +1,7 @@
 # runtime.wasm (emitter.warp's part; card runtime-prebuilt, notes/runtime_linking.md "runtime.wasm format"): every
 # runtime word compiled once, no program deciding its kinds or what it makes, and the hooks a program gives the code of
 # the module of the runtime words alone, its bytes: read again while a reading leaves out a word more
-runtime_wasm_module(runtime: Node, host: map): any := {
+def runtime_wasm_module(runtime: Node, host: map): any := {
 	module.prebuilding = yes
 	module.relocating = yes
 	module.left_out = {}
@@ -177,7 +177,7 @@ def bind_runtime_words() {
 	}
 }
 # a hook of runtime.wasm, whose code the program writes (late_code) over the stub's
-runtime_hook(name: text, parameters: list): any := {
+def runtime_hook(name: text, parameters: list): any := {
 	word = module.runtime_image.words[name]
 	f = bare_function(name)
 	f.index = word#1 + runtime_shift()
@@ -188,7 +188,7 @@ runtime_hook(name: text, parameters: list): any := {
 	f.code = [op.unreachable]
 	f
 }
-is_runtime_hook(name: text): bool := prepended() and name in module.runtime_image.hooks
+def is_runtime_hook(name: text): bool := prepended() and name in module.runtime_image.hooks
 
 # the content of runtime.wasm's section of this id, a custom one by its name; the vector it holds with more entries
 def runtime_part(id: int, name: text = ""): list {
@@ -349,14 +349,14 @@ def link_libraries(images: list, own_names: list) {
 }
 # a module's word a program may call: not one of the builders it exports for the host (its show(x) is the host's,
 # beside draw's own show()), which a program linking it exports its own of
-linkable(image: LibraryImage, word: Function): bool := word.index not in image.builders
+def linkable(image: LibraryImage, word: Function): bool := word.index not in image.builders
 # the variant of a linked name that takes that many values (card module-export-arity), ø for none
-linked_variant(name: text, parameters: int): any := {
+def linked_variant(name: text, parameters: int): any := {
 	fitting = (module.linked_words.get(name) ?? []).filter(word => #word.kinds == parameters)
 	if #fitting == 0 then ø else fitting#1
 }
 # a call of a linked name with a count of values none of its variants takes: refused naming theirs, never another's
-linked_arity_refusal(name: text, parameters: int): text := name + " of " + parameters + " values is no word of its linked module, whose " + name + " takes " + module.linked_words[name].map(word => "" + #word.kinds).join(" or ") + " values"
+def linked_arity_refusal(name: text, parameters: int): text := name + " of " + parameters + " values is no word of its linked module, whose " + name + " takes " + module.linked_words[name].map(word => "" + #word.kinds).join(" or ") + " values"
 # the program's own definitions, as parsed (a line holding several, `use units; m(x) := 7; m(1)`, the source's slices
 # miss): never a linked module's word
 def own_words_unlinked(names: list) {
@@ -594,7 +594,7 @@ def linked_imports(c_first_type: int, called: list, types: Move): list {
 	vector(functions + [memory, table, tag] + globals)
 }
 # the type of runtime.wasm's error tag (its one tag: an attribute 0, then the type)
-runtime_tag_type(): int := uleb_read(runtime_entries(section_ids.tag), 1)#1
+def runtime_tag_type(): int := uleb_read(runtime_entries(section_ids.tag), 1)#1
 # each of runtime.wasm's imports (host words, every one a function): its entry's bytes up to its type, and its type
 def runtime_import_entries(): list {
 	content = runtime_part(section_ids.import)

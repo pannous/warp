@@ -112,15 +112,15 @@ global primitive_constants = {}
 global native_build = no
 
 # a source whose first line, after a `#!` line, is the mark builds whole in primitive mode
-is_primitive_file(source: text): bool := mark_line(source.split("\n")) != ø
-mark_line(lines: list): int? := {
+def is_primitive_file(source: text): bool := mark_line(source.split("\n")) != ø
+def mark_line(lines: list): int? := {
 	first = if lines#1.starts_with("#!") and #lines > 1 then 2 else 1
 	if lines#first.trim() == PRIMITIVE_MARK then first else ø
 }
 
 # a primitive file's text with its mark's line left empty, so lines keep their numbers: the mark marks the file, never
 # its first statement; any other text as it is. A file the program uses comes so too (uses.warp file_parsed)
-without_primitive_mark(source: text): text := {
+def without_primitive_mark(source: text): text := {
 	lines = source.split("\n")
 	mark = mark_line(lines)
 	if mark == ø { return source }
@@ -129,7 +129,7 @@ without_primitive_mark(source: text): text := {
 }
 
 # the MVP wasm module of a primitive file, lowered with the primitive prelude instead of the GC one
-primitive_module(source: text, folder: text): list := {
+def primitive_module(source: text, folder: text): list := {
 	lines = without_primitive_mark(source).split("\n")
 	c_functions = c_imported(lines)
 	program = lowered_program(lines.join("\n"), folder, PRIMITIVE_PRELUDE)
@@ -160,7 +160,7 @@ primitive_module(source: text, folder: text): list := {
 }
 
 # `STDERR = 2`: [name → literal] of the statements assigning a name a number, those of names assigned once
-constants_of(statements: list): map := {
+def constants_of(statements: list): map := {
 	assigned = statements.filter(n => is_key(n, Op.Assign) and key_of(n) is symbol).map(n => name_of(key_of(n)))
 	found = {}
 	for n in statements {
@@ -168,36 +168,36 @@ constants_of(statements: list): map := {
 	}
 	found
 }
-defines_constant(n: Node): bool := is_key(n, Op.Assign) and key_of(n) is symbol and name_of(key_of(n)) in primitive_constants
+def defines_constant(n: Node): bool := is_key(n, Op.Assign) and key_of(n) is symbol and name_of(key_of(n)) in primitive_constants
 # the body with each constant read as its literal, but where a parameter of that name hides it
-with_constants(body: Node, parameters: list): Node := {
+def with_constants(body: Node, parameters: list): Node := {
 	for constant in primitive_constants.keys.filter(name => name not in parameters) { body = renamed(body, constant, primitive_constants[constant]) }
 	body
 }
 # `add·list·any(value·1: list, value·2: any) := {add(value·1, value·2)}`, the variant arity_overloads.warp makes of a
 # library word beside a definition of the file: primitive code reaches no library word, so it is left out (a call of
 # it is refused as any unknown call)
-forwards_to_library(name: text, body: Node): bool := {
+def forwards_to_library(name: text, body: Node): bool := {
 	word = written_name(name)
 	call = if is_group(body) and bracket_of(body) == "{" and #body == 1 then body#1 else body
 	word != name and is_group(call) and #call > 0 and call#1 == symbol(word)
 }
 # the name a definition is written with, `add` of its typed variant `add·i32·i32`
-written_name(name: text): text := name.split("·")#1
+def written_name(name: text): text := name.split("·")#1
 # a function's export: its written name, unless several of its variants are exported
-export_name(f: PrimitiveFunction): text := {
+def export_name(f: PrimitiveFunction): text := {
 	word = written_name(f.name)
 	if #primitive_functions.keys.filter(name => written_name(name) == word) == 1 then word else f.name
 }
 
 # `fd_write(fd: i32, pieces: pointer, count: i32, written: pointer): i32 from 'wasi_snapshot_preview1'`: [the head, its
 # result type node or ø, the library]; ø for any other statement
-foreign_import(n: Node): any := {
+def foreign_import(n: Node): any := {
 	if not (is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 == symbol("from") and n#3 is text) { return ø }
 	head = n#1
 	if is_key(head, Op.Colon) then [key_of(head), value_of(head), "" + n#3] else [head, ø, "" + n#3]
 }
-declare_import(foreign: list) := {
+def declare_import(foreign: list) := {
 	head = items_of(foreign#1)
 	parameters = head[1 ..< #head]
 	result = if foreign#2 == ø then NO_VALUE else primitive_type_name(foreign#2)
@@ -206,13 +206,13 @@ declare_import(foreign: list) := {
 	primitive_functions[name] = PrimitiveFunction(name, parameters.map(p => name_of(key_of(p))), parameters.map(p => primitive_parameter_type(p)), result, ø, #primitive_functions, foreign#3)
 }
 # a C function's import, refused but in a native build: warp's own host would answer it with its GC conventions, wrongly
-native_only(name: text, library: text, place: text) := {
+def native_only(name: text, library: text, place: text) := {
 	if not native_build { throw "primitive mode cannot emit " + name + " from '" + library + "' but in a native build: a primitive file's C calls run by `warp build native`" + place }
 }
 
 # `import strlen from "c"`: each line of lib/c.warp or lib/math.warp it names, read as a GC program reads it
 # (c_imports.warp c_functions_of), as [declaration, line number]; the statement's line left empty
-c_imported(lines: list): list := {
+def c_imported(lines: list): list := {
 	catalog = c_catalog(run_library(), [])
 	found = []
 	for i in 0..#lines {
@@ -229,14 +229,14 @@ c_imported(lines: list): list := {
 	found
 }
 # a catalog line's [name, library, parameter types, parameter names, result type] as an import of the module
-declare_c_function(d: list, line: int) := {
+def declare_c_function(d: list, line: int) := {
 	native_only(d#1, d#2, place_text([line, 1], module.program_file))
 	refused = (d#3 + [d#5]).filter(type => type not in c_primitive_types)
 	if #refused > 0 { throw "primitive mode cannot emit " + d#1 + "'s " + refused#1 + place_text([line, 1], module.program_file) }
 	primitive_functions[d#1] = PrimitiveFunction(d#1, d#4, d#3.map(type => c_primitive_types[type]), c_primitive_types[d#5], ø, #primitive_functions, d#2)
 }
 
-declare_primitive(head: list, body: Node) := {
+def declare_primitive(head: list, body: Node) := {
 	name = name_of(head#1)
 	declared_place(head#1, name)
 	parameters = head[1 ..< #head]
@@ -247,8 +247,8 @@ declare_primitive(head: list, body: Node) := {
 }
 # `struct Header { len: u32; tag: u8 }` (or `class`), which the passes leave as the opaque view ["type", name, body]:
 # its fields' [offset, type] laid out
-struct_declared(n: Node): bool := declares_type(n)
-declare_struct(n: Node) := {
+def struct_declared(n: Node): bool := declares_type(n)
+def declare_struct(n: Node) := {
 	view = value_of(n)
 	fields = {}
 	end = 0
@@ -265,22 +265,22 @@ declare_struct(n: Node) := {
 	primitive_structs[struct_name(view#2)] = StructLayout(fields, aligned(end, widest))
 }
 # the name of a declaration, under its attribute layers (`class` marks it bare_class)
-struct_name(name: any): text := if kind_of(name) == "attribute" then struct_name(name#4) else name#2
+def struct_name(name: any): text := if kind_of(name) == "attribute" then struct_name(name#4) else name#2
 # widths are powers of two
-aligned(offset: int, width: int): int := bit_and(offset + width - 1, -width)
+def aligned(offset: int, width: int): int := bit_and(offset + width - 1, -width)
 
-primitive_parameter_type(p: Node): text := {
+def primitive_parameter_type(p: Node): text := {
 	if not is_key(p, Op.Colon) { primitive_refusal(p, "a parameter without a primitive type: write `x: i32`") }
 	primitive_type_name(value_of(p))
 }
 # a scalar or a struct of the file
-primitive_type_name(n: Node): text := {
+def primitive_type_name(n: Node): text := {
 	if n is symbol and (name_of(n) in scalars or name_of(n) in primitive_structs) { return name_of(n) }
 	primitive_refusal(n, "the type " + form_of(n) + ", not a primitive type (" + scalars.keys.join(", ") + ") or a struct of the file")
 }
 # `f(x): T := e` comes lowered as `{the result: T = e; the result}`: T, "" for `nothing` (a foreign line's word for no
 # value); else ø, known once the body is read
-primitive_result(body: Node): any := {
+def primitive_result(body: Node): any := {
 	declaration = result_declaration(body)
 	if declaration == ø { return ø }
 	declared = value_of(key_of(declaration))
@@ -290,27 +290,27 @@ primitive_result(body: Node): any := {
 # (the passes leave `: nothing` as ø, and the result of a body ending in an `if` without `else` as ø?)
 nothing_words = ["nothing", "void", "ø?"]
 # `the result: T = e`, else ø
-result_declaration(body: Node): any := {
+def result_declaration(body: Node): any := {
 	first = if is_group(body) and #body > 0 then body#1 else ø
 	if first != ø and is_key(first, Op.Assign) and is_key(key_of(first), Op.Colon) and key_of(key_of(first)) == symbol("the result") then first else ø
 }
 # the body to emit: e of a function giving nothing, whose value is dropped, else the body
-giving_body(body: Node): Node := if primitive_result(body) == NO_VALUE then value_of(body#1) else body
+def giving_body(body: Node): Node := if primitive_result(body) == NO_VALUE then value_of(body#1) else body
 
-primitive_refusal(n: Node, why: text) := {
+def primitive_refusal(n: Node, why: text) := {
 	at = written_at(n)
 	place = if at then place_text(at, module.program_file) else primitive_place
 	throw "primitive mode cannot emit " + why + place
 }
 
 # a refusal while declaring a function names its place, else the function (a type the passes wrote has no place)
-declared_place(head: Node, name: text) := {
+def declared_place(head: Node, name: text) := {
 	at = written_at(head)
 	primitive_place = if at then place_text(at, module.program_file) else " in the function " + name
 }
 
 # the function's code, its result type once read
-emit_primitive(f: PrimitiveFunction) := {
+def emit_primitive(f: PrimitiveFunction) := {
 	if f.code != ø or f.library { return }
 	f.emitting = yes
 	for i in 0..#f.parameters { mvp_local_of(f, f.parameters#(i + 1), f.types#(i + 1)) }
@@ -320,14 +320,14 @@ emit_primitive(f: PrimitiveFunction) := {
 	f.emitting = no
 }
 # a function's result type, its body read first when not declared
-mvp_result_of(f: PrimitiveFunction, call: Node): text := {
+def mvp_result_of(f: PrimitiveFunction, call: Node): text := {
 	if f.result != ø { return f.result }
 	if f.emitting { primitive_refusal(call, "the call of " + f.name + " in its own body before its result type is known: declare `" + f.name + "(…): T`") }
 	emit_primitive(f)
 	f.result
 }
 
-mvp_local_of(f: PrimitiveFunction, name: text, type: text): int := {
+def mvp_local_of(f: PrimitiveFunction, name: text, type: text): int := {
 	if name not in f.locals {
 		f.locals[name] = [#f.locals, type]
 		f.local_types += [type]
@@ -336,12 +336,12 @@ mvp_local_of(f: PrimitiveFunction, name: text, type: text): int := {
 }
 
 # a struct is held as its address, a pointer
-mvp_scalar(type: text): Scalar := scalars.get(type) ?? scalars[POINTER_TYPE]
-mvp_wasm_of(type: text): text := mvp_scalar(type).wasm
-mvp_is_float(type: text): bool := mvp_wasm_of(type).starts_with("f")
+def mvp_scalar(type: text): Scalar := scalars.get(type) ?? scalars[POINTER_TYPE]
+def mvp_wasm_of(type: text): text := mvp_scalar(type).wasm
+def mvp_is_float(type: text): bool := mvp_wasm_of(type).starts_with("f")
 
 # n's code; `expected` the type an untyped literal takes, "" for none
-mvp_emitted(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
+def mvp_emitted(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
 	at = written_at(n)
 	if at { primitive_place = place_text(at, module.program_file) }
 	if n is int or n is float { return mvp_literal(n, expected) }
@@ -361,7 +361,7 @@ mvp_emitted(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
 	}
 }
 
-mvp_literal(n: Node, expected: text): PrimitiveCode := {
+def mvp_literal(n: Node, expected: text): PrimitiveCode := {
 	type = if expected and (n is int or mvp_is_float(expected)) then expected else if n is int then INT_TYPE else FLOAT_TYPE
 	wasm = mvp_wasm_of(type)
 	bytes = match wasm {
@@ -373,9 +373,9 @@ mvp_literal(n: Node, expected: text): PrimitiveCode := {
 	PrimitiveCode(type, [const_codes[if wasm == "f32" then "f64" else wasm]] + bytes)
 }
 # i32.const takes a signed 32-bit number: an unsigned one above 2^31 (0xfeedfacf) is its two's complement
-as_i32(n: int): int := if n >= 1 << 31 then n - (1 << 32) else n
+def as_i32(n: int): int := if n >= 1 << 31 then n - (1 << 32) else n
 
-mvp_variable(f: PrimitiveFunction, n: Node): PrimitiveCode := {
+def mvp_variable(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	name = name_of(n)
 	if name == "break" { return mvp_breaking(f, n) }
 	if name not in f.locals { primitive_refusal(n, "the unknown name " + name) }
@@ -383,7 +383,7 @@ mvp_variable(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 }
 
 # `fib 30`, `return x`
-mvp_spaced(f: PrimitiveFunction, n: Node): PrimitiveCode := {
+def mvp_spaced(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	head = name_of(n#1)
 	rest = items_of(n)[1 ..< #n]
 	if head == "return" {
@@ -394,7 +394,7 @@ mvp_spaced(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	primitive_refusal(n, form_of(n))
 }
 
-mvp_call(f: PrimitiveFunction, callee: Node, arguments: list, n: Node): PrimitiveCode := {
+def mvp_call(f: PrimitiveFunction, callee: Node, arguments: list, n: Node): PrimitiveCode := {
 	g = primitive_callee(name_of(callee))
 	if #arguments != #g.types { primitive_refusal(n, g.name + " with " + #arguments + " arguments, it takes " + #g.types) }
 	code = []
@@ -403,11 +403,11 @@ mvp_call(f: PrimitiveFunction, callee: Node, arguments: list, n: Node): Primitiv
 }
 
 # n's code as a `type`
-mvp_typed(f: PrimitiveFunction, n: Node, type: text): list := mvp_converted(mvp_emitted(f, n, type), type, n).code
+def mvp_typed(f: PrimitiveFunction, n: Node, type: text): list := mvp_converted(mvp_emitted(f, n, type), type, n).code
 
 # a value widened to `type` (an int into a wider int or float, f32 into f64), the same wasm type as it is; a narrowing
 # needs `as`
-mvp_converted(value: PrimitiveCode, type: text, n: Node): PrimitiveCode := {
+def mvp_converted(value: PrimitiveCode, type: text, n: Node): PrimitiveCode := {
 	if type == "" or value.type == type { return value }
 	if value.type == NO_VALUE { primitive_refusal(n, "a statement where " + type + " is wanted") }
 	if value.type in primitive_structs or type in primitive_structs {
@@ -417,8 +417,8 @@ mvp_converted(value: PrimitiveCode, type: text, n: Node): PrimitiveCode := {
 	if mvp_widens(value.type, type) or (mvp_wasm_of(value.type) == mvp_wasm_of(type) and mvp_scalar(value.type).width == mvp_scalar(type).width) { return mvp_cast(value, type) }
 	primitive_refusal(n, value.type + " where " + type + " is wanted: convert it, `x as " + type + "`")
 }
-mvp_widens(from: text, to: text): bool := mvp_scalar(from).width < mvp_scalar(to).width and (mvp_is_float(to) or not mvp_is_float(from))
-mvp_cast(value: PrimitiveCode, type: text): PrimitiveCode := {
+def mvp_widens(from: text, to: text): bool := mvp_scalar(from).width < mvp_scalar(to).width and (mvp_is_float(to) or not mvp_is_float(from))
+def mvp_cast(value: PrimitiveCode, type: text): PrimitiveCode := {
 	from = mvp_wasm_of(value.type)
 	to = mvp_wasm_of(type)
 	codes = conversion_codes.get(from + " " + to)
@@ -426,7 +426,7 @@ mvp_cast(value: PrimitiveCode, type: text): PrimitiveCode := {
 	PrimitiveCode(type, converted + narrowed(type, mvp_scalar(value.type).width))
 }
 # an i32 cut to a narrower type's bits: masked when unsigned, its sign spread back when signed
-narrowed(type: text, from_width: int): list := {
+def narrowed(type: text, from_width: int): list := {
 	scalar = mvp_scalar(type)
 	if scalar.wasm != "i32" or scalar.width >= 4 or scalar.width >= from_width { return [] }
 	bits = 8 * scalar.width
@@ -435,7 +435,7 @@ narrowed(type: text, from_width: int): list := {
 	shift + [arithmetic_codes.i32 + integer_arithmetic.shl] + shift + [arithmetic_codes.i32 + integer_arithmetic.shr]
 }
 
-mvp_block(f: PrimitiveFunction, statements: list, expected: text): PrimitiveCode := {
+def mvp_block(f: PrimitiveFunction, statements: list, expected: text): PrimitiveCode := {
 	code = []
 	last = PrimitiveCode(NO_VALUE, [])
 	for i in 0..#statements {
@@ -447,7 +447,7 @@ mvp_block(f: PrimitiveFunction, statements: list, expected: text): PrimitiveCode
 	PrimitiveCode(last.type, code)
 }
 
-mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, expected: text): PrimitiveCode := {
+def mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, expected: text): PrimitiveCode := {
 	if operator == Op.Assign { return mvp_assigned(f, left, right, n) }
 	if operator == Op.Colon and not (right is symbol and name_of(right) in scalars) { return mvp_emitted(f, right, expected) }
 	if operator == Op.Colon { return mvp_declared(f, left, right, n) }
@@ -467,7 +467,7 @@ mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, 
 	primitive_refusal(n, form_of(n))
 }
 
-mvp_operation_of(op: Op): text := match op {
+def mvp_operation_of(op: Op): text := match op {
 	Op.Add: "add"
 	Op.Sub: "sub"
 	Op.Mul: "mul"
@@ -489,7 +489,7 @@ mvp_operation_of(op: Op): text := match op {
 	Op.Ne: "ne"
 	_: ""
 }
-mvp_assigned_operation(op: Op): any := match op {
+def mvp_assigned_operation(op: Op): any := match op {
 	Op.AddAssign: Op.Add
 	Op.SubAssign: Op.Sub
 	Op.MulAssign: Op.Mul
@@ -502,7 +502,7 @@ mvp_assigned_operation(op: Op): any := match op {
 }
 
 # `x = e`: a new local of e's type, else e as the local's type
-mvp_assigned(f: PrimitiveFunction, target: Node, value: Node, n: Node): PrimitiveCode := {
+def mvp_assigned(f: PrimitiveFunction, target: Node, value: Node, n: Node): PrimitiveCode := {
 	if is_key(target, Op.Colon) { return mvp_declared(f, key_of(target), value_of(target), n, value) }
 	if is_key(target, Op.Dot) { return mvp_field_written(f, key_of(target), value_of(target), value) }
 	if not (target is symbol) { primitive_refusal(n, "an assignment to " + form_of(target)) }
@@ -514,7 +514,7 @@ mvp_assigned(f: PrimitiveFunction, target: Node, value: Node, n: Node): Primitiv
 }
 # `x: T = e`, `x: T` (0); a label of a statement, `loop·step: i++` or `data·field: N`, is the statement (mvp_keyed),
 # a literal of it taking the type its place wants
-mvp_declared(f: PrimitiveFunction, target: Node, type: Node, n: Node, value: Node = 0): PrimitiveCode := {
+def mvp_declared(f: PrimitiveFunction, target: Node, type: Node, n: Node, value: Node = 0): PrimitiveCode := {
 	if not (target is symbol) { primitive_refusal(n, "a declaration of " + form_of(target)) }
 	written = primitive_type_name(type)
 	index = mvp_local_of(f, name_of(target), written)
@@ -522,18 +522,18 @@ mvp_declared(f: PrimitiveFunction, target: Node, type: Node, n: Node, value: Nod
 }
 
 # both operands as the type of the typed one, the wider one of two when one widens to the other
-mvp_operand_type(f: PrimitiveFunction, left: Node, right: Node, expected: text): text := {
+def mvp_operand_type(f: PrimitiveFunction, left: Node, right: Node, expected: text): text := {
 	literal = (left is int or left is float)
 	if not literal and not (right is int or right is float) { return mvp_wider(mvp_emitted_type(f, left), mvp_emitted_type(f, right)) }
 	if not literal { return mvp_emitted_type(f, left) }
 	if not (right is int or right is float) { return mvp_emitted_type(f, right) }
 	if expected and expected != BOOL_TYPE then expected else if left is float or right is float then FLOAT_TYPE else INT_TYPE
 }
-mvp_wider(a: text, b: text): text := if mvp_widens(a, b) then b else a
+def mvp_wider(a: text, b: text): text := if mvp_widens(a, b) then b else a
 # the type of n's value, its code thrown away (a local it declares stays declared)
-mvp_emitted_type(f: PrimitiveFunction, n: Node): text := mvp_emitted(f, n, "").type
+def mvp_emitted_type(f: PrimitiveFunction, n: Node): text := mvp_emitted(f, n, "").type
 
-mvp_arithmetic(f: PrimitiveFunction, n: Node, operation: text, expected: text): PrimitiveCode := {
+def mvp_arithmetic(f: PrimitiveFunction, n: Node, operation: text, expected: text): PrimitiveCode := {
 	if operation in pointer_operations and POINTER_TYPE in [mvp_emitted_type(f, key_of(n)), mvp_emitted_type(f, value_of(n))] { return mvp_pointer_arithmetic(f, n, operation) }
 	type = mvp_operand_type(f, key_of(n), value_of(n), expected)
 	if type == BOOL_TYPE and operation in ["and", "or", "xor"] { type = BOOL_TYPE }
@@ -544,31 +544,31 @@ mvp_arithmetic(f: PrimitiveFunction, n: Node, operation: text, expected: text): 
 }
 # `p + i * 8`: a pointer moved by any integer, as C moves it, the integer cut to the pointer's width
 pointer_operations = ["add", "sub"]
-mvp_pointer_arithmetic(f: PrimitiveFunction, n: Node, operation: text): PrimitiveCode := {
+def mvp_pointer_arithmetic(f: PrimitiveFunction, n: Node, operation: text): PrimitiveCode := {
 	operands = [key_of(n), value_of(n)].map(side => mvp_emitted(f, side, POINTER_TYPE))
 	if operands.any(given => mvp_is_float(given.type)) { primitive_refusal(n, "a pointer moved by a float") }
 	code = operands.map(given => mvp_cast(given, POINTER_TYPE).code).flatten()
 	PrimitiveCode(POINTER_TYPE, code + [mvp_operation_code(arithmetic_codes, integer_arithmetic, operation, POINTER_TYPE)])
 }
-mvp_compared(f: PrimitiveFunction, left: Node, operation: text, right: Node): PrimitiveCode := {
+def mvp_compared(f: PrimitiveFunction, left: Node, operation: text, right: Node): PrimitiveCode := {
 	type = mvp_operand_type(f, left, right, "")
 	table = if mvp_is_float(type) then float_comparisons else integer_comparisons
 	code = mvp_typed(f, left, type) + mvp_typed(f, right, type)
 	PrimitiveCode(BOOL_TYPE, code + [mvp_operation_code(comparison_codes, table, operation, type)])
 }
-mvp_operation_code(first_codes: map, table: map, operation: text, type: text): int := {
+def mvp_operation_code(first_codes: map, table: map, operation: text, type: text): int := {
 	twin = if not mvp_is_float(type) and not mvp_scalar(type).signed and operation in unsigned_twins then 1 else 0
 	first_codes[mvp_wasm_of(type)] + table[operation] + twin
 }
 
 # a test's code, an i32 that is 0 for no: an int is yes when not 0
-mvp_condition(f: PrimitiveFunction, test: Node): list := {
+def mvp_condition(f: PrimitiveFunction, test: Node): list := {
 	value = mvp_emitted(f, test, BOOL_TYPE)
 	if value.type == NO_VALUE or mvp_is_float(value.type) { primitive_refusal(test, "a test of a " + (value.type or "statement")) }
 	if mvp_wasm_of(value.type) == "i32" { return value.code }
 	value.code + [eqz_codes.i64, op.i32_eqz]
 }
-mvp_logical(f: PrimitiveFunction, left: Node, operator: Op, right: Node): PrimitiveCode := {
+def mvp_logical(f: PrimitiveFunction, left: Node, operator: Op, right: Node): PrimitiveCode := {
 	a = mvp_condition(f, left)
 	f.depth += 1
 	b = mvp_condition(f, right)
@@ -579,7 +579,7 @@ mvp_logical(f: PrimitiveFunction, left: Node, operator: Op, right: Node): Primit
 }
 
 # `if c then a else b` lowered as Key(Key(Key(ø, If, c), Then, a), Else, b); without `else` it gives no value
-mvp_conditional(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
+def mvp_conditional(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
 	otherwise = if is_key(n, Op.Else) then value_of(n) else ø
 	then_part = if is_key(n, Op.Else) then key_of(n) else n
 	if not (is_key(then_part, Op.Then) and is_key(key_of(then_part), Op.If)) { primitive_refusal(n, form_of(n)) }
@@ -595,7 +595,7 @@ mvp_conditional(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode :=
 }
 
 # `while c do body`: block { loop { if not c break; body; continue } }
-mvp_looped(f: PrimitiveFunction, test: Node, body: Node): PrimitiveCode := {
+def mvp_looped(f: PrimitiveFunction, test: Node, body: Node): PrimitiveCode := {
 	f.depth += 1
 	f.exits += [f.depth]
 	f.depth += 1
@@ -606,13 +606,13 @@ mvp_looped(f: PrimitiveFunction, test: Node, body: Node): PrimitiveCode := {
 	f.exits = f.exits[0 ..< #f.exits - 1]
 	PrimitiveCode(NO_VALUE, [op.block, no_value, op.loop, no_value] + stop + steps.code + dropped + [op.br, 0, op.end, op.end])
 }
-mvp_breaking(f: PrimitiveFunction, n: Node): PrimitiveCode := {
+def mvp_breaking(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	if #f.exits == 0 { primitive_refusal(n, "a break outside a loop") }
 	PrimitiveCode(NO_VALUE, [op.br] + uleb(f.depth - f.exits#(#f.exits)))
 }
 
 # `x as i32`: any number type into any other
-mvp_cast_as(f: PrimitiveFunction, value: Node, type: Node): PrimitiveCode := {
+def mvp_cast_as(f: PrimitiveFunction, value: Node, type: Node): PrimitiveCode := {
 	given = mvp_emitted(f, value, "")
 	if given.type == NO_VALUE { primitive_refusal(value, "a statement converted") }
 	mvp_cast(given, primitive_type_name(type))
@@ -641,7 +641,7 @@ def primitive_body(f: PrimitiveFunction): list {
 
 ## structs
 # `Header(5, 2)`, `Header(len: 5, tag: 2)`: the fields stored at an address taken from the arena
-mvp_constructed(f: PrimitiveFunction, name: text, arguments: list, n: Node): PrimitiveCode := {
+def mvp_constructed(f: PrimitiveFunction, name: text, arguments: list, n: Node): PrimitiveCode := {
 	layout = primitive_structs[name]
 	names = layout.fields.keys
 	if #arguments != #names { primitive_refusal(n, name + " with " + #arguments + " values, it has " + #names + " fields") }
@@ -658,46 +658,46 @@ mvp_constructed(f: PrimitiveFunction, name: text, arguments: list, n: Node): Pri
 	PrimitiveCode(name, code + [op.local_get] + uleb(address))
 }
 # the struct `owner` is and the field's [offset, type]
-mvp_field(f: PrimitiveFunction, owner: Node, field: Node): list := {
+def mvp_field(f: PrimitiveFunction, owner: Node, field: Node): list := {
 	value = mvp_emitted(f, owner, "")
 	layout = primitive_structs.get(value.type)
 	if layout == ø { primitive_refusal(owner, "a field of a " + (value.type or "statement") + ", not a struct") }
 	if not (field is symbol and name_of(field) in layout.fields) { primitive_refusal(field, value.type + " has no field " + form_of(field)) }
 	[value.code, layout.fields[name_of(field)]]
 }
-mvp_field_read(f: PrimitiveFunction, owner: Node, field: Node): PrimitiveCode := {
+def mvp_field_read(f: PrimitiveFunction, owner: Node, field: Node): PrimitiveCode := {
 	found = mvp_field(f, owner, field)
 	type = found#2#2
 	scalar = mvp_scalar(type)
 	codes = load_codes[scalar.wasm + " " + scalar.width]
 	PrimitiveCode(type, found#1 + [if scalar.signed then codes#1 else codes#2] + memory_argument(found#2))
 }
-mvp_field_written(f: PrimitiveFunction, owner: Node, field: Node, value: Node): PrimitiveCode := {
+def mvp_field_written(f: PrimitiveFunction, owner: Node, field: Node, value: Node): PrimitiveCode := {
 	found = mvp_field(f, owner, field)
 	PrimitiveCode(NO_VALUE, found#1 + mvp_stored(f, found#2, value))
 }
 # with the address on the stack: the value stored into the field [offset, type]
-mvp_stored(f: PrimitiveFunction, field: list, value: Node): list := {
+def mvp_stored(f: PrimitiveFunction, field: list, value: Node): list := {
 	scalar = mvp_scalar(field#2)
 	mvp_typed(f, value, field#2) + [store_codes[scalar.wasm + " " + scalar.width]] + memory_argument(field)
 }
-memory_argument(field: list): list := uleb(alignment_exponents[mvp_scalar(field#2).width]) + uleb(field#1)
+def memory_argument(field: list): list := uleb(alignment_exponents[mvp_scalar(field#2).width]) + uleb(field#1)
 
 # with the byte count `size` computes: the arena's top as the address taken, the top moved on by the count rounded up
 # to ARENA_ALIGNMENT
-arena_taken(size: list): list := {
+def arena_taken(size: list): list := {
 	rounded = size + [op.i32_const] + sleb(ARENA_ALIGNMENT - 1) + [op.i32_add, op.i32_const] + sleb(-ARENA_ALIGNMENT) + [op.i32_and]
 	[global_get, ARENA_TOP, global_get, ARENA_TOP] + rounded + [op.i32_add, global_set, ARENA_TOP] + arena_grown()
 }
 # the memory grown by the pages it lacks when the arena's top passed its end (a failed grow traps at the next store)
-arena_grown(): list := {
+def arena_grown(): list := {
 	memory_end = [memory_size, 0, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shl]
 	missing = [global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(WASM_PAGE_BYTES - 1) + [op.i32_add, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
 	[global_get, ARENA_TOP] + memory_end + [comparison_codes.i32 + integer_comparisons.gt + 1, op.if, empty_block_type] + missing + [memory_grow, 0, op.drop, op.end]
 }
 
 # the address of a text literal's (address, length) pair in the data, its bytes in front of it; each text once
-text_address(t: text): int := {
+def text_address(t: text): int := {
 	if t not in text_addresses {
 		bytes = t.bytes
 		start = DATA_START + #primitive_data
@@ -707,14 +707,14 @@ text_address(t: text): int := {
 	}
 	text_addresses[t]
 }
-le_word(n: int): list := le64(n)[0 ..< 4]
+def le_word(n: int): list := le64(n)[0 ..< 4]
 
 ## primitive functions in a GC program
 # a function the program marks `@primitive`, called from GC code (decision primitive-annotation)
-is_primitive_function(f: Function): bool := written_name(f.name) in (marked_names.get(PRIMITIVE_ATTRIBUTE) ?? [])
+def is_primitive_function(f: Function): bool := written_name(f.name) in (marked_names.get(PRIMITIVE_ATTRIBUTE) ?? [])
 
 # a primitive function the code may call: one of the file, or in a GC program one marked, compiled at its first call
-primitive_callee(name: text): any := {
+def primitive_callee(name: text): any := {
 	hosted = if primitive_hosted then module.functions.get(name) else ø
 	if hosted != ø and hosted.kinds == ø and is_primitive_function(hosted) { compile_function(hosted, hosted.signature.parameters.map(p => ValueKind.Int)) }
 	primitive_functions.get(name)
@@ -723,7 +723,7 @@ primitive_callee(name: text): any := {
 # f as GC code calls it, converting at the boundary like a C call: its ints come as i64 and its floats as f64, each
 # wrapped to the primitive type, the result widened back; behind it the primitive function itself, `f·primitive`,
 # which other primitive code calls directly
-primitive_compiled(f: Function) := {
+def primitive_compiled(f: Function) := {
 	primitive_hosted = yes
 	primitive_place = " in the function " + f.name
 	parameters = f.signature.parameters
@@ -748,20 +748,20 @@ primitive_compiled(f: Function) := {
 	f.code = if f.gives_nothing then called + [ref_null, gc_type(gc.node)] else mvp_cast(PrimitiveCode(primitive.result, called), if primitive.result == BOOL_TYPE then BOOL_TYPE else result).code
 }
 # the kind a primitive type is held as inside the GC module; f32 has none there yet
-hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
+def hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 	"i32": ValueKind.I32
 	"i64": ValueKind.Int
 	"f64": ValueKind.Float
 	_: primitive_refusal(ø, "an f32 in a primitive function of a GC program (card f32-primitive-refused)")
 }
 # the GC value a primitive type crosses the boundary as: an int as i64, a float as f64
-boundary_type(type: text): text := if mvp_is_float(type) then BOUNDARY_FLOAT else BOUNDARY_INT
-boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Float else ValueKind.Int
+def boundary_type(type: text): text := if mvp_is_float(type) then BOUNDARY_FLOAT else BOUNDARY_INT
+def boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Float else ValueKind.Int
 
 ## the native build's C (core/commands/commands.warp build_native)
 # the main.c of a native build: wasm2c's header of the module, lib/native/wasi.c and lib/native/foreign.c, each C
 # function the module imports, the instantiation and run_main, which prints what main gives
-native_main(header: text, library: text): text := {
+def native_main(header: text, library: text): text := {
 	includes = ["<stdio.h>", "\"" + header + "\"", "\"" + library + "/native/wasi.c\"", "\"" + library + "/native/foreign.c\""]
 	foreign = c_functions_imported()
 	libraries = c_libraries(foreign)
@@ -776,29 +776,29 @@ native_main(header: text, library: text): text := {
 }
 # when the executable was built, by the C compiler's clock: `Oct 30 2026 12:07:33`, found as the C function warp_built
 built_function = "char* warp_built(void) { return __DATE__ \" \" __TIME__; }\n"
-c_functions_imported(): list := primitive_functions.keys.map(name => primitive_functions[name]).filter(f => f.library and f.library != WASI_LIBRARY)
+def c_functions_imported(): list := primitive_functions.keys.map(name => primitive_functions[name]).filter(f => f.library and f.library != WASI_LIBRARY)
 # the C libraries of the imports, which a native build links
-c_libraries(foreign: list): list := {
+def c_libraries(foreign: list): list := {
 	found = []
 	for f in foreign { if f.library not in found { found += [f.library] } }
 	found
 }
 # the C name wasm2c gives a module, its underscores doubled: w2c_wasi__snapshot__preview1; an import of it is that, "_"
 # and the function's name: w2c_c_getenv
-wasm2c_name(module_name: text): text := "w2c_" + module_name.replace("_", "__")
+def wasm2c_name(module_name: text): text := "w2c_" + module_name.replace("_", "__")
 # an import's name as wasm2c writes it: a leading underscore escaped (_NSGetExecutablePath → 0x5FNSGetExecutablePath)
-wasm2c_function_name(name: text): text := if name.starts_with("_") then "0x5F" + name.remove_prefix("_") else name
+def wasm2c_function_name(name: text): text := if name.starts_with("_") then "0x5F" + name.remove_prefix("_") else name
 # what run_main prints of each kind of value main gives
 printed_main = {"": "w2c_program_main(program);", signed: "printf(\"%lld\\n\", (long long)w2c_program_main(program));",
 	unsigned: "printf(\"%llu\\n\", (unsigned long long)w2c_program_main(program));", float: "printf(\"%g\\n\", (double)w2c_program_main(program));"}
-main_value_kind(): text := {
+def main_value_kind(): text := {
 	type = primitive_functions["main"].result
 	if type == NO_VALUE { return "" }
 	if mvp_is_float(type) then "float" else if mvp_scalar(type).signed then "signed" else "unsigned"
 }
 # the import wasm2c calls, which calls the C function of the process by that name (foreign.c native_function) with
 # each value as C takes it: a text a NUL-terminated copy, freed after, a pointer an address in the module's memory
-c_function_glue(f: PrimitiveFunction): text := {
+def c_function_glue(f: PrimitiveFunction): text := {
 	numbers = range_list(#f.types).map(i => i + 1)
 	parameters = ["struct " + wasm2c_name(f.library) + "* library"] + numbers.map(i => wasm2c_types[mvp_wasm_of(f.types#i)] + " value" + i)
 	texts = numbers.filter(i => f.types#i == TEXT_TYPE)
@@ -815,7 +815,7 @@ c_function_glue(f: PrimitiveFunction): text := {
 }
 wasm2c_types = {i32: "u32", i64: "u64", f32: "f32", f64: "f64"}
 # the C type a primitive type is passed to C as
-c_type_of_primitive(type: text): text := {
+def c_type_of_primitive(type: text): text := {
 	if type == TEXT_TYPE { return "char*" }
 	if type == POINTER_TYPE or type == HANDLE_TYPE { return "void*" }
 	if type == BOOL_TYPE { return "_Bool" }
@@ -823,14 +823,14 @@ c_type_of_primitive(type: text): text := {
 	if mvp_is_float(type) then (if scalar.width == 4 then "float" else "double") else (if scalar.signed then "int" else "uint") + scalar.width * 8 + "_t"
 }
 # a value of the module as C takes it
-c_argument(type: text, value: text, copy: text): text := {
+def c_argument(type: text, value: text, copy: text): text := {
 	if type == TEXT_TYPE { return copy }
 	if type == POINTER_TYPE { return "native_address(&library->wasi, " + value + ")" }
 	if type == HANDLE_TYPE { return "(void*)(uintptr_t)" + value }
 	"(" + c_type_of_primitive(type) + ")" + value
 }
 # a C value as the module holds it: a text copied into its arena, a pointer into its memory its address there
-module_value(type: text, value: text): text := {
+def module_value(type: text, value: text): text := {
 	if type == TEXT_TYPE { return "module_text(&library->wasi, " + value + ")" }
 	if type == POINTER_TYPE { return "module_address(&library->wasi, " + value + ")" }
 	if type == HANDLE_TYPE { return "(u64)(uintptr_t)" + value }

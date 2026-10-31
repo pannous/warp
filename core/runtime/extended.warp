@@ -21,25 +21,25 @@ use "extended/wasi.warp"
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "instructions.warp"
-extended_text(n: Node): text := {
+def extended_text(n: Node): text := {
 	made_case(Made.Time, time_text(n))
 	made_case(Made.Ratio, exact_text(n))
 	made_case(Made.BigInt, exact_text(n))
 	fail()
 }
-extended_order(a: Node, b: Node): int := exact_order(a, b)
-extended_sum(a: Node, b: Node): Node := exact_add(a, b)
-extended_difference(a: Node, b: Node): Node := exact_sub(a, b)
-extended_product(a: Node, b: Node): Node := exact_mul(a, b)
-extended_float(n: Node): float := {
+def extended_order(a: Node, b: Node): int := exact_order(a, b)
+def extended_sum(a: Node, b: Node): Node := exact_add(a, b)
+def extended_difference(a: Node, b: Node): Node := exact_sub(a, b)
+def extended_product(a: Node, b: Node): Node := exact_mul(a, b)
+def extended_float(n: Node): float := {
 	made_case(Made.BigInt, big_exact_float(n))
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
-extended_truncated(n: Node): int := {
+def extended_truncated(n: Node): int := {
 	made_case(Made.BigInt, big_exact_truncated(n))
 	int_quotient(exact_numerator(n), exact_denominator(n))
 }
-extended_wrapped(n: Node): int := int_of_magnitude(n, big_int_negative(n))
-extended_ratio(n: int, d: int): Node := exact_ratio(n, d)
-extended_zeros(count: int): text := zeros(count)
-extended_warned(message: text): Node := warned(message)
+def extended_wrapped(n: Node): int := int_of_magnitude(n, big_int_negative(n))
+def extended_ratio(n: int, d: int): Node := exact_ratio(n, d)
+def extended_zeros(count: int): text := zeros(count)
+def extended_warned(message: text): Node := warned(message)

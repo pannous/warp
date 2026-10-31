@@ -7,9 +7,9 @@
 // lowering/routes.rs checks a parameter's regular expression (":id(\\d+)"), which matches any part here.
 // lowering/routes.rs makes each `route "…" {…}` of a page a function and picks the first one matching page_path().
 
-route_segments(path: any) := [segment for segment in split(path, "/") if segment]
+def route_segments(path: any) := [segment for segment in split(path, "/") if segment]
 
-route_matches(pattern: any, path: any) := {
+def route_matches(pattern: any, path: any) := {
 	if pattern == "*" { return true }
 	let wanted = route_segments(pattern)
 	let given = route_segments(path)
@@ -31,7 +31,7 @@ route_matches(pattern: any, path: any) := {
 }
 
 // the part of the path the parameter `:name` of the pattern stands for, as text; ø when the pattern has none
-route_segment(pattern: any, path: any, name: any) := {
+def route_segment(pattern: any, path: any, name: any) := {
 	let wanted = route_segments(pattern)
 	let given = route_segments(path)
 	var index = 0
@@ -46,14 +46,14 @@ route_segment(pattern: any, path: any, name: any) := {
 
 // the parameter `:name` without a declared type: a number when it is digits ("/users/7" gives id 7), else its text
 // (lowering/routes.rs converts a typed one itself)
-route_parameter(pattern: any, path: any, name: any) := {
+def route_parameter(pattern: any, path: any, name: any) := {
 	let segment = route_segment(pattern, path, name)
 	if segment != ø and route_number(segment, 0) { return int(segment) }
 	segment
 }
 
 // the name of the parameter a pattern part declares (":id:int", ":id(\\d+)", ":id?" → "id"), "" for a fixed part
-route_part_name(part: any) := {
+def route_part_name(part: any) := {
 	if not starts_with(part, ":") { return "" }
 	var name = ""
 	for letter in part[1:] {
@@ -64,7 +64,7 @@ route_part_name(part: any) := {
 }
 
 // the type a parameter declares (":id:int" → "int"), "" when it declares none (nor with a URLPattern mark or group)
-route_part_type(part: any) := {
+def route_part_type(part: any) := {
 	let declared = split(part, ":")
 	if count(declared) > 2 and route_part_mark(part) is empty and not contains(part, "(") { return declared#3 }
 	""
@@ -72,14 +72,14 @@ route_part_type(part: any) := {
 
 // how often the last part of a pattern may come (URLPattern): "?" at most once, "*" any number, "+" at least once,
 // "" exactly once
-route_part_mark(part: any) := {
+def route_part_mark(part: any) := {
 	if part == "*" { return "*" }
 	if starts_with(part, ":") and contains("?*+", last(part)) { return "" + last(part) }
 	""
 }
 
 // whether a path part is all digits, with at most `dots` decimal points among them
-route_number(segment: any, dots: any) := {
+def route_number(segment: any, dots: any) := {
 	if segment is empty { return false }
 	var seen = 0
 	for letter in segment {
@@ -89,7 +89,7 @@ route_number(segment: any, dots: any) := {
 }
 
 // whether a path part fits the declared type of its parameter
-route_fits(kind: any, segment: any) := {
+def route_fits(kind: any, segment: any) := {
 	if kind == "int" { return route_number(segment, 0) }
 	if kind == "float" { return route_number(segment, 1) }
 	true
@@ -101,15 +101,15 @@ route_fits(kind: any, segment: any) := {
 global answer_status = 200
 global answer_content_type = ""
 global answer_header_lines = ""
-status(code: int) := answer_header("Status", code)
-header(name: text, value: any) := answer_header(name, value)
-answer_header(name: any, value: any) := {
+def status(code: int) := answer_header("Status", code)
+def header(name: text, value: any) := answer_header(name, value)
+def answer_header(name: any, value: any) := {
 	let field = lower(str(name))
 	if field == "status" { answer_status = value }
 	else if field == "content-type" { answer_content_type = str(value) }
 	else { answer_header_lines = answer_header_lines + "\n" + str(name) + ": " + str(value) }
 }
-answer_reset() := {
+def answer_reset() := {
 	answer_status = 200
 	answer_content_type = ""
 	answer_header_lines = ""
@@ -120,11 +120,11 @@ answer_reset() := {
 // exactly the request's path answers it, else the first whose pattern matches (as the host's route_at picks)
 global route_table = []
 // `+=`, not route_table.add: a program's own function add (`server def add(a, b)`) would take that call
-route_add(method: text, path: any, answer: function) := {
+def route_add(method: text, path: any, answer: function) := {
 	route_table += [{method: method, path: path, answer: answer}]
 	ø
 }
-route_answer(request: any) := {
+def route_answer(request: any) := {
 	for route in route_table {
 		if route.method == request.method and route.path == request.path { return route.answer(request) }
 	}

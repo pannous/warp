@@ -1,18 +1,18 @@
 # The words that are one wasm instruction each
 # the words that are one wasm instruction each (decision wasm-instruction-body)
-int_quotient(a: int, b: int): int := wasm i64.div_s
-int_remainder(a: int, b: int): int := wasm i64.rem_s
-bits_of_float(x: float): int := wasm i64.reinterpret_f64
-float_of_bits(bits: int): float := wasm f64.reinterpret_i64
-float_floor(x: float): float := wasm f64.floor
-float_ceil(x: float): float := wasm f64.ceil
-float_nearest(x: float): float := wasm f64.nearest
-truncated(x: float): int := wasm i64.trunc_f64_s
-float_abs(x: float): float := wasm f64.abs
+def int_quotient(a: int, b: int): int := wasm i64.div_s
+def int_remainder(a: int, b: int): int := wasm i64.rem_s
+def bits_of_float(x: float): int := wasm i64.reinterpret_f64
+def float_of_bits(bits: int): float := wasm f64.reinterpret_i64
+def float_floor(x: float): float := wasm f64.floor
+def float_ceil(x: float): float := wasm f64.ceil
+def float_nearest(x: float): float := wasm f64.nearest
+def truncated(x: float): int := wasm i64.trunc_f64_s
+def float_abs(x: float): float := wasm f64.abs
 # an int's bits: and, or, shifted left, shifted right with zeros (unsigned) or with copies of the sign bit
-bits_and(a: int, b: int): int := wasm i64.and
-bits_or(a: int, b: int): int := wasm i64.or
-bits_xor(a: int, b: int): int := wasm i64.xor
-shifted_left(a: int, by: int): int := wasm i64.shl
-shifted_right(a: int, by: int): int := wasm i64.shr_u
-shifted_right_signed(a: int, by: int): int := wasm i64.shr_s
+def bits_and(a: int, b: int): int := wasm i64.and
+def bits_or(a: int, b: int): int := wasm i64.or
+def bits_xor(a: int, b: int): int := wasm i64.xor
+def shifted_left(a: int, by: int): int := wasm i64.shl
+def shifted_right(a: int, by: int): int := wasm i64.shr_u
+def shifted_right_signed(a: int, by: int): int := wasm i64.shr_s

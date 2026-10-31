@@ -19,7 +19,7 @@ time_words = {time_of: 2, instant_at: 1}
 time_intrinsics = {time_form: 1, time_position: 1, duration_months: 1, duration_days: 1, zone_index: 1, zone_offset: 1}
 # the host words runtime words over times call, imported when the program makes a time (Rust: imports.rs makes_instant)
 time_host_words = ["local_offset"]
-makes_time(program: Node): bool := mentions(program, "instant_at") or mentions(program, "time_of")
+def makes_time(program: Node): bool := mentions(program, "instant_at") or mentions(program, "time_of")
 
 # time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
 def time_call(body: Body, name: text, arguments: list): TypedCode {

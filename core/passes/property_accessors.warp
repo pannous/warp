@@ -28,7 +28,7 @@ class Property { object: text; member: text; parameter: text; body: Node }
 # "object.property" → its getter's body, its setter's body and parameter, the module it needs
 class PropertyTable { getters: map; setters: map; parameters: map; owners: map }
 
-property_definition(n: Node): Property? := {
+def property_definition(n: Node): Property? := {
 	if not is_key(n, Op.Define) { return ø }
 	head = key_of(n)
 	if not is_key(head, Op.Dot) or not (key_of(head) is symbol) { return ø }
@@ -43,7 +43,7 @@ property_definition(n: Node): Property? := {
 }
 
 # `canvas.width := …` or `canvas.width(w) := …` starting a line of a module's text
-defines_property(line: text): bool := {
+def defines_property(line: text): bool := {
 	object = leading_name(line)
 	if object == "" or not line[#object ..].starts_with(".") { return no }
 	leading_name(line[#object + 1 ..]) != "" and line.contains(":=")
@@ -66,11 +66,11 @@ def properties_collected(definitions: list, module: text, table: PropertyTable) 
 		owners[name] = module
 	}
 }
-property_definitions(statements: list): list := statements.map(property_definition).filter(found => found != ø)
+def property_definitions(statements: list): list := statements.map(property_definition).filter(found => found != ø)
 # the object of "object.property"
-property_object(name: text): text := name.split(".")#1
+def property_object(name: text): text := name.split(".")#1
 # the properties by object, `{Key: ["escape"]}` of `Key.escape := …`: the values an object, a type, has by name
-property_values(properties: PropertyTable): map := {
+def property_values(properties: PropertyTable): map := {
 	values = {}
 	for name in properties.getters.keys {
 		object = property_object(name)
@@ -78,7 +78,7 @@ property_values(properties: PropertyTable): map := {
 	}
 	values
 }
-property_table(): PropertyTable := PropertyTable{getters: {}, setters: {}, parameters: {}, owners: {}}
+def property_table(): PropertyTable := PropertyTable{getters: {}, setters: {}, parameters: {}, owners: {}}
 
 # the standard properties of each module's text, its property lines parsed on their own, into the table
 def standard_properties(table: PropertyTable) {
@@ -92,24 +92,24 @@ def standard_properties(table: PropertyTable) {
 }
 
 # "object.property" of `object.member`, "" when it names no property or the program binds the object as a value
-property_named(object: Node, member: Node, properties: PropertyTable, scope: map): text := {
+def property_named(object: Node, member: Node, properties: PropertyTable, scope: map): text := {
 	if not (object is symbol) or not (member is symbol) or binds_value(scope, name_of(object)) { return "" }
 	name = name_of(object) + "." + name_of(member)
 	if properties.getters.has(name) or properties.setters.has(name) then name else ""
 }
-dotted_property(n: Node, properties: PropertyTable, scope: map): text := if is_key(n, Op.Dot) then property_named(key_of(n), value_of(n), properties, scope) else ""
+def dotted_property(n: Node, properties: PropertyTable, scope: map): text := if is_key(n, Op.Dot) then property_named(key_of(n), value_of(n), properties, scope) else ""
 
 # the body with each `parameter` the value written
-setter_with_value(body: Node, parameter: text, value: Node): Node := bottom_up(body, n => if n == symbol(parameter) then value else n)
+def setter_with_value(body: Node, parameter: text, value: Node): Node := bottom_up(body, n => if n == symbol(parameter) then value else n)
 
 # the base operator of `+=` and its kin, ø for another
-compound_base(op: Op): Op? := {
+def compound_base(op: Op): Op? := {
 	written = op as text
 	if compound_bases.has(written) then compound_bases[written] else ø
 }
 
 # the program with each read of a property its getter and each write its setter
-property_accessed(n: Node, properties: PropertyTable, scope: map): Node := {
+def property_accessed(n: Node, properties: PropertyTable, scope: map): Node := {
 	getter_name = dotted_property(n, properties, scope)
 	if getter_name != "" and properties.getters.has(getter_name) { return properties.getters[getter_name] }
 	match n {
@@ -119,7 +119,7 @@ property_accessed(n: Node, properties: PropertyTable, scope: map): Node := {
 }
 # `left op right`: a property written (`=`, `+=`, the setter called `canvas.width(300)`), else its sides walked; a
 # field's name is no read (`{width: 5}`, `p.width`)
-key_accessed(left: Node, op: Op, right: Node, properties: PropertyTable, scope: map): Node := {
+def key_accessed(left: Node, op: Op, right: Node, properties: PropertyTable, scope: map): Node := {
 	target = dotted_property(left, properties, scope)
 	value = property_accessed(right, properties, scope)
 	if target != "" and op == Op.Assign { return property_written(target, value, properties) }
@@ -136,7 +136,7 @@ key_accessed(left: Node, op: Op, right: Node, properties: PropertyTable, scope: 
 }
 
 # the setter's body, its parameter the value; a property without a setter is a loud error where it is written
-property_written(name: text, value: Node, properties: PropertyTable): Node := {
+def property_written(name: text, value: Node, properties: PropertyTable): Node := {
 	# (parsed, not a Text(…) node built here: the self-hosted compiler compiling itself has no node constructors)
 	if not properties.setters.has(name) { return plain_node(parsed("raise \"" + name + " is read-only, it has no setter\"")) }
 	setter_with_value(properties.setters[name], properties.parameters[name], value)
@@ -144,14 +144,14 @@ property_written(name: text, value: Node, properties: PropertyTable): Node := {
 
 # the program with each write of an object's member, `canvas.width = 300`, `p.x += 1`, its value alone: such a write
 # binds no object, so it leaves `canvas` a property's (scope.warp reads `canvas.width = …` as binding canvas)
-without_dotted_writes(program: Node): Node := bottom_up(program, n => match n {
+def without_dotted_writes(program: Node): Node := bottom_up(program, n => match n {
 	Key(target, op, value): if is_dotted_write(target, op) then value else n
 	_: n
 })
-is_dotted_write(target: Node, op: Op): bool := is_key(target, Op.Dot) and key_of(target) is symbol and (op == Op.Assign or compound_base(op) != ø)
+def is_dotted_write(target: Node, op: Op): bool := is_key(target, Op.Dot) and key_of(target) is symbol and (op == Op.Assign or compound_base(op) != ø)
 
 # the program's properties in use, its own definitions gone; `use draw` in front when a canvas property needs it
-property_accessors(program: Node): Node := {
+def property_accessors(program: Node): Node := {
 	statements = statements_in(program)
 	own = property_definitions(statements)
 	mentioned = symbol_words(program)

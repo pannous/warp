@@ -47,7 +47,7 @@ fgetc(file: handle): i32 from 'c'
 fclose(file: handle): i32 from 'c'
 
 // the system's name, Darwin or Linux
-system_name() := {
+def system_name() := {
 	buffer = calloc(1, SYSTEM_NAME_BYTES)
 	uname(buffer)
 	name = strndup(buffer, SYSTEM_NAME_BYTES)
@@ -56,14 +56,14 @@ system_name() := {
 }
 
 // a struct sockaddr_in of any address at the port: the BSDs start it with its length, Linux with a 16-bit family
-internet_address(system: text, port: int) := {
+def internet_address(system: text, port: int) := {
 	start = if system == "Linux" then [INTERNET, 0] else [16, INTERNET]
 	start + [port div 256, port % 256] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 
 // the port a socket is bound to (one the system chose for port 0), read back from its address: a C stream over the
 // bytes reads them NULs and all
-bound_port(fd: int) := {
+def bound_port(fd: int) := {
 	address = calloc(1, SOCKET_ADDRESS_BYTES)
 	getsockname(fd, address, [SOCKET_ADDRESS_BYTES, 0, 0, 0])
 	bytes = fmemopen(address, SOCKET_ADDRESS_BYTES, "r")
@@ -76,7 +76,7 @@ bound_port(fd: int) := {
 }
 
 // a listening socket at the port, else an error naming it
-listening(port: int) := {
+def listening(port: int) := {
 	system = system_name()
 	fd = socket(INTERNET, STREAM, 0)
 	if fd < 0 { throw "web: no socket" }
@@ -87,7 +87,7 @@ listening(port: int) := {
 }
 
 // what the client sent, its body read to the length its Content-Length says
-received(client: int) := {
+def received(client: int) := {
 	buffer = calloc(1, READ_BYTES + 1)
 	request = ""
 	while not request_complete(request) {
@@ -98,18 +98,18 @@ received(client: int) := {
 	free(buffer)
 	request
 }
-request_complete(request: text) := {
+def request_complete(request: text) := {
 	if not request.contains(HEAD_END) { return false }
 	parts = head_and_body(request)
 	byte_size(parts#2) >= content_length(parts#1)
 }
 // a request's head (its request line and header lines) and its body, apart at the first blank line
-head_and_body(raw: text) := {
+def head_and_body(raw: text) := {
 	sections = split(raw, HEAD_END)
 	[sections#1, sections[1 ..].join(HEAD_END)]
 }
 // the Content-Length of the head's header lines, 0 without one
-content_length(head: text) := {
+def content_length(head: text) := {
 	for line in split(head, LINE_END) {
 		if lower(line).starts_with("content-length:") { return int(trim(line[16 ..])) }
 	}
@@ -117,7 +117,7 @@ content_length(head: text) := {
 }
 
 // the request as lib/router.warp's routes read it: method, path, query fields and body
-request_of(raw: text) := {
+def request_of(raw: text) := {
 	parts = head_and_body(raw)
 	words = split(split(parts#1, LINE_END)#1, " ")
 	target = if count(words) > 1 then words#2 else "/"
@@ -127,23 +127,23 @@ request_of(raw: text) := {
 }
 
 // the HTTP answer of a route's value, with the status and headers it set; the next request starts without them
-http_answer(value: any) := {
+def http_answer(value: any) := {
 	reason = if answer_status in STATUS_REASONS then STATUS_REASONS[answer_status] else ""
 	body = wagi_body(value)
 	answer = "HTTP/1.1 " + str(answer_status) + " " + reason + LINE_END + wagi_headers(value).replace("\n", LINE_END) + LINE_END + "Content-Length: " + byte_size(body) + LINE_END + "Connection: close" + HEAD_END + body
 	answer_reset()
 	answer
 }
-http_failure(message: text) := {
+def http_failure(message: text) := {
 	answer_status = if message.starts_with("no route answers") then 404 else 500
 	http_answer(message)
 }
 
 // the HTTP answer of the program's routes to a request as the client sent it
-http_served(raw: text) := try http_answer(route_answer(request_of(raw))) catch e { http_failure(str(e)) }
+def http_served(raw: text) := try http_answer(route_answer(request_of(raw))) catch e { http_failure(str(e)) }
 
 // the program's routes served at the port until the process is stopped
-serve(port: int) := {
+def serve(port: int) := {
 	fd = listening(port)
 	print "serving http://localhost:" + bound_port(fd) + " (`warp run` runs the program once without serving)"
 	while true {
@@ -157,7 +157,7 @@ serve(port: int) := {
 
 // the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
 // else that value, the program's result; read by env, so a program not serving calls no C (none in a browser)
-routes_end(value: any = ø) := {
+def routes_end(value: any = ø) := {
 	if env("WARP_SERVE") == ø { return value }
 	port = env("WARP_PORT")
 	serve(if port == ø then DEFAULT_PORT else int(port))

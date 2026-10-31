@@ -7,14 +7,14 @@ use "show.warp"
 use "text.warp"
 use "gpu_lists.warp"
 # a value as a boxed $Node
-held(value: Node): Node := value
+def held(value: Node): Node := value
 # an int as its Int node (the emitter boxes every int so, emitter.warp boxed): one node per small number, made at its
 # first use, as a node never changes; a list of bytes or counts made a node and a box per item (16 MB to read the 232 KB
 # runtime.wasm, card hello-compile-allocations)
-small_int_low(): int := -128
-small_int_high(): int := 1023
+def small_int_low(): int := -128
+def small_int_high(): int := 1023
 global small_int_nodes = []
-int_node(n: int): Node := {
+def int_node(n: int): Node := {
 	if n < small_int_low() or n > small_int_high() { return fresh_int_node(n) }
 	if not small_int_nodes { small_int_nodes = new_list(small_int_high() - small_int_low() + 1) }
 	at = n - small_int_low() + 1
@@ -26,7 +26,7 @@ int_node(n: int): Node := {
 # of a rebuild (card key-op-case)
 global runtime_spelling_lists = []
 # each table named by its accessor below, operator_spellings() the first
-spellings_of(table: int): list := {
+def spellings_of(table: int): list := {
 	if not runtime_spelling_lists {
 		runtime_spelling_lists = [
 			# a key's operator is its code above the kind bits, the position of its spelling here (rust-harness:src/operators/codes.rs OP_CODES)
@@ -44,14 +44,14 @@ spellings_of(table: int): list := {
 	}
 	runtime_spelling_lists#table
 }
-operator_spellings(): list := spellings_of(1)
-operator_code(spelled: text): int := {
+def operator_spellings(): list := spellings_of(1)
+def operator_code(spelled: text): int := {
 	spellings = operator_spellings()
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
 	0
 }
 # `key(1, "@@", 2)`: an operator no spelling names fails, as Rust's key builder does
-key_node(left: Node, operator: Node, right: Node): Node := {
+def key_node(left: Node, operator: Node, right: Node): Node := {
 	spelled = node_text(operator)
 	code = operator_code(spelled)
 	if code == 0 and spelled != "" { raised("unknown operator: " + spelled) }
@@ -59,30 +59,30 @@ key_node(left: Node, operator: Node, right: Node): Node := {
 }
 # `as_code(data e)`: e marked as code, of the type code (Rust's emit_as_code); the kind field without the code mark:
 # `parse("a+1") == data (a+1)`
-code_bit(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Code), 2)
-code_free_kind(n: Node): int := marked_kind(n) - code_bit(n) * KindUnit.Code
-code_node(n: Node): Node := {
+def code_bit(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Code), 2)
+def code_free_kind(n: Node): int := marked_kind(n) - code_bit(n) * KindUnit.Code
+def code_node(n: Node): Node := {
 	if is_null(n) or code_bit(n) == 1 { return n }
 	with_kind(n, marked_kind(n) + KindUnit.Code)
 }
-key_left(n: Node): Node := entry_key(n)
-key_right(n: Node): Node := key_value(n)
+def key_left(n: Node): Node := entry_key(n)
+def key_right(n: Node): Node := key_value(n)
 # the byte above the Kind: a key's operator, a list's bracket, a time's form and more
-info_byte(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Info), KindUnit.Info)
-key_operator(n: Node): text := node_text(operator_spellings()#(info_byte(n) + 1))
-symbol_node(name: Node): Node := symbol_of(node_text(name))
+def info_byte(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Info), KindUnit.Info)
+def key_operator(n: Node): text := node_text(operator_spellings()#(info_byte(n) + 1))
+def symbol_node(name: Node): Node := symbol_of(node_text(name))
 # a list's bracket and separator in its kind field: the bracket's info in the byte above the kind, the separator's
 # code at bit 48 (rust-harness:src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
-bracket_spellings(): list := spellings_of(2)
-separator_spellings(): list := spellings_of(3)
-bracket_info(n: Node): int := info_byte(n)
-separator_info(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Separator), 8)
-bracket_openings(): list := spellings_of(4)
-bracket_closings(): list := spellings_of(5)
-separator_joiners(): list := spellings_of(6)
+def bracket_spellings(): list := spellings_of(2)
+def separator_spellings(): list := spellings_of(3)
+def bracket_info(n: Node): int := info_byte(n)
+def separator_info(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Separator), 8)
+def bracket_openings(): list := spellings_of(4)
+def bracket_closings(): list := spellings_of(5)
+def separator_joiners(): list := spellings_of(6)
 # `(1; 2)`, `'x', 2`: a list between its brackets, its items joined as its separator joins them; a list or map of no
 # written separator by commas, `[1, 2]`, `{a: 1, b: 'x'}`, as `warp format` writes them (decision shown-spaced)
-list_shown(n: Node): text := {
+def list_shown(n: Node): text := {
 	at = bracket_info(n) + 1
 	listed = separator_info(n) == 0 and (bracket_info(n) == BracketCode.Curly or bracket_info(n) == BracketCode.Square)
 	joiner = if listed then ", " else node_text(separator_joiners()#(separator_info(n) + 1))
@@ -90,29 +90,29 @@ list_shown(n: Node): text := {
 	node_text(bracket_openings()#at) + joined_items(items, joiner) + node_text(bracket_closings()#at)
 }
 # `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too
-list_bracket(n: Node): Node := {
+def list_bracket(n: Node): Node := {
 	if is_null(n) or kind_code(n) != Kind.List or bracket_info(n) == BracketCode.Other { return ø }
 	node_text(bracket_spellings()#(bracket_info(n) + 1))
 }
-list_separator(n: Node): Node := {
+def list_separator(n: Node): Node := {
 	if is_null(n) or kind_code(n) != Kind.List { return ø }
 	node_text(separator_spellings()#(separator_info(n) + 1))
 }
 # the position of a spelling in spellings, from 0
-spelling_code(spellings: list, spelled: text): int := {
+def spelling_code(spellings: list, spelled: text): int := {
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
 	fail()
 	0
 }
 # `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; no items is ø, as `()`
 # and `{}` parse, but `[]` in square brackets, the empty list (Rust's new_bracketed)
-bracketed_node(items: Node, bracket: Node): Node := {
+def bracketed_node(items: Node, bracket: Node): Node := {
 	if is_nothing(items) { return if text_order(node_text(bracket), "[") == 0 then list_node(Marked.SquareList, []) else ø }
 	if kind_code(items) != Kind.List { not_a_list() }
 	code = spelling_code(bracket_spellings(), node_text(bracket))
 	list_node(marked_kind(items) + (code - bracket_info(items)) * KindUnit.Info, unboxed_list(items))
 }
-separated_node(items: Node, separator: Node): Node := {
+def separated_node(items: Node, separator: Node): Node := {
 	if is_null(items) { return items }
 	if kind_code(items) != Kind.List { not_a_list() }
 	code = spelling_code(separator_spellings(), node_text(separator))

@@ -12,17 +12,17 @@ use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "../analysis/words.warp"
 
-applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
+def applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `{n}`, a block of one item, as Rust writes it
-braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
-try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semicolon)
-try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
-chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, yes_branch), Op.Else, no_branch)
+def braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
+def try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semicolon)
+def try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
+def chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, yes_branch), Op.Else, no_branch)
 
-try_name(role: text, number: int): Node := fresh_name("try·" + role, number)
+def try_name(role: text, number: int): Node := fresh_name("try·" + role, number)
 
 # `try x else y`; with a catch binding (a name, else ø) the else branch binds it to the error before y
-guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
+def guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	finished = try_name("finished", number)
 	result = try_name("value", number)
 	ran = try_assigned(finished, applied_to(HiddenWord.RanWithoutError as text, [braced(try_assigned(result, value))]))
@@ -31,24 +31,24 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	try_statements([ran, chosen_branch(succeeded, braced(result), otherwise)])
 }
 
-is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
+def is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 
 # To do give one-line summaries to all functions where the meaning is not immediately clear from the context and name 
 # todo number: int  Generalize to other numbers 
-divided(dividend: Node, op: Op, divisor: Node, fallback: Node, number: int): Node := {
+def divided(dividend: Node, op: Op, divisor: Node, fallback: Node, number: int): Node := {
 	held = try_name("divisor", number)
 	quotient = guarded_try(Key(dividend, op, held), fallback, ø, number)
 	try_statements([try_assigned(held, divisor), chosen_branch(Key(held, Op.Eq, 0), braced(fallback), braced(quotient))])
 }
 
-is_written_list(n: Node): bool := match n {
+def is_written_list(n: Node): bool := match n {
 	List(written, Bracket.Square, separator): yes
 	Text(t): yes
 	_: no
 }
 
 # TODO this doesn't seem to belong to tries but to index.warp Which doesn't exist yet but should collect all the a[index] a#position syntax?  (card index-syntax-module)
-indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
+def indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
 	held = try_name("list", number)
 	at = try_name("index", number)
 	within = Key(Key(at, Op.Ge, 1), Op.And, Key(at, Op.Le, applied_to("count", [held])))
@@ -56,7 +56,7 @@ indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
 }
 
 # the value under try, its fallback, the catch binding or ø
-lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
+def lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 	number = fresh_number()
 	match value {
 		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded_try(value, fallback, binding, number) }
@@ -76,11 +76,11 @@ lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 
 # `assert c else m`, `check c`: 1 when c holds, else it raises m (Rust twin: guards.rs lower_assert); not `asserted`,
 # emitter.warp's, as the compiler's files share one namespace
-assertion(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
+def assertion(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
 
 # parser.warp reads `try x else y` as `try·else(x, y)`, `try x catch e { y }` as `try·else(x, {y}, e)` and
 # `assert c else m` as `assert·else(c, m)`, as Rust's parser does
-try_form(n: Node): Node := match n {
+def try_form(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
 		if #parts == 3 and parts#1 == symbol(HiddenWord.AssertElse as text) { return assertion(parts#2, parts#3) }
 		if #parts < 3 or parts#1 != symbol(HiddenWord.TryElse as text) { return n }
@@ -91,4 +91,4 @@ try_form(n: Node): Node := match n {
 	_: n
 }
 
-tries(program: Node): Node := bottom_up(program, try_form)
+def tries(program: Node): Node := bottom_up(program, try_form)

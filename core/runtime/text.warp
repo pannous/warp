@@ -3,7 +3,7 @@ use "intrinsics.warp"
 use "characters.warp"
 use "walks.warp"
 use "../emitter/byte_codes.warp"
-text_join(a: text, b: text): text := {
+def text_join(a: text, b: text): text := {
 	out = new_text(byte_count(a) + byte_count(b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
@@ -14,7 +14,7 @@ text_join(a: text, b: text): text := {
 }
 # the texts joined, `between` between each two: one text made and each byte copied once, where `+=` in a loop copies
 # all bytes so far each time (card list-display-slowness)
-texts_joined(parts: list, between: text): text := {
+def texts_joined(parts: list, between: text): text := {
 	size = 0
 	for i in 1 to #parts { size += byte_count(unboxed_text(parts#i)) }
 	if #parts > 1 { size += byte_count(between) * (#parts - 1) }
@@ -36,7 +36,7 @@ global other_at = 0
 global other_before = -1
 # the characters (grapheme clusters) of a text; a short one stays out of the count kept, so a lexer's words leave its
 # source's count (card text-cache-lru)
-text_count(t: text): int := {
+def text_count(t: text): int := {
 	if byte_count(t) < short_text() { return characters_counted(t) }
 	if same_text(t, counted_text) and byte_count(t) == counted_bytes { return counted }
 	count = characters_counted(t)
@@ -45,7 +45,7 @@ text_count(t: text): int := {
 	counted = count
 	count
 }
-characters_counted(t: text): int := {
+def characters_counted(t: text): int := {
 	count = 0
 	at = 0
 	while at < byte_count(t) {
@@ -55,7 +55,7 @@ characters_counted(t: text): int := {
 	count
 }
 # the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
-code_point_count(t: text): int := {
+def code_point_count(t: text): int := {
 	count = 0
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
@@ -64,28 +64,28 @@ code_point_count(t: text): int := {
 	count
 }
 # the bytes the output area of linear memory holds at once (one page, past fd_write's iovec)
-output_room(): int := 65520
+def output_room(): int := 65520
 # the bytes of t from start until stop into the output area, from its beginning
-output_bytes(t: text, start: int, stop: int) := {
+def output_bytes(t: text, start: int, stop: int) := {
 	for i in start..stop { output_byte(i - start, byte_at(t, i)) }
 }
 # where a text goes as a C string for a host word: past the output area's scratch bytes (runtime/extended/wasi.warp
 # scratch_bytes)
-c_text_at(): int := 32
+def c_text_at(): int := 32
 # t as the C string a host word reads, its bytes and a 0 in linear memory: its address
-c_text(t: text): int := {
+def c_text(t: text): int := {
 	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
 	output_byte(c_text_at() + byte_count(t), 0)
 	output_address() + c_text_at()
 }
 # t and a newline to stdout
-print_line(t: text): int := {
+def print_line(t: text): int := {
 	print_text(t)
 	output_byte(0, Ascii.Newline)
 	write_output(1)
 }
 # t to stdout, through the output bytes of linear memory a chunk at a time: the one place a text goes into memory
-print_text(t: text) := {
+def print_text(t: text) := {
 	start = 0
 	while start < byte_count(t) {
 		stop = start + output_room()
@@ -96,7 +96,7 @@ print_text(t: text) := {
 	}
 }
 # -1, 0 or 1 as a's bytes come before b's, equal them or come after
-text_order(a: text, b: text): int := {
+def text_order(a: text, b: text): int := {
 	i = 0
 	while i < byte_count(a) and i < byte_count(b) {
 		if byte_at(a, i) < byte_at(b, i) { return -1 }
@@ -106,9 +106,9 @@ text_order(a: text, b: text): int := {
 	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then -1 else 1
 }
 # whether a and b have the same bytes: texts of other lengths without looking at a byte
-same_bytes(a: text, b: text): bool := byte_count(a) == byte_count(b) and text_order(a, b) == 0
+def same_bytes(a: text, b: text): bool := byte_count(a) == byte_count(b) and text_order(a, b) == 0
 # where the bytes of part first start in t, -1 when nowhere
-text_index(t: text, part: text): int := {
+def text_index(t: text, part: text): int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {
 		i = 0
 		while i < byte_count(part) and byte_at(t, start + i) == byte_at(part, i) { i += 1 }

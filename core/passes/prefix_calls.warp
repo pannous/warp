@@ -7,7 +7,7 @@ use "walk.warp"
 use "scope.warp"
 use "../analysis/builtin_signatures.warp"
 
-spaced_prefix_calls(program: Node): Node := {
+def spaced_prefix_calls(program: Node): Node := {
 	takers = value_takers(program)
 	own_types = own_parameter_types(program)
 	bottom_up(prefix_calls(program, takers, count_takers(program, takers)), n => fitted_comparison(n, own_types))
@@ -17,22 +17,22 @@ prefix_call_operators = [Op.Sub, Op.Hash]
 
 # the words of the program that take a value: print, its functions with a parameter (`f(x) := …`, `f := { it * 2 }`,
 # `f = x => …`), a builtin of one value; not a name it binds as a value
-value_takers(program: Node): list := {
+def value_takers(program: Node): list := {
 	scope = scope_of(program)
 	(value_taking_functions(program) + value_taking_words).filter(name => not binds_value(scope, name))
 }
 
 # the program's functions that take a value
-value_taking_functions(program: Node): list := nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
+def value_taking_functions(program: Node): list := nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
 
 # the value takers that take a count, `print #xs`: a type word converts a negative, `int -3`, but takes no count, as
 # `float[2]` is the subscript `float#3` of a typed array (lib/sugar/lists.warp), unless the program defines it as a function
-count_takers(program: Node, takers: list): list := {
+def count_takers(program: Node, takers: list): list := {
 	defined = value_taking_functions(program)
 	takers.filter(name => not is_type_word(name) or defined contains name)
 }
 
-value_function(n: Node): any := match n {
+def value_function(n: Node): any := match n {
 	Key(head, op, body): {
 		if not (op == Op.Define or op == Op.Assign) { return ø }
 		if is_round(head) { return if #items_of(head) > 1 then head_word(head) else ø }
@@ -42,10 +42,10 @@ value_function(n: Node): any := match n {
 }
 
 
-takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
+def takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
 
 # `counters`: the takers of a count (count_takers)
-prefix_calls(n: Node, takers: list, counters: list): Node := {
+def prefix_calls(n: Node, takers: list, counters: list): Node := {
 	member = counted_member(n, counters)
 	if member != ø { return prefix_calls(member, takers, counters) }
 	match n {
@@ -58,28 +58,28 @@ prefix_calls(n: Node, takers: list, counters: list): Node := {
 }
 
 # `-x`, `#xs` as the parser writes them
-prefixed_by(op: Op, argument: Node): Node := if op == Op.Sub and argument is number then 0 - argument else Key(ø, op, argument)
+def prefixed_by(op: Op, argument: Node): Node := if op == Op.Sub and argument is number then 0 - argument else Key(ø, op, argument)
 
 # `print #s.names` parses as `(print # s).names`: it counts the field, `print # s.names`; ø for any other node
-counted_member(n: Node, takers: list): any := match n {
+def counted_member(n: Node, takers: list): any := match n {
 	Key(base, Op.Dot, member): {
 		inner = if is_key(base, Op.Hash) and takes_value(key_of(base), takers) then [key_of(base), value_of(base)] else counted_parts(counted_member(base, takers))
 		if inner == ø then ø else Key(inner#1, Op.Hash, Key(inner#2, Op.Dot, member))
 	}
 	_: ø
 }
-counted_parts(counted: Node?): list? := if counted == ø then ø else [key_of(counted), value_of(counted)]
+def counted_parts(counted: Node?): list? := if counted == ø then ø else [key_of(counted), value_of(counted)]
 
 # `f a > b` read by the fit of f's parameter, never by where the phrase stands (decision juxtaposition): f(a > b) when
 # f takes a yes/no (print), (f a) > b when it doesn't (max of a list); the parser reads the first at a statement's start
 # and the second after `=` or `if`. A function of the program whose parameter is untyped reads both ways: refused,
 # naming both (decision untyped-fit-ambiguous); a word of no typed line stays as written
-fitted_comparison(n: Node, own_types: map): Node := {
+def fitted_comparison(n: Node, own_types: map): Node := {
 	if n is key and op_of(n) in comparing_ops and is_word_phrase(key_of(n)) { return fitted(key_of(n)#1, key_of(n)#2, op_of(n), value_of(n), n, own_types) }
 	if is_word_phrase(n) and n#2 is key and op_of(n#2) in comparing_ops { return fitted(n#1, key_of(n#2), op_of(n#2), value_of(n#2), n, own_types) }
 	n
 }
-fitted(word: Node, left: Node, op: Op, right: Node, written: Node, own_types: map): Node := {
+def fitted(word: Node, left: Node, op: Op, right: Node, written: Node, own_types: map): Node := {
 	fit = condition_fit(word, own_types)
 	if fit == ambiguous_fit {
 		compared = op as text
@@ -93,9 +93,9 @@ comparing_ops = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 # `all xs > 0`: the words that compare each element of their list (lib/sugar/broadcasting.warp, decision
 # each-all-broadcast), their rules matching `all (xs > 0)`
 element_comparing_words = ["all", "any"]
-is_word_phrase(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 is symbol
+def is_word_phrase(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 is symbol
 # each function of the program taking a value by name, the type its first parameter is declared ("" untyped)
-own_parameter_types(program: Node): map := {
+def own_parameter_types(program: Node): map := {
 	types = {}
 	for name in value_taking_functions(program) { types[name] = "" }
 	typed = typed_first_parameters(program)
@@ -106,7 +106,7 @@ ambiguous_fit = "ambiguous"
 condition_takers = ["any", "bool"]
 # whether the word's first parameter takes a yes/no: yes for any, bool or an untyped rest (`print(values...)`), no for
 # another declared type, ambiguous_fit for a program's function of an untyped parameter, ø for a word of no typed line
-condition_fit(word: Node, own_types: map): any := {
+def condition_fit(word: Node, own_types: map): any := {
 	name = unaliased(name_of(word))
 	if name in element_comparing_words { return yes }
 	if own_types.has(name) { return if own_types[name] == "" then ambiguous_fit else own_types[name] in condition_takers }

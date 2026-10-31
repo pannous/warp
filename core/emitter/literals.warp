@@ -5,7 +5,7 @@ exact_decimal_digits = 15
 # a decimal stays a ratio of ints while its denominator, 10 to its fraction digits, fits an int64 (10^18); past that the
 # parser keeps its digits and big_decimal makes it exact all the same
 exact_fraction_digits = 18
-exact_decimal(n: float): any := {
+def exact_decimal(n: float): any := {
 	shown = "" + n
 	if shown.contains("e") { return ø }
 	# a whole decimal shows no point (2.0 as 2): the int it is (decision int-list)
@@ -29,19 +29,19 @@ exact_decimal(n: float): any := {
 
 # a decimal past 18 places as the parser keeps it, its own digits (decision exact-decimal-big): those digits over
 # 10^places, a ratio of a big denominator
-big_decimal(written: text): TypedCode := {
+def big_decimal(written: text): TypedCode := {
 	parts = written.split(".")
 	runtime_call("decimal_ratio", [text_value(parts#1 + parts#2), number_value(#parts#2)])
 }
 
 # the passive data segment of a text's bytes, each text stored once in a segment of its own, so a trimmer drops the
 # texts no code reads (behind the runtime numbered from its segments on)
-text_segment(t: text): int := {
+def text_segment(t: text): int := {
 	if t not in module.texts { module.texts[t] = module.first_text_segment + #module.texts }
 	module.texts[t]
 }
 # a text as its bytes; one code point as its codepoint, as warp holds a literal "a" (a grapheme of more, "👍🏽", is a text)
-one_code_point(t: text): bool := #t == 1 and #codepoints(t) == 1
+def one_code_point(t: text): bool := #t == 1 and #codepoints(t) == 1
 def text_value(t: text): TypedCode {
 	if one_code_point(t) { return TypedCode(ValueKind.Char, [op.i32_const] + sleb(ord(t))) }
 	TypedCode(ValueKind.Text, text_bytes(t))

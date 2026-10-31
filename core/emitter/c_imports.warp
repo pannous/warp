@@ -43,7 +43,7 @@ c_filled_types = ["out", "length"]
 c_parameter_only_types = ["out", "bytes", "length", "texts"]
 
 # a library as written, `'m'`, `"c"`, `sqlite3`, `libm` → its name; ø for none or a library of warp's
-c_library_of(written: text, quoted: bool): any := {
+def c_library_of(written: text, quoted: bool): any := {
 	word = written.trim()
 	if word.ends_with(";") { word = word.remove_suffix(";").trim() }
 	bare = word
@@ -54,7 +54,7 @@ c_library_of(written: text, quoted: bool): any := {
 }
 
 # `strlen(s: text): i64 from 'c'` → [name, library, parameter types, parameter names, result type]; ø for another line
-c_declaration(line: text): any := {
+def c_declaration(line: text): any := {
 	parts = line.trim().split(c_foreign_mark)
 	if #parts != 2 { return ø }
 	library = c_library_of(parts#2, yes)
@@ -73,25 +73,25 @@ c_declaration(line: text): any := {
 	[name, library, types, names, c_type_of(result)]
 }
 # a type word → its type; "" is no type, which no C function takes ("?")
-c_type_of(word: text): text := {
+def c_type_of(word: text): text := {
 	written = word.trim()
 	if written == "" { return "?" }
 	c_type_words.get(written) ?? "?"
 }
 
 # the foreign lines of `text`
-c_declarations_in(content: text): list := content.split("\n").map(line => c_declaration(line)).filter(d => d != ø)
+def c_declarations_in(content: text): list := content.split("\n").map(line => c_declaration(line)).filter(d => d != ø)
 # the C functions of the standard modules a compile's program uses, name → declaration (prelude_words.warp
 # with_used_modules): a module a pass or rule brings (`use web` of server routes) calls C as one its text names does
 global used_c_functions = {}
 # the program's own C functions and those of the modules it uses, its own first
-with_used_c_functions(functions: map): map := {
+def with_used_c_functions(functions: map): map := {
 	for name in used_c_functions.keys { if not functions.has(name) { functions[name] = used_c_functions[name] } }
 	functions
 }
 
 # the foreign lines of lib/c.warp, lib/math.warp and the native files at `native_paths`
-c_catalog(library_folder: text, native_paths: list): list := {
+def c_catalog(library_folder: text, native_paths: list): list := {
 	found = []
 	for path in c_catalog_files.map(file => library_folder + "/" + file) + native_paths {
 		content = file_source(path) ?? ""
@@ -101,13 +101,13 @@ c_catalog(library_folder: text, native_paths: list): list := {
 }
 # lib/native/sqlite3.warp: the foreign lines of a C library and the warp words over them (card pure-c-imports)
 native_folder = "native"
-native_file(library: text): text := native_folder + "/" + library + ".warp"
+def native_file(library: text): text := native_folder + "/" + library + ".warp"
 # where `scripts/warp-crate build` writes a crate's native file (notes/crate_adapter.md): $WARP_CRATES_CACHE, by default
 # ~/.cache/warp/crates
 crates_cache_default = "/.cache/warp/crates"
-crates_cache(): text := env("WARP_CRATES_CACHE") ?? ((env("HOME") ?? "") + crates_cache_default)
+def crates_cache(): text := env("WARP_CRATES_CACHE") ?? ((env("HOME") ?? "") + crates_cache_default)
 # the file of a library's lines: lib/native/<library>.warp, else the crates cache's native/<library>.warp; ø for none
-native_path(library_folder: text, library: text): any := {
+def native_path(library_folder: text, library: text): any := {
 	for folder in [library_folder, crates_cache()] {
 		path = folder + "/" + native_file(library)
 		if (file_source(path) ?? "") != "" { return path }
@@ -116,7 +116,7 @@ native_path(library_folder: text, library: text): any := {
 }
 # `use crate "regex@1"` → its library, "rs_regex" (scripts/warp-crate's default name); ø for another statement
 crate_library_prefix = "rs_"
-c_crate_use(statement: text): any := {
+def c_crate_use(statement: text): any := {
 	if not statement.starts_with("use crate ") { return ø }
 	written = statement.remove_prefix("use crate ").trim()
 	bare = written
@@ -126,7 +126,7 @@ c_crate_use(statement: text): any := {
 }
 # the names the typed lines of lib/math.warp and lib/prelude.warp give warp words of its own: libm's of those names
 # need an import (`floor` is warp's, `fmin` libm's)
-warp_word_names(): any := {
+def warp_word_names(): any := {
 	names = {}
 	for content in [module_source("math"), module_source("prelude")] {
 		for line in content.split("\n") {
@@ -140,14 +140,14 @@ warp_word_names(): any := {
 }
 
 # the statements of the source's text, split at lines and semicolons
-c_statements(source: text): list := {
+def c_statements(source: text): list := {
 	found = []
 	for line in source.split("\n") { for part in line.split(";") { found += [part.trim()] } }
 	found
 }
 
 # `import (sin, floor) from 'm'` → [library, [names]]; ø for another statement
-c_import(statement: text): any := {
+def c_import(statement: text): any := {
 	if not statement.starts_with("import ") { return ø }
 	parts = statement.remove_prefix("import ").split(c_foreign_mark)
 	if #parts != 2 { return ø }
@@ -158,7 +158,7 @@ c_import(statement: text): any := {
 }
 # what `use sqlite3`, `import raylib` or `require z` names (parser.warp USE_KEYWORDS), a comment after it left out
 # (`import raylib # all of it`); ø for another statement
-used_word(statement: text): any := {
+def used_word(statement: text): any := {
 	for keyword in USE_KEYWORDS {
 		if statement.starts_with(keyword + " ") {
 			words = statement.remove_prefix(keyword + " ").trim().split(" ")
@@ -170,7 +170,7 @@ used_word(statement: text): any := {
 }
 comment_marks = ["#", "//"]
 # `use sqlite3` → "sqlite3", `import raylib` too, `use crate "regex@1"` → "rs_regex"; ø for another statement
-c_use(statement: text): any := {
+def c_use(statement: text): any := {
 	crate = c_crate_use(statement)
 	if crate != ø { return crate }
 	word = used_word(statement)
@@ -181,7 +181,7 @@ c_use(statement: text): any := {
 # [the source without its foreign lines (each an empty line, so the positions stay) and each `use sqlite3` of a
 # library with a lib/native/sqlite3.warp a `use` of that file, the C functions it calls: name → declaration, the
 # names the imports name that no line declares]
-c_functions_of(source: text, library_folder: text): list := {
+def c_functions_of(source: text, library_folder: text): list := {
 	statements = c_statements(source)
 	libraries = []
 	for statement in statements {
@@ -245,7 +245,7 @@ c_functions_of(source: text, library_folder: text): list := {
 	[c_without(kept, resolved).join("\n"), functions, missing]
 }
 # the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)
-reached_within(source: text): list := {
+def reached_within(source: text): list := {
 	reached = reached_modules(source)
 	at = 1
 	while at <= #reached {
@@ -255,7 +255,7 @@ reached_within(source: text): list := {
 	reached
 }
 # the lines without the statements of `statements`, the other statements of a line kept (a line left empty stays)
-c_without(lines: list, statements: list): list := {
+def c_without(lines: list, statements: list): list := {
 	if #statements == 0 { return lines }
 	lines.map(line => line.split(";").filter(part => part.trim() not in statements).join(";"))
 }
@@ -265,9 +265,9 @@ c_without(lines: list, statements: list): list := {
 c_emitted_words = ["floor"] + magnitude_words
 # whether `name` of `library` is such a word of warp's own (`own`, warp_word_names), which a libc or libm import leaves
 # warp's, as Rust's lane keeps its built-ins (rust-harness:src/ffi/mod.rs)
-c_warps(own: map, name: text, library: text): bool := library in c_and_m and own.has(name) and name in c_emitted_words
+def c_warps(own: map, name: text, library: text): bool := library in c_and_m and own.has(name) and name in c_emitted_words
 # the line with each `use sqlite3` of a library of `native` ([library, path] each) a `use` of its native file
-native_uses(line: text, native: list): text := {
+def native_uses(line: text, native: list): text := {
 	if #native == 0 { return line }
 	parts = []
 	for part in line.split(";") {
@@ -280,7 +280,7 @@ native_uses(line: text, native: list): text := {
 
 # the host word of a C function: [parameter kinds, result kinds, its library, its warp.c_functions line]; ø for a
 # type it can't take (f32, an untyped parameter)
-c_host_word(declaration: list): any := {
+def c_host_word(declaration: list): any := {
 	types = declaration#3
 	result = declaration#5
 	if "?" in types or "owned_text" in types or result == "?" or result in c_parameter_only_types { return ø }
@@ -302,7 +302,7 @@ c_host_word(declaration: list): any := {
 }
 
 # the host words with the C functions added: a C function of a host word's name replaces it
-with_c_functions(host: map, functions: map): map := {
+def with_c_functions(host: map, functions: map): map := {
 	all = {}
 	for name in host.keys { all[name] = host[name] }
 	for name in functions.keys {
@@ -314,7 +314,7 @@ with_c_functions(host: map, functions: map): map := {
 
 # the form of the emitter's refusal `outside the core: the call strlen(…)` when that is a C function, one of
 # passes.warp pass_owners: c_imports declared it (`functions`) or a foreign line of lib/ does; ø for another refusal
-c_refused_form(refusal: text, functions: map, library_folder: text): any := {
+def c_refused_form(refusal: text, functions: map, library_folder: text): any := {
 	start = outside_the_core + "the call "
 	if not refusal.starts_with(start) { return ø }
 	name = refusal.remove_prefix(start).split("(")#1

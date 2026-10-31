@@ -11,17 +11,17 @@ rewrite (for $item in $c $body) => while #$c.waiting > 0 { $item = $c.receive();
 class Channel {
 	waiting: list = []
 	closed: bool = no
-	send(value) := {
+	def send(value) := {
 		if closed { raise "send on a closed channel" }
 		waiting += [value]
 	}
-	receive() := {
+	def receive() := {
 		if #waiting == 0 { raise "receive on a channel no task sends to: every task has ended" }
 		oldest = waiting#1
 		waiting = waiting[1..]
 		oldest
 	}
-	close() := { closed = yes }
+	def close() := { closed = yes }
 }
 
 // the machine-wide channel listens from its assignment on: a variable holds its name and its listener
@@ -33,6 +33,6 @@ rewrite $c.receive() => machine_receive($c#2) where $c = channel $name
 // listener ids of channel variables, apart from those system_signals counts from 0
 global last_listener = 1048576
 
-machine_channel(name) := { last_listener += 1; channel_listen(last_listener, name); [name, last_listener] }
+def machine_channel(name) := { last_listener += 1; channel_listen(last_listener, name); [name, last_listener] }
 // a receive looks for a message every 5 ms
-machine_receive(listener) := { while channel_pending(listener) == 0 { sleep(5 ms) }; channel_next(listener) }
+def machine_receive(listener) := { while channel_pending(listener) == 0 { sleep(5 ms) }; channel_next(listener) }

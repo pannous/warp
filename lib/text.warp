@@ -1,10 +1,10 @@
 // The standard library module text (notes/stdlib.md): standard functions of every program, `repeat(t, 2)` or `t.repeat(2)`, no `use` needed (`use text` only for the qualified `text.repeat(t, 2)`)
 use list
-repeat(t: text, n: int) := t * n
-pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
-pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
+def repeat(t: text, n: int) := t * n
+def pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
+def pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
 // format("{} has {} items", ["cart", 3]): each {} takes the next value
-format(template, values) := {
+def format(template, values) := {
 	parts = split(template, "{}")
 	result = parts[0]
 	for i in 1 ..< count(parts) {
@@ -13,17 +13,17 @@ format(template, values) := {
 	result
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
-words(t) := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
-lines(t: text) := split(t, "\n")
+def words(t) := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
+def lines(t: text) := split(t, "\n")
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15);
 // a letter with a case beyond ASCII too (é, Ω), not yet the caseless scripts (card unicode-letters)
-letters(t) := [c for c in chars(t) if is_alpha(c) or upper(c) != lower(c)]
-capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
-center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
-title(t) := join([capitalize(w) for w in words(t)], " ")
+def letters(t) := [c for c in chars(t) if is_alpha(c) or upper(c) != lower(c)]
+def capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
+def center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
+def title(t) := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
-slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
-truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…"
+def slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
+def truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text) {
 	out = []
@@ -50,36 +50,36 @@ def from_utf8(bytes) {
 	out
 }
 // only spaces, tabs and line breaks, or nothing
-is_blank(t) := trim(t) is empty
+def is_blank(t) := trim(t) is empty
 // has letters, all upper (or lower) case
-is_upper(t) := upper(t) == t and lower(t) != t
-is_lower(t) := lower(t) == t and upper(t) != t
-remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] else t
-remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0: count(t) - count(suffix)] else t
-is_palindrome(t) := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
-word_count(t) := count(words(t))
+def is_upper(t) := upper(t) == t and lower(t) != t
+def is_lower(t) := lower(t) == t and upper(t) != t
+def remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] else t
+def remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0: count(t) - count(suffix)] else t
+def is_palindrome(t) := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
+def word_count(t) := count(words(t))
 // "helloWorld", "Hello World", "hello-world" → "hello_world"
-snake_case(t) := { out = ""; for c in t { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out and last(out) != "_" { out = out + "_" } }; out }
-kebab_case(t) := join(split(snake_case(t), "_"), "-")
+def snake_case(t) := { out = ""; for c in t { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out and last(out) != "_" { out = out + "_" } }; out }
+def kebab_case(t) := join(split(snake_case(t), "_"), "-")
 // "hello_world" → "helloWorld"
-camel_case(t) := { parts = [p for p in split(snake_case(t), "_") if p]; if parts is empty then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
+def camel_case(t) := { parts = [p for p in split(snake_case(t), "_") if p]; if parts is empty then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
 // each line indented by n spaces
-indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
+def indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
-is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
+def is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
-between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0: to - 1] }
+def between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0: to - 1] }
 // the words in lines of at most width characters
-wrap(t, width) := { out = []; line = ""; for w in words(t) { if line is empty { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line { out = out + [line] }; join(out, "\n") }
+def wrap(t, width) := { out = []; line = ""; for w in words(t) { if line is empty { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line { out = out + [line] }; join(out, "\n") }
 // a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
 // then `c.peek()` is '1'; `at` counts the characters read (an index)
 class Cursor { source: text; at = 0
-	at_end() := at >= count(source)
-	peek() := source[at]
-	advance() := { taken = source[at]; at += 1; taken }
-	looking_at(part) := source[at : min(at + count(part), count(source))] == part
-	skip(part) := { if looking_at(part) { at += count(part); return true }; false }
-	take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
-	skip_while(ok) := count(take_while(ok))
-	rest() := source[at : count(source)]
+	def at_end() := at >= count(source)
+	def peek() := source[at]
+	def advance() := { taken = source[at]; at += 1; taken }
+	def looking_at(part) := source[at : min(at + count(part), count(source))] == part
+	def skip(part) := { if looking_at(part) { at += count(part); return true }; false }
+	def take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
+	def skip_while(ok) := count(take_while(ok))
+	def rest() := source[at : count(source)]
 }

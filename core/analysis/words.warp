@@ -9,7 +9,7 @@ type_words = ["int", "nat", "integer", "long", "i64", "i32", "rational", "real",
 	"uint64"]
 any_word = "any"
 # the type an optional type word holds when it holds a value, `int` of `int?`
-required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word
+def required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word
 # the hidden words the passes write for the emitter and analyzer, a `·` in each so no program can name them:
 # `ran·without·error{statement}` (what `try` lowers to), `loop·step: i++` (a loop's step, after its body),
 # the guard markers, data items and fields, the shown text and form of an instance
@@ -30,24 +30,24 @@ raise_word = "raise"
 collection_words = ["list", "map"]
 foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
 
-is_type_word(word: text): bool := type_words contains word.lower()
+def is_type_word(word: text): bool := type_words contains word.lower()
 # `Color`, `Ω`: a name whose first character is an upper case letter
-is_capitalized(name: text): bool := name#1.upper() == name#1 and name#1.lower() != name#1
+def is_capitalized(name: text): bool := name#1.upper() == name#1 and name#1.lower() != name#1
 # the type words a type test takes besides those (no twin: Rust's BUILTIN_TYPES in rust-harness:src/lowering/types/type_tests.rs)
 test_type_words = ["key", "pair", "operation", "expression", "code", "callable", "invocable", "runnable", "error", "empty",
 	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
-is_tested_type_word(word: text): bool := is_type_word(word) or collection_words contains word or test_type_words contains word
-is_type_word_or_any(word: text): bool := word == any_word or is_type_word(word)
+def is_tested_type_word(word: text): bool := is_type_word(word) or collection_words contains word or test_type_words contains word
+def is_type_word_or_any(word: text): bool := word == any_word or is_type_word(word)
 # `ints`, `matches`: the plural of a type word
-plural_type_word(word: text): bool := {
+def plural_type_word(word: text): bool := {
 	if not word.ends_with("s") { return no }
 	if is_type_word(word[0..<(#word - 1)]) { return yes }
 	if word.ends_with("es") { return is_type_word(word[0..<(#word - 2)]) }
 	no
 }
 # `list`, `list of int`, `ints`: a list type
-is_list_type(word: text): bool := word == "list" or word.starts_with("list of ") or plural_type_word(word)
-is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
+def is_list_type(word: text): bool := word == "list" or word.starts_with("list of ") or plural_type_word(word)
+def is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
 
 # the words separating a phrase's slots, each naming the slot after it, `to add a to b`, and the articles starting a
 # noun slot, `to square a number` (Rust twin: type_name_matching.rs PREPOSITIONS, ARTICLES)
@@ -77,7 +77,7 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", real: "empty", exact: "empty"}
 
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
-with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
+def with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
 # the words naming the parameter after them, a preposition or `as`: `play(tone, for duration)` called `play C4 for: 2s`
 # (Rust twin: type_name_matching.rs PREPOSITIONS, AS_LABEL)
 label_words = phrase_prepositions + ["as"]

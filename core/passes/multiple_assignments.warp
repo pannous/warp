@@ -6,14 +6,14 @@ use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "enum_declarations.warp"
 
-held(name: Node, suffix: text): Node := match name {
+def held(name: Node, suffix: text): Node := match name {
 	Symbol(text): symbol(text + "·" + suffix)
 	_: name
 }
 
-statements(list: list): Node := List(list, Bracket.Round, Separator.Semicolon)
+def statements(list: list): Node := List(list, Bracket.Round, Separator.Semicolon)
 
-assigned(names: list, values: list): Node := {
+def assigned(names: list, values: list): Node := {
 	places = 1 to #names
 	if #values == 1 {
 		whole = held(names#1, "values")
@@ -23,16 +23,16 @@ assigned(names: list, values: list): Node := {
 	statements(firsts + places.map(i => Key(names#i, Op.Assign, held(names#i, "value"))))
 }
 
-all_names(parts: list): bool := {
+def all_names(parts: list): bool := {
 	for part in parts { if not is_name(part) { return no } }
 	yes
 }
 
 # the names before the `=` and the values after it, when the comma list is a multiple assignment at `parts#at`
-split_at_assignment(parts: list, at: int): Node := assignment_at(parts, at, parts#at)
+def split_at_assignment(parts: list, at: int): Node := assignment_at(parts, at, parts#at)
 
 # (a Node parameter: `match parts#at { Key(…) }` itself never matches, card match-silently)
-assignment_at(parts: list, at: int, candidate: Node): Node := match candidate {
+def assignment_at(parts: list, at: int, candidate: Node): Node := match candidate {
 	Key(target, Op.Assign, given): {
 		names = parts[0..<(at - 1)] + [target]
 		values = [given] + parts[at..]
@@ -42,7 +42,7 @@ assignment_at(parts: list, at: int, candidate: Node): Node := match candidate {
 }
 
 # the comma list regrouped at its first `=`, when names lead up to it; else ø
-regrouped(parts: list): any := {
+def regrouped(parts: list): any := {
 	if not is_name(parts#1) { return ø }
 	for at in 2 to #parts {
 		split = split_at_assignment(parts, at)
@@ -56,13 +56,13 @@ regrouped(parts: list): any := {
 # `x = [1, 2]` (decision reconsider-spaced); ø for another list, and for a phrase first, `x = add 1, 2`, whose function
 # word takes the values after it (lambdas.warp comma_call, decision function-words-consume; the parser gives
 # `x = add 1 2` its phrase already)
-one_name_list(parts: list): any := match parts#1 {
+def one_name_list(parts: list): any := match parts#1 {
 	Key(target, Op.Assign, first): { if is_name(target) and not starts_with_name(first) and not parts[1..].any(part => is_key(part, Op.Assign)) then Key(target, Op.Assign, List([first] + parts[1..], Bracket.Square, Separator.Comma)) else ø }
 	_: ø
 }
-starts_with_name(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n > 1 and n#1 is symbol
+def starts_with_name(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n > 1 and n#1 is symbol
 
-multiple_assignment(n: Node): Node := match n {
+def multiple_assignment(n: Node): Node := match n {
 	List(parts, Bracket.None, Separator.Comma): one_name_list(parts) ?? regrouped(parts) ?? n
 	List(parts, Bracket.None, Separator.Space): one_name_list(parts) ?? n
 	# `{a, b = b, a + b}`: the braces hold the comma list, a block of the regrouped statements
@@ -74,4 +74,4 @@ multiple_assignment(n: Node): Node := match n {
 }
 
 # an enum's cases are no assignments: `enum Level { Low, Mid = 5 }` numbers Mid (card enum-case)
-multiple_assignments(program: Node): Node := if declared_enum(program) != ø then program else multiple_assignment(children(program, multiple_assignments))
+def multiple_assignments(program: Node): Node := if declared_enum(program) != ø then program else multiple_assignment(children(program, multiple_assignments))

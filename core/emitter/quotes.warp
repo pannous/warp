@@ -1,30 +1,30 @@
 # Quoted code (emitter.warp's part): `data e` as a node, the fields of a code view (line, column, comment)
 # `data e`, glued `data(e)`: e as written, a node (Rust's blocks.rs as_data, written_quote); `parse("a + 1")` is
 # `as_code(data a + 1)`
-is_quote(n: Node): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == quote_symbol
-is_spliced_quote(n: Node): bool := bracket_of(n) == "(" and separator_of(n) == "" and #n == 2 and n#1 == spliced_quote_symbol
-is_spaced(n: Node): bool := bracket_of(n) == "" and separator_of(n) == " "
+def is_quote(n: Node): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == quote_symbol
+def is_spliced_quote(n: Node): bool := bracket_of(n) == "(" and separator_of(n) == "" and #n == 2 and n#1 == spliced_quote_symbol
+def is_spaced(n: Node): bool := bracket_of(n) == "" and separator_of(n) == " "
 # `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
 # its place, else 0
-inline_quote_at(n: Node): int := {
+def inline_quote_at(n: Node): int := {
 	if not ((bracket_of(n) == "" and separator_of(n) == " ") or (bracket_of(n) == "(" and separator_of(n) == "")) { return 0 }
 	for i in 2..<#n { if n#i == quote_symbol { return i } }
 	0
 }
-quote_folded(n: Node, at: int): Node := {
+def quote_folded(n: Node, at: int): Node := {
 	quote = separated(bracketed([n#at, n#(at + 1)], ""), " ")
 	separated(bracketed(items_of(n)[..(at - 1)] + [quote] + items_of(n)[(at + 1)..], bracket_of(n)), separator_of(n))
 }
 # `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
 position_fields = ["line", "column", "comment"]
 # the field a key reads, `x.name`, also as Rust's analysis view writes it, `x#("name" + 1)`; ø of another key
-read_field(n: Node): text? := {
+def read_field(n: Node): text? := {
 	if op_of(n) == Op.Dot and value_of(n) is symbol { return name_of(value_of(n)) }
 	field = value_of(n)
 	if op_of(n) == Op.Hash and is_key(field, Op.Add) and key_of(field) is text and value_of(field) == 1 { return key_of(field) }
 	ø
 }
-reads_position(n: Node): bool := {
+def reads_position(n: Node): bool := {
 	if type(n) is key and read_field(n) in position_fields { return yes }
 	if type(n) is key { return reads_position(key_of(n)) or reads_position(value_of(n)) }
 	is_group(n) and items_of(n).any(reads_position)
@@ -68,10 +68,10 @@ def spliced_code(body: Body, e: Node): list {
 	quoted_code(body, e)
 }
 # `class: "box"`, `"nav a": {…}`, `p{…}`: a key whose left is a word or text, kept as written
-is_word_keyed(e: Node): bool := (is_key(e, Op.Colon) or is_key(e, Op.None)) and (key_of(e) is symbol or key_of(e) is text)
-is_bound(body: Body, name: text): bool := name in body.names or is_global(body, name) or name in module.functions or name in module.variants
+def is_word_keyed(e: Node): bool := (is_key(e, Op.Colon) or is_key(e, Op.None)) and (key_of(e) is symbol or key_of(e) is text)
+def is_bound(body: Body, name: text): bool := name in body.names or is_global(body, name) or name in module.functions or name in module.variants
 # the words of e nothing binds, a field's name (`todo.text`) and an entry's key not counted
-unbound_words(body: Body, e: Node): list := {
+def unbound_words(body: Body, e: Node): list := {
 	if e is symbol { return if is_bound(body, name_of(e)) then [] else [name_of(e)] }
 	if is_quote(e) or is_spliced_quote(e) { return [] }
 	# `.box` of a style sheet reads no field: a selector, its name a word
@@ -82,4 +82,4 @@ unbound_words(body: Body, e: Node): list := {
 }
 # `div{ class: "box" p{"Hi"} }`: a word nothing binds, glued to its block, is the data pair `div: […]`, Warp's own data
 # notation (decision data-parameters, option b), which lib/markup.warp's to_html renders by name
-is_data_tag(body: Body, n: Node): bool := is_word_keyed(n) and key_of(n) is symbol and not is_bound(body, name_of(key_of(n))) and name_of(key_of(n)) not in module.classes and is_curly_group(value_of(n))
+def is_data_tag(body: Body, n: Node): bool := is_word_keyed(n) and key_of(n) is symbol and not is_bound(body, name_of(key_of(n))) and name_of(key_of(n)) not in module.classes and is_curly_group(value_of(n))

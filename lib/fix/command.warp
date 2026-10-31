@@ -26,25 +26,25 @@ code_label = "code"
 # the compiler's answer to which standard modules a file uses without their `use` (warp uses, the implicit_use hint)
 uses_command = "warp uses "
 
-is_folder(path: text): bool := (try list_files(path) else ø) != ø
-name_of_path(path: text): text := last(path.split("/"))
-has_warp_extension(path: text): bool := warp_extensions.any(extension => path.ends_with(extension))
+def is_folder(path: text): bool := (try list_files(path) else ø) != ø
+def name_of_path(path: text): text := last(path.split("/"))
+def has_warp_extension(path: text): bool := warp_extensions.any(extension => path.ends_with(extension))
 
 # warp code by its extension, or an extension-less script whose `#!` line names warp
-is_warp_file(path: text): bool := {
+def is_warp_file(path: text): bool := {
 	if name_of_path(path).contains(".") { return has_warp_extension(path) }
 	first = (try read(path) else "").split("\n")[0]
 	first.starts_with("#!") and first.contains("warp")
 }
 
 # why a path is not fixed: a golf folder or no warp file; "" when it is
-skip_reason(path: text): text := {
+def skip_reason(path: text): text := {
 	if is_folder(path) { return if name_of_path(path) in skipped_folders then skipped_folder_reason else "" }
 	if is_warp_file(path) then "" else not_warp_reason
 }
 
 # the warp files of a folder, sorted, its skipped entries left out silently
-warp_files(path: text): list := {
+def warp_files(path: text): list := {
 	if not is_folder(path) { return [path] }
 	found = []
 	for name in sort(list_files(path)) {
@@ -55,10 +55,10 @@ warp_files(path: text): list := {
 }
 
 # a name that means a file, never code: `x.warp`, `samples/hello/hello`
-looks_like_path(argument: text): bool := has_warp_extension(argument) or (argument.contains("/") and not argument.contains(" "))
+def looks_like_path(argument: text): bool := has_warp_extension(argument) or (argument.contains("/") and not argument.contains(" "))
 
 # the changed lines of old → new as `-`/`+` lines under `@@ <file>:<line>`, by their longest common subsequence
-print_diff(shown: text, old: text, new: text) := {
+def print_diff(shown: text, old: text, new: text) := {
 	a = old.split("\n")
 	b = new.split("\n")
 	if old.ends_with("\n") { a = a[0 ..< #a - 1] }
@@ -100,7 +100,7 @@ print_diff(shown: text, old: text, new: text) := {
 }
 
 # shows the diff and asks; the next line of the input answers, its end is no
-confirmed(shown: text, old: text, new: text): bool := {
+def confirmed(shown: text, old: text, new: text): bool := {
 	print_diff(shown, old, new)
 	answer = input("apply? y/n ")
 	if answer == ø { print "" }
@@ -109,7 +109,7 @@ confirmed(shown: text, old: text, new: text): bool := {
 
 # the fix with a `use` line of each standard module the file uses without saying it, after its leading comments and
 # uses (beautify only: warp format lays out)
-with_uses_written(result: list, file: text): list := {
+def with_uses_written(result: list, file: text): list := {
 	modules = command(uses_command + quoted_path(file)).split("\n").filter(module => module.trim() != "")
 	if #modules == 0 { return result }
 	lines = result[0].split("\n")
@@ -118,16 +118,16 @@ with_uses_written(result: list, file: text): list := {
 	uses = modules.map(module => "use " + module.trim())
 	[(lines[0 ..< at] + uses + lines[at ..]).join("\n"), result[1] + uses.map(line => "" + (at + 1) + " " + line)]
 }
-quoted_path(path: text): text := "'" + path.replace("'", "'\\''") + "'"
+def quoted_path(path: text): text := "'" + path.replace("'", "'\\''") + "'"
 
 # a change "<line> <rule>" as check lists it
-listed_change(shown: text, change: text): text := {
+def listed_change(shown: text, change: text): text := {
 	parts = change.split(" ")
 	shown + ":" + parts[0] + ": layout: " + change[(#parts[0] + 1) ..]
 }
 
 # code given instead of files: printed fixed; in check, its changes listed, 1 when there are some
-fixed_code(code: text, checking: bool, rules: list, rewriting: bool): int := {
+def fixed_code(code: text, checking: bool, rules: list, rewriting: bool): int := {
 	result = fixed(code, rules, rewriting)
 	if not checking { print result[0] }
 	if checking { for change in result[1] { print listed_change(code_label, change) } }
@@ -135,7 +135,7 @@ fixed_code(code: text, checking: bool, rules: list, rewriting: bool): int := {
 }
 
 # the exit code: 1 when a file cannot be fixed or, with check, would change
-fix_command(command: text, arguments: list): int := {
+def fix_command(command: text, arguments: list): int := {
 	rewriting = command not in layout_commands
 	if arguments.any(argument => argument in help_words) {
 		print "  " + (if rewriting then usage else format_usage)

@@ -9,7 +9,7 @@ showing_word = "show"
 # the number types a marked type is held as: `type Color = int`, `type Angle = float`
 MARKED_NUMBER_KINDS = {int: Kind.Int, float: Kind.Float}
 # `type Color = int`, `type Angle = float`: Color, Angle; ø for any other statement
-int_type_name(statement: Node): text? := {
+def int_type_name(statement: Node): text? := {
 	if not is_key(statement, Op.Assign) or not (value_of(statement) is symbol) or name_of(value_of(statement)) not in MARKED_NUMBER_KINDS { return ø }
 	declared = key_of(statement)
 	if not (is_key(declared, Op.Colon) and key_of(declared) == opaque_symbol) { return ø }
@@ -18,7 +18,7 @@ int_type_name(statement: Node): text? := {
 }
 # each number type the statements declare, its marked kind: the number's Kind with the type's mark above it, the
 # marks numbered in order of declaration (int_types.warp marks the values, the emitter the values it holds unboxed)
-int_type_kinds(statements: list): map := {
+def int_type_kinds(statements: list): map := {
 	kinds = {}
 	for statement in statements {
 		name = int_type_name(statement)
@@ -27,7 +27,7 @@ int_type_kinds(statements: list): map := {
 	kinds
 }
 # `show(c: Color) := …`: Color; ø for any other statement
-shower_of(statement: Node): text? := {
+def shower_of(statement: Node): text? := {
 	if not is_key(statement, Op.Define) { return ø }
 	head = key_of(statement)
 	if not (is_group(head) and #head == 2 and head#1 == symbol(showing_word) and is_key(head#2, Op.Colon)) { return ø }
@@ -35,7 +35,7 @@ shower_of(statement: Node): text? := {
 	if typed is symbol then name_of(typed) else ø
 }
 # the statements showing a value of one of the program's int types
-int_type_showers(statements: list): list := {
+def int_type_showers(statements: list): list := {
 	types = statements.map(int_type_name).filter(name => name != ø)
 	statements.filter(statement => shower_of(statement) in types)
 }

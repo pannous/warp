@@ -1,5 +1,5 @@
 // PHP's words, for programs ported from PHP: `use PHP` (foreign-spellings)
 
-array_map(f, xs) := map(xs, f)
-array_filter(xs, f) := filter(xs, f)
-array_sum(xs) := sum(xs)
+def array_map(f, xs) := map(xs, f)
+def array_filter(xs, f) := filter(xs, f)
+def array_sum(xs) := sum(xs)

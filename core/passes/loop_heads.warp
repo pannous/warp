@@ -15,30 +15,30 @@ loop_in_word = "in"
 unit_type_words = ["byte", "codepoint", "char", "character"]
 
 # `k, v` or `(k, v)`: the two names a loop over a map binds
-is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
+def is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
 
 # `for int in xs body`: a type word as the loop variable, not one of a text's units
-filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and name_of(variable) not in unit_type_words
+def filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and name_of(variable) not in unit_type_words
 
 # the statements of a `{…}` body, a bare body as it is
-loop_statements(body: Node): list := match body {
+def loop_statements(body: Node): list := match body {
 	List(items, Bracket.Curly, separator): items
 	_: [body]
 }
 
-loop_head(variable: Node, iterable: Node, body: Node): Node := List([symbol(loop_word), variable, symbol(loop_in_word), iterable, body], Bracket.None, Separator.Space)
+def loop_head(variable: Node, iterable: Node, body: Node): Node := List([symbol(loop_word), variable, symbol(loop_in_word), iterable, body], Bracket.None, Separator.Space)
 
-loop_block(statements: list): Node := List(statements, Bracket.Curly, Separator.Semicolon)
+def loop_block(statements: list): Node := List(statements, Bracket.Curly, Separator.Semicolon)
 
 # `for int·typed in xs { if is_type(int·typed, "int") { int = int·typed; body } }`
-type_filtered(variable: Node, iterable: Node, body: list): Node := {
+def type_filtered(variable: Node, iterable: Node, body: list): Node := {
 	item = symbol(name_of(variable) + "·typed")
 	test = call_of("is_type", [item, name_of(variable)])
 	loop_head(item, iterable, loop_block([Key(Key(ø, Op.If, test), Op.Then, loop_block([Key(variable, Op.Assign, item)] + body))]))
 }
 
 # a loop of two names, of a type word, or of a bare body as the rules take it; any other node as it is
-loop_heads_of(n: Node): Node := match n {
+def loop_heads_of(n: Node): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts != 5 or parts#1 != symbol(loop_word) or parts#3 != symbol(loop_in_word) { return n }
 		variable = parts#2
@@ -54,4 +54,4 @@ loop_heads_of(n: Node): Node := match n {
 	_: n
 }
 
-loop_heads(program: Node): Node := bottom_up(program, loop_heads_of)
+def loop_heads(program: Node): Node := bottom_up(program, loop_heads_of)

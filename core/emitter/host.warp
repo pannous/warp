@@ -13,7 +13,7 @@ def host_type(kind: ValueKind): list { if kind == ValueKind.I32 or kind == Value
 
 # a host word's last parameters a call may leave out, their values: `exit()` is exit(0)
 host_defaults = {exit: [0]}
-left_out(name: text, missing: int): list := {
+def left_out(name: text, missing: int): list := {
 	defaults = host_defaults.get(name) ?? []
 	if missing > 0 and missing <= #defaults then defaults[(#defaults - missing)..] else []
 }
@@ -84,14 +84,14 @@ def exported_trap_message() {
 def is_compiler_source(file: text): bool := file.starts_with("core/") or "/core/" in file or "lib/compiler/" in file
 # f at the module's next function index (results `any`: a declared Function result fails, card class-result-type),
 # the functions counted as placed, not measured: a long list's count walks it
-placed(f: Function): any := {
+def placed(f: Function): any := {
 	f.index = #module.imports + module.placed
 	module.placed += 1
 	module.order += [f]
 	f
 }
 # a function made by the emitter (no source), at the next index, its code written by the caller
-added_function(name: text, kinds: list, result: ValueKind, local_names: list): any := {
+def added_function(name: text, kinds: list, result: ValueKind, local_names: list): any := {
 	f = placed(bare_function(name))
 	f.kinds = kinds
 	f.result = result
@@ -100,7 +100,7 @@ added_function(name: text, kinds: list, result: ValueKind, local_names: list): a
 	f
 }
 # a function the host calls by its name, its code written by the caller
-exported_function(name: text, kinds: list, result: ValueKind): any := {
+def exported_function(name: text, kinds: list, result: ValueKind): any := {
 	f = added_function(name, kinds, result, range_list(#kinds).map(i => "argument" + (i + 1)))
 	f.is_runtime = yes
 	module.builders += [f]
@@ -129,7 +129,7 @@ def host_int(value: TypedCode): list {
 
 # `global name = 0`, `= ""` or `= []` at the top of runtime.warp: a module variable of that kind its words share, from
 # the kind's zero (ø for a text, an empty list); `[]` is held behind the opaque word (is_empty_list)
-runtime_global(n: Node): any := {
+def runtime_global(n: Node): any := {
 	if not (is_key(n, Op.Colon) and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
 	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable

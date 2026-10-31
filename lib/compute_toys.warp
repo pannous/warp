@@ -100,7 +100,7 @@ compute_toys_engine_only = [
 ]
 
 // The kernel as a function: no @compute attributes, the pixel parameter plain, its writes to the screen warp_store's
-compute_toys_kernel(code: text) := {
+def compute_toys_kernel(code: text) := {
 	plain = replace_all(code, "@compute\\s*@workgroup_size\\([^)]*\\)\\s*", "")
 	plain = replace_all(plain, "@builtin\\(\\s*global_invocation_id\\s*\\)\\s*", "")
 	plain = replace_all(plain, "textureDimensions\\(\\s*screen\\s*\\)", "vec2u(values.size)")
@@ -109,7 +109,7 @@ compute_toys_kernel(code: text) := {
 	replace_all(plain, "textureStore\\(\\s*screen\\s*,\\s*((?:[^,()]|\\((?:[^()]|\\([^()]*\\))*\\))+),", "warp_store(vec2i($1),")
 }
 
-compute_toy(code: text) := {
+def compute_toy(code: text) := {
 	for rule in compute_toys_engine_only {
 		if code matches rule#1 { raise "compute_toy cannot run this shader: " + rule#2 }
 	}

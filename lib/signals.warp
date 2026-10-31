@@ -11,7 +11,7 @@ rewrite $p => $q where program and $q = signaled($p)
 // each watched name's listeners in order, and whether each runs only on a change, as two lists of the same length
 global signal_listeners = {}
 global signal_changes_only = {}
-signal_listen(names: list, changes_only: bool, listener: function): any := {
+def signal_listen(names: list, changes_only: bool, listener: function): any := {
 	for name in names {
 		if not (name in signal_listeners) {
 			signal_listeners[name] = []
@@ -23,7 +23,7 @@ signal_listen(names: list, changes_only: bool, listener: function): any := {
 	ø
 }
 // the listeners of the name told of its write, from old to value; the value
-signal_notify(name: text, value: any, old: any): any := {
+def signal_notify(name: text, value: any, old: any): any := {
 	if name in signal_listeners {
 		listeners = signal_listeners[name]
 		for i in 1 ..< #listeners + 1 {

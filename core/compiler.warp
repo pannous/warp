@@ -28,7 +28,7 @@ prelude_source = module_source("prelude")
 RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
 # a root's text, its `use` paths named from core, where the roots are lowered together: runtime/extended.warp's
 # `use "extended/exact.warp"` is core/runtime/extended/exact.warp
-root_text(file: text): text := {
+def root_text(file: text): text := {
 	text = file_text(runtime_folder() + "/" + file)
 	if text == ø { raise "no runtime file " + runtime_folder() + "/" + file }
 	steps = file.split("/")
@@ -36,14 +36,14 @@ root_text(file: text): text := {
 	text.replace("use \"", "use \"" + steps[0 ..< #steps - 1].join("/") + "/")
 }
 # core, as lib/ links it: the runtime's sources, which only `warp runtime` reads (a compile takes runtime.wasm)
-runtime_folder(): text := library_folder + "/compiler"
+def runtime_folder(): text := library_folder + "/compiler"
 
 # the runtime words, lowered by the same passes as a program, only to build runtime.wasm: a compile takes them from it
-lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_source)
+def lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_source)
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
 # runtime.wasm, a library module behind it, its operands relocatable (write_module)
-compile(source: text, folder: text, library_runtime: any = ø): any := {
+def compile(source: text, folder: text, library_runtime: any = ø): any := {
 	fresh_module()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
@@ -88,7 +88,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 
 # what the checks diagnosed past the first `known` facts; an error among them fails the compile with Rust's text (card
 # pure-self-ignores-errors), the program compiled from source after a linked module didn't bind too
-checked_facts(known: int): list := {
+def checked_facts(known: int): list := {
 	found = diagnosed_since(known)
 	failing = first_error(found, module.program_file)
 	if failing { throw failing }
@@ -100,8 +100,8 @@ checked_facts(known: int): list := {
 MODULES_FOLDER = "modules"
 # which standard module defines which word, beside the prebuilt modules (prelude_words.warp word_index)
 WORD_INDEX = "words.tsv"
-word_index_file(): text := library_folder + "/" + MODULES_FOLDER + "/" + WORD_INDEX
-linked_libraries(source: text): list := {
+def word_index_file(): text := library_folder + "/" + MODULES_FOLDER + "/" + WORD_INDEX
+def linked_libraries(source: text): list := {
 	if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { return [] }
 	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
 	images = []
@@ -130,7 +130,7 @@ VIEW_SUFFIX = ".view.json"
 
 # the module of the source file written to the wasm file, the source's uses found in folder; parser.warp's view of it
 # when the output ends in VIEW_SUFFIX
-compile_file(source_file: text, wasm_file: text, folder: text) := {
+def compile_file(source_file: text, wasm_file: text, folder: text) := {
 	if wasm_file.ends_with(VIEW_SUFFIX) {
 		write(wasm_file, view_json(bridged(stage_view(parsed(read(source_file))))))
 	} else {
@@ -139,7 +139,7 @@ compile_file(source_file: text, wasm_file: text, folder: text) := {
 	}
 }
 # the module of the source written to the wasm file, and as a separate module to separate_output when one is wanted
-compile_written(source: text, wasm_file: text, folder: text) := {
+def compile_written(source: text, wasm_file: text, folder: text) := {
 	compiled = compile(source, folder)
 	# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
 	if compiled is text { raise compiled }
@@ -151,18 +151,18 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 # a run links its program unless it is primitive (it imports no runtime), makes closures (linked closure ids are open:
 # notes/runtime_linking.md "Open"), counts fuel or links a prebuilt module (`use units`: its linked form is invalid
 # wasm, 2026-10-28): those run as the module of wasm_file
-runs_linked(source: text): bool := not is_primitive_file(source) and #module.closures == 0 and not module.counts_fuel and #module.linked_images == 0
+def runs_linked(source: text): bool := not is_primitive_file(source) and #module.closures == 0 and not module.counts_fuel and #module.linked_images == 0
 
 # the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
 REPL_STATE = ".warp-repl-state.warp"
-staying_lines(line: text): text := {
+def staying_lines(line: text): text := {
 	statements = statements_in(plain_node(parsed(line)))
 	staying = statements.filter(statement => is_declaration(statement) or is_import(statement))
 	staying.map(statement => "${statement}").join("\n")
 }
 # one line of the REPL: its module written to wasm_file, compiled after the state file's lines; the line's
 # declarations added to the state once it compiled
-repl_step(state_file: text, line: text, wasm_file: text) := {
+def repl_step(state_file: text, line: text, wasm_file: text) := {
 	state = try read(state_file) else ""
 	compiled = compile(state + "\n" + line, ".")
 	if compiled is text { raise compiled }
@@ -171,7 +171,7 @@ repl_step(state_file: text, line: text, wasm_file: text) := {
 	if staying { write(state_file, state + "\n" + staying) }
 }
 # `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
-repl() := {
+def repl() := {
 	write(REPL_STATE, "")
 	line = input(REPL_PROMPT)
 	while line != ø {
@@ -197,16 +197,16 @@ LINKED_ARGUMENT = 6
 global linked_output = if command == "" and #args >= LINKED_ARGUMENT then args#LINKED_ARGUMENT else ""
 global runtime_held = ø
 # runtime.wasm: a compile's fifth argument, else lib/'s (the native warp's, core/native/warp.warp)
-runtime_path(): text := if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" then args#RUNTIME_ARGUMENT else library_folder + "/" + RUNTIME_WASM
-runtime_bytes(): list := {
+def runtime_path(): text := if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" then args#RUNTIME_ARGUMENT else library_folder + "/" + RUNTIME_WASM
+def runtime_bytes(): list := {
 	if runtime_held == ø { runtime_held = read_bytes(runtime_path()) }
 	runtime_held
 }
 # the program just compiled behind runtime.wasm, as a module importing it instead
-separate_module(): list := linked_bytes(module.order)
+def separate_module(): list := linked_bytes(module.order)
 # runtime.wasm, the runtime words compiled once (emitter/prebuilt.warp), written beside warp.wasm by `warp rebuild`
 RUNTIME_WASM = "runtime.wasm"
-write_runtime(file: text) := {
+def write_runtime(file: text) := {
 	made = runtime_wasm_module(lowered_runtime_words(), host_words)
 	if made is text { raise made }
 	write_bytes(file, with_call_sites(made))
@@ -214,12 +214,12 @@ write_runtime(file: text) := {
 # <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp own_items_from), for
 # programs to be linked to; `warp rebuild` writes one beside warp.wasm for each. Every program has the prelude, used
 # again it would define its words twice
-write_module(name: text, runtime_file: text, file: text) := {
+def write_module(name: text, runtime_file: text, file: text) := {
 	write_bytes(file, compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file)))
 }
 # every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild is
 # named and stays compiled from source: its file left empty, never an older build linked in its place
-write_modules(folder: text, runtime_file: text) := {
+def write_modules(folder: text, runtime_file: text) := {
 	for name in std_module_names {
 		file = folder + "/" + name + ".wasm"
 		try { write_module(name, runtime_file, file) } catch refusal {
@@ -229,12 +229,12 @@ write_modules(folder: text, runtime_file: text) := {
 	}
 	write(folder + "/" + WORD_INDEX, word_index_text())
 }
-source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
-show_version() := print version_text(library_folder)
-show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
-show_data() := print plain_node(parsed(source_or_code(1)))
-show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
-show_uses() := { for module in implicit_modules(source_or_code(1), word_index_file()) { print module } }
+def source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
+def show_version() := print version_text(library_folder)
+def show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
+def show_data() := print plain_node(parsed(source_or_code(1)))
+def show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
+def show_uses() := { for module in implicit_modules(source_or_code(1), word_index_file()) { print module } }
 # where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
 # they are code, compiled there for it to run; no other harness sets it
 RUN_TO_VARIABLE = "WARP_RUN_TO"

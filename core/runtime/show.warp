@@ -10,16 +10,16 @@ use "types.warp"
 use "../emitter/byte_codes.warp"
 # an enum's case: a symbol whose info byte holds its enum's number (emitter.warp case_value)
 # (a type value, `class int`, is none: decision type-text)
-is_case_node(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Symbol and code_free_kind(n) != Kind.Symbol and not names_a_type(n)
+def is_case_node(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Symbol and code_free_kind(n) != Kind.Symbol and not names_a_type(n)
 # the text a case is spelled by: the spelling it holds, `A = "a"`, else its name
-case_spelling(case: Node): text := if is_null(key_value(case)) then unboxed_text(case) else unboxed_text(key_value(case))
+def case_spelling(case: Node): text := if is_null(key_value(case)) then unboxed_text(case) else unboxed_text(key_value(case))
 # `x as text`: a case its spelling, any other value its text (decision enum-raw-values)
 # `x as text`: a case as its spelling, any other value as it shows (an instance by its class's text())
-spelled_case(n: Node): Node := if is_case_node(n) and not is_null(key_value(n)) then key_value(n) else n
+def spelled_case(n: Node): Node := if is_case_node(n) and not is_null(key_value(n)) then key_value(n) else n
 # the text of a boxed value of a kind known only at run time (kind codes: rust-harness:src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names. Only the
 # empty value prints ø: a `ø:` case would take an empty list too, which prints [] (it equals ø, as in Rust)
-node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_type(n) then "class " + unboxed_text(n) else match n {
+def node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_type(n) then "class " + unboxed_text(n) else match n {
 	Number(_): number_text(n)
 	Char(_): char_text(unboxed_char(n))
 	Text(_): unboxed_text(n)
@@ -29,13 +29,13 @@ node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_t
 	False: "no"
 	_: collection_text(n)
 }
-number_text(n: Node): text := {
+def number_text(n: Node): text := {
 	if kind_code(n) != Kind.Int { return float_text(unboxed_float(n)) }
 	# an Int not in an $i64box is an extended one, a ratio or a big int: a plain int's printing names no extended type
 	if is_plain_int(n) then int_text(unboxed_int(n)) else extended_text(n)
 }
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
-collection_text(n: Node): text := {
+def collection_text(n: Node): text := {
 	if kind_code(n) == Kind.List { return list_shown(n) }
 	if node_is_error(n) { return unboxed_text(n) }
 	if kind_code(n) == Kind.Time { return extended_text(n) }
@@ -46,18 +46,18 @@ collection_text(n: Node): text := {
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
-node_code(n: Node): text := match n {
+def node_code(n: Node): text := match n {
 	Char(_): "'" + node_text(n) + "'"
 	Text(_): text_code(unboxed_text(n))
 	_: node_text(n)
 }
 # a value as `warp test` reads it back (WARP_VALUE_AS_DATA): as a list shows it, a type value as the symbol naming it,
 # as Rust reads one back
-value_code(n: Node): text := if names_a_type(n) then unboxed_text(n) else node_code(n)
+def value_code(n: Node): text := if names_a_type(n) then unboxed_text(n) else node_code(n)
 # a one-character text reads as the character it is (rust-harness:src/node/serialization.rs)
-text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
+def text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
-quoted_text(t: text): text := {
+def quoted_text(t: text): text := {
 	escapes = 0
 	for i in 0..byte_count(t) { if is_escaped_byte(byte_at(t, i)) { escapes += 1 } }
 	out = new_text(byte_count(t) + escapes + 2)
@@ -76,18 +76,18 @@ quoted_text(t: text): text := {
 	out
 }
 # the bytes of `"` and `\`, which a quoted text escapes
-is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
+def is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
 # a list as `warp format` writes it, `[1, "ab"]` (decision shown-spaced)
-list_text(xs: list): text := "[" + joined_items(xs, ", ") + "]"
+def list_text(xs: list): text := "[" + joined_items(xs, ", ") + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
-items_text(xs: list): text := joined_items(xs, " ")
-joined_items(xs: list, joiner: text): text := {
+def items_text(xs: list): text := joined_items(xs, " ")
+def joined_items(xs: list, joiner: text): text := {
 	parts = []
 	for x in xs { parts += [node_code(x)] }
 	texts_joined(parts, joiner)
 }
 # `a: 1`; a class instance as its class's show() gives it (decision show-hook), else `Point{x: 1, y: 2}`, its fields a map
-key_text(entry: Node): text := {
+def key_text(entry: Node): text := {
 	value = key_value(entry)
 	if marked_kind(entry) == Marked.Instance {
 		shown = instance_show(entry)
@@ -101,11 +101,11 @@ key_text(entry: Node): text := {
 	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
 	node_code(entry_key(entry)) + spaced + node_code(value)
 }
-is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ
+def is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ
 # n as print shows it, in linear memory for a host to read where c_text puts a C string (the native driver reads a host
 # word's arguments so, core/native/driver.warp): its address times 2^32 plus its length; -1 for a text past the output
 # area
-shown_at(n: Node): int := {
+def shown_at(n: Node): int := {
 	t = node_text(n)
 	if c_text_at() + byte_count(t) > output_room() { return -1 }
 	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }

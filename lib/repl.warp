@@ -12,7 +12,7 @@ isatty(fd: i32): i32 from 'c'
 setlocale(category: i32, locale: text): text from 'c'
 
 // how many brackets a text leaves open: an entry goes on over the next lines while some are
-open_brackets(t: text) := {
+def open_brackets(t: text) := {
 	depth = 0
 	for c in t {
 		if c == "(" or c == "[" or c == "{" { depth = depth + 1 }
@@ -23,7 +23,7 @@ open_brackets(t: text) := {
 
 // an entry the later ones need: a use, a declaration, a definition, an assignment, ++ or --; not an expression nor a
 // comparison (==, !=, <=, >=)
-state_entry(entry: text) := {
+def state_entry(entry: text) := {
 	t = trim(entry)
 	for word in ["use ", "let ", "var ", "const ", "global ", "class "] {
 		if starts_with(t, word) { return true }
@@ -34,7 +34,7 @@ state_entry(entry: text) := {
 }
 
 // the name an entry assigns: `a = 7`, `a += 2`, `a++` give a; "" for any other entry (a definition `f(x) := …`, `a.b = 1`)
-assigned_name(entry: text) := {
+def assigned_name(entry: text) := {
 	t = trim(entry)
 	name = ""
 	for c in t {
@@ -50,12 +50,12 @@ assigned_name(entry: text) := {
 }
 
 // a text written as warp reads it back: quoted, its backslashes, quotes and line ends escaped
-quoted(t: text) := "\"" + replace(replace(replace(t, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n") + "\""
+def quoted(t: text) := "\"" + replace(replace(replace(t, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n") + "\""
 
 // The line editor on a terminal: libedit's readline (arrows, history kept in ~/.warp_history) in a module of its own,
 // run for each line, so the console still starts where the library is missing. Its arguments: "history" and the
 // history file to load it; else the prompt and the history file: the line typed, ø at the input's end (Ctrl+D)
-editor_source() := {
+def editor_source() := {
 	// the library's name built from its quotes: a `from '…'` line inside a text literal is lost (card to file)
 	edit = str(chr(39)) + "edit" + str(chr(39))
 	lines = [
@@ -77,7 +77,7 @@ editor_source() := {
 }
 
 // the editor's module and history file when standard input is a terminal and libedit is there, else ø: input reads
-line_editor() := {
+def line_editor() := {
 	if isatty(0) != 1 { return ø }
 	setlocale(0, "")
 	editor = compile_wasm(editor_source())
@@ -89,7 +89,7 @@ line_editor() := {
 }
 
 // a line typed after the prompt, by the editor if there is one, ø at the input's end
-typed(prompt: text, editor: any) := {
+def typed(prompt: text, editor: any) := {
 	if editor == ø { return input(prompt) }
 	line = try run_wasm(editor.bytes, [prompt, editor.history]) catch e { e }
 	if is_error(line) { return input(prompt) }
@@ -97,7 +97,7 @@ typed(prompt: text, editor: any) := {
 }
 
 // one entry, the brackets of its first line still open: read on until they close, ø at the input's end
-entry_from(first: text, editor: any) := {
+def entry_from(first: text, editor: any) := {
 	entry = first
 	while open_brackets(entry) > 0 {
 		more = typed("… ", editor)
@@ -111,7 +111,7 @@ repl_help := "exit or quit (or Ctrl+D) ends; :session lists the kept entries, :r
 
 // the value of a program, else its Error: the compiler's refusal (compile_wasm answers it, raising nothing), the run's
 // raise or trap
-evaluated(source: text) := {
+def evaluated(source: text) := {
 	bytes = compile_wasm(source)
 	if is_error(bytes) { return bytes }
 	try run_wasm(bytes) catch e { e }
@@ -119,7 +119,7 @@ evaluated(source: text) := {
 
 // an Error's message as the entry's: without the os.compile_wasm prefix and the scratch file the compiler read, its
 // line counted from the entry's first (the session's `kept` lines come before it) when the compiler's is past them
-message(error: any, kept: int) := {
+def message(error: any, kept: int) := {
 	m = replace(str(error), "os.compile_wasm: ", "")
 	parts = split(m, " at /")
 	if count(parts) < 2 { return m }
@@ -133,7 +133,7 @@ message(error: any, kept: int) := {
 
 // the value as warp source that gives it back, ø when there's none: a text quoted, a number or yes/no as shown, a
 // list as shown if that reads back as the same
-literal(value: any) := {
+def literal(value: any) := {
 	if is_type(value, "text") { return quoted(value) }
 	written = text_form(value)
 	if is_type(value, "list") {
@@ -145,7 +145,7 @@ literal(value: any) := {
 
 // what the session keeps of an entry evaluated to `value`: an assignment's name bound to the value's literal, else the
 // entry as written
-kept_line(entry: text, value: any) := {
+def kept_line(entry: text, value: any) := {
 	name = assigned_name(entry)
 	if name == "" { return entry }
 	written = literal(value)
@@ -155,7 +155,7 @@ kept_line(entry: text, value: any) := {
 
 // the console: read an entry, evaluate it with the session's kept lines, print its value or its Error; an entry that
 // failed is not kept
-repl() := {
+def repl() := {
 	print "Interactive console (Ctrl+D to exit)"
 	session = ""
 	kept = 0

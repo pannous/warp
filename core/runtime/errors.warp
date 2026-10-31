@@ -7,116 +7,116 @@ use "show.warp"
 use "text.warp"
 use "types.warp"
 use "error_sentences.warp"
-divide_by_zero(): int := {
+def divide_by_zero(): int := {
 	fail()
 	0
 }
 # `error("boom")`: the Error of the message, a value, not raised (Rust's text_builtins.rs error)
-error_node(message: Node): Node := error_of(node_text(message))
+def error_node(message: Node): Node := error_of(node_text(message))
 # `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
 # emit_data_item); `q.k = e`, `{k: e}`: a field holds none
-held_list_item(item: Node): Node := {
+def held_list_item(item: Node): Node := {
 	if node_is_error(item) { a_list_item_holds_no_error(item) }
 	item
 }
-held_field(item: Node): Node := {
+def held_field(item: Node): Node := {
 	if node_is_error(item) { a_field_holds_no_error(item) }
 	item
 }
-a_list_item_holds_no_error(error: Node): int := {
+def a_list_item_holds_no_error(error: Node): int := {
 	global trap_detail = error
 	fail()
 	0
 }
-a_field_holds_no_error(error: Node): int := {
+def a_field_holds_no_error(error: Node): int := {
 	global trap_detail = error
 	fail()
 	0
 }
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
 # the runtime errors of the library words, named for rust-harness:src/wasm_emitter/control/traps.rs to read off the trace
-index_out_of_range(): int := {
+def index_out_of_range(): int := {
 	fail()
 	0
 }
-not_a_list(): int := {
+def not_a_list(): int := {
 	fail()
 	0
 }
-not_a_text(): int := {
+def not_a_text(): int := {
 	fail()
 	0
 }
-not_an_int(): int := {
+def not_an_int(): int := {
 	fail()
 	0
 }
-not_a_character(): int := {
+def not_a_character(): int := {
 	fail()
 	0
 }
-invalid_code_point(): int := {
+def invalid_code_point(): int := {
 	fail()
 	0
 }
-invalid_number(): int := {
+def invalid_number(): int := {
 	fail()
 	0
 }
-not_a_whole_number(): int := {
+def not_a_whole_number(): int := {
 	fail()
 	0
 }
-not_an_exact_number(): int := {
+def not_an_exact_number(): int := {
 	fail()
 	0
 }
-an_int_must_be_a_whole_number(): int := {
+def an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
 }
 # the run's error is the message (Rust's returned_error with its trap detail)
-returned_error(message: text): int := {
+def returned_error(message: text): int := {
 	global trap_detail = held(message)
 	fail()
 	0
 }
-index_out_of_range_of(index: int, count: int): int := {
+def index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
 	index_out_of_range()
 }
 # `raise X`: the run fails with X as its message (Rust's returned_error, rust-harness:src/wasm_emitter/control/traps.rs)
-returned_error(): int := {
+def returned_error(): int := {
 	fail()
 	0
 }
 # `length(5)`, `length.([1, 2, 3])`: only a list, a text or a character has a length; the value named
-no_length(): int := {
+def no_length(): int := {
 	fail()
 	0
 }
-too_big_for_int(): int := {
+def too_big_for_int(): int := {
 	fail()
 	0
 }
-too_big_for_int_of(value: Node): int := {
+def too_big_for_int_of(value: Node): int := {
 	global trap_detail = value
 	too_big_for_int()
 }
-no_length_of(value: Node): int := {
+def no_length_of(value: Node): int := {
 	global trap_detail = value
 	no_length()
 }
-raised(value: Node): int := {
+def raised(value: Node): int := {
 	global trap_detail = value
 	returned_error()
 }
 # a statement's dropped value (decision dropped-error-raises): an Error raises, `write(…)` into a missing folder stops
 # the run with why
-dropped_value(n: Node) := if node_is_error(n) { raised(n) }
+def dropped_value(n: Node) := if node_is_error(n) { raised(n) }
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
 # it, the words of the word it failed in (trap_name): a raise's is the raised value, a missing field's names it
-caught_error(finished: bool, value: Node): Node := {
+def caught_error(finished: bool, value: Node): Node := {
 	if finished { return value }
 	global trap_name
 	global trap_detail
@@ -124,46 +124,46 @@ caught_error(finished: bool, value: Node): Node := {
 	if name == "returned_error" or name == "missing_field" then error_of(error_sentence(name)) else error_of(error_words(name))
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
-index_of_node(n: Node): int := {
+def index_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { index_must_be_an_integer() }
 	unboxed_int(n)
 }
 # a product beyond the int range (Rust's would be a big int)
-int_overflow() := {
+def int_overflow() := {
 	fail()
 	0
 }
-index_must_be_an_integer(): int := {
+def index_must_be_an_integer(): int := {
 	fail()
 	0
 }
 # `m.name` of a value without the field `name` known only at run time: "no field name"
-missing_field(name: text): int := {
+def missing_field(name: text): int := {
 	global trap_detail = held(name)
 	fail()
 	0
 }
 # `x as rational` of ∞ or NaN: "not a finite number"
-not_a_finite_number() := {
+def not_a_finite_number() := {
 	fail()
 	0
 }
 # an int result beyond 64 bits where the runtime has no big ints: "int64 overflow" (rust-harness:src/numbers/fixed_width.rs)
-overflow_of_int64() := {
+def overflow_of_int64() := {
 	fail()
 	0
 }
 # a closure call of a value that is no closure, or of a closure of another arity
-not_a_function() := {
+def not_a_function() := {
 	fail()
 	0
 }
-wrong_number_of_arguments() := {
+def wrong_number_of_arguments() := {
 	fail()
 	0
 }
 # the runtime errors Rust's run names by the function trapping (rust-harness:src/wasm_emitter/lists/list_ops/runtime_errors.rs)
-not_a_map(): int := {
+def not_a_map(): int := {
 	fail()
 	0
 }

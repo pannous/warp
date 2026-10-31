@@ -8,7 +8,7 @@ use "../floats.warp"
 use "../instructions.warp"
 use "big_ints.warp"
 use "../../emitter/byte_codes.warp"
-int_gcd(a: int, b: int): int := {
+def int_gcd(a: int, b: int): int := {
 	if a < 0 { a = -a }
 	if b < 0 { b = -b }
 	while b != 0 {
@@ -19,7 +19,7 @@ int_gcd(a: int, b: int): int := {
 	a
 }
 # n/d in lowest terms, an int when d divides n; d 0 traps, as Rust's divide by zero fails
-exact_ratio(n: int, d: int): Node := {
+def exact_ratio(n: int, d: int): Node := {
 	if d == 0 { divide_by_zero() }
 	divisor = int_gcd(n, d)
 	if d < 0 { divisor = -divisor }
@@ -29,48 +29,48 @@ exact_ratio(n: int, d: int): Node := {
 	ratio_of(n, d)
 }
 # the numerator and denominator of an Int $Node, an int its own numerator over 1
-exact_numerator(n: Node): int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
-exact_denominator(n: Node): int := if is_ratio(n) then ratio_denominator(n) else 1
+def exact_numerator(n: Node): int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
+def exact_denominator(n: Node): int := if is_ratio(n) then ratio_denominator(n) else 1
 # whether an Int node holds a big int: as a whole, or as a ratio's part (a decimal past 10^18). The words below hand
 # one to big_ratios.warp by the intrinsic made_case(Made.BigInt, big_exact_sum(a, b)) …: `if holds_big_int(a) or
 # holds_big_int(b) { return big_exact_sum(a, b) }`, compiled only into a program that makes big ints (emitter made_case), so a plain-int
 # program carries none of it
-holds_big_int(n: Node): bool := if is_ratio(n) then not has_plain_parts(n) else not is_plain_int(n)
+def holds_big_int(n: Node): bool := if is_ratio(n) then not has_plain_parts(n) else not is_plain_int(n)
 # what made_case(Made.Ratio, …) tests
-holds_ratio(n: Node): bool := is_ratio(n)
+def holds_ratio(n: Node): bool := is_ratio(n)
 # whether an exact number's parts are below 2^31, so that a sum of two products of them stays within 64 bits; the
 # words below go on in big_ratios.warp past that, an Int being unbounded (D16): twelve divisions by 1.18 are 59^12
 # over 50^12
-small_parts(n: Node): bool := {
+def small_parts(n: Node): bool := {
 	numerator = exact_numerator(n)
 	numerator < 2147483648 and numerator > -2147483648 and exact_denominator(n) < 2147483648
 }
-fit_together(a: Node, b: Node): bool := small_parts(a) and small_parts(b)
+def fit_together(a: Node, b: Node): bool := small_parts(a) and small_parts(b)
 # a's numerator times b's denominator
-cross_product(a: Node, b: Node): int := exact_numerator(a) * exact_denominator(b)
-common_product(a: Node, b: Node): int := exact_denominator(a) * exact_denominator(b)
-exact_add(a: Node, b: Node): Node := {
+def cross_product(a: Node, b: Node): int := exact_numerator(a) * exact_denominator(b)
+def common_product(a: Node, b: Node): int := exact_denominator(a) * exact_denominator(b)
+def exact_add(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_sum(a, b))
 	if not fit_together(a, b) { return big_exact_sum(a, b) }
 	exact_ratio(cross_product(a, b) + cross_product(b, a), common_product(a, b))
 }
-exact_sub(a: Node, b: Node): Node := {
+def exact_sub(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_difference(a, b))
 	if not fit_together(a, b) { return big_exact_difference(a, b) }
 	exact_ratio(cross_product(a, b) - cross_product(b, a), common_product(a, b))
 }
-exact_mul(a: Node, b: Node): Node := {
+def exact_mul(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_product(a, b))
 	if not fit_together(a, b) { return big_exact_product(a, b) }
 	exact_ratio(exact_numerator(a) * exact_numerator(b), common_product(a, b))
 }
-exact_div(a: Node, b: Node): Node := {
+def exact_div(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_quotient(a, b))
 	if not fit_together(a, b) { return big_exact_quotient(a, b) }
 	exact_ratio(cross_product(a, b), exact_denominator(a) * exact_numerator(b))
 }
 # -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
-exact_order(a: Node, b: Node): int := {
+def exact_order(a: Node, b: Node): int := {
 	made_case(Made.BigInt, big_exact_order(a, b))
 	if not fit_together(a, b) { return big_exact_order(a, b) }
 	left = cross_product(a, b)
@@ -79,7 +79,7 @@ exact_order(a: Node, b: Node): int := {
 }
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
-exact_text(n: Node): text := {
+def exact_text(n: Node): text := {
 	made_case(Made.BigInt, big_exact_text(n))
 	# an Int that is no ratio: a plain int, else a big int, whose text a program without one never compiles (shown_big_int)
 	if not is_ratio(n) { return if is_plain_int(n) then int_text(unboxed_int(n)) else shown_big_int(n) }
@@ -94,7 +94,7 @@ exact_text(n: Node): text := {
 	decimal_text(int_text(if scaled < 0 then -scaled else scaled), digits, numerator < 0)
 }
 # a magnitude's digits with a point ahead of the last `digits` of them, a 0 ahead of a leading point
-decimal_text(magnitude: text, digits: int, negative: bool): text := {
+def decimal_text(magnitude: text, digits: int, negative: bool): text := {
 	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
 	whole = byte_count(padded) - digits
 	out = new_text(byte_count(padded) + 1)
@@ -105,7 +105,7 @@ decimal_text(magnitude: text, digits: int, negative: bool): text := {
 	out
 }
 # how often factor divides n
-factor_count(n: int, factor: int): int := {
+def factor_count(n: int, factor: int): int := {
 	count = 0
 	while n != 0 and int_remainder(n, factor) == 0 {
 		n = int_quotient(n, factor)
@@ -113,7 +113,7 @@ factor_count(n: int, factor: int): int := {
 	}
 	count
 }
-power(base: int, exponent: int): int := {
+def power(base: int, exponent: int): int := {
 	out = 1
 	for i in 0..exponent { out = out * base }
 	out
@@ -121,7 +121,7 @@ power(base: int, exponent: int): int := {
 # `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
 # rust-harness:src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
 # 14142135623730951/10^16; ∞ and NaN have no fraction
-float_as_exact(x: float): Node := {
+def float_as_exact(x: float): Node := {
 	# x - x is 0 for every finite x, NaN for ∞ and NaN
 	if x - x != 0 { not_a_finite_number() }
 	if x == 0 { return exact_ratio(0, 1) }
@@ -146,7 +146,7 @@ float_as_exact(x: float): Node := {
 	exact_ratio(sign * digits, multiplied_within_64_bits(multiplied_within_64_bits(1, 5, fives), 2, twos))
 }
 # n · factor^times of n ≥ 0; beyond 64 bits it fails as an int64 overflow (Rust's twin goes on in big ints)
-multiplied_within_64_bits(n: int, factor: int, times: int): int := {
+def multiplied_within_64_bits(n: int, factor: int, times: int): int := {
 	for i in 0..times {
 		if n > int_quotient(9223372036854775807, factor) { overflow_of_int64() }
 		n = n * factor
@@ -154,13 +154,13 @@ multiplied_within_64_bits(n: int, factor: int, times: int): int := {
 	n
 }
 # a text of count zero digits
-zeros(count: int): text := {
+def zeros(count: int): text := {
 	out = new_text(if count > 0 then count else 0)
 	for i in 0..count { set_byte(out, i, Ascii.Zero) }
 	out
 }
 # `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
-floor_quotient(a: int, b: int): int := {
+def floor_quotient(a: int, b: int): int := {
 	q = int_quotient(a, b)
 	if a - q * b < 0 {
 		if b > 0 { q -= 1 } else { q += 1 }
@@ -170,7 +170,7 @@ floor_quotient(a: int, b: int): int := {
 # `base ^ exponent` of exact numbers (rust-harness:src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
 # inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names. An int
 # to a positive power is unbounded, 2^10000 a big int of 3011 digits (big_ints.warp)
-exact_pow(base: Node, exponent: Node): Node := {
+def exact_pow(base: Node, exponent: Node): Node := {
 	if is_ratio(exponent) { fail() }
 	times = unboxed_int(exponent)
 	if times < 0 {
@@ -184,7 +184,7 @@ exact_pow(base: Node, exponent: Node): Node := {
 }
 # base ^ exponent by squaring, exponent at least 0 (rust-harness:src/wasm_emitter/numbers/big_int/slow_paths.rs int_pow); a product
 # beyond the int range fails in int_overflow, where Rust's turns into a big int
-int_pow(base: int, exponent: int): int := {
+def int_pow(base: int, exponent: int): int := {
 	if exponent < 0 { fail() }
 	result = 1
 	while exponent > 0 {
@@ -195,7 +195,7 @@ int_pow(base: int, exponent: int): int := {
 	result
 }
 # a * b, failing in int_overflow when the product leaves the int range
-checked_product(a: int, b: int): int := {
+def checked_product(a: int, b: int): int := {
 	product = a * b
 	# -1 · smallest leaves the range, and its quotient check would trap itself
 	overflowed = if a == -1 then b == least_int() else a != 0 and int_quotient(product, a) != b

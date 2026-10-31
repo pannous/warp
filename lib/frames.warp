@@ -8,9 +8,9 @@ rewrite listen(data frame, $listener, $once) => frame_listened($listener, $once)
 // the program ended by its frames (lib/rule_words.warp framed)
 rewrite $p => $q where program and $q = framed($p)
 
-frame_listened(listener: function, once: bool): int := listen(data frame, listener, once)
+def frame_listened(listener: function, once: bool): int := listen(data frame, listener, once)
 // the frames after the program, its last value kept: each of the window's while it is open, one without a window
-frames_end(value: any = ø) := {
+def frames_end(value: any = ø) := {
 	set_system_value("window_open", 1)
 	if window_open() {
 		while window_open() { emitted(data frame, ø) }

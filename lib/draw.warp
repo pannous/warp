@@ -13,7 +13,7 @@ global canvas_pixels = int[pixels_for(view_width, view_height)]
 // paper: the canvas before anything is drawn, as paint shows 0 (rust-harness:src/graphics/pixels.rs PAPER; test_paint_shades)
 paper = 0xFFFAFAFA
 // the pixel a coordinate falls in
-cell(v) := floor(v) as int
+def cell(v) := floor(v) as int
 
 // what draw_shape's kind says to shape_shader (clear_shape: gpu_canvas.rs CLEAR; test_paint_shades)
 clear_shape = 0
@@ -53,7 +53,7 @@ shape_shader = shader {
 }
 
 // the pixels the canvas keeps here: none when they are on the GPU
-pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
+def pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
 
 def canvas(width, height) {
 	canvas_width = width
@@ -81,7 +81,7 @@ def mixed(below, color) {
 }
 
 // one channel (its place 65536, 256 or 1) of color over under, by alpha a from 0 to 255
-channel_mix(color, under, a, place) := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
+def channel_mix(color, under, a, place) := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
 
 def dot(x, y, color) {
 	col = cell(x)
@@ -131,12 +131,12 @@ def show() {
 class Picture {}
 // the canvas as drawn so far (decision saved-words): canvas() beside canvas(width, height), so the bare word canvas,
 // its call, is a Picture
-canvas() := Picture()
-save(made: Picture, as file) := {
+def canvas() := Picture()
+def save(made: Picture, as file) := {
 	if drawing_on_gpu { draw_shader(shape_shader) }
 	save_picture(canvas_pixels, canvas_width, canvas_height, file)
 }
-save(file: text) := save(Picture(), file)
+def save(file: text) := save(Picture(), file)
 
 // label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth
 // edges mixed with what is below (card paint-text): the host sets them, the playground with the browser's canvas,

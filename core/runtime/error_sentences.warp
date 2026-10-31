@@ -13,10 +13,10 @@ use "text_numbers.warp"
 use "nodes.warp"
 use "show.warp"
 use "types.warp"
-whole_number_fix() := "fix: compute it with /! (floor division) or `… as int`"
-error_in_data_fix() := "handle it with try … else, or declare `or error`"
+def whole_number_fix() := "fix: compute it with /! (floor division) or `… as int`"
+def error_in_data_fix() := "handle it with try … else, or declare `or error`"
 # how a runtime error is fixed, after its words; "" for one without a fix
-error_fix(name: text): text := {
+def error_fix(name: text): text := {
 	if name == "index_must_be_an_integer" or name == "count_must_be_an_integer" or name == "an_int_must_be_a_whole_number" or name == "not_a_whole_number" { return whole_number_fix() }
 	if name == "too_big_for_int" { return "fix: `x as! int` keeps its low 64 bits" }
 	if name == "not_an_exact_number" { return "fix: `x as rational` takes a float's exact value" }
@@ -28,7 +28,7 @@ error_fix(name: text): text := {
 	""
 }
 # `index_out_of_range` reads "index out of range"
-spaced_words(name: text): text := {
+def spaced_words(name: text): text := {
 	words = ""
 	start = 0
 	for i in 0..<byte_count(name) {
@@ -40,22 +40,22 @@ spaced_words(name: text): text := {
 	words + bytes_between(name, start, byte_count(name))
 }
 # the words of the runtime word `name`, its fix after them; a missing field or switch case names its own
-error_words(name: text): text := {
+def error_words(name: text): text := {
 	if text_starts_with(name, "no_field_") { return "no field " + bytes_between(name, 9, byte_count(name)) }
 	if text_starts_with(name, "no_case_") { return "no case for " + bytes_between(name, 8, byte_count(name)) }
 	if text_starts_with(name, "overflow_of_") { return overflow_words(bytes_between(name, 12, byte_count(name))) }
 	fix = error_fix(name)
 	if fix == "" then spaced_words(name) else spaced_words(name) + "; " + fix
 }
-overflow_words(type: text): text := {
+def overflow_words(type: text): text := {
 	if type == "int64" { return "int64 overflow: the value does not fit int64 (-9223372036854775808…9223372036854775807)" }
 	type + " overflow"
 }
 # a value a runtime error names as its message reads: an error's own message, a text as it is, else as print shows it
-detail_text(detail: Node): text := if node_is_error(detail) then unboxed_text(detail) else node_text(detail)
+def detail_text(detail: Node): text := if node_is_error(detail) then unboxed_text(detail) else node_text(detail)
 # what the runtime error of the word `name` says, the value it names taken in (what a try's `catch e` holds is the
 # words alone, but a raise's and a missing field's)
-error_sentence(name: text): text := {
+def error_sentence(name: text): text := {
 	global trap_detail
 	if is_null(trap_detail) { return error_words(name) }
 	if name == "returned_error" { return detail_text(trap_detail) }
@@ -73,7 +73,7 @@ error_sentence(name: text): text := {
 }
 # the words of the engine's own trap of that code (wasmtime's trap codes and words, wasmtime/trap.h), a trap no
 # runtime word named: `2^70 | 1` casts a big int to a bool; "" for no trap (-1) or a code not known
-engine_trap_words(code: int): text := {
+def engine_trap_words(code: int): text := {
 	if code == 7 { return "divide by zero" }
 	words = ["call stack exhausted", "out of bounds memory access", "misaligned memory access", "undefined element: out of bounds table access", "uninitialized element", "indirect call type mismatch", "integer overflow", "integer divide by zero", "invalid conversion to integer", "wasm `unreachable` instruction executed", "interrupt", "all fuel consumed by WebAssembly", "atomic wait on non-shared memory", "null reference", "out of bounds array access", "allocation size too large", "cast failure"]
 	if code < 0 or code >= #words then "" else "wasm trap: " + words#(code + 1)
@@ -81,7 +81,7 @@ engine_trap_words(code: int): text := {
 # the sentence of the runtime error the run failed in, at `position` (line * 4096 + column, 0 before the first
 # statement or in the compiler's own source) in `file`, before its fix: the runtime word's it failed in, else the
 # engine's trap of `code`; "" for neither (an error of the host's own tells)
-trap_sentence(file: text, position: int, code: int): text := {
+def trap_sentence(file: text, position: int, code: int): text := {
 	global trap_name
 	sentence = if textual_node(trap_name) then error_sentence(unboxed_text(trap_name)) else engine_trap_words(code)
 	if sentence == "" or position == 0 or names_place(sentence) { return sentence }
@@ -91,24 +91,24 @@ trap_sentence(file: text, position: int, code: int): text := {
 	if fix == 0 then sentence + at else text_slice(sentence, 1, fix - 1) + at + text_slice(sentence, fix, text_count(sentence))
 }
 # whether a sentence says its place already, ` at 1:6` or ` at file.warp:2:1` (a raised compile error's)
-names_place(sentence: text): bool := {
+def names_place(sentence: text): bool := {
 	for at in 0..<byte_count(sentence) {
 		if bytes_match_at(sentence, " at ", at) and is_place(place_word(sentence, at + 4)) { return yes }
 	}
 	no
 }
 # the word of the sentence at byte `start`, up to a space, a semicolon or its end
-place_word(sentence: text, start: int): text := {
+def place_word(sentence: text, start: int): text := {
 	stop = start
 	while stop < byte_count(sentence) and byte_at(sentence, stop) != Ascii.Space and byte_at(sentence, stop) != Ascii.Semicolon { stop += 1 }
 	bytes_between(sentence, start, stop)
 }
 # `1:6`, `f.warp:2:1`: a word ending in a colon and digits, a digit before the colon
-is_place(word: text): bool := {
+def is_place(word: text): bool := {
 	end = byte_count(word)
 	digits = end
 	while digits > 0 and digit_of(byte_at(word, digits - 1)) >= 0 { digits -= 1 }
 	digits < end and digits >= 2 and byte_at(word, digits - 1) == Ascii.Colon and digit_of(byte_at(word, digits - 2)) >= 0
 }
 # that sentence where shown_at puts a text for a host to read
-trap_sentence_at(file: text, position: int, code: int): int := shown_at(held(trap_sentence(file, position, code)))
+def trap_sentence_at(file: text, position: int, code: int): int := shown_at(held(trap_sentence(file, position, code)))

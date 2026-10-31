@@ -7,7 +7,7 @@ use "walk.warp"
 static_word = "static"
 
 # the program with each class's static fields as globals in front of it
-statics_hoisted(program: Node): Node := {
+def statics_hoisted(program: Node): Node := {
 	statements = statements_in(program)
 	statics = {}
 	for statement in statements {
@@ -21,14 +21,14 @@ statics_hoisted(program: Node): Node := {
 	group_like(program, globals + statements.map(statement => bottom_up(without_statics(statement, statics), part => static_read(part, statics, types))))
 }
 # `static k = 3`: the field `k = 3`, else ø
-static_field(member: Node): Node? := {
+def static_field(member: Node): Node? := {
 	if not (is_group(member) and #member == 2 and member#1 == symbol(static_word)) { return ø }
 	field = member#2
 	if is_key(field, Op.Assign) and key_of(field) is symbol then field else ø
 }
-static_name(owner: text, name: Node): Node := symbol(owner + "·" + name_of(name))
+def static_name(owner: text, name: Node): Node := symbol(owner + "·" + name_of(name))
 # the class declaration without its static fields, its members naming them bare naming the globals
-without_statics(statement: Node, statics: map): Node := {
+def without_statics(statement: Node, statics: map): Node := {
 	view = class_view(statement)
 	owner = if view == ø then "" else declared_type_name(view#2)
 	if owner not in statics { return statement }
@@ -43,13 +43,13 @@ without_statics(statement: Node, statics: map): Node := {
 	}
 }
 # a bare name of a static field as its global; a name after a dot stays the member it is
-statics_named(n: Node, owner: text, names: list): Node := match n {
+def statics_named(n: Node, owner: text, names: list): Node := match n {
 	Symbol(name): { if name in names then static_name(owner, n) else n }
 	Key(left, Op.Dot, right): Key(statics_named(left, owner, names), Op.Dot, right)
 	_: children(n, part => statics_named(part, owner, names))
 }
 # `Clicker.clicks`, `c.clicks` of a Clicker c, `Circle(1).k`: the global of the static field
-static_read(n: Node, statics: map, types: map): Node := match n {
+def static_read(n: Node, statics: map, types: map): Node := match n {
 	Key(left, Op.Dot, Symbol(name)): {
 		owner = if left is symbol and name_of(left) in statics then name_of(left) else if left is symbol and name_of(left) in types then types[name_of(left)] else written_type(left, statics) ?? ""
 		if owner in statics and statics[owner].any(field => name_of(key_of(field)) == name) then static_name(owner, value_of(n)) else n

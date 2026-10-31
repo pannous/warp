@@ -18,30 +18,30 @@ global template_misuse = ""
 global template_variables = []
 
 # the code of a hole as a node
-code_node(code: text): Node := node_of(plain(tree(code)))
+def code_node(code: text): Node := node_of(plain(tree(code)))
 
 # the tag `sql` or `sh` n is, else ""
-tag_named(n: Node): text := {
+def tag_named(n: Node): text := {
 	for tag in template_tags {
 		if n == symbol(tag) { return tag }
 	}
 	""
 }
 
-is_template_tag(n: Node): bool := tag_named(n) in template_tags
+def is_template_tag(n: Node): bool := tag_named(n) in template_tags
 
 # the runner of a tag's templates: `execute` runs sql, `exec` sh
-runner_word(tag: text): text := if tag == "sql" then "execute" else "exec"
-tag_run_by(n: Node): text := if n == symbol("execute") then "sql" else if n == symbol("exec") then "sh" else ""
+def runner_word(tag: text): text := if tag == "sql" then "execute" else "exec"
+def tag_run_by(n: Node): text := if n == symbol("execute") then "sql" else if n == symbol("exec") then "sh" else ""
 
 # the tag of a template before lowering: `sql "…"`, or the bare tag of a flat `execute sql "…"`; else ""
-template_tag_of(n: Node): text := match n {
+def template_tag_of(n: Node): text := match n {
 	List(items, _, _): { if #items == 2 then tag_named(items#1) else "" }
 	_: tag_named(n)
 }
 
 # the literal of a template, "…" or ("…"); ø for anything computed
-template_source(n: Node): any := {
+def template_source(n: Node): any := {
 	if n is text { return n }
 	if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == template_kind { return value_of(n)#2 }
 	if is_group(n) and bracket_of(n) == "(" and #items_of(n) == 1 { return template_source(items_of(n)#1) }
@@ -49,19 +49,19 @@ template_source(n: Node): any := {
 }
 
 # the fix a misuse names: a literal template with a hole, after the words given (`execute sql`)
-fix_of(words: text): text := "; fix: " + words + " \"… $value …\""
+def fix_of(words: text): text := "; fix: " + words + " \"… $value …\""
 
 # what a misused word was given, as written
-given_form(argument: any): text := if argument is ø then "nothing" else if argument is text then "\"" + argument + "\"" else "${argument}"
+def given_form(argument: any): text := if argument is ø then "nothing" else if argument is text then "\"" + argument + "\"" else "${argument}"
 
 # the misuse remembered, the first one only; ø in place of the template
-misuse(message: text): any := {
+def misuse(message: text): any := {
 	if not template_misuse { template_misuse = message }
 	ø
 }
 
 # a sql template's value: its query, then its parameters; a hole inside quotes would be a literal `?`
-sql_template(holed: list): any := {
+def sql_template(holed: list): any := {
 	query = ""
 	parameters = []
 	open_quote = ""
@@ -88,7 +88,7 @@ hole_in_word = "a sh hole must be a whole argument: `--out=$f` would glue text t
 
 # a sh template's value: the program, then its arguments, split at spaces; a hole is one whole argument, never
 # re-split, globbed or parsed by a shell
-shell_template(holed: list): any := {
+def shell_template(holed: list): any := {
 	arguments = []
 	# the last argument may still grow
 	growing = no
@@ -120,10 +120,10 @@ shell_template(holed: list): any := {
 }
 
 # a hole argument as its node, a literal one as its text
-unwrapped_argument(argument: any): any := if argument is list then argument#1 else argument
+def unwrapped_argument(argument: any): any := if argument is list then argument#1 else argument
 
 # the value of `tag argument`: (query parameter…) or (program argument…)
-lowered_template(tag: text, argument: any): any := {
+def lowered_template(tag: text, argument: any): any := {
 	literal = if argument is ø then ø else template_source(argument)
 	if literal is ø {
 		return misuse(tag + " takes a literal template, got " + given_form(argument) + ": values go into holes as parameters, never into the " + tag + " text" + fix_of(tag))
@@ -134,7 +134,7 @@ lowered_template(tag: text, argument: any): any := {
 }
 
 # the tag of the template a variable holds, else ""
-variable_tag(n: Node): text := {
+def variable_tag(n: Node): text := {
 	for pair in template_variables {
 		if pair#1 == n { return pair#2 }
 	}
@@ -142,7 +142,7 @@ variable_tag(n: Node): text := {
 }
 
 # `execute q` runs only a sql template, `exec c` only a sh one
-checked_run(tag: text, argument: any): any := {
+def checked_run(tag: text, argument: any): any := {
 	given = if argument is ø then "" else template_tag_of(argument)
 	if not given { given = variable_tag(argument) }
 	if not given and is_group(argument) and bracket_of(argument) == "(" and #items_of(argument) == 1 {
@@ -155,14 +155,14 @@ checked_run(tag: text, argument: any): any := {
 }
 
 # braceless application nests to the left: `execute sql "…"` is ((execute sql) "…"), read as one flat line
-flattened(items: list): list := {
+def flattened(items: list): list := {
 	if #items < 2 or not is_group(items#1) or bracket_of(items#1) != "" { return items }
 	head = items_of(items#1)
 	if is_template_tag(head[#head - 1]) then head + items[1 ..] else items
 }
 
 # the items of a line like `execute sql "…"`: a tag takes the item after it, a runner is checked against it
-lowered_items(items: list): list := {
+def lowered_items(items: list): list := {
 	done = []
 	at = 0
 	while at < #items {
@@ -183,7 +183,7 @@ lowered_items(items: list): list := {
 }
 
 # n with each `sql "…"` / `sh "…"` its value, in order, so earlier assignments count for a runner's check
-templates_lowered(n: Node): any := match n {
+def templates_lowered(n: Node): any := match n {
 	List(items, bracket, separator): {
 		line = flattened(items)
 		if #line == 2 and is_template_tag(line#1) then lowered_template(tag_named(line#1), line#2)
@@ -198,7 +198,7 @@ templates_lowered(n: Node): any := match n {
 }
 
 # `q = sql "…"`: q holds a sql template from here on; any other value ends that
-assigned_template(left: any, op: Op, right: any): any := {
+def assigned_template(left: any, op: Op, right: any): any := {
 	tag = template_tag_of(right)
 	value = templates_lowered(right)
 	if left is symbol {
@@ -209,7 +209,7 @@ assigned_template(left: any, op: Op, right: any): any := {
 }
 
 # the program with its templates lowered, or the error of the first misuse
-injected(program: Node): Node := {
+def injected(program: Node): Node := {
 	template_misuse = ""
 	template_variables = []
 	value = templates_lowered(program)

@@ -10,7 +10,7 @@ use "types.warp"
 use "../emitter/byte_codes.warp"
 # a boxed int (kind code 1), exact rational or float as a float
 # an instance as its class's float() gives it (decision no-units-in-shaders: `sin(2km)` of the amount in metres)
-float_of_node(n: Node): float := {
+def float_of_node(n: Node): float := {
 	if is_class_instance(n) {
 		converted = instance_float(n)
 		if not is_null(converted) { return float_of_node(converted) }
@@ -19,17 +19,17 @@ float_of_node(n: Node): float := {
 	if is_plain_int(n) then float(unboxed_int(n)) else extended_float(n)
 }
 # `x.bytecount`: the bytes of a text's or character's UTF-8, 8 an item of a list or map; an error has none
-node_bytes(n: Node): int := {
+def node_bytes(n: Node): int := {
 	if not is_null(n) and kind_code(n) == Kind.Error { fail() }
 	if textual_node(n) { return byte_count(text_of_node(n)) }
 	node_length(n) * 8
 }
 # `n as float` of a value known only at run time: a text or character spells the number
-float_cast(n: Node): float := if textual_node(n) then text_as_float(text_of_node(n)) else float_of_node(n)
+def float_cast(n: Node): float := if textual_node(n) then text_as_float(text_of_node(n)) else float_of_node(n)
 # `x as number` of a value known only at run time: a text or character spells the number, a number stays
-number_cast(n: Node): Node := if textual_node(n) then text_as_number(text_of_node(n)) else n
+def number_cast(n: Node): Node := if textual_node(n) then text_as_number(text_of_node(n)) else n
 # a % b of floats as in mathematics, as the floats of Rust: the truncated remainder, plus |b| when below 0
-float_mod(a: float, b: float): float := {
+def float_mod(a: float, b: float): float := {
 	if b == 0 { divide_by_zero() }
 	q = a / b
 	rest = a - b * (if q < 0 then float_ceil(q) else float_floor(q))
@@ -37,96 +37,96 @@ float_mod(a: float, b: float): float := {
 	rest
 }
 # a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
-number_node(n: Node): Node := {
+def number_node(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { fail() }
 	n
 }
 # a boxed int where an int is needed; any other value traps, as Rust fails on it
 # an int of a program's int type, `x as Color` (passes/int_types.warp): the int marked with its type's kind field
-marked_int(value: Node, kind: int): Node := with_kind(value, kind)
+def marked_int(value: Node, kind: int): Node := with_kind(value, kind)
 # the kind field telling a value's int type, `x is Color`; 0 for ø
-int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
+def int_mark(n: Node): int := if is_null(n) then 0 else marked_kind(n)
 # an Int node's int, a big one's low 64 bits
-whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
-int_of_node(n: Node): int := {
+def whole_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else extended_wrapped(n)
+def int_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
 	whole_int(n)
 }
 # a value known only at run time given to a variable declared int: a float or a fraction is no whole number, as Rust's
-int_admitted(n: Node): int := {
+def int_admitted(n: Node): int := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { not_an_int() }
 	if kind_code(n) == Kind.Float or is_ratio(n) { an_int_must_be_a_whole_number() }
 	whole_int(n)
 }
 # … given to a variable declared nat: a whole number of any size, as it is
-nat_admitted(n: Node): Node := {
+def nat_admitted(n: Node): Node := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { not_a_whole_number() }
 	n
 }
 # … given to a variable declared rational: an int or an exact ratio, as it is
-rational_admitted(n: Node): Node := {
+def rational_admitted(n: Node): Node := {
 	if is_null(n) or kind_code(n) != Kind.Int { not_an_exact_number() }
 	n
 }
 # … given to a variable declared list: ø or a list (a map is kind 8 in curly braces, no list), kept as it is, as Rust's
-list_admitted(n: Node): Node := {
+def list_admitted(n: Node): Node := {
 	if not is_null(n) and (kind_code(n) != Kind.List or marked_kind(n) == Marked.Map) { not_a_list() }
 	n
 }
 # … given to a typed field: kept when the type admits it, else "not a text", as Rust's
 # (rust-harness:src/wasm_emitter/declared_values.rs): a text or character for text, yes/no (or 0 and 1) for bool, a number for float
-text_checked(n: Node): Node := {
+def text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
 }
 # a yes/no, or 0 or 1, which a bool holds as no and yes (Rust: `f(): bool := x == 1 and 0` gives no)
-holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
-bool_checked(n: Node): Node := {
+def holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
+def bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
-float_checked(n: Node): Node := {
+def float_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { returned_error("not a float") }
 	n
 }
 # `x: T = v` of a class or enum T and a value known only at run time: v when it is an object (a symbol, key, block,
 # list or data: Rust's OBJECT_KINDS, rust-harness:src/wasm_emitter/declared_values.rs) or an error (of every type), else the run
 # fails with the message ("not a T")
-object_checked(value: Node, message: text): Node := {
+def object_checked(value: Node, message: text): Node := {
 	if is_null(value) or kind_code(value) < Kind.Symbol or kind_code(value) == Kind.Meta or kind_code(value) > Kind.Error { returned_error(message) }
 	value
 }
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
 # empty one) where a list is needed, a boxed character where one is needed; any other value traps, as Rust fails on it
-text_of_node(n: Node): text := {
+def text_of_node(n: Node): text := {
 	if not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Symbol) { return unboxed_text(n) }
 	if not is_null(n) and kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
 	fail()
 	""
 }
-bool_of_node(n: Node): bool := {
+def bool_of_node(n: Node): bool := {
 	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
-char_of_node(n: Node): char := {
+def char_of_node(n: Node): char := {
 	if is_null(n) or kind_code(n) != Kind.Codepoint { not_a_character() }
 	unboxed_char(n)
 }
-list_of_node(n: Node): list := {
+def list_of_node(n: Node): list := {
 	if is_null(n) { return new_list(0) }
 	if kind_code(n) != Kind.List { fail() }
 	unboxed_list(n)
 }
 # `x as bool` of a value known only at run time, as Rust's cast: a text spelling a falsy word in any case ("No",
 # "false"; FALSY_TEXTS of rust-harness:src/wasm_emitter/mod.rs) is no, another value as a condition (card yes-print)
-bool_cast(n: Node): bool := {
+def bool_cast(n: Node): bool := {
 	if is_null(n) or kind_code(n) != Kind.Text { return node_truthy(n) }
 	t = unboxed_text(n)
 	falsy = byte_count(t) == 0 or spells(t, "0") or spells(t, "false") or spells(t, "no") or spells(t, "ø")
 	not (falsy or spells(t, "nil") or spells(t, "null") or spells(t, "none"))
 }
 # t is the lower-case word, any letter of t also in upper case
-spells(t: text, word: text): bool := {
+def spells(t: text, word: text): bool := {
 	if byte_count(t) != byte_count(word) { return no }
 	for i in 0..<byte_count(t) {
 		b = byte_at(t, i)
@@ -136,7 +136,7 @@ spells(t: text, word: text): bool := {
 }
 # a value known only at run time as a condition, the rule of Rust's is_truthy (Node::is_falsy): ø and errors are no, a
 # list or map yes when it has items, a key when its key or value is, a number, character or text when not 0 or empty
-node_truthy(n: Node): bool := {
+def node_truthy(n: Node): bool := {
 	if is_null(n) { return no }
 	kind = kind_code(n)
 	if kind == Kind.Empty or kind == Kind.Error { return no }
@@ -149,18 +149,18 @@ node_truthy(n: Node): bool := {
 	yes
 }
 # `n as int` of a boxed int, exact rational or float, truncated toward 0; a text or character spells the number
-truncated_int(n: Node): int := {
+def truncated_int(n: Node): int := {
 	if textual_node(n) { return text_as_int(text_of_node(n)) }
 	if not is_null(n) and kind_code(n) == Kind.Float { return truncated(unboxed_float(n)) }
 	if is_null(n) or kind_code(n) != Kind.Int { fail() }
 	if is_ratio(n) then extended_truncated(n) else fitting_int(n)
 }
 # a whole number as an int: past 64 bits it does not fit (decision cast-checks)
-fitting_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else too_big_for_int_of(n)
+def fitting_int(n: Node): int := if is_plain_int(n) then unboxed_int(n) else too_big_for_int_of(n)
 # `x as! int`: a whole number keeps its low 64 bits, any other value converts as `as int` does
-wrapped_int(n: Node): int := if not is_null(n) and kind_code(n) == Kind.Int and not is_ratio(n) then whole_int(n) else truncated_int(n)
+def wrapped_int(n: Node): int := if not is_null(n) and kind_code(n) == Kind.Int and not is_ratio(n) then whole_int(n) else truncated_int(n)
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
-int_text(n: int): text := {
+def int_text(n: int): text := {
 	sign = if n < 0 then 1 else 0
 	digits = 1
 	left = n
@@ -179,9 +179,9 @@ int_text(n: int): text := {
 	}
 	out
 }
-char_text(c: char): text := code_point_text(code_of(c))
+def char_text(c: char): text := code_point_text(code_of(c))
 # a code point's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
-code_point_text(code: int): text := {
+def code_point_text(code: int): text := {
 	n = code
 	count = if n < Utf8.TwoBytesFrom then 1 else if n < Utf8.ThreeBytesFrom then 2 else if n < Utf8.FourBytesFrom then 3 else 4
 	out = new_text(count)

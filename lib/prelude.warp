@@ -60,11 +60,11 @@ find(t: text, f: function): element of t from emitter
 each(xs: list, f: function) from emitter
 each(t: text, f: function) from emitter
 // the call form of xs.add(x), which lib/sugar/methods.warp appends in place (the emitter has no call add)
-add(xs, x) := { xs.add(x); xs }
-insert(xs: list, at: int, x) := list_insert(xs, at, x)
+def add(xs, x) := { xs.add(x); xs }
+def insert(xs: list, at: int, x) := list_insert(xs, at, x)
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
-pop(xs: list): any := list_pop(xs)
+def pop(xs: list): any := list_pop(xs)
 clear(xs: list): same as xs from emitter
 number(x): number from emitter
 // the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
@@ -147,40 +147,40 @@ alias isalnum = is_alphanumeric
 alias is_whitespace = is_space
 alias isspace = is_space
 // C's put words, as print: puts and putf answer 0 as C's puts does, puti and putl their number
-puts(t) := { print t; 0 }
-puti(n: int) := { print n; n }
-putl(n: int) := { print n; n }
-putf(x: float) := { print x; 0 }
-first(xs) := xs#1
-last(xs) := xs#(count(xs))
+def puts(t) := { print t; 0 }
+def puti(n: int) := { print n; n }
+def putl(n: int) := { print n; n }
+def putf(x: float) := { print x; 0 }
+def first(xs) := xs#1
+def last(xs) := xs#(count(xs))
 // decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
 // (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
-find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
-byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
-present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
+def find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
+def byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
+def present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
 // Python's `list(x)`: the list itself, a text's characters
-as_list(x) := x as list
+def as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
 // occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
-count_item(xs, x) := #filter(xs, item => item == x)
-count_of(t, part) := #split(t, part) - 1
+def count_item(xs, x) := #filter(xs, item => item == x)
+def count_of(t, part) := #split(t, part) - 1
 // the count of x in y, written `count(y, x)` or `y.count(x)` (arity_variants; `count x in y` counts a yes/no, refused): of a text its parts,
 // else its items; its own name, so `count xs` stays the emitter's count
-count_in(y, x) := if y is text then count_of(y, "" + x) else count_item(y, x)
+def count_in(y, x) := if y is text then count_of(y, "" + x) else count_item(y, x)
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
-first_items(xs, n) := xs[0: min(n, count(xs))]
-last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
+def first_items(xs, n) := xs[0: min(n, count(xs))]
+def last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 // x rounded to that many digits after the point
-round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
+def round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
 // own sum: rust-harness:src/lowering/words/library_words.rs)
-sum(xs) := fold(xs, 0, +)
+def sum(xs) := fold(xs, 0, +)
 // dir(v) of a value only the run knows (lib/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
-dir_of_value(x, list_words, text_words, map_words) := if x is map then x.keys + map_words else if x is list then list_words else if x is text then text_words else []
+def dir_of_value(x, list_words, text_words, map_words) := if x is map then x.keys + map_words else if x is list then list_words else if x is text then text_words else []
 // a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
 // The template names no helper word (card after-sum): it lands in the program's code, where a program's own word of
 // that name (`range_sum(a, b) := sum(a..b)`) would be called instead, and every lane emits its arithmetic
@@ -207,27 +207,27 @@ rewrite $p => $q where program and $q = gpu_lists_packed($p)
 rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
 rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed($v)
 // the arithmetic mean, also spelled average
-mean(xs) := sum(xs) / count(xs)
+def mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
-bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
+def bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
 infix operator ↓(x: number, b: number) := log(x, b)
-replace(t, old, with new) := join(split(t, old), new)
+def replace(t, old, with new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
-is_digit(c) := c >= '0' and c <= '9'
-is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
-is_alphanumeric(c) := is_alpha(c) or is_digit(c)
-is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
-is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
-is_word_char(c) := is_alphanumeric(c) or c == '_'
+def is_digit(c) := c >= '0' and c <= '9'
+def is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
+def is_alphanumeric(c) := is_alpha(c) or is_digit(c)
+def is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+def is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
+def is_word_char(c) := is_alphanumeric(c) or c == '_'
 // at least one character, each passing is_class: consists_of("42", is_digit)
-consists_of(t: text, is_class) := { if t is empty { return false }; for c in t { if not is_class(c) { return false } }; true }
+def consists_of(t: text, is_class) := { if t is empty { return false }; for c in t { if not is_class(c) { return false } }; true }
 // a whole number, optionally signed: "-3"
-is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
+def is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
 // a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`
-fits_text_type(t: text, type: text) := match type {
+def fits_text_type(t: text, type: text) := match type {
 	"int" | "integer" => is_integer(t)
 	"number" | "float" => { parts = split(t, "."); count(parts) <= 2 and is_integer(parts#1) and (count(parts) == 1 or consists_of(parts#2, is_digit)) }
 	"digit" => count(t) == 1 and is_digit(t)
@@ -242,7 +242,7 @@ fits_text_type(t: text, type: text) := match type {
 // text patterns (notes/matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
 // match (also when t is no text); the first piece is the prefix, the last the suffix, "" where the pattern starts or
 // ends with a hole; each hole's text fits its type, "" for any text
-text_holes(t, pieces: [text], types: [text]) := {
+def text_holes(t, pieces: [text], types: [text]) := {
 	if not (t is text) { return [] }
 	prefix = first(pieces)
 	suffix = last(pieces)
@@ -262,25 +262,25 @@ text_holes(t, pieces: [text], types: [text]) := {
 // the digits of n in a base up to 36, letters past 9 (upper: true capitals): to_base(255, 16) is "ff",
 // from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
 // symbols, which needs the grapheme runtime
-to_base(n: int, base: int, upper = false) := { if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
-from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in lower(t) { out = out * base + index_of(symbols, c) - 1 }; out }
+def to_base(n: int, base: int, upper = false) := { if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
+def from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in lower(t) { out = out * base + index_of(symbols, c) - 1 }; out }
 // how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
 // "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
-radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
-hex_text(n: int) := radix_text(n, 16, "0x")
-binary_text(n: int) := radix_text(n, 2, "0b")
+def radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
+def hex_text(n: int) := radix_text(n, 16, "0x")
+def binary_text(n: int) := radix_text(n, 2, "0b")
 // a value's form as its kind field holds it (card kind-reflection, rust-harness:src/type_kinds.rs), what the lib printers read:
 // the Kind in the low byte (Int 1, Text 3, Key 6, List 8, Error 11, …), the info byte above it (a key's operator, a
 // list's bracket, an Int's bool 1, hex 2 or binary 3), and the mark of a type value (`int`, `type(x)`; code is
 // `x is code`); the Kind and the info byte are KIND_BITS wide, the type value mark is bit 54 (TYPE_VALUE_MARK)
-kind_bits() := 8
-type_value_bit() := 54
-kind_number(x: any) := kind_mark(x) % (1 << kind_bits())
-kind_info(x: any) := (kind_mark(x) >> kind_bits()) % (1 << kind_bits())
-is_type_value(x: any) := (kind_mark(x) >> type_value_bit()) % 2 == 1
+def kind_bits() := 8
+def type_value_bit() := 54
+def kind_number(x: any) := kind_mark(x) % (1 << kind_bits())
+def kind_info(x: any) := (kind_mark(x) >> kind_bits()) % (1 << kind_bits())
+def is_type_value(x: any) := (kind_mark(x) >> type_value_bit()) % 2 == 1
 // n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
 // compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives
-filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
+def filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
 // `n times {…}` runs the block n times, a plain library function (decision language-layers); `n times [x]` is n
 // copies of x, `n times "ab"` the text n times, `n times x` of a number their product
 infix operator times(n: int, body: block) := for i in 1 to n { body() }
@@ -288,16 +288,16 @@ infix operator times(n: int, items: list) := if #items == 1 then zero_fill(n, it
 infix operator times(n: int, t: text) := t * n
 infix operator times(n: number, x: number) := n * x
 // once, twice and thrice count as times does (decision count-words-library): a block runs, a value repeats
-once(body: block) := 1 times body
-once(value: any) := 1 times value
-twice(body: block) := 2 times body
-twice(value: any) := 2 times value
-thrice(body: block) := 3 times body
-thrice(value: any) := 3 times value
+def once(body: block) := 1 times body
+def once(value: any) := 1 times value
+def twice(body: block) := 2 times body
+def twice(value: any) := 2 times value
+def thrice(body: block) := 3 times body
+def thrice(value: any) := 3 times value
 // how a ± value prints (card plus-minus, P219): the ± part to 2 significant digits, the value to the same place, 7.0 ± 2.0;
 // a ± part of 0 or ∞, or more digits than 17, as each float prints; gaussian 1 adds σ. The printer calls it with the
 // parts (wasm_emitter/numbers/uncertain.rs)
-uncertain_text(value: float, radius: float, gaussian: int) := {
+def uncertain_text(value: float, radius: float, gaussian: int) := {
 	sigma = if gaussian == 1 then "σ" else ""
 	if not (radius > 0.0 and radius < 1.0 / 0.0) { return "\(value) ± \(radius)\(sigma)" }
 	scale = 1.0
@@ -308,7 +308,7 @@ uncertain_text(value: float, radius: float, gaussian: int) := {
 	place_text(value, scale, decimals) + " ± " + place_text(radius, scale, decimals) + sigma
 }
 // x rounded to the place of 1/scale with that many decimals: whole units half away from zero, decimals half to even
-place_text(x: float, scale: float, decimals: int) := {
+def place_text(x: float, scale: float, decimals: int) := {
 	sign = if x < 0.0 then "-" else ""
 	if decimals == 0 { return sign + to_base((floor(abs(x) * scale + 0.5) * round(1.0 / scale)) as int, 10) }
 	digits = round(abs(x) * scale) as int
@@ -319,7 +319,7 @@ place_text(x: float, scale: float, decimals: int) := {
 // `x as decimal` of a ratio (card repeating-decimals): the digits before the period, then the period's overlined, 1/6
 // is 0.16̅; a terminating decimal, or a period longer than 1000 digits, as the ratio prints. The cast calls it with the
 // ratio's parts, the denominator never 0 (wasm_emitter/numbers/exact.rs)
-decimal_text(numerator: int, denominator: int) := {
+def decimal_text(numerator: int, denominator: int) := {
 	rest = denominator; twos = 0; fives = 0
 	while rest % 2 == 0 { rest = rest /! 2; twos += 1 }
 	while rest % 5 == 0 { rest = rest /! 5; fives += 1 }
@@ -343,7 +343,7 @@ decimal_text(numerator: int, denominator: int) := {
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
 // convergent that is the same float. A precision replaces the default limit (`within: 1e-40` reaches beyond it)
-nearest(x, kind, limit = 1000000, within = 0) := {
+def nearest(x, kind, limit = 1000000, within = 0) := {
 	p0 = 0; q0 = 1; p1 = 1; q1 = 0; rest = x
 	cap = if within > 0 and limit == 1000000 then 0 else limit
 	while true {
@@ -366,23 +366,23 @@ nearest(x, kind, limit = 1000000, within = 0) := {
 	}
 }
 // Python's dict(pairs) (card python-stdlib): a map of [key value] pairs
-dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+def dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
 // Python's dict.fromkeys(ks, value) (card python-aliases): a map of each key with the one value
-fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
+def fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
 // Python's xs.pop(i) and m.pop(k) (card python-aliases, declaration_lowering removed_key): the element at the 0-based
 // position i (-1 the last) or the value of the key k, and the list or map without it
-popped_position(xs, i) := if i < 0 then count(xs) + i + 1 else i + 1
-popped_item(x, k) := if x is map then x.get(k) else x#(popped_position(x, k))
-popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x#i for i in 1 to count(x) if i != popped_position(x, k)]
+def popped_position(xs, i) := if i < 0 then count(xs) + i + 1 else i + 1
+def popped_item(x, k) := if x is map then x.get(k) else x#(popped_position(x, k))
+def popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x#i for i in 1 to count(x) if i != popped_position(x, k)]
 // Python's xs.clear() and m.clear() (card python-aliases, declaration_lowering cleared_collection): the empty list or map
-cleared(x) := if x is map then {} else []
+def cleared(x) := if x is map then {} else []
 // xs.insert(v, at: i) (list_mutations inserted_in_place): the list with v at the 0-based position i, past the end or
 // before 0 at the end
-inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs[0: i] + [v] + xs[i:]
+def inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs[0: i] + [v] + xs[i:]
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
 // pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
-alike(a: any, b: any, tolerance: float, rough: bool) := {
+def alike(a: any, b: any, tolerance: float, rough: bool) := {
 	if bracket_of(a) == "{" and bracket_of(b) == "{" {
 		return #a == #b and keys(a).all(k => b has k and alike(a[k], b[k], tolerance, rough))
 	}
@@ -398,53 +398,53 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 // `a .op b` where the compiler cannot tell which side is a list (broadcasting.rs, card compile-shaders): each item of
 // a list with the other side, two lists paired by index, two numbers plainly; `combined` is `(l, r) => l op r`. Both
 // sides are `any`: inferred from the body, one call with a number made it a list
-element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
+def element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
 // f of a value that may be a list (lib/sugar/broadcasting.warp): of each item of a list, else of the value itself
-each_any(value: any, f) := if value is list then [f(item) for item in value] else f(value)
+def each_any(value: any, f) := if value is list then [f(item) for item in value] else f(value)
 // a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
-pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
-pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
+def pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
+def pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
 // row) of every pixel, row by row; in a frame without a window (lib/frames.warp frames_end) at most the window's size,
 // f sampled across the size asked
 global painting_headless_frame = no
-paint_each(f, width, height) := {
+def paint_each(f, width, height) := {
 	columns = if painting_headless_frame then min(width, window_width(), window_height() * width /! height) else width
 	rows = columns * height /! width
 	paint([pixel_color(f((i % columns) * width /! columns, (i /! columns) * height /! rows)) for i in 0..columns * rows], columns, rows)
 }
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a function, f(column, row)
 // of each pixel on the CPU (paint_each)
-paint(picture, width, height) := if picture is list then paint(picture, width, height, ø) else paint_each(picture, width, height)
+def paint(picture, width, height) := if picture is list then paint(picture, width, height, ø) else paint_each(picture, width, height)
 // paint(f, width, height) of a program function: its shader on the GPU, else f of each pixel on the CPU (the rules
 // at the sum rules above)
-paint_shader(painting: map, width, height, f) := if gpu_paints() then paint(painting.shader as text, width, height, shader_values(painting.uniform)) else paint_each(f, width, height)
+def paint_shader(painting: map, width, height, f) := if gpu_paints() then paint(painting.shader as text, width, height, shader_values(painting.uniform)) else paint_each(f, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
-shader_values(values) := {
+def shader_values(values) := {
 	if values == ø { return ø }
 	plain = {}
 	for name in values.keys { plain[name] = shader_value(values[name]) }
 	plain
 }
-shader_value(value) := if value is list then value.map(shader_value) else float(value)
+def shader_value(value) := if value is list then value.map(shader_value) else float(value)
 // paint(shader) of a WGSL shader text, at the view's size (wiki/graphics.md)
-paint(shader: text) := paint(shader, view_width(), view_height(), ø)
+def paint(shader: text) := paint(shader, view_width(), view_height(), ø)
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
-sleep(amount) := sleep_ms(amount * 1000)
+def sleep(amount) := sleep_ms(amount * 1000)
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
-random_fraction(a, b) := a + random() * (b - a)
-random_until(a, b) := if a is int and b is int then a + random_below(b - a) else random_fraction(a, b)
-random_between(a, b) := if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b)
+def random_fraction(a, b) := a + random() * (b - a)
+def random_until(a, b) := if a is int and b is int then a + random_below(b - a) else random_fraction(a, b)
+def random_between(a, b) := if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b)
 // random(x) by the value's type (card random-dispatches): of a list one of its elements, of a whole number n one of 0…n-1,
 // of a fraction a float from 0 up to it
-random_element(xs) := xs#(random_below(count(xs)) + 1)
-random_of(x) := if x is list then random_element(x) else random_of_type(x)
+def random_element(xs) := xs#(random_below(count(xs)) + 1)
+def random_of(x) := if x is list then random_element(x) else random_of_type(x)
 // random int, random bool, random codepoint, random float: a random value of the type, before a whole number n (0…n-1)
 // and a fraction (a float below it)
-random_of_type(x) := {
+def random_of_type(x) := {
 	if x == int { return random_int() }
 	if x == bool { return random_bool() }
 	if x == codepoint { return random_codepoint() }
@@ -452,34 +452,34 @@ random_of_type(x) := {
 	if x is int then random_below(x) else random_fraction(0, x)
 }
 // random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
-random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_below(0x100000000)
-random_bool() := random_below(2) == 1
+def random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_below(0x100000000)
+def random_bool() := random_below(2) == 1
 // a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
-random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then n = n + 0x800; n as codepoint }
+def random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then n = n + 0x800; n as codepoint }
 // random(x), random(a, b): the dispatch above; random() itself is the host's float in [0, 1)
-random(x) := random_of(x)
-random(a, b) := random_between(a, b)
+def random(x) := random_of(x)
+def random(a, b) := random_between(a, b)
 // the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
 // rust-harness:crates/warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
 // program's own name of the same word wins
-battery() := system_value("battery")
-charging() := system_value("charging") != 0
-online() := system_value("online") != 0
-mouse_x() := system_value("mouse_x") as float
-mouse_y() := system_value("mouse_y") as float
-mouse_down() := system_value("mouse_down") != 0
-mouse_wheel() := system_value("mouse_wheel")
-key_down() := system_value("key_down") != 0
-window_open() := system_value("window_open") != 0
-view_width() := system_value("view_width")
-view_height() := system_value("view_height")
-gpu_drawing() := system_value("gpu_drawing") != 0
-gpu_paints() := system_value("gpu_paints") != 0
-window_width() := system_value("window_width")
-window_height() := system_value("window_height")
-display_width() := system_value("display_width")
-display_height() := system_value("display_height")
-display_dpi() := system_value("display_dpi")
+def battery() := system_value("battery")
+def charging() := system_value("charging") != 0
+def online() := system_value("online") != 0
+def mouse_x() := system_value("mouse_x") as float
+def mouse_y() := system_value("mouse_y") as float
+def mouse_down() := system_value("mouse_down") != 0
+def mouse_wheel() := system_value("mouse_wheel")
+def key_down() := system_value("key_down") != 0
+def window_open() := system_value("window_open") != 0
+def view_width() := system_value("view_width")
+def view_height() := system_value("view_height")
+def gpu_drawing() := system_value("gpu_drawing") != 0
+def gpu_paints() := system_value("gpu_paints") != 0
+def window_width() := system_value("window_width")
+def window_height() := system_value("window_height")
+def display_width() := system_value("display_width")
+def display_height() := system_value("display_height")
+def display_dpi() := system_value("display_dpi")
 // the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
 // listens; written, the window resizes
 window.width := window_width
@@ -501,7 +501,7 @@ display.diagonal := round(√(display_width² + display_height²)) * 1px / (disp
 // The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its wall
 // clock position, its zone's seconds east of UTC (not `offset`: the index type's synonym) and the index of the field in times.rs TIME_FIELDS
-time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
+def time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
 	days = time_days(form, wall)
 	nanos = time_nanos(form, wall)
 	match field {
@@ -522,37 +522,37 @@ time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
 	}
 }
 // time_parts(form, position): the calendar day of a position and the nanoseconds into it; a date has no clock
-time_days(form: int, position: int): int := if form == 1 then position else position /! 86400000000000
-time_nanos(form: int, position: int): int := if form == 1 then 0 else floor_mod(position, 86400000000000)
-floor_mod(n: int, divisor: int): int := n - n /! divisor * divisor
+def time_days(form: int, position: int): int := if form == 1 then position else position /! 86400000000000
+def time_nanos(form: int, position: int): int := if form == 1 then 0 else floor_mod(position, 86400000000000)
+def floor_mod(n: int, divisor: int): int := n - n /! divisor * divisor
 // Howard Hinnant's calendar over day numbers (days since 1970-01-01, proleptic Gregorian), the one warp copy of
 // rust-harness:src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on it.
 // civil_from_days: eras of 400 years from 0000-03-01, a year from March
-civil_era(days: int): int := (days + 719468) /! 146097
-civil_day_of_era(days: int): int := days + 719468 - civil_era(days) * 146097
-civil_year_of_era(day_of_era: int): int := (day_of_era - day_of_era /! 1460 + day_of_era /! 36524 - day_of_era /! 146096) /! 365
-civil_day_of_year(day_of_era: int): int := {
+def civil_era(days: int): int := (days + 719468) /! 146097
+def civil_day_of_era(days: int): int := days + 719468 - civil_era(days) * 146097
+def civil_year_of_era(day_of_era: int): int := (day_of_era - day_of_era /! 1460 + day_of_era /! 36524 - day_of_era /! 146096) /! 365
+def civil_day_of_year(day_of_era: int): int := {
 	year_of_era = civil_year_of_era(day_of_era)
 	day_of_era - (365 * year_of_era + year_of_era /! 4 - year_of_era /! 100)
 }
 // the month counted from March: months 10 and 11 of the year are January and February
-civil_march_month(day_of_year: int): int := (5 * day_of_year + 2) /! 153
-civil_month(days: int): int := {
+def civil_march_month(day_of_year: int): int := (5 * day_of_year + 2) /! 153
+def civil_month(days: int): int := {
 	march_month = civil_march_month(civil_day_of_year(civil_day_of_era(days)))
 	if march_month < 10 then march_month + 3 else march_month - 9
 }
-civil_day(days: int): int := {
+def civil_day(days: int): int := {
 	day_of_year = civil_day_of_year(civil_day_of_era(days))
 	day_of_year - (153 * civil_march_month(day_of_year) + 2) /! 5 + 1
 }
-civil_year(days: int): int := {
+def civil_year(days: int): int := {
 	year = civil_year_of_era(civil_day_of_era(days)) + civil_era(days) * 400
 	if civil_month(days) <= 2 then year + 1 else year
 }
 // the date of a day number as {year, month, day}
-civil_from_days(day_count: int) := {year: civil_year(day_count), month: civil_month(day_count), day: civil_day(day_count)}
+def civil_from_days(day_count: int) := {year: civil_year(day_count), month: civil_month(day_count), day: civil_day(day_count)}
 // the day number of a proleptic Gregorian date
-days_from_civil(year: int, month: int, day: int): int := {
+def days_from_civil(year: int, month: int, day: int): int := {
 	march_year = if month <= 2 then year - 1 else year
 	era = march_year /! 400
 	year_of_era = march_year - era * 400
@@ -562,7 +562,7 @@ days_from_civil(year: int, month: int, day: int): int := {
 }
 // the check of the Rust tests' `is!("3+3", 6)`, written `is! "3+3" 6` (decision warp-is-tests): the code's value is
 // the expected one, permissively: equal, or both nothing-like (0, ø, [], no); a failure says what the code gave
-is!(warp: text, expected: any) := {
+def is!(warp: text, expected: any) := {
 	got = eval(warp)
 	passed = got == expected or (not got and not expected)
 	if not passed then print("✗ is! \"" + warp + "\" " + str(expected) + ": got " + str(got))
@@ -579,24 +579,24 @@ class Cell { value: any }
 // `data(…)` pattern): a name binds, `_` takes anything, a type word tests the type, a value must be equal; a rest
 // `...rest` takes what the other items leave; `>= 18`, `18..65` and `a | b` stand for a part. Inside `data(…)` the
 // code must be the same but for its `$holes`, a hole used twice taking equal code
-pattern_bindings(value: any, pattern: any): any := {
+def pattern_bindings(value: any, pattern: any): any := {
 	bound = {}
 	if fits_pattern(value, pattern, bound, no) then bound else ø
 }
-fits_pattern(value: any, pattern: any, bound: map, code: bool): bool := {
+def fits_pattern(value: any, pattern: any, bound: map, code: bool): bool := {
 	if is_type(pattern, "symbol") { return fits_name(value, name_of(pattern), bound, code) }
 	if is_type(pattern, "key") { return fits_key(value, pattern, bound, code) }
 	if bracket_of(pattern) != ø { return fits_group(value, pattern, bound, code) }
 	value == pattern
 }
 // a hole or name takes the value, the same one again where it is bound already
-bound_as(value: any, name: text, bound: map): bool := {
+def bound_as(value: any, name: text, bound: map): bool := {
 	if name == "_" { return yes }
 	if name in bound { return bound[name] == value }
 	bound[name] = value
 	yes
 }
-fits_name(value: any, name: text, bound: map, code: bool): bool := {
+def fits_name(value: any, name: text, bound: map, code: bool): bool := {
 	if name.starts_with("$") { return bound_as(value, name[1 ..< #name], bound) }
 	if code { return value == symbol(name) }
 	if is_pattern_type(name) { return has_pattern_type(value, name) }
@@ -606,19 +606,19 @@ fits_name(value: any, name: text, bound: map, code: bool): bool := {
 pattern_types = {"int": is_int_value, "float": is_float_value, "number": is_number_value, "text": is_text_value,
 	"bool": is_bool_value, "list": is_list_value, "map": is_map_value, "symbol": is_symbol_value, "key": is_key_value,
 	"block": is_block_value}
-is_int_value(value: any): bool := is_type(value, "int")
-is_float_value(value: any): bool := is_type(value, "number") and not is_type(value, "int")
-is_number_value(value: any): bool := is_type(value, "number")
-is_text_value(value: any): bool := is_type(value, "text")
-is_bool_value(value: any): bool := is_type(value, "bool")
-is_list_value(value: any): bool := is_type(value, "list")
-is_map_value(value: any): bool := is_type(value, "map")
-is_symbol_value(value: any): bool := is_type(value, "symbol")
-is_key_value(value: any): bool := is_type(value, "key")
-is_block_value(value: any): bool := bracket_of(value) == "{"
-is_pattern_type(name: text): bool := name in pattern_types
-has_pattern_type(value: any, name: text): bool := pattern_types[name](value)
-fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
+def is_int_value(value: any): bool := is_type(value, "int")
+def is_float_value(value: any): bool := is_type(value, "number") and not is_type(value, "int")
+def is_number_value(value: any): bool := is_type(value, "number")
+def is_text_value(value: any): bool := is_type(value, "text")
+def is_bool_value(value: any): bool := is_type(value, "bool")
+def is_list_value(value: any): bool := is_type(value, "list")
+def is_map_value(value: any): bool := is_type(value, "map")
+def is_symbol_value(value: any): bool := is_type(value, "symbol")
+def is_key_value(value: any): bool := is_type(value, "key")
+def is_block_value(value: any): bool := bracket_of(value) == "{"
+def is_pattern_type(name: text): bool := name in pattern_types
+def has_pattern_type(value: any, name: text): bool := pattern_types[name](value)
+def fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	op = op_of(pattern)
 	left = key_of(pattern)
 	right = value_of(pattern)
@@ -635,19 +635,19 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 }
 // `>= 18`, `!= ""`: the comparison of the part with the limit; an order only between two numbers or two texts
 comparisons = {">=": at_least, ">": above, "<=": at_most, "<": below, "!=": unequal, "==": equal}
-compares(value: any, op: text, limit: any): bool := {
+def compares(value: any, op: text, limit: any): bool := {
 	if not (op in comparisons) { raise "a pattern compares by >=, >, <=, <, != or ==, not " + op }
 	if op != "!=" and op != "==" and not are_ordered(value, limit) { return no }
 	comparisons[op](value, limit)
 }
-are_ordered(a: any, b: any): bool := (is_type(a, "number") and is_type(b, "number")) or (is_type(a, "text") and is_type(b, "text"))
-at_least(a: any, b: any): bool := a >= b
-above(a: any, b: any): bool := a > b
-at_most(a: any, b: any): bool := a <= b
-below(a: any, b: any): bool := a < b
-unequal(a: any, b: any): bool := a != b
-equal(a: any, b: any): bool := a == b
-fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
+def are_ordered(a: any, b: any): bool := (is_type(a, "number") and is_type(b, "number")) or (is_type(a, "text") and is_type(b, "text"))
+def at_least(a: any, b: any): bool := a >= b
+def above(a: any, b: any): bool := a > b
+def at_most(a: any, b: any): bool := a <= b
+def below(a: any, b: any): bool := a < b
+def unequal(a: any, b: any): bool := a != b
+def equal(a: any, b: any): bool := a == b
+def fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	// `data(…)`: the code inside, holes and all
 	if not code and bracket_of(pattern) == "(" and #pattern == 2 and pattern#1 == symbol("data") { return fits_pattern(value, pattern#2, bound, yes) }
 	if bracket_of(pattern) == "{" and not code { return fits_map(value, pattern, bound) }
@@ -656,7 +656,7 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	fits_items(value, pattern, bound, code)
 }
 // the items, a rest among them taking those the others leave, the items after it counted from the end
-fits_items(value: any, pattern: any, bound: map, code: bool): bool := {
+def fits_items(value: any, pattern: any, bound: map, code: bool): bool := {
 	rest = 0
 	for i in 0..<#pattern { if rest == 0 and is_rest_item(pattern#(i + 1)) { rest = i + 1 } }
 	if rest == 0 {
@@ -673,11 +673,11 @@ fits_items(value: any, pattern: any, bound: map, code: bool): bool := {
 	fits_rest(taken, pattern#rest, bound, code)
 }
 // `...rest`, `*rest`, `rest...`, `$rest...`, a bare `..`, an item pattern `[n, label]...`
-is_rest_item(item: any): bool := {
+def is_rest_item(item: any): bool := {
 	if is_type(item, "symbol") { return name_of(item).starts_with("*") }
 	is_type(item, "key") and (op_of(item) == "to" or op_of(item) == "..") and value_of(item) == ø
 }
-fits_rest(taken: list, item: any, bound: map, code: bool): bool := {
+def fits_rest(taken: list, item: any, bound: map, code: bool): bool := {
 	if is_type(item, "symbol") { return bound_as(taken, name_of(item)[1 ..< #name_of(item)], bound) }
 	held = key_of(item)
 	if held == ø { return yes }
@@ -693,7 +693,7 @@ fits_rest(taken: list, item: any, bound: map, code: bool): bool := {
 	yes
 }
 // the names a pattern binds, in order
-pattern_names(pattern: any): list := {
+def pattern_names(pattern: any): list := {
 	if is_type(pattern, "symbol") { return if name_of(pattern) == "_" or is_pattern_type(name_of(pattern)) then [] else [unmarked(unmarked(name_of(pattern), "$"), "*")] }
 	if is_type(pattern, "key") { return pattern_names(key_of(pattern)) + (if op_of(pattern) == ":" then [] else pattern_names(value_of(pattern))) }
 	if bracket_of(pattern) == ø { return [] }
@@ -702,7 +702,7 @@ pattern_names(pattern: any): list := {
 	names
 }
 // `{status: 200, data: {user: {name}}}`: the fields it names, the others ignored; `{name}` binds the field to its name
-fits_map(value: any, pattern: any, bound: map): bool := {
+def fits_map(value: any, pattern: any, bound: map): bool := {
 	if not is_type(value, "map") { return no }
 	for i in 0..<#pattern {
 		field = pattern#(i + 1)
@@ -716,9 +716,9 @@ fits_map(value: any, pattern: any, bound: map): bool := {
 	yes
 }
 // the pieces of `"/users/" + id + "/x"`, texts and holes, in order
-text_pieces(pattern: any): list := if is_type(pattern, "key") and op_of(pattern) == "+" then text_pieces(key_of(pattern)) + text_pieces(value_of(pattern)) else [pattern]
+def text_pieces(pattern: any): list := if is_type(pattern, "key") and op_of(pattern) == "+" then text_pieces(key_of(pattern)) + text_pieces(value_of(pattern)) else [pattern]
 // the text cut at its literal pieces, each hole taking what lies between, the last its type converting it
-fits_text_cut(value: any, pieces: list, last_type: any, bound: map): bool := {
+def fits_text_cut(value: any, pieces: list, last_type: any, bound: map): bool := {
 	if not is_type(value, "text") { return no }
 	rest = value
 	for i in 0..<#pieces {
@@ -740,24 +740,24 @@ fits_text_cut(value: any, pieces: list, last_type: any, bound: map): bool := {
 }
 // a text part as its hole's type wants it, ø when it isn't one; a type no text converts to is an error
 part_conversions = {"int": int_part, "float": float_part, "number": number_part, "text": text_part}
-converted_part(part: text, type_word: any): any := {
+def converted_part(part: text, type_word: any): any := {
 	name = name_of(type_word)
 	if not (name in part_conversions) { raise "a text cut's last hole converts to int, float, number or text, not " + name }
 	part_conversions[name](part)
 }
-is_digits(t: text): bool := t != "" and t.all(c => c >= '0' and c <= '9')
+def is_digits(t: text): bool := t != "" and t.all(c => c >= '0' and c <= '9')
 # a number's digits after its leading minus, if any: `-3`, `-2.5`
-unsigned(t: text): text := if starts_with(t, "-") then slice(t, 1) else t
-int_part(t: text): any := if is_digits(unsigned(t)) then int(t) else ø
-float_part(t: text): any := {
+def unsigned(t: text): text := if starts_with(t, "-") then slice(t, 1) else t
+def int_part(t: text): any := if is_digits(unsigned(t)) then int(t) else ø
+def float_part(t: text): any := {
 	pieces = unsigned(t).split(".")
 	if #pieces > 2 or not is_digits(pieces#1) or (#pieces == 2 and not is_digits(pieces#2)) { return ø }
 	float(t)
 }
-number_part(t: text): any := if is_digits(unsigned(t)) then int(t) else float_part(t)
-text_part(t: text): any := t
+def number_part(t: text): any := if is_digits(unsigned(t)) then int(t) else float_part(t)
+def text_part(t: text): any := t
 // the name without its mark: `$a` → a, `*rest` → rest
-unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
+def unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
 
 
 // Named events (lib/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
@@ -766,7 +766,7 @@ global event_listeners = {}
 global listener_numbers = {}
 global listening_once = {}
 global listener_counts = {}
-listen(name: any, listener: function, once: bool): int := {
+def listen(name: any, listener: function, once: bool): int := {
 	key = name_of(name)
 	if not (key in event_listeners) {
 		event_listeners[key] = []
@@ -780,7 +780,7 @@ listen(name: any, listener: function, once: bool): int := {
 	listening_once[key] += [once]
 	listener_counts[key]
 }
-emitted(name: any, data: any): any := {
+def emitted(name: any, data: any): any := {
 	key = name_of(name)
 	if not (key in event_listeners) { return ø }
 	running = event_listeners[key]
@@ -789,14 +789,14 @@ emitted(name: any, data: any): any := {
 	for listener in running { result = listener(data) }
 	result
 }
-listeners_of(name: any): list := if name_of(name) in listener_numbers then listener_numbers[name_of(name)] else []
-unlisten(name: any, number: int): any := {
+def listeners_of(name: any): list := if name_of(name) in listener_numbers then listener_numbers[name_of(name)] else []
+def unlisten(name: any, number: int): any := {
 	key = name_of(name)
 	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
 	ø
 }
 // the listeners of an event at the positions keep holds for
-kept_listeners(key: text, keep: function): any := {
+def kept_listeners(key: text, keep: function): any := {
 	listeners = []
 	numbers = []
 	onces = []
@@ -814,5 +814,5 @@ kept_listeners(key: text, keep: function): any := {
 }
 
 // Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
-range(stop: int): list := 0 ..< stop
-range(start: int, stop: int): list := start ..< stop
+def range(stop: int): list := 0 ..< stop
+def range(start: int, stop: int): list := start ..< stop

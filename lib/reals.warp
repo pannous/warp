@@ -3,7 +3,7 @@
 # Euler's number (decision exact-constants: the parser leaves these words alone, the library gives them their values;
 # decision exact-roots: √ is one exact word, a perfect square's root whole, any other root kept)
 
-float_pi() := 3.141592653589793
+def float_pi() := 3.141592653589793
 
 # coefficient · √radicand · π^pi_power, the radicand without square factors (real_of)
 class Real {
@@ -11,24 +11,24 @@ class Real {
 	pi_power: number
 	radicand: int
 	# (a float's operation with it takes this at once, decision float-contagion: no root of 1 nor power of 1 taken)
-	float() := coefficient * (if radicand == 1 then 1.0 else √(radicand as float)) * (if pi_power == 1 then float_pi else float_pi ^ pi_power)
+	def float() := coefficient * (if radicand == 1 then 1.0 else √(radicand as float)) * (if pi_power == 1 then float_pi else float_pi ^ pi_power)
 	*(other) := if other is Real then real_of(coefficient * other.coefficient, pi_power + other.pi_power, radicand * other.radicand) else if other is float then float() * other else real_of(coefficient * other, pi_power, radicand)
 	# a / (c√r) is a√r / (c·r): the root rises above the fraction line
 	/(other) := if other is Real then real_of(coefficient / (other.coefficient * other.radicand), pi_power - other.pi_power, radicand * other.radicand) else if other is float then float() / other else real_of(coefficient / other, pi_power, radicand)
 	+(other) := if alike(other) then real_of(coefficient + other.coefficient, pi_power, radicand) else float() + real_float(other)
 	-(other) := if alike(other) then real_of(coefficient - other.coefficient, pi_power, radicand) else float() - real_float(other)
-	alike(other) := other is Real and other.pi_power == pi_power and other.radicand == radicand
-	compare(other) := float() - real_float(other)
+	def alike(other) := other is Real and other.pi_power == pi_power and other.radicand == radicand
+	def compare(other) := float() - real_float(other)
 	# √(c·π^p) of a rational c = n/d is √(n·d)/d · π^(p/2); of a root under it, a fourth root, a float or a fraction of
 	# a denominator past largest_shown_denominator the float's
-	root() := {
+	def root() := {
 		if radicand != 1 or coefficient is float or coefficient < 0 { return √float() }
 		denominator = denominator_of(coefficient)
 		under = coefficient * denominator * denominator
 		if under is int then real_of(1 / denominator, pi_power / 2, under) else √float()
 	}
-	text() := real_text(coefficient, pi_power, radicand)
-	show() := real_text(coefficient, pi_power, radicand)
+	def text() := real_text(coefficient, pi_power, radicand)
+	def show() := real_text(coefficient, pi_power, radicand)
 }
 
 # a number as an exact real, π to the power 0: `3 as Real`, and a number meeting a real under any operator becomes one
@@ -36,7 +36,7 @@ class Real {
 n: number as Real := Real(n, 0, 1)
 # the real c·√r·π^p at its simplest: the square factors of r out under the root, a plain number where no π or root is
 # left, a float of a float coefficient or a radicand past largest_exact_radicand
-real_of(coefficient: number, pi_power: number, radicand: number) := {
+def real_of(coefficient: number, pi_power: number, radicand: number) := {
 	if coefficient == 0 { return 0 }
 	if radicand > largest_exact_radicand { return coefficient * √(radicand as float) * float_pi ^ pi_power }
 	parts = square_parts(radicand)
@@ -45,12 +45,12 @@ real_of(coefficient: number, pi_power: number, radicand: number) := {
 	real = Real(coefficient, pi_power, parts#2)
 	if coefficient is float then real.float() else real
 }
-real_float(x) := if x is Real then x.float() else x
+def real_float(x) := if x is Real then x.float() else x
 # a root under it past this, a whole number beyond an int, is the float's
 largest_exact_radicand = 1000000000000
 # [s, r] of n = s²·r, the square factors of the primes up to largest_square_factor taken out, a perfect square whole
 largest_square_factor = 100
-square_parts(n: int): list := {
+def square_parts(n: int): list := {
 	whole = floor(√(n as float)) as int
 	if whole * whole == n { return [whole, 1] }
 	outside = 1
@@ -66,11 +66,11 @@ square_parts(n: int): list := {
 }
 # √: a perfect square's root whole, √9 is 3, any other root of an exact number kept, √2, √(3/4) is √3/2; of a float the
 # float's (the emitter's √ of a value not known to be a float)
-exact_root(x: any) := if x is Real then x.root() else if x is float then √(x as float) else Real(x, 0, 1).root()
+def exact_root(x: any) := if x is Real then x.root() else if x is float then √(x as float) else Real(x, 0, 1).root()
 
 # 2π, 3√2, √π, 3/π, √2/π: the powers of π and the root, a negative power of π below the fraction line; `3 as Real` as
 # its number
-real_text(coefficient: number, pi_power: number, radicand: int) := {
+def real_text(coefficient: number, pi_power: number, radicand: int) := {
 	half = not (pi_power is int)
 	whole = if half then pi_power - 1 / 2 else pi_power
 	inside = (if radicand == 1 then "" else str(radicand)) + (if half then "π" else "")
@@ -79,8 +79,8 @@ real_text(coefficient: number, pi_power: number, radicand: int) := {
 	power = (if whole == 0 then "" else pi_power_text(whole)) + radical
 	if power == "" then str(coefficient) else coefficient_text(coefficient, power)
 }
-pi_power_text(pi_power: int) := if pi_power == 1 then "π" else "π^" + str(pi_power)
-inverse_text(coefficient: number, power: text, radical: text) := {
+def pi_power_text(pi_power: int) := if pi_power == 1 then "π" else "π^" + str(pi_power)
+def inverse_text(coefficient: number, power: text, radical: text) := {
 	denominator = denominator_of(coefficient)
 	numerator = coefficient * denominator
 	above = if radical == "" then str(numerator) else if numerator == 1 then radical else if numerator == -1 then "-" + radical else str(numerator) + radical
@@ -88,7 +88,7 @@ inverse_text(coefficient: number, power: text, radical: text) := {
 	above + "/" + below
 }
 # 2π, -π, 3π/4: the coefficient as the fraction it is, its numerator before the power, its denominator after it
-coefficient_text(coefficient: number, power: text) := {
+def coefficient_text(coefficient: number, power: text) := {
 	denominator = denominator_of(coefficient)
 	numerator = coefficient * denominator
 	over = if denominator == 1 then "" else "/" + str(denominator)
@@ -100,26 +100,26 @@ coefficient_text(coefficient: number, power: text) := {
 }
 largest_shown_denominator = 10000
 # the least whole number making x whole, 1 for a float or a fraction of a larger denominator
-denominator_of(x: number) := {
+def denominator_of(x: number) := {
 	denominator = 1
 	while not ((x * denominator) is int) and denominator < largest_shown_denominator { denominator += 1 }
 	if denominator < largest_shown_denominator then denominator else 1
 }
 
 // sin and cos of a whole number of half π exactly, `sin π` is 0, `cos π` -1; of any other real the float's
-sin(x: Real) := if half_turns(x) then half_turns_sine(2 * x.coefficient) else sin(x.float())
-cos(x: Real) := if half_turns(x) then half_turns_sine(2 * x.coefficient + 1) else cos(x.float())
-half_turns(x: Real) := x.pi_power == 1 and x.radicand == 1 and (2 * x.coefficient) is int
+def sin(x: Real) := if half_turns(x) then half_turns_sine(2 * x.coefficient) else sin(x.float())
+def cos(x: Real) := if half_turns(x) then half_turns_sine(2 * x.coefficient + 1) else cos(x.float())
+def half_turns(x: Real) := x.pi_power == 1 and x.radicand == 1 and (2 * x.coefficient) is int
 // sin(n·π/2): 0, 1, 0, -1 around the circle
-half_turns_sine(n: int) := [0, 1, 0, -1][((n % 4) + 4) % 4]
+def half_turns_sine(n: int) := [0, 1, 0, -1][((n % 4) + 4) % 4]
 // the other real functions of lib/math.warp the float's: tan(π/6), the camera's field of view in samples/gpu/ocean.warp
-tan(x: Real) := tan(x.float())
-exp(x: Real) := exp(x.float())
+def tan(x: Real) := tan(x.float())
+def exp(x: Real) := exp(x.float())
 
 π() := Real(1, 1, 1)
-pi() := π
+def pi() := π
 τ() := Real(2, 1, 1)
-tau() := τ
+def tau() := τ
 ∞() := 1.0 / 0.0
 ℯ() := 2.718281828459045
-euler() := ℯ
+def euler() := ℯ

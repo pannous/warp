@@ -10,7 +10,7 @@ use "text.warp"
 use "types.warp"
 # `a == b` of values known only at run time: ø equals only ø, lists equal item by item, closures by their target and
 # captured values (emitter.warp closure_value), texts and characters as texts, numbers as numbers (an int and a float alike)
-node_equal(a: Node, b: Node): bool := {
+def node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
 	if same_node(a, b) { return yes }
 	# two texts, the common case of a match on spellings (`Op·case`): their bytes, past none of the other kinds' tests
@@ -41,20 +41,20 @@ node_equal(a: Node, b: Node): bool := {
 }
 # a value is an enum's case (made once, emitter.warp case_value) by being that very node; a copy, another module's or
 # the host's, by its kind (the enum's number in the info byte) and name, past node_equal's tests of every other kind
-case_equal(value: Node, case: Node): bool := same_node(value, case) or (not is_null(value) and code_free_kind(value) == code_free_kind(case) and same_bytes(unboxed_text(value), unboxed_text(case)))
+def case_equal(value: Node, case: Node): bool := same_node(value, case) or (not is_null(value) and code_free_kind(value) == code_free_kind(case) and same_bytes(unboxed_text(value), unboxed_text(case)))
 # two texts or characters equal as texts: two characters by their code points, no text made of either
-textual_equal(a: Node, b: Node): bool := {
+def textual_equal(a: Node, b: Node): bool := {
 	if kind_code(a) == Kind.Codepoint and kind_code(b) == Kind.Codepoint { return unboxed_char(a) == unboxed_char(b) }
 	same_bytes(textual_text(a), textual_text(b))
 }
-textual_text(n: Node): text := if kind_code(n) == Kind.Codepoint then char_text(unboxed_char(n)) else unboxed_text(n)
-list_equal(a: list, b: list): bool := {
+def textual_text(n: Node): text := if kind_code(n) == Kind.Codepoint then char_text(unboxed_char(n)) else unboxed_text(n)
+def list_equal(a: list, b: list): bool := {
 	if #a != #b { return no }
 	for i in 1 to #a { if not node_equal(a#i, b#i) { return no } }
 	yes
 }
 # `a == b` of two maps: the same names with equal values, in any order
-map_equal(a: Node, b: Node): bool := {
+def map_equal(a: Node, b: Node): bool := {
 	if #unboxed_list(a) != #unboxed_list(b) { return no }
 	# its own search, not map_index's: map_index may still be compiling here (map_index → key_name → node_text → …
 	# node_equal → map_equal), its result kind not known yet

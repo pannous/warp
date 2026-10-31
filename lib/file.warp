@@ -7,10 +7,10 @@ global write_bytes(path: any, bytes: any) := std_io("file", "write_bytes", [path
 global read_bytes(path: any) := std_io("file", "read_bytes", [path])
 // a value written to a file, by its type (card save-sound): save "hi" as: "note.txt"; `use sound` adds
 // save sound as: "song.wav"
-save(content: text, as file) := write(file, content)
+def save(content: text, as file) := write(file, content)
 global append_file(path: any, text: any) := std_io("file", "append", [path, text])
 global exists(path: any) := std_io("file", "exists", [path])
-list_files(folder: any) := std_io("file", "list", [folder])
+def list_files(folder: any) := std_io("file", "list", [folder])
 // `glob("rust-harness:src/*.rs")`: the paths matching the pattern, sorted; its wildcards * and ? are in its last part
-glob(pattern: any) := std_io("file", "glob", [pattern])
-lines(path) := split(read(path), "\n")
+def glob(pattern: any) := std_io("file", "glob", [pattern])
+def lines(path) := split(read(path), "\n")

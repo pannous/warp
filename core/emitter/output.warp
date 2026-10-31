@@ -7,7 +7,7 @@ def write_output(count: list): list {
 	arguments = [op.i32_const] + sleb(stdout) + [op.i32_const] + sleb(iovec_address) + [op.i32_const, 1, op.i32_const] + sleb(written_address)
 	iovec + arguments + call_code(import_index(fd_write_import)) + [op.i64_extend_i32_u]
 }
-import_index(entry: list): int := {
+def import_index(entry: list): int := {
 	index = -1
 	for i in 0..<#module.imports { if module.imports[i] == entry { index = i } }
 	if index < 0 { refuse("the import " + entry#2 + ", not declared") }
@@ -62,13 +62,13 @@ def texts_joined(body: Body, values: list, separator: text): TypedCode {
 	printed_text
 }
 spaced_arithmetic = ["+", "-", "*", "/", "%", "^"]
-is_spaced_value(n: Node): bool := {
+def is_spaced_value(n: Node): bool := {
 	if n is number or n is text { return yes }
 	if not (type(n) is key and op_of(n) in spaced_arithmetic) { return no }
 	(key_of(n) == ø or is_spaced_value(key_of(n))) and (value_of(n) == ø or is_spaced_value(value_of(n)))
 }
 # `5 -2`: a glued sign, a value of its own
-is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
+def is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout, a statement: a body ending in it gives ø, as Rust's print does, and
 # a program ending in it prints nothing more (_start)
 def printed(value: TypedCode): TypedCode { TypedCode(no_kind, dropped(runtime_call("print_line", [shown_text(value)]))) }

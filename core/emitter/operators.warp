@@ -13,7 +13,7 @@ def marked(symbol: text, result: TypedCode, a: TypedCode, b: TypedCode): TypedCo
 	if mark != 0 { return TypedCode(result.kind, result.code, mark) }
 	result
 }
-marks_kind(mark: int, kind: ValueKind): bool := mark != 0 and ((kind == ValueKind.Int and mark % KindUnit.Info == Kind.Int) or (kind == ValueKind.Float and mark % KindUnit.Info == Kind.Float))
+def marks_kind(mark: int, kind: ValueKind): bool := mark != 0 and ((kind == ValueKind.Int and mark % KindUnit.Info == Kind.Int) or (kind == ValueKind.Float and mark % KindUnit.Info == Kind.Float))
 def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 	# an element of a recursive call's result the first reading does not know yet: its index says nothing of its kind
 	if symbol == "#" and a.kind == pending { return element(body, TypedCode(ValueKind.Node, a.code), b) }
@@ -129,17 +129,17 @@ def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	operation_code(body, symbol, a, b)
 }
 # a variable declared int in an optional or union slot holds a node, an int still (boxing is the layout, not the type)
-boxed_int_slot(body: Body, n: Node): bool := n is symbol and name_of(n) in body.boxed_ints
-unboxed_int_slot(body: Body, n: Node, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and boxed_int_slot(body, n) then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
+def boxed_int_slot(body: Body, n: Node): bool := n is symbol and name_of(n) in body.boxed_ints
+def unboxed_int_slot(body: Body, n: Node, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and boxed_int_slot(body, n) then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
 # a literal beside a fast int takes the int side: `i + 1` of a counter wraps
-wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
+def wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
 # a fast int: a variable or parameter declared int (a loop's counter is), `#xs`, + - * of fast ints
-fast_int(body: Body, n: Node): bool := {
+def fast_int(body: Body, n: Node): bool := {
 	if n is symbol { return declared_int(body, name_of(n)) }
 	if is_key(n, Op.Hash) and key_of(n) == ø { return yes }
 	type(n) is key and op_of(n) in grown_words and key_of(n) != ø and wraps(body, key_of(n), value_of(n))
 }
-declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int)
+def declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int)
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod", "rem": "exact_rem"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
@@ -150,7 +150,7 @@ def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode,
 # ratio, as Rust's exact_floor)
 # `type(x)`: the type value of x's kind, of a value known only at run time the one its kind names there (a list's
 # items unknown here, Rust's `list of int`, outside the core)
-static_type_word(kind: ValueKind): text? := match kind {
+def static_type_word(kind: ValueKind): text? := match kind {
 	ValueKind.Int: "int"
 	ValueKind.Float: "float"
 	ValueKind.Text: "text"

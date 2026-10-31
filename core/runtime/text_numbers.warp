@@ -11,19 +11,19 @@ use "library_words.warp"
 use "text.warp"
 use "../emitter/byte_codes.warp"
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
-sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == Ascii.Minus or byte_at(t, 0) == Ascii.Plus) then 1 else 0
+def sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == Ascii.Minus or byte_at(t, 0) == Ascii.Plus) then 1 else 0
 # t starts with -
-is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == Ascii.Minus
+def is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == Ascii.Minus
 # the digit a byte spells, -1 for any other byte
-digit_of(b: int): int := if b >= Ascii.Zero and b <= Ascii.Nine then b - Ascii.Zero else -1
+def digit_of(b: int): int := if b >= Ascii.Zero and b <= Ascii.Nine then b - Ascii.Zero else -1
 # how many digits stand in t from byte offset start on
-digit_run(t: text, start: int): int := {
+def digit_run(t: text, start: int): int := {
 	at = start
 	while at < byte_count(t) and digit_of(byte_at(t, at)) >= 0 { at += 1 }
 	at - start
 }
 # `t as int`: an optional sign and decimal digits, nothing else; 64 bits, where Rust's grows a big int
-text_as_int(t: text): int := {
+def text_as_int(t: text): int := {
 	start = sign_length(t)
 	count = digit_run(t, start)
 	if count == 0 or start + count != byte_count(t) { invalid_number() }
@@ -33,7 +33,7 @@ text_as_int(t: text): int := {
 }
 # `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
 # nearest float, correctly rounded also beyond 10^±22, where Rust's multiplies ten by ten
-text_as_float(t: text): float := {
+def text_as_float(t: text): float := {
 	start = sign_length(t)
 	whole = digit_run(t, start)
 	at = start + whole
@@ -56,7 +56,7 @@ text_as_float(t: text): float := {
 }
 # [digits, dropped] of the digits between the byte offsets start and stop (a point among them skipped): the first 18
 # significant ones as an int (below 10^18, so below 2^63), the count of those dropped after them
-decimal_digits(t: text, start: int, stop: int): list := {
+def decimal_digits(t: text, start: int, stop: int): list := {
 	digits = 0
 	count = 0
 	dropped = 0
@@ -75,7 +75,7 @@ decimal_digits(t: text, start: int, stop: int): list := {
 # exact power of ten up to 10^22: one rounding, as Clinger's fast path; beyond, within 2^-104 before the last
 # rounding). float_scaled's steps overflow near 2^1024, so a result beyond 10^290 is scaled to 10^20 below and
 # multiplied back (a second rounding there), one below 10^-290 to 10^20 above and divided back
-decimal_float(digits: int, shift: int): float := {
+def decimal_float(digits: int, shift: int): float := {
 	if digits == 0 { return float(0) }
 	magnitude = byte_count(int_text(digits)) - 1 + shift
 	if magnitude > 308 { return float_of_bits(9218868437227405312) }
@@ -89,7 +89,7 @@ decimal_float(digits: int, shift: int): float := {
 	scaled
 }
 # 10^n of an n from 0 to 22, exact
-power_of_ten(n: int): float := {
+def power_of_ten(n: int): float := {
 	power = float(1)
 	left = n
 	while left > 0 {
@@ -99,7 +99,7 @@ power_of_ten(n: int): float := {
 	power
 }
 # `t as number`: "1/3" the exact ratio of the ints around the slash, a whole number below 2^63 an int, else a float
-text_as_number(t: text): Node := {
+def text_as_number(t: text): Node := {
 	slash = text_index(t, char_text("/"))
 	if slash >= 0 { return extended_ratio(text_as_int(bytes_between(t, 0, slash)), text_as_int(bytes_between(t, slash + 1, byte_count(t)))) }
 	x = text_as_float(t)

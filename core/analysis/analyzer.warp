@@ -31,11 +31,11 @@ node_types = {any: 1, map: 1}
 # --- kinds of expressions (Rust infer_type) ---
 
 # the kind a type word or a builtin's line names, `"int"` of int, ø of none; the spelling of a kind
-kind_named(word: text?): ValueKind? := if word == ø then ø else word as ValueKind
-kind_spelling(kind: ValueKind): text := kind as text
+def kind_named(word: text?): ValueKind? := if word == ø then ø else word as ValueKind
+def kind_spelling(kind: ValueKind): text := kind as text
 
 # a decimal of at most 15 significant digits is exact, an int; a longer one a float
-number_kind(n: number): ValueKind := {
+def number_kind(n: number): ValueKind := {
 	if n is int { return ValueKind.Int }
 	digits = "${n}".replace(".", "").replace("-", "")
 	while digits.starts_with("0") { digits = digits[1..] }
@@ -43,20 +43,20 @@ number_kind(n: number): ValueKind := {
 }
 
 # the nodes a node holds: a key's two sides, a list's items
-node_parts(n: Node): list := match n {
+def node_parts(n: Node): list := match n {
 	Key(left, _, right): [left, right]
 	List(items, _, _): items
 	_: []
 }
-is_empty(n: Node): bool := n == ø
-head_name(n: Node): Name := if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
+def is_empty(n: Node): bool := n == ø
+def head_name(n: Node): Name := if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
 # a local, else a global the scope sees
-binding(scope: Scope, name: Name): ValueKind? := if name in scope.kinds then scope.kinds[name] else if "" in scopes then scopes[""].kinds.get(name) else scope.globals.get(name)
-is_ref(kind: ValueKind): bool := kind not in primitive_kinds
-all_of(xs: list, f: function): bool := #xs.filter(f) == #xs
-any_of(xs: list, f: function): bool := #xs.filter(f) > 0
+def binding(scope: Scope, name: Name): ValueKind? := if name in scope.kinds then scope.kinds[name] else if "" in scopes then scopes[""].kinds.get(name) else scope.globals.get(name)
+def is_ref(kind: ValueKind): bool := kind not in primitive_kinds
+def all_of(xs: list, f: function): bool := #xs.filter(f) == #xs
+def any_of(xs: list, f: function): bool := #xs.filter(f) > 0
 
-arithmetic_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
+def arithmetic_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
 	if (left == ValueKind.Data or left == ValueKind.Empty) and (right == ValueKind.Data or right == ValueKind.Empty or right == ValueKind.Int or right == ValueKind.Float) { return ValueKind.Data }
 	if (right == ValueKind.Data or right == ValueKind.Empty) and (left == ValueKind.Int or left == ValueKind.Float) { return ValueKind.Data }
@@ -72,7 +72,7 @@ arithmetic_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 }
 
 # either branch's value: one kind stays, numbers widen, any other mix is a node
-branches_kind(a: ValueKind, b: ValueKind): ValueKind := {
+def branches_kind(a: ValueKind, b: ValueKind): ValueKind := {
 	if a == ValueKind.Unknown { return b }
 	if b == ValueKind.Unknown { return a }
 	if a == b and (is_ref(a) or a == ValueKind.Codepoint) { return a }
@@ -87,43 +87,43 @@ branches_kind(a: ValueKind, b: ValueKind): ValueKind := {
 }
 
 # the kind a variable holding `value` gets: ø and the empty block are a node, a character a text
-held_kind(value: Node, scope: Scope): ValueKind := {
+def held_kind(value: Node, scope: Scope): ValueKind := {
 	if is_empty(value) or (is_curly_group(value) and #value == 0) { return ValueKind.Empty }
 	kind = inferred_kind(value, scope)
 	if kind == ValueKind.Codepoint and (value is text or value is symbol) { ValueKind.Text } else { kind }
 }
 
 # the last statement of a block, or the node itself
-last_statement(n: Node): Node := if is_curly_group(n) and #n > 0 then last_statement(n#(#n)) else n
+def last_statement(n: Node): Node := if is_curly_group(n) and #n > 0 then last_statement(n#(#n)) else n
 
 # what a branch computes: its last statement, the words of one line as one call
-computed(branch: Node): Node := {
+def computed(branch: Node): Node := {
 	if is_curly_group(branch) and separator_of(branch) == " " and #branch > 1 { return separated(bracketed(branch.map(x => x), ""), " ") }
 	if is_curly_group(branch) and #branch > 0 { return computed(branch#(#branch)) }
 	branch
 }
-branch_kind(branch: Node, scope: Scope): ValueKind := held_kind(computed(branch), scope)
+def branch_kind(branch: Node, scope: Scope): ValueKind := held_kind(computed(branch), scope)
 
 # `name := {…}` holds what the block computes (a body run at each read), `name = {…}` the block; a map or a comma list
 # stays data
-assigned_value(n: Node): Node := {
+def assigned_value(n: Node): Node := {
 	value = value_of(n)
 	if is_key(n, Op.Define) and is_curly_group(value) and separator_of(value) != "," and not all_of(value, part => is_key(part, Op.Colon)) { computed(value) } else { value }
 }
 
 # the branch ends in an error raised: `error "…"`, `raise …`, `throw …`
-raises_error(branch: Node): bool := {
+def raises_error(branch: Node): bool := {
 	last = last_statement(branch)
 	is_group(last) and #last == 2 and (head_name(last) == "error" or head_name(last) in raise_words)
 }
 
-choice_kind(then: Node, otherwise: Node, scope: Scope): ValueKind := {
+def choice_kind(then: Node, otherwise: Node, scope: Scope): ValueKind := {
 	if raises_error(then) and not raises_error(otherwise) { return error_or(branch_kind(otherwise, scope)) }
 	if raises_error(otherwise) and not raises_error(then) { return error_or(branch_kind(then, scope)) }
 	branches_kind(branch_kind(then, scope), branch_kind(otherwise, scope))
 }
 # the kind of a node as written, not run (Rust Node::kind; a block is a list)
-written_kind(n: Node): ValueKind := match n {
+def written_kind(n: Node): ValueKind := match n {
 	Key(_, _, _): ValueKind.Key
 	List(_, _, _): ValueKind.List
 	Symbol(_): ValueKind.Symbol
@@ -132,14 +132,14 @@ written_kind(n: Node): ValueKind := match n {
 }
 # abs(x) (‖x‖) of the value's kind; sqrt(x) (√x) of a float a float, of any other value lib/reals.warp's exact root
 # (decision exact-roots); cbrt(x) (∛x) a float of a number
-magnitude_value_kind(word: text, kind: ValueKind): ValueKind := {
+def magnitude_value_kind(word: text, kind: ValueKind): ValueKind := {
 	if word == "abs" { return kind }
 	if word == "sqrt" { return if kind == ValueKind.Float then ValueKind.Float else ValueKind.Data }
 	if kind == ValueKind.Data or kind == ValueKind.Empty then ValueKind.Data else ValueKind.Float
 }
-error_or(kind: ValueKind): ValueKind := if kind == ValueKind.Int or kind == ValueKind.Float then ValueKind.Data else kind
+def error_or(kind: ValueKind): ValueKind := if kind == ValueKind.Int or kind == ValueKind.Float then ValueKind.Data else kind
 
-kind_of_list(n: Node, scope: Scope): ValueKind := {
+def kind_of_list(n: Node, scope: Scope): ValueKind := {
 	name = head_name(n)
 	if name == "return" and #n == 2 { return inferred_kind(n#2, scope) }
 	if name and name in results and name not in scope.parameters { return results[name] }
@@ -176,7 +176,7 @@ kind_of_list(n: Node, scope: Scope): ValueKind := {
 }
 
 # pure data, no statement or call: a list of it is a list
-is_data(n: Node): bool := {
+def is_data(n: Node): bool := {
 	if is_empty(n) or n is number or n is text or n == yes or n == no { return yes }
 	if n is symbol { return yes }
 	if type(n) is key { return is_key(n, Op.Colon) or (op_of(n) in arithmetic_ops and is_data(key_of(n)) and is_data(value_of(n))) }
@@ -184,7 +184,7 @@ is_data(n: Node): bool := {
 	no
 }
 
-kind_of_key(n: Node, scope: Scope): ValueKind := {
+def kind_of_key(n: Node, scope: Scope): ValueKind := {
 	op = op_of(n)
 	if op == ".." or op == "..<" or op == "to" or op == "…" { return ValueKind.List }
 	if op == "±" { return ValueKind.Data }
@@ -209,7 +209,7 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 	ValueKind.Int
 }
 
-compound_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
+def compound_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
 	if op == "+" and (left == ValueKind.List or right == ValueKind.List) and left != ValueKind.Text and right != ValueKind.Text { return ValueKind.List }
 	if op == "+" and (left == ValueKind.Text or right == ValueKind.Text) { return ValueKind.Text }
@@ -218,7 +218,7 @@ compound_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 	ValueKind.Int
 }
 
-logical_kind(left: ValueKind, right: ValueKind): ValueKind := {
+def logical_kind(left: ValueKind, right: ValueKind): ValueKind := {
 	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
 	if is_ref(left) or is_ref(right) or left == ValueKind.Codepoint or right == ValueKind.Codepoint or left == ValueKind.Empty or right == ValueKind.Empty {
 		return branches_kind(left, right)
@@ -226,7 +226,7 @@ logical_kind(left: ValueKind, right: ValueKind): ValueKind := {
 	ValueKind.Int
 }
 
-converted_kind(n: Node, scope: Scope): ValueKind := {
+def converted_kind(n: Node, scope: Scope): ValueKind := {
 	target = if value_of(n) is symbol then name_of(value_of(n)).lower() else ""
 	if target == "codepoint" or target == "char" or target == "character" { return ValueKind.Codepoint }
 	if target == "list" { return ValueKind.List }
@@ -239,7 +239,7 @@ converted_kind(n: Node, scope: Scope): ValueKind := {
 }
 
 # a loop is its last body value: a text or list as such, ø after a print, else a number or ø decided at run time
-loop_kind(body: Node, scope: Scope): ValueKind := {
+def loop_kind(body: Node, scope: Scope): ValueKind := {
 	statements = without_step(body)
 	# `{print x}` holds the words of its one statement, the call
 	last = if is_curly_group(statements) and separator_of(statements) == " " and #statements > 1 then statements else last_statement(statements)
@@ -251,14 +251,14 @@ loop_kind(body: Node, scope: Scope): ValueKind := {
 
 # a loop body without the step a `for` lowering appended, shown as `loop·step: i++` (Rust split_step; node_views.rs
 # SHOWN_STEP)
-without_step(body: Node): Node := {
+def without_step(body: Node): Node := {
 	if not is_group(body) or #body == 0 or not is_step(body#(#body)) { return body }
 	group_like(body, items_of(body)[0 ..< #body - 1])
 }
-is_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep as text)
+def is_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep as text)
 
 # `xs#i`: an element of a list of known elements, a character of a text
-subscript_kind(indexed: Node, index: Node, scope: Scope): ValueKind := {
+def subscript_kind(indexed: Node, index: Node, scope: Scope): ValueKind := {
 	indexed_kind = inferred_kind(indexed, scope)
 	if indexed_kind == ValueKind.Unknown { return ValueKind.Unknown }
 	element = element_kind(indexed, scope)
@@ -271,7 +271,7 @@ subscript_kind(indexed: Node, index: Node, scope: Scope): ValueKind := {
 # a call of a builtin the prelude types (builtin_signatures.warp; Rust emitted_call_kind, then library_call_kind): the kind
 # its line declares, that of an argument (`same as object`, `element of xs`), of its overload for the first value; ø
 # for no typed builtin
-typed_call_kind(n: Node, scope: Scope): ValueKind? := {
+def typed_call_kind(n: Node, scope: Scope): ValueKind? := {
 	name = head_name(n)
 	if name is empty or binding(scope, name) != ø or name in scope.parameters or not (#n >= 2 or bracket_of(n) == "(") { return ø }
 	emitted = kind_named(emitted_call_kind(name, #n - 1))
@@ -287,7 +287,7 @@ typed_call_kind(n: Node, scope: Scope): ValueKind? := {
 	kind_named(overload_kind(name, kind_spelling(inferred_kind(n#2, scope)))) ?? ValueKind.Int
 }
 
-element_kind(indexed: Node, scope: Scope): ValueKind? := {
+def element_kind(indexed: Node, scope: Scope): ValueKind? := {
 	kind = inferred_kind(indexed, scope)
 	if kind == ValueKind.Text or kind == ValueKind.Symbol { return ValueKind.Text }
 	if kind == ValueKind.Empty { return ValueKind.Empty }
@@ -295,7 +295,7 @@ element_kind(indexed: Node, scope: Scope): ValueKind? := {
 }
 
 # the kind of an element of a list or map type (list of int: int), ø when the type names none
-typed_element_kind(type_name: TypeWord?): ValueKind? := {
+def typed_element_kind(type_name: TypeWord?): ValueKind? := {
 	if type_name == ø { return ø }
 	if type_name == "map" or type_name == "list of node" { return ValueKind.Empty }
 	element = if type_name.starts_with("list of ") then type_name[8..] else if type_name.starts_with("map of ") then type_name[7..] else ""
@@ -310,11 +310,11 @@ typed_element_kind(type_name: TypeWord?): ValueKind? := {
 }
 
 # an operand's kind; a function of no parameters read bare is its call, `5 * ms` (lib/units.warp) a quantity
-operand_kind(n: Node, scope: Scope): ValueKind := {
+def operand_kind(n: Node, scope: Scope): ValueKind := {
 	if n is symbol and binding(scope, name_of(n)) == ø and name_of(n) in defined_signatures and #function_parameters(name_of(n)) == 0 { return inferred_kind(call_of(name_of(n), []), scope) }
 	inferred_kind(n, scope)
 }
-inferred_kind(n: Node, scope: Scope): ValueKind := {
+def inferred_kind(n: Node, scope: Scope): ValueKind := {
 	if is_empty(n) { return ValueKind.Empty }
 	if n == yes or n == no { return ValueKind.Int }
 	if n is number { return number_kind(n) }
@@ -330,13 +330,13 @@ inferred_kind(n: Node, scope: Scope): ValueKind := {
 
 # --- list types (Rust list_type_name) ---
 
-type_word(n: Node, scope: Scope): TypeWord := {
+def type_word(n: Node, scope: Scope): TypeWord := {
 	word = element_type_word(n, scope)
 	if word == "list" { list_type(n, scope) } else { word }
 }
 
 # the type word of one element: ø, a literal number's (int, rational, float), else its kind
-element_type_word(n: Node, scope: Scope): TypeWord := {
+def element_type_word(n: Node, scope: Scope): TypeWord := {
 	if is_empty(n) { return "ø" }
 	if n is number { return if n is int then "int" else if number_kind(n) == ValueKind.Int then (if n % 1 == 0 then "int" else "rational") else "float" }
 	if is_key(n, Op.Div) and key_of(n) is int and value_of(n) is int and value_of(n) != 0 { return if key_of(n) % value_of(n) == 0 then "int" else "rational" }
@@ -344,7 +344,7 @@ element_type_word(n: Node, scope: Scope): TypeWord := {
 }
 
 # the one type word all elements fit, ø when they are no common kind
-common_type(words: texts): TypeWord? := {
+def common_type(words: texts): TypeWord? := {
 	if #words == 0 { return ø }
 	if any_of(words, w => w == "ø" or w.ends_with("?")) {
 		values = words.filter(w => w != "ø").map(w => w.replace("?", ""))
@@ -359,7 +359,7 @@ common_type(words: texts): TypeWord? := {
 	if all_of(words, w => w == "int" or w == "rational") { "rational" } else { "number" }
 }
 
-list_type(n: Node, scope: Scope): TypeWord := {
+def list_type(n: Node, scope: Scope): TypeWord := {
 	if n is symbol {
 		declared = scope.types.get(name_of(n))
 		# `xs: list`, a parameter of no declared element type, as an untyped one: each caller may pass other elements
@@ -395,9 +395,9 @@ list_type(n: Node, scope: Scope): TypeWord := {
 	"list"
 }
 
-nested_type(item: Node, scope: Scope): TypeWord := if inferred_kind(item, scope) == ValueKind.List then list_type(item, scope) else type_word(item, scope)
+def nested_type(item: Node, scope: Scope): TypeWord := if inferred_kind(item, scope) == ValueKind.List then list_type(item, scope) else type_word(item, scope)
 
-map_type(n: Node, scope: Scope): TypeWord := {
+def map_type(n: Node, scope: Scope): TypeWord := {
 	values = n.map(entry => value_of(entry))
 	typed = values.filter(v => not (is_empty(v) or (is_group(v) and bracket_of(v) == "[" and #v == 0)))
 	# not `(if … then values else typed).map(…)`: that loses the element type (card if-expression)
@@ -409,7 +409,7 @@ map_type(n: Node, scope: Scope): TypeWord := {
 	if common != ø and (lists or #typed == #values) { "map of " + common } else { "map" }
 }
 
-element_list_type(map: Node, scope: Scope): TypeWord := {
+def element_list_type(map: Node, scope: Scope): TypeWord := {
 	outer = list_type(map, scope)
 	inner = if outer.starts_with("map of ") then outer[7..] else if outer.starts_with("list of ") then outer[8..] else ""
 	if inner == "list" and outer.starts_with("list of ") { return "list of node" }
@@ -428,9 +428,9 @@ element_list_type(map: Node, scope: Scope): TypeWord := {
 class Scope { kinds: map = {}; types: map = {}; parameters: map = {}; globals: map = {}; pinned: map = {}; declared_globals: map = {} }
 
 # `(f a b) := body`, `(f a b) = body`, and `f := body` of a body reading `it` or `$0` or of a block of statements
-is_definition(n: Node): bool := not (defined_name(n) is empty)
+def is_definition(n: Node): bool := not (defined_name(n) is empty)
 
-defined_name(n: Node): Name := {
+def defined_name(n: Node): Name := {
 	if not (is_key(n, Op.Define) or is_key(n, Op.Assign)) { return "" }
 	if is_group(key_of(n)) and bracket_of(key_of(n)) == "(" { return head_name(key_of(n)) }
 	if is_key(n, Op.Define) and key_of(n) is symbol and (takes_it(value_of(n)) or is_sequence_block(value_of(n))) { return name_of(key_of(n)) }
@@ -439,30 +439,30 @@ defined_name(n: Node): Name := {
 
 # `(f a b)`: a, b; `f := body` reading `it` or `$0`: it
 # statements, not an if-expression of lists (card if-expression)
-defined_parameters(n: Node): list := {
+def defined_parameters(n: Node): list := {
 	if is_group(key_of(n)) { return key_of(n)[1..] }
 	if takes_it(value_of(n)) { return [symbol("it")] }
 	[]
 }
 
 # whether a body reads the implicit parameter `it` or `$0`, `$1`…
-takes_it(n: Node): bool := {
+def takes_it(n: Node): bool := {
 	if n is symbol { return name_of(n) == "it" or (name_of(n).starts_with("$") and is_digits(name_of(n)[1..])) }
 	any_of(node_parts(n), part => takes_it(part))
 }
-is_digits(t: text): bool := #t > 0 and #t.chars().filter(c => c >= '0' and c <= '9') == #t
+def is_digits(t: text): bool := #t > 0 and #t.chars().filter(c => c >= '0' and c <= '9') == #t
 # `{a;b;c}`, and `{x=x+1}`, `{n++}`: statements to run, unlike the value list `{1 2 3}` (Rust is_statement_block)
-is_sequence_block(n: Node): bool := is_curly_group(n) and (separator_of(n) == ";" or separator_of(n) == "\n" or (#n == 1 and is_update(n#1)))
+def is_sequence_block(n: Node): bool := is_curly_group(n) and (separator_of(n) == ";" or separator_of(n) == "\n" or (#n == 1 and is_update(n#1)))
 
 # `x = x + 1`, `n++`, `s += t`: a statement changing a variable by its own value
-is_update(n: Node): bool := {
+def is_update(n: Node): bool := {
 	if is_key(n, Op.Assign) { return key_of(n) is symbol and mentions(value_of(n), name_of(key_of(n))) }
 	(is_key(n, Op.Inc) or is_key(n, Op.Dec) or op_of(n) in compound_ops) and key_of(n) is symbol
 }
 
 # the kind a slot holding both a and b has: equal kinds stay, an int widens to a float, a character to a text,
 # ø (nil) to a list, a number of run-time kind takes either number, any other pair is a node (empty)
-joined_kind(a: ValueKind, b: ValueKind): ValueKind := {
+def joined_kind(a: ValueKind, b: ValueKind): ValueKind := {
 	if a == ValueKind.Unknown or a == b { return b }
 	if b == ValueKind.Unknown { return a }
 	if is_kind_pair(a, b, ValueKind.Float, ValueKind.Int) { return ValueKind.Float }
@@ -472,17 +472,17 @@ joined_kind(a: ValueKind, b: ValueKind): ValueKind := {
 }
 
 # a and b are the kinds one and other, in either order
-is_kind_pair(a: ValueKind, b: ValueKind, one: ValueKind, other: ValueKind): bool := (a == one and b == other) or (a == other and b == one)
+def is_kind_pair(a: ValueKind, b: ValueKind, one: ValueKind, other: ValueKind): bool := (a == one and b == other) or (a == other and b == one)
 
 # the type word of a list's elements given both a and b (common_type), a node when they have none
-joined_word(a: TypeWord, b: TypeWord): TypeWord := {
+def joined_word(a: TypeWord, b: TypeWord): TypeWord := {
 	if a is empty or a == b { return b }
 	if b is empty { return a }
 	common = common_type([a, b])
 	if common == ø { "node" } else { common }
 }
 
-declared_kind(name: TypeWord): ValueKind? := {
+def declared_kind(name: TypeWord): ValueKind? := {
 	if name.ends_with("?") or name in node_types or name.starts_with("map") { return ValueKind.Empty }
 	# an inline union `int or text` and `number` hold a value of any of their kinds as a node
 	if name == "number" or name.contains(" or ") and not name.starts_with("list of ") { return ValueKind.Empty }
@@ -492,11 +492,11 @@ declared_kind(name: TypeWord): ValueKind? := {
 
 # --- functions ---
 
-function_parameters(name: Name): list := defined_signatures[name].parameters
+def function_parameters(name: Name): list := defined_signatures[name].parameters
 
 # the kind a parameter is pinned to: as declared, else its default's (a defaulted one by its default, as Rust's flow.rs);
 # "" when its calls decide
-pinned_kind(parameter: Parameter): ValueKind := {
+def pinned_kind(parameter: Parameter): ValueKind := {
 	if parameter.type_name and parameter.defaulted_to == ø { return declared_kind(parameter.type_name) ?? ValueKind.Empty }
 	if parameter.defaulted_to != ø {
 		kind = held_kind(parameter.defaulted_to#1, Scope())
@@ -507,7 +507,7 @@ pinned_kind(parameter: Parameter): ValueKind := {
 }
 
 # what a body does with a name: calls it (a function), uses it as a sequence (a list, a text when also joined to a text)
-used_as(name: Name, used: Usages): ValueKind? := {
+def used_as(name: Name, used: Usages): ValueKind? := {
 	if name in used.called { return ValueKind.Function }
 	if name in used.celled or name in used.foreign { return ValueKind.Data }
 	if name in used.sequences { return if name in used.texts then ValueKind.Text else ValueKind.List }
@@ -518,7 +518,7 @@ used_as(name: Name, used: Usages): ValueKind? := {
 # of, each a map of name → yes, and the [copy, source] names of its plain copies `x = y` (Rust Usages)
 class Usages { called: map = {}; celled: map = {}; foreign: map = {}; sequences: map = {}; texts: map = {}; tested: map = {}; aliases: list = [] }
 
-usages(body: Node): Usages := {
+def usages(body: Node): Usages := {
 	used = Usages()
 	record_usages(body, used)
 	# `for x in xs` walks the copy `x·items = xs`: the source of a used sequence is one too
@@ -535,7 +535,7 @@ usages(body: Node): Usages := {
 	used
 }
 
-record_usages(n: Node, used: Usages) := {
+def record_usages(n: Node, used: Usages) := {
 	called = called_closure(n)
 	if called { used.called[called] = yes }
 	record_word_call(n, used)
@@ -555,23 +555,23 @@ record_usages(n: Node, used: Usages) := {
 }
 
 # `is_type(x, "list")`, what `x is list` lowers to: the name whose kind is tested, else ""
-kind_tested(n: Node): Name := if is_group(n) and #n == 3 and head_name(n) == "is_type" and n#2 is symbol then name_of(n#2) else ""
+def kind_tested(n: Node): Name := if is_group(n) and #n == 3 and head_name(n) == "is_type" and n#2 is symbol then name_of(n#2) else ""
 
 # `closure_call_2(f, a, b)`: the function value called
-called_closure(n: Node): Name := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then name_of(n#2) else ""
+def called_closure(n: Node): Name := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then name_of(n#2) else ""
 
 cell_words = {cell_new: 1, cell_get: 1, cell_set: 1, signal_new: 1, signal_listeners: 1, signal_listeners_set: 1}
 map_words = {map_keys: 1, map_values: 1, map_entries: 1, collection_contains: 1, collection_position: 1, map_get_or: 1, map_without: 1, map_of_entry: 1, field_with: 1}
 
 # `(word map …)`: a map word reads map as a map (a sequence), a cell word as a cell
-record_word_call(n: Node, used: Usages) := {
+def record_word_call(n: Node, used: Usages) := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n >= 2 and n#2 is symbol) { return ø }
 	if head_name(n) in map_words { used.sequences[name_of(n#2)] = yes }
 	if head_name(n) in cell_words { used.celled[name_of(n#2)] = yes }
 }
 
 # `foreign_call(library, word, receiver, …, (arguments))`: the names given to foreign code
-given_to_foreign_code(n: Node): list := {
+def given_to_foreign_code(n: Node): list := {
 	if not (bracket_of(n) == "(" and head_name(n) == "foreign_call" and #n >= 3) { return [] }
 	given = [n#3]
 	if #n == 6 and is_group(n#6) { for argument in n#6 { given += [argument] } }
@@ -583,18 +583,18 @@ given_to_foreign_code(n: Node): list := {
 counting_words = {size: 1, count: 1, len: 1, length: 1}
 
 # the sequence a node uses: indexed `xs#2`, counted `#xs`, `count xs`, `xs.length`
-used_sequence(n: Node): Node := {
+def used_sequence(n: Node): Node := {
 	if is_key(n, Op.Hash) { return if is_empty(key_of(n)) then value_of(n) else key_of(n) }
 	if is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in counting_words { return key_of(n) }
 	if is_group(n) and #n == 2 and head_name(n) in counting_words { return n#2 }
 	ø
 }
 
-is_list_literal(n: Node): bool := is_group(n) and bracket_of(n) == "["
-is_literal_text(n: Node): bool := n is text
+def is_list_literal(n: Node): bool := is_group(n) and bracket_of(n) == "["
+def is_literal_text(n: Node): bool := n is text
 
 # the name `+` joins to a value `joined` accepts: `xs + [x]`, `" " + t`, `t[0 ..< n] + "…"`
-joined_name(n: Node, joined: function): Name := {
+def joined_name(n: Node, joined: function): Name := {
 	if not is_key(n, Op.Add) or joined(key_of(n)) == joined(value_of(n)) { return "" }
 	other = if joined(key_of(n)) then value_of(n) else key_of(n)
 	if other is symbol { return name_of(other) }
@@ -604,27 +604,27 @@ joined_name(n: Node, joined: function): Name := {
 
 # the arguments of a call that flow into the parameters: into a rest parameter only a lone spread, ys of `f(1, *ys)`,
 # the list it passes; the items a rest gathers flow nowhere one by one (the emitter makes their list)
-flowing_arguments(arguments: list, parameters: list): list := {
+def flowing_arguments(arguments: list, parameters: list): list := {
 	if not parameters or not parameters.last.rest { return arguments }
 	spread = if #arguments == #parameters then rest_name(arguments.last) else ø
 	arguments[..min(#parameters - 1, #arguments)] + (if spread != ø then [symbol(spread)] else [])
 }
 # every call of a defined function in n, outside nested definitions: [name, arguments]
-calls(n: Node, found: list): list := {
+def calls(n: Node, found: list): list := {
 	if is_definition(n) { return found }
 	if is_group(n) and head_name(n) in defined_functions and name_of(n#1) { found += [[head_name(n), n[1..]]] }
 	for part in node_parts(n) { calls(part, found) }
 	found
 }
 
-returns(n: Node, found: list): list := {
+def returns(n: Node, found: list): list := {
 	if head_name(n) == "return" and #n == 2 { found += [n#2] }
 	for part in node_parts(n) { returns(part, found) }
 	found
 }
 
 # the values a function gives: what it returns and its last value; a branch raising an error gives nothing
-result_values(name: Name): list := {
+def result_values(name: Name): list := {
 	body = value_of(defined_functions[name])
 	values = []
 	for value in returns(body, []) { if not raises_error(value) { values += [value] } }
@@ -636,7 +636,7 @@ result_values(name: Name): list := {
 
 # a function giving ø in one place and a list in another gives a node, unlike a variable (Rust twin:
 # infer_function_return_kind, a returned Node of another kind)
-result_kind(name: Name): ValueKind := {
+def result_kind(name: Name): ValueKind := {
 	scope = scopes[name]
 	kinds = result_values(name).map(value => flowing_kind(value, scope))
 	kind = ValueKind.Unknown
@@ -645,7 +645,7 @@ result_kind(name: Name): ValueKind := {
 }
 
 # the list type of a function giving a list: the list types of its list values joined
-result_type(name: Name): TypeWord? := {
+def result_type(name: Name): TypeWord? := {
 	scope = scopes[name]
 	type = ø
 	for value in result_values(name) {
@@ -655,7 +655,7 @@ result_type(name: Name): TypeWord? := {
 }
 
 # the kind a value flows into a slot: ø and the empty block are nil (a list or map may hold it), else as held
-flowing_kind(value: Node, scope: Scope): ValueKind := if is_empty(value) or (is_curly_group(value) and #value == 0) then ValueKind.Nil else held_kind(value, scope)
+def flowing_kind(value: Node, scope: Scope): ValueKind := if is_empty(value) or (is_curly_group(value) and #value == 0) then ValueKind.Nil else held_kind(value, scope)
 
 # --- flows ---
 
@@ -664,7 +664,7 @@ flowing_kind(value: Node, scope: Scope): ValueKind := if is_empty(value) or (is_
 enum FlowWay { Variable, Element, Parameter, Weak }
 class Flow { way: FlowWay; context: Name; target: Name; value: Node; index: int = -1 }
 
-gather(n: Node, context: Name, flows: list): list := {
+def gather(n: Node, context: Name, flows: list): list := {
 	# `f := …` defines a variable as well (Rust define_new in collect_variables)
 	if is_definition(n) and is_key(n, Op.Define) and key_of(n) is symbol { flows += [Flow(FlowWay.Variable, context, name_of(key_of(n)), assigned_value(n))] }
 	if is_definition(n) { return flows }
@@ -722,10 +722,10 @@ gather(n: Node, context: Name, flows: list): list := {
 }
 
 # `closure_call_2`: 2, else 0
-closure_arity(name: Name): int := if name.starts_with("closure_call_") and is_digits(name[13..]) then int(name[13..]) else 0
+def closure_arity(name: Name): int := if name.starts_with("closure_call_") and is_digits(name[13..]) then int(name[13..]) else 0
 
 # every function a closure is made of, with the number of values it captures: [name, captured], each once
-closure_targets_in(n: Node, found: list): list := {
+def closure_targets_in(n: Node, found: list): list := {
 	if head_name(n) == "closure_new" and #n >= 2 and n#2 is symbol {
 		made = [name_of(n#2), #n - 2]
 		if made not in found { found += [made] }
@@ -735,7 +735,7 @@ closure_targets_in(n: Node, found: list): list := {
 }
 
 # `x: T = v`: the slot is pinned to T
-declare(name: Name, type_node: Node, context: Name) := {
+def declare(name: Name, type_node: Node, context: Name) := {
 	scope = scopes[context]
 	declared = declared_kind(if type_node is symbol then name_of(type_node) else union_spelling(type_node) ?? "")
 	if declared != ø {
@@ -746,13 +746,13 @@ declare(name: Name, type_node: Node, context: Name) := {
 }
 
 # the scope a variable of `context` lives in: its own, the main scope for a global or a main variable a body reads
-owner(context: Name, name: Name): Scope := {
+def owner(context: Name, name: Name): Scope := {
 	scope = scopes[context]
 	if name in scope.kinds or context is empty or name not in scopes[""].kinds { scope } else { scopes[""] }
 }
 
 # one flow joined into its slot; yes when the slot changed
-apply(flow: Flow): bool := {
+def apply(flow: Flow): bool := {
 	context = flow.context
 	target = flow.target
 	value = flow.value
@@ -786,13 +786,13 @@ apply(flow: Flow): bool := {
 }
 
 # the list type both known (ø: none yet) and given fit: their common elements, a plain list when they have none
-joined_list_type(known: TypeWord?, given: TypeWord): TypeWord? := {
+def joined_list_type(known: TypeWord?, given: TypeWord): TypeWord? := {
 	if known == ø or known == given { return given }
 	if known.starts_with("list of ") and given.starts_with("list of ") { "list of " + joined_word(known[8..], given[8..]) } else { "list" }
 }
 
 # join kind into the slot name of scope; yes when it changed
-set_slot(scope: Scope, name: Name, kind: ValueKind): bool := {
+def set_slot(scope: Scope, name: Name, kind: ValueKind): bool := {
 	if kind == ValueKind.Unknown { return no }
 	known = scope.kinds.get(name)
 	joined = joined_kind(known ?? ValueKind.Unknown, kind)
@@ -803,7 +803,7 @@ set_slot(scope: Scope, name: Name, kind: ValueKind): bool := {
 }
 
 # every slot joined from its flows until none changes
-settle(flows: list) := {
+def settle(flows: list) := {
 	changed = yes
 	while changed {
 		changed = no
@@ -826,7 +826,7 @@ settle(flows: list) := {
 
 # parameter name → the kind of the declared or given parameter it is passed on to, not an int: `g(t) := f(t)` with f's
 # `s: text` (Rust twin: flow.rs forwarded)
-forwarded_kinds(name: Name): map := {
+def forwarded_kinds(name: Name): map := {
 	own = taken_names(defined_signatures[name])
 	forwarded = {}
 	for call in calls(value_of(defined_functions[name]), []) {
@@ -845,7 +845,7 @@ forwarded_kinds(name: Name): map := {
 }
 
 # slot `f(index)` → the kinds the closure calls pass that parameter, joined: those of the values the caller knows
-weak_kinds(flows: list): map := {
+def weak_kinds(flows: list): map := {
 	passed = {}
 	for flow in flows {
 		if flow.way == FlowWay.Weak {
@@ -859,7 +859,7 @@ weak_kinds(flows: list): map := {
 
 # the slots no value flowed into: a parameter takes what its body does with it, else what it is passed on as, anything
 # else an int
-defaults(flows: list) := {
+def defaults(flows: list) := {
 	weak = weak_kinds(flows)
 	forwarded = {}
 	for name in analyzed_functions() { forwarded[name] = forwarded_kinds(name) }
@@ -890,7 +890,7 @@ defaults(flows: list) := {
 }
 
 # every assigned name of a scope starts unknown, so a read before its first value is unknown too
-register(flows: list) := {
+def register(flows: list) := {
 	for flow in flows {
 		target = flow.target
 		if flow.way == FlowWay.Variable {
@@ -902,8 +902,8 @@ register(flows: list) := {
 
 # a linked module's word, declared without its body: its kinds and result are those the module was compiled with
 # (Module.linked_words)
-declares_linked(name: Name): bool := linked_variant(name, #function_parameters(name)) != ø
-declared_linked(name: Name, scope: Scope) := {
+def declares_linked(name: Name): bool := linked_variant(name, #function_parameters(name)) != ø
+def declared_linked(name: Name, scope: Scope) := {
 	parameters = function_parameters(name)
 	word = linked_variant(name, #parameters)
 	for index in 0..<#parameters {
@@ -916,9 +916,9 @@ declared_linked(name: Name, scope: Scope) := {
 	results[name] = word.result
 }
 # the functions whose bodies the analysis reads: all but the linked ones
-analyzed_functions(): list := defined_functions.keys().filter(name => not declares_linked(name))
+def analyzed_functions(): list := defined_functions.keys().filter(name => not declares_linked(name))
 
-analyze(program: Node): Node := {
+def analyze(program: Node): Node := {
 	global defined_functions
 	global defined_signatures
 	global results
@@ -968,7 +968,7 @@ analyze(program: Node): Node := {
 }
 
 # the kinds as data, spelled: {functions: {f: {params: [kind…], result: kind}}, variables: {x: kind}, value: kind}
-kinds(program: Node): map := {
+def kinds(program: Node): map := {
 	analyze(program)
 	functions = {}
 	for name in defined_functions.keys() {
@@ -982,18 +982,18 @@ kinds(program: Node): map := {
 }
 
 # the kinds emitter.warp holds values as: int, float, char, text, list, any other value a boxed node
-emitter_kind(kind: ValueKind): ValueKind := if kind == ValueKind.Codepoint then ValueKind.Char else if kind in emitter_kept_kinds then kind else ValueKind.Node
+def emitter_kind(kind: ValueKind): ValueKind := if kind == ValueKind.Codepoint then ValueKind.Char else if kind in emitter_kept_kinds then kind else ValueKind.Node
 emitter_kept_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Text, ValueKind.List]
 
 # the variables of a scope but its parameters, each with its emitter kind
-emitter_locals(scope: Scope, parameters: list): map := {
+def emitter_locals(scope: Scope, parameters: list): map := {
 	locals = {}
 	for name in scope.kinds.keys() { if name not in parameters and name not in scope.declared_globals { locals[name] = emitter_kind(scope.kinds[name]) } }
 	locals
 }
 
 # the element kinds of the lists a scope knows the type of: name → emitter kind
-emitter_elements(scope: Scope): map := {
+def emitter_elements(scope: Scope): map := {
 	elements = {}
 	for name in scope.types.keys() {
 		element = typed_element_kind(scope.types[name])
@@ -1004,7 +1004,7 @@ emitter_elements(scope: Scope): map := {
 
 # what emitter.warp reads (card emitter-takes): {functions: {f: {params: [kind…], result, locals: {x: kind}, elements:
 # {xs: kind}}}, variables: {x: kind}, elements: {xs: kind}, value: kind}, kinds as emitter_kind names them
-emitter_kinds(program: Node): map := {
+def emitter_kinds(program: Node): map := {
 	analyze(program)
 	functions = {}
 	for name in defined_functions.keys() {
@@ -1016,7 +1016,7 @@ emitter_kinds(program: Node): map := {
 	{functions: functions, variables: emitter_locals(main, []), elements: emitter_elements(main), value: emitter_kind(inferred_kind(program, main))}
 }
 
-inferred_kinds(program: Node): list := {
+def inferred_kinds(program: Node): list := {
 	found = kinds(program)
 	lines = []
 	for name in found.functions.keys() {

@@ -13,7 +13,7 @@ use "../analysis/words.warp"
 # the word quoting a code pattern, `data($a * 1)`
 code_word = "data"
 
-name_text(n: Node): text := match n {
+def name_text(n: Node): text := match n {
 	Symbol(name): name
 	_: ""
 }
@@ -21,26 +21,26 @@ name_text(n: Node): text := match n {
 # A clause of a function written in several, `name(patterns…) := body`
 class Clause { name: text; patterns: list; body: Node }
 
-clause_head(head: Node, body: Node): Clause? := match head {
+def clause_head(head: Node, body: Node): Clause? := match head {
 	List(call, Bracket.Round, Separator.None): { if #call > 0 and is_name(call#1) then Clause{name: name_text(call#1), patterns: call[1..], body: body} else ø }
 	_: ø
 }
 
-clause_of(n: Node): Clause? := match n {
+def clause_of(n: Node): Clause? := match n {
 	Key(head, Op.Define, body): clause_head(head, body)
 	_: ø
 }
 
-definition_name(n: Node): text := {
+def definition_name(n: Node): text := {
 	clause = clause_of(n)
 	if clause is ø then "" else clause.name
 }
 
-is_literal(n: Node): bool := n is number or n is text or n is bool
+def is_literal(n: Node): bool := n is number or n is text or n is bool
 
-parameter(name: text, i: int): Node := symbol("clause·" + i)
+def parameter(name: text, i: int): Node := symbol("clause·" + i)
 
-joined(conditions: list): Node := {
+def joined(conditions: list): Node := {
 	condition = conditions#1
 	for more in conditions[1..] { condition = Key(condition, Op.And, more) }
 	condition
@@ -49,7 +49,7 @@ joined(conditions: list): Node := {
 # what a pattern asks of the value at `at` and the names it binds there: [tests, bindings], ø for a pattern no clause
 # can take apart. A literal equals the value, a name binds it, `[h, t...]` takes a list apart (`t...` the rest),
 # `data($a * 1)` takes code apart, its `$a` binding the part written there
-pattern_parts(pattern: Node, at: Node): any := {
+def pattern_parts(pattern: Node, at: Node): any := {
 	if is_literal(pattern) { return [[Key(at, Op.Eq, pattern)], []] }
 	if is_name(pattern) { return [[], [Key(pattern, Op.Assign, at)]] }
 	if is_empty_list(pattern) { return list_parts([], at) }
@@ -59,10 +59,10 @@ pattern_parts(pattern: Node, at: Node): any := {
 }
 
 # `t...` of a list pattern, the rest of the list: its name, else ø
-rest_pattern_name(item: Node): any := if is_key(item, Op.To) and is_name(key_of(item)) and value_of(item) == ø then key_of(item) else ø
+def rest_pattern_name(item: Node): any := if is_key(item, Op.To) and is_name(key_of(item)) and value_of(item) == ø then key_of(item) else ø
 
 # `[]`, `[h, t...]`: a list of that many items (at least as many before a rest), each item's pattern at its place
-list_parts(items: list, at: Node): any := {
+def list_parts(items: list, at: Node): any := {
 	rest = if #items > 0 then rest_pattern_name(items.last) else ø
 	fixed = if rest == ø then items else items[0..<(#items - 1)]
 	count = Key(Key(ø, Op.Hash, at), if rest == ø then Op.Eq else Op.Ge, #fixed)
@@ -77,7 +77,7 @@ list_parts(items: list, at: Node): any := {
 }
 
 # `data($a * 1)`: code of that shape, a key of that operator with its sides taken apart, `$a` binding its part
-code_parts(pattern: Node, at: Node): any := {
+def code_parts(pattern: Node, at: Node): any := {
 	if pattern is symbol and name_of(pattern).starts_with("$") { return [[], [Key(symbol(name_of(pattern)[1..]), Op.Assign, at)]] }
 	if is_literal(pattern) { return [[Key(at, Op.Eq, pattern)], []] }
 	if not (type(pattern) is key) { return ø }
@@ -89,7 +89,7 @@ code_parts(pattern: Node, at: Node): any := {
 }
 
 # the clause taken apart: [tests, bindings] of all its patterns, ø when one cannot be
-clause_parts(name: text, clause: Clause): any := {
+def clause_parts(name: text, clause: Clause): any := {
 	parts = [[], []]
 	for i in 1 to #clause.patterns {
 		taken = pattern_parts(clause.patterns#i, parameter(name, i))
@@ -99,12 +99,12 @@ clause_parts(name: text, clause: Clause): any := {
 	parts
 }
 
-untaken(name: text): Node := List([symbol((HiddenWord.PatternClause as text) + name)], Bracket.Round, Separator.None)
+def untaken(name: text): Node := List([symbol((HiddenWord.PatternClause as text) + name)], Bracket.Round, Separator.None)
 # arguments no clause takes, `len(7)` of `len([]) := 0; len([h, t...]) := …`: an error when it runs
-unmatched_clauses(name: text): Node := List([symbol(raise_word), "no clause of " + name + " takes these arguments"], Bracket.None, Separator.Space)
+def unmatched_clauses(name: text): Node := List([symbol(raise_word), "no clause of " + name + " takes these arguments"], Bracket.None, Separator.Space)
 
 # the clauses from the last one up: each tried when the ones before did not take the arguments
-tried(name: text, clauses: list, at: int): Node := {
+def tried(name: text, clauses: list, at: int): Node := {
 	clause = clauses#at
 	parts = clause_parts(name, clause)
 	if parts is ø { return untaken(name) }
@@ -117,7 +117,7 @@ tried(name: text, clauses: list, at: int): Node := {
 	Key(Key(Key(ø, Op.If, test), Op.Then, branch), Op.Else, rest)
 }
 
-merged_function(name: text, clauses: list): Node := {
+def merged_function(name: text, clauses: list): Node := {
 	taken = clauses#1.patterns.length
 	if not clauses.all(clause => clause.patterns.length == taken) { return untaken(name) }
 	head = List([symbol(name)] + (1 to taken).map(i => parameter(name, i)), Bracket.Round, Separator.None)
@@ -125,16 +125,16 @@ merged_function(name: text, clauses: list): Node := {
 }
 
 # the places of the definitions named `name`
-places_named(owners: list, name: text): list := (1 to #owners).filter(j => owners#j == name)
+def places_named(owners: list, name: text): list := (1 to #owners).filter(j => owners#j == name)
 
-merged(parts: list): list := {
+def merged(parts: list): list := {
 	owners = parts.map(definition_name)
 	single = i => owners#i is empty or #places_named(owners, owners#i) == 1
 	kept = (1 to #parts).filter(i => single(i) or places_named(owners, owners#i)#1 == i)
 	kept.map(i => if single(i) then parts#i else merged_function(owners#i, places_named(owners, owners#i).map(j => clause_of(parts#j))))
 }
 
-clauses(program: Node): Node := match program {
+def clauses(program: Node): Node := match program {
 	List(parts, Bracket.None, separator): List(merged(parts), Bracket.None, separator)
 	_: program
 }

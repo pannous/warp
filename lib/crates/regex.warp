@@ -16,30 +16,30 @@ regex_as_str(re: handle): text from 'rs_regex' = regex::Regex::as_str
 regex_free(re: handle(regex::Regex)): void from 'rs_regex' = drop
 
 // the words of lib/regex.warp, in warp over the lines above: each compiles its pattern, asks, and frees it
-regex_of(pattern: text) := {
+def regex_of(pattern: text) := {
 	re = regex_new(pattern)
 	if re == 0 { raise "regex: " + rs_regex_last_error() }
 	re
 }
-is_match(subject: text, pattern: text) := {
+def is_match(subject: text, pattern: text) := {
 	re = regex_of(pattern)
 	found = regex_is_match(re, subject)
 	regex_free(re)
 	found
 }
-first_match(subject: text, pattern: text) := {
+def first_match(subject: text, pattern: text) := {
 	re = regex_of(pattern)
 	found = regex_find(re, subject)
 	regex_free(re)
 	found
 }
-find_all(subject: text, pattern: text) := {
+def find_all(subject: text, pattern: text) := {
 	re = regex_of(pattern)
 	found = regex_find_all(re, subject)
 	regex_free(re)
 	found
 }
-replace_all(subject: text, pattern: text, replacement: text) := {
+def replace_all(subject: text, pattern: text, replacement: text) := {
 	re = regex_of(pattern)
 	replaced = regex_replace_all(re, subject, replacement)
 	regex_free(re)

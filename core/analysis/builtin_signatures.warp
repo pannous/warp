@@ -21,7 +21,7 @@ rest_mark = "..."
 argument_results = {"same as ": "same", "element of ": "element", "value of ": "element", "key of ": "element"}
 
 # `separator: text = " "` of a typed line → Parameter(separator, text, defaulted_to [" "]), `values...` a rest parameter
-written_parameter(written: text): Parameter := {
+def written_parameter(written: text): Parameter := {
 	parts = written.split("=")
 	declared = parts#1.trim().split(":")
 	name = declared#1.trim()
@@ -31,7 +31,7 @@ written_parameter(written: text): Parameter := {
 }
 
 # `upper(t: text): text from warp` → Builtin; ø for a line of another library
-typed_line(line: text, library: text): Builtin? := {
+def typed_line(line: text, library: text): Builtin? := {
 	line = line.trim()
 	suffix = " from " + library
 	if not line.ends_with(suffix) { return ø }
@@ -47,7 +47,7 @@ typed_line(line: text, library: text): Builtin? := {
 	Builtin(name: head#1, signature: Signature(parameters: parameters, result: result))
 }
 
-library_lines(library: text): list := prelude_text.split("\n").map(line => typed_line(line, library)).filter(line => line != ø)
+def library_lines(library: text): list := prelude_text.split("\n").map(line => typed_line(line, library)).filter(line => line != ø)
 
 runtime_lines = library_lines(runtime_library)
 # the words only the compiler's passes write, which no program calls (closures, cells and signals, memos, linear
@@ -95,21 +95,21 @@ alias_pairs = prelude_text.split("\n").filter(line => line.starts_with(alias_sta
 
 # the library word a word names: its canonical word (lib/aliases.warp: `size` is count), through the prelude's
 # `alias keys = map_keys` lines
-unaliased(written: text): text := {
+def unaliased(written: text): text := {
 	word = canonical_word(written) ?? written
 	for pair in alias_pairs { if pair#1 == word { return pair#2 } }
 	word
 }
 
-lines_of(lines: list, word: text): list := lines.filter(line => line.name == word)
+def lines_of(lines: list, word: text): list := lines.filter(line => line.name == word)
 
 
 # the kind a line's result is held as when it is a text or a list (`list of text` too); ø for another
-line_result_kind(line: Builtin): text? := if line.signature.result == "text" then "text" else if line.signature.result.starts_with("list") then "list" else ø
+def line_result_kind(line: Builtin): text? := if line.signature.result == "text" then "text" else if line.signature.result.starts_with("list") then "list" else ø
 
 # the kind a call of `arguments` values to a word the emitter expands gives, as its first fitting line declares it; ø
 # when the call decides it (`number("2.5")`, a bool the emitter marks) or the line names no kind
-emitted_call_kind(word: text, arguments: int): text? := {
+def emitted_call_kind(word: text, arguments: int): text? := {
 	fitting = lines_of(emitter_lines, unaliased(word)).filter(line => takes(line.signature, arguments))
 	if #fitting == 0 { return ø }
 	line = fitting#1
@@ -124,7 +124,7 @@ emitted_call_kind(word: text, arguments: int): text? := {
 
 # the argument a word's result follows, and how: `field_with(object, name, value): same as object` → ["same", 1],
 # `map_get_or(m, key, default): value of m` → ["element", 1]; ø for a result of its own
-argument_result(word: text): list? := {
+def argument_result(word: text): list? := {
 	lines = lines_of(typed_lines, unaliased(word))
 	if #lines == 0 { return ø }
 	line = lines#1
@@ -140,7 +140,7 @@ argument_result(word: text): list? := {
 
 # the result of a runtime word for a first value of kind `first`: its overload's for that kind (`reverse(t: text): text`),
 # else the one all its overloads share; ø when the overloads give no text or list
-overload_kind(word: text, first: text): text? := {
+def overload_kind(word: text, first: text): text? := {
 	overloads = lines_of(runtime_lines, unaliased(word))
 	if #overloads == 0 { return ø }
 	kinds = overloads.map(line => line_result_kind(line))
@@ -154,7 +154,7 @@ overload_kind(word: text, first: text): text? := {
 }
 
 # the kind a value of a built-in type word is held as: `int` int, `text` text; ø for a list, a map or no type
-type_word_kind(word: text): text? := type_kinds.get(word)
+def type_word_kind(word: text): text? := type_kinds.get(word)
 
 # libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
 # floor compiles to, so its result is the call's
@@ -162,7 +162,7 @@ foreign_math_lines = module_source("math").split("\n").map(line => typed_line(li
 
 # the kind a declared result is held as: `nothing` and `any` a node of run-time kind, a yes/no an int, a type of
 # values its kind, any other type (`time`, `signal`) an object; ø for `number`, decided where the value is made
-declared_result_kind(result: text): text? := {
+def declared_result_kind(result: text): text? := {
 	if result == "" or result == "nothing" or result == "any" { return "empty" }
 	if result == "number" { return ø }
 	if result == "bool" { return "int" }
@@ -174,29 +174,29 @@ declared_result_kind(result: text): text? := {
 
 # the builtins taking one value, `upper(t)`, or only a rest of values, `print(values...)`, and their other spellings:
 # `print #xs` counts, `print -1` negates the value after them
-takes_one_value(signature: Signature): bool := arity(signature) == [1, 1] or (#signature.parameters == 1 and signature.parameters#1.rest)
+def takes_one_value(signature: Signature): bool := arity(signature) == [1, 1] or (#signature.parameters == 1 and signature.parameters#1.rest)
 value_taking_names = typed_lines.filter(line => takes_one_value(line.signature)).map(line => line.name)
 value_taking_words = value_taking_names + alias_pairs.filter(pair => pair#2 in value_taking_names).map(pair => pair#1)
 
 # a builtin all of whose lines give nothing, `print(values...): nothing`
-gives_nothing(word: text): bool := {
+def gives_nothing(word: text): bool := {
 	lines = lines_of(typed_lines, unaliased(word))
 	#lines > 0 and lines.all(line => line.signature.result == "nothing")
 }
 
 # a member of every map, `m.keys`, `m.get(k)`: a builtin whose line takes a map first
-takes_map_first(word: text): bool := lines_of(typed_lines, unaliased(word)).any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == "map")
+def takes_map_first(word: text): bool := lines_of(typed_lines, unaliased(word)).any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == "map")
 
 # a word the prelude, libm or the host declares
-is_declared_word(word: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(word)) > 0 or host_words.has(word)
+def is_declared_word(word: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(word)) > 0 or host_words.has(word)
 
 # a host word's result kinds as host_words.warp declares them: one int or float, else a node or none
-host_result_kind(results: list): text := if #results == 1 and results#1 != "node" then type_word_kind(results#1) ?? "int" else "empty"
+def host_result_kind(results: list): text := if #results == 1 and results#1 != "node" then type_word_kind(results#1) ?? "int" else "empty"
 
 # the kind a call of `arguments` values to a declared word gives, by the one result all its fitting lines declare: a
 # prelude typed line, a libm foreign line, a host word; ø when its lines differ by the argument (`reverse` of a text
 # or list, `same as object`) or nothing declares it
-declared_call_kind(word: text, arguments: int): text? := {
+def declared_call_kind(word: text, arguments: int): text? := {
 	fitting = lines_of(typed_lines + foreign_math_lines, unaliased(word)).filter(line => takes(line.signature, arguments))
 	if #fitting > 0 {
 		results = fitting.map(line => line.signature.result)
@@ -215,13 +215,13 @@ typed_libraries = ["warp", "emitter", "'m'"]
 global typed_word_lines = ø
 global word_lines_prelude = prelude_text
 # a lowering of a program behind this prelude: the library words it sees are the prelude's
-lowering_from(prelude: text) := {
+def lowering_from(prelude: text) := {
 	if prelude != word_lines_prelude {
 		word_lines_prelude = prelude
 		typed_word_lines = ø
 	}
 }
-word_lines(): map := {
+def word_lines(): map := {
 	if typed_word_lines != ø { return typed_word_lines }
 	typed_word_lines = {}
 	sources = if word_lines_prelude == prelude_text then prelude_text + "\n" + module_source("math") else word_lines_prelude
@@ -239,10 +239,10 @@ word_lines(): map := {
 
 # a word of the runtime, the emitter or a typed line of the library (lib/math.warp's `max`), which a class's method of
 # that name must not hide from the other values (class_methods.warp routes it, rewrites.warp keeps its sugar rules)
-is_library_word(word: text): bool := typed_lines.any(line => line.name == word) or word_lines().has(word)
+def is_library_word(word: text): bool := typed_lines.any(line => line.name == word) or word_lines().has(word)
 
 # whether the word's first line takes exactly one value, typed
-takes_one_typed_value(word: text): bool := {
+def takes_one_typed_value(word: text): bool := {
 	lines = word_lines()
 	if not lines.has(word) { return no }
 	parameters = lines[word]#1.signature.parameters

@@ -9,24 +9,24 @@ use "text_numbers.warp"
 use "../emitter/byte_codes.warp"
 # `t.lower()`, `t.upper()`: an ASCII text with its letters first…last moved by shift, any other mapped code point by
 # code point through the case table (lib/case_tables.warp, the twin of rust-harness:src/wasm_emitter/text/text_unicode.rs)
-text_lower(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.UpperA, Ascii.UpperZ, Ascii.CaseShift) else table_case(t, lower_ranges())
-text_upper(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.LowerA, Ascii.LowerZ, -Ascii.CaseShift) else table_case(t, upper_ranges())
+def text_lower(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.UpperA, Ascii.UpperZ, Ascii.CaseShift) else table_case(t, lower_ranges())
+def text_upper(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.LowerA, Ascii.LowerZ, -Ascii.CaseShift) else table_case(t, upper_ranges())
 # the case tables' ranges, read from their texts at the first use only
 global lower_table = []
 global upper_table = []
-lower_ranges(): list := {
+def lower_ranges(): list := {
 	if not lower_table { lower_table = table_ints(lower_case_text()) }
 	lower_table
 }
-upper_ranges(): list := {
+def upper_ranges(): list := {
 	if not upper_table { upper_table = table_ints(upper_case_text()) }
 	upper_table
 }
-is_ascii(t: text): bool := {
+def is_ascii(t: text): bool := {
 	for i in 0..byte_count(t) { if byte_at(t, i) >= Utf8.Continuation { return no } }
 	yes
 }
-ascii_case(t: text, first: int, last: int, shift: int): text := {
+def ascii_case(t: text, first: int, last: int, shift: int): text := {
 	out = new_text(byte_count(t))
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
@@ -35,7 +35,7 @@ ascii_case(t: text, first: int, last: int, shift: int): text := {
 	out
 }
 # each code point of t as the table's ranges map it: six ints a range (start, last, stride, delta, second, third)
-table_case(t: text, ranges: list): text := {
+def table_case(t: text, ranges: list): text := {
 	parts = []
 	at = 0
 	while at < byte_count(t) {
@@ -45,7 +45,7 @@ table_case(t: text, ranges: list): text := {
 	texts_joined(parts, "")
 }
 # the ints of a text of them, a space apart
-table_ints(t: text): list := {
+def table_ints(t: text): list := {
 	ints = []
 	at = 0
 	while at < byte_count(t) {
@@ -56,10 +56,10 @@ table_ints(t: text): list := {
 	}
 	ints
 }
-range_field(ranges: list, at: int, index: int): int := ranges#(at * 6 + index + 1)
+def range_field(ranges: list, at: int, index: int): int := ranges#(at * 6 + index + 1)
 # the code point's text: itself unless a range covers it, else itself moved by the range's delta, then its second and
 # third code points (`ß` is `SS`)
-case_mapped(ranges: list, code: int): text := {
+def case_mapped(ranges: list, code: int): text := {
 	at = range_before(ranges, code)
 	if at < 0 or code > range_field(ranges, at, 1) or int_remainder(code - range_field(ranges, at, 0), range_field(ranges, at, 2)) != 0 {
 		return char_text(char_of(code))
@@ -70,7 +70,7 @@ case_mapped(ranges: list, code: int): text := {
 	out
 }
 # the last range starting at or before code, by halving; -1 when none does
-range_before(ranges: list, code: int): int := {
+def range_before(ranges: list, code: int): int := {
 	low = 0
 	high = int_quotient(#ranges, 6)
 	while low < high {

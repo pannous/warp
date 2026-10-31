@@ -28,8 +28,8 @@ RIGHT = Key.right
 space = Key.space
 SPACE = Key.space
 KEY_NAMES = {27: "Escape", 13: "Enter", 9: "Tab", 8: "Backspace", 127: "Delete", 63232: "ArrowUp", 63233: "ArrowDown", 63234: "ArrowLeft", 63235: "ArrowRight", 63312: "Shift", 63313: "Control", 63314: "Alt", 63315: "Meta"}
-key_name(code) := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code).lower()
+def key_name(code) := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code).lower()
 // the key held now, Key.none for none (headless always)
-held_key() := key_name(system_value("key code held")) as Key
+def held_key() := key_name(system_value("key code held")) as Key
 // `on Key.escape {…}`: the block runs each frame the key is held
-on(key: Key, body: block) := frame_listened(event => if held_key == key then body() else ø, no)
+def on(key: Key, body: block) := frame_listened(event => if held_key == key then body() else ø, no)

@@ -5,13 +5,13 @@
 use "shapes.warp"
 
 // `name: value` of the program, no opaque view or attribute layer
-is_pair(entry: Node): bool := match entry {
+def is_pair(entry: Node): bool := match entry {
 	Key(name, Op.Colon, value): is_pair_key(entry)
 	_: no
 }
 
 // The parameters of `f(a, b: int) := …`: a and b
-parameter_names(target: Node): list := {
+def parameter_names(target: Node): list := {
 	names = []
 	if not is_call_head(target) { return names }
 	for parameter in items_of(target)[1:] {
@@ -25,7 +25,7 @@ parameter_names(target: Node): list := {
 // `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
 // Rust twin: warp_parser subscript
 // A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md)
-subscript(target: Node, index: Node): Node := {
+def subscript(target: Node, index: Node): Node := {
 	bounds = slice_bounds(index)
 	for bound in subscript_positions(index) {
 		if counts_from_the_end(bound) { return error_node("index out of range: negative index " + negated_form(bound) + " does not wrap around, the last element is last(${target})") }
@@ -36,7 +36,7 @@ subscript(target: Node, index: Node): Node := {
 
 // The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
 // Rust twin: subscripts.rs slice_bounds
-slice_bounds(written: Node): list? := match written {
+def slice_bounds(written: Node): list? := match written {
 	// an opaque view (a template `"k\(i)"`) or attribute layer is a key too, but no slice
 	Key(start, Op.Colon, end): { if is_pair_key(written) then [start, end] else ø }
 	Key(start, Op.Range, end): [start, end]
@@ -45,20 +45,20 @@ slice_bounds(written: Node): list? := match written {
 }
 
 // The bounds of a slice index, else the index itself
-subscript_positions(index: Node): list := slice_bounds(index) ?? [index]
+def subscript_positions(index: Node): list := slice_bounds(index) ?? [index]
 
 // A negative number or a negated expression: `-1`, `-k`
 // Rust twin: subscripts.rs counts_from_the_end
-counts_from_the_end(bound: Node): bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
+def counts_from_the_end(bound: Node): bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
 
 // `-1`, `-k` as written
-negated_form(bound: Node): text := if bound is number then "${bound}" else "-${value_of(bound)}"
+def negated_form(bound: Node): text := if bound is number then "${bound}" else "-${value_of(bound)}"
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
 // A number index keeps the number written in an attribute layer, as Rust's parser keeps WrittenIndex on `d#2`: a map
 // keyed by numbers reads it (number_keys.rs); plain_node drops the layer, number_keys.warp reads `d#2` itself
-one_based(index: Node): Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, 1)
+def one_based(index: Node): Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, 1)
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 // Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
@@ -66,7 +66,7 @@ CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "
 
 // A class body's fields with their types, `x: int` holding the type int; a method keeps its code
 // Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type
-typed_fields(node: Node): Node := match node {
+def typed_fields(node: Node): Node := match node {
 	Key(name, Op.Define, value): node
 	Key(name, op, value): { if is_pair_key(node) then Key(name, op, if value is symbol then type_node(value, ø) else value) else node }
 	List(members, bracket, separator): { if starts_code(members#1) then node else typed_members(bracket as text, separator as text, with_type_phrases(items_of(node)).map(typed_fields)) }
@@ -76,7 +76,7 @@ typed_fields(node: Node): Node := match node {
 // `items: list of text`: the words `of text` after a field's type continue it, the one type `list of text` (as
 // `list<text>` is read); `list of list of int` too
 // Rust twin: types/expressions.rs with_type_phrases
-with_type_phrases(items: list): list := {
+def with_type_phrases(items: list): list := {
 	fields = []
 	at = 1
 	while at <= #items {
@@ -93,7 +93,7 @@ with_type_phrases(items: list): list := {
 }
 
 // `items: list` and `text`: the field `items: list of text`, ø unless both are words
-of_phrase(field: Node, element: Node): any := match field {
+def of_phrase(field: Node, element: Node): any := match field {
 	Key(name, Op.Colon, kind): { if kind is symbol and element is symbol then Key(name, Op.Colon, symbol(name_of(kind) + " of " + name_of(element))) else ø }
 	_: ø
 }
@@ -102,19 +102,19 @@ of_phrase(field: Node, element: Node): any := match field {
 // word that is no type after the key is the lambda's parameter, so the entry f holds `x => x * 2`, in any bracket and
 // in a call's named argument `Holder(d: x => x + 1)`; a typed lambda `x: int => x * 2` stays one
 // Rust twin: definitions/lambdas.rs field_holding_lambda
-field_holding_lambda(item: Node): Node := match item {
+def field_holding_lambda(item: Node): Node := match item {
 	Key(lambda_head, Op.Arrow, lambda_body): entry_of_lambda(lambda_head, lambda_body, item)
 	_: item
 }
 
-entry_of_lambda(lambda_head: Node, lambda_body: Node, item: Node): Node := match lambda_head {
+def entry_of_lambda(lambda_head: Node, lambda_body: Node, item: Node): Node := match lambda_head {
 	Key(entry_name, Op.Colon, entry_value): { if is_pair_key(lambda_head) and entry_name is symbol and is_parameter_word(entry_value) then Key(entry_name, Op.Colon, Key(entry_value, Op.Arrow, lambda_body)) else item }
 	_: item
 }
 
 // a lambda's parameter after a key: a lowercase word that is no type, or a parenthesized group
 // Rust twin: definitions/functions.rs is_parameter_word
-is_parameter_word(node: Node): bool := {
+def is_parameter_word(node: Node): bool := {
 	if is_list_of(node, "(") { return yes }
 	if not (node is symbol) { return no }
 	first = name_of(node)#1
@@ -122,17 +122,17 @@ is_parameter_word(node: Node): bool := {
 }
 
 // A key of the program, no opaque view or attribute layer
-is_pair_key(node: Node): bool := key_of(node) != opaque_symbol and key_of(node) != symbol(attribute_word)
+def is_pair_key(node: Node): bool := key_of(node) != opaque_symbol and key_of(node) != symbol(attribute_word)
 
 // A class body's members, typed; the line `left: Node` is the one field
-typed_members(bracket: text, separator: text, members: list): Node := {
+def typed_members(bracket: text, separator: text, members: list): Node := {
 	if bracket == "" and #members == 1 and is_pair(members#1) { return members#1 }
 	listed(bracket as Bracket, separator as Separator, members)
 }
 
 // `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
 // Rust twin: lookahead.rs starts_code
-starts_code(first: Node): bool := {
+def starts_code(first: Node): bool := {
 	if first is symbol { return CODE_MEMBER_WORDS contains name_of(first) }
 	is_call_head(first) and first#1 is symbol
 }

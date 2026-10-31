@@ -6,16 +6,16 @@ use "nodes.warp"
 use "show.warp"
 use "text.warp"
 # `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
-is_nothing(n: Node): bool := if is_null(n) then yes else kind_code(n) == Kind.List and #unboxed_list(n) == 0
+def is_nothing(n: Node): bool := if is_null(n) then yes else kind_code(n) == Kind.List and #unboxed_list(n) == 0
 # `is_error(x)`: x is an Error value
-node_is_error(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Error
+def node_is_error(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Error
 # a boxed text or character
-textual_node(n: Node): bool := not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Codepoint)
+def textual_node(n: Node): bool := not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Codepoint)
 # `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
 # masks (rust-harness:src/lowering/types/type_tests.rs BUILTIN_TYPES). `kinds` holds the bits (held_kind_bit) of the kinds passing
 # the test, so it compares no texts (card pure-compile-speed: texts compared for the type tests of match patterns
 # took 80% of warp-self lowering runtime.warp)
-node_is_type(n: Node, type: text, kinds: int): bool := {
+def node_is_type(n: Node, type: text, kinds: int): bool := {
 	if names_a_type(n) { return names_one_of(unboxed_text(n), covered_type_words(type)) }
 	# `code` is no kind: parsed code is code and what it holds, `parse("a") is symbol` too, as in Rust
 	if kinds == 0 { return not is_null(n) and code_bit(n) == 1 }
@@ -23,7 +23,7 @@ node_is_type(n: Node, type: text, kinds: int): bool := {
 }
 # the bit of x's kind in the kinds of a type test: its Kind, a yes/no, a ratio and a map apart (HeldBit), ø the empty
 # list, as held_kind_word names them
-held_kind_bit(n: Node): int := {
+def held_kind_bit(n: Node): int := {
 	if is_null(n) { return Kind.List }
 	if marked_kind(n) == Marked.Bool { return HeldBit.Bool }
 	kind = kind_code(n)
@@ -32,13 +32,13 @@ held_kind_bit(n: Node): int := {
 	kind
 }
 # a type value `int`: a symbol marked TYPE_VALUE_MARK above its kind
-names_a_type(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.TypeValue
+def names_a_type(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.TypeValue
 # a class value of that name, the callee a closure dispatcher builds an instance of (closures.warp class_value_calls)
-names_class(n: Node, name: text): bool := names_a_type(n) and same_bytes(unboxed_text(n), name)
+def names_class(n: Node, name: text): bool := names_a_type(n) and same_bytes(unboxed_text(n), name)
 # a type value tests as the type it names: the words of the types a core type covers (type_tests.rs type_matches); a
 # third copy of the type words beside words.warp type_kinds and emitter.warp core_type_words, as runtime bodies read no
 # compiler globals yet (beautify-round, runtime constants)
-covered_type_words(type: text): list := {
+def covered_type_words(type: text): list := {
 	ints = ["int", "nat", "integer", "long", "i64", "i32"]
 	rationals = ints + ["rational", "real", "exact"]
 	floats = ["float", "double", "f64", "f32", "float32", "float64", "fast"]
@@ -56,23 +56,23 @@ covered_type_words(type: text): list := {
 	}
 }
 # words are texts: unboxed_text, as node_text's variant patterns test types through node_is_type
-names_one_of(name: text, words: list): bool := words.any(word => text_order(unboxed_text(word), name) == 0)
+def names_one_of(name: text, words: list): bool := words.any(word => text_order(unboxed_text(word), name) == 0)
 # `x is Name` of a class: an instance is an entry keyed by its class's name
-instance_of(n: Node, name: text): bool := {
+def instance_of(n: Node, name: text): bool := {
 	if is_null(n) or kind_code(n) != Kind.Key { return no }
 	text_order(key_name(n), name) == 0
 }
 # `x is Animal`: an instance of one of the classes, Animal and those extending it
-instance_among(n: Node, classes: list): bool := {
+def instance_among(n: Node, classes: list): bool := {
 	for class_name in classes { if instance_of(n, class_name) { return yes } }
 	no
 }
 # `type(x)` of a value known only at run time (Rust's list_ops.rs node_type_name): the type value naming its kind as
 # the static names do; an instance names its class, one of the program's `classes`
-node_type_name(n: any, classes: list): any := with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue)
+def node_type_name(n: any, classes: list): any := with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue)
 # … of a variable declared int in an optional or union slot: its whole number an int
-int_slot_type_name(n: any, classes: list): any := if node_type_word(n, classes) == "nat" then with_kind(symbol_of("int"), Marked.TypeValue) else node_type_name(n, classes)
-node_type_word(n: any, classes: list): text := {
+def int_slot_type_name(n: any, classes: list): any := if node_type_word(n, classes) == "nat" then with_kind(symbol_of("int"), Marked.TypeValue) else node_type_name(n, classes)
+def node_type_word(n: any, classes: list): text := {
 	# ø's type is empty, though it passes `is list`
 	if is_null(n) { return "empty" }
 	word = kind_type_word(n)
@@ -85,12 +85,12 @@ node_type_word(n: any, classes: list): text := {
 	for class_name in classes { if instance_of(n, class_name) { return class_name } }
 	if key_operator(n) in operation_spellings() then "operation" else word
 }
-one_character(t: text): bool := byte_count(t) > 0 and character_end(t, 0) == byte_count(t)
+def one_character(t: text): bool := byte_count(t) > 0 and character_end(t, 0) == byte_count(t)
 # the type word of x's kind alone, no class or operation told apart: what `x is type` tests, through no comparison
 # of texts (a text equality tests types through node_is_type)
-kind_type_word(n: any): text := if not is_null(n) and code_bit(n) == 1 then "code" else held_kind_word(n)
+def kind_type_word(n: any): text := if not is_null(n) and code_bit(n) == 1 then "code" else held_kind_word(n)
 # the type word of x's kind, code or not
-held_kind_word(n: any): text := {
+def held_kind_word(n: any): text := {
 	if is_null(n) { return "list" }
 	if marked_kind(n) == Marked.Bool { return "bool" }
 	if names_a_type(n) { return "type" }
@@ -101,7 +101,7 @@ held_kind_word(n: any): text := {
 }
 # the type word of a kind by its code (Rust's Kind names, RUN_TIME_TYPE_KINDS), data for the others: a match, as reading
 # an item of a list asks node_is_type what it is
-kind_word(kind: int): text := match kind {
+def kind_word(kind: int): text := match kind {
 	Kind.Empty: "empty"
 	Kind.Int: "int"
 	Kind.Float: "float"
@@ -118,5 +118,5 @@ kind_word(kind: int): text := match kind {
 }
 # the operators whose key computes a value, `1+1`, `a<b`, `-x` (Rust's Op::is_operation): a pair `a:1`, a binding
 # `a=1` and a lookup `a.b` stay keys
-operation_spellings(): list := ["+", "-", "*", "/", "/!", "%", "rem", "^", "<<", ">>", "<", ">", "<=", ">=", "==", "!=", "is",
+def operation_spellings(): list := ["+", "-", "*", "/", "/!", "%", "rem", "^", "<<", ">>", "<", ">", "<=", ">=", "==", "!=", "is",
 	"===", "!==", "≈", "~", "and", "or", "xor", "&", "|", "not", "⌞", "⌟", "±", "??", "↑", "↓"]

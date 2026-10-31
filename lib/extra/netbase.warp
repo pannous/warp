@@ -6,12 +6,12 @@ use json
 
 netbase_local_server = "http://localhost:8181"
 
-netbase_server() := env("NETBASE") or netbase_local_server
+def netbase_server() := env("NETBASE") or netbase_local_server
 
 // the query as a URL path segment
-netbase_path(q) := q.replace("%", "%25").replace(" ", "%20").replace(">", "%3E").replace("<", "%3C").replace("#", "%23").replace("?", "%3F")
+def netbase_path(q) := q.replace("%", "%25").replace(" ", "%20").replace(">", "%3E").replace("<", "%3C").replace("#", "%23").replace("?", "%3F")
 
 // the entities netbase finds at `server` for the query `q`, as records
-query_at(server, q) := parse_json(fetch(server + "/json/query/" + netbase_path(q)))
+def query_at(server, q) := parse_json(fetch(server + "/json/query/" + netbase_path(q)))
 
-query(q) := query_at(netbase_server(), q)
+def query(q) := query_at(netbase_server(), q)

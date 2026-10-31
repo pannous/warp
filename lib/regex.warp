@@ -2,6 +2,6 @@
 // regex natively, JS RegExp in the browser, held to what both do alike (no look-around, no backreferences)
 // `"abc" matches "a.c"` where regex is used (the parser scans a used module's operators), and `matches(s, p)`
 infix operator matches(subject: any, pattern: any) := std_pure("regex", "matches", [subject, pattern])
-first_match(subject: any, pattern: any) := std_pure("regex", "first", [subject, pattern])
-find_all(subject: any, pattern: any) := std_pure("regex", "all", [subject, pattern])
-replace_all(subject: any, pattern: any, replacement: any) := std_pure("regex", "replace", [subject, pattern, replacement])
+def first_match(subject: any, pattern: any) := std_pure("regex", "first", [subject, pattern])
+def find_all(subject: any, pattern: any) := std_pure("regex", "all", [subject, pattern])
+def replace_all(subject: any, pattern: any, replacement: any) := std_pure("regex", "replace", [subject, pattern, replacement])

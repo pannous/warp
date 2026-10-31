@@ -9,7 +9,7 @@ final_newline_rule = "final newline"
 
 # the code fixed and what changed: [text, changes], each change "<line> <rule>", the line in the code as given; by
 # the layout rules given, after the hints' replacements when rewriting (warp format lays out only)
-fixed(code: text, rules: list = layout_rules, rewriting: bool = yes): list := {
+def fixed(code: text, rules: list = layout_rules, rewriting: bool = yes): list := {
 	lines = code.split("\n")
 	if code.ends_with("\n") { lines = lines[0 ..< #lines - 1] }
 	numbers = []

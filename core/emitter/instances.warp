@@ -12,7 +12,7 @@ def name_node(name: any): list {
 }
 # (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry; nor is an
 # opaque view, `f() := {}` the body `{ {} }`, an empty map, card module-hygiene)
-is_map_entry(n: Node): bool := is_key(n, Op.Colon) and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global") and key_of(n) != opaque_symbol
+def is_map_entry(n: Node): bool := is_key(n, Op.Colon) and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global") and key_of(n) != opaque_symbol
 # `{a: 1, b: "x"}`: a map
 def map_value(body: Body, entries: list): TypedCode { TypedCode(ValueKind.Node, entries_code(body, entries.map(e => key_of(e)), entries.map(e => value_of(e)))) }
 # the map of the names to the values
@@ -67,7 +67,7 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 	TypedCode(ValueKind.Node, instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [gc_type(class_struct(class_name))]))
 }
 # a field's type's zero: 0, 0.0, "", no, [], else ø (an untyped or optional field, one of a class)
-kind_zero(kind: ValueKind?): any := match kind {
+def kind_zero(kind: ValueKind?): any := match kind {
 	ValueKind.Int: 0
 	ValueKind.Float: 0.0
 	ValueKind.Text: ""
@@ -133,13 +133,13 @@ def struct_field(class_name: text, name: text): any {
 	ø
 }
 # `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
-subscript_name(index: Node): any := {
+def subscript_name(index: Node): any := {
 	# (type() of an arithmetic key is "operation", not key)
 	if op_of(index) == Op.Add and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
 	ø
 }
 # `k+1`, the index `m[k]` lowers to
-is_shifted_index(index: Node): bool := op_of(index) == Op.Add and value_of(index) == 1
+def is_shifted_index(index: Node): bool := op_of(index) == Op.Add and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
 # else the run ends in no_field_<name>, which Rust's run reports as "no field name"
 def field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
@@ -335,19 +335,19 @@ def text_value_of(name: text): TypedCode { TypedCode(ValueKind.Text, text_bytes(
 # ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
 # the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
 base_class_layers = ["extends", "inherited_from"]
-collect_types(n: Node): any := {
+def collect_types(n: Node): any := {
 	if declares_type(n) { return record_type(value_of(n)#2, value_of(n)#3) }
 	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = aliased_spelling(value_of(n)) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
 # a class or enum declaration, the opaque view ["type", name, body]
-declares_type(n: Node): bool := type(n) is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
+def declares_type(n: Node): bool := type(n) is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 # `type Name = text`, `type View = list or int`: a declaration of no body naming another type or a union
-is_type_alias(n: Node): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and aliased_spelling(value_of(n)) != ø
-aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
+def is_type_alias(n: Node): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and aliased_spelling(value_of(n)) != ø
+def aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
 # a case of a variants declaration, `A`, or one spelled otherwise, `A = "a"`
-variant_name(variant: any): text := if kind_of(variant) == "key" then variant#3#2 else variant#2
-record_type(name: any, body: any): any := {
+def variant_name(variant: any): text := if kind_of(variant) == "key" then variant#3#2 else variant#2
+def record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
 		if declared_members(body).any(member => member == ø) { module.member_classes[name#2] = yes }
@@ -370,7 +370,7 @@ record_type(name: any, body: any): any := {
 }
 # `class Dog extends Animal {…}`: Dog's fields and defaults are Animal's first, then its own; a chain of parents in any
 # order of declaration (merging twice changes nothing)
-inherit_fields(child: text): any := {
+def inherit_fields(child: text): any := {
 	if child not in module.parents { return module.classes[child] }
 	parent = module.parents[child]
 	if parent not in module.classes { return refuse("a class extending " + parent + ", a class not declared here") }
@@ -381,7 +381,7 @@ inherit_fields(child: text): any := {
 }
 # the entries of inherited, then those of own, which win (no local is named like a map word: `entries` broke a map
 # program in the pure lane)
-entries_of_both(inherited: map, own: map): map := {
+def entries_of_both(inherited: map, own: map): map := {
 	both = {}
 	for name in inherited.keys { both[name] = inherited[name] }
 	for name in own.keys { both[name] = own[name] }
@@ -419,12 +419,12 @@ def field_admits(name: text, kind: ValueKind): bool {
 # the members a class body declares, a field as [name, type name (ø: untyped), default ([view], ø: none)]: `x`,
 # `left?` (untyped, ø by default), `x: int`, `x: int = 0`, `n = 0`; any other member (a method `sq() := …`, an
 # operator) as ø
-declared_members(body: any): list := if kind_of(body) == "list" then body[3..].map(declared_field) else []
-declared_fields(body: any): list := declared_members(body).filter(field => field != ø)
+def declared_members(body: any): list := if kind_of(body) == "list" then body[3..].map(declared_field) else []
+def declared_fields(body: any): list := declared_members(body).filter(field => field != ø)
 # a field's name as the view holds it: `x`, `"my field"`, `pi` (a constant's word)
 field_name_kinds = ["symbol", "text", "number"]
-without_optional_mark(name: text): text := name[0..<(#name - 1)]
-declared_field(field: any): any := {
+def without_optional_mark(name: text): text := name[0..<(#name - 1)]
+def declared_field(field: any): any := {
 	kind = kind_of(field)
 	if kind in field_name_kinds and field#2.ends_with("?") { return [without_optional_mark(field#2), ø, [ø]] }
 	if kind in field_name_kinds { return [field#2, ø, ø] }
@@ -440,9 +440,9 @@ declared_field(field: any): any := {
 	[named#1, named#2, [field#4]]
 }
 # an optional type's base, `text?` → text; any other type as it is
-base_type(type: text?): text? := if type is text and #type > 1 and type.ends_with("?") then type[0..<(#type - 1)] else type
+def base_type(type: text?): text? := if type is text and #type > 1 and type.ends_with("?") then type[0..<(#type - 1)] else type
 # a field's declared type as a name: `int` read as a type or as a symbol, `[int]` a list, else "?"
-type_name_of(type: any): text := {
+def type_name_of(type: any): text := {
 	if kind_of(type) == "symbol" { return type#2 }
 	if kind_of(type) == "list" { return "list" }
 	# `int or text`, a union (decision union-or)
@@ -450,12 +450,12 @@ type_name_of(type: any): text := {
 	if kind_of(type) == "type" and kind_of(type#2) == "symbol" { return type#2#2 }
 	"?"
 }
-field_types(body: any): map := {
+def field_types(body: any): map := {
 	types = {}
 	for field in declared_fields(body) { types[field#1] = field#2 }
 	types
 }
-field_defaults(body: any): map := {
+def field_defaults(body: any): map := {
 	defaults = {}
 	for field in declared_fields(body) { if field#3 != ø { defaults[field#1] = field#3 } }
 	defaults
@@ -463,7 +463,7 @@ field_defaults(body: any): map := {
 
 # a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
 # (rust-harness:src/wasm_emitter/declared_values.rs), a float field keeping an int
-field_check(kind: ValueKind): text? := match kind {
+def field_check(kind: ValueKind): text? := match kind {
 	ValueKind.Int: "int_admitted"
 	ValueKind.List: "list_admitted"
 	ValueKind.Text: "text_checked"

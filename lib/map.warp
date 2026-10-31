@@ -1,27 +1,27 @@
 // The standard library module map (notes/stdlib.md): standard functions of every program, `merge(a, b)` or `a.merge(b)`, no `use` needed (`use map` only for the qualified `map.merge(a, b)`)
 
-merge(a, b) := { out = a; ks = keys(b); for k in ks { out[k] = b.get(k) }; out }
-map_values(m, f) := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }
+def merge(a, b) := { out = a; ks = keys(b); for k in ks { out[k] = b.get(k) }; out }
+def map_values(m, f) := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }
 // {a:1 b:2} → {1:"a" 2:"b"}: the values become the keys
-invert(m) := { out = {}; ks = keys(m); for k in ks { out["" + m.get(k)] = k }; out }
+def invert(m) := { out = {}; ks = keys(m); for k in ks { out["" + m.get(k)] = k }; out }
 // only the entries of the given keys that m has
-pick(m, wanted) := { out = {}; for k in wanted { if m.has(k) { out[k] = m.get(k) } }; out }
+def pick(m, wanted) := { out = {}; for k in wanted { if m.has(k) { out[k] = m.get(k) } }; out }
 // [["a", 1] ["b", 2]] → {a:1 b:2}
-from_pairs(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+def from_pairs(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
 // the entries of m without the given keys
-omit(m, unwanted) := { out = {}; ks = keys(m); for k in ks { if not (k in unwanted) { out[k] = m.get(k) } }; out }
+def omit(m, unwanted) := { out = {}; ks = keys(m); for k in ks { if not (k in unwanted) { out[k] = m.get(k) } }; out }
 // the entries whose value f holds for
-filter_values(m, f) := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { out[k] = m.get(k) } }; out }
+def filter_values(m, f) := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { out[k] = m.get(k) } }; out }
 // {a:1 b:2} → [["a", 1] ["b", 2]], the opposite of from_pairs
-entries(m) := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]] }; out }
+def entries(m) := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]] }; out }
 // the value of key, or fallback when m has none
-get_or(m, key, fallback) := if m.has(key) then m.get(key) else fallback
+def get_or(m, key, fallback) := if m.has(key) then m.get(key) else fallback
 // the first key whose value f holds for, ø when none
-find_key(m, f) := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; ø }
+def find_key(m, f) := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; ø }
 // Python's dict methods (card python-stdlib): update merges in place, items are the entries, setdefault keeps the
 // default for a missing key and gives the key's value
-update(m, other) := merge(m, other)
-items(m) := entries(m)
-setdefault(m, key, fallback) := { if not m.has(key) { m[key] = fallback }; m.get(key) }
+def update(m, other) := merge(m, other)
+def items(m) := entries(m)
+def setdefault(m, key, fallback) := { if not m.has(key) { m[key] = fallback }; m.get(key) }
 // the last entry as [key value], removed from m in place (Python's dict.popitem)
-popitem(m) := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }
+def popitem(m) := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }

@@ -42,20 +42,20 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
-natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
+def natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
 # what no host of these commands has yet: under the native warp, the commands it lacks
 NOT_YET = " is not in warp yet"
 
-command_name(entry: list): text := entry#1.split(" ")#1
+def command_name(entry: list): text := entry#1.split(" ")#1
 # the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
 host_commands = ["repl-step", "test-list", "test-verdicts"]
-command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
-is_command(word: text): bool := word in command_words()
+def command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
+def is_command(word: text): bool := word in command_words()
 
 # the text of the file `target` names, else `target` itself as code
-source_of(target: text): text := try read(target) else target
+def source_of(target: text): text := try read(target) else target
 
-show_help() := {
+def show_help() := {
 	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
 	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
 	host_commands = running_commands + native_commands
@@ -66,35 +66,35 @@ show_help() := {
 }
 
 # words, then spaces up to width, at least one
-padded(words: text, width: int): text := {
+def padded(words: text, width: int): text := {
 	line = words + " "
 	while #line < width { line = line + " " }
 	line
 }
 
 # the version, and the lib/ the compiler reads
-version_text(library: text): text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
+def version_text(library: text): text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
 
 # the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
 # rust-harness:src/cli/display.rs structure)
-structure(n: Node): text := match n {
+def structure(n: Node): text := match n {
 	Key(left, op, right): "(" + (op as text) + " " + structure(left) + " " + structure(right) + ")"
 	List(items, bracket, separator): grouped_structure(items.map(structure), bracket as text, separator as text)
 	_: "${n}"
 }
 # the items' texts in their brackets, between them the separator ("⏎" for a line break)
-grouped_structure(items: list, bracket: text, separator: text): text := {
+def grouped_structure(items: list, bracket: text, separator: text): text := {
 	joiner = if separator == "\n" then "⏎ " else if separator == "" or separator == " " then " " else separator + " "
 	if #bracket == 2 { return bracket#1 + items.join(joiner) + bracket#2 }
 	closing = {"{": "}", "[": "]", "(": ")", "<": ">", "": ""}
 	bracket + items.join(joiner) + closing[bracket]
 }
 
-refuse_running(command: text) := {
+def refuse_running(command: text) := {
 	if natively_hosted() { raise "warp " + command + NOT_YET }
 	raise "warp " + command + " runs the module it compiles, which plain WASI cannot (no instantiate in WASI preview 1): use " + NATIVE + " or `warp " + command + "`"
 }
-refuse_native(command: text) := {
+def refuse_native(command: text) := {
 	if natively_hosted() { raise "warp " + command + NOT_YET }
 	raise "warp " + command + " needs " + NATIVE + "'s host: run `warp " + command + "`"
 }
@@ -109,7 +109,7 @@ C_COMPILER = "cc -O2"
 # wasm2c's runtime and headers, in these folders of the wabt whose wasm2c is on the PATH
 WASM2C_RUNTIME = "/share/wabt/wasm2c"
 WABT_HEADERS = "/include"
-build_native(source_file: text, library: text) := {
+def build_native(source_file: text, library: text) := {
 	source = read(source_file)
 	if not is_primitive_file(source) { raise "warp build native builds a primitive file, whose first line is `@primitive` (notes/primitive.md)" }
 	emitting_file(working_relative(source_file))
@@ -133,7 +133,7 @@ build_native(source_file: text, library: text) := {
 # <prefix>/lib), else in that library folder by its stable name (rpath): the native warp's WARP_LIB_LINK, a link the
 # next install moves to its own build, never the build folder behind it (card native-rpath-builds-folder)
 LIBRARY_LINK_VARIABLE = "WARP_LIB_LINK"
-native_links(wabt: text, library: text): text := {
+def native_links(wabt: text, library: text): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 { return "" }
 	itself = if is_macos() then "@executable_path" else "'$ORIGIN'"
@@ -144,13 +144,13 @@ native_links(wabt: text, library: text): text := {
 }
 # a native build's own C functions (foreign.c's native_pointer, the glue's) are found by name at run time (dlsym):
 # Linux executables export them only when told; macOS's always do
-exported_symbols(): text := if is_macos() then "" else " -rdynamic"
-is_macos(): bool := shell("uname") == "Darwin"
+def exported_symbols(): text := if is_macos() then "" else " -rdynamic"
+def is_macos(): bool := shell("uname") == "Darwin"
 # the folder a file's uses are read from: "." for a file named without one
-source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
-quoted_path(path: text): text := "\"" + path + "\""
+def source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
+def quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
-shell(line: text): text := {
+def shell(line: text): text := {
 	printed = std_io("os", "command", [line])
 	if printed is text then printed else raise "`" + line + "` failed: " + printed
 }
@@ -174,9 +174,9 @@ DEFAULT_TRIM = "optimize"
 WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
 BINARYEN_INSTALL = "brew install binaryen"
 # without Binaryen a build or rebuild keeps the unoptimized module and says so, never fails (user 2026-10-29)
-has_wasm_opt(): bool := shell("command -v wasm-opt || true").trim() != ""
+def has_wasm_opt(): bool := shell("command -v wasm-opt || true").trim() != ""
 
-build(words: list) := {
+def build(words: list) := {
 	options = words.filter(word => word.starts_with(OPTION_MARK))
 	targets = words.filter(word => not word.starts_with(OPTION_MARK))
 	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
@@ -200,16 +200,16 @@ build(words: list) := {
 	ø
 }
 # a file's size in bytes, as text
-size_of(file: text): text := shell("wc -c < " + quoted_path(file)).trim()
+def size_of(file: text): text := shell("wc -c < " + quoted_path(file)).trim()
 # the value of `--name=value` among the options, ø without one
-option_of(options: list, name: text): any := {
+def option_of(options: list, name: text): any := {
 	for option in options { if option.starts_with(OPTION_MARK + name + "=") { return option.remove_prefix(OPTION_MARK + name + "=") } }
 	ø
 }
 
 # the module trimmed of what its exports never reach, as `way` says (notes/runtime_linking.md "Removing the unused
 # runtime"): by default also optimized (-O2: a third smaller for 30–60 ms more)
-trim(module: text, trimmed: text, way: text) := {
+def trim(module: text, trimmed: text, way: text) := {
 	if not (way in TRIM_WAYS) { raise "warp build --trim=" + way + ": no such way, the ways are " + TRIM_WAYS.keys.join(", ") + " (warp, our own linker, is card runtime-shaking)" }
 	if way == "none" { return write_bytes(trimmed, read_bytes(module)) }
 	if not has_wasm_opt() {
@@ -232,7 +232,7 @@ TRAILER_ALIGNMENT = 16
 DRIVER_SOURCE = "/compiler/native/driver.warp"
 DRIVER_BUILT = "/data/native"
 
-built_driver(): text := {
+def built_driver(): text := {
 	folder = library_folder + DRIVER_BUILT
 	source = read(library_folder + DRIVER_SOURCE)
 	built_from = folder + "/driver.built.warp"
@@ -244,7 +244,7 @@ built_driver(): text := {
 	}
 	folder + "/driver"
 }
-write_executable(module: text, executable: text) := {
+def write_executable(module: text, executable: text) := {
 	carried = read_bytes(module)
 	shell("cp " + quoted_path(built_driver()) + " " + quoted_path(executable))
 	signed = is_macos()
@@ -271,7 +271,7 @@ SEGMENT_FILESIZE_AT = 48
 # a segment's memory size is whole pages: arm64's 16 KB, a multiple of x86-64's 4 KB
 PAGE_BYTES = 0x4000
 
-extended_to_end(image: list): list := {
+def extended_to_end(image: list): list := {
 	if little_endian(image, 0, 4) != MACHO_MAGIC { return image }
 	at = MACHO_HEADER
 	last = 0
@@ -284,7 +284,7 @@ extended_to_end(image: list): list := {
 	image[0 ..< last + SEGMENT_VMSIZE_AT] + le64(pages) + image[last + SEGMENT_FILEOFF_AT ..< last + SEGMENT_FILESIZE_AT] + le64(size) + image[last + SEGMENT_FILESIZE_AT + 8 ..< #image]
 }
 # the int of `width` bytes at `at`, little-endian
-little_endian(bytes: list, at: int, width: int): int := {
+def little_endian(bytes: list, at: int, width: int): int := {
 	n = 0
 	for i in 0..width { n += bytes[at + i] << (8 * i) }
 	n

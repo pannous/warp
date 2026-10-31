@@ -6,38 +6,38 @@ use "../analysis/kinds.warp"
 use "lists.warp"
 use "nodes.warp"
 use "show.warp"
-built_empty(): Node := ø
-built_int(n: int): Node := held(n)
-built_bool(truth: int): Node := held(truth != 0)
-built_float(x: float): Node := held(x)
-built_codepoint(code: int): Node := held(char_of(code))
+def built_empty(): Node := ø
+def built_int(n: int): Node := held(n)
+def built_bool(truth: int): Node := held(truth != 0)
+def built_float(x: float): Node := held(x)
+def built_codepoint(code: int): Node := held(char_of(code))
 # the bytes the host left in linear memory, as a text of the program's
-text_from_memory(address: int, length: int): text := {
+def text_from_memory(address: int, length: int): text := {
 	t = new_text(length)
 	for i in 0..<length { set_byte(t, i, memory_byte(address + i)) }
 	t
 }
-built_text(address: int, length: int): Node := held(text_from_memory(address, length))
-built_symbol(address: int, length: int): Node := symbol_of(text_from_memory(address, length))
+def built_text(address: int, length: int): Node := held(text_from_memory(address, length))
+def built_symbol(address: int, length: int): Node := symbol_of(text_from_memory(address, length))
 # `operator`: the operator's code (rust-harness:src/operators/codes.rs), above the kind bits as key_node puts it
-built_key(left: Node, right: Node, operator: int): Node := keyed(operator * KindUnit.Info + Kind.Key, left, right)
+def built_key(left: Node, right: Node, operator: int): Node := keyed(operator * KindUnit.Info + Kind.Key, left, right)
 # the host builds a list from its last item, a cell at a time: first ahead of the items of rest (ø for none); `info`
 # the list's bracket and separator above the kind bits (rust-harness:src/wasm_emitter/mod.rs list_info)
-built_list(first: Node, rest: Node, info: int): Node := {
+def built_list(first: Node, rest: Node, info: int): Node := {
 	items = if is_null(rest) then [] else unboxed_list(rest)
 	list_node(info * KindUnit.Info + Kind.List, list_join([first], items))
 }
 # a list of bytes the host left in linear memory (`read_bytes`), each an Int: built in one call, not a host call per
 # byte (card compile-reads)
-built_bytes(address: int, length: int, info: int): Node := {
+def built_bytes(address: int, length: int, info: int): Node := {
 	items = []
 	for i in 0..<length { items += [held(memory_byte(address + i))] }
 	list_node(info * KindUnit.Info + Kind.List, items)
 }
 # code's lists the native warp's parse_code rebuilds (core/native/driver.warp code_built): the items, a square list
 # (ø for none), with the bracket and separator their spellings name; its keys take the operator so too, key_node
-built_spelled_list(items: Node, bracket: Node, separator: Node): Node := separated_node(bracketed_node(items, bracket), separator)
+def built_spelled_list(items: Node, bracket: Node, separator: Node): Node := separated_node(bracketed_node(items, bracket), separator)
 # a type declaration as written, `class P { x: int }`: its name and body
-built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
+def built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
 # a parse failure the program's `try` catches: the Error of the host's message
-built_error(message: Node): Node := error_of(node_text(message))
+def built_error(message: Node): Node := error_of(node_text(message))

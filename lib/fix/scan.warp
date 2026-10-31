@@ -18,21 +18,21 @@ closers = [")", "]", "}"]
 class Scanned { text: text; marks: text; comment: int; starts_inside: text; ends_inside: text }
 
 # the character at index i, "" outside the line
-at(cs: list, i: int): text := if i >= 0 and i < #cs then "" + cs[i] else ""
+def at(cs: list, i: int): text := if i >= 0 and i < #cs then "" + cs[i] else ""
 # the n characters from index i
-piece(cs: list, i: int, n: int): text := {
+def piece(cs: list, i: int, n: int): text := {
 	result = ""
 	for k in 0 ..< n { result += at(cs, i + k) }
 	result
 }
 
-is_blank_character(c: text): bool := c == " " or c == "\t"
-is_word_character(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c == "_")
-is_digit_character(c: text): bool := c != "" and is_digit(c[0])
+def is_blank_character(c: text): bool := c == " " or c == "\t"
+def is_word_character(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c == "_")
+def is_digit_character(c: text): bool := c != "" and is_digit(c[0])
 
 # `//` or `#` starting a comment at index i: `//` anywhere but in a URL's `://`; `#` at the line start or after a
 # blank, before a blank, `!`, `#` or the end (`# note`, `#!`, `##`), or a directive. `xs#1` and `#xs` are code
-starts_line_comment(cs: list, i: int): bool := {
+def starts_line_comment(cs: list, i: int): bool := {
 	if piece(cs, i, 2) == "//" { return at(cs, i - 1) != ":" }
 	if at(cs, i) != "#" { return no }
 	if i > 0 and not is_blank_character(at(cs, i - 1)) { return no }
@@ -43,14 +43,14 @@ starts_line_comment(cs: list, i: int): bool := {
 }
 
 # the block comment opened at index i, its closing; "" when none opens there
-block_opened(cs: list, i: int): text := {
+def block_opened(cs: list, i: int): text := {
 	two = piece(cs, i, 2)
 	for pair in block_comments { if pair[0] == two { return pair[1] } }
 	""
 }
 
 # the scan of every line, carrying texts and block comments from line to line
-scanned(lines: list): list := {
+def scanned(lines: list): list := {
 	result = []
 	inside = in_code
 	for line in lines {
@@ -102,4 +102,4 @@ scanned(lines: list): list := {
 }
 
 # whether the character at index i of the scanned line is code
-is_code(line: Scanned, i: int): bool := i >= 0 and i < #line.marks and line.marks[i] == code_mark
+def is_code(line: Scanned, i: int): bool := i >= 0 and i < #line.marks and line.marks[i] == code_mark

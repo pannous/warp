@@ -20,7 +20,7 @@ use "node_cases.warp"
 
 # the names declared of an enum type, `c: Coin`, with that enum; "" for a name declared of several types
 # Rust twin: match_exhaustive.rs typed_subjects
-subjects_in(n: Node, enums: map, subjects: map): map := {
+def subjects_in(n: Node, enums: map, subjects: map): map := {
 	declared = match n {
 		Key(name, Op.Colon, type_name): if is_name(name) and type_name is symbol and required_type(name_of(type_name)) in enums then [name_of(name), required_type(name_of(type_name))] else ø
 		_: ø
@@ -31,13 +31,13 @@ subjects_in(n: Node, enums: map, subjects: map): map := {
 }
 
 # a name holds an enum's cases: "" once it holds another's or another value
-held_as(subjects: map, name: text, enum_name: text): map := {
+def held_as(subjects: map, name: text, enum_name: text): map := {
 	subjects[name] = if name in subjects and subjects[name] != enum_name then "" else enum_name
 	subjects
 }
 
 # the enum of a case assigned, `Coin.Dime` or a spelled case `Op·case(t)` as a match binds it, else ""
-assigned_enum(value: Node, enums: map): text := match value {
+def assigned_enum(value: Node, enums: map): text := match value {
 	Key(owner, Op.Dot, case): if is_name(owner) and name_of(owner) in enums then name_of(owner) else ""
 	List(parts, Bracket.Round, Separator.None): {
 		named = spelled_enums.filter(enum_name => #parts == 2 and parts#1 == symbol(spelled_function(enum_name, "case")))
@@ -48,19 +48,19 @@ assigned_enum(value: Node, enums: map): text := match value {
 
 # the names assigned cases of one enum, `c = Coin.Dime`, with that enum; "" for a name also assigned anything else
 # Rust twin: plain_enums.rs assigned_cases
-assigned_in(n: Node, enums: map, subjects: map): map := {
+def assigned_in(n: Node, enums: map, subjects: map): map := {
 	if is_key(n, Op.Assign) and is_name(key_of(n)) { held_as(subjects, name_of(key_of(n)), assigned_enum(value_of(n), enums)) }
 	for part in scope_parts(n) { assigned_in(part, enums, subjects) }
 	subjects
 }
 
 # the parts of a node in its scope: those of a function's definition inside it have a scope of their own
-scope_parts(n: Node): list := parts_of(n).filter(part => not is_function_definition(part))
+def scope_parts(n: Node): list := parts_of(n).filter(part => not is_function_definition(part))
 
 # the names holding cases of an enum in a scope (the program outside its functions, or a function's definition, which
 # sees those of `outer` it does not name itself): typed so, else assigned only its cases. Per scope, as names are: the
 # parser's `bracket = ""` leaves view_of's `bracket`, bound a Bracket case, its spelling
-held_cases(scope: Node, enums: map, outer: map): map := {
+def held_cases(scope: Node, enums: map, outer: map): map := {
 	subjects = assigned_in(scope, enums, {})
 	typed = subjects_in(scope, enums, {})
 	for name in typed.keys { subjects[name] = typed[name] }
@@ -69,20 +69,20 @@ held_cases(scope: Node, enums: map, outer: map): map := {
 }
 
 # the program's enum forms lowered, each function's by the names of its scope
-scoped_enum_nodes(n: Node, enums: map, subjects: map): Node := {
+def scoped_enum_nodes(n: Node, enums: map, subjects: map): Node := {
 	scope = if is_function_definition(n) then held_cases(n, enums, subjects) else subjects
 	enum_node(children(n, part => scoped_enum_nodes(part, enums, scope)), enums, scope)
 }
 
 # the spelled enum whose case a name holds or a call gives, else ø
-held_spelled(value: Node, subjects: map): text? := {
+def held_spelled(value: Node, subjects: map): text? := {
 	enum_name = if is_enum_call(value) then enum_results[name_of(value#1)] else if is_name(value) then subjects.get(name_of(value)) else ø
 	if enum_name in spelled_enums then enum_name else ø
 }
-is_enum_call(value: Node): bool := is_group(value) and bracket_of(value) == "(" and #value > 0 and value#1 is symbol and name_of(value#1) in enum_results
+def is_enum_call(value: Node): bool := is_group(value) and bracket_of(value) == "(" and #value > 0 and value#1 is symbol and name_of(value#1) in enum_results
 
 # `x == "+"` of a name holding a spelled case: Op·text(x) == "+", a case equals its spelling
-held_equality(left: Node, op: Node, right: Node, n: Node, subjects: map): Node := {
+def held_equality(left: Node, op: Node, right: Node, n: Node, subjects: map): Node := {
 	enum_name = held_spelled(left, subjects) ?? held_spelled(right, subjects)
 	if enum_name == ø { return n }
 	if not is_name(left) or not is_name(right) { return Key(held_text(enum_name, left), op, held_text(enum_name, right)) }
@@ -92,13 +92,13 @@ held_equality(left: Node, op: Node, right: Node, n: Node, subjects: map): Node :
 }
 
 # the enum having a case of that name, when only one has it, else ø
-owner_of(case: text, enums: map): text? := {
+def owner_of(case: text, enums: map): text? := {
 	owners = enums.keys.filter(name => case in enums[name])
 	if #owners == 1 then owners#1 else ø
 }
 
 # the case a value writes, `Dime`, `Coin.Dime` or `Coin::Dime`: [its enum, its name], else ø
-written_case(value: Node, enums: map): list? := {
+def written_case(value: Node, enums: map): list? := {
 	if is_key(value, Op.Dot) or is_key(value, Op.Scope) { return owned_case(key_of(value), value_of(value), enums) }
 	if not is_name(value) { return ø }
 	declaring = owner_of(name_of(value), enums)
@@ -106,7 +106,7 @@ written_case(value: Node, enums: map): list? := {
 }
 
 # `Coin.Dime` of a case Coin declares: [Coin, Dime], else ø
-owned_case(owner: Node, case: Node, enums: map): list? := {
+def owned_case(owner: Node, case: Node, enums: map): list? := {
 	if not is_name(owner) or not is_name(case) or name_of(owner) not in enums { return ø }
 	if name_of(case) in enums[name_of(owner)] then [name_of(owner), name_of(case)] else ø
 }
@@ -114,7 +114,7 @@ owned_case(owner: Node, case: Node, enums: map): list? := {
 # the enum each function of the program gives, `f(k): Coin := …`, which definitions.warp holds as
 # `f(k) := {the result: Coin = …; the result}`
 global enum_results = {}
-results_in(program: Node, enums: map): map := {
+def results_in(program: Node, enums: map): map := {
 	found = {}
 	for n in nodes_in(program) {
 		call = if is_key(n, Op.Define) then key_of(n) else ø
@@ -127,7 +127,7 @@ results_in(program: Node, enums: map): map := {
 }
 
 # the enum of a value: a case it writes, a name declared of the enum or a call of a function giving it, else ø
-type_of(value: Node, enums: map, subjects: map): text? := {
+def type_of(value: Node, enums: map, subjects: map): text? := {
 	written = written_case(value, enums)
 	if written != ø { return written#1 }
 	if is_enum_call(value) { return enum_results[name_of(value#1)] }
@@ -138,7 +138,7 @@ type_of(value: Node, enums: map, subjects: map): text? := {
 
 # the declaration as the sum type of its cases, the view Rust's sum_type gives; a case spelled otherwise than its name
 # `A = "a"`, so the case made carries its spelling (emitter.warp case_value)
-enum_type(name: text, cases: list): Node := {
+def enum_type(name: text, cases: list): Node := {
 	spelled = spellings.get(name) ?? {}
 	variants = ["list", "", " "] + cases.map(case => if spelled.has(case) and spelled[case] != case then ["key", Op.Assign, ["symbol", case], ["text", spelled[case]]] else ["symbol", case])
 	node_of(["type", ["attribute", variants_word, variants, ["symbol", name]], ["list", "{", ""]])
@@ -149,13 +149,13 @@ enum_type(name: text, cases: list): Node := {
 number_types = ["int", "integer"]
 
 # `Coin.Dime as int` of `enum Coin { Penny = 1, Dime = 10 }`: 10, the number the case declares
-case_number(enum_name: text, value: Node): Node := {
+def case_number(enum_name: text, value: Node): Node := {
 	cases = numbered_enums[enum_name]
 	matched(value, cases.keys.map(case => Key(qualified_case(enum_name, case), Op.Colon, cases[case])), ø, {})
 }
 
 # `10 as Coin`: the case numbered 10, an error for a number no case has
-numbered_case(enum_name: text, value: Node): Node := {
+def numbered_case(enum_name: text, value: Node): Node := {
 	cases = numbered_enums[enum_name]
 	missing = Key(symbol(other_arm), Op.Colon, List([symbol(raise_word), "no " + enum_name + " case has that number"], Bracket.None, Separator.Space))
 	matched(value, cases.keys.map(case => Key(cases[case], Op.Colon, qualified_case(enum_name, case))) + [missing], ø, {})
@@ -163,7 +163,7 @@ numbered_case(enum_name: text, value: Node): Node := {
 
 # `op as text` of node.warp's spelled enums its spelling (node_cases.warp converted the other values to them already);
 # other conversions as they are (a case's number and the case at an index are lib/sugar/enums.warp's rules)
-case_conversion(value: Node, target: Node, n: Node, enums: map, subjects: map): Node := {
+def case_conversion(value: Node, target: Node, n: Node, enums: map, subjects: map): Node := {
 	numbered = type_of(value, enums, subjects)
 	if is_name(target) and name_of(target) in number_types and numbered in numbered_enums { return case_number(numbered, value) }
 	if is_name(target) and name_of(target) in numbered_enums and numbered == ø { return numbered_case(name_of(target), value) }
@@ -174,11 +174,11 @@ case_conversion(value: Node, target: Node, n: Node, enums: map, subjects: map): 
 
 # `op: Op`, `op: Op?`: a spelled enum's annotation holds any value, a text standing for a case (its names were read
 # as subjects already)
-spelled_annotation(subject: Node, type: Node, n: Node): Node := {
+def spelled_annotation(subject: Node, type: Node, n: Node): Node := {
 	if type is symbol and required_type(name_of(type)) in spelled_enums then Key(subject, Op.Colon, symbol(any_word)) else n
 }
 
-enum_node(n: Node, enums: map, subjects: map): Node := match n {
+def enum_node(n: Node, enums: map, subjects: map): Node := match n {
 	Key(value, Op.As, target): case_conversion(value, target, n, enums, subjects)
 	Key(subject, Op.Colon, type): spelled_annotation(subject, type, n)
 	Key(left, Op.Eq, right): held_equality(left, Op.Eq, right, n, subjects)
@@ -189,7 +189,7 @@ enum_node(n: Node, enums: map, subjects: map): Node := match n {
 	}
 }
 
-plain_enums(program: Node): Node := {
+def plain_enums(program: Node): Node := {
 	enums = enums_in(program, {})
 	if #enums.keys == 0 { return program }
 	program = expected_in(program, Expectation(enums, parameter_types_of(program), scope_of(program), program))
@@ -203,7 +203,7 @@ plain_enums(program: Node): Node := {
 # values are its cases here, its properties (`Key.escape := …`) in property_accessors.warp
 
 # the declared parameter types of the program's functions, by name: the type of each parameter, "" of an untyped one
-parameter_types_of(program: Node): map := {
+def parameter_types_of(program: Node): map := {
 	found = {}
 	for n in nodes_in(program) {
 		call = definition_call(n)
@@ -216,10 +216,10 @@ parameter_types_of(program: Node): map := {
 # its functions, the names it binds, and the program itself for the values a name it binds holds
 class Expectation { type_values: map; parameter_types: map; scope: map; program: Node }
 
-expected_in(n: Node, expectation: Expectation): Node := bottom_up(n, m => expected_call(m, expectation))
+def expected_in(n: Node, expectation: Expectation): Node := bottom_up(n, m => expected_call(m, expectation))
 
 # a call of a function whose parameters name their types, each argument read from its parameter's type
-expected_call(n: Node, expectation: Expectation): Node := match n {
+def expected_call(n: Node, expectation: Expectation): Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
 		types = expectation.parameter_types
 		if #parts < 2 or not is_name(parts#1) or name_of(parts#1) not in types or #types[name_of(parts#1)] != #parts - 1 { return n }
@@ -231,7 +231,7 @@ expected_call(n: Node, expectation: Expectation): Node := match n {
 
 # `Red` as an argument for a Color: Color.Red, `escape` for a Key: Key.escape; any other argument as it is. A name the
 # program binds stays its own when all it holds are the type's values, else the type's value wins; both are warned
-expected_value(argument: Node, type: text, expectation: Expectation): Node := {
+def expected_value(argument: Node, type: text, expectation: Expectation): Node := {
 	values = expectation.type_values
 	if not is_name(argument) or type not in values or name_of(argument) not in values[type] { return argument }
 	if binds_value(expectation.scope, name_of(argument)) {
@@ -245,7 +245,7 @@ expected_value(argument: Node, type: text, expectation: Expectation): Node := {
 }
 
 # a value written as one of the type's: `Color.Red`, a case `Red`, made by `Color(…)`
-is_value_of(value: Node, type: text, values: map): bool := match value {
+def is_value_of(value: Node, type: text, values: map): bool := match value {
 	Key(owner, Op.Dot, _): owner == symbol(type)
 	List(parts, Bracket.Round, Separator.None): #parts > 0 and parts#1 == symbol(type)
 	Symbol(name): type in values and name in values[type]

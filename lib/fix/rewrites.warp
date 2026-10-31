@@ -16,7 +16,7 @@ floor_division = "/!"
 floor_division_words = ["div"]
 
 # every hint of the scanned lines, in the order of the source
-hints_of(lines: list): list := {
+def hints_of(lines: list): list := {
 	hints = []
 	for k in 0 ..< #lines {
 		hints += hints_of_line(lines[k], k + 1)
@@ -24,7 +24,7 @@ hints_of(lines: list): list := {
 	hints
 }
 
-hints_of_line(line: Scanned, number: int): list := {
+def hints_of_line(line: Scanned, number: int): list := {
 	cs = chars(line.text)
 	hints = []
 	depth = 0
@@ -50,14 +50,14 @@ hints_of_line(line: Scanned, number: int): list := {
 }
 
 # the word starting at index i
-word_at(cs: list, i: int): text := {
+def word_at(cs: list, i: int): text := {
 	n = 0
 	while is_word_character(at(cs, i + n)) { n += 1 }
 	piece(cs, i, n)
 }
 
 # the hint on a word: a counted type, another language's word, a floor division word; ø when none
-word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
+def word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
 	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
 	for pair in foreign_words {
 		if word == pair[0] and starts_statement(cs, i) and is_word_character(character_after_blanks(cs, i + #word)) and is_blank_character(at(cs, i + #word)) {
@@ -76,7 +76,7 @@ word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) 
 
 # `float[2]` declared or assigned (`ys : float[2]`, `ys = float[2]`) is `2 floats`; `xs[2]`, `text[2]`, `int[]`, a
 # count that is no number, and a parameter's type stay
-counted_type_hint(line: Scanned, cs: list, i: int, word: text, number: int) := {
+def counted_type_hint(line: Scanned, cs: list, i: int, word: text, number: int) := {
 	if at(cs, i - 1) == "." { return ø }
 	open = i + #word
 	if at(cs, open) != "[" { return ø }
@@ -92,29 +92,29 @@ counted_type_hint(line: Scanned, cs: list, i: int, word: text, number: int) := {
 }
 
 # the number of blanks right before index i
-blanks_before(cs: list, i: int): int := {
+def blanks_before(cs: list, i: int): int := {
 	n = 0
 	while is_blank_character(at(cs, i - 1 - n)) { n += 1 }
 	n
 }
 
-character_before_blanks(cs: list, i: int): text := at(cs, i - 1 - blanks_before(cs, i))
+def character_before_blanks(cs: list, i: int): text := at(cs, i - 1 - blanks_before(cs, i))
 
-character_after_blanks(cs: list, i: int): text := {
+def character_after_blanks(cs: list, i: int): text := {
 	k = i
 	while is_blank_character(at(cs, k)) { k += 1 }
 	at(cs, k)
 }
 
 # the word at index i starts a statement: at the line's start or after `;` or `{`
-starts_statement(cs: list, i: int): bool := {
+def starts_statement(cs: list, i: int): bool := {
 	before = character_before_blanks(cs, i)
 	before == "" or before == ";" or before == "{"
 }
 
 # `7//2` and `x //= 3` meant as floor division (decision floor-division): `//` glued between operands, or before `=`
 # after an operand, is `/!`; `x = 7 // note` stays a comment
-floor_division_hint(cs: list, i: int, number: int) := {
+def floor_division_hint(cs: list, i: int, number: int) := {
 	if piece(cs, i, 2) != "//" { return ø }
 	before = at(cs, i - 1)
 	after = at(cs, i + 2)
@@ -128,7 +128,7 @@ floor_division_hint(cs: list, i: int, number: int) := {
 }
 
 # the lines with every hint's replacement, the last of a line first so the earlier columns stay
-with_hints_applied(texts: list, hints: list): list := {
+def with_hints_applied(texts: list, hints: list): list := {
 	result = []
 	for k in 0 ..< #texts {
 		cs = chars(texts[k])

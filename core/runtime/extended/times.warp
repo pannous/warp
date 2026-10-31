@@ -11,22 +11,22 @@ use "../nodes.warp"
 use "../../emitter/byte_codes.warp"
 # durations.warp's duration_text and its nanosecond constants
 use "../durations.warp"
-is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
-is_instant(t: Node): bool := time_form(t) == TimeFormCode.Instant
-is_date(t: Node): bool := time_form(t) == TimeFormCode.Date
-is_local_time(t: Node): bool := time_form(t) == TimeFormCode.Local
-is_duration(t: Node): bool := time_form(t) == TimeFormCode.Duration
-is_zoned(t: Node): bool := time_form(t) == TimeFormCode.Zoned
-is_time_of_day(t: Node): bool := time_form(t) == TimeFormCode.Clock
+def is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
+def is_instant(t: Node): bool := time_form(t) == TimeFormCode.Instant
+def is_date(t: Node): bool := time_form(t) == TimeFormCode.Date
+def is_local_time(t: Node): bool := time_form(t) == TimeFormCode.Local
+def is_duration(t: Node): bool := time_form(t) == TimeFormCode.Duration
+def is_zoned(t: Node): bool := time_form(t) == TimeFormCode.Zoned
+def is_time_of_day(t: Node): bool := time_form(t) == TimeFormCode.Clock
 # the duration of months, days and nanoseconds: its days kept as 32 unsigned bits above the form, its months above them
-duration_of(months: int, days: int, nanos: int): Node := {
+def duration_of(months: int, days: int, nanos: int): Node := {
 	unsigned_days = if days < 0 then days + TimeInfoUnit.DayRange else days
 	time_of(TimeFormCode.Duration + unsigned_days * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos)
 }
 # `a < b` (relation 0), `a <= b` (1), `a > b` (2), `a >= b` (3) of two times of one form: two times by their positions;
 # two durations yes when it holds on every date, no when on none, else a failure (`1 month < 28 days` is no,
 # `1 month < 30 days` depends on the month); times of different forms have no order
-time_holds(a: Node, b: Node, relation: int): bool := {
+def time_holds(a: Node, b: Node, relation: int): bool := {
 	if time_form(a) != time_form(b) { return times_of_different_kinds_have_no_order() != 0 }
 	# `a > b` is `b < a`
 	smaller = if relation < 2 then a else b
@@ -40,26 +40,26 @@ time_holds(a: Node, b: Node, relation: int): bool := {
 	durations_compare_differently_on_different_dates() != 0
 }
 # the runtime error of time_holds, named to read off the trace
-times_of_different_kinds_have_no_order() := {
+def times_of_different_kinds_have_no_order() := {
 	fail()
 	0
 }
 # an operand of a time's + - * as lib/time_arithmetic.warp time_operation takes it: its form, -1 for a whole number,
 # and its position, a whole number's value
-operand_form(n: Node): int := if is_time(n) then time_form(n) else -1
-operand_position(n: Node): int := unboxed_int(n)
+def operand_form(n: Node): int := if is_time(n) then time_form(n) else -1
+def operand_position(n: Node): int := unboxed_int(n)
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
-local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
+def local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 
 ## times (card time-text-warp; rust-harness:src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
 ## of kind Time, its form in the info bits (rust-harness:src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
 ## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
-time_form(n: Node): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
+def time_form(n: Node): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
 # whether n is a time, what made_case(Made.Time, …) tests
-holds_time(n: Node): bool := kind_code(n) == Kind.Time
+def holds_time(n: Node): bool := kind_code(n) == Kind.Time
 # RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
-time_text(n: Node): text := {
+def time_text(n: Node): text := {
 	form = time_form(n)
 	if form == TimeFormCode.Duration { return duration_text(n) }
 	if form == TimeFormCode.Zoned { time_form_not_in_warp() }
@@ -72,7 +72,7 @@ time_text(n: Node): text := {
 	date_text(days) + "T" + clock + zone
 }
 # Howard Hinnant's civil_from_days as `2026-10-10`, the proleptic Gregorian date of a day number
-date_text(days: int): text := {
+def date_text(days: int): text := {
 	z = days + 719468
 	era = floor_quotient(z, 146097)
 	day_of_era = z - era * 146097
@@ -86,7 +86,7 @@ date_text(days: int): text := {
 	padded(year, 4) + "-" + padded(month, 2) + "-" + padded(day, 2)
 }
 # `14:43:33.682` of the nanoseconds of a day: the seconds only when there are any or it is a time of day (22:27:46)
-clock_text(nanos: int, form: int): text := {
+def clock_text(nanos: int, form: int): text := {
 	hours = int_quotient(nanos, hour_nanos())
 	minutes = int_remainder(int_quotient(nanos, minute_nanos()), 60)
 	seconds = int_remainder(int_quotient(nanos, second_nanos()), 60)
@@ -96,7 +96,7 @@ clock_text(nanos: int, form: int): text := {
 	out + fraction_text(fraction)
 }
 # `.5` of the nanoseconds below a second, without trailing zeros; "" for none
-fraction_text(fraction: int): text := {
+def fraction_text(fraction: int): text := {
 	if fraction == 0 { return "" }
 	digits = padded(fraction, 9)
 	stop = 9
@@ -104,9 +104,9 @@ fraction_text(fraction: int): text := {
 	"." + bytes_between(digits, 0, stop)
 }
 # n with leading zeros to count digits
-padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
+def padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
 # a zoned time in time_text: "time form not in warp" (its zone names are Rust's alone)
-time_form_not_in_warp() := {
+def time_form_not_in_warp() := {
 	fail()
 	0
 }

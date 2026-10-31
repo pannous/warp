@@ -15,21 +15,21 @@ proc_exit(code: i32) from "wasi_snapshot_preview1"
 struct Byte { value: u8 }
 struct Word { value: u32 }
 struct Long { value: i64 }
-byte_at(address: pointer): Byte := address
-word_at(address: pointer): Word := address
-long_at(address: pointer): Long := address
+def byte_at(address: pointer): Byte := address
+def word_at(address: pointer): Word := address
+def long_at(address: pointer): Long := address
 
 # the text of `length` bytes at `address`
-text_from(address: pointer, length: u32): text := text(address, length)
+def text_from(address: pointer, length: u32): text := text(address, length)
 
-write(t: text): i32 := fd_write(1, t, 1, allocate(4))
-print(t: text): nothing := {
+def write(t: text): i32 := fd_write(1, t, 1, allocate(4))
+def print(t: text): nothing := {
 	write(t)
 	write("\n")
 }
 
 # n in decimal digits
-text_of(n: i64): text := {
+def text_of(n: i64): text := {
 	end = allocate(20) + 20
 	at = end
 	rest = if n < 0 then 0 - n else n
@@ -47,20 +47,20 @@ text_of(n: i64): text := {
 }
 
 # the bytes before the first 0 byte at p, a C string's
-c_length(p: pointer): u32 := {
+def c_length(p: pointer): u32 := {
 	n: u32 = 0
 	while byte_at(p + n).value != 0 { n += 1 }
 	n
 }
 
 # how many words the command line has, the program's path first
-arg_count(): int := {
+def arg_count(): int := {
 	sizes = allocate(8)
 	args_sizes_get(sizes, sizes + 4)
 	word_at(sizes).value
 }
 # the command line's word i, the program's path at 0
-arg(i: int): text := {
+def arg(i: int): text := {
 	sizes = allocate(8)
 	args_sizes_get(sizes, sizes + 4)
 	pointers = allocate(word_at(sizes).value * 4)
@@ -72,7 +72,7 @@ arg(i: int): text := {
 # WASI's numbers below: folder 3, the first one a host opens for the program; open 9, create and truncate; rights 6,
 # read and seek, 64 write; seek origin 2 the end, 0 the start
 # the whole content of the file at path, the empty text when it does not open
-read_file(path: text): text := {
+def read_file(path: text): text := {
 	opened = allocate(4)
 	if path_open(3, 0, path.address, path.length, 0, 6, 0, 0, opened) != 0 { return text_from(0, 0) }
 	fd = word_at(opened).value as i32
@@ -86,7 +86,7 @@ read_file(path: text): text := {
 	content
 }
 # the file at path made anew with the content; its WASI error number, 0 when written
-write_file(path: text, content: text): i32 := {
+def write_file(path: text, content: text): i32 := {
 	opened = allocate(4)
 	error_number = path_open(3, 0, path.address, path.length, 9, 64, 0, 0, opened)
 	if error_number != 0 { return error_number }
@@ -95,4 +95,4 @@ write_file(path: text, content: text): i32 := {
 	fd_close(fd)
 }
 
-exit(code: i32): nothing := proc_exit(code)
+def exit(code: i32): nothing := proc_exit(code)

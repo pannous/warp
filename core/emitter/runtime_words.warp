@@ -201,9 +201,9 @@ passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: [Kind.Int, HeldBit.
 	error: [Kind.Error], code: [], function: [Kind.Function]}
 covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char],
 	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], symbol: [], map: [], error: [], code: [], function: []}
-kind_bit(kind: int): int := 1 << kind
+def kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
-descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
+def descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
 def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
@@ -215,7 +215,7 @@ def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	TypedCode(ValueKind.Bool, [op.i32_const, if covered_kinds[type].any(kind => same_kind(kind, value.kind)) then 1 else 0])
 }
 # (typed, so a kind from a table and one a cast spelled, `2 as float`, compare as kinds)
-same_kind(a: ValueKind, b: ValueKind): bool := a == b
+def same_kind(a: ValueKind, b: ValueKind): bool := a == b
 # `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline, as
 # Rust's kind masks; a type value (`int is number`) and `is code` ask runtime node_is_type
 def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
@@ -278,7 +278,7 @@ def limbs_of(code: list): list { payload(code, gc_type(gc.big_int)) + gc_code(gc
 # big_ints.warp's big_int_text when the program makes big ints (big_int_of compiled), else a trap, so
 # that a program printing only plain ints carries neither big_int_text nor the $Limbs and $BigInt types
 shown_big_int_name = "shown_big_int"
-shown_big_int_code(f: Function): any := {
+def shown_big_int_code(f: Function): any := {
 	f.code = [op.unreachable]
 	if "BigInt" in module.made { f.code = call_values(module.runtime["big_int_text"], [TypedCode(ValueKind.Node, [op.local_get, 0])]).code }
 }

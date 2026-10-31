@@ -12,29 +12,29 @@ use "extended/exact.warp"
 ## bits (rust-harness:src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three
 ## amounts, so they read as calendar.rs Duration does (tests/numbers/test_duration_words.rs)
 # a constant of the durations: an untyped word, as `f(): int :=` has no use yet
-second_nanos() := 1000000000
-day_nanos() := 86400 * second_nanos()
-hour_nanos() := 3600 * second_nanos()
-minute_nanos() := 60 * second_nanos()
-millisecond_nanos() := 1000000
-duration_months(n: Node): int := floor_quotient(marked_kind(n), power(2, 43))
+def second_nanos() := 1000000000
+def day_nanos() := 86400 * second_nanos()
+def hour_nanos() := 3600 * second_nanos()
+def minute_nanos() := 60 * second_nanos()
+def millisecond_nanos() := 1000000
+def duration_months(n: Node): int := floor_quotient(marked_kind(n), power(2, 43))
 # the 32 signed bits above the kind and the form
-duration_days(n: Node): int := {
+def duration_days(n: Node): int := {
 	days = floor_quotient(marked_kind(n), power(2, 11)) % power(2, 32)
 	if days >= power(2, 31) then days - power(2, 32) else days
 }
-duration_nanos(n: Node): int := unboxed_int(n)
+def duration_nanos(n: Node): int := unboxed_int(n)
 # `3 hours`: an amount and its unit, plural unless the amount is 1
-amount_text(amount: int, unit: text): text := {
+def amount_text(amount: int, unit: text): text := {
 	if amount == 1 { return int_text(amount) + " " + unit }
 	int_text(amount) + " " + unit + "s"
 }
 # shown and the part after a space, the part alone when nothing is shown yet
-spaced(shown: text, part: text): text := if byte_count(shown) == 0 then part else shown + " " + part
+def spaced(shown: text, part: text): text := if byte_count(shown) == 0 then part else shown + " " + part
 # shown and the amount of the unit, unchanged for a zero amount
-with_amount(shown: text, amount: int, unit: text): text := if amount == 0 then shown else spaced(shown, amount_text(amount, unit))
+def with_amount(shown: text, amount: int, unit: text): text := if amount == 0 then shown else spaced(shown, amount_text(amount, unit))
 # `1.5`, `-0.000000001`, `0`: nanoseconds as seconds with their fraction, without trailing zeros
-seconds_text(nanos: int): text := {
+def seconds_text(nanos: int): text := {
 	magnitude = if nanos < 0 then 0 - nanos else nanos
 	whole = int_text(int_quotient(magnitude, second_nanos()))
 	fraction = int_remainder(magnitude, second_nanos())
@@ -49,7 +49,7 @@ seconds_text(nanos: int): text := {
 	shown
 }
 # a duration as calendar.rs `Display for Duration` shows it: `1 month 2 days 3 hours`, `1.5 seconds`, `0 seconds`
-duration_parts_text(months: int, days: int, nanos: int): text := {
+def duration_parts_text(months: int, days: int, nanos: int): text := {
 	shown = with_amount(with_amount("", months, "month"), days, "day")
 	# whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
 	if nanos != 0 and int_remainder(nanos, second_nanos()) == 0 {
@@ -61,21 +61,21 @@ duration_parts_text(months: int, days: int, nanos: int): text := {
 	if nanos == 0 and byte_count(shown) > 0 { return shown }
 	spaced(shown, seconds_text(nanos) + " seconds")
 }
-sign_of(n: int): int := if n > 0 then 1 else if n < 0 then -1 else 0
-duration_text(n: Node): text := duration_parts_text(duration_months(n), duration_days(n), duration_nanos(n))
+def sign_of(n: int): int := if n > 0 then 1 else if n < 0 then -1 else 0
+def duration_text(n: Node): text := duration_parts_text(duration_months(n), duration_days(n), duration_nanos(n))
 # the fewest or (`most`) the most nanoseconds a difference of months, days and nanoseconds lasts on any date
 # (calendar.rs Duration::compares): a month is 28 to 31 days, negative months take more days off the longer they are;
 # daylight saving moves an exact part against the calendar part by at most an hour, calendar parts alone keep the hour
-duration_bound(months: int, days: int, nanos: int, most: bool): int := {
+def duration_bound(months: int, days: int, nanos: int, most: bool): int := {
 	if months == 0 and days == 0 { return nanos }
 	longest = (months < 0) != most
 	shift = if nanos == 0 then 0 else if most then hour_nanos() else 0 - hour_nanos()
 	(days + months * (if longest then 31 else 28)) * day_nanos() + nanos + shift
 }
 # the bound of a - b of two durations
-duration_difference_bound(a: Node, b: Node, most: bool): int := duration_bound(duration_months(a) - duration_months(b), duration_days(a) - duration_days(b), duration_nanos(a) - duration_nanos(b), most)
+def duration_difference_bound(a: Node, b: Node, most: bool): int := duration_bound(duration_months(a) - duration_months(b), duration_days(a) - duration_days(b), duration_nanos(a) - duration_nanos(b), most)
 # the runtime error of a duration comparison whose answer depends on the date
-durations_compare_differently_on_different_dates() := {
+def durations_compare_differently_on_different_dates() := {
 	fail()
 	0
 }
