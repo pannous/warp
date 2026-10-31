@@ -263,7 +263,7 @@ text_holes(t, pieces: [text], types: [text]) := {
 // from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
 // symbols, which needs the grapheme runtime
 to_base(n: int, base: int, upper = false) := { if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
-from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in lower(t) { out = out * base + index_of(symbols, c) - 1 }; out }
+from_base(t: text, base: int) := { out = 0; for c in lower(t) { code = ord(c); out = out * base + code - (if code < 58 then 48 else 87) }; out }
 // how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
 // "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
 radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
@@ -622,15 +622,14 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	op = op_of(pattern)
 	left = key_of(pattern)
 	right = value_of(pattern)
-	if op == ":" and is_type(left, "key") and op_of(left) == "+" { return fits_text_cut(value, text_pieces(left), right, bound) }
+	if is_text_cut(pattern) and not code { return fits_text_cut(value, text_pieces(pattern), bound) }
 	// `x: int`, `$k: int`, `$n: > 0`: the part fits the condition, and the name takes it
 	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, bound, no) and fits_name(value, name_of(left), bound, code) }
 	if op == "|" or op == "or" { return fits_pattern(value, left, bound, code) or fits_pattern(value, right, bound, code) }
-	if op == "+" and is_type(left, "text") and not code { return fits_text_cut(value, text_pieces(pattern), ø, bound) }
 	// `not p`, `!= x` (read as `not == x`): the part does not fit p, binding nothing
 	if op == "not" and left == ø and not code { return not fits_pattern(value, right, {}, no) }
+	if op in range_ops and not code { return in_range(value, op, left, right) }
 	if left == ø and not code { return compares(value, op, right) }
-	if op == ".." and not code { return value >= left and value <= right }
 	is_type(value, "key") and op_of(value) == op and fits_pattern(key_of(value), left, bound, code) and fits_pattern(value_of(value), right, bound, code)
 }
 // `>= 18`, `!= ""`: the comparison of the part with the limit; an order only between two numbers or two texts
@@ -646,6 +645,14 @@ above(a: any, b: any): bool := a > b
 at_most(a: any, b: any): bool := a <= b
 below(a: any, b: any): bool := a < b
 unequal(a: any, b: any): bool := a != b
+// `13 to 19`, `18..65`, `65..`: the part within the range, an open end unbounded; `to` takes its end, `..` and `..<` stop
+// before it
+range_ops = ["to", "..", "..<"]
+in_range(value: any, op: text, low: any, high: any): bool := {
+	if low != ø and not (are_ordered(value, low) and value >= low) { return no }
+	if high == ø { return yes }
+	are_ordered(value, high) and (if op == "to" then value <= high else value < high)
+}
 equal(a: any, b: any): bool := a == b
 fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	// `data(…)`: the code inside, holes and all
@@ -715,10 +722,24 @@ fits_map(value: any, pattern: any, bound: map): bool := {
 	}
 	yes
 }
-// the pieces of `"/users/" + id + "/x"`, texts and holes, in order
-text_pieces(pattern: any): list := if is_type(pattern, "key") and op_of(pattern) == "+" then text_pieces(key_of(pattern)) + text_pieces(value_of(pattern)) else [pattern]
-// the text cut at its literal pieces, each hole taking what lies between, the last its type converting it
-fits_text_cut(value: any, pieces: list, last_type: any, bound: map): bool := {
+// the pieces of `"/users/" + id: int + "/x"`, texts and holes in order, a typed hole as [name, type]
+text_pieces(pattern: any): list := {
+	if not is_type(pattern, "key") { return [pattern] }
+	if op_of(pattern) == "+" { return text_pieces(key_of(pattern)) + text_pieces(value_of(pattern)) }
+	if op_of(pattern) != ":" { return [pattern] }
+	// `+` binds closer than `:`, so `id: int + "/x"` reads `(… + id): (int + "/x")`: the type is the first piece after it
+	before = text_pieces(key_of(pattern))
+	after = text_pieces(value_of(pattern))
+	before[0 ..< #before - 1] + [[before#(#before), after#1]] + after[1 ..< #after]
+}
+// `"0x" + h`, `name + ".html"`, `"/u/" + id: int + "/p/"`: a text with holes
+is_text_cut(pattern: any): bool := {
+	if op_of(pattern) != "+" and op_of(pattern) != ":" { return no }
+	pieces = text_pieces(pattern)
+	#pieces > 1 and pieces.any(piece => is_type(piece, "text"))
+}
+// the text cut at its literal pieces, each hole taking what lies between, its type converting or testing it
+fits_text_cut(value: any, pieces: list, bound: map): bool := {
 	if not is_type(value, "text") { return no }
 	rest = value
 	for i in 0..<#pieces {
@@ -728,24 +749,32 @@ fits_text_cut(value: any, pieces: list, last_type: any, bound: map): bool := {
 			rest = rest[#piece ..< #rest]
 		} else {
 			next = if i + 1 < #pieces then pieces#(i + 2) else ø
-			ends = if next == ø then #rest + 1 else rest.find(next)
+			ends = if next == ø then #rest + 1 else if rest.contains(next) then rest.find(next) else 0
 			if ends == 0 { return no }
 			part = rest[0 ..< ends - 1]
 			rest = rest[ends - 1 ..< #rest]
-			typed = if i + 1 == #pieces and last_type != ø then converted_part(part, last_type) else part
-			if typed == ø or not bound_as(typed, name_of(piece), bound) { return no }
+			typed = if is_type(piece, "list") then converted_part(part, piece#2) else part
+			hole = if is_type(piece, "list") then piece#1 else piece
+			if typed == ø or not bound_as(typed, name_of(hole), bound) { return no }
 		}
 	}
 	rest == ""
 }
-// a text part as its hole's type wants it, ø when it isn't one; a type no text converts to is an error
+// a text part as its hole's type wants it, ø when it isn't one: int, float and number convert it, a class of
+// characters tests it; another type is an error
 part_conversions = {"int": int_part, "float": float_part, "number": number_part, "text": text_part}
+character_classes = {"digit": is_digit_text, "digits": is_digits, "letter": is_letter_text, "letters": is_letters, "hex": is_hex}
 converted_part(part: text, type_word: any): any := {
 	name = name_of(type_word)
-	if not (name in part_conversions) { raise "a text cut's last hole converts to int, float, number or text, not " + name }
-	part_conversions[name](part)
+	if name in part_conversions { return part_conversions[name](part) }
+	if not (name in character_classes) { raise "a text cut's hole converts to int, float, number or text or is digit(s), letter(s) or hex, not " + name }
+	if character_classes[name](part) then part else ø
 }
 is_digits(t: text): bool := t != "" and t.all(c => c >= '0' and c <= '9')
+is_letters(t: text): bool := t != "" and lower(t).all(c => c >= 'a' and c <= 'z')
+is_hex(t: text): bool := t != "" and lower(t).all(c => (c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))
+is_digit_text(t: text): bool := #t == 1 and is_digits(t)
+is_letter_text(t: text): bool := #t == 1 and is_letters(t)
 # a number's digits after its leading minus, if any: `-3`, `-2.5`
 unsigned(t: text): text := if starts_with(t, "-") then slice(t, 1) else t
 int_part(t: text): any := if is_digits(unsigned(t)) then int(t) else ø
