@@ -301,4 +301,52 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+
+# A field annotation can still be a Type node when the early rewrite runs.
+typed_json_field_type(member: Node): text? := match member {
+	Key(left, Op.Assign, right): typed_json_field_type(left)
+	Key(left, Op.Colon, right): {
+		view = view_of(right)
+		if kind_of(view) == "type" then declared_type_name(view#2) else type_named(right)
+	}
+	_: ø
+}
+
+typed_json_check(field: text, field_type: text): text := {
+	value = "typed_json_value[\"" + field + "\"]"
+	expected = if field_type == "string" then "text" else field_type
+	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
+	"if not (" + value + " is " + field_type + ") { raise \"" + field + " must be " + expected + ", received \" + " + received + " }"
+}
+
+# Generate typed JSON parsing from the class declared in the program.
+typed_json(source: Node, type_name: Node, program: Node): Node := {
+	for statement in program_statements(program) {
+		view = class_view(statement)
+		if view != ø and declared_type_name(view#2) == name_of(type_name) {
+			declared = class_declared(statement, view)
+			if constructor_of(declared) != ø { return plain_node(parsed("raise \"typed JSON does not support class constructors yet\"")) }
+			fields = declared.fields
+			members = view#3[3..].map(member_read)
+			field_types = {}
+			for member in members {
+				field = field_name(member)
+				if field != ø {
+					field_type = typed_json_field_type(member)
+					if field_type == ø or field_type not in ["number", "int", "float", "string", "text", "bool"] or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
+					field_types[field] = field_type
+				}
+			}
+			required_checks = fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
+			checks = fields.map(field => typed_json_check(field, field_types[field]))
+			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
+			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
+			field_names = fields.map(field => "\"" + field + "\"").join(", ")
+			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
+			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
+			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
+		}
+	}
+	plain_node(parsed("raise \"typed JSON requires a declared class\""))
+}

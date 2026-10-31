@@ -2,6 +2,8 @@
 // written here in warp, alike under every host: parse reads JSON5 too (comments, single quotes, trailing commas, bare
 // keys), and `json(t)` is json.parse(t) without `use json`; `x.json` is the JSON text of any value, to_json(x), also
 // without `use json` (`{a: 1}.json` is {"a":1}), code in the JsonLogic shape (`1+1` is {"+":[1,1]})
+rewrite parse($input, $type) => $result where $type is type and $result = typed_json($input, $type, $program)
+
 JSON_SPACE = [" ", "\t", "\n", "\r"]
 JSON_NUMBER_CHARACTERS = "+-0123456789.eE"
 JSON_ESCAPED = {"n": "\n", "t": "\t", "r": "\r", "b": chr(8), "f": chr(12)}

@@ -1,0 +1,2 @@
+# Typed parse first slice: unsupported constructors must fail instead of skipping init.
+'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; try { parse("{value:7}", Counter) } catch e { e.message }'	'typed JSON does not support class constructors yet'

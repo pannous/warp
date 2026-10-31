@@ -1,0 +1,2 @@
+# Card typed-parse: a class requires a JSON object, not another JSON value.
+'class User { id: number }; try { parse("[1,2]", User) } catch e { e.message }'	'expected object, received list'

@@ -1,0 +1,3 @@
+# Card typed-parse: present false and zero values satisfy required fields without coercion.
+'class Settings { enabled: bool; count: number }; parse("{enabled:false,count:0}", Settings).enabled'	no
+'class Settings { enabled: bool; count: number }; parse("{enabled:false,count:0}", Settings).count'	0
