@@ -497,7 +497,10 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
 	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters
 	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback)
-	Key(call_of(name, head), Op.Define, if operated then float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), floaters, dispatched) else dispatched)
+	# a class with its own method of the operator takes a float itself (`q * sin(x)` keeps q's unit, π's `*` gives the
+	# float): contagion only for the classes that leave the operator to the builtin
+	contagious = floaters.filter(floater => not lineage(classes, floater#1).any(ancestor => ancestor in owners))
+	Key(call_of(name, head), Op.Define, if operated then float_contagion(Key(call_arguments#1, operator#2 as Op, call_arguments#2), contagious, dispatched) else dispatched)
 }
 # [class, its lifted float()] of each class converting itself to a float, a float() taking nothing
 float_converters(classes: map, names: list, routes: list): list := owners_of(classes, names, float_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], float_method)) == 0).map(owning_class => [owning_class, lifted_name(classes, names, float_method, owning_class, routes)])
