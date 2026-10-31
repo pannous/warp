@@ -17,6 +17,8 @@ archive you write answers to; workers get decisions as your messages, not by rea
 
 - Queue: "## Pending questions" at the top of notes/open_decisions.md. Per entry: the question in one sentence, 2–4
   options with the recommended one first, the assumption already in the code, who asked, the branch/test it affects.
+  A question about a core/ change always names how many lines of core it changes ("core one-liner in
+  core/passes/rewrites.warp", "~60 core lines"), in the question and in each option that changes core (user 2026-10-31).
 - Intake: sessions SendMessage you questions; acknowledge and queue, never make them wait.
   fixnow tests (notes/agents/integrator.md "Fix forward"): when a test the Integrator ignored as `fixnow` pins an old edge case
   that the new behaviour arguably improves on, the owner asks you "keep the old case, or change the test to the new
