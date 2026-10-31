@@ -34,6 +34,8 @@ cast_code_point(n: int): int := {
 	if n < 0 or n > Unicode.Highest or within(n, Unicode.SurrogateFirst, Unicode.SurrogateLast) { invalid_code_point() }
 	n
 }
+# `x as char` of a value known only at run time: a whole number cast as cast_code_point casts it, a character itself
+node_code_point(n: Node): int := if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) then code_of(char_of_node(n)) else cast_code_point(whole_int(n))
 # a code point that continues the character before it: combining marks, variation selectors, skin tones, ZWJ …
 # (rust-harness:src/extensions/strings.rs GRAPHEME_EXTEND, the same table)
 extends_character(c: int): bool := {
