@@ -64,6 +64,9 @@ jobs:
     - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
+    - uses: actions/checkout@v7 # the workflow's own commit, whose release-bootstrap.sh fits any older tag
+      with:
+        path: .workflow
     - name: wabt and binaryen
       # the bootstrap's `warp build native` runs wasm2c, the rebuild optimizes warp.wasm with wasm-opt, as locally
       run: |
@@ -74,7 +77,7 @@ jobs:
         tar -xzf "wabt-$WABT-linux-x64.tar.gz" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/wabt-$WABT/bin" >>"$GITHUB_PATH"
     - name: the previous release's native warp, brought up to the tag's host words
-      run: scripts/release-bootstrap.sh x86_64-unknown-linux-gnu "$RUNNER_TEMP/bootstrap" .
+      run: .workflow/scripts/release-bootstrap.sh x86_64-unknown-linux-gnu "$RUNNER_TEMP/bootstrap" .
     - name: build
       run: |
         seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
@@ -112,6 +115,9 @@ jobs:
     - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
+    - uses: actions/checkout@v7 # the workflow's own commit, whose release-bootstrap.sh fits any older tag
+      with:
+        path: .workflow
     - uses: dtolnay/rust-toolchain@stable
     - uses: actions/download-artifact@v8
       with:
@@ -135,7 +141,7 @@ jobs:
       run: |
         WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_SOUND_TARGET="$RUNNER_TEMP/warp-sound" scripts/wasmtime-c-api.sh lib
     - name: the previous release's native warp, brought up to the tag's host words
-      run: scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
+      run: .workflow/scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
     - name: the native warp
       run: WARP_LIB=$PWD/lib "$RUNNER_TEMP/bootstrap/warp" build native core/native/warp.warp
     - name: the release folder, gated
