@@ -15,7 +15,7 @@ Language-meaning questions that would go to the Interviewer go there too.
 ## Sessions
 | session | card / task |
 |---|---|
-| warp-speed | compile slowdown, TOP PRIORITY (decision compile-speed-first): self-compile profile; building lib-hash-rebake (user OK) |
+| warp-speed (fresh 06:55, the old one ran out of context; handover notes/handover/warp-speed.md) | function-definition-core (def-first) → phase-markers |
 | warp-quality (was warp-rule-words-removal) | use-os → test-modules → hotspots from warp-speed (programs-read landed 70a9bfa89a) |
 | warp-shaders | angle-type-alias → units-ignored-by-shaders → use-keys → ocean m/s todos (ocean landed fc2ed2681c; dot-product is Codex's) |
 | warp-integrator | full suites held tonight for warp-speed's measurements; seed refresh after lib-hash-rebake lands |
