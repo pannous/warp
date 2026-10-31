@@ -85,6 +85,8 @@ before asking a question). After a context swap, this file and your role file be
 - Absolute paths and `git -C <worktree>`; in zsh `${var}:path`. Files named `*_local*` are globally git-ignored.
 
 ## Testing
+- HOLD (2026-10-31 05:00, until card warp-test-timeout is installed, then delete this line): run no `warp test`;
+  its slot table starts with garbage pids and can kill(garbage, 9) any process. Single CLI runs only.
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - Build only a branch merged with origin/main: the installed native warp's rebuild steps (rebake) call main's
   compiler words, so an unmerged branch can fail to build for reasons that aren't its own (warp-shaders, 2026-10-30).

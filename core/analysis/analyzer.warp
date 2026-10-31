@@ -657,15 +657,6 @@ result_type(name: Name): TypeWord? := {
 # the kind a value flows into a slot: ø and the empty block are nil (a list or map may hold it), else as held
 flowing_kind(value: Node, scope: Scope): ValueKind := if is_empty(value) or (is_curly_group(value) and #value == 0) then ValueKind.Nil else held_kind(value, scope)
 
-# the statements of a program, those of a nested sequence (an included module) among them
-flat_statements(program: Node): list := {
-	if not is_sequence(program) { return [program] }
-	found = []
-	for statement in program { found += flat_statements(statement) }
-	found
-}
-is_sequence(n: Node): bool := is_group(n) and bracket_of(n) == "" and (separator_of(n) == ";" or separator_of(n) == "\n")
-
 # --- flows ---
 
 # a value flowing into a slot, written in the scope `context`: into a variable, an element of the list `target`, the
