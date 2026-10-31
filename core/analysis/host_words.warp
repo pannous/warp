@@ -31,6 +31,9 @@ host_words = {
 	sound_samples: [[ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Int], []]
 	run_block: [[ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
 	parse_code: [[ValueKind.Node], [ValueKind.Node]]
+	# a path with the links on its way followed (libc realpath; a file not there yet, its folder's): what the runtime's file
+	# words open (runtime/extended/wasi.warp opened_entry); the path itself where the host has no links (the browser)
+	real_path: [[ValueKind.Node], [ValueKind.Node]]
 	"block·value": [[ValueKind.Int], [ValueKind.Node]]
 	foreign_call: [[ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
 	sleep_ms: [[ValueKind.Int], []]
@@ -79,7 +82,6 @@ host_words = {
 	fd_prestat_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_prestat_dir_name: [["i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	path_open: [["i32", "i32", "i32", "i32", "i32", "int", "int", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
-	path_readlink: [["i32", "i32", "i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_read: [["i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_close: [["i32"], ["i32"], "wasi_snapshot_preview1"]
 	# a folder's fd, where its entries go and their room, the cookie to go on from (an i64), where the bytes used go

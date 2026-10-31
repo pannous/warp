@@ -59,6 +59,7 @@ PAINT_WORD = 10
 KEY_HELD_WORD = 11
 SET_SYSTEM_VALUE_WORD = 12
 PARSE_CODE_WORD = 13
+REAL_PATH_WORD = 14
 # the end of a field in warp.wasm's parse-code encoding (core/parsing/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -339,6 +340,22 @@ resolved_path(path: text): text := {
 	free(resolved)
 	copy
 }
+# real_path(path), what the runtime's file words open (core/runtime/extended/wasi.warp opened_entry): the path with
+# the links on its way followed, as WASI follows none to an absolute path; a file not there yet at its folder's real
+# path; the path itself when neither resolves
+real_path_of(path: text): text := {
+	whole = resolved_path(path)
+	if not same_text(whole, path) { return whole }
+	folder = folder_of(path)
+	real_folder = resolved_path(if folder.length == 0 then "/" else folder)
+	if same_text(real_folder, folder) then path else joined(joined(real_folder, "/"), last_name(path))
+}
+# the name after a path's last slash
+last_name(path: text): text := {
+	last = -1
+	for i in 0..path.length { if byte_at(path.address + i).value == SLASH { last = i } }
+	text_from(path.address + last + 1, (path.length - last - 1) as u32)
+}
 # where the compiled module goes for its run: a file of this process in $TMPDIR
 compiled_path(): text := joined(joined(joined(temporary_folder(), "warp-native-"), text_of(getpid())), ".wasm")
 # $TMPDIR, ending in a slash
@@ -495,6 +512,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "system_value") { return SYSTEM_VALUE_WORD }
 	if same_text(name, "set_system_value") { return SET_SYSTEM_VALUE_WORD }
 	if same_text(name, "parse_code") { return PARSE_CODE_WORD }
+	if same_text(name, "real_path") { return REAL_PATH_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
 	if same_text(name, "key_held") { return KEY_HELD_WORD }
@@ -783,6 +801,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word == PARSE_CODE_WORD { return code_parsed(caller, wasmtime_caller_context(caller), given, results) }
+	if word == REAL_PATH_WORD { return guest_text_of(caller, context, real_path_of(shown(caller, context, given)), results) }
 	if word == SET_SYSTEM_VALUE_WORD { return system_value_set(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64), long_at(given + VALUE_BYTES + VALUE_OFFSET).value) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
