@@ -335,7 +335,8 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			}
 			checks = fields.map(field => "if not (typed_json_value[\"" + field + "\"] is " + field_types[field] + ") { raise \"" + field + " must be " + field_types[field] + "\" }")
 			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
-			validator = plain_node(parsed("(typed_json_value => { " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
+			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
+			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
 			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
 		}
 	}
