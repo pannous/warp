@@ -313,29 +313,11 @@ typed_json_field_type(member: Node): text? := match member {
 	_: ø
 }
 
-typed_json_value_check(value: text, path: text, value_type: text, depth: int): text := {
-	list_prefix = "list of "
-	is_list = value_type.starts_with(list_prefix)
-	tested_type = if is_list then "list" else value_type
-	expected = if tested_type == "string" then "text" else tested_type
-	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
-	validation = "if not (" + value + " is " + tested_type + ") { raise " + path + " + \" must be " + expected + ", received \" + " + received + " }"
-	if is_list {
-		index = "typed_json_index_" + depth
-		item = "typed_json_item_" + depth
-		item_path = "(" + path + " + \"[\" + " + index + " + \"]\")"
-		validation = validation + "; for " + index + " in 1 to #" + value + " { " + item + " = " + value + "#" + index + "; " + typed_json_value_check(item, item_path, value_type[#list_prefix..], depth + 1) + " }"
-	}
-	validation
-}
-
 typed_json_check(field: text, field_type: text): text := {
-	optional = field_type.ends_with("?")
-	base_type = if optional then field_type[0..#field_type-1] else field_type
 	value = "typed_json_value[\"" + field + "\"]"
-	present = "keys(typed_json_value).contains(\"" + field + "\")"
-	if optional { present += " and not (" + value + " is ø)" }
-	"if " + present + " { " + typed_json_value_check(value, "\"" + field + "\"", base_type, 0) + " }"
+	expected = if field_type == "string" then "text" else field_type
+	received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
+	"if not (" + value + " is " + field_type + ") { raise \"" + field + " must be " + expected + ", received \" + " + received + " }"
 }
 
 # Generate typed JSON parsing from the class declared in the program.
@@ -348,29 +330,21 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			fields = declared.fields
 			members = view#3[3..].map(member_read)
 			field_types = {}
-			field_defaults = {}
-			required_fields = []
 			for member in members {
 				field = field_name(member)
 				if field != ø {
 					field_type = typed_json_field_type(member)
 					if field_type == ø or field_type not in ["number", "int", "float", "string", "text", "bool"] or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
 					field_types[field] = field_type
-					if is_key(member, Op.Assign) { field_defaults[field] = value_of(member) }
-					if not is_key(member, Op.Assign) and field_type != ø and not field_type.ends_with("?") { required_fields = required_fields + [field] }
 				}
 			}
-			required_checks = required_fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
+			required_checks = fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
 			checks = fields.map(field => typed_json_check(field, field_types[field]))
-			arguments = fields.map(field => if field in required_fields then field + ": typed_json_value[\"" + field + "\"]" else field + ": if keys(typed_json_value).contains(\"" + field + "\") then typed_json_value[\"" + field + "\"] else typed_json_default_" + field)
+			arguments = fields.map(field => field + ": typed_json_value[\"" + field + "\"]")
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
 			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
-			for field in fields.filter(field => field not in required_fields) {
-				default = if field in keys(field_defaults) then field_defaults[field] else Node.Empty
-				validator = renamed(validator, "typed_json_default_" + field, default)
-			}
 			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
 		}
 	}

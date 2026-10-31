@@ -9,3 +9,5 @@ The original branch's constructor guard passed its focused outcome and smoke. Th
 Early feedback against the preserved branch compiler (not the flat slice build): 11 outcomes in the library, bool, falsy, root, computed-source and flat-diagnostics files passed via `WARP_NO_WINDOW=1 WARP_LIB=/Volumes/Worktrees/typed-parse/lib /Users/me/dev/bin/warp test` with the six absolute file paths. The flat slice and its new field-shape guards still require their own build and tests.
 
 Flat slice smoke passed on compiler hash 4bcf9f67268231bb (`Hello 🌍2026`); all 14 outcomes in the eight `test_typed_parse_{library,bool,falsy,root,constructor_guard,flat_guards,flat_diagnostics,computed_source}.pairs.warp` files passed with this worktree's compiler. Next remove unreachable experimental list/default generation from the isolated slice, rebuild and repeat these outcomes before landing; the original branch retains that work.
+
+Removed unreachable optional/default and recursive-list generator code from the flat slice; the original branch retains those experiments. This cleanup is unverified until a fresh merged-main smoke and the same 14 outcomes pass.
