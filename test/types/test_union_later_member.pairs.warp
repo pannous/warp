@@ -1,0 +1,6 @@
+# decision union-or (`|` = `or` in types) and D6 (`x | f` pipes): a union's later member is a type even where it also
+# converts as a function (int, float, error, a class's constructor); a value before it still pipes into it
+'x: text | int = 3; x'	3
+'x: text or float = 2.5; x'	2.5
+'class P{x:int}; p: text | P = "ab"; p'	'ab'
+'3.7 | int'	3
