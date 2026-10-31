@@ -586,13 +586,14 @@ statements_ruled(statements: list, module: text, source: text): list := {
 # class's operand (`+(a: Vec, b: Vec)`) leaves the definition to class_methods.warp
 class OperatorOverload { glyph: text; names: list; types: list; pattern: Node; template: Node; builtin: bool }
 # each kind's alternative conditions, each a list of conditions joined by `and`; `any` none
-overload_conditions = {any: [[]], function: [["is function"], ["takes one"]], block: [["is function"], ["takes one"]], type: [["is type"]], text: [["is text"]], symbol: [["is symbol"]], list: [["is list"]], map: [["is map"]], int: [["is int"]], number: [["is number"]]}
+overload_conditions = {any: [[]], function: [["is function"], ["takes one"]], block: [["is function"], ["takes one"]], type: [["is type"]], enum: [["is enum"]], text: [["is text"]], symbol: [["is symbol"]], list: [["is list"]], map: [["is map"]], int: [["is int"]], number: [["is number"]]}
 
-# the definition `glyph(a: T, b: U) := body` of a built-in operator spelled by a glyph, as its overload, else ø
+# the definition `operator_|(a: T, b: U) := body` (also `+(a: T, b: U)`, the method form) of a built-in operator, as
+# its overload, else ø
 operator_overload(statement: Node): OperatorOverload? := {
 	if not is_key(statement, Op.Define) or not is_round(key_of(statement)) or #key_of(statement) != 3 or not (key_of(statement)#1 is symbol) { return ø }
-	glyph = name_of(key_of(statement)#1)
-	if first_alphabetic_word(glyph) != "" { return ø }
+	glyph = overloaded_spelling(name_of(key_of(statement)#1))
+	if glyph == ø { return ø }
 	parameters = items_of(key_of(statement))[1 ..]
 	types = parameters.map(parameter => if parameter is symbol then any_word else if is_key(parameter, Op.Colon) and value_of(parameter) is symbol then name_of(value_of(parameter)) else "")
 	if not types.all(type => overload_conditions.has(type)) { return ø }
@@ -601,6 +602,11 @@ operator_overload(statement: Node): OperatorOverload? := {
 	if not (pattern is key and key_of(pattern) == symbol(hole_word(names#1)) and value_of(pattern) == symbol(hole_word(names#2))) { return ø }
 	template = holes_for(plain_node(value_of(statement)), names + introduced_names(value_of(statement)))
 	OperatorOverload(glyph, names, types, pattern, template, same_view(template, pattern))
+}
+# the built-in operator a definition's name spells: `operator_|` |, `operator_as` as, the method form's `+`; else ø
+overloaded_spelling(name: text): text? := {
+	spelling = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else if first_alphabetic_word(name) == "" then name else ""
+	if symbol_operator(spelling) != ø or word_operator(spelling) != ø then spelling else ø
 }
 hole_word(name: text): text := rule_hole_mark + name
 # the body with each of the names a hole: the parameters, also the names its lambdas and assignments introduce, fresh

@@ -6,3 +6,6 @@
 # an overload whose body is the operator itself keeps the built-in where its kinds fit
 'infix operator |(a: type, b: type) := a | b; infix operator |(x: any, g: function) := g(x); inc(x: int) := x + 1; x: text | int = 3; [3 | inc, x]'	[4, 3]
 'infix operator |(f: function, g: function) := x => x | f | g; inc(x: int) := x + 1; dbl(x: int) := 2 * x; h = inc | dbl; h(3)'	8
+# a built-in word operator is overloaded the same way
+'infix operator mod(a: text, b: int) := 1; ["ab" mod 2, 7 mod 2]'	[1, 1]
+'infix operator as(n: text, e: type) := 9; ["a" as int, 3.7 as int]'	[9, 3]
