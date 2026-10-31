@@ -12,4 +12,4 @@
 
 # a_negated_variable_takes_no_argument
 'x=2; [-x 1]'	[-2, 1]
-'x=5; x -1'	4
+'x=5; x -1'	[5, -1]

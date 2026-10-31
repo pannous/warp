@@ -70,7 +70,7 @@ held_cases(scope: Node, enums: map, outer: map): map := {
 
 # the program's enum forms lowered, each function's by the names of its scope
 scoped_enum_nodes(n: Node, enums: map, subjects: map): Node := {
-	scope = if is_function_definition(n) then held_cases(n, enums, subjects) else subjects
+	scope = if is_function_definition(n) then held_cases(n, enums, names_seen(subjects, nodes_in(n))) else subjects
 	enum_node(children(n, part => scoped_enum_nodes(part, enums, scope)), enums, scope)
 }
 

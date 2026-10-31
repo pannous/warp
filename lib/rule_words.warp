@@ -26,12 +26,14 @@ spelled(name: Node): text := "${name}"
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no number, or starts with a unit
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
-	if is_number_literal(amounted) { return Key(amounted, Op.Mul, unit) }
+	if is_number_literal(amounted) or is_big_number_view(amounted) { return Key(amounted, Op.Mul, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
 	if right == ø then ø else Key(key_of(amounted), op_of(amounted), right)
 }
 starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_binding_ops then starts_with_unit(key_of(code)) else code is symbol and "units" in (word_index(word_index_file()).get("${code}") ?? [])
+# `km/h`, `m²`, `cm`: code led by a unit word, the unit part of `2 km/h is speed` (lib/units.warp)
+unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else code is symbol and "units" in (word_index(word_index_file()).get("${code}") ?? [])
 unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
@@ -313,7 +315,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {

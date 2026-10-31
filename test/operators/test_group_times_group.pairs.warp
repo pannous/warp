@@ -1,0 +1,3 @@
+# a sum glued to a group multiplies it, though a sum of whole numbers is held as one that may grow (nat-and-int)
+'a = 1; b = 2; c = 3; (a + b)(c)'	9
+'a = 5; b = 2; (a - b)(4)'	12

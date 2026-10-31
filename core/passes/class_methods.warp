@@ -488,14 +488,17 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
 	for i in 0..<#owners { called[owners[i]] = owned_name(spellings[i], owners[i]) }
-	operated = falls_back and operator != ø and #call_arguments == 2
+	# an element read `xs#p` is no operation of numbers: no promotion nor float contagion, which would index by a float
+	operated = falls_back and operator != ø and #call_arguments == 2 and spellings#1 not in position_words
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
 	fallback = if not falls_back then ø else if operated then reflected else builtin_call(spellings#1, call_arguments)
-	# an operator's operands are any values: a number reaches the builtin, an instance its class's method; a routed
-	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
-	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters
+	# a dispatcher with a fallback takes any values in every place: a number reaches the builtin, an instance its class's
+	# method, compiled for any values, never for the kinds of a call no instance makes (`m[name] = v` of a map beside a
+	# class's position(p, v), whose `p` would be a text); so a list `[3, 1].sort()` passes none of the owners' methods
+	# its kind (their `self.n`)
+	head = if falls_back then call_arguments.map(argument => Key(argument, Op.Colon, symbol("any"))) else [self_node] + parameters
 	dispatched = class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback)
 	# a class with its own method of the operator takes a float itself (`q * sin(x)` keeps q's unit, π's `*` gives the
 	# float): contagion only for the classes that leave the operator to the builtin
@@ -641,9 +644,10 @@ defined_call_head(statement: Node): Node? := {
 is_keyword_definition(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords and is_group(n#2) and #(n#2) > 0
 # variable → the type of the values assigned to it, "" where they differ or are not known: by name across the
 # program, as arity_overloads.warp's assigned_kinds
-assigned_types(statements: list, classes: map): map := {
+assigned_types(statements: list, classes: map): map := assigned_types_in(statements.flat_map(nodes_in), classes)
+assigned_types_in(nodes: list, classes: map): map := {
 	types = {}
-	for n in statements.flat_map(nodes_in) {
+	for n in nodes {
 		if is_key(n, Op.Assign) and key_of(n) is symbol {
 			name = name_of(key_of(n))
 			type = written_type(value_of(n), classes) ?? ""

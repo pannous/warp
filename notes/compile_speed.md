@@ -19,11 +19,13 @@ CPU seconds between phase markers:
   Cost (2026-10-31, bench.warp on parser.warp, ~94 s CPU): WARP_PROFILE=perfmap alone changes nothing (93.3 vs 93.5 s
   CPU); `sample` attached for the whole run keeps CPU the same (94.0 s) and adds ~10–15% wall (108 vs 94–95 s) while
   it pauses the thread. On that run it took 76 k main-thread samples in 108 s, ~1.4 ms each.
-- Phase markers: a compiler built with `timed(label)` calls (`print "§T " + label` when WARP_TIMES is set) in
-  passes.warp lowered_node (per pass index), with_used, compiler.warp; branch compile-times (scratch, never landed).
-- `data/phase_times.py <command…>` (in that branch) reads the process's CPU (ps) at each marker and prints the spans,
-  biggest first; it stops after `emit done`. Run: build the marked compiler, then
-  `WARP_TIMES=1 WARP_SEED=<marked warp.wasm> python3 data/phase_times.py warp rebuild pure`.
+- Phase markers (card phase-markers): `timed(label)` (core/passes/passes.warp) prints `§T <milliseconds> <label>`
+  when WARP_TIMES is set, silent otherwise, where a phase starts: compiler.warp's compile (implicit uses,
+  checked_program, emit, emit done), with_used's steps, with_uses' (used files, module texts, each file's parse), each
+  baked table's computing, each pure pass by name. A build run with WARP_TIMES=1 keeps them in its record's build.log
+  (notes/compiler_rebuilds.md "Build records"; stage two's record for compiler.warp compiled by the tree's own
+  compiler); `scripts/phase-times.py <build.log>…` sums the wall spans per label, biggest first, up to `emit done`.
+  CPU and hotspots are the record's time and profile.txt: never build again to measure.
 - A synthetic program at 100/200/400/1600 statements shows superlinear terms quickly with the installed warp
   (`/usr/bin/time -p`, user CPU): `def gN(xs: list): int := xs.f(N) + 1` against `f(N) + 1`.
 - Rules in lib/sugar/ are not baked: switching one off in a worktree's lib (WARP_LIB) needs no rebuild, so a rule's
@@ -54,20 +56,45 @@ once per program, never per node or call site. Cheap `where` guards don't save a
    Found with warp-quality's WARP_PROFILE=perfmap (scripts/profile.sh) on `warp parse-code "<2000 lines>" out.bin`;
    a parser timing needs no `warp parse` (its print is quadratic) and no compiler build per probe.
 
-## Left (main 8a45e5…: lowering 176 s up to checked_program, emit ~40 s)
-The parser is the biggest single cost, ~62 s:
-- the used core files: 30.9 s, linear (parser.warp 4819 lines 5.6 s, ~19 µs per byte), about halved by 5.
-- SLICE_PARSES 18.6 s: every library definition parsed again, one by one, after LIBRARY_PARSES (12.4 s) parsed each
-  whole file (card slice-parses-definitions)
-Then index_positions 17 s, lambdas (pass 23) 11 s, sugar (pass 22) 8 s; emit (card emit-cpu-profile, warp-quality).
-with_uses did not regress on main: 65 s, as before; a measurement beside other builds inflated it to 75–93 s.
-`warp parse` printing a big tree is quadratic (×4 the file: 353 s, card parse-print-quadratic); the parse itself isn't.
+## Left (main 42a19df29a, stage two 2efb9b98f2f3eca9: 166 s CPU, 580 MB; was 820 s this morning)
+No single fix of 5 s or more is left without a design change (cards):
+- emit 46 s (27%): wasmtime's is_subtype libcall and GC (warp-quality, card emit-wasmtime).
+- nodes_in lists (card builds-list): keep_nodes 13% of the compile across ~60 callers, none over 8%; half GC.
+- rule tries (card sugar): rewritten_program 8.7 s, sugar 9.7 s, each kept rule tried at each node.
+- LIBRARY_PARSES 7 s per compiler build (card library-parses-cost): the bake parses every std module anew.
+- then lambdas 7.5 s, arity_overloads 6.2 s (mostly nodes_in), first/late/iteration/comprehension sugar 4–5 s each.
+`warp parse` printing a big tree is quadratic (card parse-print-quadratic); the parse itself isn't.
+
+## Three walks (2026-10-31, found on the def-first measurement)
+Self-check's stage two (compiler.warp compiled by the tree's own warp.wasm), both on the GC growth fix (1cd7a5c2e3:
+wasmtime grew a copying heap only when its active half was full; that run was 831 -> 227 s CPU and ~80% GC before),
+records /Volumes/Build/compilers/{2cd7795a6e4464f8,044362cbf97a7d00}/stage-two.record: CPU 214.2 -> 194.9 s (-9.0%),
+peak RSS 942 -> 625 MB (-34%), all from two walks:
+- lambdas' captures_assigned_later gathered, for every statement, the assignments of all later ones (quadratic, 10% of
+  the compile): each name's last assignment is gathered once (lambdas 18.8 -> 7.2 s).
+- each sugar step listed the program's nodes five times for its rule lookups, now once (sugar steps, type_tests -8 s).
+- index_positions copied every name the program assigns (most counting nothing) into each function's scope: a scope
+  now passes on only the names that count (a function's own `i = t.find(x)` counts, its local): index_positions
+  17.9 -> 1.4 s (stage two of 9a845e21fccdf599, on a loaded machine).
+- type_tests and plain_enums copied the whole program's scope into each function: a function gets only the
+  entries its own names ask for (scope.warp names_seen): type_tests 10.0 -> 0.9 s, plain_enums 10.7 -> 3.5 s; stage two
+  166 s CPU, 580 MB (2efb9b98f2f3eca9).
+def-first (every definition starting with `def`) gained nothing measurable and is parked on branch
+function-definition-core; its two collection passes were not built (the collectors they'd replace are <0.5% each, the
+definition gatherers ~1-1.7%; a table collected after with_used goes stale as later passes add, rename and lift
+definitions; user: discuss later). Left: emit 44 s (22%), index_positions 18 s, plain_enums 9 s, LIBRARY_PARSES 7 s.
 
 ### Emit (~42 s; warp-quality 2026-10-31, profile.sh -f typed_wasm_module on rebuild pure, 39053 samples)
 - 26% of emit is wasmtime's is_subtype libcall (StoreOpaque::is_subtype_cached): a `ref.test`/`ref.cast` whose
   types are not the same takes it, a failing test always. The runtime's number and node type tests do so on every
   call: node_type_test 24% with callees, ratio_node 27%, number_byte 20% (a value tested for a ratio, a box…).
-  Card emit-wasmtime: types declared final (`sub final`) or a test on the kind field first.
+  Fixed (card emit-wasmtime): wasmtime tests a final type by index equality, an open one of another type through the
+  libcall; every class struct was open, so instance_place / instance_field_at tested each class in turn and
+  is_class_instance the open $Instance (55% of the libcall). A class nobody extends now has a final struct and
+  is_class_instance tests each class's: stage 3 (the compiler compiling itself through code its own emitter wrote)
+  is_subtype 8.5% → 1.4%, 254.6 → 242.2 s CPU. The rest is the cast to the open $Node of a $MetaNode or an instance
+  (node_equal, node_text). Measure an emitter change at stage 3: stage 2 runs the seed's code, and the store's
+  warp-self.wasm is a copy of warp.wasm (data/emit-wasmtime/measure.sh).
 - 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
   initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
 - The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
@@ -76,4 +103,6 @@ with_uses did not regress on main: 65 s, as before; a measurement beside other b
 
 ## Marker pitfalls
 - A marker must stand before the work it names: `f(label, computed)` prints after `computed` ran (timed_bake did).
-- phase_times stops only at `emit done`; without that marker the rebuild's tail lands in the last label.
+- phase-times.py stops at a log's first `emit done`.
+- The marks are printed (stdout): WARP_TIMES set for a test or gate run makes every case's output differ; set it only
+  for the build or self-check measured.

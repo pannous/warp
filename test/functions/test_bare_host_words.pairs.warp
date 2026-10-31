@@ -48,6 +48,6 @@
 'use prelude; random_until(1, 2)'	1
 'use prelude; random_between(3, 3)'	3
 'use prelude; x = random_fraction(1, 2); x >= 1 and x < 2'	true
-'use prelude; type random_int()'	'int'
+'use prelude; type random_int()'	'nat'
 'use prelude; type random_bool()'	'bool'
 'use prelude; type random_codepoint()'	'codepoint'
