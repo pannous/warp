@@ -4,4 +4,3 @@
 # Done for Codex, don't continue them even when the previous run parked them: datetime-arithmetic-fail (field/unit
 # collision, core: warp-shaders' use-sound), sample-gaps-types (bits/xor, dates, reflection need core) — 2026-10-31
 program-using               # a program's top-level shown(…) beside units' Quantity.shown(): keep a method out of a free function's clauses, lib side first
-sample-gaps-tuple           # Sample gaps: tuple literals and C-style typed… (lib/ fixes only; card what needs core)
