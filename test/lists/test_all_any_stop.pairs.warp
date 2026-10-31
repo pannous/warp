@@ -1,0 +1,4 @@
+# all and any stop at the answer: the function is called on no item after it
+'xs = [1, 0]; xs.all(x => 10 / x < 3)'	no
+'xs = [5, 0]; xs.any(x => 10 / x > 1)'	yes
+'xs = [1, 2, 3]; xs.all(x => x > 0)'	yes
