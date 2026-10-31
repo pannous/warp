@@ -471,7 +471,7 @@ type_modules = ["list", "map", "text", "time", "reals"]
 # with_type_module_uses; a word of two such modules needs its `use`)
 with_type_module_uses(program: Node): Node := {
 	own = own_heads(program)
-	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
+	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	providers = type_module_providers()
 	wanted = {}
 	# a function taking nothing is called bare too: `now` as `now()`
@@ -509,7 +509,7 @@ implicit_modules(source: text, index_file: text): list := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
-	used = used_module_sources(statements_in(program), ".", [])#2
+	used = used_module_sources(flat_statements(program), ".", [])#2
 	known = {}
 	for module in used { for slice in definition_slices(used_module_text(module)) { known[slice#1] = yes } }
 	globals = global_words()
@@ -639,7 +639,7 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	modules = bundled_slices()
 	classes = declared_classes_modules()
 	definitions = definitions_by_name([prelude_slices] + modules.values)
-	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
+	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	wanted = []
 	for call in calls {
 		arguments = items_of(call)[1 ..]
@@ -806,7 +806,7 @@ called_words(n: Node): list := {
 # the program with the definitions it reaches of the standard modules it uses, those they use in turn included: `use
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: Node, folder: text): Node := {
-	sources = used_module_sources(statements_in(program), folder, [])
+	sources = used_module_sources(flat_statements(program), folder, [])
 	for source in sources#1 { for d in c_declarations_in(source) { used_c_functions[d#1] = d } }
 	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(std_module_path))
 }
@@ -819,7 +819,7 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 			seen += [name_of(used)]
 			source = used_module_text(name_of(used))
 			if source != "" {
-				inner = used_module_sources(statements_in(source_parse(std_module_path(name_of(used)), source)), folder, seen)
+				inner = used_module_sources(flat_statements(source_parse(std_module_path(name_of(used)), source)), folder, seen)
 				sources += inner#1 + [source]
 				seen = inner#2
 			}

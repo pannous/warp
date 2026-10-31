@@ -1,0 +1,6 @@
+# a `use` written in a `;` line counts when the compiler adds its implicit uses as lines after it (exists: `use
+# file`): implicit uses add to the written ones, never replace them (card use-os)
+
+# written_use_beside_an_implicit_one
+'use os; root = "/tmp"; command("true"); exists(root)'	yes
+'use os; exists("/tmp"); command("true")'	""

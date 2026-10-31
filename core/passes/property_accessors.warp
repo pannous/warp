@@ -167,7 +167,7 @@ property_accessors(program: Node): Node := {
 	rewritten = kept.map(statement => property_accessed(expected_in(statement, expectation), properties, scope))
 	# the modules of the properties the program names: `use draw` in front for the canvas's
 	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
-	uses = statements.map(use_target).filter(target => target is symbol).map(name_of)
+	uses = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	brought = property_modules.filter(module => module != prelude_module and module in needed and module not in uses)
 	separated(bracketed(brought.map(module => plain_node(parsed("use " + module))) + rewritten, ""), ";")
 }
