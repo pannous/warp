@@ -1668,7 +1668,13 @@ fired(rule: Rule, result: Node): Node := {
 }
 
 # the rule's `where` conditions hold of what its holes bound
-conditions_hold(rule: Rule, origin: map, bound: map): bool := origin_holds(rule, origin, bound) and rule.conditions.all(condition => condition_holds(condition, bound))
+# in order, the first that fails ending it: a later computed binding (`$refused = misnamed(…)`, which throws) runs only
+# where the tests before it hold (a `.all` the seed lowers calls every one)
+conditions_hold(rule: Rule, origin: map, bound: map): bool := {
+	if not origin_holds(rule, origin, bound) { return no }
+	for condition in rule.conditions { if not condition_holds(condition, bound) { return no } }
+	yes
+}
 
 # the conditions hold of the code n the rule matched, which the context conditions ask where it stands
 conditions_hold_at(rule: Rule, origin: map, bound: map, n: Node): bool := {
