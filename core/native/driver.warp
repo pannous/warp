@@ -70,6 +70,8 @@ DISPLAY_DPI_SLOT = 2
 NATIVE_VIEW_WIDTH = 640
 NATIVE_VIEW_HEIGHT = 480
 DEFAULT_DPI = 96
+# wasmtime.h's WASMTIME_PROFILING_STRATEGY_PERFMAP
+PROFILING_PERFMAP = 3
 
 wasm_config_new(): handle from "warp_wasmtime"
 wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -78,6 +80,7 @@ wasmtime_config_wasm_exceptions_set(config: handle, enabled: bool) from "warp_wa
 warp_config_gc_heap_initial_size_set(config: handle, bytes: i64) from "warp_wasmtime"
 wasmtime_config_consume_fuel_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_config_parallel_compilation_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_config_profiler_set(config: handle, strategy: i32) from "warp_wasmtime"
 wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
 wasmtime_trap_code(trap: handle, code: pointer): bool from "warp_wasmtime"
 wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
@@ -472,6 +475,8 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 # warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
 # warp.wasm's beside it (compiled_module); compiled on one thread with WARP_ONE_THREAD (a `warp test` case: its slot
 # is one core, else every case compiles on all of them, a load of 200 on 16 cores)
+# WARP_PROFILE=perfmap writes each compiled function's address range to /tmp/perf-<pid>.map, which
+# scripts/profile.sh maps `sample`'s addresses through (notes/compile_speed.md)
 warp_config(fuel: bool, heap_bytes: i64): handle := {
 	config = wasm_config_new()
 	wasmtime_config_consume_fuel_set(config, fuel)
@@ -481,6 +486,7 @@ warp_config(fuel: bool, heap_bytes: i64): handle := {
 	wasmtime_config_wasm_function_references_set(config, yes)
 	wasmtime_config_wasm_exceptions_set(config, yes)
 	wasmtime_config_cache_config_load(config, 0)
+	if same_text(getenv("WARP_PROFILE"), "perfmap") { wasmtime_config_profiler_set(config, PROFILING_PERFMAP) }
 	config
 }
 
