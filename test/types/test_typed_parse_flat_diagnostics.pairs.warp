@@ -1,0 +1,3 @@
+# Card typed-parse: missing and unknown JSON fields are rejected.
+'class User { id: number; name: string }; try { parse("{id:7}", User) } catch e { e.message }'	'name is required'
+'class User { id: number }; try { parse("{id:7,extra:1}", User) } catch e { e.message }'	'unknown field extra'
