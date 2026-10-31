@@ -1,0 +1,10 @@
+# A path through a link to an absolute path (a repo's data -> /Volumes/…) reaches the file as the shell does (card
+# format-missing): test/fixtures/root_link -> /
+
+# reading_through_an_absolute_link
+'count(read("test/fixtures/root_link/etc/hosts")) > 0'	yes
+'exists("test/fixtures/root_link/etc/hosts")'	yes
+'"hosts" in list_files("test/fixtures/root_link/etc")'	yes
+
+# writing_through_an_absolute_link
+'write("test/fixtures/root_link" + env("PWD") + "/test/fixtures/linked_write.txt", "ok"); read("test/fixtures/linked_write.txt")'	'ok'
