@@ -242,12 +242,12 @@ failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 		status = allocate(4)
 		if wasmtime_error_exit_status(error, status) { exit(word_at(status).value as i32) }
 	}
-	if raised.length > 0 {
-		complain(raised)
-		exit(1)
+	# the engine's message carries the wasm backtrace, by function name: WARP_BACKTRACE=1 shows it beside the sentence
+	if raised.length == 0 or same_text(getenv("WARP_BACKTRACE"), "1") {
+		if error != 0 { wasmtime_error_message(error, message) } else { wasm_trap_message(long_at(trap).value, message) }
+		complain(native_vector_text(native_pointer(message)))
 	}
-	if error != 0 { wasmtime_error_message(error, message) } else { wasm_trap_message(long_at(trap).value, message) }
-	complain(native_vector_text(native_pointer(message)))
+	if raised.length > 0 { complain(raised) }
 	exit(1)
 }
 checked(error: handle, trap: pointer): nothing := {
