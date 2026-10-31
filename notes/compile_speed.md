@@ -19,12 +19,13 @@ CPU seconds between phase markers:
   Cost (2026-10-31, bench.warp on parser.warp, ~94 s CPU): WARP_PROFILE=perfmap alone changes nothing (93.3 vs 93.5 s
   CPU); `sample` attached for the whole run keeps CPU the same (94.0 s) and adds ~10–15% wall (108 vs 94–95 s) while
   it pauses the thread. On that run it took 76 k main-thread samples in 108 s, ~1.4 ms each.
-- Phase markers (card phase-markers): `timed(label)` (core/passes/passes.warp) prints `§T <label>` when WARP_TIMES is
-  set, silent otherwise, where a phase starts: compiler.warp's compile (implicit uses, checked_program, emit, emit
-  done), with_used's steps, with_uses' (used files, module texts, each file's parse), each baked table's computing,
-  each pure pass by name. `scripts/phase-times.py <command…>` reads the process's CPU (ps) at each marker and prints
-  the spans per label, biggest first; it stops after `emit done`. Run, on a built tree:
-  `WARP_TIMES=1 WARP_SEED=<tree>/lib/warp.wasm scripts/phase-times.py warp rebuild pure`.
+- Phase markers (card phase-markers): `timed(label)` (core/passes/passes.warp) prints `§T <milliseconds> <label>`
+  when WARP_TIMES is set, silent otherwise, where a phase starts: compiler.warp's compile (implicit uses,
+  checked_program, emit, emit done), with_used's steps, with_uses' (used files, module texts, each file's parse), each
+  baked table's computing, each pure pass by name. A build run with WARP_TIMES=1 keeps them in its record's build.log
+  (notes/compiler_rebuilds.md "Build records"; stage two's record for compiler.warp compiled by the tree's own
+  compiler); `scripts/phase-times.py <build.log>…` sums the wall spans per label, biggest first, up to `emit done`.
+  CPU and hotspots are the record's time and profile.txt: never build again to measure.
 - A synthetic program at 100/200/400/1600 statements shows superlinear terms quickly with the installed warp
   (`/usr/bin/time -p`, user CPU): `def gN(xs: list): int := xs.f(N) + 1` against `f(N) + 1`.
 - Rules in lib/sugar/ are not baked: switching one off in a worktree's lib (WARP_LIB) needs no rebuild, so a rule's

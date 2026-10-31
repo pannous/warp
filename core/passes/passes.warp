@@ -80,10 +80,10 @@ lowered_node(n: Node): Node := {
 	timed("called_only, checks")
 	n
 }
-# WARP_TIMES set: `§T <label>` printed where a phase of the compile starts, the CPU spans between them read by
-# scripts/phase-times.py (notes/compile_speed.md); silent when unset
+# WARP_TIMES set: `§T <milliseconds> <label>` printed where a phase of the compile starts, so a build's log (its
+# record's build.log) holds its phases; scripts/phase-times.py sums the spans (notes/compile_speed.md). Silent unset
 TIMES = env("WARP_TIMES") ?? ""
-def timed(label: text) := { if TIMES != "" { print "§T " + label } }
+def timed(label: text) := { if TIMES != "" { print "§T " + "${clock()}" + " " + label } }
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
