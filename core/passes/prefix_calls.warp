@@ -76,9 +76,11 @@ counted_parts(counted: Node?): list? := if counted == ø then ø else [key_of(co
 # naming both (decision untyped-fit-ambiguous); a word of no typed line stays as written
 fitted_comparison(n: Node, own_types: map): Node := {
 	if n is key and op_of(n) in comparing_ops and is_word_phrase(key_of(n)) { return fitted(key_of(n)#1, key_of(n)#2, op_of(n), value_of(n), n, own_types) }
-	if is_word_phrase(n) and n#2 is key and op_of(n#2) in comparing_ops { return fitted(n#1, key_of(n#2), op_of(n#2), value_of(n#2), n, own_types) }
+	if (is_word_phrase(n) or is_round_word_phrase(n)) and n#2 is key and op_of(n#2) in comparing_ops { return fitted(n#1, key_of(n#2), op_of(n#2), value_of(n#2), n, own_types) }
 	n
 }
+# `(sq 2 == 4)`: the phrase in parentheses, read so too; a call `sq(2 == 4)` is no phrase
+is_round_word_phrase(n: Node): bool := is_round(n) and separator_of(n) == " " and #n == 2 and n#1 is symbol
 fitted(word: Node, left: Node, op: Op, right: Node, written: Node, own_types: map): Node := {
 	fit = condition_fit(word, own_types)
 	if fit == ambiguous_fit {
