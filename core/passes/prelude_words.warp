@@ -257,18 +257,26 @@ global brought_names = {}
 called_only(program: Node): Node := {
 	if module.relocating or #brought_names == 0 { return program }
 	statements = statements_in(program)
-	is_brought = statement => brought_names.has(declared_name(statement) ?? "")
+	names = statements.map(statement => declared_name(statement) ?? "")
+	# the brought definitions by name, each word's found at once (a scan of every statement per word was 10% of
+	# compiling the compiler, card cpu-compiling)
+	brought = {}
+	pending = emitted_words(program)
+	for i in 0 ..< #statements {
+		if brought_names.has(names[i]) { brought[names[i]] = (brought.get(names[i]) ?? []) + [statements[i]] } else { pending += words_within(statements[i]) }
+	}
 	called = {}
-	pending = statements.filter(statement => not is_brought(statement)).flat_map(words_within) + emitted_words(program)
-	while #pending > 0 {
-		word = pending#1
-		pending = pending[1 ..]
+	at = 0
+	while at < #pending {
+		word = pending[at]
+		at += 1
 		if not called.has(word) {
 			called[word] = yes
-			for statement in statements { if declared_name(statement) == word and is_brought(statement) { pending += words_within(statement) } }
+			for statement in brought.get(word) ?? [] { pending += words_within(statement) }
 		}
 	}
-	separated(bracketed(statements.filter(statement => not is_brought(statement) or called.has(declared_name(statement))), ""), ";")
+	kept = (0 ..< #statements).filter(i => not brought_names.has(names[i]) or called.has(names[i])).map(i => statements[i])
+	separated(bracketed(kept, ""), ";")
 }
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
