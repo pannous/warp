@@ -1,0 +1,6 @@
+# A bare enum case is the weakest reading of its name: any other definition the program sees wins, the case stays
+# reachable by its enum (Supervisor 2026-10-31 under the user's night rule, card use-keys; P179 bare cases)
+'use units; use keys; "" + 1.8m'	"1.8m"
+'use units; use keys; "" + 2s'	"2s"
+'use keys; Key.m == "m"'	yes
+'enum Dir { north, south }; "" + north'	"north"

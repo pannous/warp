@@ -62,12 +62,14 @@ equality_method = "equal"
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
-# the methods a class's instances convert by, each with its dispatcher and the call it falls back to on any other value:
-# `x as text` by text() (also print, str), `x as float` and float(x) by float() (lib/reals.warp's π), a shown value by
-# show(), ø on any other value: it then shows its structure (decision show-hook; runtime show.warp key_text through the
-# hook instance_show); emitter/output.warp and emitter.warp cast read the dispatchers
+# the methods a class's instances convert by, each [method, its dispatcher, the call it falls back to on any other
+# value]: `x as text` by text() (also print, str), `x as float` and float(x) by float() (lib/reals.warp's π), a value the
+# runtime needs as a float by float(), ø on any other value (runtime conversions.warp float_of_node through the hook
+# instance_float: `sin(2km)`), a shown value by show(), ø on any other value: it then shows its structure (decision
+# show-hook; runtime show.warp key_text through the hook instance_show); emitter/output.warp and emitter.warp cast read
+# the dispatchers
 form_method = "show"
-conversion_methods = {text: [showing_dispatcher, "str"], float: [HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], show: [HiddenWord.ShowShown as text, ø]}
+conversion_methods = [["text", showing_dispatcher, "str"], ["float", HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], ["float", HiddenWord.FloatHooked as text, ø], ["show", HiddenWord.ShowShown as text, ø]]
 # a class's positions (card class-position-index, decisions instance-position and property-accessors): `b#p` is its
 # position(p), from 1, `b[i]` (the parser's b#(i+1)) its index(i), from 0, either one deriving the other; `b#p = v` the
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
@@ -241,14 +243,14 @@ derived_dispatchers(classes: map, names: list, routes: list, promotions: list, o
 			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, orderers), ordered, promoted(Key(self_node, glyph as Op, other), promotions, glyph + "·operator")))]
 		}
 	}
-	for method in conversion_methods.keys {
+	for conversion in conversion_methods {
+		method = conversion#1
 		converters = owners_of(classes, names, method).filter(owning_class => #method_parameters(method_in(classes[owning_class], method)) == 0)
 		if #converters > 0 {
 			converted = {}
 			for owning_class in converters { converted[owning_class] = call_of(lifted_name(classes, names, method, owning_class, routes), [self_node]) }
-			dispatcher = conversion_methods[method]
-			fallback = if dispatcher#2 == ø then Node.Empty else call_of(dispatcher#2, [self_node])
-			made += [Key(call_of(dispatcher#1, [Key(self_node, Op.Colon, symbol("any"))]), Op.Define, value_dispatch(deepest_first(classes, converters), converted, fallback))]
+			fallback = if conversion#3 == ø then Node.Empty else call_of(conversion#3, [self_node])
+			made += [Key(call_of(conversion#2, [Key(self_node, Op.Colon, symbol("any"))]), Op.Define, value_dispatch(deepest_first(classes, converters), converted, fallback))]
 		}
 	}
 	made

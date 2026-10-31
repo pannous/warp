@@ -59,7 +59,7 @@ made_late(name: text, result: ValueKind, parameters: list): any := {
 # calls runtime.wasm's hooks
 late_words = {closure_text: [ValueKind.Text, ["closure"]], instance_set: [ValueKind.Int, ["m", "name", "value"]],
 	instance_entries: [ValueKind.Node, ["m"]], instance_field_at: [ValueKind.Node, ["m", "index"]], instance_place: [ValueKind.Int, ["m", "name"]],
-	is_class_instance: [ValueKind.Bool, ["m"]], shown_big_int: [ValueKind.Text, ["n"]], instance_show: [ValueKind.Node, ["m"]]}
+	is_class_instance: [ValueKind.Bool, ["m"]], shown_big_int: [ValueKind.Text, ["n"]], instance_show: [ValueKind.Node, ["m"]], instance_float: [ValueKind.Node, ["m"]]}
 late_word(name: text): any := made_late(name, late_words[name]#1, late_words[name]#2)
 # for each closure: if the closure's number is its own, the text it shows; another value shows "function"
 closure_text_code(f: Function): any := {
@@ -88,7 +88,7 @@ function_name(target: text): text := {
 }
 # the code of a function made late (made_late), once the program's closures and classes are known
 late_code(f: Function): int := {
-	if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name == instance_place_name { instance_place_code(f) } else if f.name == is_class_instance_name { is_class_instance_code(f) } else if f.name == instance_show_name { instance_show_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
+	if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name == instance_place_name { instance_place_code(f) } else if f.name == is_class_instance_name { is_class_instance_code(f) } else if f.name == instance_show_name { instance_show_code(f) } else if f.name == instance_float_name { instance_float_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
 	0
 }
 # a class value called, `make(c, xs) := c(xs#1, xs#2)` of `make(P, [3, "a"])`: the instance `P(3, "a")` makes, for each

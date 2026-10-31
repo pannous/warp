@@ -11,10 +11,10 @@ height = 540
 global time = 0.0
 
 # the settings of web-ocean's panel (H), with its defaults
-wind_speed = 7 # todo m/s: longer, higher waves as it rises
+wind_speed = 7m/s # longer, higher waves as it rises
 wind_direction = 28° # off the line of sight, the waves roll toward the camera
-swell_height = 1.8 # todo metres, significant wave height
-swell_length = 120 # metres
+swell_height = 1.8m # significant wave height
+swell_length = 120m
 swell_direction = -4° # off the line of sight
 choppiness = 1.25
 turbidity = 1.6 # how bright and green the water body is (coastal sediment, plankton)
@@ -29,18 +29,18 @@ exposure = 1.0
 # W A S D move, Space or E up, Q or C down, drag the mouse to look around, Escape ends
 global camera_x = 0.0
 global camera_z = 0.0
-# Angles are plain numbers of radians, `60°` is 1.0472 (decision degree-constant). The shader reads plain numbers only,
-# so the lengths it reads stay numbers of metres; units are only for the values the flying alone reads (decision
-# no-units-in-shaders)
+# The shader reads a length as its metres, an angle as its radians (`60°` is 1.0472): it ignores units (decision
+# no-units-in-shaders). The camera's lengths stay numbers of metres: a quantity times a computed float loses its unit
+# (card quantity-times-float)
 global camera_height = 2.4 # metres
 global yaw = 0° # to the right
 global pitch = -3° # up
 field_of_view = 60°
 # the angle one pixel spans (radians)
 pixel_angle = tangent(field_of_view / 2) / (height / 2)
-flying_speed = 6 # m/s todo 6 m/s once a unit word is no Key case here (card use-keys)
+flying_speed = 6 # m/s
 looking_speed = 0.2° # a pixel the mouse moves
-lowest = 0.8 # metres above the calm sea, todo 0.8 m (card use-keys)
+lowest = 0.8 # metres above the calm sea
 
 geometry_waves = 12
 detail_waves = 32
