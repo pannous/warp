@@ -1,0 +1,5 @@
+# Where a float is needed a quantity is its amount in SI base units, and a shader reads it so (decision
+# no-units-in-shaders, card units-ignored-by-shaders)
+'use units; float(90km/h)'	25
+'use units; x = 2km; round(sin(x) * 1e6)'	930040
+'use units; size = 2m; glow(x, y) := [x / 200 * size, y / 100, 0.5]; paint(glow, 20, 10); 1'	1

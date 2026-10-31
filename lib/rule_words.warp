@@ -262,7 +262,7 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 # `dir(time)`, `dir text` (card dir-ownership): the words a standard module defines, in their order, then the
 # prelude's whose first parameter is of the type so named, `upper(t: text)`; ø when the program defines its own dir
 # or binds the name, or no module is so named
-dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in(program) then ø else module_dir("${name}")
+dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in_kept(program) then ø else module_dir("${name}")
 owns_dir(program: Node): bool := function_definition(symbol("dir"), program) != ø
 module_dir(word: text): any := {
 	source = used_module_text(word)
@@ -291,7 +291,7 @@ first_parameter_type(word: text, definition: text): text := {
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
 
 # `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's) the program doesn't bind, else ø
-module_named(module: Node, program: Node): any := if "${module}" in names_bound_in(program) or used_module_text("${module}".lower()) == "" then ø else module
+module_named(module: Node, program: Node): any := if "${module}" in names_bound_in_kept(program) or used_module_text("${module}".lower()) == "" then ø else module
 
 # `let n = 5` is the assignment `n = 5`, where its name was written noted (core/passes/lambdas.warp
 # local_declarations): inside a lambda the name stays the lambda's own, not the scope's (card let-inside)

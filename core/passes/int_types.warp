@@ -1,21 +1,17 @@
 # Int types (card color-prints): `type Color = int`, in a program or a module it uses, makes a Color an int with a
 # mark of its own above its Kind, as a yes/no is a marked Int: `x as Color` marks it, `x is Color` tests the mark and
 # the type's `show(c: Color)` gives its text wherever it prints (class_methods.warp's text·shown); arithmetic,
-# comparisons and C calls see the plain int. Core names no such type: each declaration gets the next mark
+# comparisons and C calls see the plain int. Core names no such type: each declaration gets the next mark.
+# `type Angle = float` marks a float alike. Arithmetic keeps a mark (decision marks-survive-arithmetic), held unboxed
+# by the emitter as long as it can (decision marks-unboxed-first: TypedCode.mark, stamped where the value is boxed)
 use "int_type_shows.warp"
 use "class_methods.warp"
 
-# the first mark an int type takes: 1 is a yes/no's
-FIRST_INT_MARK = 2
 shown_parameter = symbol("self")
 
 # the program with its int types marked and shown
 int_types(program: Node): Node := {
-	kinds = {}
-	for statement in statements_in(program) {
-		name = int_type_name(statement)
-		if name != ø and name not in kinds { kinds[name] = Kind.Int + (FIRST_INT_MARK + #kinds) * KindUnit.Info }
-	}
+	kinds = int_type_kinds(statements_in(program))
 	if #kinds == 0 { return program }
 	marked = bottom_up(program, n => int_type_used(n, kinds))
 	showers = kinds.keys.filter(name => statements_in(marked).any(statement => shower_of(statement) == name))

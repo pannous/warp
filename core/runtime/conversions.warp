@@ -9,7 +9,12 @@ use "text_numbers.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
 # a boxed int (kind code 1), exact rational or float as a float
+# an instance as its class's float() gives it (decision no-units-in-shaders: `sin(2km)` of the amount in metres)
 float_of_node(n: Node): float := {
+	if is_class_instance(n) {
+		converted = instance_float(n)
+		if not is_null(converted) { return float_of_node(converted) }
+	}
 	if kind_code(n) != Kind.Int { return unboxed_float(n) }
 	if is_plain_int(n) then float(unboxed_int(n)) else extended_float(n)
 }
