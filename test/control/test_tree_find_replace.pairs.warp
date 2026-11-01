@@ -1,0 +1,6 @@
+'page = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}; page find {type: "image", src}'	["logo.png", "cat.jpg"]
+'page = {body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}; count(page find {type: "text"})'	1
+'[[1, 2], [3, [1, 5]]] replace [1, x] with x'	[2, [3, 5]]
+'p = {a: {type: "image", src: "c.jpg"}}; (p replace {type: "image", src} with {type: "link", href: src}).a.href'	'c.jpg'
+'pattern Config = {port: int, host: text, debug?: bool}; [{port: 1, host: "x"} is Config, {port: 1, host: "x", debug: yes} is Config, {port: 1} is Config]'	[yes, yes, no]
+'pattern Config = {port: int, host: text, debug?: bool}; ({port: "80", host: "x"} as Config).port + 1'	81
