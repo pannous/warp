@@ -60,6 +60,7 @@ KEY_HELD_WORD = 11
 SET_SYSTEM_VALUE_WORD = 12
 PARSE_CODE_WORD = 13
 REAL_PATH_WORD = 14
+SIGNAL_LISTEN_WORD = 15
 # the end of a field in warp.wasm's parse-code encoding (core/parsing/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -534,6 +535,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
 	if same_text(name, "key_held") { return KEY_HELD_WORD }
+	if same_text(name, "signal_listen") { return SIGNAL_LISTEN_WORD }
 	unanswered_word(name)
 }
 # a host word the driver doesn't answer (a library's: draw_shape, gpu_compute, …), as a word that names it when called:
@@ -814,6 +816,8 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == RANDOM_SEED_WORD { return srand48(number) }
 	# no window, no key held
 	if word == KEY_HELD_WORD { return int_result(0, results) }
+	# a timer (lib/timers.warp) runs only in a page: nothing runs beside the native warp's program
+	if word == SIGNAL_LISTEN_WORD { return complain("warning: timers run only in a page; this run starts none") }
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }

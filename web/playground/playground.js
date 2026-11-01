@@ -957,12 +957,13 @@ function servedRequest(method, target, body = "") {
 	answerInto(shared, async () => ({ request: `${method} ${target} HTTP/1.1\r\nHost: localhost\r\nContent-Length: ${length}\r\n\r\n${body}` }));
 }
 
-// the program's HTTP answer: an HTML body rendered, any other shown as the value, a failing status as an error
+// the program's HTTP answer: an HTML body rendered, any other shown as the value, a failing status's body as the error
+// (whatever its content type: lib/web.warp http_failure answers text/html)
 function showServed(response) {
 	const [head, ...body] = response.split("\r\n\r\n");
 	const text = body.join("\r\n\r\n");
 	const failed = Number(head.split(" ")[1]) >= 400;
-	const html = /^content-type:\s*text\/html/im.test(head) ? text : undefined;
+	const html = !failed && /^content-type:\s*text\/html/im.test(head) ? text : undefined;
 	showValue(html ? "" : text, failed, html);
 	showRendered(html);
 }

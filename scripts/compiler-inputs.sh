@@ -7,11 +7,12 @@
 # module changed since then win over its bundled copy without a rebuild). Other lib/ files never change the hash.
 # The seed building warp.wasm (WARP_SEED, its SHA-256): a refreshed seed builds anew (card scripts-rebuild).
 # core/native/ is no input: the native warp's own sources, which no compiler embeds.
-# --baked: the hash of what the compiler bakes in at its own build (module_source: core/** and BAKED below) and the
+# --baked: the hash of what the compiler bakes in at its own build (module_source: core/** and BAKED below, its data
+# files such as entities.tsv hashed in both modes) and the
 # seed, the rest of lib/ left out: two lib/ trees of one baked hash compile compiler.warp alike, so a self test passed
 # for one holds for the other (scripts/rebuild.sh self). --baked-files: BAKED, one a line (scripts/smoke.sh).
 set -euo pipefail
-BAKED=(prelude.warp aliases.warp math.warp rule_words.warp wgsl.warp)
+BAKED=(prelude.warp aliases.warp math.warp rule_words.warp wgsl.warp entities.tsv)
 [ "${1-}" = --baked-files ] && { printf '%s\n' "${BAKED[@]}"; exit 0; }
 lib=$(cd "${1:?usage: scripts/compiler-inputs.sh <lib> [-v] [--baked] | --baked-files}" && pwd)
 shift
@@ -28,7 +29,7 @@ done
 [ -f "${WARP_SEED-}" ] || { echo "compiler-inputs.sh: WARP_SEED names no seed (${WARP_SEED-unset}); rebuild.sh sets it, by hand: WARP_SEED=~/dev/bin/warp-seed.wasm" >&2; exit 1; }
 modules() {
 	if [ -n "$baked" ]; then (cd "$lib" && ls "${BAKED[@]}" 2>/dev/null); return; fi
-	(cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||' | LC_ALL=C sort)
+	{ (cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||'); printf '%s\n' "${BAKED[@]}" | grep -v '\.warp$'; } | LC_ALL=C sort
 }
 files() {
 	(cd "$lib" && find -H compiler -path compiler/native -prune -o -type f ! -name '.*' -print | LC_ALL=C sort)

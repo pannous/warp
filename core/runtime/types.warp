@@ -86,6 +86,9 @@ node_type_word(n: any, classes: list): text := {
 	if word == "int" { return "nat" }
 	if word == "list" { return list_type_word(n, classes) }
 	if word != "key" { return word }
+	# (an instance of the program's class in a linked module's code, which knows its own classes only: storage's
+	# type(instance))
+	if is_class_instance(n) { return key_name(n) }
 	for class_name in classes { if instance_of(n, class_name) { return class_name } }
 	if key_operator(n) in operation_spellings() then "operation" else word
 }

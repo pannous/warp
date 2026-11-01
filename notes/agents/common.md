@@ -38,6 +38,10 @@ before asking a question). After a context swap, this file and your role file be
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
 - Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (even
   while its file sits in lib/sugar/); "library" means only modules programs import.
+- Extension OKs (user): a core extension the compiler does not need to rebuild itself (a rule or file under
+  core/extensions/, lib/sugar/ until it moves) needs no strong confirmation when it is generic and/or small: build it,
+  send the Interviewer an FYI. A spelling the user has not decided, a new pass or a change to the compiler proper
+  still asks first.
 - No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
