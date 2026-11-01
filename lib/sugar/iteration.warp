@@ -10,6 +10,14 @@ rewrite for $i in $a to $b {$body...} => ($i: int = $a; $end = $b; while $i <= $
 rewrite for $i in $a to $b {$body...} => ($i = $a; $end = $b; while $i <= $end { $body...; loop··step: $i++ }) where $i is symbol
 rewrite for $i in reverse($a to $b) {$body...} => ($i: int = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol and $b is int
 rewrite for $i in reverse($a to $b) {$body...} => ($i = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol
+# The count and the sum of a range of whole numbers without its items (card count-sum): `count(1..10^12)` is n - m,
+# `sum(1 to n)` Gauss's (m + n)·(n - m + 1)/2; an empty range counts and sums 0
+rewrite count($a..$b) => ($start = $a; $end = $b; if $end > $start then $end - $start else 0) where $a is int
+rewrite count($a to $b) => ($start = $a; $end = $b; if $end >= $start then $end - $start + 1 else 0) where $a is int
+rewrite (#($a..$b)) => ($start = $a; $end = $b; if $end > $start then $end - $start else 0) where $a is int
+rewrite (#($a to $b)) => ($start = $a; $end = $b; if $end >= $start then $end - $start + 1 else 0) where $a is int
+rewrite sum($a..$b) => ($start = $a; $end = $b - 1; if $end >= $start then ($start + $end) * ($end - $start + 1) div 2 else 0) where $a is int
+rewrite sum($a to $b) => ($start = $a; $end = $b; if $end >= $start then ($start + $end) * ($end - $start + 1) div 2 else 0) where $a is int
 # An object whose class has next() is walked by it until it gives ø: `for x in Countdown(3)` (decision
 # for-over-iterator)
 rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(); if $x == ø { break }; $body... }) where $x is symbol and $o is instance
