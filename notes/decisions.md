@@ -540,6 +540,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
+- core-hygiene (user, notes/core_hygiene.md): all five moves go ahead. D (tuples, safe_navigation → lib/sugar; number_words → lib/english; entities.tsv → lib data; durations → runtime/extended) at once as plain relocation; A (libraries declare their host imports and compile-time words, removing host_words, std_module_names, canvas words, the rule_words table, wgsl baking), B (GPU lists an extension behind list-kind hooks), C (one parser rule for a named language's literal with holes: shader, wgsl, sql, sh) and E (@primitive, times, C FFI loaded only when used) are sized first, core line counts back to the user before building.
 - method-clash-from-source: a linked module whose class methods share a name with the program's classes is compiled from source (compiler note); real binding is card class-method-linking.
 - linked-variants-by-arity: linking keeps every variant of a name, a call takes the one whose arity fits; none fits → refused naming the variants.
 - baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
