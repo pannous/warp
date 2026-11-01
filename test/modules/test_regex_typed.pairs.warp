@@ -1,0 +1,5 @@
+# notes/stdlib.md: regex provides matching, finding and replacing
+'use regex; matches("abc", "b")'	yes
+'use regex; first_match("abc", "z")'	ø
+'use regex; find_all("a1 b22", "[0-9]+")'	["1", "22"]
+'use regex; replace_all("a1", "[0-9]", "#")'	"a#"
