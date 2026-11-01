@@ -20,6 +20,7 @@ TIMEFORMAT="%U %S"
 check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
+scripts=$(cd "$(dirname "$0")" && pwd)
 warp=${WARP_BINARY:-warp}
 seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
 compilers=$tree/lib
@@ -33,14 +34,25 @@ trap 'rm -rf "$scratch"' EXIT
 # stage <compiler> <output>: `warp rebuild pure` with <compiler> as the seed, the one thing a seed is asked to do (a seed
 # older than the harness may lack its newer commands: the seed of 14:52 traps in `warp self build` since the build
 # moved into compiler.warp, 2026-10-28). It leaves the tree's lib/ compilers those of the last stage's rebuild.
+# in_slot <log> <command…>: the command in the machine's fair build line (scripts/build-slot.sh), as every compile of
+# the compiler is, then the log's last lines
+in_slot() {
+  local log=$1 lines=$2
+  shift 2
+  : >"$log"
+  (cd "$tree" && "$scripts/build-slot.sh" "$log" "$@")
+  local status=$?
+  tail -"$lines" "$log"
+  return $status
+}
 stage() {
-  (cd "$tree" && WARP_SEED=$1 "$warp" rebuild seed 2>&1 | tail -2)  # its machine code and runtime, outside the time
+  WARP_SEED=$1 in_slot "$scratch/warm.log" 2 "$warp" rebuild seed  # its machine code and runtime, outside the time
   rm -f "$built"
   local start=$SECONDS
   # the CPU seconds (user + system) are the speed guard's measure: wall time swings with the box's load (2026-10-28:
-  # the same compile took 95 s at load 10, 233 s at load 89)
+  # the same compile took 95 s at load 10, 233 s at load 89), and a wait in the build line costs none
   # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
-  { time (cd "$tree" && WARP_SEED=$1 "$warp" rebuild pure 2>&1 | tail -5); } 2>"$scratch/cpu" &&
+  { time (WARP_SEED=$1 in_slot "$scratch/rebuild.log" 5 "$warp" rebuild pure); } 2>"$scratch/cpu" &&
     [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
   cp "$built" "$2"
   stage_seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
