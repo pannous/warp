@@ -233,6 +233,7 @@ function startWorker(restarts = 0) {
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
 			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
+			if (data.type === "full screen") return fullScreen(data.full);
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -341,7 +342,7 @@ function notification(text) {
 // paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
 document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
@@ -885,8 +886,13 @@ function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
 // on ⛶ is no click of the program's `on click`
 function toggleFullScreen(click) {
 	click.stopPropagation();
-	if (document.fullscreenElement) document.exitFullscreen();
-	else $("painted").requestFullscreen();
+	fullScreen(!document.fullscreenElement);
+}
+// the paintings full screen or back, by ⛶ or the program's window.fullscreen = yes (the browser grants it only right
+// after the viewer's click or key, so a program's key handler can, a timer cannot: said, not thrown)
+function fullScreen(full) {
+	if (!full) return document.fullscreenElement && document.exitFullscreen();
+	if (!document.fullscreenElement) $("painted").requestFullscreen().catch(refusal => console.warn("full screen:", refusal.message));
 }
 
 // ---- page events (notes/signals.md phase 7): `on click {…}`, `on key {…}` of the program shown --------------------
