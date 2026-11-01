@@ -106,3 +106,11 @@ definitions; user: discuss later). Left: emit 44 s (22%), index_positions 18 s, 
 - phase-times.py stops at a log's first `emit done`.
 - The marks are printed (stdout): WARP_TIMES set for a test or gate run makes every case's output differ; set it only
   for the build or self-check measured.
+
+## Hints and warnings cost nothing worth skipping (card hints-at-parse-cost, 2026-11-01)
+WARP_HINTS=0 / --no-hints only filters hints when printing (core/compiler.warp said_at); the checks still run. Measured
+on stage two's stored profile (record 1221d950b1ac6a95, 25 k samples, compiler.warp): diagnose, said_fact, rows,
+rows_of, written_at, place_text together 0.1 %; dropped_value 0.2 %; source_checks/lints run only on the main file
+(the used files go through checked_parse), so they don't show at all. The two hints (alias_word, implicit_use) only
+say what the rewrite and use resolution do anyway. kind_changes (2.0 %) and main_globals (0.3 %) find errors too,
+so they must run. A switch that skips the producers would save under 0.5 %: not built.
