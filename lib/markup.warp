@@ -39,12 +39,12 @@ handler_prefix = "on"
 handler_attribute_prefix = "data-warp-"
 
 // the HTML of the page's value, its handlers numbered anew from 1 in render order
-page_render(value: any) := {
+export page_render(value: any) := {
 	page_handlers = []
 	to_html(value)
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
-page_event(n: int, detail: any) := {
+export page_event(n: int, detail: any) := {
 	handler = page_handlers#n
 	handler(detail)
 }
