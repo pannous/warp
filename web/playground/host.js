@@ -614,9 +614,12 @@ function runSubmitted(holder, hooks, request) {
 	return { ...outcomeOf(holder, hooks, () => submitted(buildValue(holder.exports, treeOfPlain(request)))), headers: holder.answerHeaders };
 }
 
-// a timer's handler (on·every·<id>), given ø when it reads `event`, as natively (system_signals.rs call_handler)
-function runTimer(holder, hooks, name) {
+// a handler run: a timer's by its id through the program's one export timer_fired(id: int) (host-timers.js), a
+// fetch's by its export name, given ø when it reads `event`
+const TIMER_FIRED_EXPORT = "timer_fired";
+function runTimer(holder, hooks, handler) {
 	holder.warnings = [];
-	const handler = holder.exports[name];
-	return outcomeOf(holder, hooks, () => handler.length ? handler(holder.exports.new_empty()) : handler());
+	if (typeof handler === "number") return outcomeOf(holder, hooks, () => holder.exports[TIMER_FIRED_EXPORT](BigInt(handler)));
+	const named = holder.exports[handler];
+	return outcomeOf(holder, hooks, () => named.length ? named(holder.exports.new_empty()) : named());
 }

@@ -1,0 +1,2 @@
+# on exit runs once the program is done, the program's value kept (tour on exit)
+'on exit { print "bye" }; print "working"; 42'	42
