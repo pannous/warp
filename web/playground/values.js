@@ -43,7 +43,9 @@ const guestInts = (program, list, count = guestCount(program, list)) =>
 function guestEntries(program, value) {
 	try {
 		if (isGuestText(program, value)) return undefined;
-		const entries = guestItems(program, value).map(entry => guestCount(program, entry) === 2 && isGuestText(program, guestItem(program, entry, 0)) ? [guestText(program, guestItem(program, entry, 0)), guestItem(program, entry, 1)] : undefined);
+		// the name a Symbol, shown as itself
+		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0)) : undefined;
+		const entries = guestItems(program, value).map(entry => named(entry) === undefined ? undefined : [named(entry), guestItem(program, entry, 1)]);
 		return entries.length && entries.every(Boolean) ? entries : undefined;
 	} catch {
 		return undefined; // a number, or an item of no items

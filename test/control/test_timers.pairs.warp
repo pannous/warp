@@ -1,0 +1,4 @@
+# a timer runs its block at each period in a page; natively none starts and the program goes on (card registers-page)
+'n = 1; on every 500ms { n = 2 }; n'	1
+'ticks = 0; on every 1 second { ticks += 1 }; ticks + 1'	1
+'n = 1; on every 500ms: print n; n + 1'	2
