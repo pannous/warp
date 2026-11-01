@@ -494,7 +494,7 @@ addHostPart({
 		// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
 		const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
 		const numberList = (values, Elements) => !selfHosted(program()) ? list(Array.from(values), item(Elements))
-			: Elements === Float32Array ? newGuestFloats(program(), values) : newGuestValue(program(), Array.from(values, Number));
+			: Elements === Float32Array ? newGuestFloats(program(), values) : newGuestInts(program(), values);
 		// the kernel over the f32 copy of a block's cells, from `first` on read back; `kept` as gpuComputedFloats takes it
 		const kernel = (shader, numbers, workgroups, first, kept = {}) =>
 			gpuJob("gpu_kernel", { shader: plain(shader), numbers, workgroups: Number(workgroups), first, ...kept }, [numbers.buffer]);

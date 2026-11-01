@@ -118,7 +118,13 @@ function newGuestList(program, items) {
 	if (items.length === 0) return program.new_bytes(0, 0, SQUARE_BRACKET);
 	return items.reduceRight((rest, item) => program.new_list(item, rest, SQUARE_BRACKET), null);
 }
-const newGuestFloats = (program, numbers) => newGuestList(program, Array.from(numbers, number => program.new_float(number)));
+// a [list] of numbers, its cells laid in the module's memory and built in one call (new_floats, new_ints of
+// core/emitter/host.warp): new_list a cell at a time copies the list built so far, a million items stalled the page
+// (card list-cell-build)
+const newGuestCells = (program, cells, builder) =>
+	program[builder](placedBytes(program, new Uint8Array(cells.buffer, cells.byteOffset, cells.byteLength)), cells.length, SQUARE_BRACKET);
+const newGuestFloats = (program, numbers) => newGuestCells(program, Float64Array.from(numbers), "new_floats");
+const newGuestInts = (program, numbers) => newGuestCells(program, BigInt64Array.from(numbers, BigInt), "new_ints");
 // a map of the module's: its entries `name: value`, in curly brackets
 function newGuestMap(program, entries) {
 	const keys = entries.map(([name, value]) => program.new_spelled_key(newGuestBytes(program, name, "new_symbol"), newGuestText(program, ":"), value));
