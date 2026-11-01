@@ -6,7 +6,7 @@
 # WARP_BUILD_RECORD=<dir>: the run measured into that folder (user 2026-10-31: every build profiled, all of it kept):
 # time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (WARP_PROFILE=perfmap)
 set -uo pipefail
-BUILD_SLOTS=${WARP_BUILD_SLOTS:-5}
+BUILD_SLOTS=${WARP_BUILD_SLOTS:-3}  # 5 drove the load to ~460 with tests beside them (2026-11-01, swap full)
 LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
 if [ "$(uname)" = Darwin ]; then store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}; else store=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers}; fi
 scripts=$(cd "$(dirname "$0")" && pwd)
