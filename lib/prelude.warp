@@ -339,6 +339,8 @@ decimal_text(numerator: int, denominator: int) := {
 	}
 	text
 }
+// `x as decimal` (lib/sugar/arithmetic.warp): the decimal digits of x, its period overlined
+as_decimal(x: number) := decimal_text(numerator(x), denominator(x))
 // x as a fraction, by its continued fraction (rust-harness:src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
@@ -626,6 +628,8 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	// `x: int`, `$k: int`, `$n: > 0`: the part fits the condition, and the name takes it
 	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, bound, no) and fits_name(value, name_of(left), bound, code) }
 	if op == "|" or op == "or" { return fits_pattern(value, left, bound, code) or fits_pattern(value, right, bound, code) }
+	// `Shape::Circle(r)`, `Shape.Circle(r)`: the case of its enum
+	if (op == "::" or op == ".") and not code and is_case_with_fields(right) { return fits_pattern(value, right, bound, code) }
 	// `not p`, `!= x` (read as `not == x`): the part does not fit p, binding nothing
 	if op == "not" and left == ø and not code { return not fits_pattern(value, right, {}, no) }
 	if op in range_ops and not code { return in_range(value, op, left, right) }
@@ -658,9 +662,21 @@ fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	// `data(…)`: the code inside, holes and all
 	if not code and bracket_of(pattern) == "(" and #pattern == 2 and pattern#1 == symbol("data") { return fits_pattern(value, pattern#2, bound, yes) }
 	if bracket_of(pattern) == "{" and not code { return fits_map(value, pattern, bound) }
+	if is_case_with_fields(pattern) and not code and class_name(value) == name_of(pattern#1) { return fits_fields(value, pattern, bound) }
 	if code and bracket_of(value) != bracket_of(pattern) { return no }
 	if not code and not is_type(value, "list") { return no }
 	fits_items(value, pattern, bound, code)
+}
+// `Circle(r)`, `Rect(w, h)`: an enum case carrying data, or a class, with a pattern for each field
+is_case_with_fields(pattern: any): bool := bracket_of(pattern) == "(" and #pattern > 1 and is_type(pattern#1, "symbol")
+// the class of an instance, Circle of `Circle{r: 2}` (type shows as "class Circle")
+class_name(value: any): text := { shown = name_of(type(value)); if shown.starts_with("class ") then shown[6 ..< #shown] else "" }
+// the instance's fields in order fit the patterns after the case name
+fits_fields(value: any, pattern: any, bound: map): bool := {
+	fields = value.keys
+	if #fields != #pattern - 1 { return no }
+	for i in 1 to #fields { if not fits_pattern(value[fields#i], pattern#(i + 1), bound, no) { return no } }
+	yes
 }
 // the items, a rest among them taking those the others leave, the items after it counted from the end
 fits_items(value: any, pattern: any, bound: map, code: bool): bool := {

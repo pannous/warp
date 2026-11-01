@@ -1,0 +1,9 @@
+# numerator(x) and denominator(x) of an exact number, an int its own numerator over 1
+'numerator(3/4)'	3
+'denominator(3/4)'	4
+'numerator(6/8)'	3
+'denominator(-1/3)'	3
+'numerator(-1/3)'	-1
+'numerator(5)'	5
+'denominator(5)'	1
+'x = 2/7; numerator(x) + denominator(x)'	9

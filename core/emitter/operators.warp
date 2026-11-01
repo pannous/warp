@@ -161,12 +161,17 @@ static_type_word(kind: ValueKind): text? := match kind {
 	ValueKind.Bool: "bool"
 	_: ø
 }
+# a list's type as analyzer.warp found its items, `list of rational`; items of no common type a plain list
+analyzed_list_type(body: Body, n: Node): text := {
+	word = type_word(n, scopes.get(body.function.name) ?? scopes[""])
+	if word == "list of node" then "list" else word
+}
 # a whole number is a nat but where it is a fast int, declared int (decision nat-and-int)
 def type_value_of(body: Body, n: Node): TypedCode {
 	value = expression_code(body, n)
 	if value.kind == ValueKind.Node and boxed_int_slot(body, n) { return runtime_call("int_slot_type_name", [value, list_value(body, module.classes.keys)]) }
 	if value.kind == ValueKind.Node { return runtime_call("node_type_name", [value, list_value(body, module.classes.keys)]) }
-	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else static_type_word(value.kind)
+	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else if value.kind == ValueKind.List and "" in scopes then analyzed_list_type(body, n) else static_type_word(value.kind)
 	if word != ø { return TypedCode(ValueKind.Node, node(Marked.TypeValue, text_bytes(word))) }
 	refuse("the type of a " + kind_spelling(value.kind))
 }
