@@ -470,7 +470,7 @@ wgsl_value_width(assigned_code: Node): int := {
 wgsl_assigned_value(word: text): any := main_level_value(word, shading.program)
 # the value the program's main level assigns the name first, ø where it assigns none
 main_level_value(word: text, program: Node): any := {
-	found = program_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
+	found = level_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
 	if #found == 0 then ø else value_of(found#1)
 }
 # `global x = 3`, parsed `global: (x = 3)`: the assignment it declares

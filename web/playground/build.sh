@@ -1,101 +1,45 @@
 #!/bin/bash
-# Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web/mod.rs) in two
-# builds, samples.js (samples/<chapter>/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
-# version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
-#   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
-# Usage: build.sh [optimized|debug|runtime|components|pinned|served <site>|site <site>]   (all when omitted)
-#   optimized → warp.wasm: profile web-release (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
-#               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
-#   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
-#               emitter bugs are named and stack traces and the browser's debugger show Rust functions and lines
-#   components → components/<name>.js for every COMPONENTS component (`use <name>`, components.js), and their names in
-#               components/names.txt: jco
-#               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
-#               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
-#   runtime   → runtime.wasm: the runtime words a separately built program imports (`warp build --separate`, host.js
-#               withRuntime), written by the native compiler's `runtime` command (notes/runtime_linking.md); not in
-#               `all`, since CI has no native compiler yet; `site` takes it when built
-#   pinned    → packages/<name>: every package of packages.warp and the default registry (`warp fetch`; the browser
-#               suite reads them from the repository root, pages.yml, scripts/browser-dry-run.sh)
+# Builds web/playground: the self-hosted compiler for the browser (warp.wasm with the lib/ it compiles with, copied from
+# the installed warp beside ~/dev/bin/warp into warp-lib/, driver.js runs it), samples.js (samples/<chapter>/*.warp for
+# the example menu), keywords.js (the editor's hard and soft keywords) and version.js (the commit built, shown in the ⋯
+# menu). Serve the repository root and open the page:
+#   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/
+# Usage: build.sh [compiler|served <site>|site <site>]   (all when omitted)
+#   compiler  → warp-lib/: the installed lib/ (its warp.wasm, runtime.wasm, modules/ and sources), no machine code
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
-# Measured 2026-10-03: optimized 1.30 MB (545 KB gzipped); debug 22 MB (4.8 MB gzipped; full DWARF would be 53 MB).
-# Not taken: -Cpanic=immediate-abort with -Zbuild-std saves another 6% but needs nightly and loses the panic messages.
 set -euo pipefail
 
-COMPONENTS=(tests/fixtures/components/*.wasm)
+# the installed compilers: lib/ beside the warp on $PATH (~/dev/bin/lib links to the current build), else WARP_LIB
+INSTALLED_LIBRARY="${WARP_LIB:-$(dirname "$(command -v warp)")/lib}"
+# what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
+NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dylib' --exclude='*.so' --exclude='*.kept'
+	--exclude='*.stale' --exclude='*.inputs' --exclude='warp-self.wasm*' --exclude='data/')
 # what `build.sh site <folder>` collects from web/playground into the deployed site (pages.yml)
 SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js completion.js shortcuts.js entities.tsv guide.js
 	guide.md guide-expert.md primer.md markup.js markup-transitions.js markup-forms.js canvas.js worker.js task-worker.js
-	task-workers.js js-members.js coi-serviceworker.js host.js "host-*.js" components.js components foreign_python.py
-	reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm
-	warp.debug.wasm samples.js keywords.js keywords.txt assistant.json version.js)
+	task-workers.js js-members.js coi-serviceworker.js host.js "host-*.js" values.js wasi.js driver.js components.js foreign_python.py python_capi.py
+	reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
+	keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
-
-STACK_BYTES=8388608 # the parser and the emitter recurse deeply; wasm32's default stack is 1 MB
-WASM_OPT_FLAGS=(-Oz --converge --strip-debug --strip-producers
-	--enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals)
 
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
-offline=$([ "${CARGO_NET_OFFLINE:-true}" = false ] || echo --offline) # CI (.github/workflows/pages.yml) fetches crates
-target_dir="$(cargo metadata $offline --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
-
-# compile the cdylib with a cargo profile and features; prints the path of the module
-compile() {
-	local profile=$1; shift
-	RUSTFLAGS="-C link-arg=-zstack-size=$STACK_BYTES" cargo rustc $offline --lib --crate-type cdylib --profile "$profile" \
-		--target wasm32-unknown-unknown --no-default-features "$@" >&2 || return # set -e stops nothing inside $(compile …)
-	echo "$target_dir/wasm32-unknown-unknown/$profile/warp.wasm"
-}
-
-build_optimized() {
-	local compiled
-	compiled=$(compile web-release)
-	# without wasm-opt (or an older one refusing a feature) the module of the LTO build serves, a seventh larger
-	wasm-opt "${WASM_OPT_FLAGS[@]}" "$compiled" -o "$page/warp.wasm" || cp "$compiled" "$page/warp.wasm"
-	echo "built $page/warp.wasm ($(wc -c < "$page/warp.wasm") bytes)"
-}
-
-build_runtime() {
-	"$(scripts/own-warp.sh | tail -1)" pure runtime "$page/runtime.wasm"
-	echo "built $page/runtime.wasm ($(wc -c < "$page/runtime.wasm") bytes)"
-}
-
-build_debug() {
-	cp "$(compile web-debug --features validate)" "$page/warp.debug.wasm"
-	echo "built $page/warp.debug.wasm ($(wc -c < "$page/warp.debug.wasm") bytes)"
-}
-
-# a classic script for importScripts: registerComponent(name, {core module: base64}, signatures, instantiate)
-build_components() {
-	mkdir -p "$page/components"
-	for component in "${COMPONENTS[@]}"; do
-		local name transpiled="$repository/data/components/$(basename "$component" .wasm)"
-		name=$(basename "$component" .wasm)
-		jco transpile "$component" --instantiation sync --no-namespaced-exports --quiet -o "$transpiled"
-		wasm-tools component wit --json "$component" > "$transpiled/wit.json"
-		python3 - "$transpiled" "$name" "$component" > "$page/components/$name.js" <<'PYTHON'
-import base64, glob, json, os, re, sys
-folder, name, source = sys.argv[1:]
-cores = {os.path.basename(path): base64.b64encode(open(path, "rb").read()).decode() for path in sorted(glob.glob(f"{folder}/*.wasm"))}
-# the exported functions' parameter names and types: the root's own and those of its exported interfaces
-wit = json.load(open(f"{folder}/wit.json"))
-world = next((world for world in wit["worlds"] if world["name"] == "root"), wit["worlds"][-1])
-exported = [item["function"] for item in world["exports"].values() if "function" in item]
-exported += [function for item in world["exports"].values() if "interface" in item for function in wit["interfaces"][item["interface"]["id"]]["functions"].values()]
-signatures = {"functions": {function["name"]: {"params": [parameter["name"] for parameter in function["params"]], "result": function.get("result")} for function in exported},
-	"types": [type_["kind"] for type_ in wit["types"]]}
-script = re.sub(r"^export ", "", open(f"{folder}/{name}.js", encoding="utf-8").read(), flags=re.M)
-print(f"// made by build.sh from {source} (jco transpile --instantiation sync)")
-print(f"registerComponent({json.dumps(name)}, {json.dumps(cores)}, {json.dumps(signatures)}, (() => {{\n{script}\nreturn instantiate;\n}})());")
-PYTHON
-		echo "built $page/components/$name.js"
+build_compiler() {
+	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
+	rm -rf "$page/warp-lib"
+	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
+	# the tree's library over it, so the page runs this checkout's lib/ before an install: a module whose source
+	# changed is compiled from its source (its prebuilt modules/<name>.wasm dropped)
+	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" --exclude=compiler/ --exclude=modules/ --exclude="*.wasm" "$repository/lib/" "$page/warp-lib/"
+	local module name
+	for module in "$page/warp-lib/modules/"*.wasm; do
+		name=$(basename "$module" .wasm)
+		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
 	done
-	# the compiler's list of them (src/lowering/foreign/foreign_modules.rs PAGE_COMPONENTS): `use rust_demo` names one
-	for component in "${COMPONENTS[@]}"; do basename "$component" .wasm; done > "$page/components/names.txt"
+	echo "built $page/warp-lib from $INSTALLED_LIBRARY and lib/ ($(du -sh "$page/warp-lib" | cut -f1))"
 }
 
 # served-files.js: the files the server has, so the compiler's module and header searches ask only for those that exist
@@ -109,16 +53,8 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
-	# plus the built components, which git ignores (components/names.txt is what the compiler asks for)
-	{ git ls-files --cached --others --exclude-standard; find web/playground/components -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
-}
-
-# the browser cannot run git: every package of packages.warp and the default registry, fetched by the native warp as
-# `use` fetches it (`warp fetch`, src/modules/packages.rs): a pinned version cloned once into the package cache, linked
-# as packages/<name>
-fetch_pinned_packages() {
-	"$(scripts/own-warp.sh | tail -1)" fetch
-	ls -l packages
+	# plus the compiler's lib/, which git ignores
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
 }
 
 write_site_served_files() {
@@ -132,23 +68,18 @@ collect_site() {
 	(cd "$page" && cp -r ${SITE_FILES[@]} "$site/") # unquoted: host-*.js expands in the page folder
 	# the language primer for agents at the conventional path (llmstxt.org)
 	cp "$page/primer.md" "$site/llms.txt"
-	# runtime.wasm only once built (`build.sh runtime` needs the native compiler): without it a separately built program
-	# fails naming the file
-	if [ -f "$page/runtime.wasm" ]; then cp "$page/runtime.wasm" "$site/"; else echo "note: no runtime.wasm in the site (build.sh runtime)" >&2; fi
+	# the compiler at its repository path (driver.js COMPILER_LIBRARY)
+	mkdir -p "$site/web/playground" && cp -r "$page/warp-lib" "$site/web/playground/"
 	# every host part the worker imports (host.js HOST_PART_FILES) is shipped, else no deploy
 	for part in $(grep -o '"host-[a-z]*\.js"' "$page/host.js" | tr -d '"'); do
 		[ -f "$site/$part" ] || { echo "::error::$part missing from the site" >&2; exit 1; }
 	done
-	# the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
-	mkdir -p "$site/tests/fixtures/wasm" && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h "$site/tests/fixtures/wasm/"
 	# the samples' neighbours at their repository paths, as natively: `play "tune.mp3"` beside samples/sound/play_mp3.warp
 	# (card open-mozart; tune.mp3 is our own half-second C-E-G, mozart.mp3 left for its unclear copyright), the files a sample reads, writes over or includes; the regular ones, not the links
 	# (samples/tests, samples/wasm/shapes.wasm)
 	git ls-files -z samples | while IFS= read -r -d '' file; do
 		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
 	done
-	# the warp-compiled module samples/wasm/import_compiled.warp imports by its bare name (samples/wasm/shapes.wasm links it)
-	mkdir -p "$site/samples/wasm" && cp tests/fixtures/compiled/shapes.wasm "$site/samples/wasm/"
 	echo "$DOMAIN" > "$site/CNAME"
 	# the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
 	write_site_served_files "$site"
@@ -158,20 +89,15 @@ collect_site() {
 case "${1:-all}" in
 	served) write_site_served_files "$2"; exit ;;
 	site) collect_site "$2"; exit ;;
-	pinned) fetch_pinned_packages; exit ;;
-	optimized) build_optimized ;;
-	debug) build_debug ;;
-	runtime) build_runtime ;;
-	# test_in_browser.py builds only these, and the worker imports served-files.js (card browser-served)
-	components) build_components; write_repository_served_files; exit ;;
-	all) build_optimized; build_debug; build_components ;;
-	*) echo "usage: $0 [optimized|debug|runtime|components|pinned|served <site>|site <site>]" >&2; exit 2 ;;
+	compiler) build_compiler ;;
+	all) build_compiler ;;
+	*) echo "usage: $0 [compiler|served <site>|site <site>]" >&2; exit 2 ;;
 esac
 
 write_repository_served_files
 
-# a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples
-python3 - "$page/samples.js" "$page/excluded_samples.txt" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\)/') <<'PYTHON'
+# a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
+python3 - "$page/samples.js" "$page/excluded_samples.txt" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
 import collections, json, os, sys
 # the samples the page cannot run yet stay out of the menu, each named with its error in excluded_samples.txt
 excluded = {line.split()[0] for line in open(sys.argv[2], encoding="utf-8") if line.strip() and not line.startswith("#")}
@@ -195,8 +121,9 @@ PYTHON
 echo "built $page/samples.js"
 
 # the editor colors the keywords of P165 from their definitions (keywords.py)
-python3 web/playground/keywords.py "$page/keywords.js"
-echo "built $page/keywords.js and keywords.txt"
+# keywords.py still reads the Rust sources, gone since the compiler is warp: loud, and the page keeps the last keywords.js
+python3 web/playground/keywords.py "$page/keywords.js" && echo "built $page/keywords.js and keywords.txt" ||
+	echo "warning: keywords.js not rebuilt (keywords.py reads src/, card playground-keywords)" >&2
 # the uniscript entities completion.js lists after \: and <:
 cp core/entities.tsv "$page/entities.tsv"
 

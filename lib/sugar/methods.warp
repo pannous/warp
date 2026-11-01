@@ -31,6 +31,10 @@ rewrite unwrap($x.$m) => $x = $x.$m where $x is value and $m is function
 rewrite unwrap($x.$m()) => $x = $x.$m() where $x is value and $m is function
 rewrite $f unwrap($x) => $x = $f($x) where $x is value and $f is function and not $f in [print, puts]
 rewrite $f(unwrap($x)) => $x = $f($x) where $x is value and $f is function and not $f in [print, puts]
+# `xs.size -1`, `p.x -1`: a member taking nothing but its receiver (a word of one parameter, or a field), then a new
+# item, as `x -1` of a variable x is (decision glued-negative); `xs.add -1` stays its call
+rewrite $x.$f $b $a... => [$x.$f, $b, $a...] where $f is symbol and $b < 0 and $f takes one
+rewrite $x.$f $b $a... => [$x.$f, $b, $a...] where $f is symbol and $b < 0 and $x is value and $f is not function
 # `t.replace "tea" with: "coffee"`: a member followed by arguments, unbracketed, is its call
 rewrite $x.$f $b $a... => $x.$f($b, $a...) where $f is symbol and $x is not enum and $b is not block
 

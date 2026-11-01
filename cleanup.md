@@ -23,3 +23,7 @@ Verify each example against the installed compiler and document the working form
 ## Runtime documentation plan
 
 Document the runtime roots and split from current source; verify representative examples with the installed compiler.
+
+## Typed parse root diagnostic
+
+Keep the retained experimental branch intact. Upgrade the root outcome to the more precise list element type emitted by current main, then run the focused test and merged-main smoke.

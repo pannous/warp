@@ -413,11 +413,12 @@ const GPU_JOBS = {
 	gpu_paints: async () => ({ values: [await theGpuDevice().then(() => 1, failure => failureText(failure))] }),
 };
 
-// the system value "gpu paints" (crates/warp-runtime host_words.rs GPU_PAINTS): whether a shader can paint, asked of the
+// the system value "gpu_paints" (crates/warp-runtime host_words.rs GPU_PAINTS): whether a shader can paint, asked of the
 // GPU's task Worker: a yes is kept for the page, a no only for the run (a slow first answer, a timed-out adapter, is asked
 // again by the next run, and not on every frame of this one); without, paint(f, …) of a warp function paints f on the
 // CPU, as the run's warning says once
-const GPU_PAINTS = "gpu paints";
+const GPU_PAINTS = "gpu_paints"; // lib/prelude.warp gpu_paints()
+const GPU_DRAWING = "gpu_drawing"; // lib/draw.warp: use draw on the GPU is native only (draw_shape below), so never here
 const PAINTS_ON_CPU = "paint: a function paints on the CPU"; // src/graphics/paint.rs
 let gpuPaintsHere = false;
 function gpuPaints(holder) {
@@ -487,10 +488,14 @@ function linearCells(memory, block) {
 }
 
 addHostPart({
-	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : undefined,
+	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? false : undefined,
 	words: (holder, hooks, { program }) => {
-		const plain = node => plainOfTree(readNode(program(), node));
+		const plain = node => plainValue(program(), node);
 		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });
+		// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
+		const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
+		const numberList = (values, Elements) => !selfHosted(program()) ? list(Array.from(values), item(Elements))
+			: Elements === Float32Array ? newGuestFloats(program(), values) : newGuestValue(program(), Array.from(values, Number));
 		// the kernel over the f32 copy of a block's cells, from `first` on read back; `kept` as gpuComputedFloats takes it
 		const kernel = (shader, numbers, workgroups, first, kept = {}) =>
 			gpuJob("gpu_kernel", { shader: plain(shader), numbers, workgroups: Number(workgroups), first, ...kept }, [numbers.buffer]);
@@ -584,17 +589,16 @@ addHostPart({
 		};
 		const computed = (shader, numbers, workgroups) => {
 			const code = plain(shader), given = plain(numbers);
-			// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
-			const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
 			if (given !== null && typeof given === "object" && isPlainObject(given)) {
 				const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
 				const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
 				const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
+				if (selfHosted(program())) return newGuestMap(program(), Object.entries(left).map(([name, values]) => [name, numberList(values, elements[name])]));
 				const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
 				return buildValue(program(), { kind: CURLY_LIST, items: entries });
 			}
 			const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
-			return list(values, item(gpuElements(code)));
+			return numberList(values, gpuElements(code));
 		};
 		const rendered = (shader, width, height, values) => {
 			const pixels = holder.gpuRendered(plain(shader), width, height, values);

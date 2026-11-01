@@ -12,11 +12,26 @@ playground instead, with --site once it serves those built files.
 WebDriver: macOS CI runners, after `sudo safaridriver --enable`; its console is not watched).
 `test_in_browser.py --examples --site _site [name…]` checks it in a collected site (pages.yml), served as its root: a file
 the deploy forgot fails here, not on the live page.
+`test_in_browser.py --samples [samples/….warp…]` (scripts/samples-web.sh) runs every sample in the page, each as its own
+file, and compares its output with the native run's (scripts/samples.sh: data/samples/out); writes test/samples-web.txt.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/formats/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
 
+# --samples (scripts/samples-web.sh): every samples/**/*.warp in the page, its output against the native run's
+SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one a line, like test/samples.txt
+NATIVE_RESULTS = "test/samples.txt"  # scripts/samples.sh: WIN samples need a C window library, never run in a page
+# scripts/samples.sh: <sample with / as _>.txt, what the native run printed (samples-web.sh names the main checkout's)
+NATIVE_OUTPUTS = os.environ.get("WARP_NATIVE_OUTPUTS", "data/samples/out")
+SAMPLES_WEB_DATA = "data/samples-web"  # report.txt (each difference's first lines) and out/, what the page printed
+# the page stops a run after this (playground.js ?run_seconds, natively scripts/samples.sh gives 30 s) and answers; a
+# page that has not answered 10 s later is stuck
+SAMPLE_RUN_SECONDS = 30
+SAMPLE_ANSWER_SECONDS = SAMPLE_RUN_SECONDS + 10
+SHOWN_DIFFERENCE = 300  # characters of each side in report.txt
+# a duration a sample measures (`painted in 53 ms`) differs on every run: both sides compare with it masked
+MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", str(os.cpu_count() or 2))  # tests in flight: one per core
@@ -37,6 +52,9 @@ DEPLOYED_POLL_SECONDS = 10
 POLL_SECONDS = 3
 BINARY_PATH = "/__tests__.wasm"
 INCLUDE_PREFIX = "/__include__/"
+# where /__include__/<header> looks (wasi.js WARP_INCLUDE): the Rust compiler's FFI parser read its list from
+# src/formats/ffi_parser.rs, gone with src/
+HEADER_DIRECTORIES = ("/opt/homebrew/include", "/usr/local/include", "/usr/include")
 HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
 RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
@@ -232,18 +250,10 @@ served = []
 SERVED_SHOWN = 400  # the first requests: the page's and its workers' loading
 
 
-@functools.cache
-def include_dirs():
-	"""the compiler's own list, so both look in the same places; read when the server starts, so a moved ffi_parser.rs
-	stops the run instead of failing each header request quietly"""
-	source = open(os.path.join(REPOSITORY, "src", "formats", "ffi_parser.rs"), encoding="utf-8").read()
-	return re.findall(r'"([^"]+)"', re.search(r"const INCLUDE_DIRS[^=]*=\s*&\[(.*?)\];", source, re.S).group(1))
-
-
 def find_header(name):
 	if not HEADER_NAME.match(name):
 		return None
-	return next((path for path in (os.path.join(directory, name) for directory in include_dirs()) if os.path.isfile(path)), None)
+	return next((path for path in (os.path.join(directory, name) for directory in HEADER_DIRECTORIES) if os.path.isfile(path)), None)
 
 
 def log_served(path, finished):
@@ -260,7 +270,6 @@ SERVER_STARTED = time.time()
 
 
 def serve(binary, root=REPOSITORY):
-	include_dirs()
 
 	class Handler(http.server.SimpleHTTPRequestHandler):
 		def translate_path(self, path):
@@ -1086,13 +1095,107 @@ def build_components():
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
 
 
+# one sample in the page as its own file (%s: path and source as JSON): its report, or {stuck} when the page is stuck
+RUN_SAMPLE = """(async () => JSON.stringify(await Promise.race([playground.evaluate(%s, %s),
+	new Promise(done => setTimeout(() => done({ stuck: true }), %d))])))()"""
+
+
+def page_output(report):
+	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø (the
+	Rust-era page reports the last line's value apart; the self-hosted one prints it, as the native warp does)"""
+	# printedWhole: every frame's output (playground.js shows only an animation's last frame, its `printed`)
+	printed = "".join(part["text"] for part in report.get("printedWhole", report.get("printed", [])) if part.get("stream", 1) == 1)
+	value = report.get("value") or ""
+	if value in ("ø", "") or report.get("error"):
+		return printed
+	shown = value[1:-1] if len(value) > 1 and value[0] == value[-1] == '"' else value
+	return printed + shown + "\n"
+
+
+def sample_verdict(report, native_output):
+	"""(status, detail) of a sample's page run: ok when it printed what the native run printed"""
+	if report.get("stuck"):
+		return "TIME", f"the page gave no answer in {SAMPLE_ANSWER_SECONDS} s"
+	if report.get("error"):
+		first = (report.get("errors") or [report.get("value")])[0]
+		first = first.get("message", first) if isinstance(first, dict) else first
+		return "FAIL", str(first)[:200].replace("\n", " ")
+	shown = page_output(report)
+	if native_output is None:
+		return "ran", "the native run failed or did not run: nothing to compare (test/samples.txt, scripts/samples.sh)"
+	if MEASURED_TIME.sub("…", shown).rstrip() == MEASURED_TIME.sub("…", native_output).rstrip():
+		return "ok", ""
+	return "DIFF", f"page: {shown[:SHOWN_DIFFERENCE]!r}\n     native: {native_output[:SHOWN_DIFFERENCE]!r}"
+
+
+def page_report(source, path, page_url):
+	"""the page's report of the sample; a page that gave none (its renderer crashed, now and then after many runs) is
+	opened anew and asked once more, so only a sample that fails twice in a fresh page counts as stuck"""
+	for attempt in range(2):
+		answer = browser("eval", RUN_SAMPLE % (json.dumps(source), json.dumps(path), SAMPLE_ANSWER_SECONDS * 1000))
+		try:
+			report = json.loads(json.loads(answer))
+		except ValueError:
+			report = {"error": True, "stuck": None, "value": f"(page gave no answer: {(answer or browser_complaint)[:200]})"}
+		if "stuck" not in report:
+			return report
+		open_samples_page(page_url)
+	return report
+
+
+def open_samples_page(page_url):
+	"""the page opened, isolated and its playground API defined (after a crashed renderer the first eval met none)"""
+	open_page(page_url)
+	wait_for_isolation()
+	deadline = time.time() + LAUNCH_SECONDS
+	while browser("eval", "typeof playground") != '"object"' and time.time() < deadline:
+		time.sleep(0.5)
+
+
+def check_samples(paths, tree):
+	"""every sample (or the given ones) in the page served from `tree`, its output against the native run's"""
+	native = dict(line.split(None, 1)[::-1] for line in open(os.path.join(tree, NATIVE_RESULTS), encoding="utf-8").read().split("\n") if line.strip())
+	native = {path.strip(): status for path, status in native.items()}
+	paths = paths or sorted(native)
+	data = os.path.join(tree, SAMPLES_WEB_DATA)
+	os.makedirs(os.path.join(data, "out"), exist_ok=True)
+	server = serve(None, tree)
+	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={SAMPLE_RUN_SECONDS}"
+	open_samples_page(page_url)
+	lines, details = [], []
+	for path in paths:
+		output_name = path.replace("/", "_") + ".txt"
+		if native.get(path) == "WIN":
+			status, detail = "WIN", "needs a C window library"
+		else:
+			source = open(os.path.join(tree, path), encoding="utf-8").read()
+			report = page_report(source, path, page_url)
+			native_file = os.path.join(tree, NATIVE_OUTPUTS, output_name)
+			compared = native.get(path) == "ok" and os.path.isfile(native_file)
+			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
+			status, detail = sample_verdict(report, native_output)
+			with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
+				shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
+		print(f"{status:<4} {path}" + (f": {detail}" if detail and status != "ok" else ""))
+		lines.append(f"{status:<4} {path}")
+		details.append(f"{status:<4} {path}" + (f"\n     {detail}" if detail else ""))
+	browser("close")
+	server.shutdown()
+	written = len(paths) == len(native)  # a run of some samples leaves the tracked results alone
+	if written:
+		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
+	open(os.path.join(data, "report.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
+	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "TIME", "ran", "WIN")}
+	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
+
+
 WEBDRIVERS = {"--firefox": FirefoxDriver, "--safari": SafariDriver}
 
 
 def chrome_allowed():
 	"""Chrome runs only in CI (user, 2026-10-09: no test launches Chrome or Chromium on the Mac): --serve starts none,
-	--firefox runs Firefox, --safari Safari"""
-	return bool(os.environ.get("CI")) or sys.argv[1:2] == ["--serve"] or any(name in sys.argv[2:] for name in WEBDRIVERS)
+	--firefox runs Firefox, --safari Safari; --samples runs headless Chrome (user 2026-11-01, notes/playground_plan.md)"""
+	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
 def live_differences(url, site):
@@ -1135,6 +1238,8 @@ def main():
 		if "--url" in place and "--site" in place:
 			wait_until_deployed(place["--url"], place.pop("--site"))
 		check_examples(names, place.get("--url"), place.get("--site"))
+	if sys.argv[1:2] == ["--samples"]:
+		return check_samples(sys.argv[2:], REPOSITORY)
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)
