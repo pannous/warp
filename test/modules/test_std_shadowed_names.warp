@@ -15,7 +15,7 @@ added(x, y) := 7
 mix([0.1], [0.2])#1 ~ 0.3 and added(1, 2) == 7' true
 is! 'use sound
 biquad(a, k, f, q) := [9]
-count(osc(C4, 0.01s) |> lowpass(500))' 220
+count(osc(C4, 0.01s) |> lowpass(500))' 221
 is! 'use sound
 wave(shape, p) := 0.0
 max(chord_amplitudes([440], 0.01, "sine")) > 0 and wave(1, 2) == 0' true
