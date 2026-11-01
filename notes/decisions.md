@@ -754,7 +754,7 @@ the original questions 1–41: test edits and housekeeping done.
 - library-words-lexical (user 2026-11-01): library code keeps its own words: a library body's call of a word the program redefines stays the library's (`round(x) := 0; round_to(2.345, 2)` is 2.35); a program's word answers only the program's calls.
 
 ## egraph-outside-library (user, 2026-11-01)
-egraph is the first outside library: it lives in the registry github.com/pannous/warp-packages (egraph/), found by
-`use egraph`, not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
+egraph is the first outside library: it lives in the registry github.com/pannous/warp-packages (egraph/), used by its
+path (`use "packages/egraph/egraph.warp"`, decision package-use-by-path), not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
 - markup-keeps final (user, 2026-11-01, via the Interviewer): lib-first; core only fix 1 (tag items are expressions,
   ~15–25 lines) and automatic liveness (~20); keyed instances by hand for now (no core part d). warp-markup builds.
