@@ -110,7 +110,7 @@ gpu_lists_packed(program: Node): any := {
 	statements = level_statements(program)
 	bound = statements.filter(statement => is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program))
 	if #bound == 0 { return ø }
-	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement)))) else statement)
+	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement), "f32"))) else statement)
 	separated(bracketed(packed, ""), ";")
 }
 # a list made right in a GPU word's call made as a GPU list, else ø
@@ -341,7 +341,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, class_help: class_help, function_help: function_help, module_help: module_help, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, class_help: class_help, function_help: function_help, module_help: module_help, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {

@@ -1,8 +1,8 @@
-# GPU lists `[f32]` (decision gpu-bound-floats): the numbers a program hands the GPU, packed as f32 cells in linear
-# memory from their creation (lib/wgsl.warp gpu_packed chooses them), so the GPU's library reads and writes them where
-# they are (lib/native/warp_node.h warp_floats). A List $Node of the square bracket marked KindUnit.GpuList, its data
-# an Int of (address << 32) + count. It reads, shows and compares as a list; a list word that would change one refuses
-# (gpu_list_refused), as a boxed copy would lose the change
+# GPU lists `[f32]`, `[i32]`, `[u32]` (decision gpu-bound-floats): the numbers a program hands the GPU, packed as
+# four-byte cells in linear memory from their creation (lib/wgsl.warp gpu_packed chooses them), so the GPU's library
+# reads and writes them where they are (lib/native/warp_node.h warp_cells). A List $Node of the square bracket marked
+# KindUnit.GpuList and its cell type (GpuCell), its data an Int of (address << 32) + count. It reads, shows and
+# compares as a list; a list word that would change one refuses (gpu_list_refused), as a boxed copy would lose the change
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "errors.warp"
@@ -11,24 +11,27 @@ use "instructions.warp"
 page_bytes(): int := 65536
 cell_bytes(): int := 4
 address_unit(): int := 4294967296
-gpu_list_kind(): int := Kind.List + BracketCode.Square * KindUnit.Info + KindUnit.GpuList
+gpu_list_kind(cell: int): int := Kind.List + BracketCode.Square * KindUnit.Info + KindUnit.GpuList + cell * KindUnit.GpuCell
 is_gpu_list(n: Node): bool := not is_null(n) and kind_code(n) == Kind.List and bits_and(marked_kind(n), KindUnit.GpuList) != 0
 gpu_list_address(n: Node): int := shifted_right(unboxed_int(n), 32)
 gpu_list_count(n: Node): int := bits_and(unboxed_int(n), address_unit() - 1)
+# its cell type, a GpuCell
+gpu_list_cell(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.GpuCell), 4)
+gpu_cell_name(cell: int): text := if cell == GpuCell.I32 then "i32" else if cell == GpuCell.U32 then "u32" else "f32"
 # where a host finds a GPU list's cells: (address << 32) + count, -1 for any other value (core/emitter/host.warp)
 gpu_list_place(n: Node): int := if is_gpu_list(n) then unboxed_int(n) else -1
-# count zeros in pages grown for them (a grown page is zero)
-gpu_zeros(count: int): Node := {
+# count zeros of the cell type in pages grown for them (a grown page is zero)
+gpu_zeros(count: int, cell: int): Node := {
 	pages = int_quotient(count * cell_bytes() + page_bytes() - 1, page_bytes())
 	before = memory_grown(if pages > 0 then pages else 1)
 	if before < 0 { gpu_list_refused("no memory left for a GPU list of this size") }
-	with_kind(fresh_int_node(shifted_left(before * page_bytes(), 32) + count), gpu_list_kind())
+	with_kind(fresh_int_node(shifted_left(before * page_bytes(), 32) + count), gpu_list_kind(cell))
 }
 # a GPU list of a list's numbers: what a GPU word gives back (lib/wgsl.warp packs a list where it is made)
-gpu_list_of(xs: Node): Node := {
-	if is_gpu_list(xs) { return xs }
-	items = unboxed_list(xs)
-	out = gpu_zeros(#items)
+gpu_list_of(xs: Node, cell: int): Node := {
+	if is_gpu_list(xs) and gpu_list_cell(xs) == cell { return xs }
+	items = if is_gpu_list(xs) then gpu_list_items(xs) else unboxed_list(xs)
+	out = gpu_zeros(#items, cell)
 	for i in 1 to #items { gpu_list_set(out, i, items#i) }
 	out
 }
@@ -37,18 +40,32 @@ gpu_put(n: Node, index: int, value: Node): Node := {
 	gpu_list_set(n, index, value)
 	n
 }
-# the index-th number (from 1), as a float
+# the index-th number (from 1): a float of an f32 cell, an int of an i32 or u32 one
 gpu_list_at(n: Node, index: int): Node := {
 	if index < 1 or index > gpu_list_count(n) { index_out_of_range_of(index, gpu_list_count(n)) }
-	memory_f32(gpu_list_address(n) + (index - 1) * cell_bytes())
+	address = gpu_list_address(n) + (index - 1) * cell_bytes()
+	cell = gpu_list_cell(n)
+	if cell == GpuCell.I32 { return memory_i32(address) }
+	if cell == GpuCell.U32 { return memory_u32(address) }
+	memory_f32(address)
 }
 gpu_list_set(n: Node, index: int, value: Node): Node := {
 	if index < 1 or index > gpu_list_count(n) { index_out_of_range_of(index, gpu_list_count(n)) }
-	if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float { gpu_list_refused("a GPU list [f32] holds numbers only") }
-	memory_set_f32(gpu_list_address(n) + (index - 1) * cell_bytes(), float_of_node(value))
+	address = gpu_list_address(n) + (index - 1) * cell_bytes()
+	cell = gpu_list_cell(n)
+	if cell == GpuCell.F32 {
+		if kind_code(value) != Kind.Int and kind_code(value) != Kind.Float { gpu_list_refused("a GPU list [f32] holds numbers only") }
+		memory_set_f32(address, float_of_node(value))
+		return value
+	}
+	if kind_code(value) != Kind.Int { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds ints only") }
+	number = int_of_node(value)
+	if cell == GpuCell.U32 and (number < 0 or number > 4294967295) { gpu_list_refused("a GPU list [u32] holds 0 to 4294967295") }
+	if cell == GpuCell.I32 and (number < -2147483648 or number > 2147483647) { gpu_list_refused("a GPU list [i32] holds -2147483648 to 2147483647") }
+	memory_set_i32(address, number)
 	value
 }
-# the numbers as a list of floats, for the list words that read a list
+# the numbers as a list, for the list words that read a list
 gpu_list_items(n: Node): list := {
 	out = new_list(gpu_list_count(n))
 	for i in 1 to #out { out#i = gpu_list_at(n, i) }
@@ -56,4 +73,4 @@ gpu_list_items(n: Node): list := {
 }
 gpu_list_refused(message: text): int := returned_error(message)
 # a list word given a GPU list, which would read or change a copy of it
-gpu_list_refused_as(n: Node): int := gpu_list_refused("a GPU list [f32] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first")
+gpu_list_refused_as(n: Node): int := gpu_list_refused("a GPU list [" + gpu_cell_name(gpu_list_cell(n)) + "] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first")
