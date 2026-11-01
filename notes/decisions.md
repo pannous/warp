@@ -333,6 +333,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - count-words-library (user): once/twice/thrice leave both compilers and become prelude words over a block parameter, the basic demonstration of giving a block to a function (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
 - range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
+- kebab-or-minus (user): `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
+- default-parameter-def (Interviewer, small bug fix, 1 core line in definitions.warp is_parameter): `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
 - #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
