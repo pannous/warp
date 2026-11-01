@@ -64,7 +64,7 @@ arm_result(arm: Node): Node := match arm {
 # `1`, "a", 'c', ø, yes, an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
 # (`Red` of `enum Color { Red, Green }`), a constant `True`, `no`: an arm the subject equals; `"b" | "c"` (read as
 # `or`): one it equals one of
-is_value_pattern(pattern: Node, variants: map): bool := pattern is bool or match pattern {
+is_value_pattern(pattern: Node, variants: map): bool := pattern is bool or is_quoted_symbol(pattern) or match pattern {
 	ø: yes
 	# `1 | 2`, read as the bits' or between whole numbers (parser.warp bit_operator), names alternatives too
 	Key(left, Op.BitOr, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
@@ -114,6 +114,8 @@ is_case_arm(arm: Node, variants: map): bool := {
 
 # the prelude's matcher (lib/prelude.warp), which a structural arm calls
 matcher_word = "pattern_bindings"
+# `{port: "80"} as Config`: the prelude's converter of a value field by field to a named pattern's types
+pattern_converter_word = "converted_to_pattern"
 
 # `match v {…}` with an arm for the matcher, its definition brought from the prelude before the match is lowered
 is_structural_match(n: Node): bool := match n {
@@ -265,8 +267,40 @@ matched(subject: Node, arms: list, n: Node, variants: map): Node := {
 # `match (1, 2) {…}`: the tuple a list, as `p = (1, 2)` makes it (the passes that do so ran before this one)
 tuple_as_list(subject: Node): Node := if is_round(subject) and separator_of(subject) == "," then List(items_of(subject), Bracket.Square, Separator.Comma) else subject
 
+# `Saturday | Sunday => yes` (decision of 2026-10-31): a capitalised word the program declares or binds nowhere is the
+# symbol, `data(Sunday)`; a declared enum case, class or name of that spelling stays itself
+global arm_program = Node.Empty
+global arm_scope = {}
+global arm_scope_read = no
+global arm_declared = []
+symbol_binding_meanings = [Meaning.Variable, Meaning.Function, Meaning.Loop, Meaning.Type]
+is_symbol_word(name: text, variants: map): bool := {
+	if not is_capitalized(name) or name in variants { return no }
+	if not arm_scope_read {
+		nodes = nodes_in(arm_program)
+		arm_scope = scope_with({}, nodes)
+		# `enum Shape { Circle(r), Dot }`, a type view by now: its Dot and Circle are declared
+		arm_declared = nodes.filter(n => is_key(n, Op.Colon) and key_of(n) == opaque_symbol).flat_map(n => view_symbols(value_of(n)))
+		arm_scope_read = yes
+	}
+	# the arm itself reads as the lambda parameter or the field Saturday (`{Saturday | Sunday: yes}`): that binds nothing
+	not arm_declared.contains(name) and (not arm_scope.has(name) or not arm_scope[name].any(meaning => symbol_binding_meanings contains meaning))
+}
+is_quoted_symbol(pattern: Node): bool := is_quote(pattern) and pattern#2 is symbol
+symbol_values(pattern: Node, variants: map): Node := match pattern {
+	Symbol(name): if is_symbol_word(name, variants) then List([quote_symbol, pattern], Bracket.Round, Separator.None) else pattern
+	Key(left, Op.BitOr, right): Key(symbol_values(left, variants), Op.BitOr, symbol_values(right, variants))
+	Key(left, Op.Or, right): Key(symbol_values(left, variants), Op.Or, symbol_values(right, variants))
+	_: pattern
+}
+with_symbol_values(arm: Node, variants: map): Node := {
+	if not is_arm(arm) { return arm }
+	pattern = symbol_values(arm_pattern(arm), variants)
+	if pattern == arm_pattern(arm) then arm else Key(pattern, Op.Colon, arm_result(arm))
+}
+
 match_block(subject: Node, block: Node, n: Node, variants: map): Node := match block {
-	List(arms, Bracket.Curly, separator): matched(subject, joined_arms(arms), n, variants)
+	List(arms, Bracket.Curly, separator): matched(subject, joined_arms(arms).map(arm => with_symbol_values(arm, variants)), n, variants)
 	_: n
 }
 
@@ -368,6 +402,7 @@ with_named_patterns(n: Node, patterns: map): Node := match n {
 	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
 	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
 	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
+	Key(subject, Op.As, Symbol(name)): if name in patterns then List([symbol(pattern_converter_word), subject, List([quote_symbol, patterns[name]], Bracket.Round, Separator.None)], Bracket.Round, Separator.None) else n
 	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))
 	_: n
 }
@@ -386,5 +421,7 @@ node_matches(program: Node): Node := {
 	patterns = named_patterns_of(program)
 	if patterns { program = bottom_up(without_named_patterns(program), n => with_named_patterns(n, patterns)) }
 	variants = case_names_of(enums_in(program, {}))
+	arm_program = program
+	arm_scope_read = no
 	bottom_up(program, n => node_match(n, variants))
 }

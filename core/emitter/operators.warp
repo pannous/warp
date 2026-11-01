@@ -164,11 +164,16 @@ static_type_word(kind: ValueKind): text? := match kind {
 # the item types analyzer.warp is sure of in a list written out: a variable's items may change (`xs[0] = random()`,
 # `xs.pop()`), a name's value is no symbol (`[π π]`)
 certain_item_types = ["int", "rational", "float", "text", "codepoint", "bool", "ø"]
+# the words making a fresh list whose items analyzer.warp knows from the word itself: split(t, " ") is list of text
+certain_list_calls = ["split", "chars", "map_keys", "zero_fill"]
 # a list written out of items of certain types, `[1/2, 3/4]`: its type as analyzer.warp found them, `list of
-# rational`, items of no common type a plain list; ø of any other list, whose items the run time names
+# rational`, items of no common type a plain list, or the fresh list of a certain_list_calls word; ø of any other
+# list, whose items the run time names
 analyzed_list_type(body: Body, n: Node): text? := {
-	if not (is_group(n) and bracket_of(n) == "[") or "" not in scopes { return ø }
+	if "" not in scopes { return ø }
 	scope = scopes.get(body.function.name) ?? scopes[""]
+	if head_name(n) in certain_list_calls { return type_word(n, scope) }
+	if not (is_group(n) and bracket_of(n) == "[") { return ø }
 	if not all_of(items_of(n), item => element_type_word(item, scope).replace("?", "") in certain_item_types) { return ø }
 	word = type_word(n, scope)
 	if word == "list of node" then "list" else word

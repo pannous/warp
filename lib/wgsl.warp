@@ -470,7 +470,7 @@ wgsl_value_width(assigned_code: Node): int := {
 wgsl_assigned_value(word: text): any := main_level_value(word, shading.program)
 # the value the program's main level assigns the name first, ø where it assigns none
 main_level_value(word: text, program: Node): any := {
-	found = program_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
+	found = level_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
 	if #found == 0 then ø else value_of(found#1)
 }
 # `global x = 3`, parsed `global: (x = 3)`: the assignment it declares
@@ -492,6 +492,12 @@ SHADER_FRAME_HOLE = "previous"
 shader_values(s: Node, given: Node, program: Node): any := shader_holes_added(s, if is_group(given) then items_of(given) else [], program)
 # the values of a paint of shader s given none
 shader_values_of(s: Node, program: Node): any := shader_holes_added(s, [], program)
+# the size paint(s) paints at (wiki/graphics.md): the program's width and height where its main level assigns both,
+# else the view's
+paint_size(program: Node): list := {
+	if main_level_value("width", program) != ø and main_level_value("height", program) != ø { return [symbol("width"), symbol("height")] }
+	[call_of("view_width", []), call_of("view_height", [])]
+}
 shader_holes_added(s: Node, entries: list, program: Node): any := {
 	shader = main_level_value(name_of(s), program)
 	if shader == ø or not (shader is text) { return ø }

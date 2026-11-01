@@ -1,0 +1,4 @@
+# a function named like a unit is the program's own after a number argument: h is no hours, g no grams (card refuses-calling)
+
+'h(x) := x * 10; apply(n, f) := f(n); apply(4, h)'	40
+'k(p) := p.x * 3; g(x, y) := [k([x, y]), 0.0, 0.0]; paint(g, 4, 4); 1'	1

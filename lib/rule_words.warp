@@ -54,7 +54,7 @@ framed(program: Node): any := ended_by(program, "frame_listened", frames_end_wor
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
 # that declares
 ended_by(program: Node, starting: text, ending_word: text): any := {
-	statements = program_statements(program)
+	statements = level_statements(program)
 	if not statements.any(statement => is_call_of(statement, starting)) or statements.any(statement => is_call_of(statement, ending_word)) { return ø }
 	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
 	ending = statements[last]
@@ -62,7 +62,7 @@ ended_by(program: Node, starting: text, ending_word: text): any := {
 	separated(bracketed(statements[0 ..< last] + ended + statements[last + 1 ..], ""), ";")
 }
 # the main level's statements, of lines and of `;` within a line alike
-program_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then program_statements(s) else [s])
+level_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then level_statements(s) else [s])
 is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
 
 # --- variable signals (lib/signals.warp's rules, card signals-lib) ---
@@ -87,7 +87,7 @@ became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key
 # before it (the first write declares the name), that of a definition or a listener always, as they run later. ø for a
 # program without listeners
 signaled(program: Node): any := {
-	statements = program_statements(program)
+	statements = level_statements(program)
 	watched = statements.flat_map(names_listened)
 	if #watched == 0 { return ø }
 	derived = derived_inputs(statements)
@@ -104,7 +104,7 @@ signaled(program: Node): any := {
 # the program with each list it makes for the GPU (lib/wgsl.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
 # creating form packed (same-scope flow only, decision gpu-bound-floats)
 gpu_lists_packed(program: Node): any := {
-	statements = program_statements(program)
+	statements = level_statements(program)
 	bound = statements.filter(statement => is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program))
 	if #bound == 0 { return ø }
 	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement)))) else statement)
@@ -165,7 +165,7 @@ as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
 # the program's definition of the function named, `f(a, b) := …` or `f = x => …`; ø for none
 function_definition(name: Node, program: Node): any := {
-	found = program_statements(program).filter(statement => defines(statement, "${name}"))
+	found = level_statements(program).filter(statement => defines(statement, "${name}"))
 	if #found == 0 then ø else found#1
 }
 defines(statement: Node, name: text): bool := defined_name(statement) == name or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
@@ -315,7 +315,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
@@ -328,7 +328,7 @@ typed_json_field_type(member: Node): text? := match member {
 }
 
 typed_json_class(type_name: text, program: Node): Node? := {
-	for statement in program_statements(program) {
+	for statement in level_statements(program) {
 		view = class_view(statement)
 		if view != ø and declared_type_name(view#2) == type_name { return statement }
 	}
@@ -382,7 +382,7 @@ typed_json_value(value: text, path: text, value_type: text, depth: int, program:
 
 # Generate typed JSON parsing from the class declared in the program.
 typed_json(source: Node, type_name: Node, program: Node): Node := {
-	for statement in program_statements(program) {
+	for statement in level_statements(program) {
 		view = class_view(statement)
 		if view != ø and declared_type_name(view#2) == name_of(type_name) {
 			declared = class_declared(statement, view)

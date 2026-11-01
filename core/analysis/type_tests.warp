@@ -24,8 +24,20 @@ tested_type_call(subject: Node, type: Node, scope: map): Node := match type {
 	_: Key(subject, Op.Eq, type)
 }
 
+# `xs is [a, b]`, `"v12" is "v" + n`, `r is {status: s}`: a list, tuple, map or text cut naming what nothing binds yet
+# (or `_`, `...rest`) tests the shape and binds those names, as a match arm does (node_matches.warp, lib/prelude.warp
+# pattern_bindings); one naming only known values still compares, `xs is [a, b]` of a = 1, b = 2
+is_shape_pattern(p: Node): bool := (is_group(p) and (bracket_of(p) == "[" or bracket_of(p) == "{" or (bracket_of(p) == "(" and separator_of(p) == ","))) or is_text_cut_pattern(p)
+is_text_cut_pattern(p: Node): bool := (is_key(p, Op.Add) and nodes_in(p).any(part => part is text)) or (is_key(p, Op.Colon) and (is_key(key_of(p), Op.Add) or is_key(key_of(p), Op.Colon)))
+new_pattern_names(p: Node, scope: map): list := structural_names(p, no).filter(name => not binds_value(scope, name))
+binds_new_names(p: Node, scope: map): bool := is_shape_pattern(p) and (#new_pattern_names(p, scope) > 0 or nodes_in(p).any(part => part == symbol(other_arm)))
+shape_test(subject: Node, p: Node, scope: map): Node := {
+	bound = new_pattern_names(p, scope).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
+	Key(structural_test(subject, p), Op.And, List(bound + [yes], Bracket.Round, Separator.Semicolon))
+}
+
 type_test_node(n: Node, scope: map): Node := match n {
-	Key(subject, Op.Is, type): tested_type_call(subject, type, scope)
+	Key(subject, Op.Is, type): if binds_new_names(type, scope) then shape_test(subject, type, scope) else tested_type_call(subject, type, scope)
 	_: n
 }
 

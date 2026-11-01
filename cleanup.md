@@ -15,3 +15,11 @@ Keep existing duration tests unchanged. Add outcome coverage, then use the share
 # sample-gaps-types
 
 Reproduce the listed samples, then make only independently verified library or sample fixes; preserve existing tests and comments and report remaining compiler gaps.
+
+# features-docs-examples
+
+Verify each example against the installed compiler and document the working forms in the separate wiki repository. Keep unlanded or failing features explicitly identified, then record the wiki commit and remaining work on the card and branch.
+
+## Runtime documentation plan
+
+Document the runtime roots and split from current source; verify representative examples with the installed compiler.

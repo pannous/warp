@@ -1,0 +1,5 @@
+# `a b = f(x) g(y)` names the values of both calls, Bend's parallel let (decision M5)
+'square(n) := n * n; cube(n) := n * n * n; s c = square(12) cube(5); s + c'	269
+'a b = 1 2; a - b'	-1
+'sum(depth, x) := { if depth == 0 { return x }; left right = sum(depth - 1, x * 2) sum(depth - 1, x * 2 + 1); left + right }; sum(3, 0)'	28
+'xs = 1 2 3; count(xs)'	3
