@@ -684,3 +684,14 @@ the original questions 1–41: test edits and housekeeping done.
 - bare-overloaded-name (user 2026-10-31, +1/−1 core line): a bare name of an overloaded function with a nullary variant calls that variant (`f() := 3; f(x) := x; f + 1` is 4; `save(sound, …)`)
 - error-report-detail (user 2026-10-31, 3 core lines): text_char passes its index and count to index_out_of_range, and the error report never reads a stale trap detail
 - note-tests (user 2026-10-31): "discuss later" — 8 note tests expecting "C#4" texts stay red (options: compare by Note.equals, or a quoted show)
+- foreign-type-names (user 2026-11-01): Kotlin/Java type names Int, Long, Double, Float, String, Boolean, Char are prelude aliases of int, float, text, bool, codepoint with a hint naming the warp word; a program's own `class Int` shadows them.
+- generic-letter-alias (user 2026-11-01): a declared alias wins over the one-letter generic reading: `type T = int; f(x: T)` takes ints; T is generic only when nothing declares it.
+- bus-test-outcome (user 2026-11-01): test_sound_buses:4 becomes an outcome test of a bus (a sound sent to a delay bus rings on), no longer a call of the host word sound.send.
+- real-canonical (user 2026-11-01): `real` is the canonical type word; lib/reals.warp's class Real becomes real, `Real` an alias.
+- typed-parse-message (user 2026-11-01): parse's mismatch says the warp type, "expected object, received list of int"; the test upgrade 02ed001dc5 stands.
+- implicit-def-parameters (user 2026-11-01): undone. A free name in a `def` is an unknown name; parameters are declared (`def add(a, b)`).
+- word-arithmetic-infix (user 2026-11-01): undone. `plus`, `divided by` are aliases only, not infix words; `one plus two` is not arithmetic.
+- arm-symbols (user 2026-11-01): undone. An undeclared capitalised word in a match arm is an unknown name; matching.warp declares enum Day.
+- sample-count-rounds (user 2026-11-01, confirmed): a sound's sample count rounds to the nearest sample.
+- Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
+- playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.

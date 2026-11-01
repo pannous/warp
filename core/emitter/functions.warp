@@ -253,12 +253,18 @@ annotated_kind(written: text): ValueKind := {
 	if written.starts_with("[") { return ValueKind.List }
 	word = aliased_type(written)
 	if is_union(word) { return shared_kind(union_members(word).map(annotated_kind)) }
-	if word in node_annotations or word in module.classes or word.ends_with("?") { return ValueKind.Node }
+	if word in node_annotations or word in module.classes { return ValueKind.Node }
+	# `text?`: ø or the value, a node; its type named as any other (`Bogus?` is unknown too)
+	if word.ends_with("?") and annotated_kind(word.remove_suffix("?")) != ø { return ValueKind.Node }
 	# Rust twin: type_names.rs plural_element_type
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return ValueKind.List }
 	# `list of text`, `map of int`: the collection the phrase starts with (parser.warp with_type_phrases)
 	if word.contains(" of ") { return annotated_kind(word.split(" of ")#1) }
-	word as ValueKind
+	kind = word as ValueKind
+	# a word naming no type, alone or a union's member (`int or Bogus`, which would hold a node) or through an alias,
+	# is the program's mistake, said (card type-list-number); a type word the core holds no value of (nat, u8) is refused
+	if spells_a_name(word) and not is_held_kind(kind) and not is_tested_type_word(word) and word not in int_spellings { throw "unknown type " + word + module.emitting_at }
+	kind
 }
 # the kind every member holds, else a node, which holds any of them
 shared_kind(kinds: list): ValueKind := if kinds.all(kind => kind == kinds#1) then kinds#1 else ValueKind.Node
@@ -282,6 +288,9 @@ type_synonyms(): map := {
 	for word in core_type_words.keys { if core_type_words.get(word) != word { found[word] = core_type_words.get(word) } }
 	found
 }
+# a type word is a name; a shape `p{name}` or a default `b: 2` reaches annotated_kind too and is no type word
+spells_a_name(word: text): bool := #word > 0 and is_letter(word[0..<1]) and #word.chars().filter(c => is_letter(c) or is_digits(c) or c == "_") == #word
+is_letter(c: text): bool := (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
 names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: list): any := {
 	# a linked module's word the program only declares (no body): its code is the module's (bind_library_words)

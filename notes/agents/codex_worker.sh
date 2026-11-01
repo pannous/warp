@@ -194,7 +194,8 @@ when every card you took is landed, parked with such a commit, or released as ne
 
 Per card: its own branch and worktree (\`cowtree add\`, as in common.md), a test first in test/<topic>/, then common.md
 \"Done\": format, merge origin/main, \`scripts/smoke.sh <worktree>\`, follow the current testing rules, push to
-main yourself, \`todo done <card> <commit>\`. Never change existing tests unless common.md allows it. A working part of a
+main yourself, \`todo done <card> <commit>\`. Never change an existing test's expectation yourself, not even as an upgrade: park the card with the question
+(old vs new output) and the Supervisor decides. A working part of a
 card may land on its own (smoke green), the rest stays on the card.
 
 Leave something usable at every point, since a run can end any minute (timeout, usage limit):
