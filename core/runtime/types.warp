@@ -67,6 +67,9 @@ instance_among(n: Node, classes: list): bool := {
 	for class_name in classes { if instance_of(n, class_name) { return yes } }
 	no
 }
+# `x is real`: an instance of the exact reals' class or any number, an int, a rational and a float being reals too
+# (decision real-canonical)
+real_among(n: Node, classes: list): bool := instance_among(n, classes) or (not is_null(n) and marked_kind(n) != Marked.Bool and (kind_code(n) == Kind.Int or kind_code(n) == Kind.Float))
 # `type(x)` of a value known only at run time (Rust's list_ops.rs node_type_name): the type value naming its kind as
 # the static names do; an instance names its class, one of the program's `classes`
 node_type_name(n: any, classes: list): any := with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue)

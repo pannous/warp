@@ -1,4 +1,6 @@
 # The runtime words a program links (emitter.warp's part): wasm intrinsics, library words, type tests on boxed values
+# the exact reals' class (lib/reals.warp), whose `is` takes any number too
+REAL_CLASS = "real"
 # `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
 def wasm_instruction(body: Body, name: text): TypedCode {
 	if name in memory_instructions { return memory_instruction(body, name) }
@@ -206,8 +208,9 @@ kind_bit(kind: int): int := 1 << kind
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
 def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
+	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
-	if spec in module.classes { return runtime_call("instance_among", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))]) }
+	if spec in module.classes { return runtime_call(if spec == REAL_CLASS then "real_among" else "instance_among", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))]) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)
