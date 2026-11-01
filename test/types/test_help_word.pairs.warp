@@ -1,0 +1,5 @@
+# help(x) describes a class, a function or a module as text (wiki/reflection.md); a program's own help wins
+'class Point { x: int; y: int; norm() := 1 }; help(Point) == "class Point\nfields: x y\nmethods: norm"'	yes
+'area(width: int, height: int) := width * height; help area'	"area(width: int, height: int) -> int"
+'help(x) := 7; class P { a: int }; help(P)'	7
+'class Point { x: int; length() := 1 }; help(Point) == "class Point\nfields: x\nmethods: length"'	yes
