@@ -936,6 +936,10 @@ global event_listeners = {}
 global listener_numbers = {}
 global listening_once = {}
 global listener_counts = {}
+// `button{ "+1", on click {…} }`: an item `on e {…}` of a structure is that structure's own listener, kept in it as a
+// value (lib/markup.warp: the element's handler), no listener of the whole program (lib/sugar/events.warp)
+class Handler { event: text; action: function }
+handler(name: any, action: function): Handler := Handler(name_of(name), action)
 listen(name: any, listener: function, once: bool): int := {
 	key = name_of(name)
 	if not (key in event_listeners) {
