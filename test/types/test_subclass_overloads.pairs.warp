@@ -1,0 +1,2 @@
+'class Animal{name: text}; class Dog extends Animal{}; speak(a: Animal) := a.name + " makes a sound"; speak(d: Dog) := d.name + " barks"; [speak(Dog("Rex")), speak(Animal("Kitty"))]'	["Rex barks", "Kitty makes a sound"]
+'class Animal{name: text}; class Dog extends Animal{}; speak(a: Animal) := "sound"; speak(d: Dog) := "bark"; out = []; for pet in [Animal("K"), Dog("R")] { out += [speak(pet)] }; out'	["sound", "bark"]

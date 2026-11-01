@@ -9,6 +9,7 @@ use "walk.warp"
 use "uses.warp"
 use "../analysis/builtin_signatures.warp"
 use "scope.warp"
+use "lambdas.warp"
 use "../emitter/c_imports.warp"
 
 # each function a library file brought, by name: [the file, the line its definition starts on], the place a refusal
@@ -234,12 +235,19 @@ operated_within(name: text): list := {
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
 }
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
 # data view) a time's fields (emitter/times.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words)
 emitted_words(program: Node): list := time_literal_words(program) + root_words(program)
+# a value called, `room(signal)` (closure_call_1 once lowered), may be an instance its class's `call` takes (emitter
+# closures.warp instance_calls): the module's call is reached and kept for it
+callable_word = "call"
+calls_a_value(program: Node): bool := {
+	bound = names_bound_in(program)
+	nodes_in(program).any(n => is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in bound)
+}
 time_literal_words(program: Node): list := {
 	nodes = nodes_in(program)
 	if not nodes.any(is_time_view) { return [] }
@@ -265,6 +273,7 @@ called_only(program: Node): Node := {
 	for i in 0 ..< #statements {
 		if brought_names.has(names[i]) { brought[names[i]] = (brought.get(names[i]) ?? []) + [statements[i]] } else { pending += words_within(statements[i]) }
 	}
+	if pending.any(word => word.starts_with(closure_call_word)) { pending += [callable_word] }
 	called = {}
 	at = 0
 	while at < #pending {
@@ -310,7 +319,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	declared = if in_front then linked_slices() else {}
 	if in_front { own_words_unlinked(own_names) }
 	# (a linked module's classes and globals, the prelude's Cell of its closures too)
-	wanted = symbol_words(program) + lowering_words(program) + sugar_words_of(program) + linked_needs()
+	wanted = symbol_words(program) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else [])
 	uses = ø
 	origins = {}
 	keys = slice_keys(files)

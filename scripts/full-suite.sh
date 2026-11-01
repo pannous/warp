@@ -42,7 +42,12 @@ snapshot=${FULL_SUITE_SNAPSHOT:-/Volumes/Worktrees/full-suite}
 git worktree remove --force "$snapshot" 2>/dev/null
 cowtree add "$snapshot" --detach HEAD >/dev/null 2>&1 || { echo "full-suite: no snapshot of $tip at $snapshot" >&2; exit 1; }
 trap 'git -C "$tree" worktree remove --force "$snapshot"; rm -rf "$LOCK"' EXIT
-(cd "$snapshot" && WARP_NO_WINDOW=1 WARP_HINTS=0 "$WARP" test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
+# and of the installed warp: its folder (binary, compilers, libraries) copied, since an install mid-run replaces it
+# (the 2026-11-01 run died on "warp-builds/native-3cca4f44d/warp.wasm is missing")
+pinned=$snapshot/data/installed-warp
+installed=$(dirname "$(readlink -f "$WARP")")
+mkdir -p "$(dirname "$pinned")" && cp -Rc "$installed" "$pinned" || { echo "full-suite: no copy of $installed" >&2; exit 1; }
+(cd "$snapshot" && WARP_NO_WINDOW=1 WARP_HINTS=0 "$pinned/$(basename "$(readlink -f "$WARP")")" test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
 summary=$(tail -1 "$scratch/results.txt" | grep "$SUMMARY")
 if [ -z "$summary" ]; then
 	echo "full-suite: the run at $tip died without its summary; test/results.txt kept. Last errors:" >&2

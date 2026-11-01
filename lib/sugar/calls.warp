@@ -43,3 +43,7 @@ infix operator |(x: any, g: function) := g(x)
 # lambda before its argument is (lambdas.warp lowered_phrase); a block of data `{1 2} 3` stays data (card
 # block-application)
 rewrite ($b $x) => (it => $b) $x where $b is function_block
+# `increment = add(1, _)`: a call given `_` for its first or last argument is the function of that argument, the
+# partial application `x -> add(1, x)` (decision M3b)
+rewrite $f($a..., _) => ($x -> $f($a..., $x)) where $f is function
+rewrite $f(_, $b...) => ($x -> $f($x, $b...)) where $f is function

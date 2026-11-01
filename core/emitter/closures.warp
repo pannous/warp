@@ -39,7 +39,22 @@ def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	# `(2)(3)`, `(a + b)(c)`: a number glued to a group multiplies it, as `3(4)` does; a variable keeps its call
 	numeric = callee.kind == ValueKind.Int or callee.kind == ValueKind.Float or grows(arguments#1)
 	if numeric and arity == 1 and not (arguments#1 is symbol) { return expression_code(body, Key(arguments#1, Op.Mul, arguments#2)) }
-	call_values(dispatcher(arity), [callee] + arguments[1..].map(a => expression_code(body, a)))
+	called = call_values(dispatcher(arity), [callee] + arguments[1..].map(a => expression_code(body, a)))
+	# a parameter `f: (float) -> float` gives what its type says: `whole(t) := 3` passed for it gives 3.0
+	result = if arguments#1 is symbol then parameter_result(body.function, name_of(arguments#1)) else ValueKind.Node
+	if result == ValueKind.Node then called else TypedCode(result, converted(called, result))
+}
+# the kind a function-typed parameter's result is declared, a number, a text or a bool; a node for another or none
+def parameter_result(f: Function, name: text): ValueKind {
+	for i in 0..<#f.signature.parameters {
+		written = aliased_type(f.signature.parameters[i].type_name)
+		if f.signature.parameters[i].name == name and written.contains(" -> ") {
+			parts = written.split(" -> ")
+			kind = annotated_kind(parts[#parts - 1].trim())
+			if kind == ValueKind.Int or kind == ValueKind.Float or kind == ValueKind.Text or kind == ValueKind.Bool { return kind }
+		}
+	}
+	ValueKind.Node
 }
 # `(a + b)`: a sum, difference or product, held boxed where a whole number may grow (operators.warp arithmetic), a
 # number all the same
@@ -112,6 +127,15 @@ def class_value_calls(f: Function, arity: int): list {
 	f.locals = scope.kinds[#parameters ..]
 	code
 }
+# an instance called, `room(signal)`, `A(1)(2)`: the program's call taking it first (trait Callable), its method or
+# function `call(self, …)`
+callable_words = ["call", "call·method"]
+def instance_calls(closure: list, arity: int): list {
+	named = callable_words.filter(name => name in module.functions and #module.functions[name].signature.parameters == arity + 1)
+	if not named { return [] }
+	values = [TypedCode(ValueKind.Node, closure)] + range_list(arity).map(j => TypedCode(ValueKind.Node, [op.local_get] + uleb(j + 1)))
+	kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + boxed(call_values(module.functions[named#1], values)) + [op.return, op.end]
+}
 # a value called that is no closure fails in not_a_function; the closure's number picks, in one br_table jump, the
 # target's call on the captured values and the arguments (a test per closure made every call scan them all); a closure
 # of another arity fails in wrong_number_of_arguments (the runtime errors of Rust's rust-harness:src/wasm_emitter/functions/closures.rs)
@@ -122,6 +146,7 @@ dispatcher_code(f: Function): any := {
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
 	code += class_value_calls(f, arity)
+	code += instance_calls(closure, arity)
 	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
 	# the arms in closure order, each the block its br_table label leaves; the outermost block (label #arms) fails
 	arms = []
