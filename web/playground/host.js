@@ -66,7 +66,7 @@ function errorInProgram(program, reason) {
 }
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
-// host-files.js, host-sound.js (needs host-files.js), host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js and js-members.js), host-compiler.js, host-routes.js,
+// host-files.js, host-sound.js (needs host-files.js), host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js and js-members.js), host-sqlite.js (needs host-foreign.js and wasi.js), host-compiler.js, host-routes.js,
 // host-gpu.js (needs host-media.js), host-timers.js, host-random.js, host-media.js. A built site
 // ships a part only when its module imports one of the part's words or calls one of its std modules (src/host/host_parts.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
@@ -76,7 +76,7 @@ function errorInProgram(program, reason) {
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
 // values.js first: not a part, the reader and builders of self-hosted modules' values the parts' words use
-const HOST_PART_FILES = ["values.js", "host-files.js", "host-sound.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
+const HOST_PART_FILES = ["values.js", "host-files.js", "host-sound.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-sqlite.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -608,9 +608,12 @@ function runSubmitted(holder, hooks, request) {
 	return { ...outcomeOf(holder, hooks, () => submitted(buildValue(holder.exports, treeOfPlain(request)))), headers: holder.answerHeaders };
 }
 
-// a timer's handler (on·every·<id>), given ø when it reads `event`, as natively (system_signals.rs call_handler)
-function runTimer(holder, hooks, name) {
+// a handler run: a timer's by its id through the program's one export timer_fired(id: int) (host-timers.js), a
+// fetch's by its export name, given ø when it reads `event`
+const TIMER_FIRED_EXPORT = "timer_fired";
+function runTimer(holder, hooks, handler) {
 	holder.warnings = [];
-	const handler = holder.exports[name];
-	return outcomeOf(holder, hooks, () => handler.length ? handler(holder.exports.new_empty()) : handler());
+	if (typeof handler === "number") return outcomeOf(holder, hooks, () => holder.exports[TIMER_FIRED_EXPORT](BigInt(handler)));
+	const named = holder.exports[handler];
+	return outcomeOf(holder, hooks, () => named.length ? named(holder.exports.new_empty()) : named());
 }

@@ -21,8 +21,6 @@ fields, nodes, errors and builders, plus bridge (below).
 
 **Extended** is `runtime/extended.warp` and the parts it names in `core/runtime/extended/`, for optional
 features: exact, exact_rounding, pow and pow_tables, durations, times and wasi, plus the hooks' bodies (below).
-`runtime/durations.warp` is an extended part kept in `runtime/`, as tests/numbers/test_duration_words.rs reads it
-there: only `runtime/extended.warp` uses it, and `scripts/self-check.sh` counts it as extended.
 Calendar arithmetic is not part of the runtime: `lib/time_arithmetic.warp` (card time-arithmetic-library) is a class
 library beside `lib/units.warp`, over plain integers (form and position, month/day/nanosecond counts). The compiler
 never loads it: its Span's plus would send every `+` the compiler compiles through operator dispatch, and some of its
@@ -58,7 +56,7 @@ hello world calls nothing from extended. In the Rust lane a core part runs alone
 - `runtime.warp` uses only core files.
 - Core never uses extended and never names an extended word: it calls the bridge's hooks.
   `scripts/self-check.sh` checks both before taking a slot: no `^use .*extended` line in `runtime.warp` or a plain
-  file of `runtime/` (`extended.warp` and `durations.warp` aside), and no call there to a word that `durations.warp` or a `runtime/extended/*.warp` file defines.
+  file of `runtime/` (`extended.warp` aside), and no call there to a word that a `runtime/extended/*.warp` file defines.
 - An extended part is only ever loaded by `runtime/extended.warp`; its words compile only when called, for example
   float `^` compiles pow's.
 - The emitter declares each GC type only on first use, so a hello world contains none of extended's.

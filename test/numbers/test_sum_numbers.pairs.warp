@@ -1,0 +1,5 @@
+# sum of the numbers given, as max takes them (guide `sum 1 2 3`); sum of a list stays
+'sum 1 2 3'	6
+'sum(1.5, 2, 3)'	6.5
+'sum 1.5 2 3'	6.5
+'sum [1.5, 2]'	3.5

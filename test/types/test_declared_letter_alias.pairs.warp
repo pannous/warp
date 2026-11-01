@@ -1,0 +1,5 @@
+# a declared alias wins over the one-letter generic reading; an undeclared T stays generic
+'type T = int; f(x: T) := x * 2; f("a")'	error
+'type T = int; f(x: T) := x * 2; f(3)'	6
+'f(x: T) := x; f("ab")'	"ab"
+'f(x: T) := x; f(3)'	3

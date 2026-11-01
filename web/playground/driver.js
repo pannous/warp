@@ -14,8 +14,9 @@ const COMPILED_PATH = "/tmp/warp-program.wasm";
 const TYPED_FILE = "playground.warp";
 // the compiler reads the standard modules of this lib/ (core/parsing/parser.warp warp_lib), as the native warp tells it
 const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
-// a program runs as `warp <file>` runs it, which serves a program's routes: here the page's requests (lib/web.warp)
-const PROGRAM_ENVIRONMENT = [...ENVIRONMENT, "WARP_SERVE=page"];
+// a program runs as `warp <file>` runs it (core/native/warp.warp), which names the program (lib/storage.warp keeps its
+// tables beside it) and serves its routes: here the page's requests (lib/web.warp)
+const programEnvironment = file => [...ENVIRONMENT, "WARP_SERVE=page", `WARP_PROGRAM=${file}`];
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
@@ -43,11 +44,16 @@ function withWasi(imports, wasi) {
 	return new Proxy(imports, { get: (modules, module) => module === "wasi_snapshot_preview1" ? wasi : modules[module] });
 }
 
-// a module's entry run (_start, else main): its exit status, 0 when it returned (exitCode: the code its host word exit
-// ended it with); a trap's sentence to stderr
-function ranToEnd(exports, output, exitCode = () => undefined) {
+// a module's entry run: its exit status, 0 when it returned (exitCode: the code its host word exit ended it with); a
+// trap's sentence to stderr. A program exporting show runs main, and its value goes to `shown` as the text _start would
+// print (the page's value line, apart from what it printed); else _start, else a primitive module's main
+function ranToEnd(exports, output, exitCode = () => undefined, shown) {
 	try {
-		if (exports._start) exports._start();
+		if (shown && exports.show && exports.main) {
+			const value = exports.main();
+			shown(shownValue(exports, value), value);
+		}
+		else if (exports._start) exports._start();
 		else printedResult(exports.main(), output);
 		return 0;
 	} catch (failure) {
@@ -56,6 +62,23 @@ function ranToEnd(exports, output, exitCode = () => undefined) {
 		output(`${raisedMessage(exports, failure)}\n`, STDERR);
 		return FAILURE_STATUS;
 	}
+}
+
+// main's value as _start prints it (core/emitter/emitter.warp: show), "" for ø, which _start leaves unprinted
+const shownValue = (exports, value) => value === null ? "" : textOfArray(exports.show(value));
+
+// a $text (type 0 of every module the compiler writes, `(array (mut i8))` in no rec group) read from JavaScript by a
+// module of that one type, which wasm GC takes for the same type as the program's:
+//   (module (type $text (array (mut i8)))
+//     (func (export "length") (param (ref null $text)) (result i32) local.get 0 array.len)
+//     (func (export "byte") (param (ref null $text) i32) (result i32) local.get 0 local.get 1 array.get_u $text))
+const TEXT_READER = "AGFzbQEAAAABEQNeeAFgAWMAAX9gAmMAfwF/AwMCAQIHEQIGbGVuZ3RoAAAEYnl0ZQABChICBgAgAPsPCwkAIAAgAfsNAAsADgRuYW1lBAcBAAR0ZXh0";
+let textReader;
+function textOfArray(text) {
+	textReader ??= new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(atob(TEXT_READER), letter => letter.charCodeAt(0)))).exports;
+	const bytes = new Uint8Array(textReader.length(text));
+	for (let index = 0; index < bytes.length; index++) bytes[index] = textReader.byte(text, index);
+	return utf8Decoder.decode(bytes);
 }
 
 // what a primitive module's main gave, printed as its kind is (driver.warp print_result): an int, a float as C's %.17g
@@ -114,12 +137,13 @@ function withSource(code, file, work) {
 	}
 }
 
-// what a run said on stderr, printed when it ended well, its failure when not: { status, said }
-function ranSaying(exports, print, exitCode) {
-	let said = "";
-	const status = ranToEnd(exports, (text, stream) => stream === STDERR ? said += text : print(text, stream), exitCode);
+// what a run said on stderr, printed when it ended well, its failure when not, and its value when `valued`:
+// { status, said, value }
+function ranSaying(exports, print, exitCode, valued = false) {
+	let said = "", value = "", result;
+	const status = ranToEnd(exports, (text, stream) => stream === STDERR ? said += text : print(text, stream), exitCode, valued ? (shown, node) => { value = shown; result = node; } : undefined);
 	if (status === 0 && said) print(said, STDERR);
-	return { status, said: said.trimEnd() };
+	return { status, said: said.trimEnd(), value, result };
 }
 
 // warp.wasm compiles the file: { module } the bytes it wrote, else { failure } what it said
@@ -138,7 +162,7 @@ function compiledProgram(file, print) {
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
 	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks };
-	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, PROGRAM_ENVIRONMENT);
+	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, programEnvironment(file));
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
@@ -148,9 +172,10 @@ function programRan(bytes, file, hooks) {
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
-	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode);
+	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode, true);
 	eachHostPart("finished", holder, hooks);
-	return ran;
+	holder.value = ran.result;
+	return { ...ran, holder };
 }
 
 // the code compiled and run as `warp <file>` runs it: what the page shows of it (playground.js showReport), a failure's
@@ -161,9 +186,46 @@ function evaluatedNatively(code, file, hooks) {
 		const compiled = compiledProgram(source, hooks.print);
 		if (compiled.failure) return report(compiled.failure, FAILURE_STATUS);
 		hooks.module?.(compiled.module);
-		const { status, said } = programRan(compiled.module, source, hooks);
-		return report(status === 0 ? "" : said, status);
+		const { status, said, value, holder } = programRan(compiled.module, source, hooks);
+		const html = status === 0 ? pageHtml(holder) : undefined;
+		if (html !== undefined && holder.exports.page_event) hooks.listen?.(holder, pageEventsOf(html));
+		return { ...report(status === 0 ? value : said, status), html };
 	});
+}
+
+// ---- a page of markup (lib/markup.warp, card markup-keeps): page_render(value) is the HTML of main's value, each
+// handler numbered anew from 1 as data-warp-<event>="<n>"; page_event(n, detail) runs handler n of the last render
+
+// the HTML of the run's value by its page_render, undefined for a program without one
+function pageHtml(holder) {
+	const render = holder?.exports.page_render;
+	return render && holder.value != null ? guestText(holder.exports, render(holder.value)) : undefined;
+}
+
+// the markup's attributes of data-warp-… that name no handler (markup.js)
+const MARKUP_DATA_ATTRIBUTES = ["key", "instance", "leaving", "scope"];
+const HANDLER_ATTRIBUTE = /\bdata-warp-(\w+)="(\d+)"/g;
+// the element events the HTML has handlers for, as the page names them: click·1, input·2
+const pageEventsOf = html => [...html.matchAll(HANDLER_ATTRIBUTE)].filter(([, event]) => !MARKUP_DATA_ATTRIBUTES.includes(event)).map(([, event, n]) => `${event}·${n}`);
+
+// an element event (click·1) of the page: its handler run with the event's detail, then the page rendered anew:
+// { value, html, events } or { value: the failure, error }
+function pageEventHandled(holder, event, detail) {
+	const { exports } = holder;
+	const n = BigInt(event.slice(event.lastIndexOf("·") + 1));
+	try {
+		const given = newGuestValue(exports, detail ?? null);
+		try {
+			exports.page_event(n, given);
+		} catch (failure) {
+			if (!(failure instanceof TypeError)) throw failure; // n is a Node parameter: the call never started
+			exports.page_event(exports.new_int(n), given);
+		}
+		const html = pageHtml(holder);
+		return { value: shownValue(exports, holder.value), html, events: pageEventsOf(html) };
+	} catch (failure) {
+		return { value: raisedMessage(exports, failure), error: true };
+	}
 }
 
 const report = (value, status) => ({ value, error: status !== 0 && value !== "", status, warnings: [], runtime_warnings: [], hints: [], notes: [] });

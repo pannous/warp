@@ -1,0 +1,10 @@
+# a page route answers its block's markup as HTML, a server function is also POST /rpc/<name>, a form names its route
+# (notes/server_routes.md; card server-routes)
+'route "/" { div{ h1{"Hi"} } }; route_answer({method: "GET", path: "/"})'	'<div><h1>Hi</h1></div>'
+'route "/u/:id:int" { p{ "u" + id } }; route_answer({method: "GET", path: "/u/2"})'	'<p>u2</p>'
+'server def twice(x) { x + x }; route_answer({method: "POST", path: "/rpc/twice", body: "ab"})'	'abab'
+'server def three() { 3 }; three()'	3
+«to_html(form post "/t" { "x" })»	'<form method="POST" action="/t">x</form>'
+'xs = [1, 2, 3]; get "/p" { count xs }; route_answer({method: "GET", path: "/p"})'	3
+'xs = [1, 2, 3]; [last 2 of xs, first 2 of xs]'	[[2, 3], [1, 2]]
+'xs = [1, 2, 3]; get "/n" { last 2 of xs }; route_answer({method: "GET", path: "/n"})'	[2, 3]

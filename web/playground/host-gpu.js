@@ -399,13 +399,24 @@ async function gpuComputedArrays({ shader, arrays, workgroups }) {
 	const encoder = await encodedComputePass(device, shader, workgroups, bound);
 	storages.forEach((storage, at) => encoder.copyBufferToBuffer(storage, 0, readbacks[at], 0, storage.size));
 	const left = await gpuReadBacks(device, encoder, readbacks).finally(() => storages.forEach(storage => storage.destroy()));
-	return Object.fromEntries(given.map(({ name, Elements }, at) => [name, Array.from(new Elements(left[at]))]));
+	return Object.fromEntries(given.map(({ name, Elements }, at) => [name, new Elements(left[at])]));
+}
+// the arrays as one run of 32-bit words, each after the one before
+function joinedWords(arrays) {
+	const words = new Uint32Array(arrays.reduce((total, array) => total + array.length, 0));
+	arrays.reduce((at, array) => (words.set(new Uint32Array(array.buffer, array.byteOffset, array.length), at), at + array.length), 0);
+	return words;
 }
 
+// a GPU list's cells by gpu_list_cell (core/runtime/gpu_lists.warp): f32, i32, u32
+const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array];
+const plainArrays = arrays => Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, Array.from(array)]));
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
 // (writeSharedWords), not as JSON
 const GPU_JOBS = {
-	gpu_compute: async job => ({ values: job.arrays ? await gpuComputedArrays(job) : Array.from(await gpuComputedFloats(job)) }),
+	gpu_compute: async job => ({ values: job.arrays ? plainArrays(await gpuComputedArrays(job)) : Array.from(await gpuComputedFloats(job)) }),
+	// gpu_compute over GPU lists (changed in place): the arrays left as one run of words, in the order given
+	gpu_arrays: async job => ({ words: joinedWords(Object.values(await gpuComputedArrays(job))) }),
 	gpu_kernel: async job => ({ words: await gpuComputedFloats(job) }),
 	gpu_render: async job => ({ words: await gpuRendered(job) }),
 	gpu_canvas: async job => ({ values: await gpuCanvas(job) }),
@@ -495,7 +506,7 @@ addHostPart({
 		// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
 		const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
 		const numberList = (values, Elements) => !selfHosted(program()) ? list(Array.from(values), item(Elements))
-			: Elements === Float32Array ? newGuestFloats(program(), values) : newGuestValue(program(), Array.from(values, Number));
+			: Elements === Float32Array ? newGuestFloats(program(), values) : newGuestInts(program(), values);
 		// the kernel over the f32 copy of a block's cells, from `first` on read back; `kept` as gpuComputedFloats takes it
 		const kernel = (shader, numbers, workgroups, first, kept = {}) =>
 			gpuJob("gpu_kernel", { shader: plain(shader), numbers, workgroups: Number(workgroups), first, ...kept }, [numbers.buffer]);
@@ -587,7 +598,43 @@ addHostPart({
 			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
+		// a GPU list [f32] of the program's (core/runtime/gpu_lists.warp): its cells where they are in the module's memory,
+		// undefined for any other value
+		const gpuCells = value => {
+			const place = selfHosted(program()) && program().gpu_list_place ? program().gpu_list_place(value) : -1n;
+			if (place < 0n) return undefined;
+			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell?.(value) ?? 0n)];
+			return new Cells(program().memory.buffer, Number(place >> 32n), Number(place & 0xFFFFFFFFn));
+		};
+		// gpu_compute of a map holding GPU lists: those changed where they are and given back themselves, the other
+		// arrays as new lists, all bound and read back in one job without a text of them
+		const computedInPlace = (code, entries, workgroups) => {
+			const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
+			// a GPU list's cells as its type holds them (the shader's array type converts them, as natively), any other as declared
+			const arrays = Object.fromEntries(entries.map(([name, value]) => [name, gpuCells(value)?.slice() ?? (elements[name] ?? Float32Array).from([plain(value)].flat().map(Number))]));
+			const buffers = Object.values(arrays).map(array => array.buffer);
+			const words = gpuJob("gpu_arrays", { shader: code, arrays, workgroups: Number(workgroups) }, buffers, Uint32Array);
+			let at = 0;
+			return newGuestMap(program(), entries.map(([name, value]) => {
+				const length = arrays[name].length, Elements = elements[name] ?? Float32Array;
+				const left = new Elements(words.buffer, words.byteOffset + at * Uint32Array.BYTES_PER_ELEMENT, length);
+				at += length;
+				const cells = gpuCells(value); // read anew: the module's memory may have grown meanwhile
+				if (cells) cells.set(left);
+				return [name, cells ? value : numberList(left, Elements)];
+			}));
+		};
 		const computed = (shader, numbers, workgroups) => {
+			const entries = selfHosted(program()) ? guestEntries(program(), numbers) : undefined;
+			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(plain(shader), entries, workgroups);
+			const cells = gpuCells(numbers);
+			if (cells) {
+				// changed in place, as natively (lib/native/warp_node.h warp_floats): the list itself is the value
+				const code = plain(shader), copy = cells.slice();
+				const left = gpuJob("gpu_kernel", { shader: code, numbers: copy, workgroups: Number(workgroups) }, [copy.buffer], gpuElements(code));
+				gpuCells(numbers).set(left.subarray(0, cells.length)); // the module's memory may have grown meanwhile
+				return numbers;
+			}
 			const code = plain(shader), given = plain(numbers);
 			if (given !== null && typeof given === "object" && isPlainObject(given)) {
 				const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));

@@ -147,3 +147,4 @@ while time < seconds or (count(args) == 0 and window_open()) {
 	sleep(max(0, frame_milliseconds - (clock() - frame_started)) / 1000)
 	time = float(clock() - started) / 1000
 }
+"${bands} bars lit along ${song}"

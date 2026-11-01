@@ -14,7 +14,7 @@
 #include "warp_layout.h"
 
 #define WARP_OP_COLON 1
-#define WARP_FAILURE_ROOM 200
+#define WARP_FAILURE_ROOM 1024
 
 typedef struct {
 	wasm_engine_t* engine;
@@ -123,20 +123,24 @@ static inline bool warp_text_is(warp_values* values, const wasmtime_anyref_t* no
 	free(text);
 	return same;
 }
-// a GPU list [f32] (core/runtime/gpu_lists.warp): its f32 cells where they are in the module's memory and their
-// count, NULL for any other value
-static inline float* warp_floats(warp_values* values, const wasmtime_anyref_t* node, size_t* count) {
-	if (wasmtime_anyref_is_null(node) || !(warp_kind_field(values, node) & WARP_GPU_LIST_MARK)) return NULL;
+// a GPU list [f32], [i32] or [u32] (core/runtime/gpu_lists.warp): its four-byte cells where they are in the module's
+// memory, their count and type ('f', 'i' or 'u', as WGSL's f32, i32, u32), NULL for any other value
+static inline void* warp_cells(warp_values* values, const wasmtime_anyref_t* node, size_t* count, char* cell) {
+	if (wasmtime_anyref_is_null(node)) return NULL;
+	int64_t kind = warp_kind_field(values, node);
+	if (!(kind & WARP_GPU_LIST_MARK)) return NULL;
+	int64_t type = kind / WARP_GPU_CELL_UNIT % 4;
+	*cell = type == WARP_GPU_CELL_I32 ? 'i' : type == WARP_GPU_CELL_U32 ? 'u' : 'f';
 	wasmtime_anyref_t box = warp_field_ref(values, node, WARP_NODE_DATA);
 	int64_t packed = warp_boxed_number(values, &box).of.i64;
 	wasmtime_anyref_unroot(&box);
 	wasmtime_extern_t memory;
 	if (!wasmtime_caller_export_get(values->caller, "memory", 6, &memory) || memory.kind != WASMTIME_EXTERN_MEMORY) {
-		warp_failed(values, "a GPU list [f32] given by a module without its memory exported");
+		warp_failed(values, "a GPU list given by a module without its memory exported");
 		return NULL;
 	}
 	*count = (size_t)(packed & 0xFFFFFFFF);
-	return (float*)(wasmtime_memory_data(values->context, &memory.of.memory) + (packed >> 32));
+	return wasmtime_memory_data(values->context, &memory.of.memory) + (packed >> 32);
 }
 // a list's (a map's, a block's) $list: its length and items
 static inline wasmtime_anyref_t warp_list_of(warp_values* values, const wasmtime_anyref_t* node) {
@@ -342,19 +346,21 @@ static inline wasmtime_anyref_t warp_entry(warp_values* values, const char* name
 	return warp_node_new(values, WARP_MARKED_ENTRY, warp_symbol(values, name), &value);
 }
 
-// the word's answer: the value, or after a failure the module's Error of its message (its exported error_of)
+// the word's answer: the value, or after a failure a raise of its message, as the page raises a HostWordFailure
+// (web/playground/host.js raisedInProgram): the message left in trap_detail, the module's returned_error raising it
 static inline wasm_trap_t* warp_answered(warp_values* values, wasmtime_anyref_t value, wasmtime_val_t* result) {
 	wasm_trap_t* trap = NULL;
 	if (values->failure[0]) {
 		if (!wasmtime_anyref_is_null(&value)) wasmtime_anyref_unroot(&value);
 		wasmtime_val_t message = warp_anyref(warp_text(values, values->failure, strlen(values->failure)));
-		wasmtime_extern_t error_of;
-		if (!wasmtime_caller_export_get(values->caller, "error_of", 8, &error_of) || error_of.kind != WASMTIME_EXTERN_FUNC) {
-			trap = wasmtime_trap_new(values->failure, strlen(values->failure));
-		} else {
-			wasmtime_error_t* error = wasmtime_func_call(values->context, &error_of.of.func, &message, 1, result, 1, &trap);
-			if (error) trap = wasmtime_trap_new(values->failure, strlen(values->failure)), wasmtime_error_delete(error);
+		wasmtime_extern_t detail, returned_error;
+		if (wasmtime_caller_export_get(values->caller, "trap_detail", 11, &detail) && detail.kind == WASMTIME_EXTERN_GLOBAL
+			&& wasmtime_caller_export_get(values->caller, "returned_error", 14, &returned_error) && returned_error.kind == WASMTIME_EXTERN_FUNC) {
+			wasmtime_error_t* error = wasmtime_global_set(values->context, &detail.of.global, &message);
+			if (!error) error = wasmtime_func_call(values->context, &returned_error.of.func, NULL, 0, NULL, 0, &trap);
+			if (error) wasmtime_error_delete(error);
 		}
+		if (!trap) trap = wasmtime_trap_new(values->failure, strlen(values->failure));
 		warp_unroot(&message);
 	} else {
 		*result = warp_anyref(value);
