@@ -104,3 +104,35 @@ not yet the home it is meant to be: it holds sugar and an always-loaded mode.
    serializer.warp → decide on card serializer-needed (0 runs).
 5. **Make extensions truly optional**: primitive.warp loaded only for a `@primitive` file; times (emitter/times.warp +
    runtime) and C FFI (c_imports) as extensions under the same switch — the compiler pays nothing for them.
+
+## Done: move D (user decision core-hygiene, 2026-11-01)
+
+Plain relocation, no behaviour change: core/extensions/tuples.warp and safe_navigation.warp → lib/sugar/ (first sugar,
+the same place as before); core/entities.tsv → lib/entities.tsv (read by module_source("entities.tsv"), hashed through
+BAKED in scripts/compiler-inputs.sh); core/runtime/durations.warp → core/runtime/extended/. serializer.warp stays
+(card serializer-needed).
+**Not done: number_words → lib/english.warp.** As rules it is no relocation: one rule per word is forbidden
+(common.md "Vocabulary is library"), and one general rule needs a bare-hole pattern `$w` tried on every node, a rule
+word looking the value up (lib/rule_words.warp, baked), a negated key place (`{one: 1}` stays) and skipping quoted
+data, plus a hint text an alias note doesn't give. The cheap honest move is a lib *table*
+(`number_words = {…}` in lib/english.warp, read by the pass through module_source) — the pass stays in core. Asked.
+
+## Sizing of A, B, C, E (nothing built; core lines are estimates from reading)
+
+| move | core removed | core added | lib added | files | risk | order |
+|---|---|---|---|---|---|---|
+| **A1** host imports declared by their library: `draw_shape(kind: int, x: float, …) from host` as a foreign line (c_imports' existing `from 'lib'` mechanism, module "host") | ~60 of host_words.warp's 93 (draw, gpu, fetch, serve, clipboard, paint, sound, signals, key_held, system values, tasks/shared/channels) | ~25 (c_imports: `from host` → the host table, kinds of the foreign types) | ~60 lines spread over draw, wgsl, web, router, sound, channels, signals, keys | analysis/host_words.warp, emitter/c_imports.warp, builtin_signatures.warp (host results), emitter.warp imported_words | medium: the analyzer must see the kinds before passes run; tasks/channels are used by runtime words too (stay core) | 1st |
+| **A2** std modules from lib/, not a list: every lib/*.warp module is standard unless it says otherwise | 1 long line + 4 call sites changed | ~10 (LIBRARY_FILES top-level keys, a `# not standard` marker or a short exclusion of aliases/rule_words/wgsl/primitive/c/repl) | marker lines in ~6 modules | rewrites.warp, prelude_words.warp, compiler.warp prebuild | low-medium: prebuild then tries modules not prebuilt today | 2nd |
+| **A3** property modules and their trigger words read off lib (who defines `x.p :=`) | ~6 (property_modules, the window/display/canvas list) | ~15 (a baked table like BLOCK_HEADS) | 0 | property_accessors.warp, uses.warp baking | low | 3rd |
+| **A4** compile-time rule words declared by their module (`@rule_word`), the table baked from the marks instead of lib/rule_words.warp's hand table | ~0 core removed; rule_words' 1 table line | ~30 (a baking like LIBRARY_RULES, rewrites.computed reads it) | words move to their modules (wgsl, router, units, json) | rewrites.warp, uses.warp, lib/rule_words.warp, compiler-inputs.sh BAKED | medium. NB: still baked: un-baking wgsl needs running library code at compile time (an interpreter or a second wasm instance), a much bigger mechanism | 4th, optional |
+| **B** GPU lists behind list-kind hooks (bridge.warp pattern): core list words ask one generic "cells list" mark, gpu_lists.warp → runtime/extended/ | ~20 (4 is_gpu_list branches, gpu intrinsics in runtime_words.warp, `use gpu_lists`) | ~15 (generic hook names in bridge.warp, bodies in extended.warp) | 0 (gpu_lists.warp moves, 57) | runtime/lists, nodes, bridge, extended.warp, runtime_words.warp, kinds.warp | medium: GPU tests are window/GPU-bound; the speed gain is small (the mark test stays, as a generic one) — mainly hygiene | after A1 |
+| **C** one named-language literal: `word "…"` / `word {…}` for a word a library declares as a language (shader, wgsl, sql, sh): the parser keeps the raw text and its holes, the library's word gives its meaning | ~300 (injection.warp 217, parser shader_block/shader_text ~100, lexer shader_brace ~20, interpolation's sql/sh step) | ~70 (one raw-literal reader in lexer/parser, a baked table of language words) | ~150 (sql/sh hole rules in shell.warp and a sql module, wgsl holes in wgsl.warp) | parsing/lexer, parser, injection, interpolation; lib/shell, lib/wgsl, new lib/sql | medium-high: new syntax → user's OK; injection's safety guarantees (a hole never changes the query's shape) must hold in lib; the playground highlights shaders | after A (it reuses the declaration idea) |
+| **E** extensions only when used | — | — | — | — | see below | last |
+
+E honestly: a compiled compiler carries all its code; "loaded only when used" needs compiler plugins (an extension as a
+separate wasm module the driver links when a program needs it), a big mechanism (~300+ core lines, driver work).
+The cheap version: one extension table in compiler.warp (name → trigger test → its passes), primitive.warp, times
+(emitter/times.warp 147 + the 107 time references in emitter/passes) and C FFI (c_imports 323 + c_functions 27, 42
+call sites) move under core/extensions/ and are reached only through that table: ~+30 core lines, ~-0 removed, many
+call sites touched (34 primitive, 42 C, 107 time). Benefit: honest folders and a scan skipped per source; size and
+risk high for times (spread through the emitter). Recommend: primitive and FFI via the table, times later or never.
