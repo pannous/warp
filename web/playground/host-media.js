@@ -36,7 +36,7 @@ function textCoverage(words, size) {
 
 // u32s as a list of Ints, built in one call of the program's ints_to_list (gpu_render's pixels); undefined without it
 function listOfInts(program, ints) {
-	if (selfHosted(program)) return newGuestValue(program, ints);
+	if (selfHosted(program)) return newGuestInts(program, ints);
 	const address = program.ints_to_list && scratch(program, ints.byteLength);
 	if (address === undefined) return undefined;
 	new Uint32Array(program.memory.buffer, address, ints.length).set(ints);
