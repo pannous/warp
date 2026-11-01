@@ -1,0 +1,6 @@
+# a use naming no file, library or mode fails the compile instead of being ignored (card egraph-use-ignored)
+'use nonexistentpkg; 1'	error
+'use math; sqrt(16)'	4
+'use strict; 1'	1
+'use m; fmin(2, 3)'	2
+'use log; log10(100)'	2

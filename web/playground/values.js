@@ -37,6 +37,21 @@ const guestItems = (program, list) => Array.from({ length: guestCount(program, l
 const guestInts = (program, list, count = guestCount(program, list)) =>
 	Array.from({ length: count }, (_, index) => Number(program.int_item_at(list, BigInt(index + 1))));
 
+// a map's entries [name, value], read item by item and never shown (a Key is two items, its name and its value:
+// decision pair-items), so a map of a million numbers is read without its text; undefined for a value of no such
+// entries
+function guestEntries(program, value) {
+	try {
+		if (isGuestText(program, value)) return undefined;
+		// the name a Symbol, shown as itself
+		const named = entry => guestCount(program, entry) === 2 ? shownText(program, guestItem(program, entry, 0)) : undefined;
+		const entries = guestItems(program, value).map(entry => named(entry) === undefined ? undefined : [named(entry), guestItem(program, entry, 1)]);
+		return entries.length && entries.every(Boolean) ? entries : undefined;
+	} catch {
+		return undefined; // a number, or an item of no items
+	}
+}
+
 // the value as plain JavaScript (a text a string, a list an array, a map an object, yes/no booleans, ø null, numbers,
 // a ratio its quotient), read from the text warp shows it as: the one reading of any value, as the native warp hands
 // shown values to its C libraries (lib/native/foreign.c); a list too long to show (a million numbers for the GPU) is

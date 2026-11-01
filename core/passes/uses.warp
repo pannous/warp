@@ -370,7 +370,7 @@ path_in(folder: text, name: text): text := without_steps_up(if name.starts_with(
 without_steps_up(path: text): text := {
 	kept = []
 	for part in path.split("/") {
-		if part == ".." and #kept > 0 and kept#(#kept) != ".." { kept = kept[0 ..< #kept - 1] } else { kept += [part] }
+		if part == ".." and #kept > 0 and kept#(#kept) not in ["..", "."] { kept = kept[0 ..< #kept - 1] } else { kept += [part] }
 	}
 	kept.join("/")
 }
