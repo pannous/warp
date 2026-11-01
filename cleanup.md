@@ -39,3 +39,7 @@ Type one library module at a time, preserving accepted input domains and observa
 # library-typed random slice
 
 Cover choice on text and lists, shuffle and sample on text lists, and repeatable seeding before adding signatures that preserve accepted inputs; verify the focused outcomes and smoke.
+
+# library-typed UTF-8 slice
+
+Cover empty and supplementary-plane UTF-8 conversions, then annotate their results while retaining the existing input domains. Compare focused outcomes with the stored baseline and run smoke before landing.
