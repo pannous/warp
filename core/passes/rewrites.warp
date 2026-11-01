@@ -1056,6 +1056,7 @@ named_enum(code: Node): text := {
 }
 
 # whether the code a hole bound passes the condition
+program_word(word: text): bool := binds_value(rule_scope, word) or binds_as(rule_scope, word, Meaning.Function)
 condition_holds(condition: Node, bound: map): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
 	if is_rule_word_call(condition) { return computed(condition, bound) == yes }
@@ -1075,8 +1076,9 @@ condition_holds(condition: Node, bound: map): bool := {
 	}
 	if is_context_word(condition) { return context_holds(rule_matched, name_of(condition)) }
 	listing = membership(condition)
-	# a listed word the program binds as a value is its own, never the rule's: `g = "ab"; 3 times g` is no 3 grams
-	if listing != ø { return bound.has(listing.hole) and word_listed(bound[listing.hole], listing.words) and not (bound[listing.hole] is symbol and binds_value(rule_scope, name_of(bound[listing.hole]))) }
+	# a listed word the program binds as a value or a function is its own, never the rule's: `g = "ab"; 3 times g` is no
+	# 3 grams, nor `paint(h, 4, 4)` of a function h 4 hours
+	if listing != ø { return bound.has(listing.hole) and word_listed(bound[listing.hole], listing.words) and not (bound[listing.hole] is symbol and program_word(name_of(bound[listing.hole]))) }
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]

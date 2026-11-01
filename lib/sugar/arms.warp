@@ -17,3 +17,6 @@ rewrite $x replace $p with $t => replace_matches($x, data($p), data($t))
 # the phrase as a call's argument, `count(page find {type: "text"})`, which the parser reads as count's four words
 rewrite $f($x find $p) => $f(find_matches($x, data($p)))
 rewrite $f($x replace $p with $t) => $f(replace_matches($x, data($p), data($t)))
+# a rule set as a value, `simplify = rules { data($a * 1) => a }`: a function rewriting code at any depth, children
+# first, each node again while a rule fits it
+rewrite rules {$arms...} => (rules_code => rewritten_everywhere(rules_code, rules_node => match rules_node {$arms..., _ => ø}))
