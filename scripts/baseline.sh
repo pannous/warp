@@ -19,8 +19,9 @@ else
 	baseline=$FALLBACK
 fi
 
-# a result line without its leading mark: the test's place and code, the same in both files
-case_of() { sed 's/^[^ ]* //'; }
+# a result line without its leading mark, and a failure's without what it got: the test's place, code and expectation,
+# the same in both files
+case_of() { sed -e 's/^[^ ]* //' -e 's/: got .*$//'; }
 
 if [ "${1:-}" = --regressions ]; then
 	[ -f "${2:-}" ] || { echo "usage: $0 --regressions <results file>" >&2; exit 2; }
