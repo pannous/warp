@@ -7,3 +7,5 @@
 'type([[1, 2], [3]])'	'list of list of int'
 'xs = [1, ø]; type(xs)'	'list of int?'
 'type([1/2, 3/4])'	'list of rational'
+'type(split("a b", " "))'	'list of text'
+'type("abc".chars)'	'list of codepoint'
