@@ -227,6 +227,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - real-runtime: real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number type; the general run-time exact mechanism is parked (notes/real_runtime.md).
 
 ## Units and quantities
+- unit-sum-display (user): a sum of quantities keeps today's display (`2h + 30min` in hours); the guide line that says 150min is corrected.
 - #5 units yes; #3 juxtaposition `3x` multiplies; units are written glued (`3km`), `3 km` works with a hint. P64 units are checked at compile time and kept as metadata where static knowledge ends. P36 `100 cm in m` / `as m` convert within a quantity. Unit sums use the finer unit. Quantities print without a space (`500m`); P231 print rounds quantities, str() keeps the exact value. #31 `min` stays the function.
 - quantity-naming: warp says quantity (length, speed, density), axis for width/height, rank for the number of axes, shape for 28 × 28 px; `dimension` is only an alias with a hint.
 - dimensions-units: quantity names are types (`3 cm is length`; `h: length = 3 s` errs); the time quantity is `duration`; units live in lib/units.warp; a unit after a list applies to each element (`[3, 4] cm`). Predefined derived names: speed, area, volume, frequency.
