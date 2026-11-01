@@ -9,8 +9,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 
 ## Parked
-- errors-one-rule (prose discussion with the user; warp-float-param-typing, 4b1e1809de makes library failures always raise, against dropped-error-raises): user's idea: every error raises unless assigned to an optional place (`r: json? = parse(…)`, error-optional's `T?`).
-- pair-items (prose with the user; warp-float-param-typing, ~4 core lines node_at/node_length for host item_count/item_at): user asked whether a one-entry map counts 1 (it does: `#{a: 1}` 1); the question is a single pair `(a: 1)`.
 - class-text (sound notes), unit plurals, def-first (b), note tests: discuss later (user).
 - event-handlers (prose discussion with the user, no popups; block-parameters-captures landed): proposed `on(event: Event, body: block)` in the prelude, `emit(event, data)` runs the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol; (3) decided: on-frame-headless. Branch event-handlers-unknown (a4d0dde771) only a reference.
 - graphics-plain (warp-markup, parked): display alias table with notes; bare width/height as canvas sides with did-you-mean.

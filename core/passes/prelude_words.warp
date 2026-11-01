@@ -327,7 +327,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	program_words = symbol_words(program)
 	foreign = foreign_types(module)
 	if program_words.any(word => word in foreign) { hint_foreign_types(program, foreign, own_names) }
-	wanted = program_words + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else [])
+	wanted = program_words + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else [])
 	uses = ø
 	origins = {}
 	keys = slice_keys(files)
@@ -508,6 +508,8 @@ library_word(word: text): text := word + name_joiner + "library"
 # words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
 # `xs.first(3)` first_items (Rust twin: library_words.rs ARITY_VARIANTS)
 arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["count", 2, "count_in"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
+# the variants of the words a program names, which of_lookups may call (`last 2 of xs` is last_items)
+variant_words(words: list): list := arity_variants.filter(variant => variant#1 in words).map(variant => variant#3)
 arity_variant(name: text, count: int): any := {
 	for variant in arity_variants { if variant#1 == name and variant#2 == count { return variant#3 } }
 	ø
