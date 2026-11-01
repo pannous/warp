@@ -372,6 +372,8 @@ base_of(name: list): text := {
 }
 # the name a definition `f(x) := …` or `f := …` defines (in a class body a method or a property), else ø
 defined_word(n: Node): text? := match n {
+	# `shown(x: any): text := …`: the call before its result type
+	Key(Key(typed_head, Op.Colon, result_type), Op.Define, body): if is_called_name(typed_head) then name_of(typed_head#1) else ø
 	Key(method_head, Op.Define, body): { if method_head is symbol then name_of(method_head) else if is_called_name(method_head) then name_of(method_head#1) else ø }
 	_: ø
 }
