@@ -1,0 +1,1 @@
+'apply(f: (float) -> float, x: float) := f(x); whole(t) := 3; apply(whole, 1.0) is float'	true

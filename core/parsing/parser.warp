@@ -386,18 +386,19 @@ def aliased_spellings(): Spellings := {
 	tables
 }
 // The spellings an entry gives: a symbol alias spells the entry's operator (its `operator`, else the entry itself), a
-// word alias its word (also infix with `infix: yes`, also a keyword form when the word is one)
+// word alias its word (also infix by the entry's `infix`, also a keyword form when the word is one)
 def add_alias_entry(tables: Spellings, word: text, fields: Node) {
 	target = alias_field(fields, "operator") ?? word
-	written_infix = alias_field(fields, "infix") == "yes"
-	if written_infix { add_infix_word(tables, word, target) }
-	for spelling in alias_field(fields, "aliases") ?? [] {
+	aliases = alias_field(fields, "aliases") ?? []
+	for spelling in infix_spellings(alias_field(fields, "infix"), [word] + aliases) { add_infix_word(tables, spelling, target) }
+	for spelling in aliases {
 		tables.canonical[spelling] = word
 		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
-		else if written_infix { add_infix_word(tables, spelling, target) }
 		if word in tables.forms { tables.forms[spelling] = tables.forms[word] }
 	}
 }
+// `infix: yes`: the entry's word and its word aliases are written between operands too; `infix: [plus]` only those
+def infix_spellings(infix: any, spellings: list): list := if infix == "yes" then spellings.filter(spelling => is_name_start(spelling#1)) else infix ?? []
 def add_infix_word(tables: Spellings, word: text, target: text) {
 	tables.operator_words += [[word, target]]
 	tables.infix_words += [word]

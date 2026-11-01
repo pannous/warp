@@ -1,6 +1,6 @@
 # A function written with a keyword (notes/layers.md, sugar; an early sugar module, rewriting the program before the
 # passes): `def f(x) := e`, `def f(x) = e`, `def f(x) { body }`, `def f(x): T { body }` and
-# `def f(x) -> T { body }` (Swift's and Rust's result arrow) are the definitions
+# `def f(x) -> T { body }` (Swift's and Rust's result arrow), `def f(x) as T { body }` are the definitions
 # `f(x) := e` and `f(x): T := { body }`; fun, fn, define, function and func are def (words.warp function_keywords)
 rewrite (fun $d) => def $d
 rewrite (fn $d) => def $d
@@ -9,6 +9,14 @@ rewrite (function $d) => def $d
 rewrite (func $d) => def $d
 rewrite (def $h($p...): $t {$b...}) => ($h($p...): $t := {$b...})
 rewrite (def $h($p...) -> $t {$b...}) => ($h($p...): $t := {$b...})
+# `fun f(a: int) as float64 {…}`: `as` after the signature names the result type too (decision M4); the `as` splits
+# the phrase, so each keyword has its rule
+rewrite (def $h($p...) as $t {$b...}) => ($h($p...): $t := {$b...})
+rewrite (fun $h($p...) as $t {$b...}) => ($h($p...): $t := {$b...})
+rewrite (fn $h($p...) as $t {$b...}) => ($h($p...): $t := {$b...})
+rewrite (define $h($p...) as $t {$b...}) => ($h($p...): $t := {$b...})
+rewrite (function $h($p...) as $t {$b...}) => ($h($p...): $t := {$b...})
+rewrite (func $h($p...) as $t {$b...}) => ($h($p...): $t := {$b...})
 rewrite def $h($p...) {$b...} => ($h($p...) := {$b...})
 # Python's colon before the lines indented below, `def f(x):` (or none, `def f(x)`), which the parser reads as the pair
 # f(x): {body}
