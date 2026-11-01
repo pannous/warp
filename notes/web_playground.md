@@ -4,12 +4,12 @@ Roadmap card: playground (board topic, notes/roadmaps.md).
 
 Run it: `web/playground/build.sh && python3 -m http.server 8000` in the repository root, then open
 http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or a samples/ file).
-Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's,
-exit 1 on a difference). Presentation is no difference: markup the page renders (report.html) is compared with the
-HTML text the CLI prints, a program with `test` lines with `warp test` (the page's Run runs tests), a value ø with a
-CLI run that shows no » line. Samples in excluded_samples.txt are skipped (no native raylib/SDL window opens).
-Each step waits for its run to finish (#status), not a fixed sleep (after `use python` the worker is busy loading
-Pyodide).
+Sweep: `scripts/samples-web.sh [<tree>] [samples/….warp…]` (headless agent-browser; test_in_browser.py --samples)
+runs every samples/**/*.warp in the page as its own file (`playground.evaluate(code, file)`, so `use` and file reads
+resolve beside it) and compares what the page printed with what the native run printed (scripts/samples.sh,
+data/samples/out; the main checkout's when the tree has none). test/samples-web.txt (tracked): ok, DIFF, FAIL, TIME
+(the page gave no answer in 40 s), ran (the native run failed: nothing to compare), WIN (needs a C window, not run);
+data/samples-web/report.txt each difference and error. One page, one sample at a time: ~2 minutes for all.
 
 ## The tour (examples.js)
 In the order of the guide's chapters: small examples with one idea each and an obvious result first (hello, numbers,
