@@ -572,11 +572,13 @@ implicit_modules(source: text, index_file: text): list := {
 # a statement led by the word, as a module's rule starts with it: `stored users: [User]`, whose `stored` declares
 leads_statement(program: Node, word: text): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word))
 # A word several modules define is the one module's whose definitions take every call the program makes of it, by
-# the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition)
+# the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition); a module whose
+# rule the word leads takes the calls none of them takes (signals' `on change p.age {…}` beside keys' on(key, body))
 definers_taking(word: text, definers: list, program: Node): list := {
 	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 	if not counts { return definers }
-	definers.filter(module => definition_arities(module, word).any(span => counts.all(count => span#1 <= count and count <= span#2)))
+	taking = definers.filter(module => definition_arities(module, word).any(span => counts.all(count => span#1 <= count and count <= span#2)))
+	if taking then taking else definers.filter(module => not definition_arities(module, word))
 }
 # [least, most] arguments of each of module's definitions of word, read off its head `word(a, b = 1)`
 definition_arities(module: text, word: text): list := {
