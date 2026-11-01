@@ -1,5 +1,6 @@
-// The warp compiler (warp.wasm, built by build.sh) and the programs it compiles (host.js), run off the page's thread:
-// a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
+// The warp compiler (warp.wasm, the self-hosted one build.sh copies, run by driver.js as the native warp runs it) and
+// the programs it compiles (host.js), off the page's thread: a worker may compile any module synchronously and block
+// on a synchronous fetch, which WASI's file reads and the host calls need.
 
 // where a message waits: the page keeps the last stage for its stall warning and the Firefox driver's timeout report
 // (cards firefox-hello-again, tour-firefox)
@@ -7,21 +8,14 @@ const stage = name => self.postMessage({ type: "stage", stage: name });
 
 stage("loading its scripts");
 importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
-importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
+importScripts(...HOST_PART_FILES, "components.js", "served-files.js", "wasi.js", "driver.js");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
-// warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
-const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ?? "warp.wasm";
 // ?slow_start=<ms> (playground.js passes the page's one): ready that much later, as on a slow CI runner
 const SLOW_START_MS = Number(new URL(self.location.href).searchParams.get("slow_start") ?? 0);
-self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
-let compiler; // the compiler instance's exports
-let webEvaluate; // its web_evaluate, an async function where JSPI is (host-compiler.js awaitedEntry)
-// its web_worker_bundle, likewise: compiling may run code (warp_host.run, a Suspending import), and a Suspending import
-// called outside WebAssembly.promising throws "No matching WebAssembly.promising" (card compiler-crashed)
-let webWorkerBundle;
+let compiler; // the self-hosted compiler loaded (driver.js), undefined until then
 // the messages use the compiler one after another: an evaluation whose program waits for a promise (host.js JSPI) holds
 // the compiler's memory until it ends
 let compilerTurn = Promise.resolve();
@@ -73,8 +67,6 @@ const hooks = {
 	panicked: message => { panicMessage = message; },
 };
 
-const compilerText = (pointer, length) => readText(compiler, pointer, length);
-
 // the response's bytes, each chunk told to the page as {type: "loading", loaded, total} (the page shows the progress,
 // card firefox-hello-hang); a compressed response's Content-Length counts other bytes, so its total stays unknown
 async function downloaded(response) {
@@ -94,38 +86,19 @@ async function downloaded(response) {
 }
 
 async function loadCompiler() {
-	stage(`requesting ${COMPILER_URL}`);
-	const response = await fetch(COMPILER_URL);
 	stage(`downloading ${COMPILER_URL}`);
-	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
-	const bytes = await downloaded(response);
-	post({ type: "compiling" });
-	// a stage per step, so a stalled start names it (card tour-firefox-stall)
-	stage(`compiling ${COMPILER_URL} (${bytes.length} bytes)`);
-	const module = await WebAssembly.compile(bytes);
-	stage(`instantiating ${COMPILER_URL}`);
-	const instance = await WebAssembly.instantiate(module, { warp_host: warpHost(() => compiler.memory, hooks, true) });
-	compiler = instance.exports;
-	webEvaluate = awaitedEntry(compiler.web_evaluate);
-	webWorkerBundle = awaitedEntry(compiler.web_worker_bundle);
+	await loadDriverCompiler(response => (post({ type: "compiling" }), downloaded(response)));
+	compiler = true;
 }
 
-const passText = text => passedBytes(compiler, utf8.encode(text)); // host-compiler.js
-
-// a program's main may wait for a promise (host.js JSPI): the compiler waits with it
-async function evaluate(code, acknowledged) {
+// the code compiled and run as the native warp runs it (driver.js); a crash of the compiler itself loads it anew
+async function evaluate(code) {
 	panicMessage = undefined;
-	const codeText = passText(code);
-	const acknowledgedText = passText(JSON.stringify(acknowledged));
 	try {
-		const length = await webEvaluate(...codeText, ...acknowledgedText);
-		const report = JSON.parse(compilerText(compiler.web_report(), length));
-		compiler.web_free(...codeText);
-		compiler.web_free(...acknowledgedText);
-		return report;
+		return evaluatedNatively(code, self.programFile, hooks);
 	} catch (crash) {
-		compiler = undefined; // a panic leaves the compiler's memory in an unknown state: load it again
-		return { value: `compiler crashed: ${panicMessage ?? crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], notes: [] };
+		compiler = undefined;
+		return { value: `compiler crashed: ${crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], notes: [] };
 	}
 }
 
@@ -152,15 +125,26 @@ function loadPython() {
 		post({ type: "print", text: "loading Python (Pyodide, ~12 MB, once)…\n", stream: 2 });
 		importScripts(PYODIDE_URL + "pyodide.js");
 		const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
-		const bridge = await (await fetch("foreign_python.py")).text();
+		const [bridge, capi] = await Promise.all(["foreign_python.py", "python_capi.py"].map(async file => (await fetch(file)).text()));
 		pyodide.globals.set("WARP_BRIDGE_LOOP", false);
 		pyodide.runPython(bridge);
 		self.pythonAnswer = pyodide.globals.get("answer");
+		pyodide.runPython(capi); // `use python`'s C API (host-foreign.js pythonLibrary)
+		self.pythonCapi = pyodide.globals.get("capi");
+		// Python's print goes to the run's output, as natively libpython's stdout is the process's
+		pyodide.setStdout({ batched: line => post({ type: "print", text: `${line}\n`, stream: 1 }) });
+		pyodide.setStderr({ batched: line => post({ type: "print", text: `${line}\n`, stream: 2 }) });
+		return pyodide;
 	})();
 	return python;
 }
+// the modules a program imports (python_import("numpy")): Pyodide's packages among them loaded before the run, as
+// natively they are installed beside libpython
+const PYTHON_IMPORT = /python_import\("([\w.]+)"\)/g;
+const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, name]) => `import ${name}`).join("\n");
 registerForeignRuntime("python", {
-	prepare: code => USES_PYTHON.test(code) && loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
+	prepare: code => USES_PYTHON.test(code) && loadPython().then(pyodide => pyodide.loadPackagesFromImports(pythonImports(code), { messageCallback: () => {} }))
+		.catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
 // a link in the shown markup was followed (playground.js followLink): the live run shows the page at that path
@@ -179,38 +163,15 @@ function handleSubmit(request) {
 	if (live) showHandled(live, runSubmitted(live, hooks, request));
 }
 
-// the playground's Deploy (deploy.js): the program's Worker module and the query naming the scripts warp-hosting
-// composes its Worker of (src/web/mod.rs worker_bundle), `{query, module}` or `{error}`
-async function workerBundle(code) {
-	const codeText = passText(code);
-	try {
-		const length = await webWorkerBundle(...codeText);
-		const report = JSON.parse(compilerText(compiler.web_report(), length));
-		// the call first: memory it grows would detach a buffer read before it
-		const modulePointer = report.error ? undefined : compiler.web_bundle_module();
-		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, modulePointer, report.module_length).slice();
-		compiler.web_free(...codeText);
-		return { query: report.query, module, error: report.error };
-	} catch (crash) {
-		compiler = undefined; // as in evaluate: load it again
-		return { error: `compiler crashed: ${panicMessage ?? crash.message}` };
-	}
-}
+// what the Rust compiler of the page answered and the self-hosted one has no word for yet (card playground-compiles)
+const NOT_SELF_HOSTED = "not in the self-hosted playground yet";
 
-// the members to offer after the code and a dot (completion.js, src/lowering/data/members.rs): a list of names
-function memberNames(code) {
-	const codeText = passText(code);
-	try {
-		const length = compiler.web_member_names(...codeText);
-		const names = JSON.parse(compilerText(compiler.web_report(), length));
-		compiler.web_free(...codeText);
-		return names;
-	} catch (crash) {
-		compiler = undefined; // as in evaluate: load it again
-		console.warn(`member completion failed: ${panicMessage ?? crash.message}`);
-		return [];
-	}
-}
+// the playground's Deploy (deploy.js): the program's Worker module and the query naming the scripts warp-hosting
+// composes its Worker of, `{query, module}` or `{error}`
+const workerBundle = () => ({ error: `deploy: ${NOT_SELF_HOSTED}` });
+
+// the members to offer after the code and a dot (completion.js): a list of names
+const memberNames = () => [];
 
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
@@ -231,13 +192,9 @@ function showHandled(holder, handled, timer = false) {
 	post({ type: "handled", value, html: page, error: failed });
 }
 
-// the value and HTML the compiler shows for a run outcome (src/web/mod.rs shown)
+// the value and HTML the compiler shows for a run outcome: a page event's handler, not run by the self-hosted page yet
 function shownOf(outcome) {
-	const outcomeText = passText(JSON.stringify(outcome));
-	const length = compiler.web_show(...outcomeText);
-	const shown = JSON.parse(compilerText(compiler.web_report(), length));
-	compiler.web_free(...outcomeText);
-	return shown;
+	return { value: outcome.failure ?? `page events: ${NOT_SELF_HOSTED}` };
 }
 
 // markup with holes (PAGE_HOLE·<path>, src/lowering/signals/event_signals.rs, card web-fine-holes): only the elements holding
@@ -296,7 +253,7 @@ async function handleMessage(data) {
 	if (data.submit) return handleSubmit(data.submit);
 	if (data.bundle !== undefined) { // the running program keeps running
 		if (!compiler) await loadCompiler();
-		return post({ type: "bundle", bundle: await workerBundle(data.bundle) });
+		return post({ type: "bundle", bundle: workerBundle(data.bundle) });
 	}
 	if (data.members !== undefined) { // the running program keeps running
 		if (!compiler) await loadCompiler();

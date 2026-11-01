@@ -291,7 +291,73 @@ function pageDecoded(name) {
 	return { rate, amplitudes: Float32Array.from(amplitudes) };
 }
 
+// libwarp_sound in the page (lib/sound.warp: its words `from 'warp_sound'`, opened by dlopen beside warp; card
+// sound-direct): samples go to the run's voice as sound_samples' do, a file plays on the page as play_file's, a decoded
+// file's 16-bit values come from wavFrames or the page's decoder, at the rate and channel count asked (0: the file's),
+// linearly resampled as miniaudio's default resampler does. Each word answers 0 (or a file's number) as libwarp_sound does
+self.PAGE_LIBRARIES = new Set(["warp_sound"]); // host-foreign.js dlopen: warp's own libraries the page has
+function soundLibrary(holder) {
+	const program = () => holder.exports;
+	const files = [];
+	return {
+		warp_sound_play_samples: (bytes, rate, channels) => {
+			const pcm = guestBytes(program(), bytes);
+			const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+			holder.sounded(Array.from({ length: pcm.length >> 1 }, (_, at) => view.getInt16(2 * at, true) + SAMPLE_OFFSET), rate, channels);
+			return 0;
+		},
+		warp_sound_play: path => {
+			STD_ADAPTERS.sound.play_file.call({ holder }, guestText(program(), path));
+			return 0;
+		},
+		warp_sound_decode: (path, rate, channels) => {
+			files.push(decodedSound(guestText(program(), path), rate, channels));
+			return files.length - 1;
+		},
+		warp_sound_decoded_frames: file => BigInt(files[file].values.length / files[file].channels),
+		warp_sound_decoded_rate: file => files[file].rate,
+		warp_sound_decoded_channels: file => files[file].channels,
+		warp_sound_decoded_value: (file, at) => files[file].values[Number(at)] ?? 0,
+	};
+}
+// {rate, channels, values}: the file's 16-bit values interleaved, at the rate and channel count asked
+function decodedSound(path, rate, channels) {
+	const own = /\.wav$/i.test(path) ? wavDecoded(path) : pageDecodedSound(path); // the path as the run's files have it, natively too
+	const mixed = channels && channels !== own.channels ? remixed(own, channels) : own;
+	return rate && rate !== mixed.rate ? resampled(mixed, rate) : mixed;
+}
+function wavDecoded(name) {
+	const [rate, channels, ...offset] = wavFrames(readBytes(name), name);
+	return { rate, channels, values: Int16Array.from(offset, value => value - SAMPLE_OFFSET) };
+}
+// another format by the page's decoder: its first channel (task-workers.js decodeSoundInto), 16-bit
+function pageDecodedSound(name) {
+	const { rate, amplitudes } = pageDecoded(name);
+	return { rate, channels: 1, values: Int16Array.from(amplitudes) };
+}
+// each frame's channels averaged into `channels` (1), or the first ones repeated into more
+function remixed({ rate, channels: own, values: amplitudes }, channels) {
+	const frames = amplitudes.length / own;
+	const mixed = new Int16Array(frames * channels);
+	for (let frame = 0; frame < frames; frame++)
+		for (let channel = 0; channel < channels; channel++)
+			mixed[frame * channels + channel] = channels === 1 ? Math.round(Array.from({ length: own }, (_, at) => amplitudes[frame * own + at]).reduce((sum, value) => sum + value, 0) / own) : amplitudes[frame * own + Math.min(channel, own - 1)];
+	return { rate, channels, values: mixed };
+}
+function resampled({ rate: own, channels, values }, rate) {
+	const frames = Math.floor(values.length / channels * rate / own);
+	const result = new Int16Array(frames * channels);
+	for (let frame = 0; frame < frames; frame++) {
+		const at = frame * own / rate, before = Math.floor(at), share = at - before;
+		const last = values.length / channels - 1;
+		for (let channel = 0; channel < channels; channel++)
+			result[frame * channels + channel] = Math.round(values[Math.min(before, last) * channels + channel] * (1 - share) + values[Math.min(before + 1, last) * channels + channel] * share);
+	}
+	return { rate, channels, values: result };
+}
+
 addHostPart({
+	imports: holder => ({ warp_sound: soundLibrary(holder) }),
 	words: (holder, hooks, { program }) => {
 		holder.effected = (chain, floats, rate, channels) => effectsProcessed(hooks, chain, floats, rate, channels); // host-compiler.js
 		holder.spectrum = (window, rate, bands, low, high) => {
@@ -315,7 +381,7 @@ addHostPart({
 			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
 			// speakers and stays silent, as natively save sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate, channels) => {
-				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainValue(program(), samples), Number(rate), Number(channels));
 			},
 		};
 	},

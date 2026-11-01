@@ -10,6 +10,7 @@ age_group(age) := match age {
 }
 print age_group(15)
 
+enum Day { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
 weekend(day) := match day { Saturday | Sunday => yes; other => no }
 print weekend(Sunday)
 

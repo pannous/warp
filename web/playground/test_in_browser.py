@@ -28,6 +28,8 @@ SAMPLES_WEB_DATA = "data/samples-web"  # report.txt (each difference's first lin
 # the page stops a run after its RUN_TIMEOUT_MS (playground.js) and answers; a page that has not answered by then is stuck
 SAMPLE_ANSWER_SECONDS = 40
 SHOWN_DIFFERENCE = 300  # characters of each side in report.txt
+# a duration a sample measures (`painted in 53 ms`) differs on every run: both sides compare with it masked
+MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", str(os.cpu_count() or 2))  # tests in flight: one per core
@@ -1118,9 +1120,33 @@ def sample_verdict(report, native_output):
 	shown = page_output(report)
 	if native_output is None:
 		return "ran", "the native run failed or did not run: nothing to compare (test/samples.txt, scripts/samples.sh)"
-	if shown.rstrip() == native_output.rstrip():
+	if MEASURED_TIME.sub("…", shown).rstrip() == MEASURED_TIME.sub("…", native_output).rstrip():
 		return "ok", ""
 	return "DIFF", f"page: {shown[:SHOWN_DIFFERENCE]!r}\n     native: {native_output[:SHOWN_DIFFERENCE]!r}"
+
+
+def page_report(source, path, page_url):
+	"""the page's report of the sample; a page that gave none (its renderer crashed, now and then after many runs) is
+	opened anew and asked once more, so only a sample that fails twice in a fresh page counts as stuck"""
+	for attempt in range(2):
+		answer = browser("eval", RUN_SAMPLE % (json.dumps(source), json.dumps(path), SAMPLE_ANSWER_SECONDS * 1000))
+		try:
+			report = json.loads(json.loads(answer))
+		except ValueError:
+			report = {"error": True, "stuck": None, "value": f"(page gave no answer: {(answer or browser_complaint)[:200]})"}
+		if "stuck" not in report:
+			return report
+		open_samples_page(page_url)
+	return report
+
+
+def open_samples_page(page_url):
+	"""the page opened, isolated and its playground API defined (after a crashed renderer the first eval met none)"""
+	open_page(page_url)
+	wait_for_isolation()
+	deadline = time.time() + LAUNCH_SECONDS
+	while browser("eval", "typeof playground") != '"object"' and time.time() < deadline:
+		time.sleep(0.5)
 
 
 def check_samples(paths, tree):
@@ -1132,8 +1158,7 @@ def check_samples(paths, tree):
 	os.makedirs(os.path.join(data, "out"), exist_ok=True)
 	server = serve(None, tree)
 	page_url = f"http://127.0.0.1:{PORT}/web/playground/"
-	open_page(page_url)
-	wait_for_isolation()
+	open_samples_page(page_url)
 	lines, details = [], []
 	for path in paths:
 		output_name = path.replace("/", "_") + ".txt"
@@ -1141,14 +1166,7 @@ def check_samples(paths, tree):
 			status, detail = "WIN", "needs a C window library"
 		else:
 			source = open(os.path.join(tree, path), encoding="utf-8").read()
-			answer = browser("eval", RUN_SAMPLE % (json.dumps(source), json.dumps(path), SAMPLE_ANSWER_SECONDS * 1000))
-			try:
-				report = json.loads(json.loads(answer))
-			except ValueError:
-				report = {"error": True, "stuck": None, "value": f"(page gave no answer: {(answer or browser_complaint)[:200]})"}
-			if "stuck" in report:
-				open_page(page_url)  # a fresh page for the next sample
-				wait_for_isolation()
+			report = page_report(source, path, page_url)
 			native_file = os.path.join(tree, NATIVE_OUTPUTS, output_name)
 			compared = native.get(path) == "ok" and os.path.isfile(native_file)
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
