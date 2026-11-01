@@ -31,3 +31,27 @@ Keep the retained experimental branch intact. Upgrade the root outcome to the mo
 # tests-leave
 
 Keep the sound overload assertions and generated WAV bytes; use per-process names and remove each recording after saving. Add an outcome test for save and cleanup, then run the focused tests and smoke.
+
+# library-typed
+
+Type one library module at a time, preserving accepted input domains and observable results. Start with hash; verify real text and byte-list hashes before and after adding result signatures. Leave the remaining modules on the card.
+
+# library-typed random slice
+
+Cover choice on text and lists, shuffle and sample on text lists, and repeatable seeding before adding signatures that preserve accepted inputs; verify the focused outcomes and smoke.
+
+# library-typed UTF-8 slice
+
+Cover empty and supplementary-plane UTF-8 conversions, then annotate their results while retaining the existing input domains. Compare focused outcomes with the stored baseline and run smoke before landing.
+
+# library-typed color slice
+
+Cover color conversions and opacity before declaring types; retain accepted numeric domains with `any`, and validate color results without changing existing tests.
+
+# library-typed color helpers
+
+Cover hexadecimal color output and padding before annotating helper results. Preserve the existing numeric inputs and verify the focused outcomes and smoke.
+
+# library-typed memory slice
+
+Cover linear-memory copying and half-open slices before typing their signatures; preserve accepted inputs and check the existing interop outcomes.
