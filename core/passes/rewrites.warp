@@ -1468,7 +1468,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		holds_items = rule_item_block != ø and n == rule_item_block
 		if holds_items { rule_item_block = ø }
 		if is_word_block(n) { rule_item_block = value_of(n) }
-		walked = children(n, x => { if holds_items { rule_next_item = x }; placed_map_scoped(x, f, inner) })
+		walked = children(n, x => walked_item(x, holds_items, f, inner))
 		rule_maps = maps
 		outer_item = rule_item
 		rule_item = if at_item then walked else ø
@@ -1488,6 +1488,12 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 	f(walked)
 }
 
+# a child walked, marked as the item of a word's block it is for `where item` (a global set here, not in a lambda,
+# which would bind its own)
+walked_item(x: Node, is_item: bool, f: function, maps: map): Node := {
+	if is_item { rule_next_item = x }
+	placed_map_scoped(x, f, maps)
+}
 # `div{ "a", on click {…} }`: a word keying a block, whose items are the structure's items
 is_word_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and (key_of(n) is symbol or key_of(n) is text) and is_curly_group(value_of(n))
 
