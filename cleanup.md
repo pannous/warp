@@ -51,3 +51,7 @@ Cover color conversions and opacity before declaring types; retain accepted nume
 # library-typed color helpers
 
 Cover hexadecimal color output and padding before annotating helper results. Preserve the existing numeric inputs and verify the focused outcomes and smoke.
+
+# library-typed memory slice
+
+Cover linear-memory copying and half-open slices before typing their signatures; preserve accepted inputs and check the existing interop outcomes.
