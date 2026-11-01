@@ -1184,7 +1184,8 @@ def check_samples(paths, tree):
 	written = len(paths) == len(native)  # a run of some samples leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
-	open(os.path.join(data, "report.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
+	# a run of some samples keeps the whole run's report too
+	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
 	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "TIME", "ran", "WIN")}
 	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
 
