@@ -140,6 +140,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 
 ## Tooling: format, beautify, CLI
+- prebuild-fails-loudly (user, ~10–15 core lines core/compiler.warp write_modules): a library that fails to prebuild fails the rebuild, naming the module and why; a module whose words are C imports (`… from "c"`, lib/wasmtime.warp) is source-only by itself, no marker comment. wasmtime-dropped (Interviewer): lib/wasmtime.warp (Rust-era, read C headers, structs by value, already failing) leaves std_module_names; `use wasmtime` fails loudly as an unknown module; card wasmtime-self-hosted brings it back once foreign lines take structs.
 - hello-size-exports (user): shown_at and trap_message are exported only from a program that can raise (raise/throw, a raising runtime word, a host word with arguments); hello ~1.5 KB; an engine trap in another program prints as wasmtime names it, without position.
 - sample-spellings (user): samples are rewritten to the general forms (`int[height * width]`, `(y - center)^2`) instead of new syntax; no wish cards for those.
 - drop-pure-word (user): `warp pure` is gone: plain `warp <file>` is the warp compiler (warp.wasm); `warp self` stays the self-built variant; `pure` survives only as a hidden CLI alias with a one-line note. Card drop-pure-word.
@@ -417,6 +418,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cleanup-cuts: dropped compile-time lambdas, generators/yield, type-name parameters `fib int i`, scoped handlers `on … in {…}`, the defined-twice diagnostic, all phrase calls (until prepositions-call: `move x from: a to: b`). Kept: return-type overloads, tuple returns, list element checks, instance destructuring, object-shaped parameters, dispatch by class, version literals (rebuilt small). Traits are a thin alias of classes with default methods; ORM keeps only `stored people: [Person]`; `a of b` ≡ `b.a`.
 
 ## Lists, maps and indexing
+- lazy-range-value (user, core >30 lines in emitter list ops + runtime, exact count before building; after restructuring-hold): `a..b` / `a to b` hold only their two ends; count, #, sum, indexing and iteration answer from the ends; any other list operation makes the items once, so a range stays a list everywhere (`(1..3) + [4]` is [1, 2, 3, 4]).
 - pair-items (user, core OK ~4 lines node_at/node_length, the minimal change): a key-value pair reads as two items, `p = (a: 1); p#1` → a (the name), `p#2` → 1 (the value), `#p` → 2; host item_count/item_at the same.
 - bare-pair (user): `a:1` as a value is a pair; a word key stays the word as written, as `{a:1}`'s keys (`a = 5; x = a:1` is a:1, `x is pair` yes); any other key is its value (`1:4`); a computed key is `(a):1` → 5:1.
 - to-inclusive (user): `a to b` always includes b, also when b is a length: walking 0-based indexes is `1 ..< #a` or `1 to #a - 1` (samples/lists/sorting.warp).

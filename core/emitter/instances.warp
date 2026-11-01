@@ -356,6 +356,8 @@ record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
 		if declared_members(body).any(member => member == ø) { module.member_classes[name#2] = yes }
+		# a class named as a type word's other spelling is itself, not that type: reals' `class real` (decision real-canonical)
+		if name#2 in module.aliases { module.aliases = map_without(module.aliases, name#2) }
 		return module.classes[name#2] = field_types(body)
 	}
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
