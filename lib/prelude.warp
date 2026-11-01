@@ -831,6 +831,19 @@ instantiated(template: any, bound: map): any := {
 	}
 	template
 }
+// a code template's holes filled (core/passes/code_templates.warp): `$a` by the value of a, `$xs...` by xs's items
+filled_template(code: any, values: map): any := {
+	if is_type(code, "symbol") { return if name_of(code).starts_with("$") and name_of(code)[1 ..] in values then values[name_of(code)[1 ..]] else code }
+	if is_type(code, "key") { return key(filled_template(key_of(code), values), op_of(code), filled_template(value_of(code), values)) }
+	if bracket_of(code) == ø { return code }
+	items = []
+	for item in code {
+		spread = if is_type(item, "key") and is_rest_item(item) and is_type(key_of(item), "symbol") then name_of(key_of(item))[1 ..] else ""
+		if spread in values { for part in values[spread] { items += [part] } }
+		else { items += [filled_template(item, values)] }
+	}
+	separated(bracketed(items, bracket_of(code)), separator_of(code))
+}
 // the pieces of `"/users/" + id: int + "/x"`, texts and holes in order, a typed hole as [name, type]
 text_pieces(pattern: any): list := {
 	if not is_type(pattern, "key") { return [pattern] }
