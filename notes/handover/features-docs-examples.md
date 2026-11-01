@@ -1,0 +1,7 @@
+# features-docs-examples handover
+
+Wiki commit `ec87d5b` is published on warp.wiki master. It documents repeating decimals, numerator and denominator, inferred list types, union first parameters, text cuts, range arms and sound buses. Twelve example expressions were run directly with `/Users/me/dev/bin/warp` 1.6.0, compiler `3cca4f44d8`, and all returned the documented values. The bus was also exercised with `out(osc(A4, 0.1s), room)`. `warp test` was not run: the user forbids it until `warp-test-timeout` is installed. Direct expression evaluation checks the example code and expected values, not execution of the `is!` harness.
+
+Left: document and verify callable instances and the bus callable / pipe form when `bus-out` lands. At `origin/main` `3cca4f44d8`, `class A { k: int; call(x) := x + k }; a = A(1); [a(2), A(10)(2)]` fails `not a function`; implementation commit `5c4dbb7079` is in the live `bus-out` worktree but was not an ancestor of main at this check. Do not change core. After the other worker lands, refresh the installed compiler, run the example headlessly, add it to the wiki and complete the card. Verify the `is!` examples through the test harness only after the timeout tool is installed.
+
+The wiki is a separate repository: `/Users/me/dev/angles/warp/wiki`, remote `https://github.com/pannous/warp.wiki.git`; the isolated wiki worktree is `/Volumes/Worktrees/features-docs-wiki`, branch `features-docs-examples`. The Warp task worktree is `/Volumes/Worktrees/features-docs-examples`.
