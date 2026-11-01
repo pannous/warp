@@ -15,7 +15,9 @@ const MAX_VOICES = 32;
 const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
-const RUN_TIMEOUT_MS = 10000;
+// ?run_seconds=<s>: runs stop that much later (scripts/samples-web.sh, whose samples compile on a loaded machine)
+const RUN_SECONDS_PARAMETER = "run_seconds";
+const RUN_TIMEOUT_MS = 1000 * Number(new URLSearchParams(location.search).get(RUN_SECONDS_PARAMETER) ?? 10);
 // a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
 // playground-turn); a quick run never flickers
 const STOP_GRACE_MS = 500;
@@ -272,7 +274,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
 			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
@@ -584,6 +586,7 @@ function painted(run, painting) {
 // a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins.
 // Before any frame each print shows at once, so a print before a slow paint is read while it renders (card print-watch)
 function printedChunk(run, chunk) {
+	(run.printedWhole ??= []).push(chunk); // every frame's, for the report (scripts/samples-web.sh compares it with the native run's)
 	if (startsFrame(run, "printed")) {
 		showPrinted(run.printed);
 		run.printed = [];
