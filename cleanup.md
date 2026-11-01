@@ -35,3 +35,7 @@ Keep the sound overload assertions and generated WAV bytes; use per-process name
 # library-typed
 
 Type one library module at a time, preserving accepted input domains and observable results. Start with hash; verify real text and byte-list hashes before and after adding result signatures. Leave the remaining modules on the card.
+
+# library-typed random slice
+
+Cover choice on text and lists, shuffle and sample on text lists, and repeatable seeding before adding signatures that preserve accepted inputs; verify the focused outcomes and smoke.
