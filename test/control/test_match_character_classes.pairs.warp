@@ -1,0 +1,2 @@
+'number_of(t) := match t { "0x" + h: hex => from_base(h, 16); "0b" + b: digits => from_base(b, 2); n: digits => int(n); _ => 0 }; [number_of("0xff"), number_of("0b101"), number_of("12"), number_of("x")]'	[255, 5, 12, 0]
+'kind(t) := match t { c: letter => "letter"; d: digit => "digit"; _ => "other" }; [kind("a"), kind("7"), kind("ab")]'	["letter", "digit", "other"]

@@ -602,6 +602,7 @@ fits_name(value: any, name: text, bound: map, code: bool): bool := {
 	if name.starts_with("$") { return bound_as(value, name[1 ..< #name], bound) }
 	if code { return value == symbol(name) }
 	if is_pattern_type(name) { return has_pattern_type(value, name) }
+	if name in character_classes { return is_type(value, "text") and character_classes[name](value) }
 	bound_as(value, name, bound)
 }
 // the type words a pattern tests a value by, each with its test
