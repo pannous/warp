@@ -6,7 +6,7 @@
 # WARP_BUILD_RECORD=<dir>: the run measured into that folder (user 2026-10-31: every build profiled, all of it kept):
 # time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (WARP_PROFILE=perfmap)
 set -uo pipefail
-BUILD_SLOTS=${WARP_BUILD_SLOTS:-4}  # 5 drove the load to ~460 with tests beside them (2026-11-01, swap full); 3 queued 13 builds over an hour at load ~30
+BUILD_SLOTS=${WARP_BUILD_SLOTS:-3}  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
 LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
 FIRST_IN_LINE_RETRY=2  # seconds between the oldest waiter's tries of the slots
 IN_LINE_RETRY=5  # seconds between the others' looks at the line

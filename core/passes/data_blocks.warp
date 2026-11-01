@@ -15,7 +15,7 @@ in_word = symbol("in")
 data_blocks(program: Node): Node := {
 	scope = scope_of(program)
 	positions = data_positions_of(nodes_in(program))
-	bottom_up(program, n => data_argued(with_loops_as_items(n, scope), positions))
+	bottom_up(program, n => data_argued(with_loops_as_items(n, scope, positions), positions))
 }
 
 is_data_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) == data_type
@@ -45,7 +45,9 @@ is_free_tag(n: Node, scope: map): bool := {
 	name = name_of(key_of(n))
 	not (binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type))
 }
-with_loops_as_items(n: Node, scope: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), items_of(value_of(n)).map(loop_as_items))) else n
+with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), items_of(value_of(n)).map(item => data_argued(as_call(loop_as_items(item), scope), positions)))) else n
+# `greet "Ann" {…}` among a tag's items: a phrase headed by a function the program binds is its call, as anywhere else
+as_call(item: Node, scope: map): Node := if is_group(item) and bracket_of(item) == "" and separator_of(item) == " " and #item > 1 and item#1 is symbol and binds_as(scope, name_of(item#1), Meaning.Function) then call_node(item#1, items_of(item)[1..]) else item
 # `for g in guests { li{g} }` → `[li{g} for g in guests]`, any other item as it is
 loop_as_items(item: Node): Node := {
 	if not (is_group(item) and bracket_of(item) == "" and #item >= 5 and item#1 == for_word and item#3 == in_word and is_curly_group(item#(#item))) { return item }
