@@ -1,0 +1,4 @@
+# a variable's listener is numbered as an event's: kept in a name, listed and removed by it (card whenever-parse-fix)
+'t = 0; a = on set t {print 1}; b = on set t {print 2}; remove b from listeners of t; t = 5; count listeners of t'	1
+'t = 0; h = (whenever t > 30 { print 1 }); remove h from listeners of t; t = 40; count listeners of t'	0
+'x = 0; n = 0; h = on change x { n += 1 }; x = 1; remove h from listeners of x; x = 2; n'	1
