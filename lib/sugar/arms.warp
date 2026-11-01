@@ -9,6 +9,14 @@ rewrite match $s {$arms...} => match $s {($k: $v) for (case.$k: $v) in $arms...}
 rewrite match $s {$arms...} => match $s {($k: $v) for (.$k: $v) in $arms...}
 rewrite match $s {$arms...} => match $s {($k: $v) for (case $k: $v) in $arms...}
 rewrite switch $s {$arms...} => match $s {$arms...}
+# Tree patterns (notes/matching.md): `page find {type: "image", src}` every match at any depth, a pattern binding one
+# name its values, none the matched parts, several their maps; `xs replace [1, x] with x` each match rewritten,
+# children first (lib/prelude.warp find_matches, replace_matches)
+rewrite $x find $p => find_matches($x, data($p))
+rewrite $x replace $p with $t => replace_matches($x, data($p), data($t))
+# the phrase as a call's argument, `count(page find {type: "text"})`, which the parser reads as count's four words
+rewrite $f($x find $p) => $f(find_matches($x, data($p)))
+rewrite $f($x replace $p with $t) => $f(replace_matches($x, data($p), data($t)))
 # a rule set as a value, `simplify = rules { data($a * 1) => a }`: a function rewriting code at any depth, children
 # first, each node again while a rule fits it
 rewrite rules {$arms...} => (rules_code => rewritten_everywhere(rules_code, rules_node => match rules_node {$arms..., _ => ø}))
