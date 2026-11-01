@@ -10,6 +10,8 @@ playground instead, with --site once it serves those built files.
 `test_in_browser.py --examples --firefox [--url …|--site …] [name…]` runs the same check in headless Firefox
 (firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome; `--safari` in Safari (safaridriver, classic
 WebDriver: macOS CI runners, after `sudo safaridriver --enable`; its console is not watched).
+`test_in_browser.py --examples --guide` checks the guide instead (guide.md: each snippet's `=> value` and ```printed
+lines); with example names, both.
 `test_in_browser.py --examples --site _site [name…]` checks it in a collected site (pages.yml), served as its root: a file
 the deploy forgot fails here, not on the live page.
 `test_in_browser.py --samples [samples/….warp…]` (scripts/samples-web.sh) runs every sample in the page, each as its own
@@ -25,9 +27,13 @@ NATIVE_RESULTS = "test/samples.txt"  # scripts/samples.sh: WIN samples need a C 
 # scripts/samples.sh: <sample with / as _>.txt, what the native run printed (samples-web.sh names the main checkout's)
 NATIVE_OUTPUTS = os.environ.get("WARP_NATIVE_OUTPUTS", "data/samples/out")
 SAMPLES_WEB_DATA = "data/samples-web"  # report.txt (each difference's first lines) and out/, what the page printed
-# the page stops a run after its RUN_TIMEOUT_MS (playground.js) and answers; a page that has not answered by then is stuck
-SAMPLE_ANSWER_SECONDS = 40
+# the page stops a run after this (playground.js ?run_seconds, natively scripts/samples.sh gives 30 s) and answers; a
+# page that has not answered 10 s later is stuck
+SAMPLE_RUN_SECONDS = 30
+SAMPLE_ANSWER_SECONDS = SAMPLE_RUN_SECONDS + 10
 SHOWN_DIFFERENCE = 300  # characters of each side in report.txt
+# a duration a sample measures (`painted in 53 ms`) differs on every run: both sides compare with it masked
+MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", str(os.cpu_count() or 2))  # tests in flight: one per core
@@ -87,6 +93,16 @@ BROWSER_OWN_WARNINGS = {"No available adapters.", "A valid external Instance ref
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
+# `--examples --guide`: every guide.md snippet's `=> value` and ```printed lines in the page (guide.js SNIPPET_FENCE)
+GUIDE = "--guide"
+GUIDE_FILE = "web/playground/guide.md"
+SNIPPET_FENCE = re.compile(r"^```warp(?: => (.*))?$")
+PRINTED_FENCE = "```printed"
+# a snippet run in the page (%s: its code as JSON, the milliseconds it may take): its value and stdout, or {stuck}
+RUN_SNIPPET = """(async () => {
+	const report = await Promise.race([playground.evaluate(%s), new Promise(done => setTimeout(() => done({ stuck: true }), %d))]);
+	return JSON.stringify(report.stuck ? report : { value: report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
+})()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
 TEXT_HOLE_CODE = 'n = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 } "add" } "clicked " + n + " times" } }'
 TEXT_HOLE_CLICKS = 3
@@ -1016,6 +1032,45 @@ class MemoryWatch:
 		return sorted(found, reverse=True)
 
 
+def guide_snippets(path=os.path.join(REPOSITORY, GUIDE_FILE)):
+	"""(line, code, value, printed) of each guide fence that shows a value (```warp => value) or what it prints (a
+	```printed fence right after it), as guide.js renders them"""
+	with open(path, encoding="utf-8") as guide:
+		lines = guide.read().split("\n")
+	def fence_body(index):
+		body = []
+		index += 1
+		while index < len(lines) and lines[index] != "```":
+			body.append(lines[index])
+			index += 1
+		return "\n".join(body), index
+	snippets, index = [], 0
+	while index < len(lines):
+		fence = SNIPPET_FENCE.match(lines[index])
+		if fence:
+			line = index + 1
+			code, index = fence_body(index)
+			printed = None
+			if index + 1 < len(lines) and lines[index + 1] == PRINTED_FENCE:
+				printed, index = fence_body(index + 1)
+			if fence.group(1) is not None or printed is not None:
+				snippets.append((line, code, fence.group(1), printed))
+		index += 1
+	return snippets
+
+
+def snippet_wrong(code, value, printed):
+	"""what the page shows otherwise than the guide says of a snippet: its value and printed lines"""
+	answer = browser("eval", RUN_SNIPPET % (json.dumps(code), SAMPLE_ANSWER_SECONDS * 1000))
+	shown = json.loads(json.loads(answer)) if answer.startswith('"') else {"value": f"(page gave no answer: {answer or browser_complaint})", "printed": ""}
+	if shown.get("stuck"):
+		return [f"no answer after {SAMPLE_ANSWER_SECONDS} s"]
+	wrong = [f"value: {shown['value']!r}, the guide shows {value!r}"] if value is not None and shown["value"] != value else []
+	if printed is not None and shown["printed"].rstrip("\n") != printed:
+		wrong.append(f"printed: {shown['printed']!r}, the guide shows {printed!r}")
+	return wrong
+
+
 def check_examples(names, page_url=None, site=None):
 	"""every example of the tour shows its value and prints its text in the playground (the local build, the collected
 	`site` directory, or the deployed one at `page_url`), and neither loading the page nor showing an example or a sample
@@ -1025,8 +1080,8 @@ def check_examples(names, page_url=None, site=None):
 		server = serve(None, os.path.abspath(site))
 		page_url = f"http://127.0.0.1:{PORT}/"
 	elif not page_url:
-		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
-			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
+		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp-lib", "warp.wasm")):
+			sys.exit("error: web/playground/warp-lib/warp.wasm is missing; build it with web/playground/build.sh")
 		server = serve(None)
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
@@ -1065,6 +1120,9 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
+	snippets = guide_snippets() if GUIDE in names else []
+	for line, code, value, printed in snippets:
+		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
 	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
@@ -1075,7 +1133,7 @@ def check_examples(names, page_url=None, site=None):
 		if failures:
 			show_served()
 	memory.report()
-	checked = len(chosen) + 1 + len(extra_checks)
+	checked = len(chosen) + 1 + len(snippets) + len(extra_checks)
 	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
@@ -1091,20 +1149,22 @@ def build_components():
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
 
 
-# one sample in the page as its own file (%s: path and source as JSON): its report, or {stuck} when the page is stuck
-RUN_SAMPLE = """(async () => JSON.stringify(await Promise.race([playground.evaluate(%s, %s),
-	new Promise(done => setTimeout(() => done({ stuck: true }), %d))])))()"""
+# one sample started in the page as its own file (%s: path and source as JSON), its report kept as JSON in
+# window.sampleReport; asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
+# closed" for gpu_visualizer under load)
+START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s).then(report => window.sampleReport = JSON.stringify(report),
+	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
+SAMPLE_POLL_SECONDS = 0.5
 
 
 def page_output(report):
-	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø (the
-	Rust-era page reports the last line's value apart; the self-hosted one prints it, as the native warp does)"""
-	printed = "".join(part["text"] for part in report.get("printed", []) if part.get("stream", 1) == 1)
+	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø"""
+	# printedWhole: every frame's output (playground.js shows only an animation's last frame, its `printed`)
+	printed = "".join(part["text"] for part in report.get("printedWhole", report.get("printed", [])) if part.get("stream", 1) == 1)
 	value = report.get("value") or ""
 	if value in ("ø", "") or report.get("error"):
 		return printed
-	shown = value[1:-1] if len(value) > 1 and value[0] == value[-1] == '"' else value
-	return printed + shown + "\n"
+	return printed + value + "\n"  # as the native warp shows it, a text in its quotes
 
 
 def sample_verdict(report, native_output):
@@ -1118,9 +1178,46 @@ def sample_verdict(report, native_output):
 	shown = page_output(report)
 	if native_output is None:
 		return "ran", "the native run failed or did not run: nothing to compare (test/samples.txt, scripts/samples.sh)"
-	if shown.rstrip() == native_output.rstrip():
+	if MEASURED_TIME.sub("…", shown).rstrip() == MEASURED_TIME.sub("…", native_output).rstrip():
 		return "ok", ""
 	return "DIFF", f"page: {shown[:SHOWN_DIFFERENCE]!r}\n     native: {native_output[:SHOWN_DIFFERENCE]!r}"
+
+
+def page_report(source, path, page_url):
+	"""the page's report of the sample; a page that gave none (its renderer crashed, now and then after many runs) is
+	opened anew and asked once more, so only a sample that fails twice in a fresh page counts as stuck"""
+	for attempt in range(2):
+		report = sample_answer(source, path)
+		if "stuck" not in report:
+			return report
+		open_samples_page(page_url)
+	return report
+
+
+def sample_answer(source, path):
+	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS"""
+	started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
+	if started != '"started"':
+		return {"error": True, "stuck": None, "value": f"(the page did not start it: {(started or browser_complaint)[:200]})"}
+	deadline = time.time() + SAMPLE_ANSWER_SECONDS
+	while time.time() < deadline:
+		time.sleep(SAMPLE_POLL_SECONDS)
+		answer = browser("eval", "window.sampleReport ?? null")
+		if answer not in ("null", ""):
+			try:
+				return json.loads(json.loads(answer))
+			except ValueError:
+				return {"error": True, "stuck": None, "value": f"(page gave no answer: {answer[:200]})"}
+	return {"error": True, "stuck": True, "value": f"the page gave no answer in {SAMPLE_ANSWER_SECONDS} s"}
+
+
+def open_samples_page(page_url):
+	"""the page opened, isolated and its playground API defined (after a crashed renderer the first eval met none)"""
+	open_page(page_url)
+	wait_for_isolation()
+	deadline = time.time() + LAUNCH_SECONDS
+	while browser("eval", "typeof playground") != '"object"' and time.time() < deadline:
+		time.sleep(0.5)
 
 
 def check_samples(paths, tree):
@@ -1131,9 +1228,8 @@ def check_samples(paths, tree):
 	data = os.path.join(tree, SAMPLES_WEB_DATA)
 	os.makedirs(os.path.join(data, "out"), exist_ok=True)
 	server = serve(None, tree)
-	page_url = f"http://127.0.0.1:{PORT}/web/playground/"
-	open_page(page_url)
-	wait_for_isolation()
+	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={SAMPLE_RUN_SECONDS}"
+	open_samples_page(page_url)
 	lines, details = [], []
 	for path in paths:
 		output_name = path.replace("/", "_") + ".txt"
@@ -1141,14 +1237,7 @@ def check_samples(paths, tree):
 			status, detail = "WIN", "needs a C window library"
 		else:
 			source = open(os.path.join(tree, path), encoding="utf-8").read()
-			answer = browser("eval", RUN_SAMPLE % (json.dumps(source), json.dumps(path), SAMPLE_ANSWER_SECONDS * 1000))
-			try:
-				report = json.loads(json.loads(answer))
-			except ValueError:
-				report = {"error": True, "stuck": None, "value": f"(page gave no answer: {(answer or browser_complaint)[:200]})"}
-			if "stuck" in report:
-				open_page(page_url)  # a fresh page for the next sample
-				wait_for_isolation()
+			report = page_report(source, path, page_url)
 			native_file = os.path.join(tree, NATIVE_OUTPUTS, output_name)
 			compared = native.get(path) == "ok" and os.path.isfile(native_file)
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
@@ -1163,7 +1252,8 @@ def check_samples(paths, tree):
 	written = len(paths) == len(native)  # a run of some samples leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
-	open(os.path.join(data, "report.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
+	# a run of some samples keeps the whole run's report too
+	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
 	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "TIME", "ran", "WIN")}
 	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
 

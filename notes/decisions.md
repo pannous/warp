@@ -137,6 +137,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 
 ## Tooling: format, beautify, CLI
+- hello-size-exports (user): shown_at and trap_message are exported only from a program that can raise (raise/throw, a raising runtime word, a host word with arguments); hello ~1.5 KB; an engine trap in another program prints as wasmtime names it, without position.
+- sample-spellings (user): samples are rewritten to the general forms (`int[height * width]`, `(y - center)^2`) instead of new syntax; no wish cards for those.
 - drop-pure-word (user): `warp pure` is gone: plain `warp <file>` is the warp compiler (warp.wasm); `warp self` stays the self-built variant; `pure` survives only as a hidden CLI alias with a one-line note. Card drop-pure-word.
 - warp-format: `warp format` (synonym `warp lint`, no `fmt`) only fixes layout in one canonical form, never meaning: tabs, `name: value`, spaced binary operators (glued only where spacing changes meaning; checked by comparing parse trees), list separators as written, `{` on its header's line, one space after `,`, none inside brackets, ≤ 1 blank line. Abbreviated words get a soft hint ("warp avoids abbreviations"), never a fix.
 - beautify (also beautify-preview): opinionated rewrites are `warp beautify`: prints the diff, asks "apply? y/n" in a terminal (piped lines answer it, one per file; end of input is no), `beautify yes` applies, `beautify check` previews; rules: hash-comments, alias words to their warp word via the I-meant fixes.
@@ -193,6 +195,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
+- type-shows-nat (user): type(3) and an undeclared whole value show `nat`, a declared int shows `int`.
+- fast-int-readings (user): a literal beside a fast int stays int (`xs[i + 1]` in a range loop); `i++`/`i--` on an undeclared counter stay int; `s += i` grows like + (a nat).
+- int-boxed-overflow-big (user; asked whether it can be done in fewer than ~25 core lines): + - * of two boxed ints that overflow give the big-int result instead of trapping (`xs = [2^62]; xs#1 * 4`).
+- marked-floats-shape (user): `type X = float` beside `= int`; marks survive arithmetic (left mark, else right, only when the Kind matches, so `Color * 0.5` is plain); `°` an Angle shown in degrees, also when statically known and unboxed.
 - exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
 - exact-power (user): a power of exact operands stays exact, a whole decimal exponent included (`0.5 ^ 1074.0` prints all ~750 digits of 2^-1074; `print 0.999 ^ 1000000.0` is exact too, however slow); the warp runtime's float pow is used only for float operands. Tests and probes keep their examples to calculations under ~10 s.
 - int-list: a whole decimal literal is int (`type([0.0, 0.0])` is list of int, P196b); a variable's type joins every write. #21 `x=π; type(x)` is real.
@@ -269,6 +275,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 
 ## Types and annotations
+- real-canonical-core (user, ~6 core lines): `real` is no longer a rational synonym (`exact` stays); `3 is real` yes; a program's own type of a core type word shadows it; a float given to `real` converts to the exact real (2.5).
+- parameter-typed (user): `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
 - primitive-annotation (user, roadmap native-harness): `@primitive` marks GC-free code emitted as plain MVP wasm (core/extensions/primitive.warp, user OK): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 - primitive-int-width (user): `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
 - P203 annotations make code strict; unannotated code is lax (checked at run time); `--strict` warns on lax spots. P204 an `any` value entering an annotated place gets a run-time check. P201 `s: Shape = Circle(…); s.r` is a compile error with hints `match Circle(r)` / `s as Circle`.
@@ -286,7 +294,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P125 optional parameters: `x=ø`, `maybe x`, `x?` alike; typed `x:int?`; `a ?? b` only for ø.
 - P179 sum types auto-unwrap like optionals; payload fields by position `rgb(1,2,3)#1`; a payload-free variant is its symbol and `red is Color`. P178 enum cases with values are sealed classes.
 - instance-position (user): `#` reads a class instance's fields by position like P179 payloads: `class P { x: int; y: int }; P(2, 3)#1` → 2; what is built by position reads by position. Code that names fields (the compiler) uses `.field`. Now a quick fix for classes; later (card class-position-index, Later) a class may override its position function like its index function, and defining one of the two derives the other.
-- position-index-words (Interviewer's decision, user away): a class's `#` is its `position(p)` (from 1), `[]` its `index(i)` (from 0), prefix `#b` its `count()`; writes `b#i = v` / `b[i] = v` are `position(p, value)` / `index(i, value)` (property-accessors: setters by arity), chosen by the assignment, so `m[i, j]` stays a read; defining one of position/index derives the other. PitchClass `F#4` is `position(octave)`. Card class-position-index.
+- position-index-words (user): a class's `#` is its `position(p)` (from 1), `[]` its `index(i)` (from 0), prefix `#b` its `count()`; writes `b#i = v` / `b[i] = v` are `position(p, value)` / `index(i, value)` (property-accessors: setters by arity), chosen by the assignment, so `m[i, j]` stays a read; defining one of position/index derives the other. PitchClass `F#4` is `position(octave)`. Card class-position-index.
 - P45 a variable given kinds that don't mix (`x=[1]; x=5`) is a compile error; Int→Float widening stays; undeclared lists stay `list any`.
 - P28 `real x;` read before assignment is its type's zero value.
 - P23/P20/type-words-reserved: every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as` (Interviewer's decision).
@@ -300,6 +308,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - function-type: `type(gcd)` prints `function: (a, b) -> int`. parse-type / body-code: quoted program parts (`parse("1+1")`, `f.body`) have type `code`, print their source, keep `.op`.
 
 ## Variables, binding and charged definitions
+- charged-values-rule (user): a charged value definition is the rule `($h := $e) => ($h() := $e) where $h is varying` in lib/sugar/heads.warp, not a pass.
+- lambda-assign-writes-through (user): in a lambda or block argument `=` to a name of the enclosing scope writes that name (`seen=0; f=() => {seen=3}; f(); seen` → 3); `let x = …` makes a new local; a def's body keeps its own locals.
+- op-assign-target-once (user): `x[f()] op= y` evaluates the target's parts once, as C, Python, JS.
 - let-reassign: `let` is fully immutable (fix "use var x"); `var` is the variable; `let mut x` = `var x` with a loud warning. const-deep: `const` is deep like `let`.
 - P159 `const x=7; x=7` warns "remove the redundant assignment". P130 pi and named constants are constants; a class field named pi is the class's own.
 - let-parallel: the parallel let is only `a b = f(x) g(y)`; `let a b = …` is a function definition; `let a, b = 3, 4` unpacks.
@@ -322,11 +333,18 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - count-words-library (user): once/twice/thrice leave both compilers and become prelude words over a block parameter, the basic demonstration of giving a block to a function (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
 - range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
+- kebab-or-minus (user): `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
+- default-parameter-def (Interviewer, small bug fix, 1 core line in definitions.warp is_parameter): `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
 - #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
+- map-all-test (user): the test reads as English, `all xs are even` and `are all xs even`, `any xs is even` and `is any xs even` (lib/sugar/broadcasting.warp); the call all(xs, f) / xs.all(f) stays yes/no for newcomers.
+- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (map-all-test).
+- int-overflow-shape (user): int-boxed-overflow-big keeps its ~23 lines with named overflow tests; no bit-trick or float shortcut.
+- words-as-values (user): a function word used as a value is the lambda of its call (`f = sqrt; f(16)` 4, `apply(floor, 2.5)` 2), bringing its module; with several arities the one its use needs, never silently the first.
+- definition-name-canonical (user): the name a definition carries is canonical for dir and everything warp prints (count stays count); internal names get canonical ones (map_keys → keys), old names become aliases or go.
 - call-function-values (Supervisor): a glued `(` after a round group or an element calls a function value: `(x => x*2)(5)` 10, `adder(5)(1)` 6, `fs[0](3)`; numbers keep juxtaposed multiplication, `(2)(3)` 6, an edge case (user): no special code to keep it; if it breaks, a Later card.
 - keywordless-def (user): at statement start `f(x) { body }` with plain parameter names defines f when f is defined nowhere, with a got-it note "I meant: def f(x) { … }"; when f exists it stays a call with a trailing block (block-lazy-body).
 - reflection: function objects have .name, .signature, .return_type, .parameters, .doc; printing one shows its doc above its typed .dump; `methods(x)` returns the function objects; `use reflection` adds compilation unit, compiler, origin, wasm index, effects. A bare parameterless function inside print/help/dump/type is called, with a warning and hint `function now`.
@@ -418,6 +436,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
+- for-over-iterator (user): a construction of a program class counts as an instance, so `for x in Countdown(3)` iterates by next() until ø.
 - rewrite-rules (user): a rule set `rules { data($a * 1) => a; … }` is a value; calling it rewrites bottom-up to a normal form (a rewritten node is tried again until no rule fires: `simplify(data(y * 1 * 1 + 0))` → y); a step cap stops a rule set that never settles with a loud error naming the rule that keeps firing. `tree replace P with Q` stays a single pass.
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
 - match-alternatives: `1 | 2`, `1 or 2`, `1, 2` as case keys all mean either; `int or text` as a key is the type test; `other` is a catch-all like `_`/`default`/`else`.
@@ -518,6 +537,39 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - save-sound: audio goes to a file through the general `save` (`save sound as: "song.wav"`); render_sound gives an I-meant hint.
 - signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
+## Compiler internals (technical, decided by the Supervisor or Interviewer)
+- method-clash-from-source: a linked module whose class methods share a name with the program's classes is compiled from source (compiler note); real binding is card class-method-linking.
+- linked-variants-by-arity: linking keeps every variant of a name, a call takes the one whose arity fits; none fits → refused naming the variants.
+- baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
+- made-by-reach: module.made counts only kinds made by functions reachable from the program's roots.
+- comments-not-candidates: words in comments or a shebang never make a program an implicit-use candidate.
+- native-window-sdl3: the native warp's window is lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
+- node-attributes: marks ride on the node, an `attributes` field of $MetaNode beside `comment` (with_attribute / attributes_of); `let` inside a lambda is such a mark.
+- hello-lazy-runtime-dropped: binding runtime words lazily is dropped (under 7 MB of hello's 176 MB).
+- canonical-runtime-names: runtime words map_keys/map_values/map_get_or/collection_contains are keys/values/get/has; contains/includes stay aliases of has.
+- rule-not-in-own-definition: a rewrite rule never fires inside the definition of the word its template produces.
+- small-int-cache: Int nodes of −128..1023 are shared, landing only if hello, a byte-heavy program and rebuild time all improve.
+- rule-whose: a rule word missing from an older compiler skips its rules with a warning instead of failing the build.
+- inline-code: every entry (file, inline, piped, compile) links the prebuilt lib/modules beside the runtime.
+- gpu-driver-plumbing: painted_pixels() and system_value("gpu_paints") from the GPU library, plumbing of the GPU hand-off OK.
+- prelude-rule-no-use: a fired rule of the prelude itself adds no `use prelude`.
+- baked-origins: a reached library slice's file:line comes from the baked text; disk reads only for WARP_LIB-edited files.
+- modules-triage: test/modules paths moved to test/fixtures/; `use square` held as esoteric; `use uniscript` a gap; Python's `from list import zip` a lib/sugar rule meaning `use list`, with a hint.
+- hole-calls-unreached: a standard-library word inside a text hole loads its module like anywhere else.
+- refusal-place-of-lib: a refusal inside a library function names its file, the definition's first line and the function.
+- shaders-in-lib: the WGSL translator is lib/shaders.warp; `paint(f, w, h)` hands f's quoted definition, callees and globals (uniforms) to it; native GPU through lib/gpu.warp + libwarp_gpu (wgpu-native).
+- float-int-power: float ^ int by square-and-multiply (within about 1 ulp); exact values untouched.
+- signals-test-15: test_variable_signals:15 upgraded 3 → 4, the loop's final x-- is a write too.
+- after-participle-held: `after tested: …` (hook by past participle) held as esoteric.
+- implicit-standard-words-index: the word index covers every standard module's definitions but the prelude, dialects included, read at rebuild; a program's own class names never pull a module in.
+- program-match-lowering: run-time matcher in lib/prelude.warp + core/node_matches.warp.
+- computed-hole-shape: compile-time rule words live in lib/rule_words.warp (`where $h = word(…)`, `where word(…)`, `$program`, `where program`); routes rules sit in lib/web.warp.
+- ffi-link-any-import: pure runs link C libraries for any import module other than wasi/host; `--sandbox` refuses C imports.
+- error-expectation: a test expectation `error` matches any Error result, no message substrings.
+- host-list-one-shot: a host word's list result is built in one shot.
+- shown-non: show/print of a statically known Text/Int/Float/Bool/Char uses its own word; rare-kind branches only when the program makes them.
+- test-oversubscribes-mac: `warp test` case processes compile single-threaded when cases already run in parallel.
+
 ## Old id index (superseded or historic; git has the text)
 P35 → index-position. P42 → P227. P56(2-4) unknown entity → P56 revised. P63 → wiki/charged.md. P66 → footgun-divzero.
 P103, P104 → no-executable-by-default + build-should. P110 → P163. P118, P214 → P240. P168 → field-or-minus.
@@ -602,7 +654,7 @@ the original questions 1–41: test edits and housekeeping done.
 - of-in-selectors (user: "I was hoping this was implemented elegantly by right associative; if that's possible keep it, otherwise bring it back"): `count of words in t`, `number of bytes in t`, `first of words in "ab cd"` are kept if they fall out of the right-associative `of` chain (X of Y of t = X(Y(t))) with `in` closing the chain as the source, without special code beside it; otherwise held and brought back to the user. `x in xs` alone stays membership (2026-10-29)
 - reflection-words (user): `use reflection` only (`mode` is no word; `use reflection mode` an unknown module with a did-you-mean); one name per property: f.name, f.doc, f.params/f.parameters, f.signature, f.return_type, f.body; synonyms description, returns, representation, dump get a did-you-mean; effects (f.effects) is card effects-lists, Later (2026-10-29)
 - untyped-fit-ambiguous (user): when a word with an untyped parameter is followed by a phrase that could end before or after an operator (`sq(x) := x*x; sq 2 == 4`), it is an ambiguity error naming both readings with their parentheses: `sq(2 == 4)` or `(sq 2) == 4`; a typed parameter decides by fit (juxtaposition-one-rule), `print x > 0` stays print(x > 0) (2026-10-29)
-- one-duration (Interviewer, from fixed-time-units; to confirm): a time-unit quantity and a time literal are one duration type, no second kind converting per operation: `2024-01-15T10:00 + 2 hours`, `1 day > 2 hours`, `2 hours == 120 min` just work. second/minute/hour are fixed; day/week/month/year stay calendar durations (a day 23–25 h, a month 28–31 days): added to a date they move the calendar, compared with a fixed duration they compare on their bounds, and a comparison the bounds cannot decide (`1 month > 30 days`) is an error naming the ambiguity. Shape (Interviewer): every duration is a lib/units Quantity of the time dimension; day/week/month/year are calendar units whose length is a range; time nodes are instants only; instant + Quantity moves exact seconds for fixed units, the calendar for calendar units (2026-10-29)
+- one-duration (user, from fixed-time-units): a time-unit quantity and a time literal are one duration type, no second kind converting per operation: `2024-01-15T10:00 + 2 hours`, `1 day > 2 hours`, `2 hours == 120 min` just work. second/minute/hour are fixed; day/week/month/year stay calendar durations (a day 23–25 h, a month 28–31 days): added to a date they move the calendar, compared with a fixed duration they compare on their bounds, and a comparison the bounds cannot decide (`1 month > 30 days`) is an error naming the ambiguity. Shape (Interviewer): every duration is a lib/units Quantity of the time dimension; day/week/month/year are calendar units whose length is a range; time nodes are instants only; instant + Quantity moves exact seconds for fixed units, the calendar for calendar units (2026-10-29)
 - compare-equal-hooks (user, from the core audit of 1abec60c4b: "the proper solution would be overridable class methods … used in a general way"): `<` `>` `<=` `>=` call the type's `compare(other)` (negative, 0, positive), `==` `!=` its `equal(other)` (default compare == 0); one general rule for every class and lib type (Time, Real, Quantity); no per-type comparison branches in core; the emitter's Time branches go (2026-10-29)
 - dates-later (user: "getting the details of time zones right is very hard work. One more reason to get it out of the emitter. Maybe let's park it on a later card"): dates and times become library values, out of the emitter and core runtime, on card dates-times-extraction (Later); until then the time commits stay and compare-equal-hooks lands for classes only, the emitter's Time branches staying until that card (2026-10-29)
 - module-arity-overloads (user core OK): same-named functions of different arity coexist across a linked module boundary as within one program (draw's show() beside color's show(c: Color)); fix in core/passes int_types / arity_overloads (2026-10-29)
@@ -695,3 +747,4 @@ the original questions 1–41: test edits and housekeeping done.
 - sample-count-rounds (user 2026-11-01, confirmed): a sound's sample count rounds to the nearest sample.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
 - playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.
+- library-words-lexical (user 2026-11-01): library code keeps its own words: a library body's call of a word the program redefines stays the library's (`round(x) := 0; round_to(2.345, 2)` is 2.35); a program's word answers only the program's calls.

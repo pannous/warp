@@ -1,6 +1,6 @@
-# samples/<chapter>/*.warp left out of the playground menu (build.sh), each with why; tests/programs/test_playground_samples.rs
-# checks that every other sample runs without an error. Fix one, delete its line, and it is in the menu again
-# (card playground-excluded-samples, 2026-10-07).
+# samples/<chapter>/*.warp left out of the playground menu (build.sh): only those that cannot run in a browser, each
+# with why (notes/playground_plan.md); scripts/samples-web.sh runs every other sample in the page against its native
+# output (test/samples-web.txt). A sample failing natively too is a sample to fix, not a line here.
 # needs a window: native only
 raylib_circle	module not found: raylib
 raylib_circle_forever	module not found: raylib
@@ -14,9 +14,4 @@ sdl_red_square	undefined function: SDL_Init at 17:10
 # runs processes: native only
 crontab	os.exec: no such word in the browser (exec runs a process; card read-chron)
 rust_crates	use cargo strsim builds the crate with cargo: only the native warp can (card use-cargo-playground)
-# errors to fix
-errors	`}` is missing: the group opened at 4:9 runs to the end of the input (deliberately malformed: input for the forgiving parser, never meant to run)
-life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13) (fails on purpose: tests/welcoming/test_welcoming_ask.rs checks the explanation)
-netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package); `results where country is germany` reads country as a field: card natural-phrases
 unix_commands	cd, which and rm on folders run natively only (card unix-words)
-packages	browser: `use colors` probes colors.wasp before colors.warp in warp-packages, a 404 in the console (card registry-browser-probe)

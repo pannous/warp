@@ -8,7 +8,7 @@ Sweep: `scripts/samples-web.sh [<tree>] [samples/….warp…]` (headless agent-b
 runs every samples/**/*.warp in the page as its own file (`playground.evaluate(code, file)`, so `use` and file reads
 resolve beside it) and compares what the page printed with what the native run printed (scripts/samples.sh,
 data/samples/out; the main checkout's when the tree has none). test/samples-web.txt (tracked): ok, DIFF, FAIL, TIME
-(the page gave no answer in 40 s), ran (the native run failed: nothing to compare), WIN (needs a C window, not run);
+(the page gave no answer: it stops a run after 30 s, ?run_seconds, as samples.sh does natively), ran (the native run failed: nothing to compare), WIN (needs a C window, not run);
 data/samples-web/report.txt each difference and error. One page, one sample at a time: ~2 minutes for all.
 
 ## The tour (examples.js)
@@ -94,6 +94,23 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
 - The first markup program a worker compiles pays a one-time cost (lib/markup.warp's to_html): after a run is shown
   the page asks its worker once to warm up (playground.js warmWorker → worker.js warmUp: `p{ "" }` evaluated with the
   worker's messages silenced, skipped over a live run).
+
+## Values of self-hosted modules (values.js, 2026-11-01)
+A module of the self-hosted compiler has no reflect_* exports: a host word reads its value arguments as driver.warp
+does natively, through exports (values.js): guestText (shown_at, packed address·2^32+length), isGuestText,
+guestCount/guestItem/guestInts (item_count, item_at, int_item_at), guestBytes; guestPlain reads any value from its
+shown text (maps, lists, texts, yes/no, ø, numbers, ratios; a list too long to show item by item). Built back with
+the constructors of core/emitter/host.warp host_builders (newGuestText, newGuestList from the last item on,
+newGuestMap by new_spelled_key/new_spelled_list, newGuestFloats, newGuestError, newGuestValue of plain JS).
+plainValue/builtValue/errorValue pick reader.js for a Rust-era module until none runs in the page (card
+drop-readnode-branch). Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
+sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its rest) and floats are read by shown
+text, so a million-item GPU list stops the run (samples/gpu/gpu_million; bulk exports asked of core).
+libwarp_sound is a page library: lib/sound.warp's `from 'warp_sound'` words (host-sound.js soundLibrary: play
+samples on the run's voice, play a file, decode/resample) and c.dlopen of @executable_path/libwarp_<name> answers a
+handle when self.PAGE_LIBRARIES has it (host-foreign.js pageStdio).
+Sweep caveats: samples that print a measured duration as "N ms" compare masked; gpu/gpu_visualizer and
+gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a measured time (5.001 vs 5.123): DIFF.
 
 ## Cross-origin isolation and tasks on Workers (notes/threads.md step 5)
 - host.js startTask: a task runs on a Worker of a pool (task-worker.js) when the page is cross-origin isolated, else

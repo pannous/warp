@@ -60,7 +60,22 @@ function loadRouteModule(holder) {
 	return loadedRoutes.get(name);
 }
 
+// `serve` in the playground (lib/web.warp page_serve, WARP_SERVE=page): the program waits for the page's next request
+// (its address bar, a link, a form) as a server waits for its next client, however long, and gives the page its
+// answer; HTTP text both ways (playground.js servedRequest)
+const PAGE_SERVING = {
+	request(port) {
+		if (!self.servingPage) throw new Error(`serve ${port}: this page sends no requests`);
+		return askPage(`serve ${port}`, shared => self.servingPage(shared, port), Infinity).request;
+	},
+	answer(response) {
+		self.servedPage(response);
+		return null;
+	},
+};
+
 if (globalThis.addHostPart) addHostPart({
+	adapters: { web: PAGE_SERVING },
 	words: (holder, hooks, { program }) => ({
 		// the path of the page shown, which picks its route (src/lowering/web/routes.rs); navigate changes it
 		page_path: () => buildValue(program(), treeOfPlain(holder.pagePath ?? ROOT_PATH)),

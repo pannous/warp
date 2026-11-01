@@ -13,7 +13,11 @@ const INCLUDE_FD = 4; // "/include": the C headers warp reads for FFI signatures
 const INCLUDE_DIRECTORY = "/include";
 const TEMPORARY_FD = 5; // "/tmp": a directory of the overlay only, for scratch files (tests/common temp_dir)
 const TEMPORARY_DIRECTORY = "/tmp";
-const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY]]);
+// the served repository again at an absolute path, as natively a path names warp's lib/ from anywhere (driver.js)
+const REPOSITORY_FD = 6;
+const REPOSITORY_DIRECTORY = "/warp";
+const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY], [REPOSITORY_FD, REPOSITORY_DIRECTORY]]);
+const isRepository = fd => fd === ROOT_FD || fd === REPOSITORY_FD;
 const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
 // WARP_INCLUDE replaces the compiler's include directories (src/formats/ffi_parser.rs), so it looks in exactly one place;
 // WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch
@@ -118,14 +122,17 @@ function served(path) {
 	return isDirectory ? { entries: new Set(listing(path).keys()) } : lazyFile(FILE_ROOT + path);
 }
 
-// what instances share of the file system they change: the written files (path → bytes), the folders made and the paths
-// removed, over the served ones (a compiler's output read by its driver, driver.js)
+// what instances share of the file system they change: the written files (path → bytes, or a text), the folders made
+// and the paths removed, over the served ones (a compiler's output read by its driver, driver.js); kept(path, bytes)
+// after a file was written and closed, forgotten(path) after one was removed, where a host keeps them (a page's
+// IndexedDB)
 const newOverlay = () => ({ written: new Map(), made: new Set(), removed: new Set() });
+const contentBytes = content => typeof content === "string" ? utf8.encode(content) : content;
 
 // args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2); overlay: the
-// changes over the served files, the instance's own unless given
-function wasiImports(memory, args, output, overlay = newOverlay()) {
-	const { written, made, removed } = overlay;
+// changes over the served files, the instance's own unless given; environment: its variables, NAME=value each
+function wasiImports(memory, args, output, overlay = newOverlay(), environment = ENVIRONMENT) {
+	const { written, made, removed, kept = () => {}, forgotten = () => {} } = overlay;
 	const descriptors = new Map(); // fd → {path, bytes, position, append} of a file or {path, entries} of a directory
 	let nextFd = ROOT_FD + PREOPENS.size;
 	const view = () => new DataView(memory().buffer);
@@ -135,7 +142,7 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 	// what is at a path, the overlay first
 	function lookup(path) {
 		if (removed.has(path)) return null;
-		if (written.has(path)) return { bytes: written.get(path) };
+		if (written.has(path)) return { bytes: contentBytes(written.get(path)) };
 		const children = path => [...written.keys(), ...made].filter(child => parentOf(child) === path && !removed.has(child)).map(nameOf);
 		if (made.has(path)) return { entries: new Set(children(path)) };
 		const found = served(path);
@@ -144,7 +151,7 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 	}
 	// a path as the overlay and served() key it: relative for the repository, "/…" for the machine
 	const resolve = (dirFd, pointer, length) => {
-		const base = dirFd === ROOT_FD ? "" : PREOPENS.get(dirFd) ?? descriptors.get(dirFd)?.path;
+		const base = isRepository(dirFd) ? "" : PREOPENS.get(dirFd) ?? descriptors.get(dirFd)?.path;
 		if (base === undefined) return undefined;
 		const path = normalPath(`${base}/${textAt(pointer, length)}`);
 		return base.startsWith("/") ? `/${path}` : path;
@@ -185,8 +192,8 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 	const known = {
 		args_get: (pointers, buffer) => writeStrings(args, pointers, buffer),
 		args_sizes_get: (count, size) => writeSizes(args, count, size),
-		environ_get: (pointers, buffer) => writeStrings(ENVIRONMENT, pointers, buffer),
-		environ_sizes_get: (count, size) => writeSizes(ENVIRONMENT, count, size),
+		environ_get: (pointers, buffer) => writeStrings(environment, pointers, buffer),
+		environ_sizes_get: (count, size) => writeSizes(environment, count, size),
 		clock_time_get: (_id, _precision, time) => {
 			view().setBigUint64(time, BigInt(Math.round((performance.timeOrigin + performance.now()) * 1e6)), true);
 			return ERRNO.SUCCESS;
@@ -210,6 +217,7 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 					grown.set(chunk, start);
 					file.bytes = grown;
 					file.position = start + length;
+					file.changed = true;
 					written.set(file.path, file.bytes);
 				} else output(utf8Decoder.decode(chunk), fd);
 				total += length;
@@ -238,7 +246,13 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 			view().setBigUint64(position, BigInt(file.position), true);
 			return ERRNO.SUCCESS;
 		},
-		fd_close: fd => descriptors.delete(fd) ? ERRNO.SUCCESS : ERRNO.BADF,
+		fd_close: fd => {
+			const file = descriptors.get(fd);
+			if (!file) return ERRNO.BADF;
+			if (file.changed) kept(file.path, file.bytes);
+			descriptors.delete(fd);
+			return ERRNO.SUCCESS;
+		},
 		fd_sync: () => ERRNO.SUCCESS,
 		fd_datasync: () => ERRNO.SUCCESS,
 		fd_prestat_get: (fd, prestat) => {
@@ -273,10 +287,11 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 			const resized = new Uint8Array(Number(size));
 			resized.set(file.bytes.subarray(0, resized.length));
 			written.set(file.path, file.bytes = resized);
+			file.changed = true;
 			return ERRNO.SUCCESS;
 		},
 		fd_readdir: (fd, buffer, length, cookie, used) => {
-			const directory = fd === ROOT_FD ? { entries: lookup("").entries } : descriptors.get(fd);
+			const directory = isRepository(fd) ? { entries: lookup("").entries } : descriptors.get(fd);
 			if (!directory?.entries) return ERRNO.NOTDIR;
 			const names = [...directory.entries].sort();
 			let offset = 0;
@@ -312,7 +327,7 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 				written.set(path, bytes);
 				removed.delete(path);
 			}
-			return open({ path, bytes, position: 0, append: !!(fdFlags & FD_FLAG_APPEND) }, opened);
+			return open({ path, bytes, position: 0, append: !!(fdFlags & FD_FLAG_APPEND), changed: !existing || Boolean(openFlags & OPEN.TRUNCATE) }, opened);
 		},
 		path_filestat_get: (dirFd, _flags, pointer, length, stat) => {
 			const path = resolve(dirFd, pointer, length);
@@ -331,6 +346,7 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 			if (!lookup(path)) return ERRNO.NOENT;
 			written.delete(path);
 			removed.add(path);
+			forgotten(path);
 			return ERRNO.SUCCESS;
 		},
 		path_remove_directory: (dirFd, pointer, length) => {
@@ -349,6 +365,8 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 			made.delete(from);
 			removed.add(from);
 			removed.delete(to);
+			if (entry.bytes) kept(to, entry.bytes);
+			forgotten(from);
 			return ERRNO.SUCCESS;
 		},
 		path_readlink: () => ERRNO.INVAL,

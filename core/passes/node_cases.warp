@@ -114,11 +114,12 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: map): Nod
 }
 
 # the annotations that hold any value, unless the program declares that type itself: Node and its cases (also
-# optional, `Key?`); a type variable `T` of a generic signature (Rust twin: type_parameters.rs lower_type_variables).
+# optional, `Key?`); a type variable `T` of a generic signature (Rust twin: type_parameters.rs lower_type_variables),
+# unless the program declares T, `type T = int` (user decision, card declared-alias-generic).
 # A spelled enum's annotation, `op: Op`, whose cases a text stands for, stays for plain_enums.warp, which reads the
 # names it types before it lets them hold any value (card enum-parameter-conversion)
-holds_any(type: Node, declared: map): bool := match type {
-	Symbol(name): name not in declared and (holds_node(required_type(name)) or (#name == 1 and is_capitalized(name)))
+holds_any(type: Node, declared: map, scope: map): bool := match type {
+	Symbol(name): name not in declared and (holds_node(required_type(name)) or (#name == 1 and is_capitalized(name) and not binds_as(scope, name, Meaning.Type)))
 	_: no
 }
 
@@ -126,11 +127,11 @@ holds_node(name: text): bool := name == node_type or name in node_case_types
 
 is_spelled_type(type: Node, declared: map): bool := type is symbol and name_of(type) in spelled_enums and name_of(type) not in declared
 
-node_value(n: Node, builds: map, declared: map): Node := match n {
+node_value(n: Node, builds: map, declared: map, scope: map): Node := match n {
 	Key(owner, Op.Dot, case_name): if is_word(owner, node_type) then node_case(case_name) else n
 	Key(owner, Op.Scope, case_name): if is_word(owner, node_type) then node_case(case_name) else n
 	# a name's annotation, not a map entry: `{"K": K}` keeps the value K
-	Key(subject, Op.Colon, type): if subject is symbol and holds_any(type, declared) then Key(subject, Op.Colon, symbol("any")) else n
+	Key(subject, Op.Colon, type): if subject is symbol and holds_any(type, declared, scope) then Key(subject, Op.Colon, symbol("any")) else n
 	Key(value, Op.As, type): if is_spelled_type(type, declared) then spelled_case(value, name_of(type), n) else n
 	Key(left, Op.Eq, right): spelled_equality(left, Op.Eq, right, n, declared)
 	Key(left, Op.Ne, right): spelled_equality(left, Op.Ne, right, n, declared)
@@ -311,5 +312,5 @@ node_cases(program: Node): Node := {
 	builds = {}
 	for case in ["Key", "List"] { if not (binds_value(scope, case) or binds_as(scope, case, Meaning.Function)) { builds[case] = yes } }
 	declared = enums_in(program, {})
-	with_spelled_enums(bottom_up(program, n => node_value(n, builds, declared)), declared)
+	with_spelled_enums(bottom_up(program, n => node_value(n, builds, declared, scope)), declared)
 }
