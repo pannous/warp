@@ -1,0 +1,4 @@
+# a slot declared with an int member names its whole number int, a value of another member its own type
+'x: int|text = 3; type(x)'	int
+'x: int|text = "ab"; type(x)'	text
+'x: int or text = 3; x'	3
