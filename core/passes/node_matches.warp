@@ -139,6 +139,9 @@ structural_names(pattern: Node, quoted: bool): list := {
 	if is_quote(pattern) { return structural_names(pattern#2, yes) }
 	match pattern {
 		Symbol(name): marked_name(name, quoted)
+		# `"/u/" + id: int + "/p/" + p: int` reads `(("/u/" + id): (int + "/p/" + p)): int`: a text cut's later holes
+		Key(Key(cut_left, Op.Add, cut_right), Op.Colon, right): structural_names(key_of(pattern), quoted) + structural_names(right, quoted)
+		Key(Key(cut_left, Op.Colon, cut_right), Op.Colon, right): structural_names(key_of(pattern), quoted) + structural_names(right, quoted)
 		Key(left, Op.Colon, right): structural_names(left, quoted)
 		Key(left, op, right): structural_names(left, quoted) + structural_names(right, quoted)
 		List(items, Bracket.Curly, separator): items.flat_map(field => field_names(field, quoted))
