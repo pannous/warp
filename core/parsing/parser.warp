@@ -4291,6 +4291,8 @@ def typed_parameter(argument: Node): Node := {
 	if words.length == 3 and words#2 == symbol("of") and is_type_symbol(last) and is_symbol(first) and not is_type_symbol(first) {
 		return Key(first, Op.Colon, last)
 	}
+	// `xs: list of int`, parsed `(xs: list) of int`: the words after the type are the type's
+	if words.length > 2 and is_typed_name(first) and words#2 == symbol("of") { return type_continued(first, words[1 ..]) }
 	if is_symbol(first) and REST_MARKERS.contains(name_of(first)) { return rest_parameter(last, argument) }
 	if words.length == 2 and is_type_symbol(first) { return typed_default(last, first, argument) }
 	argument
@@ -4326,6 +4328,10 @@ def labeled_parameter(parts: list): bool := parts#2 == " " and #parts#3 == 2 and
 def is_typed_name(node: Node): bool := match node {
 	Key(name, Op.Colon, kind): name is symbol
 	_: no
+}
+def type_continued(typed: Node, words: list): Node := match typed {
+	Key(name, Op.Colon, kind): Key(name, Op.Colon, spaced([kind] + words))
+	_: typed
 }
 
 // The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type
