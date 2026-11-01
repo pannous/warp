@@ -39,7 +39,22 @@ def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	# `(2)(3)`, `(a + b)(c)`: a number glued to a group multiplies it, as `3(4)` does; a variable keeps its call
 	numeric = callee.kind == ValueKind.Int or callee.kind == ValueKind.Float or grows(arguments#1)
 	if numeric and arity == 1 and not (arguments#1 is symbol) { return expression_code(body, Key(arguments#1, Op.Mul, arguments#2)) }
-	call_values(dispatcher(arity), [callee] + arguments[1..].map(a => expression_code(body, a)))
+	called = call_values(dispatcher(arity), [callee] + arguments[1..].map(a => expression_code(body, a)))
+	# a parameter `f: (float) -> float` gives what its type says: `whole(t) := 3` passed for it gives 3.0
+	result = if arguments#1 is symbol then parameter_result(body.function, name_of(arguments#1)) else ValueKind.Node
+	if result == ValueKind.Node then called else TypedCode(result, converted(called, result))
+}
+# the kind a function-typed parameter's result is declared, a number, a text or a bool; a node for another or none
+def parameter_result(f: Function, name: text): ValueKind {
+	for i in 0..<#f.signature.parameters {
+		written = aliased_type(f.signature.parameters[i].type_name)
+		if f.signature.parameters[i].name == name and written.contains(" -> ") {
+			parts = written.split(" -> ")
+			kind = annotated_kind(parts[#parts - 1].trim())
+			if kind == ValueKind.Int or kind == ValueKind.Float or kind == ValueKind.Text or kind == ValueKind.Bool { return kind }
+		}
+	}
+	ValueKind.Node
 }
 # `(a + b)`: a sum, difference or product, held boxed where a whole number may grow (operators.warp arithmetic), a
 # number all the same
