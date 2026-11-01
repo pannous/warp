@@ -1,0 +1,1 @@
+'class note{pitch:int}; class file{name:text}; play(xs: notes) := "playing \\(count xs) notes"; play(xs: files) := "playing \\(count xs) files"; [play([note(60), note(64), note(67)]), play([file("intro.mid")])]'	["playing 3 notes", "playing 1 files"]

@@ -1,1 +1,1 @@
-'route(path) := match path { "/users/" + id: int + "/posts/" + post: int => "post \(post) of user \(id)"; _ => "not found" }; route("/users/7/posts/9")'	'post 9 of user 7'
+'route(path) := match path { "/users/" + id: int + "/posts/" + post: int => "post \\(post) of user \\(id)"; _ => "not found" }; route("/users/7/posts/9")'	'post 9 of user 7'
