@@ -723,8 +723,9 @@ fits_rest(taken: list, item: any, bound: map, code: bool): bool := {
 	for name in pattern_names(held) { bound[name] = fitted.map(one => one[name]) }
 	yes
 }
-// the names a pattern binds, in order
+// the names a pattern binds, in order; a map's by its fields' patterns, `{name}` its field's name
 pattern_names(pattern: any): list := {
+	if bracket_of(pattern) == "{" { return field_pattern_names(pattern) }
 	if is_type(pattern, "symbol") { return if name_of(pattern) == "_" or is_pattern_type(name_of(pattern)) then [] else [unmarked(unmarked(name_of(pattern), "$"), "*")] }
 	if is_type(pattern, "key") { return pattern_names(key_of(pattern)) + (if op_of(pattern) == ":" then [] else pattern_names(value_of(pattern))) }
 	if bracket_of(pattern) == ø { return [] }
@@ -732,19 +733,103 @@ pattern_names(pattern: any): list := {
 	for i in 0..<#pattern { names += pattern_names(pattern#(i + 1)) }
 	names
 }
-// `{status: 200, data: {user: {name}}}`: the fields it names, the others ignored; `{name}` binds the field to its name
+// `debug?: bool`, which a map pattern holds as the phrase [debug, ?:, bool]
+is_optional_field(field: any): bool := is_type(field, "list") and #field == 3 and is_type(field#2, "symbol") and name_of(field#2) == "?:"
+field_pattern_names(pattern: any): list := {
+	names = []
+	for i in 0..<#pattern {
+		field = pattern#(i + 1)
+		names += if is_type(field, "symbol") then [name_of(field)] else if is_type(field, "key") then pattern_names(value_of(field)) else []
+	}
+	names
+}
+// `{status: 200, data: {user: {name}}}`: the fields it names, the others ignored; `{name}` binds the field to its name;
+// `debug?: bool` (read `debug ?: bool`) may be missing
 fits_map(value: any, pattern: any, bound: map): bool := {
 	if not is_type(value, "map") { return no }
 	for i in 0..<#pattern {
 		field = pattern#(i + 1)
 		if is_type(field, "symbol") {
 			if not (name_of(field) in value) or not bound_as(value[name_of(field)], name_of(field), bound) { return no }
+		} else if is_optional_field(field) {
+			name = name_of(field#1)
+			if name in value and not fits_pattern(value[name], field#3, bound, no) { return no }
 		} else if is_type(field, "key") and op_of(field) == ":" {
-			name = if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)
+			name = field_key(field)
 			if not (name in value) or not fits_pattern(value[name], value_of(field), bound, no) { return no }
 		} else { return no }
 	}
 	yes
+}
+// every part of a value, itself first, then its items' and fields' parts in order
+parts_within(value: any): list := {
+	found = [value]
+	if is_type(value, "list") { for item in value { found += parts_within(item) } }
+	else if is_type(value, "map") { for key in value.keys { found += parts_within(value[key]) } }
+	found
+}
+// what `value find pattern` gives each match: the one name's value, the part itself, or the map of the names
+found_as(part: any, bound: map, names: list): any := if #names == 1 then bound[names#1] else if #names == 0 then part else bound
+find_matches(value: any, pattern: any): list := {
+	names = pattern_names(pattern)
+	found = []
+	for part in parts_within(value) {
+		bound = pattern_bindings(part, pattern)
+		if bound != ø { found += [found_as(part, bound, names)] }
+	}
+	found
+}
+// `value replace pattern with template`: the items and fields replaced first, then the value itself where it fits,
+// the template's names its bindings
+replace_matches(value: any, pattern: any, template: any): any := {
+	inner = value
+	if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
+	else if is_type(value, "map") {
+		inner = {}
+		for key in value.keys { inner[key] = replace_matches(value[key], pattern, template) }
+	}
+	bound = pattern_bindings(inner, pattern)
+	if bound == ø then inner else instantiated(template, bound)
+}
+// `{port: "80", host: "x"} as Config`: the value with each text field converted to its pattern's type ("80" the int 80),
+// raising when it then does not fit the pattern
+converted_to_pattern(value: any, pattern: any): any := {
+	if bracket_of(pattern) == "{" and is_type(value, "map") {
+		converted = {}
+		for key in value.keys { converted[key] = value[key] }
+		for i in 0..<#pattern {
+			field = pattern#(i + 1)
+			typed = if is_optional_field(field) then [name_of(field#1), field#3] else if is_type(field, "key") then [field_key(field), value_of(field)] else ø
+			if typed != ø and typed#1 in converted { converted[typed#1] = converted_to_pattern(converted[typed#1], typed#2) }
+		}
+		value = converted
+	} else if is_type(value, "text") and is_type(pattern, "symbol") and name_of(pattern) in part_conversions {
+		part = part_conversions[name_of(pattern)](value)
+		if part != ø { value = part }
+	}
+	if pattern_bindings(value, pattern) == ø { raise "the value does not fit the pattern it converts to" }
+	value
+}
+// a map pattern's field name: `port` of `port: int`
+field_key(field: any): any := if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)
+// the template with each name it binds put in: `{type: "link", href: src}` a map, `[x, y]` a list
+instantiated(template: any, bound: map): any := {
+	if is_type(template, "symbol") { return if name_of(template) in bound then bound[name_of(template)] else template }
+	if bracket_of(template) == "{" {
+		made = {}
+		for i in 0..<#template {
+			field = template#(i + 1)
+			if is_type(field, "symbol") { made[name_of(field)] = instantiated(field, bound) }
+			else if is_type(field, "key") { made[field_key(field)] = instantiated(value_of(field), bound) }
+		}
+		return made
+	}
+	if bracket_of(template) == "[" {
+		made = []
+		for i in 0..<#template { made += [instantiated(template#(i + 1), bound)] }
+		return made
+	}
+	template
 }
 // the pieces of `"/users/" + id: int + "/x"`, texts and holes in order, a typed hole as [name, type]
 text_pieces(pattern: any): list := {
