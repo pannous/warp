@@ -86,7 +86,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # `where $f takes number`: a first parameter typed one of these
 number_word = "number"
-numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real"]
+numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real", "real"]
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
