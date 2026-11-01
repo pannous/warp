@@ -27,3 +27,7 @@ Document the runtime roots and split from current source; verify representative 
 ## Typed parse root diagnostic
 
 Keep the retained experimental branch intact. Upgrade the root outcome to the more precise list element type emitted by current main, then run the focused test and merged-main smoke.
+
+# tests-leave
+
+Keep the sound overload assertions and generated WAV bytes; use per-process names and remove each recording after saving. Add an outcome test for save and cleanup, then run the focused tests and smoke.
