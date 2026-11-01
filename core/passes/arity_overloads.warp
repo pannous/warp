@@ -10,6 +10,7 @@ use "scope.warp"
 use "../analysis/signatures.warp"
 use "clauses.warp"
 use "../analysis/builtin_signatures.warp"
+use "../parsing/number_words.warp"
 use "../analysis/words.warp"
 use "class_methods.warp"
 use "definitions.warp"
@@ -343,6 +344,8 @@ magnitude_kind(word: text, number: list?): list? := {
 numeric_kinds = ["int", "float"]
 known_kind(n: Node, judge: ArgumentJudge): list? := {
 	if n is symbol and name_of(n) in judge.variables and judge.variables[name_of(n)] { return judge.variables[name_of(n)] }
+	# `three times four`: a number word the program names nothing is its number, before number_words_pass writes it so
+	if n is symbol and number_words.has(name_of(n)) and name_of(n) not in judge.variables and name_of(n) not in judge.own { return static_kind(number_words[name_of(n)]) }
 	# a function the program defines, passed by name (`play(hum, 2s)`): a function of its parameters' count; one of
 	# none read bare is its call, `sin(π)` of a π() := Real(1, 1)
 	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) and #judge.own[name_of(n)] > 1 { return ["function", #judge.own[name_of(n)] - 1] }
