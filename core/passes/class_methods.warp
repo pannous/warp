@@ -97,7 +97,12 @@ names_syntax(method: text): bool := is_tested_type_word(method) or method in syn
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
 called_name(method: text, routes: list): text := if method in routes then routed_name(method) else method
 # the functions the program defines, by name
-functions_defined(top_statements: list): list := top_statements.map(defined_word).filter(found_word => found_word != ø)
+functions_defined(top_statements: list): list := top_statements.map(function_word).filter(found_word => found_word != ø)
+# the function a top statement defines, also one with a result type, `shown(x: any): text := …`
+function_word(n: Node): text? := match n {
+	Key(Key(typed_head, Op.Colon, result_type), Op.Define, body): if is_called_name(typed_head) then name_of(typed_head#1) else ø
+	_: defined_word(n)
+}
 
 # the classes of the program, by name: [statement, parent name or "", field names, methods, the type each field is
 # declared or given (`names = []`: list, `at: Point`: Point)]

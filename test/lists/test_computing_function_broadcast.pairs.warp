@@ -1,0 +1,6 @@
+# a function of one untyped parameter it computes with applies to each item of a list (decision M3c)
+'def square := it * it; numbers = [1, 2, 3]; (square numbers)'	[1, 4, 9]
+'square(x) := x * x; numbers = [1, 2, 3]; (square numbers)'	[1, 4, 9]
+'twice(x) := x * 2; twice([1, 2])'	[2, 4]
+'square(x) := x * x; square(3)'	9
+'more(x) := x + [9]; more([1, 2])'	[1, 2, 9]
