@@ -161,6 +161,8 @@ resolved(n: Node, overloaded: map, called: map): Node := {
 
 arity_overloads(program: Node): Node := {
 	program = result_overloads(program)
+	overload_classes = declared_classes(program)
+	overload_bases = declared_bases(program)
 	overloaded = overloaded_arities(program)
 	typed_overloads(if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program)))
 }
@@ -180,12 +182,14 @@ overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int
 	codepoint: "codepoint", char: "codepoint", character: "codepoint", bool: "bool", boolean: "bool", function: "function",
 	block: "function"}
 
-# the element type of a list type: int of `[int]`, `ints`, `list of int`; ø of another type
+# the program's classes, whose plurals are list types too (`xs: notes` of `class note`)
+global overload_classes = []
+# the element type of a list type: int of `[int]`, `ints`, `notes`, `list of int`; ø of another type
 element_of(type: text): text? := {
 	if type.starts_with("[") { return type.replace("[", "").replace("]", "").trim() }
 	if type.starts_with("list of ") { return type.replace("list of ", "") }
 	singular = type[0 ..< #type - 1]
-	if type.ends_with("s") and singular in overload_kinds then singular else ø
+	if type.ends_with("s") and (singular in overload_kinds or singular in overload_classes) then singular else ø
 }
 
 # the kind of value a parameter type takes: list, map or one of overload_kinds; ø of `any` and of another type
@@ -200,6 +204,20 @@ overload_kind(type: text): text? := {
 # also a class the program declares, `x: Real`, which the run time tells by `is`
 is_overload_type(type: text, classes: list): bool := type == any_word or overload_kind(type) != ø or type in classes or (is_union(type) and union_members(type).all(member => is_overload_type(member, classes)))
 declared_classes(program: Node): list := statements_in(program).map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
+# class → the class it extends ("" of none), of the program's classes
+global overload_bases = {}
+declared_bases(program: Node): map := {
+	bases = {}
+	for view in statements_in(program).map(class_view).filter(view => view != ø) { bases[declared_type_name(view#2)] = base_of(view#2) }
+	bases
+}
+# how many classes up from the kind's class the type is, 0 of the class itself, ø of a kind that is no instance of it
+class_distance(kind: text, type: text): int? := {
+	if kind == type { return 0 }
+	if not (kind in overload_bases) or overload_bases[kind] == "" { return ø }
+	above = class_distance(overload_bases[kind], type)
+	if above == ø then ø else above + 1
+}
 
 # `x: int` → "int", an untyped parameter "any"; a definition taking a pattern apart, `len([h, t...])`, is a clause of
 # clauses.warp, no overload (card pattern-clause-refusal)
@@ -295,6 +313,8 @@ static_kind(n: Node): list? := {
 	if n is codepoint { return ["codepoint", ø] }
 	if n is text { return ["text", ø] }
 	if is_group(n) and bracket_of(n) == "[" { return ["list", element_kind(items_of(n))] }
+	# `note(60)`: an instance of the program's class
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in overload_classes { return [name_of(n#1), ø] }
 	# a block, `3 times {…}`, is the function lambdas.warp makes of it
 	if is_lambda(n) or is_block_argument(n) { return ["function", ø] }
 	ø
@@ -379,6 +399,7 @@ element_kind(items: list): text? := {
 # a codepoint to a text); ø when it does not
 fit(kind: text, type: text): int? := {
 	if type == any_word { return any_fit }
+	if type in overload_classes { return class_distance(kind, type) }
 	if type == "number" { return if kind == "int" or kind == "float" then 1 else ø }
 	wanted = overload_kind(type)
 	if kind == wanted { return 0 }
