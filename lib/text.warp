@@ -25,7 +25,7 @@ title(t) := join([capitalize(w) for w in words(t)], " ")
 slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
 truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
-def to_utf8(t: text) {
+def to_utf8(t: text): list {
 	out = []
 	for c in t {
 		n = ord(c)
@@ -36,7 +36,7 @@ def to_utf8(t: text) {
 	}
 	out
 }
-def from_utf8(bytes) {
+def from_utf8(bytes: any): text {
 	out = ""
 	i = 0
 	while i < count(bytes) {
