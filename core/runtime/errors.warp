@@ -107,6 +107,15 @@ no_length_of(value: Node): int := {
 	global trap_detail = value
 	no_length()
 }
+# `sort [1, "a"]`, `3 < "x"`: numbers order with numbers, texts with texts; the two values named
+no_order(): int := {
+	fail()
+	0
+}
+no_order_of(a: Node, b: Node): int := {
+	global trap_detail = held([a, b])
+	no_order()
+}
 raised(value: Node): int := {
 	global trap_detail = value
 	returned_error()
