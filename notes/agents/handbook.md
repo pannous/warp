@@ -59,6 +59,11 @@ Principles and Talking live only in common.md.
 ## Testing
 - Warp tests (`warp test`) run locally with the shared binary; the whole suite only at the
   Integrator's rare intervals (nightly), never in a gate.
+- Stored baseline (user, 2026-11-01): scripts/full-suite.sh copies its results into the store record of the compiler
+  that ran (<store>/<hash>/warp.record/results.txt, results.commit = the tree's commit). A branch compares against
+  the record of main's installed compiler, the one its merge base was built with: `scripts/baseline.sh <paths>` (stored
+  lines), `scripts/baseline.sh --regressions <results file>` (✓ there, ✗ now; exit 1). Rerunning tests on main to
+  compare is never needed. A record without results falls back to test/results.txt, loudly.
 - Stop isolation : an agent stops only its own helper jobs, never with a stop that
   reaches other agents.
 - Communicate less : message only when it really matters (landed, blocked, a decision needed); batch

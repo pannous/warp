@@ -74,8 +74,8 @@ const BUG_TOKEN_PARAMETER = "bug_token";
 const BUG_TOKEN_KEY = "warp-playground-bug-token";
 const BUG_TOKEN = "ON4YlqHqAtviYPgPzSeqx3QS_gSPFlY5";
 const FORBIDDEN = 403; // a wrong token: it is forgotten and the field asks again
-// a page event, or one element's (`on click·1`, src/lowering/web/element_events.rs)
-const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
+// a page event, or one element's (`on click·1`: the markup's data-warp-click="1", lib/markup.warp page_render)
+const PAGE_EVENT = /^on ((?:click|key|input)|\w+·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound/mod.rs SAMPLE_OFFSET)
 
