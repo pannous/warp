@@ -1,0 +1,9 @@
+# a type word naming no type is said, also as a union's member or through an alias, never held as any value
+'f(x: int or Bogus) := 1; f(2)'	error
+'type Size = list or number or Bogus; f(x: Size) := 1; f(2)'	error
+'type Size = Bogus; f(x: Size) := 1; f(2)'	error
+'f(x: Bogus) := 1; f(2)'	error
+'f(x: int or text) := 1; f(2)'	1
+'type Size = list or number; f(x: Size) := 1; f(2)'	1
+'f(x: Bogus?) := 1; f(2)'	error
+'f(x: text?) := 1; f("a")'	1
