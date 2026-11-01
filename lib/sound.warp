@@ -429,10 +429,12 @@ REVERB_FEEDBACK = 0.75
 // an echo's output below this (-60 dB) for TAIL_SECONDS beyond its longest gap has rung out
 SILENT = 0.001
 TAIL_SECONDS = 0.05
-effected(amplitudes: list, effect: list) := {
+effected(amplitudes: list, effect: list) := scaled_effect(amplitudes, effect, if loudness * loudest_sample > 0 then loudness * loudest_sample else 1.0)
+// the effect on amplitudes that `scale` makes 1: a signal's loudness, a bus's full scale (its tail rings out at -60 dB
+// of the speakers, as the playground's)
+scaled_effect(amplitudes: list, effect: list, scale) := {
 	name = effect#1
 	if name not in EFFECT_NAMES { raise "no effect named " + name + ": " + EFFECT_NAMES.join(", ") }
-	scale = if loudness * loudest_sample > 0 then loudness * loudest_sample else 1.0
 	x = [a / scale for a in amplitudes]
 	y = if name == "gain" then [v * effect#2 for v in x]
 	else if name == "delay" then echoed(x, [effect#2], effect#3, effect#4, 1)
@@ -581,7 +583,14 @@ class Bus {
 	id: int
 	chain: list
 }
-bus() := Bus(std_io("sound", "bus", [0, []]), [])
+// each bus's chain by its id, 0 the speakers' own (none), and the bus the thread's sounds go to: warp runs the chain on
+// each sound sent there (sound), natively and in the browser alike, a delay's or reverb's tail added
+global bus_chains = [[]]
+global sent_bus = 0
+bus() := {
+	bus_chains = bus_chains + [[]]
+	Bus(count(bus_chains) - 1, [])
+}
 // the bus with the effect at the end of its chain, or in place of its effect of that name (its new settings, what
 // rings in it kept), which the host takes over from this voice's moment on (card shared-buses stage 3). EQ bands are
 // several of a name: one replaces the band at its frequency (card bus-peak)
@@ -600,7 +609,7 @@ with_effect(b: Bus, effect) := {
 	if not replaced {
 		chain.push(effect)
 	}
-	std_io("sound", "bus", [b.id, chain])
+	bus_chains[b.id] = chain
 	Bus(b.id, chain)
 }
 lowpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["lowpass", si_amount(frequency), q])
@@ -619,10 +628,14 @@ high_shelf(b: Bus, frequency, db, q = 0.707) := with_effect(b, ["high_shelf", si
 // in attack seconds and a fall in release
 compress(b: Bus, threshold = -18, ratio = 4, attack = 0.01, release = 0.1) := with_effect(b, ["compress", threshold, ratio, si_amount(attack), si_amount(release)])
 // the thread's sounds go to the bus; gives where they went before, for sent_back
-sent_to(b: Bus) := std_io("sound", "send", [b.id])
+sent_to(b: Bus) := {
+	before = sent_bus
+	sent_bus = b.id
+	before
+}
 // the thread's sounds go where they went before again; gives the handle of the sound sent
 sent_back(before, handle) := {
-	std_io("sound", "send", [before])
+	sent_bus = before
 	handle
 }
 // the signal played through the bus; its handle
@@ -637,8 +650,16 @@ out(signal) := sound(clamped_samples(signal))
 global pan = 0.0 as float
 // the samples for the speakers: mono in the middle, else interleaved left, right, the far side quieter by the pan
 panned(samples) := if pan == 0 then samples else [sample_offset + (round((sample - sample_offset) * side) as int) for sample in samples for side in [min(1, 1 - pan), min(1, 1 + pan)]]
+// the samples through the chain of the bus the thread sends to
+bused(samples) := {
+	chain = bus_chains[sent_bus]
+	if count(chain) == 0 { return samples }
+	amplitudes = [x - sample_offset for x in samples]
+	for effect in chain { amplitudes = scaled_effect(amplitudes, effect, loudest_sample) }
+	clamped_samples(amplitudes)
+}
 sound(samples) := {
-	speakers = panned(through_effects(samples))
+	speakers = panned(bused(through_effects(samples)))
 	sounded(speakers, sample_rate, if pan == 0 then 1 else 2)
 }
 
