@@ -125,15 +125,26 @@ function loadPython() {
 		post({ type: "print", text: "loading Python (Pyodide, ~12 MB, once)…\n", stream: 2 });
 		importScripts(PYODIDE_URL + "pyodide.js");
 		const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
-		const bridge = await (await fetch("foreign_python.py")).text();
+		const [bridge, capi] = await Promise.all(["foreign_python.py", "python_capi.py"].map(async file => (await fetch(file)).text()));
 		pyodide.globals.set("WARP_BRIDGE_LOOP", false);
 		pyodide.runPython(bridge);
 		self.pythonAnswer = pyodide.globals.get("answer");
+		pyodide.runPython(capi); // `use python`'s C API (host-foreign.js pythonLibrary)
+		self.pythonCapi = pyodide.globals.get("capi");
+		// Python's print goes to the run's output, as natively libpython's stdout is the process's
+		pyodide.setStdout({ batched: line => post({ type: "print", text: `${line}\n`, stream: 1 }) });
+		pyodide.setStderr({ batched: line => post({ type: "print", text: `${line}\n`, stream: 2 }) });
+		return pyodide;
 	})();
 	return python;
 }
+// the modules a program imports (python_import("numpy")): Pyodide's packages among them loaded before the run, as
+// natively they are installed beside libpython
+const PYTHON_IMPORT = /python_import\("([\w.]+)"\)/g;
+const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, name]) => `import ${name}`).join("\n");
 registerForeignRuntime("python", {
-	prepare: code => USES_PYTHON.test(code) && loadPython().catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
+	prepare: code => USES_PYTHON.test(code) && loadPython().then(pyodide => pyodide.loadPackagesFromImports(pythonImports(code), { messageCallback: () => {} }))
+		.catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
 // a link in the shown markup was followed (playground.js followLink): the live run shows the page at that path
