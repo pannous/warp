@@ -557,7 +557,7 @@ implicit_modules(source: text, index_file: text): list := {
 	free = free_words(program)
 	modules = []
 	# (the module a `use` names is no word of it: `use hash` beside color's hash)
-	for word in candidates.filter(word => (word in free or leads_statement(program, word, index[word])) and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
+	for word in candidates.filter(word => ((word in free and not only_rules_lead(word, index[word])) or leads_statement(program, word, index[word])) and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
 		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
@@ -569,6 +569,9 @@ implicit_modules(source: text, index_file: text): list := {
 	}
 	modules
 }
+# whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
+# quoted code (`data(set width of p to 12)` brings no english)
+only_rules_lead(word: text, modules: list): bool := modules.all(module => not definition_arities(module, word))
 # a statement led by a word a module's rule starts with: `stored users: [User]`, whose `stored` declares (sound's
 # `pattern` function never takes `pattern Pair = [_, _]`)
 leads_statement(program: Node, word: text, modules: list): bool := modules.any(module => word in rule_heads(used_module_text(module))) and flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word))
@@ -579,7 +582,7 @@ definers_taking(word: text, definers: list, program: Node): list := {
 	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 	if not counts { return definers }
 	taking = definers.filter(module => definition_arities(module, word).any(span => counts.all(count => span#1 <= count and count <= span#2)))
-	if taking then taking else definers.filter(module => not definition_arities(module, word))
+	if taking then taking else definers.filter(module => not definition_arities(module, word) and rule_fits(module, word, program))
 }
 # [least, most] arguments of each of module's definitions of word, read off its head `word(a, b = 1)`
 definition_arities(module: text, word: text): list := {
@@ -639,7 +642,19 @@ word_index_text(): text := {
 }
 # the word each `rewrite` line of a source starts its pattern with: `stored` of `rewrite stored $name: [$kind] => …`
 # (none of a pattern starting with a hole, `rewrite $p => …`)
-rule_heads(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => leading_word(line[#"rewrite " ..])).filter(word => #word > 0)
+rule_heads(source: text): list := rule_patterns(source).map(leading_word).filter(word => #word > 0)
+rule_patterns(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => line[#"rewrite " ..])
+# whether one of the module's rules the word leads goes on as a statement it leads does: the word after it a hole or
+# the statement's own, `on every 1 second {…}` timers' rule, `on change x {…}` signals'
+rule_fits(module: text, word: text, program: Node): bool := {
+	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word) and n#2 is symbol).map(n => name_of(n#2))
+	rule_patterns(used_module_text(module)).filter(pattern => leading_word(pattern) == word).any(pattern => second_word(pattern).starts_with("$") or second_word(pattern) in seconds)
+}
+# the pattern's word after its leading one, "" for none
+second_word(pattern: text): text := {
+	words = pattern.trim_start("(").split(" ")
+	if #words > 1 then words#2 else ""
+}
 leading_word(pattern: text): text := {
 	start = if pattern.starts_with("(") then 1 else 0
 	pattern[start ..< name_end(pattern, start, #pattern)]
