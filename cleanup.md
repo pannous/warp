@@ -43,3 +43,7 @@ Cover choice on text and lists, shuffle and sample on text lists, and repeatable
 # library-typed UTF-8 slice
 
 Cover empty and supplementary-plane UTF-8 conversions, then annotate their results while retaining the existing input domains. Compare focused outcomes with the stored baseline and run smoke before landing.
+
+# library-typed color slice
+
+Cover color conversions and opacity before declaring types; retain accepted numeric domains with `any`, and validate color results without changing existing tests.
