@@ -106,14 +106,16 @@ own_parameter_types(program: Node): map := {
 }
 ambiguous_fit = "ambiguous"
 condition_takers = ["any", "bool"]
+# a parameter type takes a yes/no when it, or a member of its union, is a condition taker: `bool or int` does
+takes_condition(type: text): bool := union_members(type).any(member => member in condition_takers)
 # whether the word's first parameter takes a yes/no: yes for any, bool or an untyped rest (`print(values...)`), no for
 # another declared type, ambiguous_fit for a program's function of an untyped parameter, ø for a word of no typed line
 condition_fit(word: Node, own_types: map): any := {
 	name = unaliased(name_of(word))
 	if name in element_comparing_words { return yes }
-	if own_types.has(name) { return if own_types[name] == "" then ambiguous_fit else own_types[name] in condition_takers }
+	if own_types.has(name) { return if own_types[name] == "" then ambiguous_fit else takes_condition(own_types[name]) }
 	lines = lines_of(typed_lines, name) + (word_lines().get(name) ?? [])
 	firsts = lines.filter(line => #line.signature.parameters > 0).map(line => line.signature.parameters#1)
 	if #firsts == 0 { return ø }
-	firsts.any(p => p.type_name in condition_takers or (p.rest and p.type_name == ""))
+	firsts.any(p => takes_condition(p.type_name) or (p.rest and p.type_name == ""))
 }
