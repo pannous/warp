@@ -17,6 +17,13 @@ in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete"
 target_operators = ["#", ".", ":"]
 # a name the compiler makes, `match·bound`, `index·3`, which the program never wrote: never the user's to decide
 made_name_mark = "·"
+is_made_name(name: text): bool := name.contains(made_name_mark)
+# a name only the compiler binds in the body, a match arm's `t = match·bound#"t"`: each value it gets reads a made name
+bound_by_compiler(body: Node, name: text): bool := {
+	values = assigned_values(body, name)
+	#values > 0 and values.all(reads_made_name)
+}
+reads_made_name(n: Node): bool := if n is symbol then is_made_name(name_of(n)) else parts_within(n).any(reads_made_name)
 
 # the lowered program, the first change of a main-level variable from one of the functions `own_names` defines (not a
 # used module's or the prelude's) diagnosed
@@ -30,7 +37,7 @@ main_globals(program: Node, own_names: list): any := {
 			own = parameter_names(key_of(function_definition))
 			decided = {}
 			for name in changed_names(body) {
-				if not name.contains(made_name_mark) and name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) {
+				if not is_made_name(name) and name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) and not bound_by_compiler(body, name) {
 					decided[name] = yes
 					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name]), function_definition) }
 					diagnose(call_of("local_or_global", [name, defined_function]), function_definition)
