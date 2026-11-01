@@ -223,17 +223,22 @@ write_runtime(file: text) := {
 write_module(name: text, runtime_file: text, file: text) := {
 	write_bytes(file, compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file)))
 }
-# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild is
-# named and stays compiled from source: its file left empty, never an older build linked in its place
+# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild keeps
+# an empty file, never an older build linked in its place. A module calling C by its foreign lines (`… from "c"`) may
+# refuse and stays compiled from source with the program; any other refusal fails the rebuild, naming the module and
+# why (decision prebuild-fails-loudly)
 write_modules(folder: text, runtime_file: text) := {
+	refused = []
 	for name in std_module_names {
 		file = folder + "/" + name + ".wasm"
 		try { write_module(name, runtime_file, file) } catch refusal {
-			print name + ".wasm not prebuilt: " + refusal
 			write_bytes(file, [])
+			calls_c = #c_declarations_in(LIBRARY_FILES.get(name + module_extension) ?? "") > 0
+			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
 		}
 	}
 	write(folder + "/" + WORD_INDEX, word_index_text())
+	if #refused > 0 { raise "standard modules that don't prebuild: " + refused.join("; ") }
 }
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
 show_version() := print version_text(library_folder)

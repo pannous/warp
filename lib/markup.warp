@@ -45,8 +45,8 @@ export page_render(value: any) := {
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 export page_event(n: int, detail: any) := {
-	handler = page_handlers#n
-	handler(detail)
+	action = page_handlers#n
+	action(detail)
 }
 
 // a live part's value as it is now
