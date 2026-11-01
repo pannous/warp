@@ -110,6 +110,7 @@ global kept_comprehension_sugar = []
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	brought_names = {}
+	exported_names = {}
 	defined_origins = {}
 	local_declarations = {}
 	timed("with_uses")

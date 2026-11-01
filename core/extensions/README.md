@@ -1,1 +1,1 @@
-# Compiler extensions: one new capability per file (tuples.warp, varargs.warp, …), a subfolder only for a big topic (concurrency/); this folder moves to core/extensions/ with the compiler (card compiler-to-core).
+# Compiler extensions: one optional capability per file whose compiler code (a pass, an emitter mode) only the programs using it need (primitive.warp); a capability that is rewrite rules only is sugar in lib/sugar/ (tuples, safe_navigation; notes/core_hygiene.md).

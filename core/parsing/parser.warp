@@ -38,7 +38,7 @@ def parsed(source: text, uses: text = ""): Node := {
 ENTITY_MARK = "\\:"
 // `name TAB characters` lines, the table Rust include_str!s, built into the compiler as its other data
 // (module_source: user 2026-10-25, "These should all be built in")
-ENTITY_TABLE = module_source("compiler/entities.tsv")
+ENTITY_TABLE = module_source("entities.tsv")
 // The lib/ a run reads a program's standard modules from (its own data is built in, module_source): the one the run was
 // given (compiler.warp's fourth argument, given_library), else WARP_LIB, else the one above this file, or beside it when
 // the file was reached as core/ (card compiler-core-link). A compiled stage is kept for every identical lib/ and runs
@@ -66,8 +66,8 @@ def use_library(folder: text) { given_library = folder }
 // older seed) calls library_sources below and reads them where it runs
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
-// core's folders bundled all the same: the extensions' rules, which every compile reads (rewrites.warp
-// extension_module_names), baked with the rest instead of parsed at each run (~25 ms of a small program's 0.15 s)
+// core's folders bundled all the same: an extension's rules, read by the compiles using it, baked with the rest
+// instead of parsed at each run (~25 ms of a small program's 0.15 s)
 BUNDLED_CORE_FOLDERS = ["compiler/extensions"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)

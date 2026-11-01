@@ -53,6 +53,7 @@ served(program: Node): any := ended_by(program, "route_add", routes_end_word)
 # a program with frame listeners, ending in its frames (lib/frames.warp frames_end): one, as no window opens
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
+exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
 # that declares
@@ -70,7 +71,7 @@ is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" an
 
 # --- variable signals (lib/signals.warp's rules, card signals-lib) ---
 
-signal_listen_word = "signal_listen"
+variable_listen_word = "variable_listen"
 signal_old = "signal·old"
 # `whenever x > y {…}`: a listener of each name the condition reads, running the block when the write made the
 # condition hold, it holding not with the name's old value: `if value > y and not old > y {…}` for x
@@ -81,7 +82,7 @@ condition_listens(condition: Node, body: Node, flags: list): Node := {
 	unfired = flags.map(flag => Key(ø, Op.Not, Key(flag, Op.Hash, 1)))
 	block = if #flags == 0 then body else List(flags.map(flag => Key(Key(flag, Op.Hash, 1), Op.Assign, Node.True)) + [body], Bracket.Curly, Separator.Semicolon)
 	declared = flags.map(flag => Key(flag, Op.Assign, List([Node.False], Bracket.Square, Separator.Comma)))
-	listens = symbol_words(condition).map(name => call_of(signal_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
+	listens = symbol_words(condition).map(name => call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
 	separated(bracketed(declared + listens, "("), ";")
 }
 became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
@@ -110,13 +111,13 @@ gpu_lists_packed(program: Node): any := {
 	statements = level_statements(program)
 	bound = statements.filter(statement => is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program))
 	if #bound == 0 { return ø }
-	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement)))) else statement)
+	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement), "f32"))) else statement)
 	separated(bracketed(packed, ""), ";")
 }
 # a list made right in a GPU word's call made as a GPU list, else ø
 gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
-# the names the statement's signal_listen calls listen to
-names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, signal_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
+# the names the statement's variable_listen calls listen to
+names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
 # each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
 # changes
 derived_inputs(statements: list): map := {
@@ -279,8 +280,31 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 # `dir(time)`, `dir text` (card dir-ownership): the words a standard module defines, in their order, then the
 # prelude's whose first parameter is of the type so named, `upper(t: text)`; ø when the program defines its own dir
 # or binds the name, or no module is so named
+# `help(x)` (wiki/reflection.md): a class's fields and methods, a function's signature and the doc below it, a
+# module's words; ø where the program has its own help or x is none of them
+class_help(name: Node, program: Node, source: text): any := {
+	# the class as written: the class methods pass has lifted its methods out of the program's view by now
+	statement = if owns_word("help", program) then ø else declared_class(spelled(name), plain_node(parsed(source)))
+	if statement == ø { return ø }
+	view = class_view(statement)
+	declared = class_declared(statement, view)
+	# a method by the name it is written with, `length` (read, it is its alias's word, count)
+	methods = view#3[3 ..].map(member => defined_word(node_of(member)) ?? defined_word(member_read(member))).filter(word => word != ø)
+	["class " + spelled(name), "fields: " + declared.fields.join(" "), "methods: " + methods.join(" ")].join("\n")
+}
+function_help(name: Node, program: Node, source: text): any := {
+	signature = if owns_word("help", program) then ø else signature_text(name, program)
+	if signature == ø { return ø }
+	doc = doc_of(name, program, source)
+	spelled(name) + signature + (if doc == "" then "" else "\n" + doc)
+}
+module_help(name: Node, program: Node): any := {
+	words = if owns_word("help", program) then ø else dir_words(name, program)
+	if words == ø then ø else "module " + spelled(name) + ": " + items_of(words).map(word => "${word}").join(" ")
+}
 dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in_kept(program) then ø else module_dir("${name}")
-owns_dir(program: Node): bool := function_definition(symbol("dir"), program) != ø
+owns_dir(program: Node): bool := owns_word("dir", program)
+owns_word(word: text, program: Node): bool := function_definition(symbol(word), program) != ø
 module_dir(word: text): any := {
 	source = used_module_text(word)
 	if source == "" { return ø }
@@ -318,7 +342,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
@@ -330,7 +354,8 @@ typed_json_field_type(member: Node): text? := match member {
 	_: ø
 }
 
-typed_json_class(type_name: text, program: Node): Node? := {
+# the statement declaring the class of that name in the program, ø for none
+declared_class(type_name: text, program: Node): Node? := {
 	for statement in level_statements(program) {
 		view = class_view(statement)
 		if view != ø and declared_type_name(view#2) == type_name { return statement }
@@ -353,7 +378,7 @@ typed_json_value(value: text, path: text, value_type: text, depth: int, program:
 		received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
 		return "({ if not (" + value + " is " + value_type + ") { raise " + path + " + \" must be " + expected + ", received \" + " + received + " }; " + value + " })"
 	}
-	statement = typed_json_class(value_type, program)
+	statement = declared_class(value_type, program)
 	if statement == ø or ancestors.contains(value_type) { return ø }
 	view = class_view(statement)
 	declared = class_declared(statement, view)

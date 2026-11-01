@@ -58,6 +58,7 @@ const hooks = {
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
 	resizeWindow: (width, height) => post({ type: "window", width, height }), // window.width = 800 (canvas.js)
+	fullScreen: full => post({ type: "full screen", full }), // window.fullscreen = yes (playground.js fullScreen)
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;

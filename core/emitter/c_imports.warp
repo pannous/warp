@@ -19,8 +19,8 @@
 #   texts    a list of warp texts as a NULL-terminated `char *[]` of their copies (argv: posix_spawn, execv)
 #   void     no result
 
-# the names the libraries go by in a program: `use libm` is `use m`
-c_library_aliases = {libc: "c", libm: "m", zlib: "z", SDL2: "SDL2", sdl: "SDL2", sdl2: "SDL2"}
+# the names the libraries go by in a program: `use libm` is `use m`, as `use cmath` (C++'s header) is
+c_library_aliases = {libc: "c", libm: "m", cmath: "m", zlib: "z", SDL2: "SDL2", sdl: "SDL2", sdl2: "SDL2"}
 # libc and libm, which a program may name for each other
 c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
@@ -88,6 +88,14 @@ global used_c_functions = {}
 with_used_c_functions(functions: map): map := {
 	for name in used_c_functions.keys { if not functions.has(name) { functions[name] = used_c_functions[name] } }
 	functions
+}
+# the declarations of the compile's foreign lines and catalog (c_functions_of), so `use mylib` of a program declaring
+# `f(): i32 from 'mylib'` names its library and `use log` libm's function
+global declared_c_functions = []
+# `use m`, `use zlib`, `use sqlite3`, `use log`: a C library or one of its functions, though no module file has its name
+is_c_library(name: text): bool := {
+	library = c_library_aliases.get(name) ?? name
+	library in c_and_m or native_path(run_library(), library) != ø or declared_c_functions.any(d => d#2 == library or d#1 == name)
 }
 
 # the foreign lines of lib/c.warp, lib/math.warp and the native files at `native_paths`
@@ -242,6 +250,7 @@ c_functions_of(source: text, library_folder: text): list := {
 		d = c_declaration(line)
 		if d != ø and not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
 	}
+	declared_c_functions = functions.keys.map(name => functions[name]) + catalog
 	[c_without(kept, resolved).join("\n"), functions, missing]
 }
 # the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)

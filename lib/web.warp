@@ -5,15 +5,31 @@
 use os
 use router
 use wagi
+use markup
 
 // `get "/fib/:n:int" { … }`: a route, the route table's entry of lib/router.warp, `route_add("GET", "/fib/:n:int",
 // request => { n = route_parameter("/fib/:n:int", request.path, "n"); … })`, each `:name` of the path a variable of
 // its body; post, put, delete and patch alike. A program with routes ends serving them (routes_end; lib/rule_words.warp
 // computes both, decision computed-hole)
-rewrite $m $path {$body...} => route_add($verb, $path, request => { $bindings...; $body... }) where $m in [get, post, put, delete, patch] and $path is text and $verb = route_verb($m) and $bindings = route_bindings($path)
+// `form post "/todos" { … }` is the form sending there, `form{ method: "POST", action: "/todos", … }`, the path any
+// expression (notes/server_routes.md)
+rewrite form $m $path {$body...} => form{ method: $verb, action: $path, $body... } where $m in [get, post, put, delete, patch] and $verb = route_verb($m)
+rewrite $m $path {$body...} => route_add($verb, $path, request => { $bindings...; {$body...} }) where $m in [get, post, put, delete, patch] and $path is text and $verb = route_verb($m) and $bindings = route_bindings($path)
+// `route "/users/:id:int" { div{…} }`: a page, a GET answering its block's markup as HTML (lib/markup.warp to_html)
+rewrite route $path {$body...} => route_add("GET", $path, page_answering(request => { $bindings...; {$body...} })) where $path is text and $bindings = route_bindings($path)
+// `server def user_count() {…}`: the function, which a page asks with POST /rpc/user_count, a parameter's argument
+// the request's body
+rewrite server def $h() {$b...} => ($h() := {$b...}; route_add("POST", "/rpc/" + $name, request => $h())) where $name = spelled($h)
+rewrite server def $h($x) {$b...} => ($h($x) := {$b...}; route_add("POST", "/rpc/" + $name, request => $h(request.body))) where $name = spelled($h)
 rewrite $p => $q where program and $q = served($p)
 
 DEFAULT_PORT = 8080
+HTML_TYPE = "text/html; charset=utf-8"
+// a page route's answer: the markup its block gives, as HTML
+page_answering(page: function) := request => {
+	header("Content-Type", HTML_TYPE)
+	to_html(page(request))
+}
 // WARP_SERVE's value in the playground, which serves the page's requests
 PAGE_SERVING = "page"
 BACKLOG = 64

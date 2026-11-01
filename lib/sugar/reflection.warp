@@ -22,3 +22,10 @@ rewrite $f.dump => $refused where $f is symbol and $f is function and $refused =
 rewrite dir $x => dir($x)
 rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)
 rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
+
+# `help(Point)`, `help(area)`, `help(sound)`: what a class, a function or a module is, as text (lib/rule_words.warp
+# class_help, function_help, module_help; wiki/reflection.md); a program's own help wins
+rewrite help $x => help($x)
+rewrite help($c) => $t where $c is symbol and $t = class_help($c, $program, $source)
+rewrite help($f) => $t where $f is symbol and $f is function and $t = function_help($f, $program, $source)
+rewrite help($m) => $t where $m is symbol and $t = module_help($m, $program)
