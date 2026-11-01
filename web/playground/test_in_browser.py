@@ -25,8 +25,10 @@ NATIVE_RESULTS = "test/samples.txt"  # scripts/samples.sh: WIN samples need a C 
 # scripts/samples.sh: <sample with / as _>.txt, what the native run printed (samples-web.sh names the main checkout's)
 NATIVE_OUTPUTS = os.environ.get("WARP_NATIVE_OUTPUTS", "data/samples/out")
 SAMPLES_WEB_DATA = "data/samples-web"  # report.txt (each difference's first lines) and out/, what the page printed
-# the page stops a run after its RUN_TIMEOUT_MS (playground.js) and answers; a page that has not answered by then is stuck
-SAMPLE_ANSWER_SECONDS = 40
+# the page stops a run after this (playground.js ?run_seconds, natively scripts/samples.sh gives 30 s) and answers; a
+# page that has not answered 10 s later is stuck
+SAMPLE_RUN_SECONDS = 30
+SAMPLE_ANSWER_SECONDS = SAMPLE_RUN_SECONDS + 10
 SHOWN_DIFFERENCE = 300  # characters of each side in report.txt
 # a duration a sample measures (`painted in 53 ms`) differs on every run: both sides compare with it masked
 MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
@@ -1158,7 +1160,7 @@ def check_samples(paths, tree):
 	data = os.path.join(tree, SAMPLES_WEB_DATA)
 	os.makedirs(os.path.join(data, "out"), exist_ok=True)
 	server = serve(None, tree)
-	page_url = f"http://127.0.0.1:{PORT}/web/playground/"
+	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={SAMPLE_RUN_SECONDS}"
 	open_samples_page(page_url)
 	lines, details = [], []
 	for path in paths:

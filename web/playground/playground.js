@@ -15,7 +15,9 @@ const MAX_VOICES = 32;
 const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
-const RUN_TIMEOUT_MS = 10000;
+// ?run_seconds=<s>: runs stop that much later (scripts/samples-web.sh, whose samples compile on a loaded machine)
+const RUN_SECONDS_PARAMETER = "run_seconds";
+const RUN_TIMEOUT_MS = 1000 * Number(new URLSearchParams(location.search).get(RUN_SECONDS_PARAMETER) ?? 10);
 // a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
 // playground-turn); a quick run never flickers
 const STOP_GRACE_MS = 500;
