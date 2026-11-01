@@ -125,7 +125,7 @@ echo "built $page/samples.js"
 python3 web/playground/keywords.py "$page/keywords.js" && echo "built $page/keywords.js and keywords.txt" ||
 	echo "warning: keywords.js not rebuilt (keywords.py reads src/, card playground-keywords)" >&2
 # the uniscript entities completion.js lists after \: and <:
-cp core/entities.tsv "$page/entities.tsv"
+cp lib/entities.tsv "$page/entities.tsv"
 
 # the ⋯ menu names the commit the page was built from and when, so a deployed page tells which version it is
 # (cards version-commit, g_oMw8)

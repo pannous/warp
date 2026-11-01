@@ -38,7 +38,7 @@ def parsed(source: text, uses: text = ""): Node := {
 ENTITY_MARK = "\\:"
 // `name TAB characters` lines, the table Rust include_str!s, built into the compiler as its other data
 // (module_source: user 2026-10-25, "These should all be built in")
-ENTITY_TABLE = module_source("compiler/entities.tsv")
+ENTITY_TABLE = module_source("entities.tsv")
 // The lib/ a run reads a program's standard modules from (its own data is built in, module_source): the one the run was
 // given (compiler.warp's fourth argument, given_library), else WARP_LIB, else the one above this file, or beside it when
 // the file was reached as core/ (card compiler-core-link). A compiled stage is kept for every identical lib/ and runs
