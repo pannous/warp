@@ -31,3 +31,5 @@ UTF-8 verification: the four new outcomes pass after typing; combined with exist
 UTF-8 slice landed at `365870d2a57313f07d07fa07b4f86ade3f89ec5a`. Color audit: installed warp returned `[yes, yes, 128]` for red HSV, green HSV vs RGB, and half-alpha red. New `test/modules/test_color_typed.pairs.warp` passed 4/4 before signatures. Next annotate color conversion functions preserving numeric domains and rerun outcomes; remaining modules and typed-infix remain open.
 
 Color signatures added for `rgb`, `hsv`, `with_alpha` and `alpha_of`: inputs remain `any` to avoid narrowing numeric values, and results declare `Color` or `int`. Direct installed compiler with worktree lib returns `[yes, yes, 128]` as before. Focused post-change test is running; check it, format, smoke and land before auditing the remaining color helpers and other modules.
+
+Color conversion verification: focused new outcomes pass 4/4 after typing; `warp format yes lib/color.warp` changed nothing and `scripts/smoke.sh /Volumes/Worktrees/library-typed` passed. Next land this partial slice, then audit `show`, `hash`, `hex`, `padded_hex` and the remaining library modules; no existing tests were modified.
