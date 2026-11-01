@@ -80,15 +80,8 @@ is_type_head(n: Node): bool := match n {
 
 # `object.member`, through the left operands of an operator: `p + 1` gives `p.name + 1`
 member_of(object: Node, member: Node): Node := match object {
-	Key(left, op, right): { if op != Op.Dot and left != ø then Key(member_of(left, member), op, right) else Key(object, Op.Dot, counted_member(member)) }
-	_: Key(object, Op.Dot, counted_member(member))
-}
-# `last 2` of `last 2 of users`: the word's arity variant called, `users.last_items(2)` (prelude_words.warp
-# arity_variants: the prelude reached it before this pass writes the call), any other member as written
-counted_member(member: Node): Node := {
-	if not (is_spaced(member) and #member == 2 and member#1 is symbol) { return member }
-	variant = arity_variant(name_of(member#1), 2)
-	if variant == ø then member else List([symbol(variant), member#2], Bracket.Round, Separator.None)
+	Key(left, op, right): { if op != Op.Dot and left != ø then Key(member_of(left, member), op, right) else Key(object, Op.Dot, member) }
+	_: Key(object, Op.Dot, member)
 }
 
 # `of` after anything but a type head, `in` and `from` after a selector word: `words in t`
@@ -117,7 +110,9 @@ looked_up(parts: list): any := {
 			member = word
 			if at >= 2 and parts[at - 2] is symbol and word is not symbol {
 				start = at - 2
-				member = call_of(name_of(parts[at - 2]), [word])
+				# `last 2 of users`: users.last_items(2), the word's arity variant (prelude_words.warp arity_variants), which
+				# the prelude reached before this pass writes the call
+				member = call_of(arity_variant(name_of(parts[at - 2]), 2) ?? name_of(parts[at - 2]), [word])
 			}
 			parts = parts[0 .. start] + [member_of(object, member)] + parts[end ..]
 			at = #parts - 2
