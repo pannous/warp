@@ -1254,7 +1254,7 @@ midi_file(notes) := {
 	// by tick, a note's end before a note's start at the same tick
 	track = [0, MIDI_META, MIDI_TEMPO, 3] + big_endian(MIDI_MICROSECONDS_PER_QUARTER, 3)
 	now = 0
-	for event in in_key_order(events, [event#1 * 2 + event#2 for event in events]) {
+	for event in list_sorted_by(events, [event#1 * 2 + event#2 for event in events]) {
 		track = track + midi_variable_length(event#1 - now) + event#3
 		now = event#1
 	}
@@ -1327,20 +1327,7 @@ midi_notes(bytes) := {
 			}
 		}
 	}
-	[[note#1 / 1000.0, midi_hertz(note#2), note#3 / 1000.0, note#4] for note in in_key_order(notes, [note#1 * 128 + note#2 for note in notes])]
-}
-// the items in the order of their keys, the smallest first, equal keys as they came: sort refuses in a module that
-// defines compare, as units does (card sort-refuses-compare)
-in_key_order(items, keys) := {
-	left = [at for at in 0..count(items)]
-	ordered = []
-	while count(left) > 0 {
-		first = left#1
-		for at in left { if keys[at] < keys[first] { first = at } }
-		ordered = ordered + [items[first]]
-		left = left.filter(at => at != first)
-	}
-	ordered
+	[[note#1 / 1000.0, midi_hertz(note#2), note#3 / 1000.0, note#4] for note in list_sorted_by(notes, [note#1 * 128 + note#2 for note in notes])]
 }
 // the milliseconds at a tick of a file whose tempo changes at the ticks of tempi ([tick, microseconds a quarter])
 midi_milliseconds(tick, tempi, division) := {
