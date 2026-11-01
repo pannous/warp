@@ -739,7 +739,8 @@ function showAcknowledged() {
 function showValue(value, error, html) {
 	$("value").textContent = value;
 	$("value").classList.toggle("error", Boolean(error));
-	$("value").parentElement.hidden = Boolean(html) && !error;
+	// a self-hosted run prints its own value (driver.js): no » line then
+	$("value").parentElement.hidden = (Boolean(html) || value === "") && !error;
 }
 
 function showReport(report) {
