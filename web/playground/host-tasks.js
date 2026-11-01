@@ -748,13 +748,14 @@ function writeShared(shared, record) {
 
 // the page's answer to a Worker's question its asynchronous browser APIs answer (the clipboard's text, card
 // web-apis-rest): `ask(shared)` hands the page a shared buffer, the page writes its record into it (markup.js
-// answerInto) while the Worker waits; without shared memory (a page not cross-origin isolated) a loud error
-function askPage(what, ask) {
+// answerInto) while the Worker waits, up to `waiting` milliseconds; without shared memory (a page not cross-origin
+// isolated) a loud error
+function askPage(what, ask, waiting = PAGE_ANSWER_MS) {
 	if (!ask) throw new Error(`${what}: this page has no way to answer its Worker`);
 	if (!self.crossOriginIsolated) throw new Error(`${what}: the page is not cross-origin isolated, so its Worker cannot wait for it`);
 	const shared = takeAnswerBuffer();
 	ask(shared);
-	if (Atomics.wait(new Int32Array(shared, 0, 2), 0, 0, PAGE_ANSWER_MS) === "timed-out") throw new Error(`${what}: the page did not answer in ${PAGE_ANSWER_MS / 1000} s`);
+	if (Atomics.wait(new Int32Array(shared, 0, 2), 0, 0, waiting) === "timed-out") throw new Error(`${what}: the page did not answer in ${waiting / 1000} s`);
 	const { error, ...answer } = readShared(shared);
 	returnAnswerBuffer(shared);
 	if (error) throw new Error(`${what}: ${error}`);
