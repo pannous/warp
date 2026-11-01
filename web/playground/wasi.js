@@ -65,6 +65,7 @@ const bytesOf = request => Uint8Array.from(request.responseText, character => ch
 // known without asking the server
 function listing(directory) {
 	if (listings.has(directory)) return listings.get(directory);
+	if (typeof SERVED_FILES !== "undefined") return servedListing(directory);
 	const exists = directory === "" || listing(parentOf(directory))?.get(nameOf(directory));
 	const request = exists ? requestSync("GET", `${FILE_ROOT}${directory}${directory ? "/" : ""}?listing`) : null;
 	const entries = request && new Map([...request.responseText.matchAll(LISTING_LINK)].map(match => {
@@ -73,6 +74,21 @@ function listing(directory) {
 	}));
 	listings.set(directory, entries);
 	return entries;
+}
+
+// a directory's entries from the files the server has (served-files.js, build.sh), no request: every listing at once
+function servedListing(directory) {
+	if (!listings.size) {
+		for (const file of SERVED_FILES) {
+			const parts = file.split("/");
+			parts.forEach((name, index) => {
+				const parent = parts.slice(0, index).join("/");
+				if (!listings.has(parent)) listings.set(parent, new Map());
+				listings.get(parent).set(name, index < parts.length - 1);
+			});
+		}
+	}
+	return listings.get(directory) ?? null;
 }
 
 const headers = new Map(); // header URL → its lazy file or null, for every test of this worker
@@ -102,11 +118,14 @@ function served(path) {
 	return isDirectory ? { entries: new Set(listing(path).keys()) } : lazyFile(FILE_ROOT + path);
 }
 
-// args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2)
-function wasiImports(memory, args, output) {
-	const written = new Map(); // path → bytes of files written in this instance
-	const made = new Set(); // directories made in this instance
-	const removed = new Set(); // paths deleted in this instance
+// what instances share of the file system they change: the written files (path → bytes), the folders made and the paths
+// removed, over the served ones (a compiler's output read by its driver, driver.js)
+const newOverlay = () => ({ written: new Map(), made: new Set(), removed: new Set() });
+
+// args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2); overlay: the
+// changes over the served files, the instance's own unless given
+function wasiImports(memory, args, output, overlay = newOverlay()) {
+	const { written, made, removed } = overlay;
 	const descriptors = new Map(); // fd → {path, bytes, position, append} of a file or {path, entries} of a directory
 	let nextFd = ROOT_FD + PREOPENS.size;
 	const view = () => new DataView(memory().buffer);
