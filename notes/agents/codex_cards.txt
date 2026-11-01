@@ -4,4 +4,8 @@
 # `retired: <card>`: taken back from Codex, never continued even when parked (codex_worker.sh RETIRED)
 retired: datetime-arithmetic-fail  # field/unit collision is core: warp-shaders' use-sound
 retired: sample-gaps-types         # bits/xor, dates, reflection need core (parked 6 times on 2026-10-31)
-program-using               # a program's top-level shown(…) beside units' Quantity.shown(): keep a method out of a free function's clauses, lib side first
+retired: program-using      # its next step needs core (pattern·clause·shown); back to a session
+features-docs-examples      # wiki: tonight's features (0.3̅, numerator, type of a list, callable instances, buses, text cuts) with running is! examples
+triage-approx               # ≈ and ~ with a tolerance on numbers, lists, maps (lib/; `~` on a list item fails in test_std_shadowed_names)
+tests-leave                 # tests leave chord_*.wav in test/functions: write into data/ or remove after
+runtime-docs                # wiki: runtime library documentation, checked against what runs
