@@ -9,7 +9,7 @@
 use "extended/big_ints.warp"
 use "extended/exact.warp"
 use "extended/big_ratios.warp"
-use "durations.warp"
+use "extended/durations.warp"
 use "extended/times.warp"
 use "extended/pow_tables.warp"
 use "extended/pow.warp"

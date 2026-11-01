@@ -189,6 +189,8 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
 // own sum: rust-harness:src/lowering/words/library_words.rs)
 sum(xs: list) := fold(xs, 0, +)
+// `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
+sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (lib/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
 dir_of_value(x, list_words, text_words, map_words) := if x is map then x.keys + map_words else if x is list then list_words else if x is text then text_words else []
@@ -215,11 +217,13 @@ rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol a
 rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
 // a list the program makes for the GPU (gpu_compute takes it) is made as a GPU list [f32] (decision gpu-bound-floats,
 // lib/rule_words.warp gpu_lists_packed): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks
-// for one outright
+// for one outright, `xs: [i32] = …` and `xs: [u32] = …` for one of integer cells
 rewrite $p => $q where program and $q = gpu_lists_packed($p)
 // (this rule needs gpu_compute, so the prelude's rules, the one above too, come with any program calling it)
 rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
-rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed($v)
+rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f32, $v)
+rewrite ($xs: [i32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(i32, $v)
+rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, $v)
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
