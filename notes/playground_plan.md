@@ -85,8 +85,16 @@ The page gives what the native warp gives for all 28. Each snippet is guide.md a
 | 587 | `write "f" "milk"; read "f"` | unknown name read | "milk" |
 | 799 | `law square(-x) == square(x)` | unknown name law | 9 |
 
-Markup DOM examples (element events, fine updates, components, keyed list, form binding, styles, transitions) are
-warp-web-samples' page work. Still open: lists (`[#fruits, fruits#1]` writes a comma, so native's `[3, "apple"]` may be
+Markup DOM examples (element events, fine updates, components, keyed list, form binding, styles, transitions):
+warp-web-host's page work now, on lib/markup.warp's two exports (card markup-keeps): page_render(value) is the HTML,
+handlers numbered from 1 per render as data-warp-<event>="n"; page_event(n, detail) runs one. driver.js already
+renders and handles through them (pageEventHandled). State 2026-11-01: a program exports them only with `use markup`;
+`on click {…}` in a tag becomes a markup Handler and the examples get `use web` with warp-markup's next step, so
+the tour checks wait for it. Then, verified by `test_in_browser.py --examples --firefox`, the Rust-era paths go:
+host.js page·value/page·render/page·hole(s)/on·<event>·node (renderedHtml, pageHoles, holePatches, pageEvents,
+runPageEvent, listeningRun), worker.js PAGE_VALUE and showHoles, host-compiler.js page_event, markup.js
+data-warp-instance; site.js and site-worker.js (built sites) move to page_render/page_event as driver.js did.
+Still open: lists (`[#fruits, fruits#1]` writes a comma, so native's `[3, "apple"]` may be
 right) and welcoming errors (native's new sentence carries no position).
 
 - Samples that fail natively fail identically in the page. These are core or language gaps, reported to the supervisor:
