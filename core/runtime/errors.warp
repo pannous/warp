@@ -114,6 +114,11 @@ raised(value: Node): int := {
 # a statement's dropped value (decision dropped-error-raises): an Error raises, `write(…)` into a missing folder stops
 # the run with why
 dropped_value(n: Node) := if node_is_error(n) { raised(n) }
+# a value put in a plain variable (decision errors-one-rule): an Error raises, as a dropped one does
+raised_if_error(n: Node): Node := {
+	if node_is_error(n) { raised(n) }
+	n
+}
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
 # it, the words of the word it failed in (trap_name): a raise's is the raised value, a missing field's names it
 caught_error(finished: bool, value: Node): Node := {

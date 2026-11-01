@@ -692,6 +692,9 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 	TypedCode(ValueKind.Float, kept + get_dividend + get_dividend + get_divisor + [op.f64_div, op.f64_trunc] + get_divisor + [op.f64_mul, op.f64_sub])
 }
 
+# a variable an Error raises in (decision errors-one-rule): any but an optional one (`r: json? = …`), a runtime
+# word's own, or a lowering's hidden one (try·value)
+def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and not (name in body.declared and (body.declared[name].ends_with("?") or body.declared[name] == "error"))
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
 	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
@@ -724,6 +727,7 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
+	if value.kind == ValueKind.Node and plain_place(body, name) { value = runtime_call("raised_if_error", [value]) }
 	kind = value.kind
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`

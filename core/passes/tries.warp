@@ -74,6 +74,20 @@ lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 	}
 }
 
+# a raise in v kept as the Error it raised (decision errors-one-rule): `try v catch e { e }`
+kept_raise(v: Node): Node := {
+	number = fresh_number()
+	guarded_try(v, try_name("error", number), try_name("error", number), number)
+}
+# where an Error stops the run no more (decision errors-one-rule): an optional place `r: T? = v` keeps it, `a or b` is
+# b when a raises (else `or` as ever), `x else y` is y when x raises or is ø (decision else-fallback), `x` evaluated once
+handled_form(n: Node): Node := match n {
+	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
+	Key(a, Op.Or, b): if is_call(a) then Key(kept_raise(a), Op.Or, b) else n
+	Key(x, Op.Else, y): if is_key(x, Op.Then) then n else Key(lowered_try(x, ø, ø), Op.Coalesce, y)
+	_: n
+}
+
 # `assert c else m`, `check c`: 1 when c holds, else it raises m (Rust twin: guards.rs lower_assert); not `asserted`,
 # emitter.warp's, as the compiler's files share one namespace
 assertion(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
@@ -88,7 +102,7 @@ try_form(n: Node): Node := match n {
 		if #parts == 4 and is_name(parts#4) { return lowered_try(parts#2, parts#3, parts#4) }
 		n
 	}
-	_: n
+	_: handled_form(n)
 }
 
 tries(program: Node): Node := bottom_up(program, try_form)
