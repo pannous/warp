@@ -140,7 +140,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 
 ## Tooling: format, beautify, CLI
-- prebuild-fails-loudly (user, ~10–15 core lines core/compiler.warp write_modules): a library that fails to prebuild fails the rebuild, naming the module and why; a module whose words are C imports (`… from "c"`, lib/wasmtime.warp) is source-only by itself, no marker comment.
+- prebuild-fails-loudly (user, ~10–15 core lines core/compiler.warp write_modules): a library that fails to prebuild fails the rebuild, naming the module and why; a module whose words are C imports (`… from "c"`, lib/wasmtime.warp) is source-only by itself, no marker comment. wasmtime-dropped (Interviewer): lib/wasmtime.warp (Rust-era, read C headers, structs by value, already failing) leaves std_module_names; `use wasmtime` fails loudly as an unknown module; card wasmtime-self-hosted brings it back once foreign lines take structs.
 - hello-size-exports (user): shown_at and trap_message are exported only from a program that can raise (raise/throw, a raising runtime word, a host word with arguments); hello ~1.5 KB; an engine trap in another program prints as wasmtime names it, without position.
 - sample-spellings (user): samples are rewritten to the general forms (`int[height * width]`, `(y - center)^2`) instead of new syntax; no wish cards for those.
 - drop-pure-word (user): `warp pure` is gone: plain `warp <file>` is the warp compiler (warp.wasm); `warp self` stays the self-built variant; `pure` survives only as a hidden CLI alias with a one-line note. Card drop-pure-word.

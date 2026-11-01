@@ -15,7 +15,10 @@ outer(half, 3.0)' 1.5
 is! 'use sound
 chord(t) := 0.1 * sin(2 * pi * 441 * t)
 play(chord, 0.1s)
-save(sound, "chord_signal.wav") > 0' true
+file = "chord_signal_" + str(getpid()) + ".wav"
+saved = save(sound, file) > 0
+removed = unlink(file) == 0
+saved and removed' true
 is! 'use sound
 linear block = float[512]
 chord(t) := {
@@ -23,4 +26,6 @@ chord(t) := {
   0
 }
 play_blocks(chord, linear_address(block), 0.1s)
-round(save(sound, "chord_blocks.wav") * 100)' 10
+file = "chord_blocks_" + str(getpid()) + ".wav"
+duration = round(save(sound, file) * 100)
+if unlink(file) == 0 then duration else 0' 10

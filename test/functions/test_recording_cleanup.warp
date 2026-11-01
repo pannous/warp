@@ -1,0 +1,8 @@
+# Sound recordings can be saved and removed after use (card tests-leave).
+is! 'use sound
+file = "recording_cleanup_" + str(getpid()) + ".wav"
+chord(t) := 0.1 * sin(2 * pi * 441 * t)
+play(chord, 0.1s)
+saved = save(sound, file) > 0
+removed = unlink(file) == 0
+saved and removed and not exists(file)' true
