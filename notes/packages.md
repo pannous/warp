@@ -1,9 +1,16 @@
-# Packages: `use <name>` falls back to the registry
+# Packages: used by their path
 
-- `use name` (src/modules.rs): a local `name.warp` in the search directories wins; else a builtin library; else a
-  package: an entry of `packages.warp` (repository root, compiled in with `include_str!`) or a folder of the default
-  registry github.com/pannous/warp-packages; else an FFI library. A package is fetched once into `packages/<name>`
-  below the working directory (gitignored) and its `<name>.warp` loaded like any module; without it, it only brings files.
+- Decision package-use-by-path (user 2026-11-01): the compiler searches no packages and fetches no registry. A package
+  is used by its path, `use "packages/egraph/egraph.warp"`; getting it there (a clone of
+  github.com/pannous/warp-packages, a link) is the project's business. `use <name>` names `<name>.warp` beside the
+  program, a standard module lib/<name>.warp, a C library (lib/native/<name>.warp, libc/libm, a foreign line's library)
+  or a mode of lib/modes.data (`use strict`); any other name fails the compile, "no module, library or package named
+  <name>" (card egraph-use-ignored; it was silently ignored before).
+- What follows describes the Rust compiler (branch rust-bootstrap): its registry lookup, pins and package tools are not
+  in the warp compiler.
+- `use name` (Rust, src/modules.rs): a local `name.warp` in the search directories won; else a builtin library; else a
+  package: an entry of `packages.warp` or a folder of the default registry github.com/pannous/warp-packages, fetched
+  once into `packages/<name>`; else an FFI library.
 - Default registry (packages.rs `registered`): one folder per package, `<name>/<name>.warp`
   plus the manifest `<name>/package.warp`; versions are tags `<name>@1.2.3`. Its default branch is cloned to
   `~/.cache/warp/packages/.registry`, refreshed when older than an hour (a missing folder does not force a fetch, so a C
@@ -65,8 +72,8 @@
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.warp
   and data/uniscript/. warp's tests/web/test_uniscript.rs still tests it (through `use uniscript`).
 - First registry-only extension: egraph (warp-packages/egraph, user 2026-11-01): equality saturation over code, never in
-  lib/ or core/ (notes/egraphs.md); its tests run by `warp test` in its folder. The pure compiler's `use egraph` does
-  not reach packages/ or the registry yet (card egraph-use-ignored): `use "packages/egraph/egraph.warp"` meanwhile.
+  lib/ or core/ (notes/egraphs.md); its tests run by `warp test` in its folder; programs say
+  `use "packages/egraph/egraph.warp"` (decision package-use-by-path).
 - Versions (src/lowering/data/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
   The default branch's module declares its version with a top level `version 1.2.3`; if it does not satisfy the
   requirement, the best git tag (`v1.2.3` or `1.2.3`, via `git ls-remote --tags`) is cloned into packages/<name>@<version>.
