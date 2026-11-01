@@ -1303,8 +1303,8 @@ bound_by_definition(definition: Node): list := {
 	head = untyped_head(key_of(definition))
 	if is_group(head) and #head > 1 {
 		for parameter in items_of(head)[1 ..] {
-			name = leftmost_name(parameter)
-			if name != ø { names += [name] }
+			name = parameter_name(parameter)
+			if name != "" { names += [name] }
 		}
 	}
 	declared_within(value_of(definition), names)
