@@ -368,9 +368,11 @@ def collect_functions(program: Node, functions: map): list {
 # globals, main's assignment declaring each, as Rust's late_binding makes them; one walk of each function's body finds
 # the ones it mentions (a walk for each name and function was quadratic)
 shared_names(statements: list) := {
+	# (a name main declares `global` is the module's in every function, however often main assigns it)
+	declared = statements.map(declared_global_name).filter(name => name != ø)
 	assigned = {}
 	for s in statements {
-		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol { assigned[name_of(key_of(s))] = yes }
+		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol and name_of(key_of(s)) not in declared { assigned[name_of(key_of(s))] = yes }
 	}
 	read_free = {}
 	if assigned {
@@ -386,6 +388,11 @@ shared_names(statements: list) := {
 	shared = {}
 	for name in assigned.keys { if name in read_free { shared[name] = yes } }
 	shared
+}
+# the name a statement `global name = value` or `global name` declares, else ø
+declared_global_name(s: Node): text? := {
+	declaration = if is_group(s) and bracket_of(s) == "" and #s == 2 and s#1 == symbol("global") then s#2 else if is_key(s, Op.Colon) and key_of(s) == symbol("global") then value_of(s) else ø
+	if declaration is symbol then name_of(declaration) else if is_key(declaration, Op.Assign) and key_of(declaration) is symbol then name_of(key_of(declaration)) else ø
 }
 # the names among `wanted` a walk found symbols of, each once, as mentions finds one
 class Mentions { wanted: any; found: map = {} }
