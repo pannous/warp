@@ -270,7 +270,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
 			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
@@ -582,6 +582,7 @@ function painted(run, painting) {
 // a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins.
 // Before any frame each print shows at once, so a print before a slow paint is read while it renders (card print-watch)
 function printedChunk(run, chunk) {
+	(run.printedWhole ??= []).push(chunk); // every frame's, for the report (scripts/samples-web.sh compares it with the native run's)
 	if (startsFrame(run, "printed")) {
 		showPrinted(run.printed);
 		run.printed = [];
