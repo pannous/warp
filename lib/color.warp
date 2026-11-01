@@ -28,9 +28,9 @@ hex(c: Color) := c as int
 // the low digits of n in upper-case hexadecimal, zeros in front
 padded_hex(n, digits) := join([hex_digits[(n >> 4 * (digits - 1 - i)) % 16] for i in 0..digits], "")
 // r, g, b from 0 to 255
-rgb(r, g, b) := (opaque + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)) as Color
+rgb(r: any, g: any, b: any): Color := (opaque + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)) as Color
 // hue in degrees, saturation and value from 0 to 1
-def hsv(h, s, v) {
+def hsv(h: any, s: any, v: any): Color {
 	hue = (h % 360) / 60.0
 	c = v * s
 	x = c * (1 - abs(hue % 2 - 1))
@@ -42,5 +42,5 @@ def hsv(h, s, v) {
 	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
 }
 // alpha from 0 (invisible) to 1 (opaque)
-with_alpha(color, alpha) := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216) as Color
-alpha_of(color) := color /! 16777216
+with_alpha(color: any, alpha: any): Color := ((round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216) as Color
+alpha_of(color: any): int := color /! 16777216
