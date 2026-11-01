@@ -432,7 +432,7 @@ def defined_arities(program: Node): map {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; marks: map = {} }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {} }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -784,10 +784,14 @@ def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 # `x: int or text = v` (decision union-or): x holds a node, a value of a kind no member takes is refused
 def union_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
 	if not fits_union(type_name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
-	# an int only where every member is one: `x: int|float = 1.5` holds a float
-	if union_members(type_name).all(member => aliased_type(member.remove_suffix("?")) == "int") { body.boxed_ints[name] = yes }
+	# an int only where every member is one: `x: int|float = 1.5` holds a float; with any int member its boxed whole
+	# number is that int still, `x: int|text = 3; type(x)` int, not nat (decision nat-and-int)
+	members = union_members(type_name)
+	if members.any(member => is_int_member(member)) { body.int_members[name] = yes }
+	if members.all(member => is_int_member(member)) { body.boxed_ints[name] = yes }
 	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
 }
+is_int_member(member: text): bool := aliased_type(member.remove_suffix("?")) == "int"
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused; `x: Node? = v` (any node
 # annotation, a class too: an object or ø) holds the node as it is
