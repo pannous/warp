@@ -32,3 +32,4 @@ while time < 5 {
 	sleep(1 / 60)
 	time = float(clock() - started) / 1000
 }
+"swirled for 5 s"
