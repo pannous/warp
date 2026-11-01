@@ -9,3 +9,6 @@ rewrite match $s {$arms...} => match $s {($k: $v) for (case.$k: $v) in $arms...}
 rewrite match $s {$arms...} => match $s {($k: $v) for (.$k: $v) in $arms...}
 rewrite match $s {$arms...} => match $s {($k: $v) for (case $k: $v) in $arms...}
 rewrite switch $s {$arms...} => match $s {$arms...}
+# a rule set as a value, `simplify = rules { data($a * 1) => a }`: a function rewriting code at any depth, children
+# first, each node again while a rule fits it
+rewrite rules {$arms...} => (rules_code => rewritten_everywhere(rules_code, rules_node => match rules_node {$arms..., _ => ø}))

@@ -743,6 +743,14 @@ fits_map(value: any, pattern: any, bound: map): bool := {
 	}
 	yes
 }
+// code with each part rewritten by the rule, then itself again while the rule gives code (ø: no rule fits)
+rewritten_everywhere(code: any, rule: function): any := {
+	inner = code
+	if is_type(code, "key") { inner = key(rewritten_everywhere(key_of(code), rule), op_of(code), rewritten_everywhere(value_of(code), rule)) }
+	else if is_type(code, "list") { inner = separated(bracketed(code.map(part => rewritten_everywhere(part, rule)), bracket_of(code)), separator_of(code)) }
+	rewritten = rule(inner)
+	if rewritten == ø then inner else rewritten_everywhere(rewritten, rule)
+}
 // the pieces of `"/users/" + id: int + "/x"`, texts and holes in order, a typed hole as [name, type]
 text_pieces(pattern: any): list := {
 	if not is_type(pattern, "key") { return [pattern] }

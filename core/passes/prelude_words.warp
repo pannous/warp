@@ -235,8 +235,11 @@ operated_within(name: text): list := {
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or is_pattern_definition(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
 }
+# `data($a * 1) => a`, an arm of quoted code wherever a sugar word holds it (`rules {…}`, lib/sugar/arms.warp): its
+# match is written only once the sugar fires
+is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
 # data view) a time's fields (emitter/times.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words)
