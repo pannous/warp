@@ -435,6 +435,10 @@ shader_value(value) := if value is list then value.map(shader_value) else float(
 paint(shader: text) := paint(shader, view_width(), view_height(), ø)
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
 sleep(amount) := sleep_ms(amount * 1000)
+// what a module holds per task, kept around a task and given back after it (lib/sugar/tasks.warp): nothing here, a
+// module holding some (sound's voice) defines both, which replace these
+task_context() := ø
+task_context_back(context) := ø
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)
