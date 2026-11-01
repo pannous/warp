@@ -7,7 +7,10 @@ const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
 const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
-const C_CALLS_SECTION = "warp.c_calls"; // src/modules/wasm_modules.rs C_CALLS_SECTION
+// the C functions a module calls, one line each: import module, library, name, parameter kinds (comma-separated),
+// result register, what the result crosses as, an out-pointer's pointee, -, how a failure shows
+// (core/emitter/c_functions.warp, read as core/native/driver.warp foreign_of reads it)
+const C_FUNCTIONS_SECTION = "warp.c_functions";
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
 // a promise is awaited only by an awaited run's main (host.js JSPI), not where the browser has no JSPI (Safari), nor in a
 // page event's handler, nor in a warp function JavaScript calls back (a JavaScript frame between: the engine refuses
@@ -104,68 +107,64 @@ function cText(memory, address) {
 	return bytes.slice(0, end < 0 ? bytes.length : end);
 }
 
-// the program's C calls (src/modules/wasm_modules.rs c_calls, which lists the letters) by "module\tname"
+// the program's C functions by "module\tname" (C_FUNCTIONS_SECTION)
 function cCalls(run) {
 	if (!run.cCalls) {
-		const lines = WebAssembly.Module.customSections(run.module, C_CALLS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
-		run.cCalls = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, name, parameters, result]) =>
-			[`${module}\t${name}`, { parameters: [...parameters], result }]));
+		const lines = WebAssembly.Module.customSections(run.module, C_FUNCTIONS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
+		run.cCalls = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, , name, parameters, register, crossing, pointee, , failure]) =>
+			[`${module}\t${name}`, { parameters: parameters ? parameters.split(",") : [], register, crossing, pointee, failure }]));
 	}
 	return run.cCalls;
 }
 
-// a C function of a module, called with the program's values: each text (a NUL-terminated copy in the program's memory,
-// or a pointer and length) is copied into a block of the module's malloc, each out-pointer gets a NULL slot there, each
-// buffer a block of its capacity and a length slot, all freed after the call; a char * result (or char ** out-pointer,
-// or the bytes a buffer received) is read back as a text of the program (NULL is ø)
+// a C function of a module, called with the program's values as driver.warp c_called calls one: each text (ptr) a
+// NUL-terminated copy in a block of the module's malloc, a list of texts (texts) a NULL-terminated array of them, a
+// text or list of bytes (bytes) its bytes and their count for a following length, the first out-pointer a NULL slot
+// there, all freed after the call; a text result (text, owned_text) is read back as a text of the program (NULL is ø)
 function callC(holder, exports, member, call, values, what) {
 	const program = holder.exports;
 	const blocks = [];
-	const outSlots = [];
-	const buffers = [];
-	const moduleArguments = [];
 	const malloc = bytes => {
-		if (!exports.malloc) throw new Error(`${what} takes a text, buffer or out-pointer, but its module exports no malloc(size)`);
+		if (!exports.malloc) throw new Error(`${what} takes a text or out-pointer, but its module exports no malloc(size)`);
 		const block = exports.malloc(bytes.length);
 		new Uint8Array(exports.memory.buffer).set(bytes, block);
 		blocks.push(block);
 		return block;
 	};
-	const u32 = count => new Uint8Array(new Uint32Array([count]).buffer);
-	const remaining = [...values];
-	(call?.parameters ?? values.map(() => "n")).forEach((letter, index) => {
-		if (letter === "o") return moduleArguments.push(outSlots[outSlots.push(malloc(u32(0))) - 1]);
-		if (letter === "k") return moduleArguments.push((buffers.at(-1).slot = malloc(u32(buffers.at(-1).capacity))));
-		const value = remaining.shift();
-		if (letter === "l") return; // the length of the text before it, libc.wasm reads up to the NUL
-		if (letter === "b") return moduleArguments.push(buffers[buffers.push({ capacity: Number(value) }) - 1].block = malloc(new Uint8Array(Number(value))));
-		if (letter !== "t") return moduleArguments.push(value);
-		const length = ["l", "s"].includes(call.parameters[index + 1]) ? Number(remaining[0]) : undefined;
-		const text = length === undefined ? cText(program.memory, value) : new Uint8Array(program.memory.buffer, value, length).slice();
-		moduleArguments.push(malloc([...text, 0]));
-	});
-	const returned = member(...moduleArguments);
-	const textOf = bytes => bytes === null ? program.new_empty() : program.new_text(...writeBytes(program, bytes));
+	const textBlock = value => malloc([...utf8.encode(guestText(program, value)), 0]);
+	const bytesOf = value => isGuestText(program, value) ? utf8.encode(guestText(program, value)) : guestInts(program, value).map(byte => byte & 0xff);
 	const memory = () => new DataView(exports.memory.buffer);
-	const received = () => {
-		const address = memory().getUint32(outSlots[0], true);
-		if (address === 0) throw new Error(`${what} gave nothing through its out-pointer (C status ${returned ?? 0})`);
-		return address;
-	};
-	const bufferBytes = () => {
-		if (returned !== 0) throw new Error(`${what} failed (C status ${returned})`);
-		const { block, slot } = buffers[0];
-		return new Uint8Array(exports.memory.buffer, block, memory().getUint32(slot, true)).slice();
-	};
-	const value = {
-		t: () => textOf(returned === 0 ? null : cText(exports.memory, returned)),
-		u: () => BigInt(returned >>> 0),
-		ot: () => textOf(cText(exports.memory, received())),
-		on: () => received() | 0,
-		b: () => textOf(bufferBytes()),
-	}[call?.result]?.() ?? returned;
+	let out, bytesLength = 0;
+	const remaining = [...values];
+	const moduleArguments = (call?.parameters ?? values.map(() => "i64")).map(kind => {
+		if (kind === "out") return out ??= malloc(new Uint8Array(4));
+		if (kind === "length") return BigInt(bytesLength);
+		const value = remaining.shift();
+		if (kind === "ptr") return textBlock(value);
+		if (kind === "texts") {
+			const pointers = new Uint32Array([...guestItems(program, value).map(textBlock), 0]);
+			return malloc(new Uint8Array(pointers.buffer));
+		}
+		if (kind === "bytes") {
+			const bytes = bytesOf(value);
+			bytesLength = bytes.length;
+			return malloc(bytes);
+		}
+		return value;
+	});
+	let returned = member(...moduleArguments);
+	const asNumber = Number(returned ?? 0);
+	if ((call?.failure === "not_null" && asNumber !== 0) || (call?.failure === "false" && (asNumber & 0xff) === 0)) throw new Error(`${what} failed, C result ${returned}`);
+	if (call?.pointee) {
+		returned = out === undefined ? 0 : memory().getUint32(out, true);
+		if (returned === 0) throw new Error(`${what} gave no ${call.pointee}, C status ${asNumber}`);
+	}
+	const cTextResult = () => returned === 0 ? program.new_empty() : newGuestText(program, utf8Decoder.decode(cText(exports.memory, Number(returned))));
+	const result = call?.crossing === "text" || call?.crossing === "owned_text" ? cTextResult()
+		: call?.register === "bool" ? (Number(returned) & 0xff ? 1 : 0)
+		: call?.register === "i64" ? BigInt(returned ?? 0) : returned;
 	if (exports.free) blocks.forEach(block => exports.free(block));
-	return value;
+	return result;
 }
 
 // libc.wasm, instantiated once per worker: its WASI imports serve only stdio, which nothing here reaches
