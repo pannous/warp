@@ -15,6 +15,8 @@ gpu_list_kind(): int := Kind.List + BracketCode.Square * KindUnit.Info + KindUni
 is_gpu_list(n: Node): bool := not is_null(n) and kind_code(n) == Kind.List and bits_and(marked_kind(n), KindUnit.GpuList) != 0
 gpu_list_address(n: Node): int := shifted_right(unboxed_int(n), 32)
 gpu_list_count(n: Node): int := bits_and(unboxed_int(n), address_unit() - 1)
+# where a host finds a GPU list's cells: (address << 32) + count, -1 for any other value (core/emitter/host.warp)
+gpu_list_place(n: Node): int := if is_gpu_list(n) then unboxed_int(n) else -1
 # count zeros in pages grown for them (a grown page is zero)
 gpu_zeros(count: int): Node := {
 	pages = int_quotient(count * cell_bytes() + page_bytes() - 1, page_bytes())

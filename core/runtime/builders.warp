@@ -34,6 +34,10 @@ built_bytes(address: int, length: int, info: int): Node := {
 	for i in 0..<length { items += [held(memory_byte(address + i))] }
 	list_node(info * KindUnit.Info + Kind.List, items)
 }
+# a list of ints or floats the host left in linear memory, i64 or f64 cells (BigInt64Array, Float64Array): built in one
+# call, where new_list's cell at a time copies the list built so far (card list-cell-build)
+built_ints(address: int, count: int, info: int): Node := list_node(info * KindUnit.Info + Kind.List, [held(memory_i64(address + 8 * i)) for i in 0..<count])
+built_floats(address: int, count: int, info: int): Node := list_node(info * KindUnit.Info + Kind.List, [held(memory_f64(address + 8 * i)) for i in 0..<count])
 # code's lists the native warp's parse_code rebuilds (core/native/driver.warp code_built): the items, a square list
 # (ø for none), with the bracket and separator their spellings name; its keys take the operator so too, key_node
 built_spelled_list(items: Node, bracket: Node, separator: Node): Node := separated_node(bracketed_node(items, bracket), separator)
