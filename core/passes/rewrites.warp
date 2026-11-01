@@ -86,7 +86,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # `where $f takes number`: a first parameter typed one of these
 number_word = "number"
-numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real"]
+numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real", "real"]
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
@@ -95,14 +95,8 @@ one_word = "one"
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
 # their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
-# the compiler extensions (notes/agents/common.md: new capabilities, one file each in core/extensions/), applied
-# with the first sugar, ahead of it: data_items reads the names in `[a, b]` before the later sugar steps could see them.
-# A new extension adds its line here.
-extension_module_names = [
-	"compiler/extensions/tuples"
-	"compiler/extensions/safe_navigation"
-]
-first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/arms", "sugar/heads", "sugar/test_words"]
+# tuples and safe navigation first: data_items reads the names in `[a, b]` before the later sugar steps could see them
+first_sugar_module_names = ["sugar/tuples", "sugar/safe_navigation", "sugar/lists", "sugar/arms", "sugar/heads", "sugar/test_words"]
 # every other file of lib/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
 sugar_folder = "sugar/"
 placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
@@ -118,7 +112,7 @@ comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage", "frames", "signals"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage", "frames", "signals", "timers"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)

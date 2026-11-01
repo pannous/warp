@@ -33,3 +33,23 @@ key_name(code) := if code == 0 then "" else KEY_NAMES.get(code) ?? chr(code).low
 held_key() := key_name(system_value("key code held")) as Key
 // `on Key.escape {…}`: the block runs each frame the key is held
 on(key: Key, body: block) := frame_listened(event => if held_key == key then body() else ø, no)
+// `on key {…}`: the block runs once as a key goes down, `key` that key (`if key == ESC`, `key == "s"`), checked each
+// frame of the window before the frame's own listeners (lib/frames.warp)
+rewrite listen(data key, $listener, $once) => key_listened($listener)
+global key_listeners = []
+global pressed_key = Key.none
+global code_before = 0
+key() := pressed_key
+key_listened(listener: function): int := {
+	if count(key_listeners) == 0 { frame_listened(event => keys_went_down(), no) }
+	key_listeners = key_listeners + [listener]
+	count(key_listeners)
+}
+keys_went_down() := {
+	code = system_value("key code held")
+	if code != 0 and code != code_before {
+		pressed_key = key_name(code) as Key
+		for listener in key_listeners { listener(pressed_key) }
+	}
+	code_before = code
+}

@@ -3,7 +3,8 @@
 # into the wet paper, bloom along its grain and dry with dark tide lines at their edges; a long stroke runs dry.
 # Pigments mix as paint does, subtractively: blue into wet yellow turns green. Hold W while painting to smudge with
 # clear water (the brush lifts pigment instead of laying it), scroll for the hue, shift + scroll for the brush size,
-# R turns the hue as you paint (a rainbow), D drops a wash at the centre, space clears the paper.
+# R turns the hue as you paint (a rainbow), D drops a wash at the centre, space clears the paper. The window resizes
+# keeping the paper's shape; F fills the screen with it, Escape leaves full screen, then ends.
 # Water flow, pigment transport, settling and drying run on the GPU (gpu_compute), two steps a frame, over GPU lists
 # [f32] it changes where they are (paper, wet, pixels: each made once and handed only to gpu_compute)
 use keys
@@ -140,6 +141,8 @@ fn conductance(a: vec2f, b: vec2f, wa: f32, wb: f32) -> f32 {
 paper = float[cells * state_size]
 wet = float[cells * state_size]
 pixels = float[cells]
+# the brush the shader reads, its cells set each step: a list made anew each step would take new memory each time
+global brush = float[9]
 global hue = 220.0
 global radius = 9.0
 global rainbow = no
@@ -151,8 +154,10 @@ global last_y = 0.0
 
 # steps_per_frame steps of the paper, the brush down at x, y unless pressed is 0 (no brush: the paper only flows and dries)
 def painted(x, y, pressed, size, stroke_hue, stroke_load, smudging, clearing = 0) {
+	settings = [x, y, size, pressed, stroke_hue, stroke_load, smudging, 0, clearing]
+	for setting in 1 to #settings { brush#setting = settings#setting }
 	for phase in 0..steps_per_frame {
-		brush = [x, y, size, pressed, stroke_hue, stroke_load, smudging, phase, clearing]
+		brush#8 = phase
 		gpu_compute(step, {paper: paper, wet: wet, brush: brush, pixels: pixels}, cells / 64 + 1)
 	}
 }
@@ -174,7 +179,8 @@ stroked(90, 50, 210, 160, 10, 225, 40)
 dried(120)
 
 on key {
-	if key == ESC: exit()
+	if key == ESC: if window.fullscreen { window.fullscreen = no } else { exit() }
+	if key == "f": window.fullscreen = not window.fullscreen
 	if key == SPACE: painted(0, 0, 0, 0, 0, 0, 0, 1)
 	if key == "r": rainbow = not rainbow
 	if key == "d": for moment in 0..6 { painted(width / 2, height / 2, 1, 40, hue, 1, 0) }

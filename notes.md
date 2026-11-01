@@ -47,3 +47,5 @@
 - module-imports (550dee2568): full.wasm imports only host words its code reaches, unreached runtime callers go to one
   trapping stub per type: hello 81 -> 1 imports. Trap: the seed keeps the FIRST of two defs of a word silently (a
   duplicate runtime_import_entries dropped the type byte; card compiler-word-redefinition); map int .keys with < traps
+
+- 2026-11-01 16:30: builds crawled (each warp rebuild ~19% CPU, a 5-min compile >1 h) with the CPU 54% idle: every process of ours at ps pri 4 (Terminal, tmux, claude, warp) while Factorio ran full screen (pri 97). Most likely cause: macOS Game Mode moves background work to the efficiency cores. Check `ps -axo pri,command` when builds are slow.
