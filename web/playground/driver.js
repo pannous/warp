@@ -12,7 +12,13 @@ const COMPILER_URL = `../../${COMPILER_FOLDER}/warp.wasm`;
 const COMPILED_PATH = "/tmp/warp-program.wasm";
 // the program typed in the page when it is no sample's file: at the repository root, as `warp playground.warp` there
 const TYPED_FILE = "playground.warp";
+// the compiler reads the standard modules of this lib/ (core/parsing/parser.warp warp_lib), as the native warp tells it
+const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
+// a program runs as `warp <file>` runs it, which serves a program's routes: here the page's requests (lib/web.warp)
+const PROGRAM_ENVIRONMENT = [...ENVIRONMENT, "WARP_SERVE=page"];
 const FAILURE_STATUS = 1;
+const STDOUT = 1;
+const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
 
 let compilerModule; // warp.wasm compiled once; each compile gets a fresh instance, as each native run a fresh store
 
@@ -41,7 +47,8 @@ function withWasi(imports, wasi) {
 // ended it with); a trap's sentence to stderr
 function ranToEnd(exports, output, exitCode = () => undefined) {
 	try {
-		(exports._start ?? exports.main)();
+		if (exports._start) exports._start();
+		else printedResult(exports.main(), output);
 		return 0;
 	} catch (failure) {
 		if (failure instanceof WasiExit) return failure.code;
@@ -49,6 +56,22 @@ function ranToEnd(exports, output, exitCode = () => undefined) {
 		output(`${raisedMessage(exports, failure)}\n`, STDERR);
 		return FAILURE_STATUS;
 	}
+}
+
+// what a primitive module's main gave, printed as its kind is (driver.warp print_result): an int, a float as C's %.17g
+function printedResult(result, output) {
+	if (typeof result === "bigint" || Number.isInteger(result)) output(`${result}\n`, STDOUT);
+	else if (typeof result === "number") output(`${shortestG(result)}\n`, STDOUT);
+}
+
+// a float as C's gcvt(x, 17) writes it: 17 significant digits, trailing zeros dropped, an exponent below 1e-4 and from 1e17
+function shortestG(x) {
+	if (!Number.isFinite(x)) return Number.isNaN(x) ? "nan" : x > 0 ? "inf" : "-inf";
+	const exponent = x === 0 ? 0 : Math.floor(Math.log10(Math.abs(x)));
+	const trimmed = digits => digits.includes(".") ? digits.replace(/0+$/, "").replace(/\.$/, "") : digits;
+	if (exponent >= -4 && exponent < FLOAT_DIGITS) return trimmed(x.toPrecision(FLOAT_DIGITS));
+	const [mantissa, power] = x.toExponential(FLOAT_DIGITS - 1).split("e");
+	return `${trimmed(mantissa)}e${power[0]}${power.slice(1).padStart(2, "0")}`;
 }
 
 // what a run failed in, as every host says it (driver.warp raised_message): the module's trap_message, else the
@@ -103,7 +126,7 @@ function ranSaying(exports, print, exitCode) {
 function compiledProgram(file, print) {
 	let exports;
 	const args = [COMPILER_LIBRARY + "/warp.wasm", file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`];
-	const wasi = wasiImports(() => exports.memory, args, print, programFiles);
+	const wasi = wasiImports(() => exports.memory, args, print, programFiles, COMPILER_ENVIRONMENT);
 	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
 	const { status, said } = ranSaying(exports, print);
 	const module = programFiles.written.get(COMPILED_PATH);
@@ -114,8 +137,8 @@ function compiledProgram(file, print) {
 
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
-	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
-	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles);
+	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks };
+	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, PROGRAM_ENVIRONMENT);
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };

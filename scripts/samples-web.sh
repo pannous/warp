@@ -12,5 +12,5 @@ main_checkout=$(git -C "$tree" worktree list --porcelain | sed -n '1s/^worktree 
 for outputs in "$tree/data/samples/out" "$main_checkout/data/samples/out"; do
 	[ -d "$outputs" ] && break
 done
-[ -f "$tree/web/playground/warp.wasm" ] || { echo "error: $tree/web/playground/warp.wasm is missing: web/playground/build.sh" >&2; exit 2; }
+[ -f "$tree/web/playground/warp-lib/warp.wasm" ] || { echo "error: $tree/web/playground/warp-lib/warp.wasm is missing: web/playground/build.sh" >&2; exit 2; }
 WARP_NATIVE_OUTPUTS=$outputs exec python3 "$tree/web/playground/test_in_browser.py" --samples "$@"

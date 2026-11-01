@@ -130,8 +130,8 @@ const newOverlay = () => ({ written: new Map(), made: new Set(), removed: new Se
 const contentBytes = content => typeof content === "string" ? utf8.encode(content) : content;
 
 // args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2); overlay: the
-// changes over the served files, the instance's own unless given
-function wasiImports(memory, args, output, overlay = newOverlay()) {
+// changes over the served files, the instance's own unless given; environment: its variables, NAME=value each
+function wasiImports(memory, args, output, overlay = newOverlay(), environment = ENVIRONMENT) {
 	const { written, made, removed, kept = () => {}, forgotten = () => {} } = overlay;
 	const descriptors = new Map(); // fd → {path, bytes, position, append} of a file or {path, entries} of a directory
 	let nextFd = ROOT_FD + PREOPENS.size;
@@ -192,8 +192,8 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 	const known = {
 		args_get: (pointers, buffer) => writeStrings(args, pointers, buffer),
 		args_sizes_get: (count, size) => writeSizes(args, count, size),
-		environ_get: (pointers, buffer) => writeStrings(ENVIRONMENT, pointers, buffer),
-		environ_sizes_get: (count, size) => writeSizes(ENVIRONMENT, count, size),
+		environ_get: (pointers, buffer) => writeStrings(environment, pointers, buffer),
+		environ_sizes_get: (count, size) => writeSizes(environment, count, size),
 		clock_time_get: (_id, _precision, time) => {
 			view().setBigUint64(time, BigInt(Math.round((performance.timeOrigin + performance.now()) * 1e6)), true);
 			return ERRNO.SUCCESS;

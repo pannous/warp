@@ -159,12 +159,60 @@ function callC(holder, exports, member, call, values, what) {
 		returned = out === undefined ? 0 : memory().getUint32(out, true);
 		if (returned === 0) throw new Error(`${what} gave no ${call.pointee}, C status ${asNumber}`);
 	}
-	const cTextResult = () => returned === 0 ? program.new_empty() : newGuestText(program, utf8Decoder.decode(cText(exports.memory, Number(returned))));
-	const result = call?.crossing === "text" || call?.crossing === "owned_text" ? cTextResult()
-		: call?.register === "bool" ? (Number(returned) & 0xff ? 1 : 0)
-		: call?.register === "i64" ? BigInt(returned ?? 0) : returned;
+	const result = crossedResult(program, call, returned, address => utf8Decoder.decode(cText(exports.memory, Number(address))));
 	if (exports.free) blocks.forEach(block => exports.free(block));
 	return result;
+}
+
+// a C function's result as the program takes it (driver.warp c_result): a text (NULL is ø, textOf reads it), a
+// handle's id, a yes/no, an i64 or an i32
+function crossedResult(program, call, returned, textOf) {
+	if (call?.crossing === "text" || call?.crossing === "owned_text") return !returned ? program.new_empty() : newGuestText(program, textOf(returned));
+	if (call?.crossing === "handle" || call?.register === "i32") return Number(returned ?? 0) | 0;
+	if (call?.register === "bool") return Number(returned) & 0xff ? 1 : 0;
+	if (call?.register === "i64") return BigInt(returned ?? 0);
+	return returned;
+}
+
+// a C library the page answers in JavaScript (natively a shared library): `functions(name)` gives a C function as a
+// JavaScript one, which takes a text as a string and gives one so, its numbers and handles' ids as they cross
+function libraryInJs(holder, library, functions) {
+	return new Proxy({}, {
+		get: (_, name) => (...values) => {
+			const member = functions(name);
+			if (!member) throw new Error(`${library}.${name} is not available in the browser`);
+			const call = cCalls(holder.run).get(`${library}\t${name}`);
+			const program = holder.exports;
+			const remaining = [...values];
+			const given = (call?.parameters ?? []).filter(kind => kind !== "out" && kind !== "length")
+				.map(kind => (value => kind === "ptr" ? guestText(program, value) : value)(remaining.shift()));
+			return crossedResult(program, call, member(...given), text => text);
+		},
+	});
+}
+
+// dlopen of one of warp's own libraries beside the executable (lib/sound.warp: @executable_path/libwarp_sound.dylib):
+// a handle when the page has it (host-sound.js PAGE_LIBRARIES), else 0, as for a library that is not there
+const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
+const PAGE_LIBRARY_HANDLE = 1;
+
+// the C functions of stdio a program reaches without a file (lib/sound.warp said: fdopen(2, "w"), fputs, fflush): a
+// FILE * is its descriptor, what it puts goes to the run's output; and dlopen of warp's own libraries
+const pageStdio = hooks => ({
+	fdopen: descriptor => descriptor,
+	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
+	fflush: () => 0,
+	dlopen: path => self.PAGE_LIBRARIES?.has(path.match(OWN_LIBRARY)?.[1]) ? PAGE_LIBRARY_HANDLE : 0,
+});
+
+// `use python` (lib/native/python.warp: the Python C API, natively libpython's) answered by Pyodide's Python
+// (python_capi.py), loaded before the run (worker.js prepareForeignRuntimes)
+function pythonLibrary(holder) {
+	return libraryInJs(holder, "python", name => {
+		if (!self.pythonCapi) throw new Error(`python.${name}: Python is not loaded in this page (Pyodide)`);
+		const member = self.pythonCapi.get(name);
+		return member && ((...values) => member(...values));
+	});
 }
 
 // libc.wasm, instantiated once per worker: its WASI imports serve only stdio, which nothing here reaches
@@ -177,9 +225,10 @@ function libcExports() {
 }
 
 // `use c` in the browser: the program's C calls go to libc.wasm (natively warp opens the system libc)
-function libcImports(holder) {
+function libcImports(holder, hooks) {
+	const stdio = libraryInJs(holder, "c", name => pageStdio(hooks)[name]);
 	return new Proxy({}, {
-		get: (_, name) => (...values) => {
+		get: (_, name) => name in pageStdio(hooks) ? stdio[name] : (...values) => {
 			const exports = libcExports();
 			const member = exports[name];
 			if (typeof member !== "function") throw new Error(`c.${name} is not available in the browser (web/playground/lib/build_libc.sh lists libc.wasm's functions)`);
@@ -296,10 +345,11 @@ addHostPart({
 			foreign_call: holder.awaited ? awaitingCall(foreignCall) : foreignCall,
 		};
 	},
-	imports: holder => ({
+	imports: (holder, hooks) => ({
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
-		c: libcImports(holder),
+		c: libcImports(holder, hooks),
+		python: pythonLibrary(holder),
 		// `use { memory, table } from "env"` (src/run/wasm_reader.rs define_imported_entities): a fresh memory and table
 		env: {
 			get memory() { return new WebAssembly.Memory({ initial: IMPORTED_MEMORY_PAGES }); },
