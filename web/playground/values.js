@@ -9,6 +9,7 @@
 // until the page compiles with the self-hosted compiler only (card wasm-playground-build), then they are these
 const selfHosted = program => !program.reflect_value;
 const plainValue = (program, value) => selfHosted(program) ? guestPlain(program, value) : plainOfTree(readNode(program, value));
+const errorValue = (program, reason) => selfHosted(program) ? newGuestError(program, reason) : errorInProgram(program, reason);
 const builtValue = (program, plain) => selfHosted(program) ? newGuestValue(program, plain) : buildValue(program, treeOfPlain(plain));
 
 const SHOWN_TEXT_SHIFT = 2n ** 32n; // driver.warp TEXT_SHIFT
