@@ -82,7 +82,7 @@ kept_raise(v: Node): Node := {
 # where an Error stops the run no more (decision errors-one-rule): an optional place `r: T? = v` keeps it (a value's
 # `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {
-	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
+	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and is_call(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
 	_: n
 }
 
