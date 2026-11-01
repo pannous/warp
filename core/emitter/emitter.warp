@@ -695,6 +695,7 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 # a variable an Error raises in (decision errors-one-rule): any but an optional one (`r: json? = …`), a runtime
 # word's own, or a lowering's hidden one (try·value)
 def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and not (name in body.declared and (body.declared[name].ends_with("?") or body.declared[name] == "error"))
+def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and plain_place(body, name) then runtime_call("raised_if_error", [value]) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
 	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
@@ -727,7 +728,7 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
-	if value.kind == ValueKind.Node and plain_place(body, name) { value = runtime_call("raised_if_error", [value]) }
+	value = place_checked(body, name, value)
 	kind = value.kind
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`
@@ -855,8 +856,9 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	if not (is_key(declaration, Op.Assign) and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
-	body.globals[name_of(key_of(declaration))] = yes
-	declare_global(global_key(body, name_of(key_of(declaration))), expression_code(body, value_of(declaration)))
+	name = name_of(key_of(declaration))
+	body.globals[name] = yes
+	declare_global(global_key(body, name), place_checked(body, name, expression_code(body, value_of(declaration))))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
 	if name not in module.globals and value.mark != 0 { module.global_marks[name] = value.mark }
@@ -1296,6 +1298,8 @@ def negation(body: Body, value: TypedCode): TypedCode {
 logical_words = {and: "and", or: "or"}
 def logical(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	a = expression_code(body, left)
+	# a value's `a or b` is b when a raises (decision errors-one-rule): a call giving a node is read under a try
+	if symbol == "or" and a.kind == ValueKind.Node and is_call(left) and not body.function.is_runtime { a = expression_code(body, kept_raise(left)) }
 	if a.kind == ValueKind.Bool and is_answered(a.code, symbol) { return a }
 	logical_code(body, symbol, a, nested(body, right, 1))
 }
@@ -1440,7 +1444,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime = {}
 	module.globals = {}
 	module.global_order = []
-	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text)
+	# (a value's `f(x) or b` too, logical reading f(x) under a try)
+	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text) or #nodes_kept(program, n => is_key(n, Op.Or) and is_call(key_of(n))) > 0
 	if module.catches_errors { declared_global(try_depth_name, ValueKind.Int) }
 	# the name of the runtime word a run failed in, which error_sentences.warp reads
 	declared_global(trap_name_global, ValueKind.Node)
