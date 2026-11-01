@@ -201,8 +201,12 @@ const sizeOf = path => { const content = writtenOrRead(path); return typeof cont
 
 function forgetWritten(path) {
 	if (!writtenFiles.delete(filePath(path))) throw new Error(`${path}: no such file among the page's written files`);
-	if (self.keepStored) databaseObjects("readwrite", DATABASE.files).then(objects => requested(objects.delete(filePath(path))));
+	forgetKeptFile(path);
 	return null;
+}
+// a written file no longer kept in IndexedDB
+function forgetKeptFile(path) {
+	if (self.keepStored) databaseObjects("readwrite", DATABASE.files).then(objects => requested(objects.delete(filePath(path))));
 }
 
 const isDatabase = file => file.endsWith(DATABASE_STORE);

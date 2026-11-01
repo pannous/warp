@@ -36,6 +36,7 @@ function textCoverage(words, size) {
 
 // u32s as a list of Ints, built in one call of the program's ints_to_list (gpu_render's pixels); undefined without it
 function listOfInts(program, ints) {
+	if (selfHosted(program)) return newGuestValue(program, ints);
 	const address = program.ints_to_list && scratch(program, ints.byteLength);
 	if (address === undefined) return undefined;
 	new Uint32Array(program.memory.buffer, address, ints.length).set(ints);
@@ -46,6 +47,7 @@ function listOfInts(program, ints) {
 // samples), their magnitudes as the low and high 32 bits of each (Int32Array): a view of the program's memory, valid
 // until it runs on. Undefined for any other value or without list_to_ints, which the caller reads node by node
 function intHalvesOfList(program, list, room) {
+	if (selfHosted(program)) return isGuestText(program, list) ? undefined : halvesOf(guestInts(program, list, Math.min(room, guestCount(program, list))));
 	const address = program.list_to_ints && scratch(program, room * BigInt64Array.BYTES_PER_ELEMENT);
 	if (address === undefined) return undefined;
 	const count = program.list_to_ints(list, address, room);
@@ -117,8 +119,8 @@ addHostPart({
 	words: (holder, hooks, { program }) => ({
 		// text_coverage(words, size) (label of use draw, card paint-text): the words set by the browser's canvas
 		text_coverage: (words, size) => {
-			const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
-			return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
+			const covered = textCoverage(String(plainValue(program(), words)), Number(size));
+			return listOfInts(program(), covered) ?? builtValue(program(), Array.from(covered));
 		},
 		// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings);
 		// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234), in the
@@ -127,7 +129,7 @@ addHostPart({
 			if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 			[width, height] = [Number(width), Number(height)];
 			const halves = intHalvesOfList(program(), pixels, width * height);
-			const painted = halves ?? plainOfTree(readNode(program(), pixels));
+			const painted = halves ?? plainValue(program(), pixels);
 			if (typeof painted === "string") {
 				if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
 				const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
@@ -142,10 +144,10 @@ addHostPart({
 		save_picture: (pixels, width, height, file) => {
 			if (!hooks.savePicture) throw new Error("save: no page here to download the picture to");
 			[width, height] = [Number(width), Number(height)];
-			const halves = intHalvesOfList(program(), pixels, width * height) ?? halvesOf(plainOfTree(readNode(program(), pixels)));
+			const halves = intHalvesOfList(program(), pixels, width * height) ?? halvesOf(plainValue(program(), pixels));
 			const words = new Int32Array(width * height);
 			for (let at = 0; at < words.length; at++) words[at] = shadeWord(halves[2 * at], halves[2 * at + 1]);
-			hooks.savePicture(String(plainOfTree(readNode(program(), file))), words, width, height);
+			hooks.savePicture(String(plainValue(program(), file)), words, width, height);
 		},
 	}),
 });
