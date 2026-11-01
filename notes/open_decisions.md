@@ -5,11 +5,10 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+- map-all-canonical (user wants `moved all particles` canonical over `particles.map(moved)`): conflicts with the quantifier all(xs, f): bool (`even all xs`: map or test?).
+- int-overflow-shape (warp-quality review): keep ~23 lines, or the bit-trick sum test (−8 lines, reads worse)?
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
-- hello-size-exports (core ~20 lines): shown_at/trap_message exported only from programs that can raise; hello 25.8 KB → ~1.5 KB, but other programs' engine traps lose `at 1:15`.
-- one-duration: `2 hours` and time literals are one duration type; day/week/month/year calendar, compared on bounds, undecidable comparisons an error.
-- sample-spellings: samples rewritten to the spec (`int[height * width]`, `(y - center)^2`, `particles.map(moved)`); keep the originals as language wishes?
 - charged-values-no-pass: a new pass charged_values landed without the user's yes; being folded into a sugar rule. Keep the fold, or allow the pass?
 
 ## Parked
