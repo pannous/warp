@@ -65,6 +65,7 @@ const bytesOf = request => Uint8Array.from(request.responseText, character => ch
 // known without asking the server
 function listing(directory) {
 	if (listings.has(directory)) return listings.get(directory);
+	if (typeof SERVED_FILES !== "undefined") return servedListing(directory);
 	const exists = directory === "" || listing(parentOf(directory))?.get(nameOf(directory));
 	const request = exists ? requestSync("GET", `${FILE_ROOT}${directory}${directory ? "/" : ""}?listing`) : null;
 	const entries = request && new Map([...request.responseText.matchAll(LISTING_LINK)].map(match => {
@@ -73,6 +74,21 @@ function listing(directory) {
 	}));
 	listings.set(directory, entries);
 	return entries;
+}
+
+// a directory's entries from the files the server has (served-files.js, build.sh), no request: every listing at once
+function servedListing(directory) {
+	if (!listings.size) {
+		for (const file of SERVED_FILES) {
+			const parts = file.split("/");
+			parts.forEach((name, index) => {
+				const parent = parts.slice(0, index).join("/");
+				if (!listings.has(parent)) listings.set(parent, new Map());
+				listings.get(parent).set(name, index < parts.length - 1);
+			});
+		}
+	}
+	return listings.get(directory) ?? null;
 }
 
 const headers = new Map(); // header URL → its lazy file or null, for every test of this worker
@@ -102,11 +118,17 @@ function served(path) {
 	return isDirectory ? { entries: new Set(listing(path).keys()) } : lazyFile(FILE_ROOT + path);
 }
 
-// args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2)
-function wasiImports(memory, args, output) {
-	const written = new Map(); // path → bytes of files written in this instance
-	const made = new Set(); // directories made in this instance
-	const removed = new Set(); // paths deleted in this instance
+// what instances share of the file system they change: the written files (path → bytes, or a text), the folders made
+// and the paths removed, over the served ones (a compiler's output read by its driver, driver.js); kept(path, bytes)
+// after a file was written and closed, forgotten(path) after one was removed, where a host keeps them (a page's
+// IndexedDB)
+const newOverlay = () => ({ written: new Map(), made: new Set(), removed: new Set() });
+const contentBytes = content => typeof content === "string" ? utf8.encode(content) : content;
+
+// args: the program's argument list (argv[0] first); output(text, fd) receives stdout (1) and stderr (2); overlay: the
+// changes over the served files, the instance's own unless given
+function wasiImports(memory, args, output, overlay = newOverlay()) {
+	const { written, made, removed, kept = () => {}, forgotten = () => {} } = overlay;
 	const descriptors = new Map(); // fd → {path, bytes, position, append} of a file or {path, entries} of a directory
 	let nextFd = ROOT_FD + PREOPENS.size;
 	const view = () => new DataView(memory().buffer);
@@ -116,7 +138,7 @@ function wasiImports(memory, args, output) {
 	// what is at a path, the overlay first
 	function lookup(path) {
 		if (removed.has(path)) return null;
-		if (written.has(path)) return { bytes: written.get(path) };
+		if (written.has(path)) return { bytes: contentBytes(written.get(path)) };
 		const children = path => [...written.keys(), ...made].filter(child => parentOf(child) === path && !removed.has(child)).map(nameOf);
 		if (made.has(path)) return { entries: new Set(children(path)) };
 		const found = served(path);
@@ -191,6 +213,7 @@ function wasiImports(memory, args, output) {
 					grown.set(chunk, start);
 					file.bytes = grown;
 					file.position = start + length;
+					file.changed = true;
 					written.set(file.path, file.bytes);
 				} else output(utf8Decoder.decode(chunk), fd);
 				total += length;
@@ -219,7 +242,13 @@ function wasiImports(memory, args, output) {
 			view().setBigUint64(position, BigInt(file.position), true);
 			return ERRNO.SUCCESS;
 		},
-		fd_close: fd => descriptors.delete(fd) ? ERRNO.SUCCESS : ERRNO.BADF,
+		fd_close: fd => {
+			const file = descriptors.get(fd);
+			if (!file) return ERRNO.BADF;
+			if (file.changed) kept(file.path, file.bytes);
+			descriptors.delete(fd);
+			return ERRNO.SUCCESS;
+		},
 		fd_sync: () => ERRNO.SUCCESS,
 		fd_datasync: () => ERRNO.SUCCESS,
 		fd_prestat_get: (fd, prestat) => {
@@ -254,6 +283,7 @@ function wasiImports(memory, args, output) {
 			const resized = new Uint8Array(Number(size));
 			resized.set(file.bytes.subarray(0, resized.length));
 			written.set(file.path, file.bytes = resized);
+			file.changed = true;
 			return ERRNO.SUCCESS;
 		},
 		fd_readdir: (fd, buffer, length, cookie, used) => {
@@ -293,7 +323,7 @@ function wasiImports(memory, args, output) {
 				written.set(path, bytes);
 				removed.delete(path);
 			}
-			return open({ path, bytes, position: 0, append: !!(fdFlags & FD_FLAG_APPEND) }, opened);
+			return open({ path, bytes, position: 0, append: !!(fdFlags & FD_FLAG_APPEND), changed: !existing || Boolean(openFlags & OPEN.TRUNCATE) }, opened);
 		},
 		path_filestat_get: (dirFd, _flags, pointer, length, stat) => {
 			const path = resolve(dirFd, pointer, length);
@@ -312,6 +342,7 @@ function wasiImports(memory, args, output) {
 			if (!lookup(path)) return ERRNO.NOENT;
 			written.delete(path);
 			removed.add(path);
+			forgotten(path);
 			return ERRNO.SUCCESS;
 		},
 		path_remove_directory: (dirFd, pointer, length) => {
@@ -330,6 +361,8 @@ function wasiImports(memory, args, output) {
 			made.delete(from);
 			removed.add(from);
 			removed.delete(to);
+			if (entry.bytes) kept(to, entry.bytes);
+			forgotten(from);
 			return ERRNO.SUCCESS;
 		},
 		path_readlink: () => ERRNO.INVAL,
