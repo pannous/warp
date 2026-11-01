@@ -45,4 +45,6 @@ counted_calls(n: Node, functions: list, scope: map): any := {
 	children(n, x => counted_calls(x, functions, scope))
 }
 
-library_calls(program: Node): Node := counted_calls(program, functions_with_parameters(program), scope_of(program))
+# the names bound outside function bodies: a parameter f of another function, `map(xs, f: function)`, leaves the
+# program's own f(n) counting
+library_calls(program: Node): Node := counted_calls(program, functions_with_parameters(program), scope_with({}, outer_nodes_in(program)))
