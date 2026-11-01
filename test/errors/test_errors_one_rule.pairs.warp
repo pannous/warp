@@ -1,0 +1,11 @@
+# decision errors-one-rule (user): an Error raises unless it reaches an optional place or a handler; decision
+# else-fallback: x else y is y when x raises or is ø, a falsy x kept
+'r = write("no such folder/x.txt", "hi"); 1'	error	a failed write put in a plain variable stops the run
+'f(x) := error "bad"; r = f(1); 2'	error	a program's own Error too
+'r: json? = parse_json("{oops"); r failed'	true
+'parse_json("{oops") or 7'	7
+'0 or 10'	10
+'parse_json("{oops") else []'	[]
+'0 else 10'	0
+'"" else "anon"'	""
+'x = ø; x else 5'	5
