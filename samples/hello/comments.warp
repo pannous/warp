@@ -36,7 +36,7 @@ still in outer
 # Documentation comments for export (triple slash)
 ## Computes the factorial of n
 ## Returns n! for non-negative integers
-	def factorial(n) {
+def factorial(n) {
 	if n <= 1 { return 1 }
 	return n * factorial(n - 1)
 }
