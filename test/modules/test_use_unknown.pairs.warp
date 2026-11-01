@@ -3,3 +3,4 @@
 'use math; sqrt(16)'	4
 'use strict; 1'	1
 'use m; fmin(2, 3)'	2
+'use log; log10(100)'	2
