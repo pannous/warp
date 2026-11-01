@@ -4442,6 +4442,7 @@ def declared_type(p: Parser, word: text): Node := {
 	if word == "mixin" { name = attributed("mixin", true, name) }
 	p.at = end
 	parameters = type_parameters(p)
+	constructor = if CLASS_KEYWORDS.contains(word) then constructor_fields(p) else []
 	ends_statement = ";}\n".contains(peek(p.code, blank_end(p, p.at), p.n))
 	skip_blanks(p)
 	if keyword_at(p, "extends") {
@@ -4470,12 +4471,34 @@ def declared_type(p: Parser, word: text): Node := {
 		p.at = p.at + 1
 		body = items_until(p, Bracket.Curly, ItemsEnd.Closer)
 		fields = group_parts(body)
-		if fields != ø and fields#1 == "{" { body = listed(Bracket.Curly, fields#2 as Separator, fields#3.map(field => untyped(field, parameters))) }
+		if fields != ø and fields#1 == "{" { body = class_body(constructor + fields#3, if #constructor > 0 then Separator.Semicolon else fields#2 as Separator, parameters) }
 		return declared_type_node(name, body)
 	}
+	if #constructor > 0 { return declared_type_node(name, class_body(constructor, Separator.Semicolon, parameters)) }
 	if not ends_statement { return type_node(name, ø) }
 	if word == "class" { name = attributed("bare_class", true, name) }
 	declared_type_node(name, listed(Bracket.Curly, Separator.None, []))
+}
+
+def class_body(fields: list, separator: Separator, parameters: list): Node := listed(Bracket.Curly, separator, fields.map(field => untyped(field, parameters)))
+
+// `class P(val x: Int, var w: Int = 2) {…}` (Kotlin, Scala, TypeScript): the primary constructor's parameters are the
+// class's first fields, their val, var or let dropped
+CONSTRUCTOR_FIELD_WORDS = ["val", "var", "let"]
+def constructor_fields(p: Parser): list {
+	if not is_at(p.code, p.at, '(', p.n) { return [] }
+	p.at = p.at + 1
+	fields = []
+	while p.at < p.n {
+		skip_blanks(p)
+		if is_at(p.code, p.at, ')', p.n) { p.at = p.at + 1; return fields }
+		for word in CONSTRUCTOR_FIELD_WORDS { if keyword_at(p, word) { p.at = blank_end(p, p.at + word.length) } }
+		before = p.at
+		fields += [expression(p, 0)]
+		skip_blanks(p)
+		if is_at(p.code, p.at, ',', p.n) { p.at = p.at + 1 } else if p.at == before { return fields }
+	}
+	fields
 }
 
 // A type declaration, its fields typed

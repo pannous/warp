@@ -1095,9 +1095,12 @@ def build_components():
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
 
 
-# one sample in the page as its own file (%s: path and source as JSON): its report, or {stuck} when the page is stuck
-RUN_SAMPLE = """(async () => JSON.stringify(await Promise.race([playground.evaluate(%s, %s),
-	new Promise(done => setTimeout(() => done({ stuck: true }), %d))])))()"""
+# one sample started in the page as its own file (%s: path and source as JSON), its report kept as JSON in
+# window.sampleReport; asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
+# closed" for gpu_visualizer under load)
+START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s).then(report => window.sampleReport = JSON.stringify(report),
+	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
+SAMPLE_POLL_SECONDS = 0.5
 
 
 def page_output(report):
@@ -1132,15 +1135,28 @@ def page_report(source, path, page_url):
 	"""the page's report of the sample; a page that gave none (its renderer crashed, now and then after many runs) is
 	opened anew and asked once more, so only a sample that fails twice in a fresh page counts as stuck"""
 	for attempt in range(2):
-		answer = browser("eval", RUN_SAMPLE % (json.dumps(source), json.dumps(path), SAMPLE_ANSWER_SECONDS * 1000))
-		try:
-			report = json.loads(json.loads(answer))
-		except ValueError:
-			report = {"error": True, "stuck": None, "value": f"(page gave no answer: {(answer or browser_complaint)[:200]})"}
+		report = sample_answer(source, path)
 		if "stuck" not in report:
 			return report
 		open_samples_page(page_url)
 	return report
+
+
+def sample_answer(source, path):
+	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS"""
+	started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
+	if started != '"started"':
+		return {"error": True, "stuck": None, "value": f"(the page did not start it: {(started or browser_complaint)[:200]})"}
+	deadline = time.time() + SAMPLE_ANSWER_SECONDS
+	while time.time() < deadline:
+		time.sleep(SAMPLE_POLL_SECONDS)
+		answer = browser("eval", "window.sampleReport ?? null")
+		if answer not in ("null", ""):
+			try:
+				return json.loads(json.loads(answer))
+			except ValueError:
+				return {"error": True, "stuck": None, "value": f"(page gave no answer: {answer[:200]})"}
+	return {"error": True, "stuck": True, "value": f"the page gave no answer in {SAMPLE_ANSWER_SECONDS} s"}
 
 
 def open_samples_page(page_url):
@@ -1184,7 +1200,8 @@ def check_samples(paths, tree):
 	written = len(paths) == len(native)  # a run of some samples leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
-	open(os.path.join(data, "report.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
+	# a run of some samples keeps the whole run's report too
+	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
 	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "TIME", "ran", "WIN")}
 	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
 

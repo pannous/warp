@@ -158,3 +158,4 @@ while time < seconds {
 	sleep(max(0, frame_milliseconds - (clock() - frame_started)) / 1000)
 	time = float(clock() - started) / 1000
 }
+"${bands} bands shown along the tune"
