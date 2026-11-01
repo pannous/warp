@@ -754,3 +754,5 @@ the original questions 1–41: test edits and housekeeping done.
 ## egraph-outside-library (user, 2026-11-01)
 egraph is the first outside library: it lives in the registry github.com/pannous/warp-packages (egraph/), found by
 `use egraph`, not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
+- markup-keeps final (user, 2026-11-01, via the Interviewer): lib-first; core only fix 1 (tag items are expressions,
+  ~15–25 lines) and automatic liveness (~20); keyed instances by hand for now (no core part d). warp-markup builds.
