@@ -13,7 +13,11 @@ const INCLUDE_FD = 4; // "/include": the C headers warp reads for FFI signatures
 const INCLUDE_DIRECTORY = "/include";
 const TEMPORARY_FD = 5; // "/tmp": a directory of the overlay only, for scratch files (tests/common temp_dir)
 const TEMPORARY_DIRECTORY = "/tmp";
-const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY]]);
+// the served repository again at an absolute path, as natively a path names warp's lib/ from anywhere (driver.js)
+const REPOSITORY_FD = 6;
+const REPOSITORY_DIRECTORY = "/warp";
+const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY], [REPOSITORY_FD, REPOSITORY_DIRECTORY]]);
+const isRepository = fd => fd === ROOT_FD || fd === REPOSITORY_FD;
 const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
 // WARP_INCLUDE replaces the compiler's include directories (src/formats/ffi_parser.rs), so it looks in exactly one place;
 // WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch
@@ -147,7 +151,7 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 	}
 	// a path as the overlay and served() key it: relative for the repository, "/…" for the machine
 	const resolve = (dirFd, pointer, length) => {
-		const base = dirFd === ROOT_FD ? "" : PREOPENS.get(dirFd) ?? descriptors.get(dirFd)?.path;
+		const base = isRepository(dirFd) ? "" : PREOPENS.get(dirFd) ?? descriptors.get(dirFd)?.path;
 		if (base === undefined) return undefined;
 		const path = normalPath(`${base}/${textAt(pointer, length)}`);
 		return base.startsWith("/") ? `/${path}` : path;
@@ -287,7 +291,7 @@ function wasiImports(memory, args, output, overlay = newOverlay()) {
 			return ERRNO.SUCCESS;
 		},
 		fd_readdir: (fd, buffer, length, cookie, used) => {
-			const directory = fd === ROOT_FD ? { entries: lookup("").entries } : descriptors.get(fd);
+			const directory = isRepository(fd) ? { entries: lookup("").entries } : descriptors.get(fd);
 			if (!directory?.entries) return ERRNO.NOTDIR;
 			const names = [...directory.entries].sort();
 			let offset = 0;

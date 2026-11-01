@@ -7,7 +7,10 @@ const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
 const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
-const C_CALLS_SECTION = "warp.c_calls"; // src/modules/wasm_modules.rs C_CALLS_SECTION
+// the C functions a module calls, one line each: import module, library, name, parameter kinds (comma-separated),
+// result register, what the result crosses as, an out-pointer's pointee, -, how a failure shows
+// (core/emitter/c_functions.warp, read as core/native/driver.warp foreign_of reads it)
+const C_FUNCTIONS_SECTION = "warp.c_functions";
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
 // a promise is awaited only by an awaited run's main (host.js JSPI), not where the browser has no JSPI (Safari), nor in a
 // page event's handler, nor in a warp function JavaScript calls back (a JavaScript frame between: the engine refuses
@@ -104,68 +107,112 @@ function cText(memory, address) {
 	return bytes.slice(0, end < 0 ? bytes.length : end);
 }
 
-// the program's C calls (src/modules/wasm_modules.rs c_calls, which lists the letters) by "module\tname"
+// the program's C functions by "module\tname" (C_FUNCTIONS_SECTION)
 function cCalls(run) {
 	if (!run.cCalls) {
-		const lines = WebAssembly.Module.customSections(run.module, C_CALLS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
-		run.cCalls = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, name, parameters, result]) =>
-			[`${module}\t${name}`, { parameters: [...parameters], result }]));
+		const lines = WebAssembly.Module.customSections(run.module, C_FUNCTIONS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
+		run.cCalls = new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([module, , name, parameters, register, crossing, pointee, , failure]) =>
+			[`${module}\t${name}`, { parameters: parameters ? parameters.split(",") : [], register, crossing, pointee, failure }]));
 	}
 	return run.cCalls;
 }
 
-// a C function of a module, called with the program's values: each text (a NUL-terminated copy in the program's memory,
-// or a pointer and length) is copied into a block of the module's malloc, each out-pointer gets a NULL slot there, each
-// buffer a block of its capacity and a length slot, all freed after the call; a char * result (or char ** out-pointer,
-// or the bytes a buffer received) is read back as a text of the program (NULL is ø)
+// a C function of a module, called with the program's values as driver.warp c_called calls one: each text (ptr) a
+// NUL-terminated copy in a block of the module's malloc, a list of texts (texts) a NULL-terminated array of them, a
+// text or list of bytes (bytes) its bytes and their count for a following length, the first out-pointer a NULL slot
+// there, all freed after the call; a text result (text, owned_text) is read back as a text of the program (NULL is ø)
 function callC(holder, exports, member, call, values, what) {
 	const program = holder.exports;
 	const blocks = [];
-	const outSlots = [];
-	const buffers = [];
-	const moduleArguments = [];
 	const malloc = bytes => {
-		if (!exports.malloc) throw new Error(`${what} takes a text, buffer or out-pointer, but its module exports no malloc(size)`);
+		if (!exports.malloc) throw new Error(`${what} takes a text or out-pointer, but its module exports no malloc(size)`);
 		const block = exports.malloc(bytes.length);
 		new Uint8Array(exports.memory.buffer).set(bytes, block);
 		blocks.push(block);
 		return block;
 	};
-	const u32 = count => new Uint8Array(new Uint32Array([count]).buffer);
-	const remaining = [...values];
-	(call?.parameters ?? values.map(() => "n")).forEach((letter, index) => {
-		if (letter === "o") return moduleArguments.push(outSlots[outSlots.push(malloc(u32(0))) - 1]);
-		if (letter === "k") return moduleArguments.push((buffers.at(-1).slot = malloc(u32(buffers.at(-1).capacity))));
-		const value = remaining.shift();
-		if (letter === "l") return; // the length of the text before it, libc.wasm reads up to the NUL
-		if (letter === "b") return moduleArguments.push(buffers[buffers.push({ capacity: Number(value) }) - 1].block = malloc(new Uint8Array(Number(value))));
-		if (letter !== "t") return moduleArguments.push(value);
-		const length = ["l", "s"].includes(call.parameters[index + 1]) ? Number(remaining[0]) : undefined;
-		const text = length === undefined ? cText(program.memory, value) : new Uint8Array(program.memory.buffer, value, length).slice();
-		moduleArguments.push(malloc([...text, 0]));
-	});
-	const returned = member(...moduleArguments);
-	const textOf = bytes => bytes === null ? program.new_empty() : program.new_text(...writeBytes(program, bytes));
+	const textBlock = value => malloc([...utf8.encode(guestText(program, value)), 0]);
+	const bytesOf = value => isGuestText(program, value) ? utf8.encode(guestText(program, value)) : guestInts(program, value).map(byte => byte & 0xff);
 	const memory = () => new DataView(exports.memory.buffer);
-	const received = () => {
-		const address = memory().getUint32(outSlots[0], true);
-		if (address === 0) throw new Error(`${what} gave nothing through its out-pointer (C status ${returned ?? 0})`);
-		return address;
-	};
-	const bufferBytes = () => {
-		if (returned !== 0) throw new Error(`${what} failed (C status ${returned})`);
-		const { block, slot } = buffers[0];
-		return new Uint8Array(exports.memory.buffer, block, memory().getUint32(slot, true)).slice();
-	};
-	const value = {
-		t: () => textOf(returned === 0 ? null : cText(exports.memory, returned)),
-		u: () => BigInt(returned >>> 0),
-		ot: () => textOf(cText(exports.memory, received())),
-		on: () => received() | 0,
-		b: () => textOf(bufferBytes()),
-	}[call?.result]?.() ?? returned;
+	let out, bytesLength = 0;
+	const remaining = [...values];
+	const moduleArguments = (call?.parameters ?? values.map(() => "i64")).map(kind => {
+		if (kind === "out") return out ??= malloc(new Uint8Array(4));
+		if (kind === "length") return BigInt(bytesLength);
+		const value = remaining.shift();
+		if (kind === "ptr") return textBlock(value);
+		if (kind === "texts") {
+			const pointers = new Uint32Array([...guestItems(program, value).map(textBlock), 0]);
+			return malloc(new Uint8Array(pointers.buffer));
+		}
+		if (kind === "bytes") {
+			const bytes = bytesOf(value);
+			bytesLength = bytes.length;
+			return malloc(bytes);
+		}
+		return value;
+	});
+	let returned = member(...moduleArguments);
+	const asNumber = Number(returned ?? 0);
+	if ((call?.failure === "not_null" && asNumber !== 0) || (call?.failure === "false" && (asNumber & 0xff) === 0)) throw new Error(`${what} failed, C result ${returned}`);
+	if (call?.pointee) {
+		returned = out === undefined ? 0 : memory().getUint32(out, true);
+		if (returned === 0) throw new Error(`${what} gave no ${call.pointee}, C status ${asNumber}`);
+	}
+	const result = crossedResult(program, call, returned, address => utf8Decoder.decode(cText(exports.memory, Number(address))));
 	if (exports.free) blocks.forEach(block => exports.free(block));
-	return value;
+	return result;
+}
+
+// a C function's result as the program takes it (driver.warp c_result): a text (NULL is ø, textOf reads it), a
+// handle's id, a yes/no, an i64 or an i32
+function crossedResult(program, call, returned, textOf) {
+	if (call?.crossing === "text" || call?.crossing === "owned_text") return !returned ? program.new_empty() : newGuestText(program, textOf(returned));
+	if (call?.crossing === "handle" || call?.register === "i32") return Number(returned ?? 0) | 0;
+	if (call?.register === "bool") return Number(returned) & 0xff ? 1 : 0;
+	if (call?.register === "i64") return BigInt(returned ?? 0);
+	return returned;
+}
+
+// a C library the page answers in JavaScript (natively a shared library): `functions(name)` gives a C function as a
+// JavaScript one, which takes a text as a string and gives one so, its numbers and handles' ids as they cross
+function libraryInJs(holder, library, functions) {
+	return new Proxy({}, {
+		get: (_, name) => (...values) => {
+			const member = functions(name);
+			if (!member) throw new Error(`${library}.${name} is not available in the browser`);
+			const call = cCalls(holder.run).get(`${library}\t${name}`);
+			const program = holder.exports;
+			const remaining = [...values];
+			const given = (call?.parameters ?? []).filter(kind => kind !== "out" && kind !== "length")
+				.map(kind => (value => kind === "ptr" ? guestText(program, value) : value)(remaining.shift()));
+			return crossedResult(program, call, member(...given), text => text);
+		},
+	});
+}
+
+// dlopen of one of warp's own libraries beside the executable (lib/sound.warp: @executable_path/libwarp_sound.dylib):
+// a handle when the page has it (host-sound.js PAGE_LIBRARIES), else 0, as for a library that is not there
+const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
+const PAGE_LIBRARY_HANDLE = 1;
+
+// the C functions of stdio a program reaches without a file (lib/sound.warp said: fdopen(2, "w"), fputs, fflush): a
+// FILE * is its descriptor, what it puts goes to the run's output; and dlopen of warp's own libraries
+const pageStdio = hooks => ({
+	fdopen: descriptor => descriptor,
+	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
+	fflush: () => 0,
+	dlopen: path => self.PAGE_LIBRARIES?.has(path.match(OWN_LIBRARY)?.[1]) ? PAGE_LIBRARY_HANDLE : 0,
+});
+
+// `use python` (lib/native/python.warp: the Python C API, natively libpython's) answered by Pyodide's Python
+// (python_capi.py), loaded before the run (worker.js prepareForeignRuntimes)
+function pythonLibrary(holder) {
+	return libraryInJs(holder, "python", name => {
+		if (!self.pythonCapi) throw new Error(`python.${name}: Python is not loaded in this page (Pyodide)`);
+		const member = self.pythonCapi.get(name);
+		return member && ((...values) => member(...values));
+	});
 }
 
 // libc.wasm, instantiated once per worker: its WASI imports serve only stdio, which nothing here reaches
@@ -177,16 +224,11 @@ function libcExports() {
 	return libc;
 }
 
-// dlopen of one of warp's own libraries beside the executable (lib/sound.warp: @executable_path/libwarp_sound.dylib):
-// a handle when the page has it (host-sound.js PAGE_LIBRARIES), else 0, as for a library that is not there
-const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
-const PAGE_LIBRARY_HANDLE = 1;
-const pageLibraryOpened = (holder, path) => self.PAGE_LIBRARIES?.has(guestText(holder.exports, path).match(OWN_LIBRARY)?.[1]) ? PAGE_LIBRARY_HANDLE : 0;
-
 // `use c` in the browser: the program's C calls go to libc.wasm (natively warp opens the system libc)
-function libcImports(holder) {
+function libcImports(holder, hooks) {
+	const stdio = libraryInJs(holder, "c", name => pageStdio(hooks)[name]);
 	return new Proxy({}, {
-		get: (_, name) => name === "dlopen" ? path => pageLibraryOpened(holder, path) : (...values) => {
+		get: (_, name) => name in pageStdio(hooks) ? stdio[name] : (...values) => {
 			const exports = libcExports();
 			const member = exports[name];
 			if (typeof member !== "function") throw new Error(`c.${name} is not available in the browser (web/playground/lib/build_libc.sh lists libc.wasm's functions)`);
@@ -303,10 +345,11 @@ addHostPart({
 			foreign_call: holder.awaited ? awaitingCall(foreignCall) : foreignCall,
 		};
 	},
-	imports: holder => ({
+	imports: (holder, hooks) => ({
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
-		c: libcImports(holder),
+		c: libcImports(holder, hooks),
+		python: pythonLibrary(holder),
 		// `use { memory, table } from "env"` (src/run/wasm_reader.rs define_imported_entities): a fresh memory and table
 		env: {
 			get memory() { return new WebAssembly.Memory({ initial: IMPORTED_MEMORY_PAGES }); },
