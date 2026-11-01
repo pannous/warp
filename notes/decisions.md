@@ -275,6 +275,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 
 ## Types and annotations
+- real-canonical-core (user, ~6 core lines): `real` is no longer a rational synonym (`exact` stays); `3 is real` yes; a program's own type of a core type word shadows it; a float given to `real` converts to the exact real (2.5).
 - parameter-typed (user): `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
 - primitive-annotation (user, roadmap native-harness): `@primitive` marks GC-free code emitted as plain MVP wasm (core/extensions/primitive.warp, user OK): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 - primitive-int-width (user): `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
@@ -337,7 +338,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
-- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (open, discussed in prose: map-all-test).
+- map-all-test (user): the test reads as English, `all xs are even` and `are all xs even`, `any xs is even` and `is any xs even` (lib/sugar/broadcasting.warp); the call all(xs, f) / xs.all(f) stays yes/no for newcomers.
+- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (map-all-test).
 - int-overflow-shape (user): int-boxed-overflow-big keeps its ~23 lines with named overflow tests; no bit-trick or float shortcut.
 - words-as-values (user): a function word used as a value is the lambda of its call (`f = sqrt; f(16)` 4, `apply(floor, 2.5)` 2), bringing its module; with several arities the one its use needs, never silently the first.
 - definition-name-canonical (user): the name a definition carries is canonical for dir and everything warp prints (count stays count); internal names get canonical ones (map_keys → keys), old names become aliases or go.
