@@ -64,6 +64,9 @@
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.warp
   and data/uniscript/. warp's tests/web/test_uniscript.rs still tests it (through `use uniscript`).
+- First registry-only extension: egraph (warp-packages/egraph, user 2026-11-01): equality saturation over code, never in
+  lib/ or core/ (notes/egraphs.md); its tests run by `warp test` in its folder. The pure compiler's `use egraph` does
+  not reach packages/ or the registry yet (card egraph-use-ignored): `use "packages/egraph/egraph.warp"` meanwhile.
 - Versions (src/lowering/data/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
   The default branch's module declares its version with a top level `version 1.2.3`; if it does not satisfy the
   requirement, the best git tag (`v1.2.3` or `1.2.3`, via `git ls-remote --tags`) is cloned into packages/<name>@<version>.

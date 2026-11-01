@@ -9,6 +9,10 @@ const SHA256_K = Uint32Array.from([0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba
 	0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
 	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f,
 	0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2]);
+// what a hash reads of its subject: a list's items as bytes, as the native crate takes them (samples/crates/regex_and_sha2),
+// anything else as its UTF-8 text
+const hashedBytes = subject => Array.isArray(subject) ? Uint8Array.from(subject, byteOf) : utf8.encode(contentText(subject));
+
 function sha256Hex(bytes) {
 	const length = Math.ceil((bytes.length + 9) / 64) * 64;
 	const padded = new Uint8Array(length);
@@ -99,7 +103,7 @@ addHostPart({
 		std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 	}),
 	adapters: {
-		hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
+		hash: { sha256: subject => sha256Hex(hashedBytes(subject)), crc32: subject => crc32Of(hashedBytes(subject)) },
 		json: { parse: jsonOrJson5, to_json(value, classes) { return jsonText.call(this, value, classes, false); }, exact_json(value, classes) { return jsonText.call(this, value, classes, true); } },
 		regex: {
 			matches: (subject, pattern) => regexOf(pattern).test(subject),

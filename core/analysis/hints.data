@@ -2,3 +2,5 @@
 alias_word($written, $canonical)	"warp says {canonical}"	"{canonical}"	"alias-{written}@{written}"
 # a word of a standard module the program names without its use (prelude_words.warp implicit_modules)
 implicit_use($word, $module)	"{word} is {module}'s"	"use {module}"
+# a foreign type name of the prelude (prelude_words.warp foreign_types): `x: Int`
+foreign_type($written, $canonical)	"{written} is {canonical} in warp"	"{canonical}"	"foreign-type-{written}@{written}"

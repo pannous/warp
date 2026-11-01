@@ -18,11 +18,16 @@ const WASM_PAGE_BYTES = 65536;
 const valueDecoder = new TextDecoder();
 const valueEncoder = new TextEncoder();
 
-// the value's text: a text's own, any other value as warp shows it
-function guestText(program, value) {
+// the value's text: a text's own, any other value as warp shows it; undefined for one past the module's room to show
+// it in (runtime/show.warp shown_at's -1)
+function shownText(program, value) {
 	const packed = program.shown_at(value);
-	if (packed < 0n) throw new Error("a host word's argument is too long to show");
-	return valueDecoder.decode(new Uint8Array(program.memory.buffer, Number(packed / SHOWN_TEXT_SHIFT), Number(packed % SHOWN_TEXT_SHIFT)));
+	return packed < 0n ? undefined : valueDecoder.decode(new Uint8Array(program.memory.buffer, Number(packed / SHOWN_TEXT_SHIFT), Number(packed % SHOWN_TEXT_SHIFT)));
+}
+function guestText(program, value) {
+	const text = shownText(program, value);
+	if (text === undefined) throw new Error("a host word's argument is too long to show");
+	return text;
 }
 const isGuestText = (program, value) => program.is_textual(value) !== 0;
 const guestCount = (program, list) => Number(program.item_count(list));
@@ -34,8 +39,13 @@ const guestInts = (program, list, count = guestCount(program, list)) =>
 
 // the value as plain JavaScript (a text a string, a list an array, a map an object, yes/no booleans, ø null, numbers,
 // a ratio its quotient), read from the text warp shows it as: the one reading of any value, as the native warp hands
-// shown values to its C libraries (lib/native/foreign.c)
-const guestPlain = (program, value) => isGuestText(program, value) ? guestText(program, value) : plainOfShown(guestText(program, value));
+// shown values to its C libraries (lib/native/foreign.c); a list too long to show (a million numbers for the GPU) is
+// read item by item
+function guestPlain(program, value) {
+	if (isGuestText(program, value)) return guestText(program, value);
+	const shown = shownText(program, value);
+	return shown === undefined ? guestItems(program, value).map(item => guestPlain(program, item)) : plainOfShown(shown);
+}
 const SHOWN_WORDS = { yes: true, no: false, "ø": null };
 const SHOWN_NUMBER = /^-?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?(\/\d+)?/;
 const SHOWN_NAME = /^[^\s,:{}\[\]()"']+/u;
@@ -92,6 +102,10 @@ function plainOfShown(shown) {
 	skip();
 	return at === shown.length ? plain : fail();
 }
+
+// a bytes value as a Uint8Array: a text's UTF-8, else its Int items, each taken modulo 256 (driver.warp c_bytes)
+const guestBytes = (program, value) => isGuestText(program, value) ? valueEncoder.encode(guestText(program, value))
+	: Uint8Array.from(guestInts(program, value), byte => byte & 0xFF);
 
 // the bytes placed in the module's memory, where its next text goes: above its text heap when it exports one, else at
 // the end of its memory, grown for them (driver.warp guest_bytes_built); their address

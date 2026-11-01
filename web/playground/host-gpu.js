@@ -413,11 +413,12 @@ const GPU_JOBS = {
 	gpu_paints: async () => ({ values: [await theGpuDevice().then(() => 1, failure => failureText(failure))] }),
 };
 
-// the system value "gpu paints" (crates/warp-runtime host_words.rs GPU_PAINTS): whether a shader can paint, asked of the
+// the system value "gpu_paints" (crates/warp-runtime host_words.rs GPU_PAINTS): whether a shader can paint, asked of the
 // GPU's task Worker: a yes is kept for the page, a no only for the run (a slow first answer, a timed-out adapter, is asked
 // again by the next run, and not on every frame of this one); without, paint(f, …) of a warp function paints f on the
 // CPU, as the run's warning says once
-const GPU_PAINTS = "gpu paints";
+const GPU_PAINTS = "gpu_paints"; // lib/prelude.warp gpu_paints()
+const GPU_DRAWING = "gpu_drawing"; // lib/draw.warp: use draw on the GPU is native only (draw_shape below), so never here
 const PAINTS_ON_CPU = "paint: a function paints on the CPU"; // src/graphics/paint.rs
 let gpuPaintsHere = false;
 function gpuPaints(holder) {
@@ -487,7 +488,7 @@ function linearCells(memory, block) {
 }
 
 addHostPart({
-	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : undefined,
+	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? false : undefined,
 	words: (holder, hooks, { program }) => {
 		const plain = node => plainValue(program(), node);
 		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });

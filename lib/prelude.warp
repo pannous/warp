@@ -107,6 +107,17 @@ bracketed(n, bracket): list from emitter
 separated(n, separator): list from emitter
 string(x): text from emitter
 
+// Foreign type names (Kotlin, Java, Swift, C#): `x: Int`, `class P(val name: String)` read as warp's type; types, not
+// aliases, so only a type's place reads them (an alias would rename the enum case Kind.Int too); a program's own
+// `class Int` or `type String = …` shadows them (card data-class-p)
+type Int = int
+type Long = int
+type Double = float
+type Float = float
+type String = text
+type Boolean = bool
+type Char = codepoint
+
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
 alias tuple = list
