@@ -1,0 +1,5 @@
+# Color conversions: lib/color.warp hue, RGB and alpha contract
+'use color; hsv(0, 1, 1) == red'	true
+'use color; hsv(120, 1, 1) == rgb(0, 255, 0)'	true
+'use color; alpha_of(with_alpha(red, 0.5))'	128
+'use color; alpha_of(with_alpha(blue, 0))'	0

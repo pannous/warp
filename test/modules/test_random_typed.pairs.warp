@@ -1,0 +1,6 @@
+# notes/stdlib.md: random provides choice, shuffle, sample and repeatable seeding
+'use random; choice(["only"])'	"only"
+'use random; choice("x")'	'x'
+'use random; sort(shuffle(["b", "a"]))'	["a", "b"]
+'use random; sort(sample(["b", "a"], 2))'	["a", "b"]
+'use random; seed(42); a = random_below(100); seed(42); a == random_below(100)'	yes
