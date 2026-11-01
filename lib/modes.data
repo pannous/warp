@@ -1,0 +1,10 @@
+# The modes and bundles a program names with `use <word>` that no module file is: each word, then what it turns on.
+# Any other `use <name>` names a file (<name>.warp beside the program, lib/<name>.warp, lib/native/<name>.warp) or a C
+# library, else the compile fails "no module, library or package named <name>" (core/passes/prelude_words.warp)
+strict	numbers and JSON refuse what they would only approximate (lib/json.warp)
+relaxed	no hints
+script	a script: no hints, the scripting words (wiki/script.md)
+graphics	the drawing bundle (wiki/use.md)
+comments	comments kept as the metadata of the next element (`.doc`, `.meta.comment`)
+reflection	functions as values with their line, column and origin
+fuel	the run counts fuel steps (decision fuel-metering)

@@ -1,0 +1,6 @@
+# [i32] and [u32] GPU lists hold integer cells as [f32] holds floats; the GPU changes them in place (card i32-u32)
+'xs: [i32] = [1, -2, 3]; xs#2'	-2
+'xs: [u32] = int[3]; xs#1 = 7; xs'	[7, 0, 0]
+'xs: [i32] = [1, 2, 3]; gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<i32>; @compute @workgroup_size(1) fn main(@builtin(global_invocation_id) id: vec3u) { cells[id.x] = cells[id.x] * -2; }", xs, 3); xs'	[-2, -4, -6]
+'xs: [u32] = [1, 2]; xs#1 = -1'	error	a u32 cell holds no negative number
+'xs: [i32] = [1, 2]; xs#1 = 1.5'	error	an i32 cell holds no fraction
