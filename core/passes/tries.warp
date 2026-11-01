@@ -80,10 +80,9 @@ kept_raise(v: Node): Node := {
 	guarded_try(v, try_name("error", number), try_name("error", number), number)
 }
 # where an Error stops the run no more (decision errors-one-rule): an optional place `r: T? = v` keeps it (a value's
-# `a or b`, emitter.warp logical, too), `x else y` is y when x raises or is ø (decision else-fallback), x evaluated once
+# `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {
 	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
-	Key(x, Op.Else, y): if is_key(x, Op.Then) then n else Key(lowered_try(x, ø, ø), Op.Coalesce, y)
 	_: n
 }
 
