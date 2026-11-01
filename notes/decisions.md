@@ -193,6 +193,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
+- type-shows-nat (user): type(3) and an undeclared whole value show `nat`, a declared int shows `int`.
+- fast-int-readings (user): a literal beside a fast int stays int (`xs[i + 1]` in a range loop); `i++`/`i--` on an undeclared counter stay int; `s += i` grows like + (a nat).
+- int-boxed-overflow-big (user; asked whether it can be done in fewer than ~25 core lines): + - * of two boxed ints that overflow give the big-int result instead of trapping (`xs = [2^62]; xs#1 * 4`).
+- marked-floats-shape (user): `type X = float` beside `= int`; marks survive arithmetic (left mark, else right, only when the Kind matches, so `Color * 0.5` is plain); `°` an Angle shown in degrees, also when statically known and unboxed.
 - exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
 - exact-power (user): a power of exact operands stays exact, a whole decimal exponent included (`0.5 ^ 1074.0` prints all ~750 digits of 2^-1074; `print 0.999 ^ 1000000.0` is exact too, however slow); the warp runtime's float pow is used only for float operands. Tests and probes keep their examples to calculations under ~10 s.
 - int-list: a whole decimal literal is int (`type([0.0, 0.0])` is list of int, P196b); a variable's type joins every write. #21 `x=π; type(x)` is real.
@@ -269,6 +273,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 
 ## Types and annotations
+- parameter-typed (user): `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
 - primitive-annotation (user, roadmap native-harness): `@primitive` marks GC-free code emitted as plain MVP wasm (core/extensions/primitive.warp, user OK): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 - primitive-int-width (user): `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
 - P203 annotations make code strict; unannotated code is lax (checked at run time); `--strict` warns on lax spots. P204 an `any` value entering an annotated place gets a run-time check. P201 `s: Shape = Circle(…); s.r` is a compile error with hints `match Circle(r)` / `s as Circle`.
@@ -286,7 +291,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P125 optional parameters: `x=ø`, `maybe x`, `x?` alike; typed `x:int?`; `a ?? b` only for ø.
 - P179 sum types auto-unwrap like optionals; payload fields by position `rgb(1,2,3)#1`; a payload-free variant is its symbol and `red is Color`. P178 enum cases with values are sealed classes.
 - instance-position (user): `#` reads a class instance's fields by position like P179 payloads: `class P { x: int; y: int }; P(2, 3)#1` → 2; what is built by position reads by position. Code that names fields (the compiler) uses `.field`. Now a quick fix for classes; later (card class-position-index, Later) a class may override its position function like its index function, and defining one of the two derives the other.
-- position-index-words (Interviewer's decision, user away): a class's `#` is its `position(p)` (from 1), `[]` its `index(i)` (from 0), prefix `#b` its `count()`; writes `b#i = v` / `b[i] = v` are `position(p, value)` / `index(i, value)` (property-accessors: setters by arity), chosen by the assignment, so `m[i, j]` stays a read; defining one of position/index derives the other. PitchClass `F#4` is `position(octave)`. Card class-position-index.
+- position-index-words (user): a class's `#` is its `position(p)` (from 1), `[]` its `index(i)` (from 0), prefix `#b` its `count()`; writes `b#i = v` / `b[i] = v` are `position(p, value)` / `index(i, value)` (property-accessors: setters by arity), chosen by the assignment, so `m[i, j]` stays a read; defining one of position/index derives the other. PitchClass `F#4` is `position(octave)`. Card class-position-index.
 - P45 a variable given kinds that don't mix (`x=[1]; x=5`) is a compile error; Int→Float widening stays; undeclared lists stay `list any`.
 - P28 `real x;` read before assignment is its type's zero value.
 - P23/P20/type-words-reserved: every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as` (Interviewer's decision).
@@ -300,6 +305,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - function-type: `type(gcd)` prints `function: (a, b) -> int`. parse-type / body-code: quoted program parts (`parse("1+1")`, `f.body`) have type `code`, print their source, keep `.op`.
 
 ## Variables, binding and charged definitions
+- lambda-assign-writes-through (user): in a lambda or block argument `=` to a name of the enclosing scope writes that name (`seen=0; f=() => {seen=3}; f(); seen` → 3); `let x = …` makes a new local; a def's body keeps its own locals.
+- op-assign-target-once (user): `x[f()] op= y` evaluates the target's parts once, as C, Python, JS.
 - let-reassign: `let` is fully immutable (fix "use var x"); `var` is the variable; `let mut x` = `var x` with a loud warning. const-deep: `const` is deep like `let`.
 - P159 `const x=7; x=7` warns "remove the redundant assignment". P130 pi and named constants are constants; a class field named pi is the class's own.
 - let-parallel: the parallel let is only `a b = f(x) g(y)`; `let a b = …` is a function definition; `let a, b = 3, 4` unpacks.
@@ -327,6 +334,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
+- words-as-values (user): a function word used as a value is the lambda of its call (`f = sqrt; f(16)` 4, `apply(floor, 2.5)` 2), bringing its module; with several arities the one its use needs, never silently the first.
+- definition-name-canonical (user): the name a definition carries is canonical for dir and everything warp prints (count stays count); internal names get canonical ones (map_keys → keys), old names become aliases or go.
 - call-function-values (Supervisor): a glued `(` after a round group or an element calls a function value: `(x => x*2)(5)` 10, `adder(5)(1)` 6, `fs[0](3)`; numbers keep juxtaposed multiplication, `(2)(3)` 6, an edge case (user): no special code to keep it; if it breaks, a Later card.
 - keywordless-def (user): at statement start `f(x) { body }` with plain parameter names defines f when f is defined nowhere, with a got-it note "I meant: def f(x) { … }"; when f exists it stays a call with a trailing block (block-lazy-body).
 - reflection: function objects have .name, .signature, .return_type, .parameters, .doc; printing one shows its doc above its typed .dump; `methods(x)` returns the function objects; `use reflection` adds compilation unit, compiler, origin, wasm index, effects. A bare parameterless function inside print/help/dump/type is called, with a warning and hint `function now`.
@@ -418,6 +427,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
+- for-over-iterator (user): a construction of a program class counts as an instance, so `for x in Countdown(3)` iterates by next() until ø.
 - rewrite-rules (user): a rule set `rules { data($a * 1) => a; … }` is a value; calling it rewrites bottom-up to a normal form (a rewritten node is tried again until no rule fires: `simplify(data(y * 1 * 1 + 0))` → y); a step cap stops a rule set that never settles with a loud error naming the rule that keeps firing. `tree replace P with Q` stays a single pass.
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
 - match-alternatives: `1 | 2`, `1 or 2`, `1, 2` as case keys all mean either; `int or text` as a key is the type test; `other` is a catch-all like `_`/`default`/`else`.
