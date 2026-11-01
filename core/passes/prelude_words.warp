@@ -617,7 +617,7 @@ implicit_modules(source: text, index_file: text): list := {
 	free = free_words(program)
 	modules = []
 	# (the module a `use` names is no word of it: `use hash` beside color's hash)
-	for word in candidates.filter(word => ((word in free and not only_rules_lead(word, index[word])) or leads_statement(program, word, index[word])) and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
+	for word in candidates.filter(word => word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math and ((word in free and not only_rules_lead(word, index[word])) or leads_statement(program, word, index[word]))) {
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
 		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
@@ -631,10 +631,16 @@ implicit_modules(source: text, index_file: text): list := {
 }
 # whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
 # quoted code (`data(set width of p to 12)` brings no english)
-only_rules_lead(word: text, modules: list): bool := modules.all(module => not definition_arities(module, word))
+only_rules_lead(word: text, modules: list): bool := modules.all(module => not definition_slices(used_module_text(module)).any(slice => slice#1 == word))
 # a statement led by a word a module's rule starts with: `stored users: [User]`, whose `stored` declares (sound's
 # `pattern` function never takes `pattern Pair = [_, _]`)
-leads_statement(program: Node, word: text, modules: list): bool := modules.any(module => word in rule_heads(used_module_text(module))) and flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word))
+leads_statement(program: Node, word: text, modules: list): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word)) and modules.any(module => word in module_rule_heads(module))
+# the words a module's rules start with, read once a module
+global rule_heads_by_module = {}
+module_rule_heads(module: text): list := {
+	if not rule_heads_by_module.has(module) { rule_heads_by_module[module] = rule_heads(used_module_text(module)) }
+	rule_heads_by_module[module]
+}
 # A word several modules define is the one module's whose definitions take every call the program makes of it, by
 # the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition); a module whose
 # rule the word leads takes the calls none of them takes (signals' `on change p.age {…}` beside keys' on(key, body))
