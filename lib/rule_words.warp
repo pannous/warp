@@ -22,6 +22,25 @@ path_parameter(part: text): text := {
 	name
 }
 
+# `j-i` of a program binding j and i but no name j-i: their difference (j - i), noted (decision kebab-or-minus); a name
+# the program binds stays its own, warned when its parts are bound too; ø where a part is unbound or a number
+kebab_difference(name: Node, program: Node): any := {
+	written = "${name}"
+	parts = written.split("-")
+	if #parts < 2 or parts.any(part => part == "" or is_digits(part[0 ..< 1])) { return ø }
+	scope = scope_of(program)
+	if not parts.all(part => scope.has(part)) { return ø }
+	difference = parts.join(" - ")
+	if scope.has(written) {
+		warn written + " is the name " + written + ", not " + difference + ": write " + difference + " for the difference"
+		return ø
+	}
+	warn written + " reads as " + difference + ": " + parts.join(" and ") + " are bound, no name " + written
+	subtracted = symbol(parts#1)
+	for part in parts[1 ..] { subtracted = Key(subtracted, Op.Sub, symbol(part)) }
+	subtracted
+}
+
 # `users` → "users": a name as the text it is spelled by, a program's own word as written (twice·own → "twice")
 spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 
@@ -318,7 +337,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, kebab_difference: kebab_difference, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
