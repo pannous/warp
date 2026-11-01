@@ -2,6 +2,7 @@
 // each period. A page runs them (web/playground/host-timers.js): the program tells the host each timer by the host word
 // signal_listen(kind, id, argument) and the page calls back the exported timer_fired(id) at each firing. Natively
 // nothing runs beside the program (the pure lane), so the native warp says that it starts none
+use units
 TIMER_EVERY = 0
 rewrite on every $period $body: block => timer_every($period, () => $body)
 rewrite on every $count $unit $body: block => timer_every($count $unit, () => $body)

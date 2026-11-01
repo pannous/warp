@@ -4,5 +4,5 @@
 'tests/warp/selective_package/main.warp'	'<box 5> 6 4'
 
 # a_registry_package_passes_on_its_chosen_words
-'use svg; count(rainbow(3))'	3
-'use colors; use svg; to_hex(255)'	'#0000ff'
+'use "../../packages/svg/svg.warp"; count(rainbow(3))'	3
+'use "../../packages/colors/colors.warp"; use "../../packages/svg/svg.warp"; to_hex(255)'	'#0000ff'
