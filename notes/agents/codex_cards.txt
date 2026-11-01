@@ -7,5 +7,7 @@ retired: sample-gaps-types         # bits/xor, dates, reflection need core (park
 retired: program-using      # its next step needs core (pattern·clause·shown); back to a session
 features-docs-examples      # wiki: tonight's features (0.3̅, numerator, type of a list, callable instances, buses, text cuts) with running is! examples
 triage-approx               # ≈ and ~ with a tolerance on numbers, lists, maps (lib/; `~` on a list item fails in test_std_shadowed_names)
-tests-leave                 # tests leave chord_*.wav in test/functions: write into data/ or remove after
+tests-leave                 # tests leave chord_*.wav in test/functions: write into data/ or remove after; changing a test's output path is allowed (Supervisor 2026-11-01), its expectations stay
 runtime-docs                # wiki: runtime library documentation, checked against what runs
+library-typed               # give every library word in lib/ a full type signature (parameters and result), one module at a time
+uniscript-tests             # uniscript's tests/wasp/run.sh fails every case: make them run under the self-hosted warp (in the uniscript repo, packages by path)

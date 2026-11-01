@@ -100,6 +100,9 @@ memory_i64(address: int): int from runtime
 memory_f64(address: int): float from runtime
 memory_f32(address: int): float from runtime
 memory_set_f32(address: int, value: float) from runtime
+memory_i32(address: int): int from runtime
+memory_u32(address: int): int from runtime
+memory_set_i32(address: int, value: int) from runtime
 memory_grown(pages: int): int from runtime
 # times and durations, packed in the kind field; time_of(info, position) builds one (emitter.warp time_words, which
 # Rust's lane knows only of a constant info)
