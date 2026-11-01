@@ -1,0 +1,8 @@
+# a word whose first parameter is a union of no yes/no, random(x: list or number), reads `random 2.5 < 2.5`
+# one way: (random 2.5) < 2.5
+'random 2.5 < 2.5'	true
+'pick(x: list or number) := 1; pick 2 < 3'	true
+'pick(x: bool or int) := x; pick 2 < 3'	true
+'x = random [4, 4]; x'	4
+'x = random 3; x < 3'	true
+'x = random bool; type x'	'bool'
