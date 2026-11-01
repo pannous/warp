@@ -494,6 +494,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - go-voice: a `go {}` task is a voice sounding along from where its starter stands. deleted-loop: a live_loop deleted from the source stops on re-evaluation (≤ ~4 s fade).
 
 ## Modules, library and foreign code
+- host-callback-exports (user): the main module exports everything it defines, helpers included; a leading underscore (`_square`) or the keyword `private` keeps a word unexported; a library exports nothing by default, and `export f(…) := …` marks a word a host calls back (page_render, page_event, left_sample), kept whenever the module is used and exported under its name. `public` is an alias of `export` (got-it note naming it); revises P78 for private/public. ~10–15 core lines in prelude_words.warp plus the private/underscore rule. Order (warp-markup): library `export` first (~8 lines); the main-module/private half is card host-exports-own, landing with a sweep of the hosts that rely on every kept function being exported.
+- package-use-by-path (user): `use <name>` does not search packages/ or the registry; a package is used by its path, `use "packages/egraph/egraph.warp"`; an unknown name fails loudly ("no module, library or package named X"); notes/packages.md is corrected to match.
 - file-words-implicit (user): every word of lib/file.warp (write, exists, append, delete…) works without `use file`, like `read`; its first use loads the bundled module on demand (built-in-lib); the host's capability check still applies.
 - bare-append-file (user): `append("log.txt", "line")` with two texts is the file word `append(file: File, content: any)`, with a warning suggesting the File type or a path literal (`~/my/path`), or `"a" + "b"` for concatenation; a File or path literal takes it silently; `file.append` (P183) is the explicit form.
 - dropped-error-raises (user): an Error value a statement drops raises and stops the run with its message (`write("nofolder/x", "hi"); print "after"` fails loudly); kept errors stay values (`r = write(…)`, `print write(…)`), `try` catches.
@@ -511,6 +513,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
+- markup-keeps (user): interactive markup is library-first. Core: (1) a tag block's items are expressions like any block's (module rules walk them, a phrase headed by a bound function is a call, unbound words stay data), ~15–25 lines; (2) automatic liveness, ~20 lines: an item reading a variable written later is kept as code (`is varying`), so `p{ "count: " + count }` updates after a click. Library: `on(event, handler: block)` (comma allowed before it), live parts re-evaluated after a handler with only changed output patched, a Live class showing its current value natively, `input{ bind: name }` as a lib/sugar rule, keyed instances by hand `instance(t, () => Counter(t))` (automatic keying ~20 core lines later if programs need it). General, not web: any library (terminal UI, native canvas, sound, `on change`) uses the same live API; core names carry no web words. Rejected: React-style re-render.
+- markup-handler-comma (user): a handler inside a tag may be separated by a comma, `button{ "+1", on click { count += 1 } }`, if that makes the reading easier.
 - P188 stay close to HTML and CSS; only the basic machinery. web-keyframes: CSS's own `@keyframes`; warp adds only `leave:`.
 - html-meta: page facts are keys on html (`title:`, `description:`, `meta: {…}`).
 - key-if: inside `on key {…}` bare `key` reads event.key; named keys compare as words (ESC, ENTER, UP); held-key: `held_key` is the held key's name.
@@ -538,6 +542,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
+- core-hygiene (user, notes/core_hygiene.md): all five moves go ahead. D (tuples, safe_navigation → lib/sugar; number_words → lib/english; entities.tsv → lib data; durations → runtime/extended) at once as plain relocation; A (libraries declare their host imports and compile-time words, removing host_words, std_module_names, canvas words, the rule_words table, wgsl baking), B (GPU lists an extension behind list-kind hooks), C (one parser rule for a named language's literal with holes: shader, wgsl, sql, sh) and E (@primitive, times, C FFI loaded only when used) are sized first, core line counts back to the user before building.
 - method-clash-from-source: a linked module whose class methods share a name with the program's classes is compiled from source (compiler note); real binding is card class-method-linking.
 - linked-variants-by-arity: linking keeps every variant of a name, a call takes the one whose arity fits; none fits → refused naming the variants.
 - baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
@@ -748,3 +753,9 @@ the original questions 1–41: test edits and housekeeping done.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
 - playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.
 - library-words-lexical (user 2026-11-01): library code keeps its own words: a library body's call of a word the program redefines stays the library's (`round(x) := 0; round_to(2.345, 2)` is 2.35); a program's word answers only the program's calls.
+
+## egraph-outside-library (user, 2026-11-01)
+egraph is the first outside library: it lives in the registry github.com/pannous/warp-packages (egraph/), used by its
+path (`use "packages/egraph/egraph.warp"`, decision package-use-by-path), not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
+- markup-keeps final (user, 2026-11-01, via the Interviewer): lib-first; core only fix 1 (tag items are expressions,
+  ~15–25 lines) and automatic liveness (~20); keyed instances by hand for now (no core part d). warp-markup builds.

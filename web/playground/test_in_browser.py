@@ -10,6 +10,8 @@ playground instead, with --site once it serves those built files.
 `test_in_browser.py --examples --firefox [--url …|--site …] [name…]` runs the same check in headless Firefox
 (firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome; `--safari` in Safari (safaridriver, classic
 WebDriver: macOS CI runners, after `sudo safaridriver --enable`; its console is not watched).
+`test_in_browser.py --examples --guide` checks the guide instead (guide.md: each snippet's `=> value` and ```printed
+lines); with example names, both.
 `test_in_browser.py --examples --site _site [name…]` checks it in a collected site (pages.yml), served as its root: a file
 the deploy forgot fails here, not on the live page.
 `test_in_browser.py --samples [samples/….warp…]` (scripts/samples-web.sh) runs every sample in the page, each as its own
@@ -91,6 +93,16 @@ BROWSER_OWN_WARNINGS = {"No available adapters.", "A valid external Instance ref
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
+# `--examples --guide`: every guide.md snippet's `=> value` and ```printed lines in the page (guide.js SNIPPET_FENCE)
+GUIDE = "--guide"
+GUIDE_FILE = "web/playground/guide.md"
+SNIPPET_FENCE = re.compile(r"^```warp(?: => (.*))?$")
+PRINTED_FENCE = "```printed"
+# a snippet run in the page (%s: its code as JSON, the milliseconds it may take): its value and stdout, or {stuck}
+RUN_SNIPPET = """(async () => {
+	const report = await Promise.race([playground.evaluate(%s), new Promise(done => setTimeout(() => done({ stuck: true }), %d))]);
+	return JSON.stringify(report.stuck ? report : { value: report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
+})()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
 TEXT_HOLE_CODE = 'n = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 } "add" } "clicked " + n + " times" } }'
 TEXT_HOLE_CLICKS = 3
@@ -1020,6 +1032,45 @@ class MemoryWatch:
 		return sorted(found, reverse=True)
 
 
+def guide_snippets(path=os.path.join(REPOSITORY, GUIDE_FILE)):
+	"""(line, code, value, printed) of each guide fence that shows a value (```warp => value) or what it prints (a
+	```printed fence right after it), as guide.js renders them"""
+	with open(path, encoding="utf-8") as guide:
+		lines = guide.read().split("\n")
+	def fence_body(index):
+		body = []
+		index += 1
+		while index < len(lines) and lines[index] != "```":
+			body.append(lines[index])
+			index += 1
+		return "\n".join(body), index
+	snippets, index = [], 0
+	while index < len(lines):
+		fence = SNIPPET_FENCE.match(lines[index])
+		if fence:
+			line = index + 1
+			code, index = fence_body(index)
+			printed = None
+			if index + 1 < len(lines) and lines[index + 1] == PRINTED_FENCE:
+				printed, index = fence_body(index + 1)
+			if fence.group(1) is not None or printed is not None:
+				snippets.append((line, code, fence.group(1), printed))
+		index += 1
+	return snippets
+
+
+def snippet_wrong(code, value, printed):
+	"""what the page shows otherwise than the guide says of a snippet: its value and printed lines"""
+	answer = browser("eval", RUN_SNIPPET % (json.dumps(code), SAMPLE_ANSWER_SECONDS * 1000))
+	shown = json.loads(json.loads(answer)) if answer.startswith('"') else {"value": f"(page gave no answer: {answer or browser_complaint})", "printed": ""}
+	if shown.get("stuck"):
+		return [f"no answer after {SAMPLE_ANSWER_SECONDS} s"]
+	wrong = [f"value: {shown['value']!r}, the guide shows {value!r}"] if value is not None and shown["value"] != value else []
+	if printed is not None and shown["printed"].rstrip("\n") != printed:
+		wrong.append(f"printed: {shown['printed']!r}, the guide shows {printed!r}")
+	return wrong
+
+
 def check_examples(names, page_url=None, site=None):
 	"""every example of the tour shows its value and prints its text in the playground (the local build, the collected
 	`site` directory, or the deployed one at `page_url`), and neither loading the page nor showing an example or a sample
@@ -1069,6 +1120,9 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
+	snippets = guide_snippets() if GUIDE in names else []
+	for line, code, value, printed in snippets:
+		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
 	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
@@ -1079,7 +1133,7 @@ def check_examples(names, page_url=None, site=None):
 		if failures:
 			show_served()
 	memory.report()
-	checked = len(chosen) + 1 + len(extra_checks)
+	checked = len(chosen) + 1 + len(snippets) + len(extra_checks)
 	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 

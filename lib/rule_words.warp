@@ -5,6 +5,9 @@
 # warp functions as one WGSL shader (lib/prelude.warp paint rules) are lib/wgsl.warp's words
 use wgsl
 
+# the mark of a program's function named as a library word, its own (core/passes/prelude_words.warp own_word)
+own_mark = "·own"
+
 # where a path parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
 parameter_ends = ":(?*+"
 
@@ -19,8 +22,8 @@ path_parameter(part: text): text := {
 	name
 }
 
-# `users` → "users": a name as the text it is spelled by
-spelled(name: Node): text := "${name}"
+# `users` → "users": a name as the text it is spelled by, a program's own word as written (twice·own → "twice")
+spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 
 # `x > 1500` and m → `x > 1500 * m`: a unit after an expression multiplies its last amount, through the operators
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no number, or starts with a unit
@@ -216,7 +219,7 @@ body_of(name: Node, program: Node): any := {
 doc_of(name: Node, program: Node, source: text): text := {
 	body = body_of(name, program)
 	if body != ø and is_sequence_block(body) and #body > 1 and body#1 is text { return "${body#1}" }
-	word = "${name}"
+	word = spelled(name)
 	found = comment_above(source, word)
 	modules = word_index(word_index_file()).get(word) ?? []
 	for module in modules { if found == "" { found = comment_above(used_module_text(module), word) } }
@@ -240,7 +243,7 @@ comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1)
 definition_text(name: Node, program: Node, source: text): any := {
 	definition = function_definition(name, program)
 	if definition == ø { return ø }
-	written_definition(source, "${name}") ?? serialize(view_of(definition))
+	written_definition(source, spelled(name)) ?? serialize(view_of(definition))
 }
 # the definition as the source writes it: from its head to the end of its statement, a `;` or a line's end outside
 # brackets and texts; ø when no statement of the source defines the word
