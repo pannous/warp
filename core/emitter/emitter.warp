@@ -439,7 +439,7 @@ def defined_arities(program: Node): map {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {} }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {} }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -694,8 +694,8 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 
 # a variable an Error raises in (decision errors-one-rule): any but an optional one (`r: json? = …`), a runtime
 # word's own, or a lowering's hidden one (try·value)
-def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and not (name in body.declared and (body.declared[name].ends_with("?") or body.declared[name] == "error"))
-def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and plain_place(body, name) then runtime_call("raised_if_error", [value]) else value
+def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and name not in body.kept
+def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
 	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
@@ -774,6 +774,7 @@ admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
+	if type_name.ends_with("?") or type_name == "error" { body.kept[name] = yes }
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
