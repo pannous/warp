@@ -94,7 +94,7 @@ or `as float`; compare them with `≈`, not `==`.
 
 Numbers can have units.
 
-```warp => 150min
+```warp => 2.5h
 2h + 30min
 ```
 

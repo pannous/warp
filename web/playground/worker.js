@@ -58,6 +58,7 @@ const hooks = {
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
 	resizeWindow: (width, height) => post({ type: "window", width, height }), // window.width = 800 (canvas.js)
+	fullScreen: full => post({ type: "full screen", full }), // window.fullscreen = yes (playground.js fullScreen)
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
@@ -178,7 +179,14 @@ const memberNames = () => [];
 
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
+	if (live?.exports.page_event) return showPageEvent(live, pageEventHandled(live, event, detail));
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
+}
+
+// a page of markup after its handler (driver.js pageEventHandled): the value, the page, the handlers it has now
+function showPageEvent(holder, { value, html, error, events }) {
+	post({ type: "handled", value, html, error });
+	if (events) post({ type: "listening", events: events.map(event => `on ${event}`), address: addressOf(holder) });
 }
 
 // what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/signals/event_signals.rs

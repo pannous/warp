@@ -1,0 +1,4 @@
+# gpu_compute runs a WGSL compute shader over a list; a shader that fails to compile raises with the WGSL error
+'gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1)'	[2]
+'try { gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1) } catch e { "reserved keyword" in e.message }'	yes
+'left = gpu_compute("@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }", [1.0], 1); 3'	error	a shader that fails to compile raises, as on the page, even when its answer is kept

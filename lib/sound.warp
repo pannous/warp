@@ -410,13 +410,14 @@ global unison = 1
 global detune = 0.1 as float
 
 // the cycles a wave of frequency f has run at sample i, its vibrato included: the integral of f · (1 + c·sin(2π r t))
-phase(f, i) := {
-	t = sample_time(i)
-	depth = 2 ^ (vibrato / 12) - 1
-	f * t + (if vibrato == 0 then 0.0 else f * depth * (1 - cos(2 * pi * vibrato_rate * t)) / (2 * pi * vibrato_rate))
-}
+phase(f, i) := phase_at(f, sample_time(i), vibrato_depth(), float(vibrato_rate))
+// the share the vibrato swings the pitch by, a float: `vibrato = 0.5` is an exact ratio, whose math each sample took
+// seconds a note
+vibrato_depth() := 2 ^ (float(vibrato) / 12) - 1
+phase_at(f, t, depth, rate) := f * t + (if depth == 0 then 0.0 else f * depth * (1 - cos(2 * pi * rate * t)) / (2 * pi * rate))
 // the gain of the tremolo at sample i: 1 at the start, 1 - tremolo at its lowest
-tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * sample_time(i)))
+tremolo_gain(i) := tremolo_gain_at(sample_time(i), float(tremolo), float(tremolo_rate))
+tremolo_gain_at(t, share, rate) := if share == 0 then 1.0 else 1 - share * (0.5 - 0.5 * cos(2 * pi * rate * t))
 voices_of(pitches) := if unison <= 1 then pitches else [frequency * 2^(detune * (k / (unison - 1) - 0.5) / 12) for frequency in pitches for k in 0..unison]
 // the amplitudes through one effect, mono, in warp so every host has it (as Rust's rust-harness:src/sound/effects.rs on_signal):
 // ["gain", g]; ["lowpass", hertz, q], also highpass and bandpass, and ["peak", hertz, dB, q], low_shelf, high_shelf
@@ -533,7 +534,18 @@ chord_amplitudes(pitches, duration, shape) := {
 	n = round(duration * sample_rate) as int
 	voices = voices_of(pitches)
 	share = loudness * loudest_sample / count(voices)
-	[share * envelope(i, n) * tremolo_gain(i) * sum([wave(shape, phase(frequency, i) % 1, frequency / sample_rate) for frequency in voices]) for i in 0..n]
+	// voice by voice into one sum: a list per sample to sum made a two-second chord take seconds
+	// the settings once a chord, as floats
+	depth = vibrato_depth()
+	rate = float(vibrato_rate)
+	sounding = [0.0 for i in 0..n]
+	for frequency in voices {
+		step = frequency / sample_rate
+		for i in 0..<n { sounding[i] += wave(shape, phase_at(frequency, sample_time(i), depth, rate) % 1, step) }
+	}
+	dip = float(tremolo)
+	dip_rate = float(tremolo_rate)
+	[share * envelope(i, n) * tremolo_gain_at(sample_time(i), dip, dip_rate) * sounding[i] for i in 0..n]
 }
 // the samples of frequencies sounding together
 chord_samples(pitches, duration, shape) := [sample_offset + (round(a) as int) for a in filtered(chord_amplitudes(pitches, duration, shape))]
@@ -1203,11 +1215,134 @@ midi_inputs() := std_io("midi", "inputs", [])
 midi_receive(port = "", seconds = 0) := std_io("midi", "receive", [port, seconds])
 // a Standard MIDI File of notes [start, pitch, length, velocity] (seconds, frequency or note, seconds, 1 to 127) at
 // 120 beats a minute, and the notes of such a file the same way: write_midi("tune.mid", [[0, C4, 0.5, 100]])
-write_midi(path, notes) := std_io("midi", "write_file", [path, [v for entry in notes for v in [round(entry#1 * 1000) as int, midi(entry#2), round(si_amount(entry#3) * 1000) as int, entry#4]]])
-read_midi(path) := {
-	flat = std_io("midi", "read_file", [path])
-	[[flat#(4 * i + 1) / 1000.0, midi_hertz(flat#(4 * i + 2)), flat#(4 * i + 3) / 1000.0, flat#(4 * i + 4)] for i in 0..((count(flat) / 4) as int)]
+// The file is made and read in warp, the same on every host: format 0, one track, MIDI_TICKS_PER_QUARTER ticks a
+// quarter note at MIDI_MICROSECONDS_PER_QUARTER (120 beats a minute)
+write_midi(path, notes) := write_bytes(path, midi_file(notes))
+read_midi(path) := midi_notes(read_bytes(path))
+MIDI_TICKS_PER_QUARTER = 480
+MIDI_MICROSECONDS_PER_QUARTER = 500000
+MIDI_NOTE_ON = 144
+MIDI_NOTE_OFF = 128
+MIDI_META = 255
+MIDI_TEMPO = 81
+MIDI_TRACK_END = 47
+MIDI_SYSTEM_EXCLUSIVE = [240, 247]
+midi_ticks_per_second() := MIDI_TICKS_PER_QUARTER * 1000000 / MIDI_MICROSECONDS_PER_QUARTER
+midi_ticks(seconds) := round(max(0, seconds) * midi_ticks_per_second()) as int
+big_endian(n, width) := [(n / 256 ** (width - 1 - i)) as int % 256 for i in 0..width]
+big_endian_at(bytes, at, width) := sum([bytes[at + i] * 256 ** (width - 1 - i) for i in 0..width]) as int
+// a delay as MIDI writes it: seven bits a byte, the first ones marked by their high bit
+midi_variable_length(n) := {
+	groups = [n % 128]
+	rest = (n / 128) as int
+	while rest > 0 {
+		groups = [rest % 128 + 128] + groups
+		rest = (rest / 128) as int
+	}
+	groups
 }
+midi_chunk(kind, body) := codes(kind) + big_endian(count(body), 4) + body
+// the bytes of a Standard MIDI File of notes [start, pitch, length, velocity]
+midi_file(notes) := {
+	events = []
+	for note in notes {
+		key = midi(note#2)
+		if key < 0 or key > 127 { raise "MIDI keys are 0 to 127, got " + str(key) }
+		on = midi_ticks(note#1)
+		events = events + [[on, 1, [MIDI_NOTE_ON, key, min(127, max(1, note#4))]], [max(on, midi_ticks(note#1 + si_amount(note#3))), 0, [MIDI_NOTE_OFF, key, 0]]]
+	}
+	// by tick, a note's end before a note's start at the same tick
+	track = [0, MIDI_META, MIDI_TEMPO, 3] + big_endian(MIDI_MICROSECONDS_PER_QUARTER, 3)
+	now = 0
+	for event in list_sorted_by(events, [event#1 * 2 + event#2 for event in events]) {
+		track = track + midi_variable_length(event#1 - now) + event#3
+		now = event#1
+	}
+	track = track + [0, MIDI_META, MIDI_TRACK_END, 0]
+	midi_chunk("MThd", big_endian(0, 2) + big_endian(1, 2) + big_endian(MIDI_TICKS_PER_QUARTER, 2)) + midi_chunk("MTrk", track)
+}
+// a delay or a length as MIDI writes it, at byte `at`: [its value, the byte after it]
+midi_length_at(bytes, at) := {
+	value = 0
+	next = at
+	while bytes[next] >= 128 {
+		value = value * 128 + bytes[next] % 128
+		next += 1
+	}
+	[value * 128 + bytes[next], next + 1]
+}
+// the notes [start, pitch, length, velocity] of a Standard MIDI File's bytes, in seconds to the millisecond, each note's
+// key as its frequency, by their start and then their key; every track's, timed by the file's tempo changes
+midi_notes(bytes) := {
+	if count(bytes) < 14 or bytes[0..4] != codes("MThd") { raise "not a MIDI file (it does not start with MThd)" }
+	division = big_endian_at(bytes, 12, 2)
+	if division >= 32768 { raise "MIDI files timed in SMPTE frames are not supported, only ticks per quarter note" }
+	tempi = [[0, MIDI_MICROSECONDS_PER_QUARTER]]
+	// [tick, sounding, channel, key, velocity], each note's start and end
+	messages = []
+	at = 8 + big_endian_at(bytes, 4, 4)
+	for track in 0..big_endian_at(bytes, 10, 2) {
+		end = at + 8 + big_endian_at(bytes, at + 4, 4)
+		in_track = bytes[at..at + 4] == codes("MTrk")
+		at = if in_track then at + 8 else end
+		tick = 0
+		status = 0
+		while at < end {
+			delay = midi_length_at(bytes, at)
+			tick += delay#1
+			at = delay#2
+			if bytes[at] >= 128 {
+				status = bytes[at]
+				at += 1
+			}
+			if status == MIDI_META {
+				size = midi_length_at(bytes, at + 1)
+				if bytes[at] == MIDI_TEMPO and size#1 == 3 { tempi = tempi + [[tick, big_endian_at(bytes, size#2, 3)]] }
+				at = size#2 + size#1
+			} else if status in MIDI_SYSTEM_EXCLUSIVE {
+				size = midi_length_at(bytes, at)
+				at = size#2 + size#1
+			} else {
+				kind = status - status % 16
+				one = bytes[at]
+				two = if kind == 192 or kind == 208 then 0 else bytes[at + 1]
+				at += if kind == 192 or kind == 208 then 1 else 2
+				if kind == MIDI_NOTE_ON or kind == MIDI_NOTE_OFF { messages = messages + [[tick, kind == MIDI_NOTE_ON and two > 0, status % 16, one, two]] }
+			}
+		}
+		at = end
+	}
+	milliseconds = tick => midi_milliseconds(tick, tempi, division)
+	sounding = []
+	notes = []
+	for message in messages {
+		if message#2 {
+			sounding = sounding + [message]
+		} else {
+			started = sounding.filter(m => m#3 == message#3 and m#4 == message#4)
+			if count(started) > 0 {
+				first = started#1
+				sounding = sounding.filter(m => not same_node(m, first))
+				notes = notes + [[milliseconds(first#1), first#4, milliseconds(message#1) - milliseconds(first#1), first#5]]
+			}
+		}
+	}
+	[[note#1 / 1000.0, midi_hertz(note#2), note#3 / 1000.0, note#4] for note in list_sorted_by(notes, [note#1 * 128 + note#2 for note in notes])]
+}
+// the milliseconds at a tick of a file whose tempo changes at the ticks of tempi ([tick, microseconds a quarter])
+midi_milliseconds(tick, tempi, division) := {
+	seconds = 0.0
+	from = 0
+	tempo = MIDI_MICROSECONDS_PER_QUARTER
+	for change in tempi {
+		if change#1 >= tick { return round((seconds + (tick - from) * tempo / 1000000.0 / division) * 1000) as int }
+		seconds += (change#1 - from) * tempo / 1000000.0 / division
+		from = change#1
+		tempo = change#2
+	}
+	round((seconds + (tick - from) * tempo / 1000000.0 / division) * 1000) as int
+}
+
 
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
 // audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to

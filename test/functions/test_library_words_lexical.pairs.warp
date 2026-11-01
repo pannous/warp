@@ -1,0 +1,8 @@
+# a program's word named as a library word answers only the program's calls it takes; a library body keeps its own (decision library-words-lexical)
+'round(x) := 0; round(2.345, 2)'	2.35
+'round(x) := 0; round_to(2.345, 2)'	2.35
+'round(x) := 0; round(2.345)'	0
+'abs(x, y) := 9; abs(-2) + abs(1, 1)'	11
+'first(x) := x * 2; [first(4), first([5,6,7], 2)]'	[8, [5, 6]]
+'use math; clamp(x) := 9; clamp(5, 0, 3) + clamp(1)'	12
+'double(x) := x * 2; round(x) := 7; map([1.4], round)'	[7]

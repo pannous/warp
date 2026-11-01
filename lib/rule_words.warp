@@ -5,6 +5,9 @@
 # warp functions as one WGSL shader (lib/prelude.warp paint rules) are lib/wgsl.warp's words
 use wgsl
 
+# the mark of a program's function named as a library word, its own (core/passes/prelude_words.warp own_word)
+own_mark = "·own"
+
 # where a path parameter's name ends: its type `:id:int`, a pattern `:id(\d+)`, a mark `:tab?` `:path*` `:path+`
 parameter_ends = ":(?*+"
 
@@ -19,8 +22,8 @@ path_parameter(part: text): text := {
 	name
 }
 
-# `users` → "users": a name as the text it is spelled by
-spelled(name: Node): text := "${name}"
+# `users` → "users": a name as the text it is spelled by, a program's own word as written (twice·own → "twice")
+spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 
 # `x > 1500` and m → `x > 1500 * m`: a unit after an expression multiplies its last amount, through the operators
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no number, or starts with a unit
@@ -50,6 +53,7 @@ served(program: Node): any := ended_by(program, "route_add", routes_end_word)
 # a program with frame listeners, ending in its frames (lib/frames.warp frames_end): one, as no window opens
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
+exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
 # that declares
@@ -67,7 +71,7 @@ is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" an
 
 # --- variable signals (lib/signals.warp's rules, card signals-lib) ---
 
-signal_listen_word = "signal_listen"
+variable_listen_word = "variable_listen"
 signal_old = "signal·old"
 # `whenever x > y {…}`: a listener of each name the condition reads, running the block when the write made the
 # condition hold, it holding not with the name's old value: `if value > y and not old > y {…}` for x
@@ -78,7 +82,7 @@ condition_listens(condition: Node, body: Node, flags: list): Node := {
 	unfired = flags.map(flag => Key(ø, Op.Not, Key(flag, Op.Hash, 1)))
 	block = if #flags == 0 then body else List(flags.map(flag => Key(Key(flag, Op.Hash, 1), Op.Assign, Node.True)) + [body], Bracket.Curly, Separator.Semicolon)
 	declared = flags.map(flag => Key(flag, Op.Assign, List([Node.False], Bracket.Square, Separator.Comma)))
-	listens = symbol_words(condition).map(name => call_of(signal_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
+	listens = symbol_words(condition).map(name => call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
 	separated(bracketed(declared + listens, "("), ";")
 }
 became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
@@ -107,13 +111,13 @@ gpu_lists_packed(program: Node): any := {
 	statements = level_statements(program)
 	bound = statements.filter(statement => is_key(statement, Op.Assign) and gpu_bound(key_of(statement), program))
 	if #bound == 0 { return ø }
-	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement)))) else statement)
+	packed = statements.map(statement => if statement in bound then plain_node(parsed(as_code(key_of(statement)) + " = " + gpu_packed_code(value_of(statement), "f32"))) else statement)
 	separated(bracketed(packed, ""), ";")
 }
 # a list made right in a GPU word's call made as a GPU list, else ø
 gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
-# the names the statement's signal_listen calls listen to
-names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, signal_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
+# the names the statement's variable_listen calls listen to
+names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
 # each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
 # changes
 derived_inputs(statements: list): map := {
@@ -216,7 +220,7 @@ body_of(name: Node, program: Node): any := {
 doc_of(name: Node, program: Node, source: text): text := {
 	body = body_of(name, program)
 	if body != ø and is_sequence_block(body) and #body > 1 and body#1 is text { return "${body#1}" }
-	word = "${name}"
+	word = spelled(name)
 	found = comment_above(source, word)
 	modules = word_index(word_index_file()).get(word) ?? []
 	for module in modules { if found == "" { found = comment_above(used_module_text(module), word) } }
@@ -240,7 +244,7 @@ comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1)
 definition_text(name: Node, program: Node, source: text): any := {
 	definition = function_definition(name, program)
 	if definition == ø { return ø }
-	written_definition(source, "${name}") ?? serialize(view_of(definition))
+	written_definition(source, spelled(name)) ?? serialize(view_of(definition))
 }
 # the definition as the source writes it: from its head to the end of its statement, a `;` or a line's end outside
 # brackets and texts; ø when no statement of the source defines the word
@@ -315,7 +319,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed}
+rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {

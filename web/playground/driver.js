@@ -49,7 +49,10 @@ function withWasi(imports, wasi) {
 // print (the page's value line, apart from what it printed); else _start, else a primitive module's main
 function ranToEnd(exports, output, exitCode = () => undefined, shown) {
 	try {
-		if (shown && exports.show && exports.main) shown(shownValue(exports, exports.main()));
+		if (shown && exports.show && exports.main) {
+			const value = exports.main();
+			shown(shownValue(exports, value), value);
+		}
 		else if (exports._start) exports._start();
 		else printedResult(exports.main(), output);
 		return 0;
@@ -137,10 +140,10 @@ function withSource(code, file, work) {
 // what a run said on stderr, printed when it ended well, its failure when not, and its value when `valued`:
 // { status, said, value }
 function ranSaying(exports, print, exitCode, valued = false) {
-	let said = "", value = "";
-	const status = ranToEnd(exports, (text, stream) => stream === STDERR ? said += text : print(text, stream), exitCode, valued ? shown => value = shown : undefined);
+	let said = "", value = "", result;
+	const status = ranToEnd(exports, (text, stream) => stream === STDERR ? said += text : print(text, stream), exitCode, valued ? (shown, node) => { value = shown; result = node; } : undefined);
 	if (status === 0 && said) print(said, STDERR);
-	return { status, said: said.trimEnd(), value };
+	return { status, said: said.trimEnd(), value, result };
 }
 
 // warp.wasm compiles the file: { module } the bytes it wrote, else { failure } what it said
@@ -171,7 +174,8 @@ function programRan(bytes, file, hooks) {
 	}
 	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode, true);
 	eachHostPart("finished", holder, hooks);
-	return ran;
+	holder.value = ran.result;
+	return { ...ran, holder };
 }
 
 // the code compiled and run as `warp <file>` runs it: what the page shows of it (playground.js showReport), a failure's
@@ -182,9 +186,46 @@ function evaluatedNatively(code, file, hooks) {
 		const compiled = compiledProgram(source, hooks.print);
 		if (compiled.failure) return report(compiled.failure, FAILURE_STATUS);
 		hooks.module?.(compiled.module);
-		const { status, said, value } = programRan(compiled.module, source, hooks);
-		return report(status === 0 ? value : said, status);
+		const { status, said, value, holder } = programRan(compiled.module, source, hooks);
+		const html = status === 0 ? pageHtml(holder) : undefined;
+		if (html !== undefined && holder.exports.page_event) hooks.listen?.(holder, pageEventsOf(html));
+		return { ...report(status === 0 ? value : said, status), html };
 	});
+}
+
+// ---- a page of markup (lib/markup.warp, card markup-keeps): page_render(value) is the HTML of main's value, each
+// handler numbered anew from 1 as data-warp-<event>="<n>"; page_event(n, detail) runs handler n of the last render
+
+// the HTML of the run's value by its page_render, undefined for a program without one
+function pageHtml(holder) {
+	const render = holder?.exports.page_render;
+	return render && holder.value != null ? guestText(holder.exports, render(holder.value)) : undefined;
+}
+
+// the markup's attributes of data-warp-… that name no handler (markup.js)
+const MARKUP_DATA_ATTRIBUTES = ["key", "instance", "leaving", "scope"];
+const HANDLER_ATTRIBUTE = /\bdata-warp-(\w+)="(\d+)"/g;
+// the element events the HTML has handlers for, as the page names them: click·1, input·2
+const pageEventsOf = html => [...html.matchAll(HANDLER_ATTRIBUTE)].filter(([, event]) => !MARKUP_DATA_ATTRIBUTES.includes(event)).map(([, event, n]) => `${event}·${n}`);
+
+// an element event (click·1) of the page: its handler run with the event's detail, then the page rendered anew:
+// { value, html, events } or { value: the failure, error }
+function pageEventHandled(holder, event, detail) {
+	const { exports } = holder;
+	const n = BigInt(event.slice(event.lastIndexOf("·") + 1));
+	try {
+		const given = newGuestValue(exports, detail ?? null);
+		try {
+			exports.page_event(n, given);
+		} catch (failure) {
+			if (!(failure instanceof TypeError)) throw failure; // n is a Node parameter: the call never started
+			exports.page_event(exports.new_int(n), given);
+		}
+		const html = pageHtml(holder);
+		return { value: shownValue(exports, holder.value), html, events: pageEventsOf(html) };
+	} catch (failure) {
+		return { value: raisedMessage(exports, failure), error: true };
+	}
 }
 
 const report = (value, status) => ({ value, error: status !== 0 && value !== "", status, warnings: [], runtime_warnings: [], hints: [], notes: [] });
