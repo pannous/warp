@@ -136,3 +136,22 @@ The cheap version: one extension table in compiler.warp (name → trigger test �
 call sites) move under core/extensions/ and are reached only through that table: ~+30 core lines, ~-0 removed, many
 call sites touched (34 primitive, 42 C, 107 time). Benefit: honest folders and a scan skipped per source; size and
 risk high for times (spread through the emitter). Recommend: primitive and FFI via the table, times later or never.
+
+### Should lib/sugar/ move under core/? (user wording rule 2026-11-01: a rule giving the language a new spelling is an extension, not library)
+
+By that wording the 23 files of lib/sugar/ (480 lines, tuples and safe_navigation from move D among them) are
+extensions. Moving the folder is mechanical; what it changes is the cost of every later sugar edit:
+- **References:** core/passes/rewrites.warp (sugar_folder and the 7 placed name lists, `"sugar/x"` →
+  `"compiler/sugar/x"`), core/parsing/parser.warp BUNDLED_CORE_FOLDERS (add `compiler/sugar`, else the rules are
+  parsed at each run, ~25 ms a program), ~46 files naming `lib/sugar/` in comments (core, lib, test, notes, wiki: one
+  fastmod), web/playground keywords.py if it lists sugar words. No test reads the path.
+- **Cost:** core/** is compiler code (scripts/compiler-inputs.sh hashes it as code, `--baked` too). A sugar edit today
+  is a lib rebake (~1 min, no compiler build, smoke test only); under core/ it is a full compiler build (~6 min CPU,
+  97c39a1f this branch: cpu=365 s) plus self-check, and by common.md's core rule it needs the user's OK first. Rewrite
+  rules are the cheap way to add syntax (notes/layers.md); moving them into core makes them as dear as a parser branch.
+- **Risk:** low technically (paths only); high for the workflow above.
+- **Options:** (a) `core/sugar/` with that cost; (b) rename to `lib/extensions/` (or keep lib/sugar/ and call its files
+  "extensions written as rules" in common.md): the wording matches, the cheap rebake stays, risk low; (c) core/sugar/
+  hashed as data like BAKED lib files (a special case in compiler-inputs.sh: not recommended).
+  Recommended: (b) `lib/extensions/` — "extension" by name, rebaked like data; core/extensions/ keeps the
+  extensions that need compiler code (primitive). Same for D: tuples and safe_navigation would sit in lib/extensions/.
