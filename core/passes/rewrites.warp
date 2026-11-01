@@ -976,14 +976,26 @@ definitions_signatures(program: Node): map := definitions_signatures_in(nodes_in
 definitions_signatures_in(nodes: list): map := {
 	signatures = {}
 	for n in nodes {
-		call = definition_call(n)
+		call = definition_call(n) ?? implicit_call(n)
 		if call != ø {
 			word = name_of(call#1)
-			signatures[word] = (if signatures.has(word) then signatures[word] else []) + [signature_of(items_of(call))]
+			signatures[word] = (if signatures.has(word) then signatures[word] else []) + [computing_signature(signature_of(items_of(call)), value_of(n))]
 		}
 	}
 	signatures
 }
+# `def square := it * it`: a lone untyped parameter that the body computes with takes a number, so `square numbers`
+# squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts
+computing_signature(signature: Signature, body: Node): Signature := {
+	if #signature.parameters != 1 { return signature }
+	parameter = signature.parameters#1
+	if parameter.type_name != "" or parameter.rest or not computes_with(body, symbol(parameter.name)) { return signature }
+	Signature(parameters: [Parameter(name: parameter.name, type_name: number_word)])
+}
+# `def square := it * it` as the call `square(it)` it is
+implicit_call(n: Node): Node? := if is_key(n, Op.Define) and key_of(n) is symbol and mentions(value_of(n), implicit_parameter) then bracketed([key_of(n), symbol(implicit_parameter)], "(") else ø
+computing_ops = [Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
+computes_with(body: Node, name: Node): bool := nodes_in(body).any(n => n is key and op_of(n) in computing_ops and key_of(n) != ø and (key_of(n) == name or value_of(n) == name))
 # `f(x: int) := …`: f → "int", for each definition of the program with a typed first parameter
 typed_first_parameters(program: Node): map := typed_first_parameters_in(nodes_in(program))
 typed_first_parameters_in(nodes: list): map := {
@@ -1273,26 +1285,6 @@ context_holds(code: Node, context: text): bool := {
 	locally_bound(starting_word(code))
 }
 
-# bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding): the method part
-# of a `.` is tried as such, a definition's parts inside the names it binds
-bottom_up_placed(n: Node, f: function): Node := {
-	if is_key(n, Op.Dot) {
-		left = bottom_up_placed(key_of(n), f)
-		part = children(value_of(n), x => bottom_up_placed(x, f))
-		outer_part = rule_method_part
-		rule_method_part = part
-		right = f(part)
-		rule_method_part = outer_part
-		return f(Key(left, Op.Dot, right))
-	}
-	if not is_key(n, Op.Define) { return f(children(n, x => bottom_up_placed(x, f))) }
-	outer = rule_binding
-	rule_binding = rule_binding + bound_by_definition(n)
-	walked = children(n, x => bottom_up_placed(x, f))
-	rule_binding = outer
-	f(walked)
-}
-
 # the names a definition binds inside it: its parameters, the names its body's statements declare
 bound_by_definition(definition: Node): list := {
 	names = []
@@ -1436,17 +1428,7 @@ map_names_in(nodes: list, outer: map): map := {
 	only_maps
 }
 
-# the node walked bottom-up by f, rule_maps holding the names that hold a map where f meets each node: those of the
-# program, inside a function its own over them, as Rust's Names::within (a list `found` beside another function's
-# map `found`; a nested function's maps stay its own)
-map_scoped_bottom_up(n: Node, f: function, maps: map): Node := {
-	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
-	walked = children(n, x => map_scoped_bottom_up(x, f, inner))
-	rule_maps = maps
-	f(walked)
-}
-
-# bottom_up_placed and map_scoped_bottom_up in one walk, for the rules: the method part of a `.` tried as such, a
+# bottom-up for the rules, keeping where the node they try stands: the method part of a `.` tried as such, a
 # definition's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
 # hold a map where f meets each node, a function's own inside it (merge of engine-rule-conditions with main's
 # map scoping)
@@ -1472,7 +1454,8 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 	outer_defining = rule_defining
 	rule_binding = rule_binding + bound_by_definition(n)
 	rule_defining = head_word(key_of(n))
-	walked = children(n, x => placed_map_scoped(x, f, inner))
+	# `square(x) := …` names its parameters, no call: only they are tried, so broadcasting leaves the head as it is
+	walked = if is_called_head(key_of(n)) then placed(Key(head_with_parameters(key_of(n), x => placed_map_scoped(x, f, inner)), Op.Define, placed_map_scoped(value_of(n), f, inner)), n) else children(n, x => placed_map_scoped(x, f, inner))
 	rule_binding = outer
 	rule_defining = outer_defining
 	rule_maps = maps
@@ -1626,13 +1609,14 @@ with_placed_parts(n: Node, placed_code: function): Node := {
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
 
+is_called_head(head: Node): bool := is_round(head) and #head > 1 and head#1 is symbol
 # the head of `f(a, b) := …` (also `f(a): T`) with each parameter changed, its name kept (F10)
 head_with_parameters(head: Node, changed: function): Node := {
 	if is_key(head, Op.Colon) {
 		inner = head_with_parameters(key_of(head), changed)
 		return if inner == key_of(head) then head else placed(Key(inner, Op.Colon, value_of(head)), head)
 	}
-	if not (is_round(head) and #head > 1 and head#1 is symbol) { return head }
+	if not is_called_head(head) { return head }
 	parameters = items_of(head)[1 ..]
 	rewritten = parameters.map(changed)
 	if rewritten == parameters then head else placed(group_like(head, [head#1] + rewritten), head)
