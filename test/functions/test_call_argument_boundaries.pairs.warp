@@ -1,0 +1,7 @@
+# a comma separates a call's arguments, a blank joins the words of one (card call-argument-flattening)
+
+'f(a, b) := [a, b]; f(4, 5 s)'	[4, 5s]
+'f(a, b) := b; f(4, s)'	1s
+'square(n) := n*n; square(square 2)'	16
+'use units; str(3 m)'	"3m"
+'sum(x * x for x in [1, 2, 3])'	14

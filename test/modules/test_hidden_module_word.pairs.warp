@@ -1,5 +1,5 @@
-# a program's word of a module word's name and arity, which another word of the module calls, is refused loudly: the
-# module would run the program's word unseen (card rule-words-core); replacing a word no other one calls stays
-'use math; norm(x) := 99; distance([3, 4], [0, 0])'	error	lib/math.warp's norm is hidden by the program's norm, which its distance would call
+# a program's word of a module word's name and arity answers the program's calls; another word of the module keeps
+# the module's own (decision library-words-lexical), so math's distance still calls math's norm
+'use math; norm(x) := 99; distance([3, 4], [0, 0])'	5
 'use math; clamp(x) := 9; clamp(5)'	9
 'use math; lerp(a, b, t) := 0; lerp(1, 2, 0.5)'	0

@@ -7,6 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- extension-wording (user): a rewrite rule giving the language a new spelling (lib/sugar) is a compiler extension, not a library; "library" means modules programs import.
 - no-fixpoint (user, 2026-10-26, to warp-fixer): "If the compiler can compile itself once more, we don't need the fixed point." warp.wasm is promoted to warp-self.wasm (and a refresh-seed stage becomes the seed) once it compiles compiler.warp again and that build runs hello; byte identity with the previous stage is only reported. The docs say "self test" instead of "fixpoint" (card fixpoint-wasm).
 - self-landing (user, 2026-10-26): "since all the workers are already testing, the recompilation and the smoke test, it's useless if the integrator does the same test again. Can they just merge directly onto main?" Workers merge origin/main into their branch, smoke-test that merge (core/: + self-check) and push it to main fast-forward; the Integrator watches main (compilers install, background tiers, full suite at rare intervals) instead of gating.
 - no-slots (user, 2026-10-26): "this whole slot mechanism was only for the Rust world. In Warp, the compilation does not bloat the whole system, so we can get rid of it. Also in the notes and scripts." scripts/slot.sh and every slot rule go; rebuilds and checks run directly (card tests-through-test).
@@ -226,6 +227,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - real-runtime: real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number type; the general run-time exact mechanism is parked (notes/real_runtime.md).
 
 ## Units and quantities
+- unit-sum-display (user): a sum of quantities keeps today's display (`2h + 30min` in hours); the guide line that says 150min is corrected.
 - #5 units yes; #3 juxtaposition `3x` multiplies; units are written glued (`3km`), `3 km` works with a hint. P64 units are checked at compile time and kept as metadata where static knowledge ends. P36 `100 cm in m` / `as m` convert within a quantity. Unit sums use the finer unit. Quantities print without a space (`500m`); P231 print rounds quantities, str() keeps the exact value. #31 `min` stays the function.
 - quantity-naming: warp says quantity (length, speed, density), axis for width/height, rank for the number of axes, shape for 28 × 28 px; `dimension` is only an alias with a hint.
 - dimensions-units: quantity names are types (`3 cm is length`; `h: length = 3 s` errs); the time quantity is `duration`; units live in lib/units.warp; a unit after a list applies to each element (`[3, 4] cm`). Predefined derived names: speed, area, volume, frequency.
@@ -275,6 +277,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 
 ## Types and annotations
+- real-canonical-core (user, ~6 core lines): `real` is no longer a rational synonym (`exact` stays); `3 is real` yes; a program's own type of a core type word shadows it; a float given to `real` converts to the exact real (2.5).
 - parameter-typed (user): `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
 - primitive-annotation (user, roadmap native-harness): `@primitive` marks GC-free code emitted as plain MVP wasm (core/extensions/primitive.warp, user OK): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 - primitive-int-width (user): `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
@@ -332,12 +335,15 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - count-words-library (user): once/twice/thrice leave both compilers and become prelude words over a block parameter, the basic demonstration of giving a block to a function (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
 - range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
+- kebab-or-minus (user): `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
+- default-parameter-def (Interviewer, small bug fix, 1 core line in definitions.warp is_parameter): `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
 - #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
-- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (open, discussed in prose: map-all-test).
+- map-all-test (user): the test reads as English, `all xs are even` and `are all xs even`, `any xs is even` and `is any xs even` (lib/sugar/broadcasting.warp); the call all(xs, f) / xs.all(f) stays yes/no for newcomers.
+- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (map-all-test).
 - int-overflow-shape (user): int-boxed-overflow-big keeps its ~23 lines with named overflow tests; no bit-trick or float shortcut.
 - words-as-values (user): a function word used as a value is the lambda of its call (`f = sqrt; f(16)` 4, `apply(floor, 2.5)` 2), bringing its module; with several arities the one its use needs, never silently the first.
 - definition-name-canonical (user): the name a definition carries is canonical for dir and everything warp prints (count stays count); internal names get canonical ones (map_keys → keys), old names become aliases or go.
@@ -409,6 +415,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cleanup-cuts: dropped compile-time lambdas, generators/yield, type-name parameters `fib int i`, scoped handlers `on … in {…}`, the defined-twice diagnostic, all phrase calls (until prepositions-call: `move x from: a to: b`). Kept: return-type overloads, tuple returns, list element checks, instance destructuring, object-shaped parameters, dispatch by class, version literals (rebuilt small). Traits are a thin alias of classes with default methods; ORM keeps only `stored people: [Person]`; `a of b` ≡ `b.a`.
 
 ## Lists, maps and indexing
+- pair-items (user, core OK ~4 lines node_at/node_length, the minimal change): a key-value pair reads as two items, `p = (a: 1); p#1` → a (the name), `p#2` → 1 (the value), `#p` → 2; host item_count/item_at the same.
 - bare-pair (user): `a:1` as a value is a pair; a word key stays the word as written, as `{a:1}`'s keys (`a = 5; x = a:1` is a:1, `x is pair` yes); any other key is its value (`1:4`); a computed key is `(a):1` → 5:1.
 - to-inclusive (user): `a to b` always includes b, also when b is a length: walking 0-based indexes is `1 ..< #a` or `1 to #a - 1` (samples/lists/sorting.warp).
 - #4/P40 `size` = count; bytes via `byte_size` / `number of bytes`; `len(x)` counts with a hint `#x`.
@@ -490,9 +497,12 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - go-voice: a `go {}` task is a voice sounding along from where its starter stands. deleted-loop: a live_loop deleted from the source stops on re-evaluation (≤ ~4 s fade).
 
 ## Modules, library and foreign code
+- host-callback-exports (user): the main module exports everything it defines, helpers included; a leading underscore (`_square`) or the keyword `private` keeps a word unexported; a library exports nothing by default, and `export f(…) := …` marks a word a host calls back (page_render, page_event, left_sample), kept whenever the module is used and exported under its name. `public` is an alias of `export` (got-it note naming it); revises P78 for private/public. ~10–15 core lines in prelude_words.warp plus the private/underscore rule. Order (warp-markup): library `export` first (~8 lines); the main-module/private half is card host-exports-own, landing with a sweep of the hosts that rely on every kept function being exported.
+- package-use-by-path (user): `use <name>` does not search packages/ or the registry; a package is used by its path, `use "packages/egraph/egraph.warp"`; an unknown name fails loudly ("no module, library or package named X"); notes/packages.md is corrected to match.
 - file-words-implicit (user): every word of lib/file.warp (write, exists, append, delete…) works without `use file`, like `read`; its first use loads the bundled module on demand (built-in-lib); the host's capability check still applies.
 - bare-append-file (user): `append("log.txt", "line")` with two texts is the file word `append(file: File, content: any)`, with a warning suggesting the File type or a path literal (`~/my/path`), or `"a" + "b"` for concatenation; a File or path literal takes it silently; `file.append` (P183) is the explicit form.
-- dropped-error-raises (user): an Error value a statement drops raises and stops the run with its message (`write("nofolder/x", "hi"); print "after"` fails loudly); kept errors stay values (`r = write(…)`, `print write(…)`), `try` catches.
+- errors-one-rule (user, revises dropped-error-raises): one rule for every word, library, host or program: an Error raises unless it reaches an optional place or a handler: `r: json? = parse_json("{oops")` keeps it (`if r failed …`), `try …` catches it, `parse_json("{oops") or {}` falls back (or-fallback (user): `a or b` is b when a raises, else `or` as before, falsy values included: `0 or 10` is 10 — `or` replaces whatever is faulty on the left; else-fallback (user): `X else Y` replaces only an error or ø and keeps falsy values (`0 else 10` 0, `parse_json("{oops") else []` []), so a program can choose; `try X else Y` and `??` stay); a plain `r = parse_json("{oops")` raises, so does `r = write("nofolder/x", "hi")`. Tests pinning a kept error in a plain variable are upgraded to `?` or `try` under this decision. Driver words (write, read) raise like library words; a program's own Error assigned to a plain variable raises; an Error passed as an argument (`print f(1)`) stays a value. ~40 core lines (driver.warp guest_error, passes/tries.warp, emitter assignment).
+- dropped-error-raises (user, superseded in part by errors-one-rule): an Error value a statement drops raises and stops the run with its message (`write("nofolder/x", "hi"); print "after"` fails loudly); kept errors stay values (`r = write(…)`, `print write(…)`), `try` catches.
 - bodiless-imports (user): a function without a body is its typed head with who supplies it: `is_null(x: any): bool from warp` (the foreign-signature line, `from runtime`/`from 'm'` alike); `import is_null(x: any): bool` works too (WASM's word). `import m` without a head stays `use m` (P139).
 - foreign-signature: a libm function is declared by a typed foreign line `sin(x: float): float from 'm'`; builtin math words use the same line with `from warp`; a bare `floor` is warp's, C's only qualified (`m.floor`); `import (…) from 'm'` keeps working for headers. Open (card foreign-line): a program's own line should win over the header's signature.
 - P169 `use math` is the module with readable names; raw C math is `use cmath`.
@@ -507,6 +517,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
+- markup-keeps (user): interactive markup is library-first. Core: (1) a tag block's items are expressions like any block's (module rules walk them, a phrase headed by a bound function is a call, unbound words stay data), ~15–25 lines; (2) automatic liveness, ~20 lines: an item reading a variable written later is kept as code (`is varying`), so `p{ "count: " + count }` updates after a click. Library: `on(event, handler: block)` (comma allowed before it), live parts re-evaluated after a handler with only changed output patched, a Live class showing its current value natively, `input{ bind: name }` as a lib/sugar rule, keyed instances by hand `instance(t, () => Counter(t))` (automatic keying ~20 core lines later if programs need it). General, not web: any library (terminal UI, native canvas, sound, `on change`) uses the same live API; core names carry no web words. Rejected: React-style re-render.
+- markup-handler-comma (user): a handler inside a tag may be separated by a comma, `button{ "+1", on click { count += 1 } }`, if that makes the reading easier.
 - P188 stay close to HTML and CSS; only the basic machinery. web-keyframes: CSS's own `@keyframes`; warp adds only `leave:`.
 - html-meta: page facts are keys on html (`title:`, `description:`, `meta: {…}`).
 - key-if: inside `on key {…}` bare `key` reads event.key; named keys compare as words (ESC, ENTER, UP); held-key: `held_key` is the held key's name.
@@ -534,6 +546,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
+- core-hygiene (user, notes/core_hygiene.md): all five moves go ahead. D (tuples, safe_navigation → lib/sugar; number_words → lib/english; entities.tsv → lib data; durations → runtime/extended) at once as plain relocation; A (libraries declare their host imports and compile-time words, removing host_words, std_module_names, canvas words, the rule_words table, wgsl baking), B (GPU lists an extension behind list-kind hooks), C (one parser rule for a named language's literal with holes: shader, wgsl, sql, sh) and E (@primitive, times, C FFI loaded only when used) are sized first, core line counts back to the user before building.
 - method-clash-from-source: a linked module whose class methods share a name with the program's classes is compiled from source (compiler note); real binding is card class-method-linking.
 - linked-variants-by-arity: linking keeps every variant of a name, a call takes the one whose arity fits; none fits → refused naming the variants.
 - baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
@@ -744,3 +757,9 @@ the original questions 1–41: test edits and housekeeping done.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
 - playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.
 - library-words-lexical (user 2026-11-01): library code keeps its own words: a library body's call of a word the program redefines stays the library's (`round(x) := 0; round_to(2.345, 2)` is 2.35); a program's word answers only the program's calls.
+
+## egraph-outside-library (user, 2026-11-01)
+egraph is the first outside library: it lives in the registry github.com/pannous/warp-packages (egraph/), used by its
+path (`use "packages/egraph/egraph.warp"`, decision package-use-by-path), not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
+- markup-keeps final (user, 2026-11-01, via the Interviewer): lib-first; core only fix 1 (tag items are expressions,
+  ~15–25 lines) and automatic liveness (~20); keyed instances by hand for now (no core part d). warp-markup builds.

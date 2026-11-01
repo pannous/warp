@@ -40,3 +40,4 @@ while elapsed < seconds {
 	# a float, as measurements are: an exact 4 at the end would be the run's exit status
 	elapsed = float(clock() - started) / 1000
 }
+"${bands} bands shown along the tune"

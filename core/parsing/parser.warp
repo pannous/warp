@@ -386,19 +386,18 @@ def aliased_spellings(): Spellings := {
 	tables
 }
 // The spellings an entry gives: a symbol alias spells the entry's operator (its `operator`, else the entry itself), a
-// word alias its word (also infix by the entry's `infix`, also a keyword form when the word is one)
+// word alias its word (also infix with `infix: yes`, also a keyword form when the word is one)
 def add_alias_entry(tables: Spellings, word: text, fields: Node) {
 	target = alias_field(fields, "operator") ?? word
-	aliases = alias_field(fields, "aliases") ?? []
-	for spelling in infix_spellings(alias_field(fields, "infix"), [word] + aliases) { add_infix_word(tables, spelling, target) }
-	for spelling in aliases {
+	written_infix = alias_field(fields, "infix") == "yes"
+	if written_infix { add_infix_word(tables, word, target) }
+	for spelling in alias_field(fields, "aliases") ?? [] {
 		tables.canonical[spelling] = word
 		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
+		else if written_infix { add_infix_word(tables, spelling, target) }
 		if word in tables.forms { tables.forms[spelling] = tables.forms[word] }
 	}
 }
-// `infix: yes`: the entry's word and its word aliases are written between operands too; `infix: [plus]` only those
-def infix_spellings(infix: any, spellings: list): list := if infix == "yes" then spellings.filter(spelling => is_name_start(spelling#1)) else infix ?? []
 def add_infix_word(tables: Spellings, word: text, target: text) {
 	tables.operator_words += [[word, target]]
 	tables.infix_words += [word]
@@ -3467,7 +3466,7 @@ def bare_atom(p: Parser): Node := {
 		p.at = end
 		// `$f(x)`, `$f(x) {…}`: a hole applied reads as the name it stands for applied, its arguments read as a call's
 		// (typed_parameters): `$f($x)`
-		return name_or_call(p, hole, "")
+		return name_or_call(p, hole)
 	}
 	if EXACT_CONSTANTS.contains("$(c)") {
 		p.at = p.at + 1
@@ -4038,11 +4037,11 @@ def named(p: Parser): Node := {
 		// `Point{x: 1}` of a declared type constructs a point, any other `name{…}` stays the tagged block (D4)
 		return Key(name, if declared then Op.None else Op.Colon, braced_items(p))
 	}
-	name_or_call(p, name, word)
+	name_or_call(p, name)
 }
 // the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
-// (`f(x) {…}`); the arguments of `print(…)` as print reads them
-def name_or_call(p: Parser, name: Node, word: text): Node := {
+// (`f(x) {…}`)
+def name_or_call(p: Parser, name: Node): Node := {
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
 	written = items_until(p, Bracket.Round, ItemsEnd.Closer)
@@ -4054,16 +4053,7 @@ def name_or_call(p: Parser, name: Node, word: text): Node := {
 		// the head is the call f(x, y)
 		return call_of([call_of([name] + spread(arguments)), body])
 	}
-	call_of([name] + (if word == PRINT_WORD then print_arguments(written) else spread(arguments)))
-}
-
-// `print(a b)`, `print(match n {…})`: words set apart by blanks are the one value printed; `print(a, b)` prints each
-// Rust twin: commands.rs print_arguments
-PRINT_WORD = "print"
-def print_arguments(arguments: Node): list {
-	parts = group_parts(arguments)
-	if parts != ø and parts#2 == " " and #parts#3 > 1 { return [arguments] }
-	spread(arguments)
+	call_of([name] + spread(arguments))
 }
 
 // The type names that take type arguments in angle brackets besides the plural and capitalized ones
@@ -4261,14 +4251,17 @@ def function_reference(p: Parser): Node := {
 	attributed(FUNCTION_REFERENCE_MARK, true, symbol(p.code[at .. end]))
 }
 
-// The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter
-// `greet(person name: String)` stays one argument
+// The items of an argument list: none for ø, the list's items, else the one argument. A comma separates arguments,
+// a blank joins the words of one: `f(4, s)` is f of 4 and s, `square(square 2)` and `str(3 meter)` take one; Swift's
+// labeled parameter `greet(person name: String)` stays one argument too
 // Rust twin: atoms.rs function_call, is_labeled_parameter
 def spread(arguments: Node): list {
 	if arguments == ø { return [] }
 	parts = group_parts(arguments)
-	if parts != ø and not labeled_parameter(parts) { return parts#3 }
-	[arguments]
+	if parts == ø or labeled_parameter(parts) { return [arguments] }
+	if parts#2 != " " or #parts#3 < 2 { return parts#3 }
+	// the words of the one argument, a phrase as between commas: `f(square 3)` as `f(square 3, 2)` holds it
+	[if parts#1 == "(" then spaced(parts#3) else arguments]
 }
 
 // Every argument of `f(int x, float y)` as its typed parameter
@@ -4297,6 +4290,8 @@ def typed_parameter(argument: Node): Node := {
 	if words.length == 3 and words#2 == symbol("of") and is_type_symbol(last) and is_symbol(first) and not is_type_symbol(first) {
 		return Key(first, Op.Colon, last)
 	}
+	// `xs: list of int`, parsed `(xs: list) of int`: the words after the type are the type's
+	if words.length > 2 and is_typed_name(first) and words#2 == symbol("of") { return type_continued(first, words[1 ..]) }
 	if is_symbol(first) and REST_MARKERS.contains(name_of(first)) { return rest_parameter(last, argument) }
 	if words.length == 2 and is_type_symbol(first) { return typed_default(last, first, argument) }
 	argument
@@ -4332,6 +4327,10 @@ def labeled_parameter(parts: list): bool := parts#2 == " " and #parts#3 == 2 and
 def is_typed_name(node: Node): bool := match node {
 	Key(name, Op.Colon, kind): name is symbol
 	_: no
+}
+def type_continued(typed: Node, words: list): Node := match typed {
+	Key(name, Op.Colon, kind): Key(name, Op.Colon, spaced([kind] + words))
+	_: typed
 }
 
 // The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type

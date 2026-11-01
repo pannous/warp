@@ -985,17 +985,20 @@ definitions_signatures_in(nodes: list): map := {
 	signatures
 }
 # `def square := it * it`: a lone untyped parameter that the body computes with takes a number, so `square numbers`
-# squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts
+# squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts, nor
+# where the body asks its kind (`if x is number …` takes anything)
 computing_signature(signature: Signature, body: Node): Signature := {
 	if #signature.parameters != 1 { return signature }
 	parameter = signature.parameters#1
-	if parameter.type_name != "" or parameter.rest or not computes_with(body, symbol(parameter.name)) { return signature }
+	name = symbol(parameter.name)
+	if parameter.type_name != "" or parameter.rest or not computes_with(body, name) or kind_tested(body, name) { return signature }
 	Signature(parameters: [Parameter(name: parameter.name, type_name: number_word)])
 }
 # `def square := it * it` as the call `square(it)` it is
 implicit_call(n: Node): Node? := if is_key(n, Op.Define) and key_of(n) is symbol and mentions(value_of(n), implicit_parameter) then bracketed([key_of(n), symbol(implicit_parameter)], "(") else ø
 computing_ops = [Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
 computes_with(body: Node, name: Node): bool := nodes_in(body).any(n => n is key and op_of(n) in computing_ops and key_of(n) != ø and (key_of(n) == name or value_of(n) == name))
+kind_tested(body: Node, name: Node): bool := nodes_in(body).any(n => is_key(n, Op.Is) and key_of(n) == name)
 # `f(x: int) := …`: f → "int", for each definition of the program with a typed first parameter
 typed_first_parameters(program: Node): map := typed_first_parameters_in(nodes_in(program))
 typed_first_parameters_in(nodes: list): map := {
@@ -1538,8 +1541,10 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 		if is_element_list(n) { n = group_like(n, items_of(n).map(element => at_place(element, Place.Element, rules, origins))) }
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
-		# runs of words side by side, never across commas: `[1, s]` holds none (card match-rest-item-pattern)
-		runs = if separator_of(n) != "," then with_runs(if phrase then words_of_all(items) else items, rules, origins) else items
+		# runs of words side by side, never across commas: `[1, s]` holds none (card match-rest-item-pattern), nor a
+		# call's arguments, which commas set apart: `f(4, s)` is no 4 seconds, `f(4 s)` is (card call-argument-flattening)
+		call = bracket_of(n) == "(" and separator_of(n) == ""
+		runs = if separator_of(n) != "," and not call then with_runs(if phrase then words_of_all(items) else items, rules, origins) else items
 		if phrase and runs == words_of_all(items) { runs = items }
 		# a phrase all one run takes the place the phrase stands in: a statement's template of statements stays the
 		# statements (`$f(x) := …` defines f where the phrase stood), a value's turns into its block (as_value) there
