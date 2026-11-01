@@ -7,3 +7,4 @@
 'use markup; n = 0; step = (event => n += event); page_render(div{ button{ onclick: step } }); page_event(1, 5); n'	5
 'use markup; n = 1; to_html(div{ p{ () => n + 1 } })'	'<div><p>2</p></div>'
 
+'use markup; greet(name: text) := p{ "hi " + name }; to_html(div{ "a", greet "Ann" })'	'<div>a<p>hi Ann</p></div>'
