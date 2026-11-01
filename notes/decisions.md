@@ -694,3 +694,4 @@ the original questions 1–41: test edits and housekeeping done.
 - arm-symbols (user 2026-11-01): undone. An undeclared capitalised word in a match arm is an unknown name; matching.warp declares enum Day.
 - sample-count-rounds (user 2026-11-01, confirmed): a sound's sample count rounds to the nearest sample.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
+- playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.
