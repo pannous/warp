@@ -1,4 +1,6 @@
 # The runtime words a program links (emitter.warp's part): wasm intrinsics, library words, type tests on boxed values
+# the exact reals' class (lib/reals.warp), whose `is` takes any number too
+REAL_CLASS = "real"
 # `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
 def wasm_instruction(body: Body, name: text): TypedCode {
 	if name in memory_instructions { return memory_instruction(body, name) }
@@ -157,6 +159,13 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		# page count before, -1 when it can't grow)
 		"memory_f32": TypedCode(ValueKind.Float, index_code(values#1) + [op.f32_load, 2, 0, f64_promote])
 		"memory_set_f32": TypedCode(no_kind, index_code(values#1) + converted(values#2, ValueKind.Float) + [f32_demote, op.f32_store, 2, 0])
+		# its i32 and u32 cells: one read as an int, one written (the low 32 bits)
+		"memory_i32": TypedCode(ValueKind.Int, index_code(values#1) + [op.i64_load32_s, 2, 0])
+		"memory_u32": TypedCode(ValueKind.Int, index_code(values#1) + [op.i64_load32_u, 2, 0])
+		"memory_set_i32": TypedCode(no_kind, index_code(values#1) + converted(values#2, ValueKind.Int) + [op.i64_store32, 2, 0])
+		# a host's i64 and f64 cells (runtime/builders.warp built_ints, built_floats)
+		"memory_i64": TypedCode(ValueKind.Int, index_code(values#1) + [op.i64_load, 3, 0])
+		"memory_f64": TypedCode(ValueKind.Float, index_code(values#1) + [op.f64_load, 3, 0])
 		"memory_grown": TypedCode(ValueKind.Int, index_code(values#1) + [op.memory_grow, 0, op.i64_extend_i32_s])
 		# copy_text(to, at, from, start, count)
 		_: TypedCode(no_kind, values#1.code + index_code(values#2) + values#3.code + index_code(values#4) + index_code(values#5) + gc_code(gc_ops.array_copy, [gc_type(gc.text), gc_type(gc.text)]))
@@ -166,7 +175,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 # memory_set_byte(address, value)
 program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same_node", "baked_segment"]
 intrinsics = {baked_segment: 1, with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
-	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, memory_f32: 1, memory_set_f32: 2, memory_grown: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
+	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, memory_f32: 1, memory_set_f32: 2, memory_i32: 1, memory_u32: 1, memory_set_i32: 2, memory_i64: 1, memory_f64: 1, memory_grown: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
@@ -206,8 +215,9 @@ kind_bit(kind: int): int := 1 << kind
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
 def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
+	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
-	if spec in module.classes { return runtime_call("instance_among", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))]) }
+	if spec in module.classes { return runtime_call(if spec == REAL_CLASS then "real_among" else "instance_among", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))]) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)

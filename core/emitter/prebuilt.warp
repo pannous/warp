@@ -440,6 +440,9 @@ def behind_libraries() {
 # the module's class structs the program's of their names, which it declares alike (its classes from the module's
 # text), else the program compiles the module from its source
 def bind_library_words() {
+	# (a linked module calls a value through the runtime's hooks, whose code is the program's dispatchers: made, though
+	# the program calls none itself, so that storage's model() of the program's class is called)
+	if module.linked_images { for arity in 0..(hook_arities + 1) { dispatcher(arity) } }
 	for image in module.linked_images {
 		if method_clash(image) { refuse(LINKED_METHOD_CLASH + image.name) }
 		for name in image.c_functions { program_import(name) }

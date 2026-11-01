@@ -1,0 +1,4 @@
+# a pair reads as two items, its name and its value (decision pair-items)
+'p = (a: 1); "${p#1}"'	"a"
+'p = (a: 1); p#2'	1
+'p = (a: 1); #p'	2

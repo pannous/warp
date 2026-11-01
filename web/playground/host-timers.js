@@ -2,10 +2,9 @@
 // records them, the page starts them after it (startTimers, in the playground's worker.js and a built site's site.js); a
 // host without a page that stays (test-worker.js) only warns
 
-const TIMER_HANDLER_PREFIX = "on·every·";
 function addTimer(holder, hooks, id, timer, written) {
 	if (!hooks.listen) return holder.warnings.push(`${written}: timers do not run here`);
-	(holder.timers ??= []).push({ id: Number(id), handler: TIMER_HANDLER_PREFIX + id, ...timer });
+	(holder.timers ??= []).push({ id: Number(id), ...timer });
 }
 
 // milliseconds from now to the next local minute_of_day on a weekday of the mask (bit 0 Sunday), as seconds_until_on
@@ -20,18 +19,21 @@ function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) 
 	return 7 * DAY_MILLISECONDS;
 }
 
-// a run's timers started: `fire(handler)` runs the handler on·every·<id> of each when it is due; stopTimers ends them
+// a run's timers started: `fire(id)` runs the program's timer_fired(id) for each when it is due (runTimer); a program
+// without that export is refused loudly, once; stopTimers ends them
 function startTimers(holder, fire) {
 	const handles = [];
+	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
+	if (holder.timers?.length && !holder.exports[TIMER_FIRED_EXPORT])
+		return console.error(`${holder.timers.length} timer(s) refused: the program exports no ${TIMER_FIRED_EXPORT}(id)`);
 	const atClock = timer => handles.push(setTimeout(() => {
-		fire(timer.handler);
+		fire(timer.id);
 		if (!timer.once) atClock(timer);
 	}, millisecondsUntil(timer.minute, timer.weekdays)));
 	for (const timer of holder.timers ?? []) {
-		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer.handler), timer.every));
+		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer.id), timer.every));
 		else atClock(timer);
 	}
-	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
 }
 
 // what a timer says in the page: "every 500 ms", "at 09:00", "every day at 09:00", or the channel its listener reads

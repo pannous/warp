@@ -1,9 +1,10 @@
 # .github/workflows/pages.yml
 name: Playground
 
-# The browser playground (web/playground, notes/web_playground.md) on GitHub Pages, custom domain warp.pannous.com:
-# the warp compiler built for wasm32-unknown-unknown without the native feature (warp.wasm optimized, warp.debug.wasm
-# with names and line tables: ?debug), the page, samples/<chapter>/*.warp and the jco-transpiled components (components.js).
+# The browser playground (web/playground, notes/playground_plan.md) on GitHub Pages, custom domain warp.pannous.com:
+# the self-hosted compiler warp.wasm with its lib/ (warp-lib/: the latest release's, this checkout's lib/ laid over it,
+# web/playground/build.sh), the page and samples/<chapter>/*.warp. scripts/browser-dry-run.sh runs the same tours on
+# pannous.com. The workflow is disabled on GitHub (2026-11-01): it is enabled only when the user says so.
 # Stage 2 of 2 : the Integrator pushes main after the native gate (stage 1) and never waits for this.
 # Hourly, the latest main is built, checked in the browsers and deployed, if it changed the compiler, the page or the
 # samples since the last green run; by hand at once (`gh workflow run Playground -R pannous/warp`) for an urgent fix or
@@ -38,8 +39,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CARGO_TERM_COLOR: always
-  CARGO_NET_OFFLINE: false
   # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/graphics/webgpu logs
   # "No available adapters." and the tour refuses the deploy
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
@@ -57,7 +56,7 @@ jobs:
     - id: since
       env:
         GH_TOKEN: ${{ github.token }}
-        SITE_PATHS: src crates web/playground samples Cargo.toml Cargo.lock .github/workflows/pages.yml
+        SITE_PATHS: lib web/playground samples .github/workflows/pages.yml
       run: |
         if [ "${{ github.event_name }}" != schedule ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
         green=$(gh run list -R "$GITHUB_REPOSITORY" -w Playground -b main -s success -L 1 --json headSha -q '.[0].headSha')
@@ -71,25 +70,16 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
-    - uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: wasm32-unknown-unknown
-    - uses: actions/cache@v6
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-playground-${{ hashFiles('**/Cargo.lock') }}
-    - name: Install wasm-opt
-      run: sudo apt-get install -y binaryen
-    - name: Install jco (build.sh components)
-      run: npm install -g @bytecodealliance/jco
-    - name: "Install wasm-tools (build.sh components: the WIT signatures)"
-      uses: taiki-e/install-action@v2
-      with:
-        tool: wasm-tools
-    - name: Build the compiler, samples.js and the components
+    # the compiler the page runs is warp.wasm of the latest release: its archive is the lib folder itself (the native
+    # warp, warp.wasm, runtime.wasm, the standard modules); build.sh copies it and lays this checkout's lib/ over it
+    - name: The latest release's warp.wasm and lib
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release download -R "$GITHUB_REPOSITORY" --pattern 'warp-v*-x86_64-unknown-linux-gnu.tar.gz' --output warp-lib.tar.gz
+        mkdir -p "$RUNNER_TEMP/warp-lib" && tar xzf warp-lib.tar.gz -C "$RUNNER_TEMP/warp-lib"
+        echo "WARP_LIB=$RUNNER_TEMP/warp-lib" >> "$GITHUB_ENV"
+    - name: Build the compiler folder and samples.js
       run: web/playground/build.sh
     # the same collection as scripts/browser-dry-run.sh's (build.sh collect_site)
     - name: Collect the site
@@ -103,69 +93,6 @@ jobs:
         name: site
         path: _site
         retention-days: 1
-
-  # a branch check runs the browser suite only when the branch changes code or tests (docs-only branches skip it);
-  # main always runs it
-  scope:
-    needs: changed
-    if: needs.changed.outputs.run == 'true'
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
-    outputs:
-      suite: ${{ steps.changes.outputs.suite }}
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        fetch-depth: 0
-    - id: changes
-      run: |
-        if [ "$GITHUB_REF" = refs/heads/main ]; then echo "suite=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-        changed=$(git diff --name-only "$(git merge-base origin/main HEAD)" HEAD)
-        echo "$changed"
-        if grep -qE "$SUITE_PATHS" <<< "$changed"; then echo "suite=true"; else echo "suite=false"; fi >> "$GITHUB_OUTPUT"
-      env:
-        SUITE_PATHS: ^(src/|tests/|web/|crates/|Cargo\.|\.cargo/|\.github/workflows/pages\.yml)
-
-  # the whole test suite in headless Chrome (cargo browser-test, notes/web_playground.md): browser tests run in CI only
-  # . Beside the deploy, not before it: a failure shows in the run without holding the page back.
-  # Four shards of every 4th test, each running one test per core 
-  browser-suite:
-    needs: scope
-    if: needs.scope.outputs.suite == 'true' && !inputs.skip_checks
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [ 1, 2, 3, 4 ]
-    name: browser-suite (${{ matrix.shard }}/4)
-    env:
-      WARP_BROWSER_TEST_SHARD: ${{ matrix.shard }}/4
-    steps:
-    - uses: actions/checkout@v7
-    - uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: wasm32-wasip1
-    - uses: actions/cache@v6
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-browser-suite-${{ hashFiles('**/Cargo.lock') }}
-    - name: Install jco (build.sh components, for the `use wasm` tests)
-      run: npm install -g @bytecodealliance/jco
-    - name: "Install wasm-tools (build.sh components: the WIT signatures)"
-      uses: taiki-e/install-action@v2
-      with:
-        tool: wasm-tools
-    - name: Install agent-browser (headless Chrome)
-      run: npm install -g agent-browser && agent-browser install --with-deps
-    # the browser cannot run git: the packages, fetched by a native debug warp as `use` fetches them (card build-sh:
-    # warp reads packages.warp and the default registry itself, no regex reader)
-    - name: Fetch the packages
-      run: cargo fetch && web/playground/build.sh pinned
-    - name: The test suite in headless Chrome
-      run: cargo browser-test
 
   # every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the
   # console, in the collected site, else no deploy
