@@ -177,10 +177,16 @@ function libcExports() {
 	return libc;
 }
 
+// dlopen of one of warp's own libraries beside the executable (lib/sound.warp: @executable_path/libwarp_sound.dylib):
+// a handle when the page has it (host-sound.js PAGE_LIBRARIES), else 0, as for a library that is not there
+const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
+const PAGE_LIBRARY_HANDLE = 1;
+const pageLibraryOpened = (holder, path) => self.PAGE_LIBRARIES?.has(guestText(holder.exports, path).match(OWN_LIBRARY)?.[1]) ? PAGE_LIBRARY_HANDLE : 0;
+
 // `use c` in the browser: the program's C calls go to libc.wasm (natively warp opens the system libc)
 function libcImports(holder) {
 	return new Proxy({}, {
-		get: (_, name) => (...values) => {
+		get: (_, name) => name === "dlopen" ? path => pageLibraryOpened(holder, path) : (...values) => {
 			const exports = libcExports();
 			const member = exports[name];
 			if (typeof member !== "function") throw new Error(`c.${name} is not available in the browser (web/playground/lib/build_libc.sh lists libc.wasm's functions)`);

@@ -151,7 +151,7 @@ function programImports(holder, hooks) {
 				// key_down: whether the page's held key (canvas.js trackKey) is any; "key code held" which (held_key names it)
 				const heldKey = self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) : 0;
 				if (value === "key_down") return BigInt(heldKey !== 0);
-				const partValue = eachHostPart("systemValue", value, holder).find(known => known !== undefined); // "gpu paints": host-gpu.js
+				const partValue = eachHostPart("systemValue", value, holder).find(known => known !== undefined); // "gpu_paints": host-gpu.js
 				if (partValue !== undefined) return BigInt(partValue);
 				if (value === "key code held") return BigInt(heldKey);
 				if (value in WINDOW_SIDES) return BigInt(windowSide(value));
