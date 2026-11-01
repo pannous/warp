@@ -88,6 +88,11 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Testing
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
+- The baseline is stored with its compiler: rely on it, never rerun your touched tests on main to compare (user,
+  2026-11-01). `scripts/baseline.sh <test paths>` prints their stored lines; `scripts/baseline.sh --regressions
+  <your results>` names what was ✓ there and is ✗ in your `warp test <paths>` output. The full suite stores its results in
+  the record of the compiler that ran (<store>/<hash>/warp.record/results.txt); until a record has them, the script
+  falls back to test/results.txt at its commit and says so.
 - Build only a branch merged with origin/main: the installed native warp's rebuild steps (rebake) call main's
   compiler words, so an unmerged branch can fail to build for reasons that aren't its own (warp-shaders, 2026-10-30).
 - Only the pure pipeline counts. Smoke test, every branch: `scripts/smoke.sh <worktree>`. It rebuilds only for what
