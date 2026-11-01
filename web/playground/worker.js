@@ -41,6 +41,9 @@ self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", sha
 self.askPageDecode = (shared, url, bytes) => self.postMessage({ type: "sound decode", shared, url, bytes }); // host-sound.js pageDecoded
 self.askPageCall = (shared, request) => self.postMessage({ type: "page call", shared, request }); // host-foreign.js callOnPage
 self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // save sound's WAV, for the page's download link
+// a program serving the page's requests (host-routes.js PAGE_SERVING): waiting for the next in `shared`, its answer
+self.servingPage = (shared, port) => self.postMessage({ type: "serving", shared, port });
+self.servedPage = response => self.postMessage({ type: "served", response });
 addPageSoundWords(post); // host-tasks.js
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)

@@ -12,6 +12,10 @@ const COMPILER_URL = `../../${COMPILER_FOLDER}/warp.wasm`;
 const COMPILED_PATH = "/tmp/warp-program.wasm";
 // the program typed in the page when it is no sample's file: at the repository root, as `warp playground.warp` there
 const TYPED_FILE = "playground.warp";
+// the compiler reads the standard modules of this lib/ (core/parsing/parser.warp warp_lib), as the native warp tells it
+const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
+// a program runs as `warp <file>` runs it, which serves a program's routes: here the page's requests (lib/web.warp)
+const PROGRAM_ENVIRONMENT = [...ENVIRONMENT, "WARP_SERVE=page"];
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
@@ -122,7 +126,7 @@ function ranSaying(exports, print, exitCode) {
 function compiledProgram(file, print) {
 	let exports;
 	const args = [COMPILER_LIBRARY + "/warp.wasm", file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`];
-	const wasi = wasiImports(() => exports.memory, args, print, programFiles);
+	const wasi = wasiImports(() => exports.memory, args, print, programFiles, COMPILER_ENVIRONMENT);
 	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
 	const { status, said } = ranSaying(exports, print);
 	const module = programFiles.written.get(COMPILED_PATH);
@@ -133,8 +137,8 @@ function compiledProgram(file, print) {
 
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
-	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
-	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles);
+	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks };
+	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, PROGRAM_ENVIRONMENT);
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
