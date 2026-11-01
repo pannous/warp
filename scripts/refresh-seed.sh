@@ -52,7 +52,8 @@ stage() {
   # the CPU seconds (user + system) are the speed guard's measure: wall time swings with the box's load (2026-10-28:
   # the same compile took 95 s at load 10, 233 s at load 89), and a wait in the build line costs none
   # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
-  { time (WARP_SEED=$1 in_slot "$scratch/rebuild.log" 5 "$warp" rebuild pure); } 2>"$scratch/cpu" &&
+  # the line's messages (stderr) go with the output: the cpu file holds only time's line
+  { time (WARP_SEED=$1 in_slot "$scratch/rebuild.log" 5 "$warp" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
     [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
   cp "$built" "$2"
   stage_seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
