@@ -1,0 +1,2 @@
+'weekend(day) := match day { Saturday | Sunday => yes; other => no }; [weekend(data(Sunday)), weekend(data(Monday))]'	[yes, no]
+'enum Day { Sat, Sun, Mon }; f(d) := match d { Sat | Sun => "weekend"; _ => "work" }; [f(Day.Sun), f(Day.Mon)]'	["weekend", "work"]
