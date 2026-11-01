@@ -114,6 +114,8 @@ is_case_arm(arm: Node, variants: map): bool := {
 
 # the prelude's matcher (lib/prelude.warp), which a structural arm calls
 matcher_word = "pattern_bindings"
+# `{port: "80"} as Config`: the prelude's converter of a value field by field to a named pattern's types
+pattern_converter_word = "converted_to_pattern"
 
 # `match v {…}` with an arm for the matcher, its definition brought from the prelude before the match is lowered
 is_structural_match(n: Node): bool := match n {
@@ -368,6 +370,7 @@ with_named_patterns(n: Node, patterns: map): Node := match n {
 	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
 	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
 	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
+	Key(subject, Op.As, Symbol(name)): if name in patterns then List([symbol(pattern_converter_word), subject, List([quote_symbol, patterns[name]], Bracket.Round, Separator.None)], Bracket.Round, Separator.None) else n
 	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))
 	_: n
 }
