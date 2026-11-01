@@ -11,6 +11,7 @@
 set -uo pipefail
 WARP=${WARP:-/Users/me/dev/bin/warp}
 LOCK=$HOME/.cache/warp/full-suite.lock
+STORE=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}
 SUMMARY='failed in [0-9]* files\|tests passed in [0-9]* files'
 
 commit=0
@@ -56,6 +57,16 @@ if [ -z "$summary" ]; then
 fi
 mv "$scratch/results.txt" "$report"
 echo "full-suite: $summary at $tip"
+# the baseline of the compiler that ran: its store record keeps these results, so a branch compares its touched tests
+# against the record of its merge base's compiler instead of rerunning them on main
+compiler_hash=$(cut -d' ' -f1 "$pinned/warp.wasm.inputs" 2>/dev/null)
+record=$STORE/$compiler_hash/warp.record
+if [ -n "$compiler_hash" ] && mkdir -p "$record"; then
+	cp "$report" "$record/results.txt" && echo "$tip" >"$record/results.commit"
+	echo "full-suite: baseline stored in $record/results.txt"
+else
+	echo "full-suite: no store record for the compiler that ran ($pinned/warp.wasm.inputs): baseline only in $report" >&2
+fi
 ((commit)) || exit 0
 git add -- "$report" && git diff --cached --quiet -- "$report" && exit 0
 git commit -q -m "chore: full suite $summary at $tip" -- "$report" && git pull -q --rebase --autostash && git push -q

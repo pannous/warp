@@ -1,0 +1,5 @@
+# min after a number is the minute (decision one-duration), anywhere else the function min (decision #31)
+'str(30min)'	'30min'
+'2h + 30min == 150 min'	true
+'x = 2 hours; x == 120 min'	true
+'min(3, 4)'	3
