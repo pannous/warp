@@ -518,6 +518,39 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - save-sound: audio goes to a file through the general `save` (`save sound as: "song.wav"`); render_sound gives an I-meant hint.
 - signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
+## Compiler internals (technical, decided by the Supervisor or Interviewer)
+- method-clash-from-source: a linked module whose class methods share a name with the program's classes is compiled from source (compiler note); real binding is card class-method-linking.
+- linked-variants-by-arity: linking keeps every variant of a name, a call takes the one whose arity fits; none fits → refused naming the variants.
+- baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
+- made-by-reach: module.made counts only kinds made by functions reachable from the program's roots.
+- comments-not-candidates: words in comments or a shebang never make a program an implicit-use candidate.
+- native-window-sdl3: the native warp's window is lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
+- node-attributes: marks ride on the node, an `attributes` field of $MetaNode beside `comment` (with_attribute / attributes_of); `let` inside a lambda is such a mark.
+- hello-lazy-runtime-dropped: binding runtime words lazily is dropped (under 7 MB of hello's 176 MB).
+- canonical-runtime-names: runtime words map_keys/map_values/map_get_or/collection_contains are keys/values/get/has; contains/includes stay aliases of has.
+- rule-not-in-own-definition: a rewrite rule never fires inside the definition of the word its template produces.
+- small-int-cache: Int nodes of −128..1023 are shared, landing only if hello, a byte-heavy program and rebuild time all improve.
+- rule-whose: a rule word missing from an older compiler skips its rules with a warning instead of failing the build.
+- inline-code: every entry (file, inline, piped, compile) links the prebuilt lib/modules beside the runtime.
+- gpu-driver-plumbing: painted_pixels() and system_value("gpu_paints") from the GPU library, plumbing of the GPU hand-off OK.
+- prelude-rule-no-use: a fired rule of the prelude itself adds no `use prelude`.
+- baked-origins: a reached library slice's file:line comes from the baked text; disk reads only for WARP_LIB-edited files.
+- modules-triage: test/modules paths moved to test/fixtures/; `use square` held as esoteric; `use uniscript` a gap; Python's `from list import zip` a lib/sugar rule meaning `use list`, with a hint.
+- hole-calls-unreached: a standard-library word inside a text hole loads its module like anywhere else.
+- refusal-place-of-lib: a refusal inside a library function names its file, the definition's first line and the function.
+- shaders-in-lib: the WGSL translator is lib/shaders.warp; `paint(f, w, h)` hands f's quoted definition, callees and globals (uniforms) to it; native GPU through lib/gpu.warp + libwarp_gpu (wgpu-native).
+- float-int-power: float ^ int by square-and-multiply (within about 1 ulp); exact values untouched.
+- signals-test-15: test_variable_signals:15 upgraded 3 → 4, the loop's final x-- is a write too.
+- after-participle-held: `after tested: …` (hook by past participle) held as esoteric.
+- implicit-standard-words-index: the word index covers every standard module's definitions but the prelude, dialects included, read at rebuild; a program's own class names never pull a module in.
+- program-match-lowering: run-time matcher in lib/prelude.warp + core/node_matches.warp.
+- computed-hole-shape: compile-time rule words live in lib/rule_words.warp (`where $h = word(…)`, `where word(…)`, `$program`, `where program`); routes rules sit in lib/web.warp.
+- ffi-link-any-import: pure runs link C libraries for any import module other than wasi/host; `--sandbox` refuses C imports.
+- error-expectation: a test expectation `error` matches any Error result, no message substrings.
+- host-list-one-shot: a host word's list result is built in one shot.
+- shown-non: show/print of a statically known Text/Int/Float/Bool/Char uses its own word; rare-kind branches only when the program makes them.
+- test-oversubscribes-mac: `warp test` case processes compile single-threaded when cases already run in parallel.
+
 ## Old id index (superseded or historic; git has the text)
 P35 → index-position. P42 → P227. P56(2-4) unknown entity → P56 revised. P63 → wiki/charged.md. P66 → footgun-divzero.
 P103, P104 → no-executable-by-default + build-should. P110 → P163. P118, P214 → P240. P168 → field-or-minus.
@@ -695,3 +728,4 @@ the original questions 1–41: test edits and housekeeping done.
 - sample-count-rounds (user 2026-11-01, confirmed): a sound's sample count rounds to the nearest sample.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
 - playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.
+- library-words-lexical (user 2026-11-01): library code keeps its own words: a library body's call of a word the program redefines stays the library's (`round(x) := 0; round_to(2.345, 2)` is 2.35); a program's word answers only the program's calls.
