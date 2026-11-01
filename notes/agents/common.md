@@ -36,6 +36,8 @@ before asking a question). After a context swap, this file and your role file be
 - Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
+- Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (even
+  while its file sits in lib/sugar/); "library" means only modules programs import.
 - No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
@@ -143,7 +145,9 @@ before asking a question). After a context swap, this file and your role file be
   `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
   smoke test only if the new commits touch core/ or lib/; push. The self-check and gate are never rerun after such a
   re-merge (they passed on your change; the new commits passed their own), only the smoke test, and right after it
-  merge and push in one `&&` chain, so main cannot move again in between (2026-11-01: a landing looped 1.5 h). At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
+  merge and push in one `&&` chain, so main cannot move again in between (2026-11-01: a landing looped 1.5 h). The chain may end with one more
+  merge of origin/main without its own smoke, only when it merges cleanly and touches none of your files; a conflict
+  means smoke again. At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
   main right away (user 2026-10-26). Then `todo done <card> <commit>`. The full suite runs
   only at rare intervals, in the background.
