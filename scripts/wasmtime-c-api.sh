@@ -43,8 +43,15 @@ patched_wasmtime() {
   for patch in "$crate"/patches/*.patch; do patch -s -p1 -d "$patched/wasmtime" <"$patch"; done
   echo "$stamp" >"$patched/wasmtime/.patches"
 }
-patched_wasmtime
-(cd "$checkout/crates/wasmtime-capi" && nice -n 19 cargo build --release --locked -q)
+# the C API built once per set of inputs: a fresh worktree unpacks wasmtime at a new path, which cargo takes for a
+# new crate and rebuilds all of wasmtime from scratch (2026-11-01: a rustc in every landing's rebuild)
+wasmtime_inputs=$( (echo "$WASMTIME_VERSION"; cd "$checkout/crates/wasmtime-capi" && cat Cargo.toml Cargo.lock build.rs patches/*.patch $(find src -type f | sort)) | shasum -a 256 | cut -d' ' -f1)
+wasmtime_stamp=$CARGO_TARGET_DIR/release/warp_wasmtime.inputs
+if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CARGO_TARGET_DIR"/release/*warp_wasmtime.* >/dev/null 2>&1; then
+  patched_wasmtime
+  (cd "$checkout/crates/wasmtime-capi" && nice -n 19 cargo build --release --locked -q)
+  echo "$wasmtime_inputs" >"$wasmtime_stamp"
+fi
 case $(uname -s) in
   Darwin) suffix=dylib; prefix=lib; system_libraries=""
     gpu_libraries="-framework Metal -framework QuartzCore -framework Foundation -framework CoreGraphics -framework IOKit -framework IOSurface -lobjc" ;;
