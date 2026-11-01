@@ -73,30 +73,47 @@ function compilerHostWords(exports) {
 	};
 }
 
-// warp.wasm compiles the code as the file: { module } the bytes it wrote, else { failure } what it said on stderr
-function compiledProgram(code, file, overlay, print) {
-	const source = file || TYPED_FILE;
-	overlay.written.set(source, utf8.encode(code));
-	overlay.removed.delete(source);
-	let exports;
+// the files programs write, over the served ones, for the page's life and kept in its IndexedDB (host-files.js
+// writtenFiles), as natively they stay on disk from run to run
+const programFiles = { ...newOverlay(), written: writtenFiles, kept: (path, bytes) => { keepWrittenFile(path, bytes); self.taskWrote?.(path, bytes); }, forgotten: forgetKeptFile };
+
+// the code as the file while `work` runs, the file's own content back after it
+function withSource(code, file, work) {
+	const before = programFiles.written.get(file);
+	programFiles.written.set(file, utf8.encode(code));
+	try {
+		return work();
+	} finally {
+		if (before === undefined) programFiles.written.delete(file);
+		else programFiles.written.set(file, before);
+	}
+}
+
+// what a run said on stderr, printed when it ended well, its failure when not: { status, said }
+function ranSaying(exports, print, exitCode) {
 	let said = "";
-	const output = (text, stream) => stream === STDERR ? said += text : print(text, stream);
-	const args = [COMPILER_LIBRARY + "/warp.wasm", source, COMPILED_PATH, folderOf(source), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`];
-	const wasi = wasiImports(() => exports.memory, args, output, overlay);
+	const status = ranToEnd(exports, (text, stream) => stream === STDERR ? said += text : print(text, stream), exitCode);
+	if (status === 0 && said) print(said, STDERR);
+	return { status, said: said.trimEnd() };
+}
+
+// warp.wasm compiles the file: { module } the bytes it wrote, else { failure } what it said
+function compiledProgram(file, print) {
+	let exports;
+	const args = [COMPILER_LIBRARY + "/warp.wasm", file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`];
+	const wasi = wasiImports(() => exports.memory, args, print, programFiles);
 	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
-	const status = ranToEnd(exports, output);
-	const module = overlay.written.get(COMPILED_PATH);
-	overlay.written.delete(COMPILED_PATH);
-	if (status !== 0 || !module?.length) return { failure: said || `warp.wasm wrote no module of ${source} (status ${status})` };
-	if (said) print(said, STDERR);
+	const { status, said } = ranSaying(exports, print);
+	const module = programFiles.written.get(COMPILED_PATH);
+	programFiles.written.delete(COMPILED_PATH);
+	if (status !== 0 || !module?.length) return { failure: said || `warp.wasm wrote no module of ${file} (status ${status})` };
 	return { module };
 }
 
-// the compiled program run with the page's host words: { status, failure? }
-function programRan(bytes, file, overlay, hooks) {
+// the compiled program run with the page's host words: { status, said }
+function programRan(bytes, file, hooks) {
 	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
-	const name = file || TYPED_FILE;
-	const wasi = wasiImports(() => holder.exports.memory, [name, ...(self.programArguments ?? [])], hooks.print, overlay);
+	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles);
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
@@ -104,24 +121,24 @@ function programRan(bytes, file, overlay, hooks) {
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(module, programImports(holder, hooks)), wasi)).exports;
 	} catch (failure) {
-		return { status: FAILURE_STATUS, failure: String(failure.message ?? failure) };
+		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
-	let said = "";
-	const status = ranToEnd(holder.exports, (text, stream) => stream === STDERR ? said += text : hooks.print(text, stream), () => holder.exitCode);
+	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode);
 	eachHostPart("finished", holder, hooks);
-	return { status, failure: said || undefined, holder };
+	return ran;
 }
 
-// the code compiled and run as `warp <file>` runs it: what the page shows of it (playground.js showReport); what it
-// printed went to hooks.print meanwhile
+// the code compiled and run as `warp <file>` runs it: what the page shows of it (playground.js showReport), a failure's
+// message as its value; what it printed went to hooks.print meanwhile
 function evaluatedNatively(code, file, hooks) {
-	const overlay = newOverlay();
-	const compiled = compiledProgram(code, file, overlay, hooks.print);
-	if (compiled.failure) return report(compiled.failure.trimEnd(), true);
-	hooks.module?.(compiled.module);
-	const ran = programRan(compiled.module, file, overlay, hooks);
-	return report(ran.failure?.trimEnd() ?? "", ran.failure !== undefined, ran.status);
+	const source = file || TYPED_FILE;
+	return withSource(code, source, () => {
+		const compiled = compiledProgram(source, hooks.print);
+		if (compiled.failure) return report(compiled.failure, FAILURE_STATUS);
+		hooks.module?.(compiled.module);
+		const { status, said } = programRan(compiled.module, source, hooks);
+		return report(status === 0 ? "" : said, status);
+	});
 }
 
-const report = (value, error, status = error ? FAILURE_STATUS : 0) =>
-	({ value, error, status, warnings: [], runtime_warnings: [], hints: [], notes: [] });
+const report = (value, status) => ({ value, error: status !== 0 && value !== "", status, warnings: [], runtime_warnings: [], hints: [], notes: [] });
