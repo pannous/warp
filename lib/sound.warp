@@ -944,10 +944,9 @@ signal_sound(amplitudes, channels) := sounded(clamped_samples([a * loudest_sampl
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
-// A linear array is a module's block of samples, its address the block itself (card linear-parameters)
-rewrite (linear $name = float#$shifted) => ($name = new_samples($shifted - 1)) where $name is symbol
-linear_address(block: samples) := block
-play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blocks is list then blocks else [blocks], seconds)
+// A linear array (lib/sugar/declarations.warp) is a list of floats, its address the list itself (card linear-parameters)
+linear_address(block) := block
+play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blocks is list and count(blocks) > 0 and blocks[0] is list then blocks else [blocks], seconds)
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
