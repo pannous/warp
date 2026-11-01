@@ -80,3 +80,8 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - body-statements: a function body looped as a list of statements, each with its kind (operation, call, assignment…); no `.kind` until then.
 - P69a: may a run-time block assign the `!` site's locals? Default (wiki/charged.md): no, it reads them as at `!` and assigns only declared globals. Until run-time `!` is built.
 - #10 Polish notation for .wat/.wast (`(module a b)` as nodes, a ParserOptions mode); test_wast stays ignored.
+
+- library-words-lexical (Supervisor default, being built; warp-units, card round-two-call): a library body's call of a
+  word the program redefines stays the library's word: `round(x) := 0; round_to(2.345, 2)` is 2.35, not 0. Before, a
+  program's round(x) replaced math's round for every caller, library bodies included. Alternative (B): keep that dynamic
+  replacement (programs can redirect library internals on purpose). Confirm A?
