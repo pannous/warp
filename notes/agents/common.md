@@ -36,6 +36,8 @@ before asking a question). After a context swap, this file and your role file be
 - Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
+- Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (even
+  while its file sits in lib/sugar/); "library" means only modules programs import.
 - No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
