@@ -459,7 +459,7 @@ random_bool() := random_below(2) == 1
 // a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
 random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then n = n + 0x800; n as codepoint }
 // random(x), random(a, b): the dispatch above; random() itself is the host's float in [0, 1)
-random(x) := random_of(x)
+random(x: list or number) := random_of(x)
 random(a, b) := random_between(a, b)
 // the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
 // rust-harness:crates/warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
@@ -602,6 +602,7 @@ fits_name(value: any, name: text, bound: map, code: bool): bool := {
 	if name.starts_with("$") { return bound_as(value, name[1 ..< #name], bound) }
 	if code { return value == symbol(name) }
 	if is_pattern_type(name) { return has_pattern_type(value, name) }
+	if name in character_classes { return is_type(value, "text") and character_classes[name](value) }
 	bound_as(value, name, bound)
 }
 // the type words a pattern tests a value by, each with its test

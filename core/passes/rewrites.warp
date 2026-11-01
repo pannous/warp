@@ -991,7 +991,9 @@ typed_first_parameters_in(nodes: list): map := {
 	for n in nodes {
 		if is_key(n, Op.Define) and is_round(key_of(n)) and #key_of(n) >= 2 and key_of(n)#1 is symbol {
 			parameter = key_of(n)#2
-			if is_key(parameter, Op.Colon) and value_of(parameter) is symbol { types[name_of(key_of(n)#1)] = name_of(value_of(parameter)) }
+			# a union, `x: list or number`, is a declared type too
+			type = if is_key(parameter, Op.Colon) then (if value_of(parameter) is symbol then name_of(value_of(parameter)) else union_spelling(value_of(parameter))) else ø
+			if type != ø { types[name_of(key_of(n)#1)] = type }
 		}
 	}
 	types
