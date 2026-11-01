@@ -2,6 +2,8 @@
 # so to the emitter, which makes each case of each enum once (a case knows its enum, card case-enum-carry); Swift's arm
 # `case .red:` the case red of the one enum declaring it
 rewrite $e::$c => $e.$c where $c is case of $e
+# `Shape::Rect(2, 3)`: the case carrying data, made by its own name
+rewrite $e::$c => $c where $c is instance
 rewrite case.$c => $c where $c is case
 
 # `c is Coin` (type_tests.warp's is_type(c, "Coin")) of an enum: c is one of its cases
