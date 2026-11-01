@@ -81,9 +81,42 @@ node_type_word(n: any, classes: list): text := {
 	if word == "text" and one_character(unboxed_text(n)) { return "codepoint" }
 	# a boxed whole number is a nat: a declared int is never boxed (decision nat-and-int)
 	if word == "int" { return "nat" }
+	if word == "list" { return list_type_word(n, classes) }
 	if word != "key" { return word }
 	for class_name in classes { if instance_of(n, class_name) { return class_name } }
 	if key_operator(n) in operation_spellings() then "operation" else word
+}
+# a list's type by its items, as analyzer.warp's common_type names a list written out: `list of int`, `list of
+# int?` with an item ø, `list of rational` of ints and ratios, `list of number` with a float too; a plain list of
+# items of no common type, or of none (card type-narrowing-random)
+list_type_word(xs: Node, classes: list): text := {
+	shared = ""
+	optional = no
+	for item in unboxed_list(xs) {
+		if is_null(item) {
+			optional = yes
+		} else {
+			word = item_type_word(item, classes)
+			shared = if shared == "" then word else shared_type_word(shared, word)
+			if shared == "list" { return "list" }
+		}
+	}
+	if shared == "" { return "list" }
+	"list of " + shared + (if optional then "?" else "")
+}
+# an item's type word, a boxed whole number an int as a list written out names it
+item_type_word(item: Node, classes: list): text := {
+	word = node_type_word(item, classes)
+	if word == "nat" then "int" else word
+}
+# the type two items share: the same one, rational of ints and ratios, number of numbers with a float; else list,
+# none
+shared_type_word(a: text, b: text): text := {
+	if a == b { return a }
+	exact = ["int", "rational"]
+	if a in exact and b in exact { return "rational" }
+	numbers = ["int", "rational", "float", "number"]
+	if a in numbers and b in numbers then "number" else "list"
 }
 one_character(t: text): bool := byte_count(t) > 0 and character_end(t, 0) == byte_count(t)
 # the type word of x's kind alone, no class or operation told apart: what `x is type` tests, through no comparison
