@@ -325,7 +325,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	declared = if in_front then linked_slices() else {}
 	if in_front { own_words_unlinked(own_names) }
 	# (a linked module's classes and globals, the prelude's Cell of its closures too)
-	wanted = symbol_words(program) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else [])
+	program_words = symbol_words(program)
+	foreign = foreign_types(module)
+	if program_words.any(word => word in foreign) { hint_foreign_types(program, foreign, own_names) }
+	wanted = program_words + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else [])
 	uses = ø
 	origins = {}
 	keys = slice_keys(files)
@@ -403,6 +406,52 @@ module_aliases(source: text): any := {
 		}
 	}
 	aliases
+}
+# the foreign type names of a module, the `type Int = int` lines of its block under FOREIGN_TYPES_HEADER (the
+# prelude's): each name by warp's type, which a program writing it hears of (foreign_type in hints.data)
+FOREIGN_TYPES_HEADER = "// Foreign type names"
+foreign_types(source: text): map := {
+	found = {}
+	if not source.contains(FOREIGN_TYPES_HEADER) { return found }
+	inside = no
+	for line in source.split("\n") {
+		if line.starts_with(FOREIGN_TYPES_HEADER) { inside = yes }
+		else if inside and line.trim() == "" { return found }
+		else if inside and line.starts_with("type ") {
+			sides = line[5 ..].split("=")
+			if #sides == 2 { found[sides#1.trim()] = sides#2.trim() }
+		}
+	}
+	found
+}
+# [name, node] of each type the program names in a type's place: `x: Int`, `f(n: Int)`, a class field's `w: Int`
+# (not an enum case `Kind.Int`)
+written_types(n: Node): list := {
+	found = []
+	waiting = [n]
+	at = 1
+	while at <= #waiting {
+		part = waiting#at
+		at += 1
+		if is_named_type(part) { found += [[declared_type_name(value_of(part)#2), part]] }
+		else if is_key(part, Op.Colon) and value_of(part) is symbol {
+			found += [[name_of(value_of(part)), value_of(part)]]
+			waiting += [key_of(part)]
+		}
+		else if part is key or is_group(part) { waiting += parts_within(part) }
+	}
+	found
+}
+# `x: Int`: the hint naming warp's type, once a name, unless the program declares a type of that name itself
+hint_foreign_types(program: Node, foreign: map, own_names: list) := {
+	hinted = {}
+	for written in written_types(program) {
+		name = written#1
+		if name in foreign and name not in own_names and name not in hinted {
+			hinted[name] = yes
+			diagnose(call_of("foreign_type", [symbol(name), symbol(foreign[name])]), written#2)
+		}
+	}
 }
 # aliases with the call form of each word operator the names define: `divides(3, 12)` calls operator_divides unless
 # a function divides is defined (Rust twin: word_operators.rs lower_call_forms)
