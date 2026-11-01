@@ -62,6 +62,29 @@ web/playground/examples.js, run with `warp <file>`. Each example is extracted wi
 | lazy ranges | runs past 20 s | `[999999999999 …]` at once | |
 | kitchen sink | unknown name test (67:1) | | |
 
+| markup | `div: {h2: {"Alice"} …}` | `div{h2:"Alice" …}`, the markup shown form | show |
+
+## Guide gaps (2026-11-01: 54 of 82 guide.md snippets hold in the page; `test_in_browser.py --examples --firefox --guide`)
+The page gives what the native warp gives for all 28. Each snippet is guide.md at its line.
+
+| guide.md line | snippet | native | the guide |
+|---|---|---|---|
+| 302 313 338 344 352 360 382 394 | `[1 2 3]`, `sort [3 1 2]`, `{name: "Ada" age: 36}` … | `[1, 2, 3]`, `{name: "Ada", age: 36}` | space form (shown-separator) |
+| 684 690 696 702 | `p{ "hello" }`, `ul{ li all fruits }` | `p: {"hello"}`, `ul: {li all ["apple", "pear"]}` | `p:"hello"`, `ul{li:"apple" li:"pear"}` |
+| 605 611 | `1 / 0`, `raise "boom"` | a failure "divide by zero at …:1:1" | the value `Error("divide by zero at 1:1")` |
+| 617 | `if f(-1) failed` of `error "neg"` | 2 | 1: failed sees the error |
+| 524 | `type(3)` | `"nat"` | `class int` |
+| 97 | `2h + 30min` | unknown name min: `use extrema` defines it | 150min |
+| 289 | `match day { Saturday \| Sunday => …}` | unknown name Sunday | "weekend" |
+| 319 | `[Alf, Bob]` | unknown name Alf | 2 |
+| 332 | `sum 1 2 3` | unknown name sum | 6 |
+| 367 504 | `sort(xs, {it.length})`, `sort(xs, {$0 > $1})` | a call of sorted_node with 2 arguments | sorted |
+| 375 | `square := it * it; square [1 2 3]` | the operator * on list and list | [1 4 9] |
+| 562 569 | `local["name"]`, `database.score` | unknown name local / database | the value |
+| 576 | `people where age > 18` | unknown name age | "Bo" |
+| 587 | `write "f" "milk"; read "f"` | unknown name read | "milk" |
+| 799 | `law square(-x) == square(x)` | unknown name law | 9 |
+
 Markup DOM examples (element events, fine updates, components, keyed list, form binding, styles, transitions) are
 warp-web-samples' page work. Still open: lists (`[#fruits, fruits#1]` writes a comma, so native's `[3, "apple"]` may be
 right) and welcoming errors (native's new sentence carries no position).
