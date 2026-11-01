@@ -1029,8 +1029,8 @@ def check_examples(names, page_url=None, site=None):
 		server = serve(None, os.path.abspath(site))
 		page_url = f"http://127.0.0.1:{PORT}/"
 	elif not page_url:
-		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
-			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
+		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp-lib", "warp.wasm")):
+			sys.exit("error: web/playground/warp-lib/warp.wasm is missing; build it with web/playground/build.sh")
 		server = serve(None)
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
