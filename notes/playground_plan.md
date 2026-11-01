@@ -59,7 +59,7 @@ web/playground/examples.js, run with `warp <file>`. Each example is extracted wi
 | wasm components | the call counter(…) (3:5) | | |
 | C libraries | a call of crc32 with 3 arguments (4:55) | | |
 | signals, signals in lists | a list where a int is needed (3:9, 6:58) | | |
-| lazy ranges | runs past 20 s | `[999999999999 …]` at once | |
+| lazy ranges | builds the range of 10^12 numbers: 4.3 GB in 12 s natively; in the page Chrome freezes under a memory cap before the 10 s stop, so a tour stalls there | `[999999999999 …]` at once: count, sum and # of a range need no items | range words (lazy) |
 | kitchen sink | unknown name test (67:1) | | |
 
 | markup | `div: {h2: {"Alice"} …}` | `div{h2:"Alice" …}`, the markup shown form | show |
