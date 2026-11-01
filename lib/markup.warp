@@ -39,12 +39,12 @@ handler_prefix = "on"
 handler_attribute_prefix = "data-warp-"
 
 // the HTML of the page's value, its handlers numbered anew from 1 in render order
-page_render(value: any) := {
+export page_render(value: any) := {
 	page_handlers = []
 	to_html(value)
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
-page_event(n: int, detail: any) := {
+export page_event(n: int, detail: any) := {
 	handler = page_handlers#n
 	handler(detail)
 }
@@ -52,18 +52,21 @@ page_event(n: int, detail: any) := {
 // a live part's value as it is now
 html_now(value: any) := if value is function then html_now(value()) else value
 
-// `onclick: (event => …)`: an element's handler of the event named after `on`
-html_is_handler(item: any) := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
+// an element's handler: `on click {…}` among its items (a Handler, lib/prelude.warp), or HTML's own spelling
+// `onclick: (event => …)`
+html_is_handler(item: any) := item is Handler or html_is_handler_pair(item)
+html_is_handler_pair(item: any) := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
 html_is_handler_name(name: any) := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
-html_handler(item: any) := {
-	page_handlers.add(html_raw_content(item))
-	" " + handler_attribute_prefix + html_name(item)[#handler_prefix ..] + "=\"" + count(page_handlers) + "\""
+html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
+html_handler_attribute(event: text, action: function) := {
+	page_handlers.add(action)
+	" " + handler_attribute_prefix + event + "=\"" + count(page_handlers) + "\""
 }
 
 // a pair's name and content, `div{…}` or `class: "box"` (a one-entry map as Rust's pair)
 html_name(pair: any) := if pair is map then keys(pair)#1 else str(key_of(pair))
 html_raw_content(pair: any) := if pair is map then values(pair)#1 else value_of(pair)
-html_content(pair: any) := if html_is_handler(pair) then html_raw_content(pair) else html_now(html_raw_content(pair))
+html_content(pair: any) := if html_is_handler_pair(pair) then html_raw_content(pair) else html_now(html_raw_content(pair))
 
 // `scope`: the component whose elements a style sheet styles (data-warp-scope, card web-scoped); `chosen`: the value
 // of the select around, whose option is selected (`select{ bind: fruit }`, card web-bind-select)
