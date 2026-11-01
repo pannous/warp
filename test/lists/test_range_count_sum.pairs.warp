@@ -1,0 +1,10 @@
+# the count and the sum of a range of whole numbers come without its items (card count-sum): 10^12 of them at once
+'count(1..10^12)'	999999999999
+'count(1 to 10^12)'	1000000000000
+'#(0..5)'	5
+'#(1 to 10^12)'	1000000000000
+'sum(1 to 100)'	5050
+'sum(1..101)'	5050
+'sum(1 to 10^12)'	500000000000500000000000
+'n = 4; count(1..n) + sum(1 to n)'	13
+'count(5..2) + sum(5 to 2)'	0
