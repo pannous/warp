@@ -557,7 +557,7 @@ implicit_modules(source: text, index_file: text): list := {
 	free = free_words(program)
 	modules = []
 	# (the module a `use` names is no word of it: `use hash` beside color's hash)
-	for word in candidates.filter(word => word in free and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
+	for word in candidates.filter(word => (word in free or leads_statement(program, word)) and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
 		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
@@ -569,6 +569,8 @@ implicit_modules(source: text, index_file: text): list := {
 	}
 	modules
 }
+# a statement led by the word, as a module's rule starts with it: `stored users: [User]`, whose `stored` declares
+leads_statement(program: Node, word: text): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word))
 # A word several modules define is the one module's whose definitions take every call the program makes of it, by
 # the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition)
 definers_taking(word: text, definers: list, program: Node): list := {
@@ -617,12 +619,13 @@ word_index(file: text): map := {
 	word_indices[file]
 }
 # the index of the words each standard module defines but the prelude, as word_index reads it: a word of letters
-# (`red`, `minute`), no operator or made name
+# (`red`, `minute`), no operator or made name; also the word leading a rule of the module that means nothing else
+# (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 word_index_text(): text := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude") {
-		for slice in definition_slices(file_text(std_module_path(module)) ?? "") {
-			word = slice#1
+		source = file_text(std_module_path(module)) ?? ""
+		for word in definition_slices(source).map(slice => slice#1) + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not word.contains(name_joiner) {
 				known = definers.get(word) ?? []
 				if module not in known { definers[word] = known + [module] }
@@ -631,6 +634,14 @@ word_index_text(): text := {
 	}
 	definers.keys.map(word => word + "\t" + definers[word].join(" ")).join("\n")
 }
+# the word each `rewrite` line of a source starts its pattern with: `stored` of `rewrite stored $name: [$kind] => …`
+# (none of a pattern starting with a hole, `rewrite $p => …`)
+rule_heads(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => leading_word(line[#"rewrite " ..])).filter(word => #word > 0)
+leading_word(pattern: text): text := {
+	start = if pattern.starts_with("(") then 1 else 0
+	pattern[start ..< name_end(pattern, start, #pattern)]
+}
+has_meaning(word: text): bool := is_declared_word(word) or word in prelude_definitions() or is_operator_spelling(word) or keyword_form(word) != ""
 # the names a program says, as a value or a call: never a member's, `c.pi` names c, `xs.f(a)` xs and a; what of them it
 # binds itself is names_bound_in's
 free_words(n: Node): map := {
