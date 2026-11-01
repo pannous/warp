@@ -14,8 +14,9 @@ const COMPILED_PATH = "/tmp/warp-program.wasm";
 const TYPED_FILE = "playground.warp";
 // the compiler reads the standard modules of this lib/ (core/parsing/parser.warp warp_lib), as the native warp tells it
 const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
-// a program runs as `warp <file>` runs it, which serves a program's routes: here the page's requests (lib/web.warp)
-const PROGRAM_ENVIRONMENT = [...ENVIRONMENT, "WARP_SERVE=page"];
+// a program runs as `warp <file>` runs it (core/native/warp.warp), which names the program (lib/storage.warp keeps its
+// tables beside it) and serves its routes: here the page's requests (lib/web.warp)
+const programEnvironment = file => [...ENVIRONMENT, "WARP_SERVE=page", `WARP_PROGRAM=${file}`];
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
@@ -138,7 +139,7 @@ function compiledProgram(file, print) {
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
 	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks };
-	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, PROGRAM_ENVIRONMENT);
+	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, programEnvironment(file));
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
