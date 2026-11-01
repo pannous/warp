@@ -21,6 +21,22 @@ This supersedes decision playground-after-parity (the user: "the bigger local is
    - warp-web-samples: the sweep, then graphics (canvas, gpu), sound, media, markup.
    excluded_samples.txt keeps only samples that can't run in a browser (raylib/SDL windows, processes), each with why.
 
+## Host areas, state (warp-web-host, 2026-11-01)
+- Step 1 done: web/playground/driver.js is driver.warp's twin (warp.wasm over wasi.js; the compiler reads the
+  tree's lib/ through WARP_LIB; build.sh overlays it on the installed lib).
+- Servers: a program with routes serves the page's requests (lib/web.warp page_serve under WARP_SERVE=page,
+  host-routes.js web.request/answer over shared memory; the address bar, links and forms are the client).
+  `route "…"`, `server def` and `form post` are warp-speed's (card server-routes).
+- Storage: host-sqlite.js answers lib/native/sqlite3.warp with SQLite's own wasm build, without its JS glue
+  (instantiated synchronously, env/WASI stubs; its own VFS has no files, so a file database opens in memory, is
+  deserialized from the page's files and serialized back on close and at the end of the run). Any C library in a wasm
+  module goes through host-foreign.js wasmLibraryImports and typedExports (arguments fitted to the wasm signature).
+- FFI and Python: callC follows driver.warp c_called (warp.c_functions section; only the first out-pointer gets a
+  slot); `use python` runs in Pyodide through python_capi.py, the C API by handle.
+- Samples that fail natively fail identically in the page. These are core or language gaps, reported to the supervisor:
+  a linked storage.wasm can't call type(instance); the word index misses rule heads such as `stored`; plus `where`
+  with bare fields, `stop`, `load`, and `go` in an expression.
+
 ## Rules for the two playground workers (user: no core changes, delegate them)
 - They change only lib/, web/, samples/, test/, scripts/, notes/: never core/.
 - When a sample needs a core change: send warp-supervisor one line (sample, error, the core place if known, a repro),
