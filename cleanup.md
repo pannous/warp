@@ -47,3 +47,7 @@ Cover empty and supplementary-plane UTF-8 conversions, then annotate their resul
 # library-typed color slice
 
 Cover color conversions and opacity before declaring types; retain accepted numeric domains with `any`, and validate color results without changing existing tests.
+
+# library-typed color helpers
+
+Cover hexadecimal color output and padding before annotating helper results. Preserve the existing numeric inputs and verify the focused outcomes and smoke.
