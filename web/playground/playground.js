@@ -262,6 +262,8 @@ function startWorker(restarts = 0) {
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
 			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
+			if (data.type === "serving") return servingRequests(data);
+			if (data.type === "served") return showServed(data.response);
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -649,6 +651,11 @@ function evaluate(code, file = programFile()) {
 }
 
 async function runInWorker(code, file) {
+	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
+	if (worker.serving) {
+		worker.terminate();
+		startWorker();
+	}
 	await workerReady;
 	return new Promise(resolve => {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
@@ -838,6 +845,8 @@ function submitForm(submitted) {
 	const fields = Object.fromEntries(new FormData(form, submitted.submitter));
 	const path = new URL(form.getAttribute("action") ?? "", PROGRAM_ORIGIN + ($("address").value || "/")).pathname;
 	const posted = method !== "GET";
+	const encoded = new URLSearchParams(fields).toString();
+	if (worker.serving) return servedRequest(method, posted ? path : `${path}?${encoded}`, posted ? encoded : "");
 	worker.postMessage({ submit: { method, path, query: posted ? {} : fields, body: posted ? fields : null } });
 }
 
@@ -914,8 +923,48 @@ function followLink(click) {
 	const url = new URL(link.getAttribute("href"), PROGRAM_ORIGIN);
 	if (url.origin !== PROGRAM_ORIGIN) return false;
 	click.preventDefault();
-	worker.postMessage({ navigate: url.pathname });
+	goTo(url);
 	return true;
+}
+
+// a path of the program: a request to the program serving them (lib/web.warp page_serve), else its page there
+function goTo(url) {
+	if (worker.serving) servedRequest("GET", url.pathname + url.search);
+	else worker.postMessage({ navigate: url.pathname });
+}
+
+// ---- a program serving requests (lib/web.warp page_serve): the page is its client ------------------------------
+
+const SERVING_RUN = { value: "", error: false, status: 0, warnings: [], runtime_warnings: [], hints: [], notes: [] };
+const SERVED_ROOT = "/";
+// the program waits for a request in `shared` (host-routes.js PAGE_SERVING): its run is shown as it is so far, and
+// the page asks for its root at once, as a browser opening the address; a request made while it was busy goes now
+function servingRequests({ shared, port }) {
+	const first = !worker.serving;
+	const waiting = worker.serving?.waiting ?? (first ? ["GET", SERVED_ROOT] : undefined);
+	worker.serving = { shared };
+	if (first && pending) finish(pending, { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT });
+	if (waiting) servedRequest(...waiting);
+}
+
+// a request as HTTP text into the waiting program's buffer, else kept until it waits again
+function servedRequest(method, target, body = "") {
+	showAddress(target);
+	const { shared } = worker.serving;
+	if (!shared) return worker.serving.waiting = [method, target, body];
+	worker.serving = {};
+	const length = new TextEncoder().encode(body).length;
+	answerInto(shared, async () => ({ request: `${method} ${target} HTTP/1.1\r\nHost: localhost\r\nContent-Length: ${length}\r\n\r\n${body}` }));
+}
+
+// the program's HTTP answer: an HTML body rendered, any other shown as the value, a failing status as an error
+function showServed(response) {
+	const [head, ...body] = response.split("\r\n\r\n");
+	const text = body.join("\r\n\r\n");
+	const failed = Number(head.split(" ")[1]) >= 400;
+	const html = /^content-type:\s*text\/html/im.test(head) ? text : undefined;
+	showValue(html ? "" : text, failed, html);
+	showRendered(html);
 }
 
 // the address bar shows the path of a program with routes (worker.js addressOf); a path typed there goes to that page
@@ -925,8 +974,7 @@ function showAddress(path) {
 }
 
 function goToAddress(key) {
-	if (key.key !== "Enter") return;
-	worker.postMessage({ navigate: new URL($("address").value, PROGRAM_ORIGIN).pathname });
+	if (key.key === "Enter") goTo(new URL($("address").value, PROGRAM_ORIGIN));
 }
 
 // the pointer over a canvas (canvas.js) for the running program's worker

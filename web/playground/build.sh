@@ -31,7 +31,15 @@ build_compiler() {
 	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
-	echo "built $page/warp-lib from $INSTALLED_LIBRARY ($(du -sh "$page/warp-lib" | cut -f1))"
+	# the tree's library over it, so the page runs this checkout's lib/ before an install: a module whose source
+	# changed is compiled from its source (its prebuilt modules/<name>.wasm dropped)
+	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" --exclude=compiler/ --exclude=modules/ --exclude="*.wasm" "$repository/lib/" "$page/warp-lib/"
+	local module name
+	for module in "$page/warp-lib/modules/"*.wasm; do
+		name=$(basename "$module" .wasm)
+		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
+	done
+	echo "built $page/warp-lib from $INSTALLED_LIBRARY and lib/ ($(du -sh "$page/warp-lib" | cut -f1))"
 }
 
 # served-files.js: the files the server has, so the compiler's module and header searches ask only for those that exist

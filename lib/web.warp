@@ -14,6 +14,8 @@ rewrite $m $path {$body...} => route_add($verb, $path, request => { $bindings...
 rewrite $p => $q where program and $q = served($p)
 
 DEFAULT_PORT = 8080
+// WARP_SERVE's value in the playground, which serves the page's requests
+PAGE_SERVING = "page"
 BACKLOG = 64
 READ_BYTES = 65536
 LINE_END = "\r\n"
@@ -142,10 +144,15 @@ http_failure(message: text) := {
 // the HTTP answer of the program's routes to a request as the client sent it
 http_served(raw: text) := try http_answer(route_answer(request_of(raw))) catch e { http_failure(str(e)) }
 
-// the program's routes served at the port until the process is stopped
+// what a program says as it starts serving
+serving_line(port: int) := "serving http://localhost:" + port + " (`warp run` runs the program once without serving)"
+
+// the program's routes served at the port until the process is stopped; in the playground (WARP_SERVE=page) the page's
+// own requests
 serve(port: int) := {
+	if env("WARP_SERVE") == PAGE_SERVING { return page_serve(port) }
 	fd = listening(port)
-	print "serving http://localhost:" + bound_port(fd) + " (`warp run` runs the program once without serving)"
+	print serving_line(bound_port(fd))
 	while true {
 		client = accept(fd, 0, 0)
 		if client >= 0 {
@@ -153,6 +160,13 @@ serve(port: int) := {
 			close(client)
 		}
 	}
+}
+
+// the program's routes answering the playground's requests (its address bar, links and forms) as HTTP text, which a
+// page hands over and shows (web/playground/host-routes.js): a browser page listens on no port
+page_serve(port: int) := {
+	print serving_line(port)
+	while true { std_io("web", "answer", [http_served(std_io("web", "request", [port]))]) }
 }
 
 // the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
