@@ -22,3 +22,8 @@ rewrite (any $xs < $y) => any($xs, $e -> $e < $y)
 rewrite (any $xs > $y) => any($xs, $e -> $e > $y)
 rewrite (any $xs <= $y) => any($xs, $e -> $e <= $y)
 rewrite (any $xs >= $y) => any($xs, $e -> $e >= $y)
+# `all xs are even`, `are all xs even`: whether every element holds (decision map-all-canonical: `f all xs` maps)
+rewrite (all $xs are $p) => all($xs, $e -> $p($e)) where $p is function
+rewrite (are all $xs $p) => all($xs, $e -> $p($e)) where $p is function
+rewrite (any $xs is $p) => any($xs, $e -> $p($e)) where $p is function
+rewrite (is any $xs $p) => any($xs, $e -> $p($e)) where $p is function
