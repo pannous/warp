@@ -30,13 +30,45 @@ html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", 
 
 to_html(value: any) := html_render(value, ø, ø)
 
+// A page's markup keeps its live parts as code (card markup-keeps): `p{ "count: " + count }` reading a variable a
+// handler changes is the part `() => …`, recomputed each time the markup renders; `on click { count += 1 }` is the
+// attribute `onclick: (event => …)`. The page renders the program's value with page_render, whose HTML names each
+// handler by its number, data-warp-click="1", and runs one with page_event; then it renders again and morphs.
+global page_handlers = []
+handler_prefix = "on"
+handler_attribute_prefix = "data-warp-"
+
+// the HTML of the page's value, its handlers numbered anew from 1 in render order
+page_render(value: any) := {
+	page_handlers = []
+	to_html(value)
+}
+// handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
+page_event(n: int, detail: any) := {
+	handler = page_handlers#n
+	handler(detail)
+}
+
+// a live part's value as it is now
+html_now(value: any) := if value is function then html_now(value()) else value
+
+// `onclick: (event => …)`: an element's handler of the event named after `on`
+html_is_handler(item: any) := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
+html_is_handler_name(name: any) := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
+html_handler(item: any) := {
+	page_handlers.add(html_raw_content(item))
+	" " + handler_attribute_prefix + html_name(item)[#handler_prefix ..] + "=\"" + count(page_handlers) + "\""
+}
+
 // a pair's name and content, `div{…}` or `class: "box"` (a one-entry map as Rust's pair)
 html_name(pair: any) := if pair is map then keys(pair)#1 else str(key_of(pair))
-html_content(pair: any) := if pair is map then values(pair)#1 else value_of(pair)
+html_raw_content(pair: any) := if pair is map then values(pair)#1 else value_of(pair)
+html_content(pair: any) := if html_is_handler(pair) then html_raw_content(pair) else html_now(html_raw_content(pair))
 
 // `scope`: the component whose elements a style sheet styles (data-warp-scope, card web-scoped); `chosen`: the value
 // of the select around, whose option is selected (`select{ bind: fruit }`, card web-bind-select)
-html_render(value: any, scope: any, chosen: any) := {
+html_render(live: any, scope: any, chosen: any) := {
+	value = html_now(live)
 	if html_is_element(value) { return html_element(html_tag(html_name(value)), html_content(value), scope, chosen) }
 	if html_is_group(value) {
 		var out = ""
@@ -71,7 +103,8 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	// `style: { color: red }` and a transition's style: one attribute
 	var styles = []
 	for item in items {
-		if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(html_name(item), html_content(item)) }
+		if html_is_handler(item) { attributes = attributes + html_handler(item) }
+		else if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(html_name(item), html_content(item)) }
 		else if html_is_attribute(item, tag) and html_name(item) == "style" {
 			if count(styles) == 0 { attributes = attributes + html_style_mark }
 			styles.add(if html_is_declarations(html_content(item)) then html_css(html_content(item)) else html_attribute_value(html_content(item)))
