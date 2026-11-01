@@ -193,12 +193,15 @@ rewrite $n ints => int[$n]
 // that wgsl_shader of lib/wgsl.warp compiles f to, the program values it reads the values of paint, read again
 // at each paint; on the GPU, else f of each pixel on the CPU, by paint_shader below. shader_of(f) is the text of that
 // shader. Rules of the prelude, so they meet paint before arity_overloads names its overloads, in every program
+// paint(s) and paint(s, values) paint at the program's own width and height where it assigns both, else at the view's
+// size (wiki/graphics.md): the rules below then fill the shader's holes or compile the function
+rewrite paint($s) => paint($s, $size...) where $s is symbol and $size = paint_size($program)
+rewrite paint($s, $v) => paint($s, $size..., $v) where $s is symbol and $size = paint_size($program)
 rewrite paint($f, $w, $h) => paint_shader($painting, $w, $h, $f) where $f is symbol and $f is function and $painting = wgsl_painting($f, $program)
 rewrite shader_of($f) => $shader where $f is symbol and $f is function and $shader = wgsl_shader($f, $program)
 // a paint of a shader the program assigns reads its holes from the variables of their names (lib/wgsl.warp shader_values)
 rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values($s, $v, $program)
 rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
-rewrite paint($s) => paint($s, view_width(), view_height(), $filled) where $s is symbol and $filled = shader_values_of($s, $program)
 // a list the program makes for the GPU (gpu_compute takes it) is made as a GPU list [f32] (decision gpu-bound-floats,
 // lib/rule_words.warp gpu_lists_packed): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks
 // for one outright
@@ -416,9 +419,9 @@ paint_each(f, width, height) := {
 	rows = columns * height /! width
 	paint([pixel_color(f((i % columns) * width /! columns, (i /! columns) * height /! rows)) for i in 0..columns * rows], columns, rows)
 }
-// paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a function, f(column, row)
-// of each pixel on the CPU (paint_each)
-paint(picture, width, height) := if picture is list then paint(picture, width, height, ø) else paint_each(picture, width, height)
+// paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
+// host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
+paint(picture, width, height) := if picture is list or picture is text then paint(picture, width, height, ø) else paint_each(picture, width, height)
 // paint(f, width, height) of a program function: its shader on the GPU, else f of each pixel on the CPU (the rules
 // at the sum rules above)
 paint_shader(painting: map, width, height, f) := if gpu_paints() then paint(painting.shader as text, width, height, shader_values(painting.uniform)) else paint_each(f, width, height)
