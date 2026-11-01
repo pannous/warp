@@ -1,0 +1,7 @@
+# Element handlers and live parts (wiki/html.md "Elements by id", card markup-keeps): a handler attribute holding a
+# function is numbered by page_render (data-warp-click="1") and run by page_event; a function among the markup is a
+# live part, its value now
+
+'use markup; n = 0; tick = (event => n += 1); page_render(button{ "+" onclick: tick })' '<button data-warp-click="1">+</button>'
+'use markup; n = 0; label = () => "n " + n; tick = (event => n += 1); page = div{ button{ onclick: tick } p{ label } }; page_render(page); page_event(1, ø); page_render(page)' '<div><button data-warp-click="1"></button><p>n 1</p></div>'
+'use markup; n = 0; step = (event => n += event); page_render(div{ button{ onclick: step } }); page_event(1, 5); n' 5
