@@ -38,17 +38,6 @@ unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, O
 
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
-# `user_count() {…}` of `server def` → route_add("POST", "/rpc/user_count", request => user_count()): a page's call of
-# a server function, its one argument the request's body, more of them the items of its JSON list
-rpc_route(definition: Node): Node := {
-	head = definition#1
-	name = head#1
-	given = items_of(head)[1 ..]
-	body = Key(symbol("request"), Op.Dot, symbol("body"))
-	arguments = if #given < 2 then given.map(parameter => body) else (1 to #given).map(i => Key(List([symbol("json"), body], Bracket.Round, Separator.None), Op.Hash, i))
-	answer = Key(symbol("request"), Op.Arrow, List([name] + arguments, Bracket.Round, Separator.None))
-	List([symbol("route_add"), "POST", "/rpc/" + spelled(name), answer], Bracket.Round, Separator.None)
-}
 # `get` → "GET": a route's method as HTTP spells it
 route_verb(method: Node): text := "${method}".upper()
 # each `:name` of a route's path a variable of its body, its segment of the request's path (an int where it is digits):
