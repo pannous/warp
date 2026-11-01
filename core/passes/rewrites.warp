@@ -985,17 +985,20 @@ definitions_signatures_in(nodes: list): map := {
 	signatures
 }
 # `def square := it * it`: a lone untyped parameter that the body computes with takes a number, so `square numbers`
-# squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts
+# squares each item as `square all numbers` does (decision M3c); not by `+`, which also joins lists and texts, nor
+# where the body asks its kind (`if x is number …` takes anything)
 computing_signature(signature: Signature, body: Node): Signature := {
 	if #signature.parameters != 1 { return signature }
 	parameter = signature.parameters#1
-	if parameter.type_name != "" or parameter.rest or not computes_with(body, symbol(parameter.name)) { return signature }
+	name = symbol(parameter.name)
+	if parameter.type_name != "" or parameter.rest or not computes_with(body, name) or kind_tested(body, name) { return signature }
 	Signature(parameters: [Parameter(name: parameter.name, type_name: number_word)])
 }
 # `def square := it * it` as the call `square(it)` it is
 implicit_call(n: Node): Node? := if is_key(n, Op.Define) and key_of(n) is symbol and mentions(value_of(n), implicit_parameter) then bracketed([key_of(n), symbol(implicit_parameter)], "(") else ø
 computing_ops = [Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
 computes_with(body: Node, name: Node): bool := nodes_in(body).any(n => n is key and op_of(n) in computing_ops and key_of(n) != ø and (key_of(n) == name or value_of(n) == name))
+kind_tested(body: Node, name: Node): bool := nodes_in(body).any(n => is_key(n, Op.Is) and key_of(n) == name)
 # `f(x: int) := …`: f → "int", for each definition of the program with a typed first parameter
 typed_first_parameters(program: Node): map := typed_first_parameters_in(nodes_in(program))
 typed_first_parameters_in(nodes: list): map := {

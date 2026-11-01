@@ -5,7 +5,7 @@
 # Pure function with := (single expression)
 def square := it * it
 def twice := it * 2
-def add := a + b
+def add(a, b) := a + b
 
 # Named parameters
 def greet(name) := "Hello, " + name + "!"

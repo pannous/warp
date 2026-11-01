@@ -275,6 +275,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 
 ## Types and annotations
+- real-canonical-core (user, ~6 core lines): `real` is no longer a rational synonym (`exact` stays); `3 is real` yes; a program's own type of a core type word shadows it; a float given to `real` converts to the exact real (2.5).
 - parameter-typed (user): `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
 - primitive-annotation (user, roadmap native-harness): `@primitive` marks GC-free code emitted as plain MVP wasm (core/extensions/primitive.warp, user OK): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 - primitive-int-width (user): `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
@@ -332,12 +333,15 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - count-words-library (user): once/twice/thrice leave both compilers and become prelude words over a block parameter, the basic demonstration of giving a block to a function (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
 - range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
+- kebab-or-minus (user): `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
+- default-parameter-def (Interviewer, small bug fix, 1 core line in definitions.warp is_parameter): `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
 - #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
-- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (open, discussed in prose: map-all-test).
+- map-all-test (user): the test reads as English, `all xs are even` and `are all xs even`, `any xs is even` and `is any xs even` (lib/sugar/broadcasting.warp); the call all(xs, f) / xs.all(f) stays yes/no for newcomers.
+- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (map-all-test).
 - int-overflow-shape (user): int-boxed-overflow-big keeps its ~23 lines with named overflow tests; no bit-trick or float shortcut.
 - words-as-values (user): a function word used as a value is the lambda of its call (`f = sqrt; f(16)` 4, `apply(floor, 2.5)` 2), bringing its module; with several arities the one its use needs, never silently the first.
 - definition-name-canonical (user): the name a definition carries is canonical for dir and everything warp prints (count stays count); internal names get canonical ones (map_keys → keys), old names become aliases or go.
@@ -507,6 +511,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
+- markup-keeps (user, core OK ~80 lines in data_blocks.warp, rewrites.warp, closures.warp, show.warp; order a, b, c, d, each landable alone): (a) `on click {B}` in a tag (comma allowed) is the item `onclick: (event => B)`, ~15 lines in data_blocks.warp; (b) live parts are charged values: an item reading a variable a handler writes is live (`is varying` counts handler writes), the compiler passes the read and written names so the page patches only the parts reading a written name; natively a live part shows its current value; ~40 lines; (c) `input{ bind: name }` is value + oninput by a lib/sugar rule; (d) a component call in a live comprehension is an instance keyed by t.id, else t, keeping its state, ~21 core + ~20 lib lines. Rejected: React-style re-render (~150+), the riskier phrase-matching module rules for (a). General, not web (user): live values, their read/written names and keyed instances are a language mechanism any library consumes (terminal UI, native window or canvas, sound parameters, files, `on change`); lib/markup.warp and the page are only one consumer; core names carry no web words.
+- markup-handler-comma (user): a handler inside a tag may be separated by a comma, `button{ "+1", on click { count += 1 } }`, if that makes the reading easier.
 - P188 stay close to HTML and CSS; only the basic machinery. web-keyframes: CSS's own `@keyframes`; warp adds only `leave:`.
 - html-meta: page facts are keys on html (`title:`, `description:`, `meta: {…}`).
 - key-if: inside `on key {…}` bare `key` reads event.key; named keys compare as words (ESC, ENTER, UP); held-key: `held_key` is the held key's name.
