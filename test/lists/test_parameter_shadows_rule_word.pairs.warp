@@ -1,6 +1,8 @@
 # a parameter named like a rule's word (`text#$n`, `int#$n` fill a list) is the local: the rule does not fire on it
 'second_letter(text: text) := text[1]; second_letter("abc")'	'b'
 'second_item(int: list) := int#2; second_item([4 5])'	5
+# a module's word too: sound's pattern_end(text: text, …) reads text[i] as its letter
+'use sound; pattern_end("ab]c", 0, "]")'	2
 # a preposition parameter `for d` binds d, not the word for: loops and comprehensions inside still lower
 'f(x, for d) := [i * d for i in [1, 2]]; f(1, 2)'	[2, 4]
 'f(x, for d) := { s = 0; for i in [1, 2] { s += i }; s * d }; f(1, 2)'	6
