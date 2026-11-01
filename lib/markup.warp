@@ -50,7 +50,7 @@ export page_event(n: int, detail: any) := {
 }
 
 // a live part's value as it is now
-html_now(value: any) := if value is function then html_now(value()) else value
+html_now(value: any) := if value is Live then html_now(value.now()) else if value is function then html_now(value()) else value
 
 // an element's handler: `on click {…}` among its items (a Handler, lib/prelude.warp), or HTML's own spelling
 // `onclick: (event => …)`

@@ -948,6 +948,14 @@ global listener_counts = {}
 // value (lib/markup.warp: the element's handler), no listener of the whole program (lib/sugar/events.warp)
 class Handler { event: text; action: function }
 handler(name: any, action: function): Handler := Handler(name_of(name), action)
+// a live value: code kept to run each time its value is wanted, shown as its value now; an item of a structure
+// reading a variable a handler writes is one (lib/sugar/events.warp), `p{ "count: " + count }`
+class Live {
+	compute: function
+	now() := { value = compute; value() }
+	show() := str(now())
+}
+live(compute: function): Live := Live(compute)
 listen(name: any, listener: function, once: bool): int := {
 	key = name_of(name)
 	if not (key in event_listeners) {
