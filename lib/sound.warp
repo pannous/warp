@@ -740,6 +740,12 @@ played(file) := {
 
 // The voice's clock (card sound-native-clock): where its queued sounds end in real time (clock() milliseconds) and its
 // place, the seconds of sound since its first, which save sound mixes by; `at` moves both for its block
+// a task's voice (lib/sugar/tasks.warp): it starts where its starter's stands, which goes on after it as before
+task_context() := [voice_end, voice_place]
+task_context_back(context) := {
+	voice_end = context#1
+	voice_place = context#2
+}
 global voice_end = 0
 global voice_place = 0.0 as float
 global voice_origin = 0

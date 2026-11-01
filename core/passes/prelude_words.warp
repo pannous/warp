@@ -235,8 +235,11 @@ operated_within(name: text): list := {
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
 }
+# `data($a * 1) => a`, an arm of quoted code wherever a sugar word holds it (`rules {…}`, lib/sugar/arms.warp): its
+# match is written only once the sugar fires
+is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
 # data view) a time's fields (emitter/times.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words)
@@ -341,6 +344,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 				if key == ø and #origins == 0 { origins = slice_origins(files) }
 				origin = if key != ø then baked_origin(key, files) else origins.get(slice#2)
 				if origin != ø { defined_origins[slice#1] = origin }
+				hidden = if in_front then hidden_call(slice_node, slice#1, own_arities, own) else ø
+				if hidden != ø { raise (if origin != ø then origin#1 else "a used module") + "'s " + hidden + " is hidden by the program's " + hidden + ", which its " + slice#1 + " would call: rename one of them" }
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
@@ -461,6 +466,18 @@ arity_variant(name: text, count: int): any := {
 
 # whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
 # function when it takes them (a parameter `b = 1` may be left out, a rest one takes any more)
+# a module word's call of another word of the module that the program defines with that many parameters, which would
+# run the program's word, silently (card rule-words-core: core/emitter/prebuilt.warp's read_names took the calls of
+# lib/rule_words.warp's free_names); ø when none. `shared`: the program's function names the module defines too
+hidden_call(slice_node: Node, defining: text, shared: map, own: map): text? := {
+	for n in nodes_in(slice_node) {
+		if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol {
+			called = name_of(n#1)
+			if called != defining and shared.has(called) and is_group(own[called]) and shadows(own, called, #n - 1) { return called }
+		}
+	}
+	ø
+}
 shadows(own: map, name: text, count: int): bool := {
 	if name not in own { return no }
 	head = own[name]

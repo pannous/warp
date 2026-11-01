@@ -1,0 +1,4 @@
+'pair = [3, 4]; if pair is [a, b] then a * b else 0'	12
+'if "v12" is "v" + n then "version " + n else "?"'	'version 12'
+'f(xs) := if xs is [first, ...rest] then first + #rest else 0; [f([5, 6, 7]), f([])]'	[7, 0]
+'r = {status: 404}; if r is {status: s} then s else 0'	404
