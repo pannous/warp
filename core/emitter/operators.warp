@@ -130,6 +130,8 @@ def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 }
 # a variable declared int in an optional or union slot holds a node, an int still (boxing is the layout, not the type)
 boxed_int_slot(body: Body, n: Node): bool := n is symbol and name_of(n) in body.boxed_ints
+# a slot whose declared type has an int member: type() names its boxed whole number int
+int_member_slot(body: Body, n: Node): bool := boxed_int_slot(body, n) or (n is symbol and name_of(n) in body.int_members)
 unboxed_int_slot(body: Body, n: Node, value: TypedCode): TypedCode := if value.kind == ValueKind.Node and boxed_int_slot(body, n) then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
 # a literal beside a fast int takes the int side: `i + 1` of a counter wraps
 wraps(body: Body, left: Node, right: Node): bool := body.function.is_runtime or (fast_int(body, left) and fast_int(body, right)) or (left is number and fast_int(body, right)) or (right is number and fast_int(body, left))
@@ -181,7 +183,7 @@ analyzed_list_type(body: Body, n: Node): text? := {
 # a whole number is a nat but where it is a fast int, declared int (decision nat-and-int)
 def type_value_of(body: Body, n: Node): TypedCode {
 	value = expression_code(body, n)
-	if value.kind == ValueKind.Node and boxed_int_slot(body, n) { return runtime_call("int_slot_type_name", [value, list_value(body, module.classes.keys)]) }
+	if value.kind == ValueKind.Node and int_member_slot(body, n) { return runtime_call("int_slot_type_name", [value, list_value(body, module.classes.keys)]) }
 	if value.kind == ValueKind.Node { return runtime_call("node_type_name", [value, list_value(body, module.classes.keys)]) }
 	listed = if value.kind == ValueKind.List then analyzed_list_type(body, n) else ø
 	if value.kind == ValueKind.List and listed == ø { return runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)]) }
