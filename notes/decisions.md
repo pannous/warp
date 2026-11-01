@@ -695,3 +695,4 @@ the original questions 1–41: test edits and housekeeping done.
 - sample-count-rounds (user 2026-11-01, confirmed): a sound's sample count rounds to the nearest sample.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
 - playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.
+- library-words-lexical (user 2026-11-01): library code keeps its own words: a library body's call of a word the program redefines stays the library's (`round(x) := 0; round_to(2.345, 2)` is 2.35); a program's word answers only the program's calls.
