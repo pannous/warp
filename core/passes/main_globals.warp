@@ -15,6 +15,8 @@ counting_operators = ["++", "--"]
 in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
 # the operators a changed target is reached through: `xs#i`, `p.x`, the declared `k: int`
 target_operators = ["#", ".", ":"]
+# a name the compiler makes, `match·bound`, `index·3`, which the program never wrote: never the user's to decide
+made_name_mark = "·"
 
 # the lowered program, the first change of a main-level variable from one of the functions `own_names` defines (not a
 # used module's or the prelude's) diagnosed
@@ -28,7 +30,7 @@ main_globals(program: Node, own_names: list): any := {
 			own = parameter_names(key_of(function_definition))
 			decided = {}
 			for name in changed_names(body) {
-				if name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) {
+				if not name.contains(made_name_mark) and name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) {
 					decided[name] = yes
 					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name]), function_definition) }
 					diagnose(call_of("local_or_global", [name, defined_function]), function_definition)
