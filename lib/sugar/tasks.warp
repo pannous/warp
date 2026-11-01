@@ -12,5 +12,6 @@ rewrite await any $xs => $xs#1
 rewrite await first $xs => $xs#1
 rewrite await $x within $t or $d => $x
 rewrite await $x => $x
-rewrite stop $x => ø where statement
-rewrite cancel $x => ø where statement
+# (a rule's result ø reads as no match, so the finished task is named and then nothing)
+rewrite stop $x => ($x; ø) where statement
+rewrite cancel $x => ($x; ø) where statement
