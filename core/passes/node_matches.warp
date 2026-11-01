@@ -259,8 +259,11 @@ chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If,
 matched(subject: Node, arms: list, n: Node, variants: map): Node := {
 	if #arms == 0 { return n }
 	if is_name(subject) { return arm_chain(arms, subject, variants) }
-	List([Key(symbol(subject_name), Op.Assign, subject), arm_chain(arms, symbol(subject_name), variants)], Bracket.Round, Separator.Semicolon)
+	List([Key(symbol(subject_name), Op.Assign, tuple_as_list(subject)), arm_chain(arms, symbol(subject_name), variants)], Bracket.Round, Separator.Semicolon)
 }
+
+# `match (1, 2) {…}`: the tuple a list, as `p = (1, 2)` makes it (the passes that do so ran before this one)
+tuple_as_list(subject: Node): Node := if is_round(subject) and separator_of(subject) == "," then List(items_of(subject), Bracket.Square, Separator.Comma) else subject
 
 match_block(subject: Node, block: Node, n: Node, variants: map): Node := match block {
 	List(arms, Bracket.Curly, separator): matched(subject, joined_arms(arms), n, variants)
