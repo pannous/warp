@@ -33,7 +33,7 @@ def instance_value(body: Body, class_name: text, fields: list): TypedCode {
 def positional_instance(body: Body, class_name: text, arguments: list): TypedCode {
 	field_names = if class_name in module.classes then module.classes[class_name].keys else []
 	slots = placed_arguments(field_names, arguments)
-	if not (slots is list) { return refuse("an instance of " + class_name + " given more values than fields") }
+	if slots == ø { return refuse("an instance of " + class_name + " given more values than fields") }
 	given = range_list(#slots).filter(i => slots[i] != ø)
 	instance_of_fields(body, class_name, given.map(i => field_names[i]), given.map(i => slots[i]#1))
 }
@@ -89,11 +89,15 @@ def class_struct(class_name: text): text {
 	if name not in module.class_structs {
 		super = if class_name in module.parents then class_struct(module.parents[class_name]) else instance_struct()
 		fields = module.classes[class_name].keys
-		definition = [80, 1, super, 95] + uleb(#instance_fields + #fields) + instance_field_types() + concatenated(fields.map(field => [99, gc.node, 1]))
+		definition = [subtype_prefix(class_name), 1, super, 95] + uleb(#instance_fields + #fields) + instance_field_types() + concatenated(fields.map(field => [99, gc.node, 1]))
 		module.class_structs[name] = [definition, instance_fields + fields]
 	}
 	name
 }
+# a class no other class extends has a final struct (79), else an open one (80): wasmtime tests a value against a
+# final type by comparing type indexes, against an open one of another type through its is_subtype libcall (each
+# instance lookup tested every class in turn so: a quarter of the emit; notes/compile_speed.md "Emit")
+def subtype_prefix(class_name: text): int { if class_name in module.parents.values then 80 else 79 }
 # $Instance, every class's struct's supertype: a $Node with the map of its extra fields
 instance_fields = ["kind", "data", "value", "extra"]
 def instance_field_types(): list { node_fields + [99, gc.node, 1] }
@@ -291,9 +295,10 @@ def instance_place_code(f: Function) {
 	f.code = each_class_field(find, extra) + [op.i64_const, 0]
 }
 # is_class_instance(m): whether m is an instance of a class the program makes, a struct (an AST key without an
-# operator is marked as an instance too)
+# operator is marked as an instance too): a test of each class's struct, not of the open $Instance (subtype_prefix)
 def is_class_instance_code(f: Function) {
-	f.code = if #made_classes() == 0 then [op.i32_const, 0] else [op.local_get, 0] + gc_code(gc_ops.ref_test, [gc_type(instance_struct())])
+	tests = made_classes().map(class_name => [op.local_get, 0] + gc_code(gc_ops.ref_test, [gc_type(class_struct(class_name))]))
+	f.code = if #tests == 0 then [op.i32_const, 0] else tests#1 + concatenated(tests[1 ..].map(test => test + [op.i32_or]))
 }
 # instance_show(m): the text m's class shows it as by its show() (decision show-hook), ø when the program's classes
 # give none (class_methods.warp show·shown)

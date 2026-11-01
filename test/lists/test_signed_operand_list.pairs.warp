@@ -11,7 +11,7 @@
 '1 - 1'	0
 '1-1'	0
 '1+ 1'	2
-'x=5;x -1'	4
+'x=5;x -1'	[5, -1]
 
 # each_reading_has_its_explicit_form
 '[3 - 1]'	[2]

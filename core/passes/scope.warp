@@ -171,6 +171,14 @@ scope_with(outer: map, nodes: list): map := {
 	scope
 }
 
+# the scope's entries for the names among the nodes: what a function's nodes can ask of the scope around it, without
+# copying all of it (each function copying the whole program's scope was ~10% of compiling compiler.warp)
+names_seen(scope: map, nodes: list): map := {
+	seen = {}
+	for n in nodes { if n is symbol and scope.has(name_of(n)) { seen[name_of(n)] = scope[name_of(n)] } }
+	seen
+}
+
 # `f(a) := …`, `f(a) = …`: a function's definition, whose parameters and locals no other function sees
 is_function_definition(n: Node): bool := match n {
 	Key(target, op, value): (op == Op.Assign or op == Op.Define) and is_round(target) and #items_of(target) > 0

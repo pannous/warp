@@ -17,3 +17,17 @@ Gotchas met:
 - A top-level value of a module used by a module can be unknown when another module's words reach it (card
   unknown-name): write such constants as functions.
 - `warp format yes` breaks .pairs.warp tabs (card format-tab-spacing).
+- lib/units.warp is bundled into the compiler, and its rules also apply when the compiler compiles itself: a rule
+  firing there pulls units in (Quantity's shown() beside diagnostics.warp's shown: "pattern·clause·shown"). Every
+  units rule change needs scripts/self-check.sh, not only smoke. A `$u in [s, …]` listing also takes the char 's'
+  (card char-literal-matching), so unit rules guard with `$u is symbol`.
+- `rewrite (… :=` on one line reads as a definition of the word rewrite (prelude_words.warp name_defined_in), so the
+  word index sent every rewrite to that module; fixed in core: a line led by `rewrite` defines no word (card
+  units-rewrite-assign).
+- Finding where a module rule fires in the compiler: give its template a marker call
+  (`=> unit_rule_fired_here($bound)`), run `warp lower compiler.warp` from core/ with WARP_LIB=<worktree>/lib (3 min,
+  no rebuild), grep the marker (card module-rule-trace for a real trace).
+- A module rule loads only for a program naming its needed word: the pattern's first word, else the words of its
+  `$h in [...]` listings. An operator (`is`) is no word, so `rewrite $e $u is $t` needs a listing, else it never fires.
+- Rules apply bottom-up: `3 cm is length` parses as 3 (cm is length), so `cm is length` is tried first; the dimension
+  rule skips a unit-led left side (rule word unit_led) and `$e $u is $t` moves the unit to its amount first.

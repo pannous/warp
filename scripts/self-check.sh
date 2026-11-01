@@ -66,7 +66,7 @@ else
   pair=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh --check both $worktree 2>&1)
 fi
 case $? in
-  0) ;;
+  0) pair_hash=$(cut -d' ' -f1 $worktree/lib/warp.wasm.inputs 2>/dev/null) ;;
   3) print -r -- "self-check: REBUILD NEEDED: no pair for these compiler inputs in lib/ nor the store; checking the existing pair (scripts/self-check.sh --rebuild builds it)" ;;
   *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree (its step and log in the store):"; print -r -- $pair; exit 1 ;;
 esac
@@ -87,13 +87,15 @@ $said"; return 1; }
 # a build slot (scripts/build-slot.sh) like every compiler build, and its outcome is kept under warp.wasm's inputs hash
 # (<store>/<hash>/stage-two.passed, stage-two.failed/ with build.log and message), so a check of that hash runs it once;
 # the compile is measured and profiled (stage-two.record/, failed: stage-two.failed/record/: time, profile.txt, build.log);
-# --rebuild runs it again
+# --rebuild runs it again. Only a pair of the current inputs has that hash (pair_hash): an existing pair of other or no
+# inputs (REBUILD NEEDED) runs stage 2 every time, its outcome only in the tree's data/self-check/ (a lib/ without
+# warp.wasm.inputs was answered "stage 2 of unhashed passed before" for every such tree, card scripts-self)
 stage_two() {
   local stage=$scratch/lib native=$warp  # the checked native warp: WARP_LIB first, nothing beside it wins
-  local hash=${$(cut -d' ' -f1 $worktree/lib/warp.wasm.inputs 2>/dev/null):-unhashed}
-  local record=$store/$hash/stage-two log=$scratch/stage-two.log measured=$scratch/stage-two.record
-  if [[ -z $rebuild && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
-  if [[ -z $rebuild && -d $record.failed ]]; then verdict="SELF CHECK RED: $(<$record.failed/message)"; return 1; fi
+  local hash=${pair_hash:-unkept}
+  local record=${${pair_hash:+$store/$hash}:-$worktree/data/self-check}/stage-two log=$scratch/stage-two.log measured=$scratch/stage-two.record
+  if [[ -z $rebuild && -n $pair_hash && -f $record.passed ]]; then verdict="SELF CHECK ok: stage 2 of $hash passed before ($record.passed)"; return 0; fi
+  if [[ -z $rebuild && -n $pair_hash && -d $record.failed ]]; then verdict="SELF CHECK RED: $(<$record.failed/message)"; return 1; fi
   mkdir -p $stage && ln -s $worktree/lib/*(N) $stage/ && rm -f $stage/warp.wasm* $stage/warp-self.wasm* $stage/runtime.wasm*
   WARP_BUILD_RECORD=$measured WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/build-slot.sh $log $native $worktree/lib/warp.wasm -- \
     $worktree/lib/compiler/compiler.warp $stage/warp.wasm $worktree/lib/compiler $worktree/lib $worktree/lib/runtime.wasm

@@ -1,0 +1,3 @@
+# a named argument of a call dispatched by its arguments' types goes by its name: save sound as: "a.wav"
+'save(path: text, content) := 1; class R {}; save(made: R, as file) := file; save R() as: "a"'	"a"
+'f(x: int, as file) := file; f(x: text, as file) := "t"; [f(1, as: "i"), f("x", as: "j")]'	["i", "t"]

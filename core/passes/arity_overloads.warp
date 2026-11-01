@@ -438,7 +438,12 @@ takes_widened(type: text): bool := type == "float" or type == "number"
 run_time_test(argument: Node, type: text): Node := {
 	if is_union(type) { return union_members(type).map(member => run_time_test(argument, member)).fold(ø, (tests, test) => if tests == ø then test else Key(tests, Op.Or, test)) }
 	element = element_of(type)
-	if element == ø { return call_of("is_type", [argument, if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type]) }
+	if element == ø {
+		word = if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type
+		test = call_of("is_type", [argument, word])
+		# an instance converting itself to a float takes a float or number variant: √2 picks f(x: float)
+		return if word == "float" or word == "number" then Key(test, Op.Or, call_of(HiddenWord.FloatConvertible as text, [argument])) else test
+	}
 	no_items = Key(call_of("count", [argument]), Op.Eq, 0)
 	first_item = run_time_test(Key(argument, Op.Hash, 1), element)
 	Key(call_of("is_type", [argument, "list"]), Op.And, Key(no_items, Op.Or, first_item))
@@ -463,19 +468,24 @@ in_test_order(candidates: list, kinds: list): list := {
 dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: text): Node := {
 	bindings = []
 	passed = []
+	values = []
 	for at in 1 to #arguments {
 		argument = arguments#at
+		value = argument
 		if kinds#at == ø and (argument is key or is_group(argument)) {
-			held = symbol("overload·" + at)
-			bindings += [Key(held, Op.Assign, argument)]
-			argument = held
+			# a named argument, `save sound as: "a.wav"`, holds its value and passes it by its name
+			label = if is_key(argument, Op.Colon) and key_of(argument) is symbol then key_of(argument) else ø
+			value = symbol("overload·" + at)
+			bindings += [Key(value, Op.Assign, if label == ø then argument else value_of(argument))]
+			argument = if label == ø then value else Key(label, Op.Colon, value)
 		}
 		passed += [argument]
+		values += [value]
 	}
 	chain = call_of(raise_word, [refusal])
 	for types in in_test_order(candidates, kinds).reverse() {
 		variant = call_of(typed_variant(name, types), passed)
-		tests = tested_places(kinds, types).map(at => run_time_test(passed#at, types#at))
+		tests = tested_places(kinds, types).map(at => run_time_test(values#at, types#at))
 		chain = if not tests then variant else Key(Key(Key(ø, Op.If, joined(tests)), Op.Then, variant), Op.Else, chain)
 	}
 	if not bindings then chain else List(bindings + [chain], Bracket.Round, Separator.Semicolon)

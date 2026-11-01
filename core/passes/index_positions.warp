@@ -90,7 +90,9 @@ call_items(n: Node): list := match n {
 count_name(count: list): text := if count#2 == "" then count#1 else count#2 + " " + count#1
 
 # the names one scope counts: those around it, its own declared ones, and those it assigns only values counting the
-# same way, in program order; not those of the functions it defines
+# same way, in program order; not those of the functions it defines. A name it assigns values counting nothing or
+# differently is left out once the scope is read: its functions' own assignment of it is theirs, and every name of the
+# program carried into each function made compiling compiler.warp quadratic
 scope_counts(body: Node, counted: map, type_words: list): map := {
 	own = {}
 	for name in counted.keys() { own[name] = counted[name] }
@@ -112,7 +114,12 @@ scope_counts(body: Node, counted: map, type_words: list): map := {
 			_: ø
 		}
 	}
-	own
+	counting_only(own)
+}
+counting_only(counts: map): map := {
+	kept = {}
+	for name in counts.keys() { if counts[name] != ø { kept[name] = counts[name] } }
+	kept
 }
 # a name's count after one more assignment: the same as before, or ø once two differ
 assigned_count(name: text, given: list?, own: map): list? := if name in own and own[name] != given then ø else given

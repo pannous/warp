@@ -296,7 +296,8 @@ def operator_alias(words: list): list {
 	prefix = words.length > 0 and words#1 == "prefix"
 	if prefix { words = words[1 .. words.length] }
 	if not (words.length == 4 and words#1 == "operator" and words#3 == ":=") { return [] }
-	if is_operator_spelling(words#4) or (prefix and is_name_start(words#4#1)) then [words#2, words#4] else []
+	// a prefix alias names a function, the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
+	if is_operator_spelling(words#4) or (prefix and is_name_start(words#4#1) and name_end(words#4, 0, words#4.length) == words#4.length) then [words#2, words#4] else []
 }
 // An alias spelling a function, `√` of sqrt, no operator
 def spells_function(alias: list): bool := is_name_start(alias#2#1) and not is_operator_spelling(alias#2)
@@ -706,7 +707,31 @@ def heads_block(p: Parser, found: list): bool {
 	if found.length == 0 or is_block(found#(found.length)#1) or found#(found.length)#2 != Separator.Space { return false }
 	first = found.length
 	while first > 1 and found#(first - 1)#2 == Separator.Space { first = first - 1 }
-	found#first#1 is symbol and BLOCK_HEADS.has(name_of(found#first#1))
+	found#first#1 is symbol and BLOCK_HEADS.has(name_of(found#first#1)) and body_follows(p)
+}
+// whether the statement goes on to a body, `{` or `:` outside brackets and texts before its end: without one a block
+// head is an ordinary call, the program's own `twice square 3` of a twice(f, x) beside the prelude's twice(body: block)
+def body_follows(p: Parser): bool {
+	depth = 0
+	at = p.at
+	while at < p.n {
+		c = p.code[at]
+		if c == '"' or c == '\'' {
+			at = at + 1
+			while at < p.n and p.code[at] != c { at = at + 1 }
+		} else if depth == 0 and (c == '{' or c == ':') {
+			return true
+		} else if c == '(' or c == '[' {
+			depth = depth + 1
+		} else if c == ')' or c == ']' {
+			if depth == 0 { return false }
+			depth = depth - 1
+		} else if depth == 0 and (c == '\n' or c == ';' or c == '}') {
+			return false
+		}
+		at = at + 1
+	}
+	false
 }
 def head_item(p: Parser): Node := if body_word_width(p) == 1 then listed(Bracket.Curly, Separator.Semicolon, [colon_body(p, 1)]) else header_expression(p, CONDITION_POWER)
 def follows_clause_word(found: list): bool := found.length > 0 and ends_with_clause_word(found#(found.length)#1)
@@ -1706,14 +1731,16 @@ def operator_at(p: Parser): list {
 	if written != "" and assigns_after(p, written.length) and (if spelled.length == 0 then not declares_before(p) else computes(spelled#2)) { return [written + "=", COMPOUND_ASSIGNMENT] }
 	spelled
 }
-// the word before the operand is one declaring it, `const x=5`, `let n=5`: its `x=` an assignment, no `x max= 5`
+// the word before the operand is one declaring it, `const x=5`, `let n=5`, or its type, `int i=2*3`: its `x=` an
+// assignment, no `x max= 5`
 DECLARING_WORDS = ["let", "var", "global", "export", "import", "const", "constant", "final", "mutable", "mut", "val", "static"]
 def declares_before(p: Parser): bool {
 	end = p.at
 	while end > 0 and is_blank(p.code[end - 1]) { end = end - 1 }
 	start = end
 	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
-	p.code[start ..< end] in DECLARING_WORDS
+	word = p.code[start ..< end]
+	word in DECLARING_WORDS or (end < p.at and known_type(word, p.types))
 }
 // `=` alone (no `==`) right after `width` characters
 def assigns_after(p: Parser, width: int): bool := peek(p.code, p.at + width, p.n) == '=' and peek(p.code, p.at + width + 1, p.n) != '='
@@ -1865,7 +1892,9 @@ def declared_operator(infix: bool, words: list): text {
 	if not is_name_start(head#1) { while end < head.length and head[end] != '(' { end = end + 1 } }
 	word = head[0 .. end]
 	operator = (is_name_start(head#1) and word != "operator") or is_operator_glyph(word)
-	if operator and (end == head.length or head[end] == '(') then word else ""
+	// a built-in word, `infix operator as(n: any, e: enum) := …`, is no new operator: an overload of it
+	// (operator_method_definition)
+	if operator and (end == head.length or head[end] == '(') and word_operator(word) == ø then word else ""
 }
 
 // `operator × := *`: another spelling of a built-in operator, no function
@@ -2138,17 +2167,19 @@ def group_items(declared: Node): list {
 METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "≈", "~", "#"]
 
 // `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
-// plus, no count `#`; ø where no `:=` follows the parentheses
+// plus, no count `#`; ø where no `:=` follows the parentheses. After the keyword (`infix operator |(x: any, g:
+// function) := …`, `infix operator as(…)`, `declared`) any built-in operator, its function named as written
+// (`operator_|`): an overload by its operands' kinds (rewrites.warp operator_rules)
 // Rust twin: operators.rs try_parse_operator_method_head
-def operator_method_head(p: Parser): Node {
+def operator_method_head(p: Parser, declared: bool = false): Node {
 	op = operator_at(p)
-	if op.length == 0 or not METHOD_OPERATORS.contains(op#2) { return ø }
+	if op.length == 0 or not (declared or METHOD_OPERATORS.contains(op#2)) { return ø }
 	open = p.at + op#1.length
 	if not is_at(p.code, open, '(', p.n) { return ø }
 	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n)), p.n) { return ø }
 	p.at = open
 	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
-	call_of([symbol(op#2)] + parameters)
+	call_of([symbol(if METHOD_OPERATORS.contains(op#2) then op#2 else OPERATOR_FUNCTION_PREFIX + op#1)] + parameters)
 }
 
 // `operator #(n) := …`, `infix operator +(a: V, b: V) := …`: the method of a built-in operator, its keywords
@@ -2162,7 +2193,7 @@ def operator_method_definition(p: Parser, word: text): Node {
 		p.at = p.at + 8
 		skip_spaces(p)
 	}
-	head = operator_method_head(p)
+	head = operator_method_head(p, true)
 	if head == ø {
 		p.at = start
 		return ø
@@ -3381,6 +3412,8 @@ def bare_atom(p: Parser): Node := {
 		// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals; Rust twin:
 		// numbers.rs scientific_float); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
 		if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
+		period = overlined_digits(p)
+		if period != "" and written.contains(".") { return repeating_decimal(written, period) }
 		if written.contains(".") { return with_glued_factor(p, decimal_value(written)) }
 		literal = p.code[number_start .. p.at]
 		if not (literal.contains("e") or literal.contains("E")) {
@@ -4706,6 +4739,33 @@ def decimal_number(p: Parser): text {
 	written
 }
 
+// `0.16̅`: the digits under an overline (U+0305, one grapheme with its digit) repeat forever
+def overlined_digits(p: Parser): text {
+	period = ""
+	while p.at < p.n and p.code[p.at].ends_with("̅") and is_digit(p.code[p.at].replace("̅", "")) {
+		period = period + p.code[p.at].replace("̅", "")
+		p.at = p.at + 1
+	}
+	period
+}
+
+// a.b followed by the period p repeating, exactly: (abp - ab) / (10^#b · (10^#p - 1)), 0.3̅ is 1/3, 2.45̅ 221/90
+def repeating_decimal(written: text, period: text): Node {
+	parts = written.split(".")
+	fraction = parts#2
+	digits = parts#1 + fraction
+	keyed("/", int(digits + period) - int(digits), (ten_to_the(period.length) - 1) * ten_to_the(fraction.length))
+}
+
+def ten_to_the(count: int): int {
+	power = 1
+	while count > 0 {
+		power = power * 10
+		count = count - 1
+	}
+	power
+}
+
 def digits_read(p: Parser): text {
 	// the runs of digits between `_` separators are copied whole and joined once
 	parts = []
@@ -4715,7 +4775,7 @@ def digits_read(p: Parser): text {
 		if c == '_' and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n)) {
 			parts += [p.code[copied .. p.at]]
 			copied = p.at + 1
-		} else if not is_digit(c) {
+		} else if not is_digit(c) or c.ends_with("̅") {
 			return join(parts + [p.code[copied .. p.at]], "")
 		}
 		p.at = p.at + 1

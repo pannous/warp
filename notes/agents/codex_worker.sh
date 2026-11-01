@@ -155,7 +155,10 @@ fi
 export GH_TOKEN
 
 PREVIOUS_RESULT=$(ls -t "$LOG_DIR"/*.last.md 2>/dev/null | head -1)
-PARKED_BEFORE=$([ -n "$PREVIOUS_RESULT" ] && blocks PARKED "$PREVIOUS_RESULT")
+# cards the Supervisor took back from Codex (`retired: <card>` lines of the list): never continued, even when parked
+RETIRED=$(sed -n 's/^retired: *\([A-Za-z0-9_-]*\).*/\1/p' "$CARD_LIST" 2>/dev/null | paste -sd' ' -)
+not_retired() { awk -v retired=" $RETIRED " '/^PARKED/{block=""; skip=0} {block=block $0 "\n"} /^card:/{if (index(retired, " " $2 " ")) skip=1} /^END/{if (!skip) printf "%s", block; block=""}'; }
+PARKED_BEFORE=$([ -n "$PREVIOUS_RESULT" ] && blocks PARKED "$PREVIOUS_RESULT" | not_retired)
 
 PROMPT="You are a warp worker session named codex, started by a timer; nobody watches this run. Read AGENTS.md and
 notes/agents/common.md and follow them, with these differences: you cannot use SendMessage, ListAgents or ask anyone,
@@ -166,7 +169,8 @@ cleaned up): every card whose Agent is codex (\`todo list Now\`), every PARKED c
 origin not merged into main, each with its notes/handover/<card>.md. Reuse the worktree if it still exists, otherwise
 \`cowtree add\` it from the pushed branch; merge origin/main and carry on from the handover's next step. A leftover
 worktree with nothing new against main is removed, its branch deleted (local and remote).
-${PARKED_BEFORE:+Parked by the previous run:
+${RETIRED:+The Supervisor took these cards back: never continue them, leave their cards, branches and worktrees alone: $RETIRED
+}${PARKED_BEFORE:+Parked by the previous run:
 $PARKED_BEFORE
 }
 

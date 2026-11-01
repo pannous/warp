@@ -26,7 +26,7 @@
 # a_bang_known_only_at_run_time_runs_the_block
 'xs = [data a+1, data a*2]; a = 5; xs#2!'	10
 'xs = [data a+1, data a*2]; a = 5; y = xs#2; y!'	10
-'5!'	5
+'5!'	120
 'x = 3; x!'	3
 
 # a_bang_on_a_parameter_or_a_call_result_decides_at_run_time

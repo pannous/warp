@@ -1,7 +1,7 @@
 # from test_runtime_kind_arithmetic.rs: edit the Rust test, then run the script again
 
 # fields_of_a_map_parameter_compute_by_their_values
-'def f(m){ m.a * m.b }; f({a:sqrt(2), b:2})'	2.8284271247461903
+'def f(m){ m.a * m.b }; f({a:sqrt(2), b:2})'	2√2
 'def f(m){ m.a + m.b }; f({a:1.5, b:2.25})'	3.75
 'def f(m){ m.a + 1 }; f({a:2})'	3
 

@@ -1,0 +1,5 @@
+# function f names the function as a value, also inside a group
+'f(x) := x; (function f) is function'	yes
+'use math; (function gcd) is function'	yes
+'f(x) := x + 1; g = (function f); g(2)'	3
+'f() := 7; h = function f; h()'	7

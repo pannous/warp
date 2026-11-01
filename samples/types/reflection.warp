@@ -22,7 +22,7 @@ print "$(area.body)"
 print "OK"
 # print area.dumb To do we have all the information so we can emit the complete function as it will be copy pastable: ≈
 # area(width: int, height: int) := width * height
-print area.dump
+print area.definition
 print dir(&area)
 print type(&area)
 print dir(area)
@@ -34,5 +34,5 @@ print area.doc              # the comment above the definition
 print area.doc      # the same
 print area.return_type
 print area.return_type          # the same
-print area.dump   # the same as area.dump: the definition
+print area.definition   # the same as area.dump: the definition
 print area.full             # what print area shows: the doc line and the definition

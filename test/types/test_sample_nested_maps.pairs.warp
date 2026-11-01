@@ -1,0 +1,2 @@
+# Nested maps can be bound and read (wiki/map.md).
+'company = {employees: [{name: "Bob"}, {name: "Carol"}, {name: "Dave"}]}; company.employees#3.name'	"Dave"

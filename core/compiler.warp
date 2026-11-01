@@ -49,7 +49,9 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
 	# (the standard modules it names words of without their `use`, as if it said them)
+	timed("implicit uses")
 	source = with_implicit_uses(source, word_index_file())
+	timed("c functions, runtime, linking")
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
 	foreign = c_functions_of(source, library_folder)
 	unknown = foreign#3
@@ -61,11 +63,15 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	linking = library_runtime == ø and prepended()
 	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}
+	timed("checked_program")
 	program = checked_program(foreign#1, folder, prelude_source)
+	timed("checked_program done")
 	c_functions = with_linked_c_functions(with_used_c_functions(foreign#2), library_folder)
 	found = checked_facts(known)
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
+	timed("emit")
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, c_functions), emitter_kinds(program))
+	timed("emit done")
 	# a linked module whose words won't take the program's values: said, and the program compiled with its source
 	if made is text and #module.linked_images > 0 {
 		# (a method clash is the linking's own gap, card class-method-linking, nothing the program's author did)

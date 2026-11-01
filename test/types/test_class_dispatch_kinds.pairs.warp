@@ -1,0 +1,4 @@
+# a class's method is compiled only for what may be its instance: a map write beside a class's position setter stays the map's
+'class Cells { address: int; position(p, value) := put(address + 8 * p, value) }; put(address: int, value: float) := address; global units_seen = {}; note(name: text, one) := { units_seen[name] = one; one }; note("x", 5)'	5
+'use units; class Cells { address: int; position(p) := cell(address + 8 * p) }; cell(address: int): float := 1.5; 2 km'	2km
+'use sound; C4'	261.63

@@ -1,0 +1,2 @@
+'enum Shape { Circle(r: float), Square(side: float), Dot }; area(s) := match s { Circle(r): 3 * r * r; Square(a): a * a; Dot: 0.0 }; area(Circle(2.0)) + area(Square(3.0)) + area(Dot)'	21.0
+'enum Shape { Circle(r), Rect(w, h), Dot }; area(s) := match s { Shape::Circle(r) => 3 * r * r; Shape::Rect(w, h) => w * h; Dot => 0 }; [area(Circle(2)), area(Rect(2, 3)), area(Dot)]'	[12, 6, 0]
