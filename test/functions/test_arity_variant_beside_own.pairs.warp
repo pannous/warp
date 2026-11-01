@@ -1,0 +1,4 @@
+# a call of an arity variant's count is the variant beside a program's own word of another arity
+'first(x) := x * 2; first([5,6,7], 2)'	[5, 6]
+'first(x) := x * 2; first(4)'	8
+'last(x) := 0; last([5,6,7], 2)'	[6, 7]

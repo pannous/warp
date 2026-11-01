@@ -636,14 +636,16 @@ function finish(run, report) {
 }
 
 // evaluate code in the worker: the report of src/web/mod.rs evaluate plus `printed` [{text, stream}]. The worker runs one
-// program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several)
-function evaluate(code) {
-	const run = runs.then(() => runInWorker(code));
+// program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several).
+// `file`: the program's path in the served repository (samples/…), so its `use` and file reads resolve beside it, as
+// the chosen sample's do (scripts/samples-web.sh runs every sample so)
+function evaluate(code, file = programFile()) {
+	const run = runs.then(() => runInWorker(code, file));
 	runs = run.catch(() => {});
 	return run;
 }
 
-async function runInWorker(code) {
+async function runInWorker(code, file) {
 	await workerReady;
 	return new Promise(resolve => {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
@@ -654,7 +656,7 @@ async function runInWorker(code) {
 		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
 		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile(), arguments: programArguments(), liveHandover });
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover });
 		liveHandover = {};
 	});
 }
@@ -737,7 +739,8 @@ function showAcknowledged() {
 function showValue(value, error, html) {
 	$("value").textContent = value;
 	$("value").classList.toggle("error", Boolean(error));
-	$("value").parentElement.hidden = Boolean(html) && !error;
+	// a self-hosted run prints its own value (driver.js): no » line then
+	$("value").parentElement.hidden = (Boolean(html) || value === "") && !error;
 }
 
 function showReport(report) {

@@ -75,7 +75,8 @@ function errorInProgram(program, reason) {
 // systemValue(name, holder) a system value it knows, else undefined; started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
-const HOST_PART_FILES = ["host-files.js", "host-sound.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
+// values.js first: not a part, the reader and builders of self-hosted modules' values the parts' words use
+const HOST_PART_FILES = ["values.js", "host-files.js", "host-sound.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js", "host-media.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -150,7 +151,7 @@ function programImports(holder, hooks) {
 				// key_down: whether the page's held key (canvas.js trackKey) is any; "key code held" which (held_key names it)
 				const heldKey = self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) : 0;
 				if (value === "key_down") return BigInt(heldKey !== 0);
-				const partValue = eachHostPart("systemValue", value, holder).find(known => known !== undefined); // "gpu paints": host-gpu.js
+				const partValue = eachHostPart("systemValue", value, holder).find(known => known !== undefined); // "gpu_paints": host-gpu.js
 				if (partValue !== undefined) return BigInt(partValue);
 				if (value === "key code held") return BigInt(heldKey);
 				if (value in WINDOW_SIDES) return BigInt(windowSide(value));
