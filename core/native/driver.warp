@@ -1353,13 +1353,14 @@ number_in(digits: text): i64 := {
 	n
 }
 
-## hash: sha256 as lowercase hex, crc32 as a number, of a text's UTF-8 bytes
+## hash: sha256 as lowercase hex, crc32 as a number, of a text's UTF-8 bytes or a list of 0 to 255, NULs and all
 HEX_DIGITS = 16
 CRC_POLYNOMIAL = 3988292384
 ALL_BITS = 4294967295
 BLOCK = 64
 hash_answered(caller: handle, context: handle, member: text, listed: pointer, result: pointer): nothing := {
-	subject = shown(caller, context, item_of(caller, context, listed, 1))
+	given = item_of(caller, context, listed, 1)
+	subject = text_from(c_bytes(caller, context, given), c_bytes_length(caller, context, given) as u32)
 	if same_text(member, "sha256") { return guest_text_of(caller, context, sha256_hex(subject), result) }
 	if same_text(member, "crc32") { return guest_int(caller, context, "new_int", crc32_of(subject) as i64, result) }
 	guest_error(caller, context, lacking("hash", member), result)
