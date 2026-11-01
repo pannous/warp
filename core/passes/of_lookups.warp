@@ -110,7 +110,9 @@ looked_up(parts: list): any := {
 			member = word
 			if at >= 2 and parts[at - 2] is symbol and word is not symbol {
 				start = at - 2
-				member = call_of(name_of(parts[at - 2]), [word])
+				# `last 2 of users`: users.last_items(2), the word's arity variant (prelude_words.warp arity_variants), which
+				# the prelude reached before this pass writes the call
+				member = call_of(arity_variant(name_of(parts[at - 2]), 2) ?? name_of(parts[at - 2]), [word])
 			}
 			parts = parts[0 .. start] + [member_of(object, member)] + parts[end ..]
 			at = #parts - 2

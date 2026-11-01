@@ -69,6 +69,9 @@ def exported_builders(): any {
 	# a GPU list's cells, so a host reads and writes them in place as natively (runtime/gpu_lists.warp)
 	f = exported_function("gpu_list_place", [ValueKind.Node], ValueKind.Int)
 	f.code = runtime_call("gpu_list_place", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
+	# and their type, a GpuCell (f32 0, i32 1, u32 2)
+	f = exported_function("gpu_list_cell", [ValueKind.Node], ValueKind.Int)
+	f.code = runtime_call("gpu_list_cell", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 	f = exported_function("is_textual", [ValueKind.Node], ValueKind.Bool)
 	f.code = runtime_call("textual_node", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 }
