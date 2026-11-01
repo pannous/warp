@@ -7,6 +7,8 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- restructuring-hold (user 2026-11-01): all restructuring (core-hygiene A–E, sugar-in-core, number-words-table) is on hold until the current worktrees are cleaned up and every branch is integrated or dismissed.
+- extension-oks (user): core extensions not required for rebuilding the compiler need no strong confirmation if they are generic and/or small (FYI to the Interviewer); undecided spellings, new passes and the compiler proper still ask first.
 - extension-wording (user): a rewrite rule giving the language a new spelling (lib/sugar) is a compiler extension, not a library; "library" means modules programs import.
 - no-fixpoint (user, 2026-10-26, to warp-fixer): "If the compiler can compile itself once more, we don't need the fixed point." warp.wasm is promoted to warp-self.wasm (and a refresh-seed stage becomes the seed) once it compiles compiler.warp again and that build runs hello; byte identity with the previous stage is only reported. The docs say "self test" instead of "fixpoint" (card fixpoint-wasm).
 - self-landing (user, 2026-10-26): "since all the workers are already testing, the recompilation and the smoke test, it's useless if the integrator does the same test again. Can they just merge directly onto main?" Workers merge origin/main into their branch, smoke-test that merge (core/: + self-check) and push it to main fast-forward; the Integrator watches main (compilers install, background tiers, full suite at rare intervals) instead of gating.
@@ -138,6 +140,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 
 ## Tooling: format, beautify, CLI
+- prebuild-fails-loudly (user, ~10–15 core lines core/compiler.warp write_modules): a library that fails to prebuild fails the rebuild, naming the module and why; a module whose words are C imports (`… from "c"`, lib/wasmtime.warp) is source-only by itself, no marker comment.
 - hello-size-exports (user): shown_at and trap_message are exported only from a program that can raise (raise/throw, a raising runtime word, a host word with arguments); hello ~1.5 KB; an engine trap in another program prints as wasmtime names it, without position.
 - sample-spellings (user): samples are rewritten to the general forms (`int[height * width]`, `(y - center)^2`) instead of new syntax; no wish cards for those.
 - drop-pure-word (user): `warp pure` is gone: plain `warp <file>` is the warp compiler (warp.wasm); `warp self` stays the self-built variant; `pure` survives only as a hidden CLI alias with a one-line note. Card drop-pure-word.

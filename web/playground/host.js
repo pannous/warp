@@ -177,6 +177,12 @@ function programImports(holder, hooks) {
 				const side = decode(cString(name));
 				// lib/frames.warp asks for a native window; the page's canvas is the window already
 				if (side === "window_open") return;
+				// window.fullscreen = yes: the paintings' frame fills the screen (playground.js fullScreen), read back as the
+				// page tells it; until it does, as asked
+				if (side === "window_fullscreen") {
+					(self.pageSystemValues ??= {}).window_fullscreen = Number(value !== 0n);
+					return hooks.fullScreen?.(value !== 0n);
+				}
 				if (side === "display_dpi") {
 					if (value <= 0n) throw new Error(`display.dpi = ${value} dpi: a display has a positive number of dots per inch`);
 					holder.displayDpi = Number(value);
