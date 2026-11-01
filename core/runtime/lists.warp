@@ -36,6 +36,9 @@ node_at(n: Node, index: int): Node := {
 	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
 	if kind_code(n) == Kind.Codepoint and index == 1 { return n }
 	if marked_kind(n) == Marked.Instance and has_fields(n) { return instance_position(n, index) }
+	# a pair's two items, its name and its value (decision pair-items): (a: 1)#1 is a, #2 is 1
+	if kind_code(n) == Kind.Key and (index == 1 or index == 2) { return if index == 1 then entry_key(n) else key_value(n) }
+	if kind_code(n) == Kind.Key { index_out_of_range_of(index, 2) }
 	not_a_list()
 }
 # a class instance's default position function: its fields in the order its class declares them, `P(2, 3)#1` is 2
@@ -50,6 +53,7 @@ node_length(n: Node): int := {
 	if kind_code(n) == Kind.List { return #unboxed_list(n) }
 	if kind_code(n) == Kind.Text { return text_count(unboxed_text(n)) }
 	if kind_code(n) == Kind.Codepoint { return 1 }
+	if kind_code(n) == Kind.Key { return 2 }
 	no_length_of(n)
 }
 # `xs.pop()`: the last item, dropped from xs in place by lowering its count (Rust's list_drop_last), so every alias

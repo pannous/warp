@@ -837,23 +837,28 @@ gpu_sink_counted(argument: Node) := {
 }
 # the forms a GPU list is made by: `float[n]`, a list literal of items, a comprehension `[e for x in r]`
 gpu_creating(v: Node): bool := gpu_zeros_count(v) != ø or gpu_comprehension(v) or gpu_literal(v)
-# `float[n]`, which the parser reads as float#(n + 1): that shifted count
-gpu_zeros_count(v: Node): Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) == "float" then value_of(v) else ø
+# `float[n]` (`int[n]` for integer cells), which the parser reads as float#(n + 1): that shifted count
+gpu_zeros_count(v: Node): Node := if is_key(v, Op.Hash) and key_of(v) is symbol and name_of(key_of(v)) in ["float", "int"] then value_of(v) else ø
 gpu_comprehension(v: Node): bool := is_group(v) and bracket_of(v) == "[" and #v == 2 and is_group(v#2) and #(v#2) == 5 and v#2#1 is symbol and name_of(v#2#1) == "for"
 gpu_literal(v: Node): bool := is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)
 # the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
 # one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
-gpu_packed(v: Node): Node := plain_node(parsed(gpu_packed_code(v)))
-gpu_packed_code(v: Node): text := {
-	if not gpu_creating(v) { return "gpu_list_of(" + as_code(v) + ")" }
+# the cells a GPU list holds, `xs: [i32] = …` (core/analysis/kinds.warp GpuCell): f32 unless the program says so
+GPU_CELLS = {f32: 0, i32: 1, u32: 2}
+gpu_packed(v: Node): Node := plain_node(parsed(gpu_packed_code(v, "f32")))
+# `xs: [i32] = …`, `xs: [u32] = …`: the value made as a GPU list of those cells; ø for a list type of no GPU cell
+gpu_packed_as(cell: Node, v: Node): any := if cell is symbol and name_of(cell) in GPU_CELLS then plain_node(parsed(gpu_packed_code(v, name_of(cell)))) else ø
+gpu_packed_code(v: Node, cell: text): text := {
+	code = GPU_CELLS[cell]
+	if not gpu_creating(v) { return "gpu_list_of(" + as_code(v) + ", " + code + ")" }
 	shifted = gpu_zeros_count(v)
-	if shifted != ø { return "gpu_zeros((" + as_code(shifted) + ") - 1)" }
+	if shifted != ø { return "gpu_zeros((" + as_code(shifted) + ") - 1, " + code + ")" }
 	if gpu_comprehension(v) {
 		each = v#2
 		over = "for " + as_code(each#2) + " in " + as_code(each#4)
-		return "{ gpu_count = 0; " + over + " { gpu_count += 1 }; gpu_made = gpu_zeros(gpu_count); gpu_at = 1; " + over + " { gpu_made#gpu_at = " + as_code(v#1) + "; gpu_at += 1 }; gpu_made }"
+		return "{ gpu_count = 0; " + over + " { gpu_count += 1 }; gpu_made = gpu_zeros(gpu_count, " + code + "); gpu_at = 1; " + over + " { gpu_made#gpu_at = " + as_code(v#1) + "; gpu_at += 1 }; gpu_made }"
 	}
-	written = "gpu_zeros(" + #v + ")"
+	written = "gpu_zeros(" + #v + ", " + code + ")"
 	for i in 1 to #v { written = "gpu_put(" + written + ", " + i + ", " + as_code(v#i) + ")" }
 	written
 }
