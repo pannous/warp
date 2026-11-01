@@ -1,0 +1,15 @@
+# a class's primary constructor (Kotlin, Scala, TypeScript) declares its fields, in order, val/var/let dropped
+'data class P(val x: Int); P(1) == P(2)'	no
+'data class P(val x: Int); P(4).x'	4
+'class Point(val x: Int, val y: Int); Point(1, 2).y'	2
+'class Box(var w: Int = 2); Box().w'	2
+'class P(val x: Int) { twice() := x * 2 }; P(3).twice()'	6
+'class P(x: int, y: int) { z: int = 9 }; p = P(1, 2); p.y + p.z'	11
+# Kotlin's type names are warp's: Int is int, String text, Double float
+'x: Int = 3; x'	3
+'f(n: Int) := n + 1; f(2)'	3
+'class Name(val first: String); Name("Ada").first'	'Ada'
+'x: Double = 1.5; x'	1.5
+# a program's own type of such a name shadows the alias
+'class Int { v: text }; Int("a").v'	'a'
+'type String = int; x: String = 3; x'	3

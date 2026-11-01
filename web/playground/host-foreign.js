@@ -121,6 +121,7 @@ function cCalls(run) {
 // NUL-terminated copy in a block of the module's malloc, a list of texts (texts) a NULL-terminated array of them, a
 // text or list of bytes (bytes) its bytes and their count for a following length, the first out-pointer a NULL slot
 // there, all freed after the call; a text result (text, owned_text) is read back as a text of the program (NULL is ø)
+const NULL_POINTER = 0;
 function callC(holder, exports, member, call, values, what) {
 	const program = holder.exports;
 	const blocks = [];
@@ -137,7 +138,7 @@ function callC(holder, exports, member, call, values, what) {
 	let out, bytesLength = 0;
 	const remaining = [...values];
 	const moduleArguments = (call?.parameters ?? values.map(() => "i64")).map(kind => {
-		if (kind === "out") return out ??= malloc(new Uint8Array(4));
+		if (kind === "out") return out === undefined ? out = malloc(new Uint8Array(4)) : NULL_POINTER; // a later out-pointer NULL
 		if (kind === "length") return BigInt(bytesLength);
 		const value = remaining.shift();
 		if (kind === "ptr") return textBlock(value);
@@ -227,14 +228,62 @@ function libcExports() {
 // `use c` in the browser: the program's C calls go to libc.wasm (natively warp opens the system libc)
 function libcImports(holder, hooks) {
 	const stdio = libraryInJs(holder, "c", name => pageStdio(hooks)[name]);
+	const libc = wasmLibraryImports(holder, "c", libcExports, "web/playground/lib/build_libc.sh lists libc.wasm's functions");
+	return new Proxy({}, { get: (_, name) => name in pageStdio(hooks) ? stdio[name] : libc[name] });
+}
+
+// a C library the page has as a WebAssembly module, natively a shared library: exportsOf() its exports, memory and
+// malloc among them; each program call goes through callC
+function wasmLibraryImports(holder, library, exportsOf, missing = "") {
 	return new Proxy({}, {
-		get: (_, name) => name in pageStdio(hooks) ? stdio[name] : (...values) => {
-			const exports = libcExports();
+		get: (_, name) => (...values) => {
+			const exports = exportsOf();
 			const member = exports[name];
-			if (typeof member !== "function") throw new Error(`c.${name} is not available in the browser (web/playground/lib/build_libc.sh lists libc.wasm's functions)`);
-			return callC(holder, exports, member, cCalls(holder.run).get(`c\t${name}`), values, `c.${name}`);
+			if (typeof member !== "function") throw new Error(`${library}.${name} is not available in the browser${missing && ` (${missing})`}`);
+			return callC(holder, exports, member, cCalls(holder.run).get(`${library}\t${name}`), values, `${library}.${name}`);
 		},
 	});
+}
+
+// the exported functions of a module's bytes, each taking its arguments as its parameters' types are: a C library's
+// pointer is an i32 in wasm32 where the program declares it an i64 (sqlite3_bind_text's destructor), an i64 a BigInt
+const WASM_ARGUMENT = { 0x7f: value => Number(BigInt.asIntN(32, BigInt(value))), 0x7e: value => BigInt(value), 0x7d: Number, 0x7c: Number };
+function typedExports(bytes, exports) {
+	const parameters = exportedParameters(bytes);
+	return Object.fromEntries(Object.entries(exports).map(([name, member]) => {
+		const types = parameters.get(name);
+		return [name, types ? (...values) => member(...values.map((value, index) => WASM_ARGUMENT[types[index]]?.(value) ?? value)) : member];
+	}));
+}
+
+// export name → its function's parameter types (the binary's type, import, function and export sections)
+function exportedParameters(bytes) {
+	let at = 8; // after the magic and the version
+	const unsigned = () => {
+		let value = 0, shift = 0, byte;
+		do { byte = bytes[at++]; value += (byte & 0x7f) * 2 ** shift; shift += 7; } while (byte & 0x80);
+		return value;
+	};
+	const vector = item => Array.from({ length: unsigned() }, item);
+	const name = () => { const length = unsigned(); at += length; return decode(bytes.subarray(at - length, at)); };
+	let signatures = [], functions = [];
+	const exported = new Map();
+	const IMPORT_SKIPS = { 1: () => { at++; limits(); }, 2: () => limits(), 3: () => { at += 2; } }; // table, memory, global
+	const limits = () => { const flags = unsigned(); unsigned(); if (flags & 1) unsigned(); };
+	const SECTIONS = {
+		1: () => { signatures = vector(() => { at++; const parameters = vector(() => bytes[at++]); vector(() => bytes[at++]); return parameters; }); },
+		2: () => vector(() => { name(); name(); const kind = bytes[at++]; if (kind === 0) functions.push(unsigned()); else IMPORT_SKIPS[kind](); }),
+		3: () => { functions.push(...vector(unsigned)); },
+		7: () => vector(() => { const exportName = name(); const kind = bytes[at++]; const index = unsigned(); if (kind === 0) exported.set(exportName, signatures[functions[index]]); }),
+	};
+	while (at < bytes.length) {
+		const id = bytes[at++];
+		const size = unsigned();
+		const end = at + size;
+		SECTIONS[id]?.();
+		at = end;
+	}
+	return exported;
 }
 
 // the exports of a WebAssembly module the program imports by path (src/modules/wasm_modules.rs link): instantiated once per

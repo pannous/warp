@@ -1,0 +1,203 @@
+#!/usr/bin/env warp
+# watercolor on cold-press paper, after https://watercolor.bizar.ro/: the round brush lays water and pigment that bleed
+# into the wet paper, bloom along its grain and dry with dark tide lines at their edges; a long stroke runs dry.
+# Pigments mix as paint does, subtractively: blue into wet yellow turns green. Hold W while painting to smudge with
+# clear water (the brush lifts pigment instead of laying it), scroll for the hue, shift + scroll for the brush size,
+# R turns the hue as you paint (a rainbow), D drops a wash at the centre, space clears the paper.
+# Water flow, pigment transport, settling and drying run on the GPU (gpu_compute), two steps a frame, over GPU lists
+# [f32] it changes where they are (paper, wet, pixels: each made once and handed only to gpu_compute)
+use keys
+width = 320
+height = 200
+cells = width * height
+state_size = 8 # per cell: water, suspended cyan magenta yellow, deposited cyan magenta yellow, unused
+steps_per_frame = 2
+dry_after_pixels = 250 # a stroke runs dry along its way, after this many pixels
+hue_per_wheel_step = 15
+size_per_wheel_step = 1.5
+rainbow_degrees_per_frame = 2
+
+step = "
+@group(0) @binding(0) var<storage, read_write> paper: array<f32>;
+@group(0) @binding(1) var<storage, read_write> wet: array<f32>;
+@group(0) @binding(2) var<storage, read_write> brush: array<f32>;
+@group(0) @binding(3) var<storage, read_write> pixels: array<f32>;
+const W = ${width}; const H = ${height}; const S = ${state_size};
+const FLOW = 0.2;          // how readily water moves between wet cells
+const SPREAD = 0.05;       // how readily a pool creeps onto dry paper, pit by pit along the grain
+const POOLED = 0.3;        // water deeper than this creeps onto dry paper
+const MIXING = 0.02;       // pigments of wet neighbors running into each other
+const CAPILLARY = 0.15;    // pigment drawn toward the shallower water at a wash's edge, where it dries into a tide line
+const EVAPORATION = 0.0008;
+const EDGE_EVAPORATION = 0.01; // a wet cell next to dry paper dries faster: water flows out to it, pigment with it
+const SETTLING = 0.004;    // pigment settling into the paper while wet, much more in the grain's pits
+const LIFT = 0.04;         // a clear-water brush lifting settled pigment back into the water
+const DRY = 0.003;         // below this much water a cell is dry and all its pigment settles
+const DENSITY = 2.4;       // how dark a unit of pigment absorbs
+
+// the brush: x, y, radius, pressed, hue, load, smudging, phase (which array holds this step's state), clearing
+fn from_paper() -> bool { return brush[7] < 0.5; }
+fn held_at(cell: i32, k: i32) -> f32 {
+	let at = cell * S + k;
+	if (from_paper()) { return paper[at]; }
+	return wet[at];
+}
+fn held_put(cell: i32, k: i32, v: f32) {
+	let at = cell * S + k;
+	if (from_paper()) { wet[at] = v; } else { paper[at] = v; }
+}
+fn hash(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
+fn noise(p: vec2f) -> f32 {
+	let i = floor(p);
+	let f = fract(p);
+	let u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2f(1.0, 0.0)), u.x), mix(hash(i + vec2f(0.0, 1.0)), hash(i + vec2f(1.0, 1.0)), u.x), u.y);
+}
+// cold-press grain, 0 on the tooth, 1 in a pit
+fn grain(p: vec2f) -> f32 { return 0.55 * noise(p * 0.45) + 0.3 * noise(p * 1.3) + 0.15 * hash(p); }
+fn cmy_of_hue(hue: f32) -> vec3f {
+	let rgb = clamp(abs(fract(hue / 360.0 + vec3f(0.0, 2.0, 1.0) / 3.0) * 6.0 - 3.0) - 1.0, vec3f(0.0), vec3f(1.0));
+	return 1.0 - mix(vec3f(1.0), rgb, 0.85) * 0.92;
+}
+// water that moves between two cells: their difference, freely where both are wet; onto dry paper only from a
+// pool, and first into the grain's pits (the same for both sides, so no water is made or lost)
+fn conductance(a: vec2f, b: vec2f, wa: f32, wb: f32) -> f32 {
+	let between = grain((a + b) * 0.5);
+	let creeping = SPREAD * smoothstep(POOLED, 2.0 * POOLED, max(wa, wb)) * smoothstep(0.35, 0.7, between);
+	return select(creeping, FLOW * mix(0.5, 1.5, between), min(wa, wb) >= DRY);
+}
+
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+	let cell = i32(id.x);
+	if (cell >= W * H) { return; }
+	if (brush[8] > 0.5) {
+		for (var k = 0; k < S; k++) { held_put(cell, k, 0.0); }
+		pixels[cell] = 0.0;
+		return;
+	}
+	let x = cell % W;
+	let y = cell / W;
+	let at = vec2f(f32(x), f32(y));
+	var water = held_at(cell, 0);
+	var suspended = vec3f(held_at(cell, 1), held_at(cell, 2), held_at(cell, 3));
+	var settled = vec3f(held_at(cell, 4), held_at(cell, 5), held_at(cell, 6));
+	let concentration = suspended / max(water, 1e-4);
+	var dry_neighbors = 0.0;
+	let offsets = array<vec2i, 4>(vec2i(1, 0), vec2i(-1, 0), vec2i(0, 1), vec2i(0, -1));
+	var flow = 0.0;
+	var carried = vec3f(0.0);
+	for (var n = 0; n < 4; n++) {
+		let p = vec2i(x, y) + offsets[n];
+		if (p.x < 0 || p.y < 0 || p.x >= W || p.y >= H) { continue; }
+		let other = p.y * W + p.x;
+		let other_water = held_at(other, 0);
+		let other_suspended = vec3f(held_at(other, 1), held_at(other, 2), held_at(other, 3));
+		if (other_water < DRY) { dry_neighbors += 1.0; }
+		let moved = conductance(at, vec2f(p), water, other_water) * (other_water - water) * 0.25;
+		flow += moved;
+		// pigment rides with the water, at the concentration of the cell it leaves, faster toward shallower water,
+		// and runs into wet neighbors
+		let drawn = moved + CAPILLARY * (other_water - water) * step(DRY, min(water, other_water));
+		carried += drawn * select(concentration, other_suspended / max(other_water, 1e-4), drawn > 0.0);
+		carried += MIXING * (other_suspended - suspended) * step(DRY, min(water, other_water));
+	}
+	water += flow;
+	suspended = max(suspended + carried, vec3f(0.0));
+	water = max(water - EVAPORATION - EDGE_EVAPORATION * dry_neighbors * step(DRY, water), 0.0);
+
+	let pit = grain(at);
+	// a round brush, its rim frayed by the paper's tooth
+	let reach = brush[2] * (0.85 + 0.3 * noise(at * 0.35));
+	let touch = brush[3] * (1.0 - smoothstep(reach * 0.75, reach, distance(at, vec2f(brush[0], brush[1]))));
+	if (touch > 0.0) {
+		let smudging = brush[6];
+		let load = brush[5];
+		water += (mix(0.12 + 0.2 * load, 0.3, smudging) - water) * touch * 0.4 * step(water, 0.6);
+		suspended += touch * load * 0.04 * cmy_of_hue(brush[4]) * (1.0 - smudging);
+		let lifted = settled * LIFT * touch * smudging;
+		settled -= lifted;
+		suspended += lifted;
+	}
+	// pigment granulates: it settles into the pits while wet, all of it where the paper has dried
+	let settling = select(SETTLING * (0.2 + 3.0 * pit * pit), 1.0, water < DRY);
+	let settles = suspended * settling;
+	settled += settles;
+	suspended -= settles;
+
+	held_put(cell, 0, water);
+	held_put(cell, 1, suspended.x); held_put(cell, 2, suspended.y); held_put(cell, 3, suspended.z);
+	held_put(cell, 4, settled.x); held_put(cell, 5, settled.y); held_put(cell, 6, settled.z);
+
+	// cyan takes red, magenta green, yellow blue from the light the paper reflects; wet paint shows a little darker
+	let paper_color = vec3f(0.97, 0.955, 0.92) * (1.0 - 0.07 * pit);
+	let pigment = settled + 0.85 * suspended;
+	let rgb = paper_color * exp(-DENSITY * pigment) * (1.0 - 0.06 * smoothstep(0.0, 0.3, water));
+	let bytes = vec3i(clamp(rgb, vec3f(0.0), vec3f(1.0)) * 255.0);
+	// a color as paint takes it, 0x01RRGGBB: an f32 keeps it but for blue's lowest bit
+	pixels[cell] = f32((1 << 24) | (bytes.x << 16) | (bytes.y << 8) | bytes.z);
+}"
+
+paper = float[cells * state_size]
+wet = float[cells * state_size]
+pixels = float[cells]
+global hue = 220.0
+global radius = 9.0
+global rainbow = no
+global load = 1.0
+global wheel_before = mouse_wheel
+global was_down = no
+global last_x = 0.0
+global last_y = 0.0
+
+# steps_per_frame steps of the paper, the brush down at x, y unless pressed is 0 (no brush: the paper only flows and dries)
+def painted(x, y, pressed, size, stroke_hue, stroke_load, smudging, clearing = 0) {
+	for phase in 0..steps_per_frame {
+		brush = [x, y, size, pressed, stroke_hue, stroke_load, smudging, phase, clearing]
+		gpu_compute(step, {paper: paper, wet: wet, brush: brush, pixels: pixels}, cells / 64 + 1)
+	}
+}
+def dried(moments) {
+	for moment in 0..moments { painted(0, 0, 0, 0, 0, 0, 0) }
+}
+def stroked(x1, y1, x2, y2, size, stroke_hue, dabs) {
+	for dab in 0..dabs {
+		painted(x1 + (x2 - x1) * dab / dabs, y1 + (y2 - y1) * dab / dabs, 1, size, stroke_hue, 1 - dab / dabs, 0)
+	}
+}
+
+# a first painting while the program starts, so the window opens on paint (headless: the PNG shows it): a blue
+# stroke across a yellow wash that is still wet, the two running green where they meet, and a red one dried apart
+stroked(40, 150, 120, 40, 8, 350, 30)
+dried(60)
+stroked(70, 110, 250, 95, 22, 55, 40)
+stroked(90, 50, 210, 160, 10, 225, 40)
+dried(120)
+
+on key {
+	if key == ESC: exit()
+	if key == SPACE: painted(0, 0, 0, 0, 0, 0, 0, 1)
+	if key == "r": rainbow = not rainbow
+	if key == "d": for moment in 0..6 { painted(width / 2, height / 2, 1, 40, hue, 1, 0) }
+}
+
+on frame {
+	turned = mouse_wheel - wheel_before
+	wheel_before = mouse_wheel
+	if held_key == Key.shift {
+		radius = clamp(radius + turned * size_per_wheel_step, 2, 60)
+	} else {
+		hue = hue + turned * hue_per_wheel_step
+	}
+	down = mouse_down
+	if down and not was_down { load = 1.0; last_x = mouse_x; last_y = mouse_y }
+	if down {
+		load = max(load - (abs(mouse_x - last_x) + abs(mouse_y - last_y)) / dry_after_pixels, 0.0)
+		if rainbow: hue = hue + rainbow_degrees_per_frame
+	}
+	last_x = mouse_x
+	last_y = mouse_y
+	was_down = down
+	painted(mouse_x, mouse_y, if down then 1 else 0, radius, hue, load, if held_key == Key.w then 1 else 0)
+	paint([int(color) for color in pixels], width, height)
+}
+"watercolor on ${width}×${height} cells of cold-press paper"

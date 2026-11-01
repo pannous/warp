@@ -275,6 +275,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 
 ## Types and annotations
+- real-canonical-core (user, ~6 core lines): `real` is no longer a rational synonym (`exact` stays); `3 is real` yes; a program's own type of a core type word shadows it; a float given to `real` converts to the exact real (2.5).
 - parameter-typed (user): `a or b` / `a | b` as a parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member is refused at compile time, a node checked at run time.
 - primitive-annotation (user, roadmap native-harness): `@primitive` marks GC-free code emitted as plain MVP wasm (core/extensions/primitive.warp, user OK): on a function (`@primitive add(a: i32, b: i32): i32 := a + b`; called from GC code it converts at the boundary like an FFI call, the reverse is refused), on a file (first line: every definition primitive, the file builds to MVP wasm), on a class (`@primitive class Header { len: u32; tag: u8 }` a fixed linear-memory layout, C structs; `struct Header { len: u32; tag: u8 }` is the same). A form the mode can't emit is refused loudly at its line. i32/u8/… are the FFI types usable everywhere (D16); `pointer` joins them.
 - primitive-int-width (user): `int` is warp's 64-bit int everywhere, @primitive code included; 32-bit is `i32`; C's 32-bit int only on foreign signature lines; a literal takes its expected type's width, untyped 64-bit.
@@ -307,6 +308,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - function-type: `type(gcd)` prints `function: (a, b) -> int`. parse-type / body-code: quoted program parts (`parse("1+1")`, `f.body`) have type `code`, print their source, keep `.op`.
 
 ## Variables, binding and charged definitions
+- charged-values-rule (user): a charged value definition is the rule `($h := $e) => ($h() := $e) where $h is varying` in lib/sugar/heads.warp, not a pass.
 - lambda-assign-writes-through (user): in a lambda or block argument `=` to a name of the enclosing scope writes that name (`seen=0; f=() => {seen=3}; f(); seen` → 3); `let x = …` makes a new local; a def's body keeps its own locals.
 - op-assign-target-once (user): `x[f()] op= y` evaluates the target's parts once, as C, Python, JS.
 - let-reassign: `let` is fully immutable (fix "use var x"); `var` is the variable; `let mut x` = `var x` with a loud warning. const-deep: `const` is deep like `let`.
@@ -331,11 +333,16 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - count-words-library (user): once/twice/thrice leave both compilers and become prelude words over a block parameter, the basic demonstration of giving a block to a function (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
 - range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
+- kebab-or-minus (user): `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
+- default-parameter-def (Interviewer, small bug fix, 1 core line in definitions.warp is_parameter): `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
 - #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
+- map-all-test (user): the test reads as English, `all xs are even` and `are all xs even`, `any xs is even` and `is any xs even` (lib/sugar/broadcasting.warp); the call all(xs, f) / xs.all(f) stays yes/no for newcomers.
+- map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (map-all-test).
+- int-overflow-shape (user): int-boxed-overflow-big keeps its ~23 lines with named overflow tests; no bit-trick or float shortcut.
 - words-as-values (user): a function word used as a value is the lambda of its call (`f = sqrt; f(16)` 4, `apply(floor, 2.5)` 2), bringing its module; with several arities the one its use needs, never silently the first.
 - definition-name-canonical (user): the name a definition carries is canonical for dir and everything warp prints (count stays count); internal names get canonical ones (map_keys → keys), old names become aliases or go.
 - call-function-values (Supervisor): a glued `(` after a round group or an element calls a function value: `(x => x*2)(5)` 10, `adder(5)(1)` 6, `fs[0](3)`; numbers keep juxtaposed multiplication, `(2)(3)` 6, an edge case (user): no special code to keep it; if it breaks, a Later card.
@@ -504,6 +511,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
+- markup-keeps (user): interactive markup is library-first. Core: (1) a tag block's items are expressions like any block's (module rules walk them, a phrase headed by a bound function is a call, unbound words stay data), ~15–25 lines; (2) automatic liveness, ~20 lines: an item reading a variable written later is kept as code (`is varying`), so `p{ "count: " + count }` updates after a click. Library: `on(event, handler: block)` (comma allowed before it), live parts re-evaluated after a handler with only changed output patched, a Live class showing its current value natively, `input{ bind: name }` as a lib/sugar rule, keyed instances by hand `instance(t, () => Counter(t))` (automatic keying ~20 core lines later if programs need it). General, not web: any library (terminal UI, native canvas, sound, `on change`) uses the same live API; core names carry no web words. Rejected: React-style re-render.
+- markup-handler-comma (user): a handler inside a tag may be separated by a comma, `button{ "+1", on click { count += 1 } }`, if that makes the reading easier.
 - P188 stay close to HTML and CSS; only the basic machinery. web-keyframes: CSS's own `@keyframes`; warp adds only `leave:`.
 - html-meta: page facts are keys on html (`title:`, `description:`, `meta: {…}`).
 - key-if: inside `on key {…}` bare `key` reads event.key; named keys compare as words (ESC, ENTER, UP); held-key: `held_key` is the held key's name.
@@ -741,3 +750,9 @@ the original questions 1–41: test edits and housekeeping done.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
 - playground-today (user 2026-11-01): the playground moves to the self-hosted compiler now, all samples running in the browser is the day's plan (notes/playground_plan.md); supersedes playground-after-parity. Two workers (warp-web-host, warp-web-samples) make no core changes and hand core needs to the Supervisor.
 - library-words-lexical (user 2026-11-01): library code keeps its own words: a library body's call of a word the program redefines stays the library's (`round(x) := 0; round_to(2.345, 2)` is 2.35); a program's word answers only the program's calls.
+
+## egraph-outside-library (user, 2026-11-01)
+egraph is the first outside library: it lives in the registry github.com/pannous/warp-packages (egraph/), found by
+`use egraph`, not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
+- markup-keeps final (user, 2026-11-01, via the Interviewer): lib-first; core only fix 1 (tag items are expressions,
+  ~15–25 lines) and automatic liveness (~20); keyed instances by hand for now (no core part d). warp-markup builds.
