@@ -1104,15 +1104,13 @@ SAMPLE_POLL_SECONDS = 0.5
 
 
 def page_output(report):
-	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø (the
-	Rust-era page reports the last line's value apart; the self-hosted one prints it, as the native warp does)"""
+	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø"""
 	# printedWhole: every frame's output (playground.js shows only an animation's last frame, its `printed`)
 	printed = "".join(part["text"] for part in report.get("printedWhole", report.get("printed", [])) if part.get("stream", 1) == 1)
 	value = report.get("value") or ""
 	if value in ("ø", "") or report.get("error"):
 		return printed
-	shown = value[1:-1] if len(value) > 1 and value[0] == value[-1] == '"' else value
-	return printed + shown + "\n"
+	return printed + value + "\n"  # as the native warp shows it, a text in its quotes
 
 
 def sample_verdict(report, native_output):
