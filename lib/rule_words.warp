@@ -280,8 +280,31 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 # `dir(time)`, `dir text` (card dir-ownership): the words a standard module defines, in their order, then the
 # prelude's whose first parameter is of the type so named, `upper(t: text)`; ø when the program defines its own dir
 # or binds the name, or no module is so named
+# `help(x)` (wiki/reflection.md): a class's fields and methods, a function's signature and the doc below it, a
+# module's words; ø where the program has its own help or x is none of them
+class_help(name: Node, program: Node, source: text): any := {
+	# the class as written: the class methods pass has lifted its methods out of the program's view by now
+	statement = if owns_word("help", program) then ø else declared_class(spelled(name), plain_node(parsed(source)))
+	if statement == ø { return ø }
+	view = class_view(statement)
+	declared = class_declared(statement, view)
+	# a method by the name it is written with, `length` (read, it is its alias's word, count)
+	methods = view#3[3 ..].map(member => defined_word(node_of(member)) ?? defined_word(member_read(member))).filter(word => word != ø)
+	["class " + spelled(name), "fields: " + declared.fields.join(" "), "methods: " + methods.join(" ")].join("\n")
+}
+function_help(name: Node, program: Node, source: text): any := {
+	signature = if owns_word("help", program) then ø else signature_text(name, program)
+	if signature == ø { return ø }
+	doc = doc_of(name, program, source)
+	spelled(name) + signature + (if doc == "" then "" else "\n" + doc)
+}
+module_help(name: Node, program: Node): any := {
+	words = if owns_word("help", program) then ø else dir_words(name, program)
+	if words == ø then ø else "module " + spelled(name) + ": " + items_of(words).map(word => "${word}").join(" ")
+}
 dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in_kept(program) then ø else module_dir("${name}")
-owns_dir(program: Node): bool := function_definition(symbol("dir"), program) != ø
+owns_dir(program: Node): bool := owns_word("dir", program)
+owns_word(word: text, program: Node): bool := function_definition(symbol(word), program) != ø
 module_dir(word: text): any := {
 	source = used_module_text(word)
 	if source == "" { return ø }
@@ -319,7 +342,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check}
+rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
@@ -331,7 +354,8 @@ typed_json_field_type(member: Node): text? := match member {
 	_: ø
 }
 
-typed_json_class(type_name: text, program: Node): Node? := {
+# the statement declaring the class of that name in the program, ø for none
+declared_class(type_name: text, program: Node): Node? := {
 	for statement in level_statements(program) {
 		view = class_view(statement)
 		if view != ø and declared_type_name(view#2) == type_name { return statement }
@@ -354,7 +378,7 @@ typed_json_value(value: text, path: text, value_type: text, depth: int, program:
 		received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
 		return "({ if not (" + value + " is " + value_type + ") { raise " + path + " + \" must be " + expected + ", received \" + " + received + " }; " + value + " })"
 	}
-	statement = typed_json_class(value_type, program)
+	statement = declared_class(value_type, program)
 	if statement == ø or ancestors.contains(value_type) { return ø }
 	view = class_view(statement)
 	declared = class_declared(statement, view)
