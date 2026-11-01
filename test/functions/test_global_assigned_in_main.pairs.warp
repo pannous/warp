@@ -1,0 +1,3 @@
+# a name main declares global stays the module's in every function, however often main assigns it
+'global hue = 220.0; def g() { hue }; def f(c) { hue = c; g() }; x = f(55); hue = 1.0; x'	55
+'global n = 0; def bump() { n = n + 1 }; bump(); n = n + 10; bump(); n'	12
