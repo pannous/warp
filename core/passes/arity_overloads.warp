@@ -212,6 +212,19 @@ declared_bases(program: Node): map := {
 	for view in statements_in(program).map(class_view).filter(view => view != ø) { bases[declared_type_name(view#2)] = base_of(view#2) }
 	bases
 }
+# how many classes a type's class extends, 0 of a type no class of the program
+variant_class_depth(type: text): int := if type in overload_bases and overload_bases[type] != "" then 1 + variant_class_depth(overload_bases[type]) else 0
+variant_depth(types: list): int := types.map(variant_class_depth).fold(0, (total, depth) => total + depth)
+# `speak(d: Dog)` before `speak(a: Animal)` of `class Dog extends Animal`: a subclass's variant is tested first, as
+# the base's test passes for its instances too; else in the order given
+deeper_classes_first(candidates: list): list := {
+	ordered = []
+	for types in candidates {
+		insert_at = #ordered.filter(other => variant_depth(other) >= variant_depth(types))
+		ordered = ordered[0..<insert_at] + [types] + ordered[insert_at..]
+	}
+	ordered
+}
 # how many classes up from the kind's class the type is, 0 of the class itself, ø of a kind that is no instance of it
 class_distance(kind: text, type: text): int? := {
 	if kind == type { return 0 }
@@ -481,7 +494,7 @@ in_test_order(candidates: list, kinds: list): list := {
 	ordered = []
 	for tested in (0 to #kinds).reverse() {
 		for widened in 0 to #kinds {
-			ordered += candidates.filter(types => #tested_places(kinds, types) == tested and #tested_places(kinds, types).filter(at => takes_widened(types#at)) == widened)
+			ordered += deeper_classes_first(candidates.filter(types => #tested_places(kinds, types) == tested and #tested_places(kinds, types).filter(at => takes_widened(types#at)) == widened))
 		}
 	}
 	ordered
