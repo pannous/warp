@@ -511,6 +511,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
+- markup-handler-comma (user): a handler inside a tag may be separated by a comma, `button{ "+1", on click { count += 1 } }`, if that makes the reading easier.
 - P188 stay close to HTML and CSS; only the basic machinery. web-keyframes: CSS's own `@keyframes`; warp adds only `leave:`.
 - html-meta: page facts are keys on html (`title:`, `description:`, `meta: {…}`).
 - key-if: inside `on key {…}` bare `key` reads event.key; named keys compare as words (ESC, ENTER, UP); held-key: `held_key` is the held key's name.
