@@ -715,7 +715,7 @@ rule_fits(module: text, word: text, program: Node): bool := {
 }
 # the pattern's word after its leading one, "" for none
 second_word(pattern: text): text := {
-	words = pattern.trim_start("(").split(" ")
+	words = (if pattern.starts_with("(") then pattern[1 ..] else pattern).split(" ")
 	if #words > 1 then words#2 else ""
 }
 leading_word(pattern: text): text := {
