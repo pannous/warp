@@ -18,7 +18,7 @@ name = "Ada"
 	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants such as pi cannot change
 pi = 4
 2 * pi` },
-	lists: { value: '[3 "apple"]', code: `// a list, how many items it has, and its first item
+	lists: { value: '[3, "apple"]', code: `// a list, how many items it has, and its first item
 fruits = ["apple" "pear" "plum"]
 [#fruits, fruits#1]` },
 	"lazy ranges": { value: "[999999999999 499999999999500000000000 123456789]", code: `// a range of a trillion numbers, counted and summed at once
