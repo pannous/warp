@@ -7,6 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- extension-wording (user): a rewrite rule giving the language a new spelling (lib/sugar) is a compiler extension, not a library; "library" means modules programs import.
 - no-fixpoint (user, 2026-10-26, to warp-fixer): "If the compiler can compile itself once more, we don't need the fixed point." warp.wasm is promoted to warp-self.wasm (and a refresh-seed stage becomes the seed) once it compiles compiler.warp again and that build runs hello; byte identity with the previous stage is only reported. The docs say "self test" instead of "fixpoint" (card fixpoint-wasm).
 - self-landing (user, 2026-10-26): "since all the workers are already testing, the recompilation and the smoke test, it's useless if the integrator does the same test again. Can they just merge directly onto main?" Workers merge origin/main into their branch, smoke-test that merge (core/: + self-check) and push it to main fast-forward; the Integrator watches main (compilers install, background tiers, full suite at rare intervals) instead of gating.
 - no-slots (user, 2026-10-26): "this whole slot mechanism was only for the Rust world. In Warp, the compilation does not bloat the whole system, so we can get rid of it. Also in the notes and scripts." scripts/slot.sh and every slot rule go; rebuilds and checks run directly (card tests-through-test).
