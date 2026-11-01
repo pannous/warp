@@ -14,7 +14,7 @@
 #include "warp_layout.h"
 
 #define WARP_OP_COLON 1
-#define WARP_FAILURE_ROOM 200
+#define WARP_FAILURE_ROOM 1024
 
 typedef struct {
 	wasm_engine_t* engine;
@@ -342,19 +342,21 @@ static inline wasmtime_anyref_t warp_entry(warp_values* values, const char* name
 	return warp_node_new(values, WARP_MARKED_ENTRY, warp_symbol(values, name), &value);
 }
 
-// the word's answer: the value, or after a failure the module's Error of its message (its exported error_of)
+// the word's answer: the value, or after a failure a raise of its message, as the page raises a HostWordFailure
+// (web/playground/host.js raisedInProgram): the message left in trap_detail, the module's returned_error raising it
 static inline wasm_trap_t* warp_answered(warp_values* values, wasmtime_anyref_t value, wasmtime_val_t* result) {
 	wasm_trap_t* trap = NULL;
 	if (values->failure[0]) {
 		if (!wasmtime_anyref_is_null(&value)) wasmtime_anyref_unroot(&value);
 		wasmtime_val_t message = warp_anyref(warp_text(values, values->failure, strlen(values->failure)));
-		wasmtime_extern_t error_of;
-		if (!wasmtime_caller_export_get(values->caller, "error_of", 8, &error_of) || error_of.kind != WASMTIME_EXTERN_FUNC) {
-			trap = wasmtime_trap_new(values->failure, strlen(values->failure));
-		} else {
-			wasmtime_error_t* error = wasmtime_func_call(values->context, &error_of.of.func, &message, 1, result, 1, &trap);
-			if (error) trap = wasmtime_trap_new(values->failure, strlen(values->failure)), wasmtime_error_delete(error);
+		wasmtime_extern_t detail, returned_error;
+		if (wasmtime_caller_export_get(values->caller, "trap_detail", 11, &detail) && detail.kind == WASMTIME_EXTERN_GLOBAL
+			&& wasmtime_caller_export_get(values->caller, "returned_error", 14, &returned_error) && returned_error.kind == WASMTIME_EXTERN_FUNC) {
+			wasmtime_error_t* error = wasmtime_global_set(values->context, &detail.of.global, &message);
+			if (!error) error = wasmtime_func_call(values->context, &returned_error.of.func, NULL, 0, NULL, 0, &trap);
+			if (error) wasmtime_error_delete(error);
 		}
+		if (!trap) trap = wasmtime_trap_new(values->failure, strlen(values->failure));
 		warp_unroot(&message);
 	} else {
 		*result = warp_anyref(value);
