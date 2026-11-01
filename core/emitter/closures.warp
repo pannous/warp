@@ -147,7 +147,7 @@ dispatcher_code(f: Function): any := {
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
 	code += class_value_calls(f, arity)
 	code += instance_calls(closure, arity)
-	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
+	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + (delegated_call(f.name, arity) ?? not_a_function) + [op.end]
 	# the arms in closure order, each the block its br_table label leaves; the outermost block (label #arms) fails
 	arms = []
 	labels = []

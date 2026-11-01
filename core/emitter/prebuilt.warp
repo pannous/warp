@@ -178,17 +178,30 @@ def bind_runtime_words() {
 }
 # a hook of runtime.wasm, whose code the program writes (late_code) over the stub's
 runtime_hook(name: text, parameters: list): any := {
-	word = module.runtime_image.words[name]
-	f = bare_function(name)
-	f.index = word#1 + runtime_shift()
-	f.kinds = word#2
-	f.result = word#3
+	f = runtime_stub(name)
 	f.locals = []
 	f.local_names = parameters
 	f.code = [op.unreachable]
 	f
 }
 is_runtime_hook(name: text): bool := prepended() and name in module.runtime_image.hooks
+# a hook's stub in runtime.wasm, at its index, of its kinds: what the program's code for it is called through
+runtime_stub(name: text): any := {
+	word = module.runtime_image.words[name]
+	f = bare_function(name)
+	f.index = word#1 + runtime_shift()
+	f.kinds = word#2
+	f.result = word#3
+	f
+}
+# a prebuilt module's dispatcher given a value it doesn't know, a class, instance or closure of the program linking it
+# (storage's model() of the program's class): the runtime's hook of that arity, which the program's dispatcher fills
+def delegated_call(name: text, arity: int): list? {
+	if not module.prebuilding or module.runtime_image == ø or name not in module.runtime_image.hooks { return ø }
+	stub = runtime_stub(name)
+	stub.is_runtime = yes
+	boxed(call_values(stub, range_list(arity + 1).map(j => TypedCode(ValueKind.Node, [op.local_get] + uleb(j))))) + [op.return]
+}
 
 # the content of runtime.wasm's section of this id, a custom one by its name; the vector it holds with more entries
 def runtime_part(id: int, name: text = ""): list {
@@ -440,6 +453,8 @@ def behind_libraries() {
 # the module's class structs the program's of their names, which it declares alike (its classes from the module's
 # text), else the program compiles the module from its source
 def bind_library_words() {
+	# (a module's dispatcher delegates what it doesn't know to the runtime's hooks: the program's dispatchers fill them)
+	if module.linked_images { for arity in 0..(hook_arities + 1) { dispatcher(arity) } }
 	for image in module.linked_images {
 		if method_clash(image) { refuse(LINKED_METHOD_CLASH + image.name) }
 		for name in image.c_functions { program_import(name) }
