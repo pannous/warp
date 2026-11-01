@@ -153,8 +153,9 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 }
 
 # the number of slots in the machine's pool: WARP_TEST_SLOTS, else the cores, at most WHILE_BUILDING of them while a
-# compiler builds (scripts/rebuild.sh's build slots; 2026-10-31: load 33 on 10 cores, tests beside 3 builds)
-WHILE_BUILDING = 4
+# compiler builds (scripts/rebuild.sh's build slots; 2026-10-31: load 33 on 10 cores, tests beside 3 builds; user 2026-11-01: four
+# warps at once, 3 builds and 1 test run)
+WHILE_BUILDING = 1
 slot_count(): i32 := {
 	given = getenv("WARP_TEST_SLOTS")
 	cores = number_of(trimmed_end(command_output("getconf _NPROCESSORS_ONLN")))
