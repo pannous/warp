@@ -19,8 +19,8 @@
 #   texts    a list of warp texts as a NULL-terminated `char *[]` of their copies (argv: posix_spawn, execv)
 #   void     no result
 
-# the names the libraries go by in a program: `use libm` is `use m`
-c_library_aliases = {libc: "c", libm: "m", zlib: "z", SDL2: "SDL2", sdl: "SDL2", sdl2: "SDL2"}
+# the names the libraries go by in a program: `use libm` is `use m`, as `use cmath` (C++'s header) is
+c_library_aliases = {libc: "c", libm: "m", cmath: "m", zlib: "z", SDL2: "SDL2", sdl: "SDL2", sdl2: "SDL2"}
 # libc and libm, which a program may name for each other
 c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
