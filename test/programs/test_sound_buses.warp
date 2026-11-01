@@ -1,11 +1,10 @@
 # from test_sound_buses.rs: edit the Rust test, then run the script again
 
-# out_restores_the_bus_before
+# a sound sent to a delay bus rings on: 0.1 s of A4 renders 2.9 s (decision bus-test-outcome)
 is! 'use sound
-room = bus()
-std_io("sound", "send", [7])
-out([0.0], room)
-std_io("sound", "send", [0])' 7
+room = bus() |> delay(0.3, 0.5, 1)
+out(osc(A4, 0.1s), room)
+round(save(sound, "bus_rings.wav") * 10)' 29
 
 # list_effects_run_the_bus_dsp
 is! 'use sound

@@ -1077,11 +1077,10 @@ pattern_item(kind, payload) := [kind, payload, 1, 1.0 as float]
 pattern_note(word) := if word == "~" then pattern_item(1, []) else pattern_item(1, [note_hertz(upper(word[0]) + word[1..]) for word in split(word, ",")])
 // k notes over n steps as evenly as possible: step i sounds when (i * k) mod n < k
 pattern_euclid(item, k, n) := pattern_item(0, [if (i * k) % n < k then item else pattern_item(1, []) for i in 0..n])
-// `steps`, not `text`: lib/sugar/lists.warp reads a module's `text[i]` as i empty texts unless the program binds text
-// (card lists-text-rewrite)
-pattern_end(steps: text, from: int, stops: text) := {
+// a parameter `text` is the local here: `text[i]` is its letter, never the rule's i empty texts
+pattern_end(text: text, from: int, stops: text) := {
 	i = from
-	while i < count(steps) and not (steps[i] in stops) { i = i + 1 }
+	while i < count(text) and not (text[i] in stops) { i = i + 1 }
 	i
 }
 global pattern_stops = " []<>*(?@_"
