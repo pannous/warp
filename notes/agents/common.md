@@ -141,7 +141,9 @@ before asking a question). After a context swap, this file and your role file be
   wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
   change; on that merge run the smoke test (`scripts/smoke.sh <worktree>`; core/ changes: it + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; AGENTS.md "Testing");
   `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
-  smoke test only if the new commits touch core/ or lib/; push. At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
+  smoke test only if the new commits touch core/ or lib/; push. The self-check and gate are never rerun after such a
+  re-merge (they passed on your change; the new commits passed their own), only the smoke test, and right after it
+  merge and push in one `&&` chain, so main cannot move again in between (2026-11-01: a landing looped 1.5 h). At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
   main right away (user 2026-10-26). Then `todo done <card> <commit>`. The full suite runs
   only at rare intervals, in the background.
