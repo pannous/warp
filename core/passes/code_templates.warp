@@ -52,6 +52,7 @@ hole_name(n: Node): text? := {
 # the `$` of `$(expr)`, which the parser reads as the character
 is_computed_hole_mark(n: Node): bool := match n {
 	Char(c): "" + c == hole_mark
+	Text(t): t == hole_mark
 	Symbol(name): name == hole_mark
 	_: no
 }
