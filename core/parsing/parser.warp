@@ -3467,7 +3467,7 @@ def bare_atom(p: Parser): Node := {
 		p.at = end
 		// `$f(x)`, `$f(x) {…}`: a hole applied reads as the name it stands for applied, its arguments read as a call's
 		// (typed_parameters): `$f($x)`
-		return name_or_call(p, hole, "")
+		return name_or_call(p, hole)
 	}
 	if EXACT_CONSTANTS.contains("$(c)") {
 		p.at = p.at + 1
@@ -4038,11 +4038,11 @@ def named(p: Parser): Node := {
 		// `Point{x: 1}` of a declared type constructs a point, any other `name{…}` stays the tagged block (D4)
 		return Key(name, if declared then Op.None else Op.Colon, braced_items(p))
 	}
-	name_or_call(p, name, word)
+	name_or_call(p, name)
 }
 // the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
-// (`f(x) {…}`); the arguments of `print(…)` as print reads them
-def name_or_call(p: Parser, name: Node, word: text): Node := {
+// (`f(x) {…}`)
+def name_or_call(p: Parser, name: Node): Node := {
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
 	written = items_until(p, Bracket.Round, ItemsEnd.Closer)
@@ -4054,16 +4054,7 @@ def name_or_call(p: Parser, name: Node, word: text): Node := {
 		// the head is the call f(x, y)
 		return call_of([call_of([name] + spread(arguments)), body])
 	}
-	call_of([name] + (if word == PRINT_WORD then print_arguments(written) else spread(arguments)))
-}
-
-// `print(a b)`, `print(match n {…})`: words set apart by blanks are the one value printed; `print(a, b)` prints each
-// Rust twin: commands.rs print_arguments
-PRINT_WORD = "print"
-def print_arguments(arguments: Node): list {
-	parts = group_parts(arguments)
-	if parts != ø and parts#2 == " " and #parts#3 > 1 { return [arguments] }
-	spread(arguments)
+	call_of([name] + spread(arguments))
 }
 
 // The type names that take type arguments in angle brackets besides the plural and capitalized ones
@@ -4261,14 +4252,17 @@ def function_reference(p: Parser): Node := {
 	attributed(FUNCTION_REFERENCE_MARK, true, symbol(p.code[at .. end]))
 }
 
-// The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter
-// `greet(person name: String)` stays one argument
+// The items of an argument list: none for ø, the list's items, else the one argument. A comma separates arguments,
+// a blank joins the words of one: `f(4, s)` is f of 4 and s, `square(square 2)` and `str(3 meter)` take one; Swift's
+// labeled parameter `greet(person name: String)` stays one argument too
 // Rust twin: atoms.rs function_call, is_labeled_parameter
 def spread(arguments: Node): list {
 	if arguments == ø { return [] }
 	parts = group_parts(arguments)
-	if parts != ø and not labeled_parameter(parts) { return parts#3 }
-	[arguments]
+	if parts == ø or labeled_parameter(parts) { return [arguments] }
+	if parts#2 != " " or #parts#3 < 2 { return parts#3 }
+	// the words of the one argument, a phrase as between commas: `f(square 3)` as `f(square 3, 2)` holds it
+	[if parts#1 == "(" then spaced(parts#3) else arguments]
 }
 
 // Every argument of `f(int x, float y)` as its typed parameter
