@@ -270,7 +270,7 @@ promoted(operation: Node, promotions: list, dispatcher: text): Node := {
 	left = key_of(operation)
 	right = value_of(operation)
 	for promotion in promotions.reverse() {
-		test = Key(ø, Op.If, Key(Key(right, Op.Is, symbol(promotion#1)), Op.And, Key(left, Op.Is, symbol(promotion#2))))
+		test = Key(ø, Op.If, Key(instance_test(right, promotion#1), Op.And, Key(left, Op.Is, symbol(promotion#2))))
 		operation = Key(Key(test, Op.Then, call_of(dispatcher, [call_of(conversion_name(promotion#1), [left]), right])), Op.Else, operation)
 	}
 	operation
@@ -278,9 +278,12 @@ promoted(operation: Node, promotions: list, dispatcher: text): Node := {
 # the value of the first owner's on an instance of it, else of the next owner's…, the fallback on any other value
 value_dispatch(owners: list, values: map, fallback: Node): Node := {
 	otherwise = if #owners == 1 then fallback else value_dispatch(owners[1..], values, fallback)
-	test = Key(ø, Op.If, Key(self_node, Op.Is, symbol(owners#1)))
+	test = Key(ø, Op.If, instance_test(self_node, owners#1))
 	Key(Key(test, Op.Then, values[owners#1]), Op.Else, otherwise)
 }
+# whether the value is an instance of the class or of one extending it: the dispatchers' test, which `x is real` of
+# any number (decision real-canonical) does not answer
+instance_test(subject: Node, class_name: text): Node := call_of(HiddenWord.InstanceOf as text, [subject, class_name])
 # the function a class's method was lifted to: its own name when one class declares it and it is not routed
 lifted_name(classes: map, names: list, method: text, owning_class: text, routes: list): text := if #owners_of(classes, names, method) == 1 and method not in routes then method else owned_name(method, owning_class)
 
@@ -444,7 +447,7 @@ equality_derived(class_name: text, methods: list, operator_table: map): list := 
 	if ordering_method not in words or words.any(word => spells_operator(word, "==", operator_table)) { return methods }
 	other = symbol("other")
 	compared = Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0)
-	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(Key(other, Op.Is, symbol(class_name)), Op.And, compared))]
+	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(instance_test(other, class_name), Op.And, compared))]
 }
 owns_operator(declared: Declared, glyph: text, operator_table: map): bool := declared.methods.any(method => spells_operator(defined_word(method), glyph, operator_table))
 spells_operator(word: any, glyph: text, operator_table: map): bool := word is text and spelled_operator(operator_table, word) != ø and operator_table[word]#2 == glyph
@@ -523,10 +526,9 @@ float_contagion(operation: Node, floaters: list, dispatched: Node): Node := {
 	right = value_of(operation)
 	op = op_of(operation)
 	for floater in floaters.reverse() {
-		owner = symbol(floater#1)
 		converted = floater#2
-		instance_right = Key(ø, Op.If, Key(Key(left, Op.Is, symbol(float_method)), Op.And, Key(right, Op.Is, owner)))
-		instance_left = Key(ø, Op.If, Key(Key(right, Op.Is, symbol(float_method)), Op.And, Key(left, Op.Is, owner)))
+		instance_right = Key(ø, Op.If, Key(Key(left, Op.Is, symbol(float_method)), Op.And, instance_test(right, floater#1)))
+		instance_left = Key(ø, Op.If, Key(Key(right, Op.Is, symbol(float_method)), Op.And, instance_test(left, floater#1)))
 		dispatched = Key(Key(instance_left, Op.Then, Key(call_of(converted, [left]), op, right)), Op.Else, dispatched)
 		dispatched = Key(Key(instance_right, Op.Then, Key(left, op, call_of(converted, [right]))), Op.Else, dispatched)
 	}
@@ -540,7 +542,7 @@ class_dispatch(owners: list, called: map, call_arguments: list, fallback: Node, 
 	first_call = call_of(called[owners#1], call_arguments)
 	if #owners == 1 and fallback == ø { return first_call }
 	otherwise = if #owners == 1 then fallback else class_dispatch(owners[1..], called, call_arguments, fallback, tested)
-	test = Key(ø, Op.If, Key(tested, Op.Is, symbol(owners#1)))
+	test = Key(ø, Op.If, instance_test(tested, owners#1))
 	Key(Key(test, Op.Then, first_call), Op.Else, otherwise)
 }
 

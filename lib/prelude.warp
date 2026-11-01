@@ -117,6 +117,7 @@ type Float = float
 type String = text
 type Boolean = bool
 type Char = codepoint
+type Real = real
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
