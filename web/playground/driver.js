@@ -4,9 +4,11 @@
 // with the program's host words (host.js programImports) and the same WASI, its _start printing its own value.
 // Needs wasi.js, values.js and host.js.
 
-// the installed compiler's lib/ (beside ~/dev/bin/warp), which build.sh copies into the page
-const COMPILER_LIBRARY = "web/playground/warp-lib";
-const COMPILER_URL = `../../${COMPILER_LIBRARY}/warp.wasm`;
+// the installed compiler's lib/ (beside ~/dev/bin/warp), which build.sh copies into the page; the compiler gets its
+// absolute path (wasi.js REPOSITORY_DIRECTORY), as natively, so it is found from any program's folder
+const COMPILER_FOLDER = "web/playground/warp-lib";
+const COMPILER_LIBRARY = `${REPOSITORY_DIRECTORY}/${COMPILER_FOLDER}`;
+const COMPILER_URL = `../../${COMPILER_FOLDER}/warp.wasm`;
 const COMPILED_PATH = "/tmp/warp-program.wasm";
 // the program typed in the page when it is no sample's file: at the repository root, as `warp playground.warp` there
 const TYPED_FILE = "playground.warp";
