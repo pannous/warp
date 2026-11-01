@@ -259,3 +259,5 @@ euclidean_quotient(a: int, b: int): int := {
 	truncated = (a - rest) /! b
 	if rest >= 0 then truncated else if b < 0 then truncated + 1 else truncated - 1
 }
+even(n: int) := is_even(n)
+odd(n: int) := is_odd(n)
