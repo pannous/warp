@@ -38,11 +38,13 @@ counted_parts(n: Node, functions: list, scope: map): list? := match n {
 	_: ø
 }
 
-# `print#xs` → `print(#xs)`, from the top: a member chain on the count is whole before its parts are rewritten
+# `print#xs` → `print(#xs)`, from the top: a member chain on the count is whole before its parts are rewritten. A
+# function sees the names outside function bodies and its own: a parameter f of map(xs, f) is a value in map only
 counted_calls(n: Node, functions: list, scope: map): any := {
-	parts = counted_parts(n, functions, scope)
-	if parts != ø { return call_of(parts#1, [Key(ø, Op.Hash, counted_calls(parts#2, functions, scope))]) }
-	children(n, x => counted_calls(x, functions, scope))
+	seen = if is_function_definition(n) then scope_with(scope, nodes_in(n)) else scope
+	parts = counted_parts(n, functions, seen)
+	if parts != ø { return call_of(parts#1, [Key(ø, Op.Hash, counted_calls(parts#2, functions, seen))]) }
+	children(n, x => counted_calls(x, functions, seen))
 }
 
-library_calls(program: Node): Node := counted_calls(program, functions_with_parameters(program), scope_of(program))
+library_calls(program: Node): Node := counted_calls(program, functions_with_parameters(program), scope_with({}, outer_nodes_in(program)))

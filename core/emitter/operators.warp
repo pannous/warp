@@ -161,12 +161,26 @@ static_type_word(kind: ValueKind): text? := match kind {
 	ValueKind.Bool: "bool"
 	_: ø
 }
+# the item types analyzer.warp is sure of in a list written out: a variable's items may change (`xs[0] = random()`,
+# `xs.pop()`), a name's value is no symbol (`[π π]`)
+certain_item_types = ["int", "rational", "float", "text", "codepoint", "bool", "ø"]
+# a list written out of items of certain types, `[1/2, 3/4]`: its type as analyzer.warp found them, `list of
+# rational`, items of no common type a plain list; ø of any other list, whose items the run time names
+analyzed_list_type(body: Body, n: Node): text? := {
+	if not (is_group(n) and bracket_of(n) == "[") or "" not in scopes { return ø }
+	scope = scopes.get(body.function.name) ?? scopes[""]
+	if not all_of(items_of(n), item => element_type_word(item, scope).replace("?", "") in certain_item_types) { return ø }
+	word = type_word(n, scope)
+	if word == "list of node" then "list" else word
+}
 # a whole number is a nat but where it is a fast int, declared int (decision nat-and-int)
 def type_value_of(body: Body, n: Node): TypedCode {
 	value = expression_code(body, n)
 	if value.kind == ValueKind.Node and boxed_int_slot(body, n) { return runtime_call("int_slot_type_name", [value, list_value(body, module.classes.keys)]) }
 	if value.kind == ValueKind.Node { return runtime_call("node_type_name", [value, list_value(body, module.classes.keys)]) }
-	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else static_type_word(value.kind)
+	listed = if value.kind == ValueKind.List then analyzed_list_type(body, n) else ø
+	if value.kind == ValueKind.List and listed == ø { return runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)]) }
+	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else if value.kind == ValueKind.List then listed else static_type_word(value.kind)
 	if word != ø { return TypedCode(ValueKind.Node, node(Marked.TypeValue, text_bytes(word))) }
 	refuse("the type of a " + kind_spelling(value.kind))
 }

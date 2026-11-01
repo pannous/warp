@@ -1,0 +1,9 @@
+# type(xs) names the items xs holds when it is asked, never a guess from how xs began
+'xs = [0, 0]; xs[0] = 0.5f; type(xs)'	'list of number'
+'xs = [1, 2]; xs[0] = 1/2; type(xs)'	'list of rational'
+'xs = [1, 2]; xs.add("a"); type(xs)'	'list'
+'xs = [1]; xs.pop(); type(xs)'	'list'
+'f(xs: list) := type(xs); f([1, 2])'	'list of int'
+'type([[1, 2], [3]])'	'list of list of int'
+'xs = [1, ø]; type(xs)'	'list of int?'
+'type([1/2, 3/4])'	'list of rational'

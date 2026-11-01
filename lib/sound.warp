@@ -429,10 +429,12 @@ REVERB_FEEDBACK = 0.75
 // an echo's output below this (-60 dB) for TAIL_SECONDS beyond its longest gap has rung out
 SILENT = 0.001
 TAIL_SECONDS = 0.05
-effected(amplitudes: list, effect: list) := {
+effected(amplitudes: list, effect: list) := scaled_effect(amplitudes, effect, if loudness * loudest_sample > 0 then loudness * loudest_sample else 1.0)
+// the effect on amplitudes that `scale` makes 1: a signal's loudness, a bus's full scale (its tail rings out at -60 dB
+// of the speakers, as the playground's)
+scaled_effect(amplitudes: list, effect: list, scale) := {
 	name = effect#1
 	if name not in EFFECT_NAMES { raise "no effect named " + name + ": " + EFFECT_NAMES.join(", ") }
-	scale = if loudness * loudest_sample > 0 then loudness * loudest_sample else 1.0
 	x = [a / scale for a in amplitudes]
 	y = if name == "gain" then [v * effect#2 for v in x]
 	else if name == "delay" then echoed(x, [effect#2], effect#3, effect#4, 1)
@@ -581,7 +583,14 @@ class Bus {
 	id: int
 	chain: list
 }
-bus() := Bus(std_io("sound", "bus", [0, []]), [])
+// each bus's chain by its id, 0 the speakers' own (none), and the bus the thread's sounds go to: warp runs the chain on
+// each sound sent there (sound), natively and in the browser alike, a delay's or reverb's tail added
+global bus_chains = [[]]
+global sent_bus = 0
+bus() := {
+	bus_chains = bus_chains + [[]]
+	Bus(count(bus_chains) - 1, [])
+}
 // the bus with the effect at the end of its chain, or in place of its effect of that name (its new settings, what
 // rings in it kept), which the host takes over from this voice's moment on (card shared-buses stage 3). EQ bands are
 // several of a name: one replaces the band at its frequency (card bus-peak)
@@ -600,7 +609,7 @@ with_effect(b: Bus, effect) := {
 	if not replaced {
 		chain.push(effect)
 	}
-	std_io("sound", "bus", [b.id, chain])
+	bus_chains[b.id] = chain
 	Bus(b.id, chain)
 }
 lowpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["lowpass", si_amount(frequency), q])
@@ -619,10 +628,14 @@ high_shelf(b: Bus, frequency, db, q = 0.707) := with_effect(b, ["high_shelf", si
 // in attack seconds and a fall in release
 compress(b: Bus, threshold = -18, ratio = 4, attack = 0.01, release = 0.1) := with_effect(b, ["compress", threshold, ratio, si_amount(attack), si_amount(release)])
 // the thread's sounds go to the bus; gives where they went before, for sent_back
-sent_to(b: Bus) := std_io("sound", "send", [b.id])
+sent_to(b: Bus) := {
+	before = sent_bus
+	sent_bus = b.id
+	before
+}
 // the thread's sounds go where they went before again; gives the handle of the sound sent
 sent_back(before, handle) := {
-	std_io("sound", "send", [before])
+	sent_bus = before
 	handle
 }
 // the signal played through the bus; its handle
@@ -637,8 +650,16 @@ out(signal) := sound(clamped_samples(signal))
 global pan = 0.0 as float
 // the samples for the speakers: mono in the middle, else interleaved left, right, the far side quieter by the pan
 panned(samples) := if pan == 0 then samples else [sample_offset + (round((sample - sample_offset) * side) as int) for sample in samples for side in [min(1, 1 - pan), min(1, 1 + pan)]]
+// the samples through the chain of the bus the thread sends to
+bused(samples) := {
+	chain = bus_chains[sent_bus]
+	if count(chain) == 0 { return samples }
+	amplitudes = [x - sample_offset for x in samples]
+	for effect in chain { amplitudes = scaled_effect(amplitudes, effect, loudest_sample) }
+	clamped_samples(amplitudes)
+}
 sound(samples) := {
-	speakers = panned(through_effects(samples))
+	speakers = panned(bused(through_effects(samples)))
 	sounded(speakers, sample_rate, if pan == 0 then 1 else 2)
 }
 
@@ -664,7 +685,7 @@ sounded(speakers, rate, channels) := {
 	sounds_made = sounds_made + 1
 	seconds = count(speakers) / channels / rate
 	start_and_place = scheduled(seconds)
-	recorded = recorded + [RecordedSound(start_and_place#2, rate, channels, speakers)]
+	recorded = recorded + [RecordedSound(start_and_place#2, rate, channels, speakers, sounds_made)]
 	waited_till(start_and_place#1)
 	if not heard_directly(speakers, rate, channels) { played(sound_file(speakers, rate, channels, seconds)) }
 	sounds_made
@@ -748,7 +769,7 @@ clock_at_end() := {
 }
 // The sounds since the last save, each at its place, mixed into one WAV (at the highest rate and the most channels of
 // them, a mono sound on both speakers alike); its seconds
-class RecordedSound { place: float; rate: int; channels: int; speakers: list }
+class RecordedSound { place: float; rate: int; channels: int; speakers: list; handle: int }
 global recorded = []
 global rendered_until = 0.0 as float
 rendered(file) := {
@@ -763,11 +784,14 @@ rendered(file) := {
 		length = round(frames * rate / sound.rate) as int
 		needed = start + length * channels
 		if count(mixed) < needed { mixed = mixed + [0 for i in 0..(needed - count(mixed))] }
+		fades = sound_fades.filter(fade => fade[0] == 0 or fade[0] == sound.handle)
 		for frame in 0..length {
 			from = min(frames - 1, frame * sound.rate / rate as int) * sound.channels
-			for channel in 0..channels { mixed[start + frame * channels + channel] += sound.speakers[from + min(channel, sound.channels - 1)] - sample_offset }
+			gain = if count(fades) == 0 then 1.0 else faded_gain(fades, sound.place + frame / rate)
+			for channel in 0..channels { mixed[start + frame * channels + channel] += round((sound.speakers[from + min(channel, sound.channels - 1)] - sample_offset) * gain) as int }
 		}
 	}
+	sound_fades = []
 	write_bytes(file, wav_bytes([min(max(sum, -32768), 32767) + sample_offset for sum in mixed], rate, channels))
 	seconds = count(mixed) / channels / rate
 	rendered_until = (first + seconds) as float
@@ -886,10 +910,27 @@ play_file(path) := {
 	played(path)
 }
 // play gives the sound's handle: h = play(C4, 2s); stop_sound(h) stops that one alone, stop_sound (handle 0) all
-global stop_sound(handle = 0) := std_io("sound", "stop", [handle])
+global stop_sound(handle = 0) := {
+	fade_sound(handle, 0, 0)
+	std_io("sound", "stop", [handle])
+}
 // a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play(C4, 4s);
 // fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. save sound writes the fade too
-fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
+fade_sound(handle, gain, seconds = 0.05) := {
+	if handle > sounds_made { raise "fade_sound(" + handle + "): no sound " + handle + " in this run, which played " + sounds_made }
+	if not (gain >= 0 and gain <= 1) or si_amount(seconds) < 0 { raise "fade_sound(" + handle + ", " + gain + ", " + seconds + "): the gain is 0…1 and the seconds not negative" }
+	sound_fades = sound_fades + [[handle, voice_place - sound_queued(), gain, si_amount(seconds)]]
+	std_io("sound", "fade", [handle, gain, si_amount(seconds)])
+}
+// [handle, place, gain, seconds] of each fade since the last save, in the order called, from where the speaker stood
+global sound_fades = []
+// the gain at the place after the fades: each ramps linearly from the gain it finds there to its own
+faded_gain(fades, place) := {
+	ramp = [[0, 0.0, 1.0, 0.0], 1.0]
+	for fade in fades { if fade[1] <= place { ramp = [fade, ramped_gain(ramp[0], ramp[1], fade[1])] } }
+	ramped_gain(ramp[0], ramp[1], place)
+}
+ramped_gain(fade, from, at) := from + (fade[2] - from) * (if fade[3] > 0 then min(1, max(0, (at - fade[1]) / fade[3])) else 1)
 // a signal (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t), of a float to a float by the parameter's type;
 // play(hum, 2s) (play([left, right], 2s) in stereo, or play_signal) calls hum for every sample in turn, t its time in
 // seconds, 1 the loudest; its handle

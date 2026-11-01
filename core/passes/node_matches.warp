@@ -44,14 +44,18 @@ case_pattern(pattern: Node): list? := match pattern {
 default_arms = [other_arm, "other", "default", "else"]
 is_other_arm(pattern: Node): bool := is_name(pattern) and default_arms contains name_of(pattern)
 
-# an arm `pattern: result` or `pattern => result` (read as `->`)
+# an arm `pattern: result` or `pattern => result` (read as `->`); `n: digits => e`, read `n: (digits => e)` as digits is
+# no type word, is the arm of the pattern `n: digits`, a hole typed by a class of characters (lib/prelude.warp)
+character_class_words = ["digit", "digits", "letter", "letters", "hex"]
 arm_pattern(arm: Node): Node := match arm {
+	Key(pattern, Op.Colon, Key(Symbol(word), Op.Arrow, result)): if word in character_class_words then Key(pattern, Op.Colon, symbol(word)) else pattern
 	Key(pattern, Op.Colon, result): pattern
 	Key(pattern, Op.Arrow, result): pattern
 	_: arm
 }
 
 arm_result(arm: Node): Node := match arm {
+	Key(pattern, Op.Colon, Key(Symbol(word), Op.Arrow, result)): if word in character_class_words then result else value_of(arm)
 	Key(pattern, Op.Colon, result): result
 	Key(pattern, Op.Arrow, result): result
 	_: arm
@@ -139,6 +143,9 @@ structural_names(pattern: Node, quoted: bool): list := {
 	if is_quote(pattern) { return structural_names(pattern#2, yes) }
 	match pattern {
 		Symbol(name): marked_name(name, quoted)
+		# `"/u/" + id: int + "/p/" + p: int` reads `(("/u/" + id): (int + "/p/" + p)): int`: a text cut's later holes
+		Key(Key(cut_left, Op.Add, cut_right), Op.Colon, right): structural_names(key_of(pattern), quoted) + structural_names(right, quoted)
+		Key(Key(cut_left, Op.Colon, cut_right), Op.Colon, right): structural_names(key_of(pattern), quoted) + structural_names(right, quoted)
 		Key(left, Op.Colon, right): structural_names(left, quoted)
 		Key(left, op, right): structural_names(left, quoted) + structural_names(right, quoted)
 		List(items, Bracket.Curly, separator): items.flat_map(field => field_names(field, quoted))
@@ -283,10 +290,7 @@ is_arm(n: Node): bool := is_key(n, Op.Colon) or is_key(n, Op.Arrow)
 with_alternatives(values: list, arm: Node): Node := {
 	if #values == 0 { return arm }
 	pattern = values.reverse().fold(arm_pattern(arm), (alternatives, value) => Key(value, Op.Or, alternatives))
-	match arm {
-		Key(written, op, result): Key(pattern, op, result)
-		_: arm
-	}
+	if is_arm(arm) then Key(pattern, Op.Colon, arm_result(arm)) else arm
 }
 
 # `match f(x)` of `match f(x) {…}` as a value, the subject a call ending before the block: `((match f(x)) {…})`
