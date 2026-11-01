@@ -14,9 +14,9 @@ use markup
 // `form post "/todos" { … }` is the form sending there, `form{ method: "POST", action: "/todos", … }`, the path any
 // expression (notes/server_routes.md)
 rewrite form $m $path {$body...} => form{ method: $verb, action: $path, $body... } where $m in [get, post, put, delete, patch] and $verb = route_verb($m)
-rewrite $m $path {$body...} => route_add($verb, $path, request => { $bindings...; $body... }) where $m in [get, post, put, delete, patch] and $path is text and $verb = route_verb($m) and $bindings = route_bindings($path)
+rewrite $m $path {$body...} => route_add($verb, $path, request => { $bindings...; {$body...} }) where $m in [get, post, put, delete, patch] and $path is text and $verb = route_verb($m) and $bindings = route_bindings($path)
 // `route "/users/:id:int" { div{…} }`: a page, a GET answering its block's markup as HTML (lib/markup.warp to_html)
-rewrite route $path {$body...} => route_add("GET", $path, page_answering(request => { $bindings...; $body... })) where $path is text and $bindings = route_bindings($path)
+rewrite route $path {$body...} => route_add("GET", $path, page_answering(request => { $bindings...; {$body...} })) where $path is text and $bindings = route_bindings($path)
 // `server def user_count() {…}`: the function, which a page asks with POST /rpc/user_count, a parameter's argument
 // the request's body
 rewrite server def $h() {$b...} => ($h() := {$b...}; route_add("POST", "/rpc/" + $name, request => $h())) where $name = spelled($h)
