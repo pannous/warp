@@ -99,3 +99,7 @@ Cover the documented scan and predicate-based take/drop outcomes, then type thei
 ## library-typed callback helpers
 
 Check callback outcomes before annotating generic parameters and results; preserve existing accepted values, verify the module and smoke on current main, and continue the library audit.
+
+## library-typed map selection
+
+Cover map selection and lookup outcomes before adding non-narrowing signatures; verify focused tests and merged-main smoke.

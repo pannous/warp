@@ -1,0 +1,6 @@
+// Source: notes/stdlib.md; map selection and lookup preserve their outcomes with typed signatures.
+'use map; count(keys(pick({a: 1, b: 2}, ["a", "missing"])))'	1
+'use map; omit({a: 1, b: 2}, ["a"]).get("b")'	2
+'use map; filter_values({a: 1, b: 2}, x => x > 1).get("b")'	2
+'use map; find_key({a: 1, b: 2}, x => x == 2)'	'b'
+'use map; m = {a: 1}; [m.setdefault("b", 3), m.setdefault("a", 9)]'	[3, 1]
