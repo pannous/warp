@@ -47,6 +47,7 @@ CASE_ANSWER_SECONDS = CASE_RUN_SECONDS + 10  # a page that finished no case in t
 CASE_BATCH = 100  # cases the page runs in one go, its reports collected as they finish
 CASE_FILE = "test_case.warp"  # a case runs as a file of its test file's folder, so its uses resolve beside it
 STOPPED = "stopped after"  # playground.js: the report of a run the page stopped (the native run's `timeout`)
+PAGE_LOST = "playground is not defined"  # a report of a page that lost its API mid-batch: no verdict, the case runs again
 # a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
 VERDICT = re.compile(r"^([✓✗]) (.*?)(?:: got .*)?$")
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
@@ -1275,6 +1276,7 @@ def check_samples(paths, tree):
 
 # the page runs the cases [[code, file]…] one after the other, each as `warp test` runs one, its report pushed as it ends
 RUN_CASES = """window.caseReports = []; (async cases => { for (const [code, file] of cases) {
+	if (typeof playground !== "object") { window.caseReports.push({ error: true, value: "%s" }); return; }
 	let report; try { report = await playground.evaluate(code, file, { asData: true }); } catch (failure) { report = { error: true, value: String(failure) }; }
 	window.caseReports.push(report); } })(%s); "started";"""
 TAKE_REPORTS = "JSON.stringify((window.caseReports ?? []).splice(0))"
@@ -1302,12 +1304,12 @@ def case_written(work, run, report, milliseconds):
 def cases_ran(work, runs, page_url):
 	"""each run of the work folder run in the page, CASE_BATCH at a time; a page that ends no run in CASE_ANSWER_SECONDS
 	is opened anew, the run it stuck on written as timed out"""
-	done = 0
+	done, lost_at = 0, None
 	while done < len(runs):
 		batch = runs[done:done + CASE_BATCH]
 		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
-		if browser("eval", RUN_CASES % json.dumps(cases)) != '"started"':
-			open_samples_page(page_url)
+		if browser("eval", RUN_CASES % (PAGE_LOST, json.dumps(cases))) != '"started"':
+			page_opened(page_url)
 			continue
 		ended, last = 0, time.time()
 		while ended < len(batch):
@@ -1315,18 +1317,39 @@ def cases_ran(work, runs, page_url):
 			answer = browser("eval", TAKE_REPORTS)
 			reports = json.loads(json.loads(answer)) if answer.startswith('"') else []
 			now = time.time()
+			lost = any(PAGE_LOST in str(report.get("value")) for report in reports)
 			for report in reports:
+				if PAGE_LOST in str(report.get("value")):
+					break
 				case_written(work, batch[ended][0], report, (now - last) * 1000 / len(reports))
 				ended += 1
+			if lost:
+				# a case that loses the page twice is that case's failure, so the run goes on past it
+				current = batch[ended][0]
+				if lost_at == current:
+					case_written(work, current, {"error": True, "value": f"the page lost its API running it ({PAGE_LOST})"}, 0)
+					ended += 1
+					lost_at = None
+				else:
+					lost_at = current
+				page_opened(page_url)
+				break
 			if reports:
 				last = now
 			elif now - last > CASE_ANSWER_SECONDS:
 				case_written(work, batch[ended][0], {"stuck": True}, CASE_ANSWER_SECONDS * 1000)
 				ended += 1
-				open_samples_page(page_url)
+				page_opened(page_url)
 				break
 		done += ended
 		print(f"     {done} of {len(runs)} runs")
+
+
+def page_opened(page_url):
+	"""the page opened anew with its playground API, else the run stops: verdicts of a page without one are no verdicts"""
+	open_samples_page(page_url)
+	if browser("eval", "typeof playground") != '"object"':
+		sys.exit(f"error: the page has no playground API after it was opened anew ({page_url}): {browser_complaint}")
 
 
 def verdicts_of(lines):
@@ -1350,7 +1373,10 @@ def check_tests(paths, tree):
 	cases_ran(work, runs, page_url)
 	browser("close")
 	server.shutdown()
-	page = verdicts_of(compiler_said(tree, "test-verdicts", work, "--each", *paths).split("\n"))
+	said = compiler_said(tree, "test-verdicts", work, "--each", *paths)
+	page = verdicts_of(said.split("\n"))
+	if not page:
+		sys.exit(f"error: test-verdicts gave no verdicts (the runs are kept in {work}): {said[-500:]}")
 	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True)
 	native = verdicts_of(baseline.stdout.split("\n"))
 	status_of = lambda case: "ok" if page[case] == "✓" else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
