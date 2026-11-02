@@ -1,0 +1,13 @@
+# a yes/no is the int 0 or 1 underneath: any operator but equality takes it as that int; of two yes/no values an
+# operator that gives 0 or 1 again gives yes/no (notes/bool_type.md, user 2026-11-02, card surprised-simple-implement)
+'yes xor no'	yes
+'no xor yes'	yes
+'yes xor yes'	no
+'no xor no'	no
+'a = 3 > 2; b = 1 > 2; a xor b'	yes
+'yes & no'	no
+'yes | no'	yes
+'yes + yes'	2
+'yes + 1'	2
+'no < yes'	yes
+'5 xor 3'	6
