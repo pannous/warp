@@ -16,7 +16,7 @@ while not WindowShouldClose() {
 	BeginDrawing()
 
 	if(needsClear){
-		# ClearBackground(0xFFF5F5F5) todo? Flickers horribly from black to white if uncommented 
+		# ClearBackground(0xFFF5F5F5) todo? Flickers horribly from black to white if uncommented  (card clearbackground-each)
 		needsClear = 0
 	}
 
