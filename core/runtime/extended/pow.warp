@@ -6,9 +6,25 @@ use "../intrinsics.warp"
 use "../instructions.warp"
 use "pow_tables.warp"
 use "../../emitter/byte_codes.warp"
-# the table's int at index: its 16 hex digits, read in place
-pow_log_entry(index: int): int := hex_entry(pow_log_table_text(), index)
-pow_exp_entry(index: int): int := hex_entry(pow_exp_table_text(), index)
+# the table's int at index, the tables read from their texts at the first use only, as case.warp's: a text written in
+# the code is made anew each time it is reached, so reading in place made a table of kilobytes at every power, and
+# the garbage of x ^ 2 in a loop drew finger_paint's circles at a few frames a second (card finger-paint-slow)
+global pow_log_bits = []
+global pow_exp_bits = []
+pow_log_entry(index: int): int := {
+	if not pow_log_bits { pow_log_bits = hex_entries(pow_log_table_text()) }
+	pow_log_bits#(index + 1)
+}
+pow_exp_entry(index: int): int := {
+	if not pow_exp_bits { pow_exp_bits = hex_entries(pow_exp_table_text()) }
+	pow_exp_bits#(index + 1)
+}
+# every entry of a table, in order
+hex_entries(table: text): list := {
+	entries = []
+	for index in 0 ..< (byte_count(table) + 1) / hex_entry_width() { entries += [hex_entry(table, index)] }
+	entries
+}
 # 16 hex digits and a space
 hex_entry_width(): int := 17
 hex_entry(table: text, index: int): int := {
