@@ -78,6 +78,9 @@ jobs:
       run: |
         scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"
         echo "WARP_LIB=$PWD/lib" >> "$GITHUB_ENV"
+    # the registry's packages, which samples use by path (scripts/link-packages.sh locally)
+    - name: The packages
+      run: git clone -q --depth 1 https://github.com/pannous/warp-packages.git packages
     - name: Build the compiler folder and samples.js
       run: web/playground/build.sh
     # the same collection as scripts/browser-dry-run.sh's (build.sh collect_site)

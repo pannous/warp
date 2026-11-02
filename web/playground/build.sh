@@ -131,8 +131,14 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
-	# plus the compiler's lib/, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
+	# plus the compiler's lib/ and the packages, which git ignores
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; } | write_served_files "$page/served-files.js"
+}
+
+# the files of packages/ (scripts/link-packages.sh, the registry's folders linked in), which samples use by path,
+# `use "../../packages/colors/colors.warp"` (decision package-use-by-path)
+package_files() {
+	[ -d packages ] && find -L packages -type f -not -path '*/.git/*' -not -name .DS_Store || true
 }
 
 write_site_served_files() {
@@ -158,6 +164,7 @@ collect_site() {
 	git ls-files -z samples | while IFS= read -r -d '' file; do
 		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
 	done
+	package_files | while IFS= read -r file; do mkdir -p "$site/$(dirname "$file")" && cp -L "$file" "$site/$file"; done
 	echo "$DOMAIN" > "$site/CNAME"
 	# the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
 	write_site_served_files "$site"
