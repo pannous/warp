@@ -437,12 +437,25 @@ static int surface_ready(void* layer, int32_t width, int32_t height) {
 	}
 	return 1;
 }
+// the last painting a window out of sight could not show (its shader and values, else its pixels), shown when the
+// window comes into sight (warp_gpu_shown_again): a window opens behind the app in front, and a still picture paints once
+typedef struct { char* shader; char* values; uint8_t* pixels; void* layer; int32_t width, height; } Unshown;
+static Unshown unshown;
+static int out_of_sight; // the last present found the window out of sight
+static void unshown_kept(const char* shader, const char* values, const uint8_t* pixels, void* layer, int32_t width, int32_t height) {
+	free(unshown.shader), free(unshown.values), free(unshown.pixels);
+	unshown = (Unshown){0};
+	if (!out_of_sight) return;
+	size_t bytes = (size_t)width * height * PIXEL_BYTES;
+	unshown = (Unshown){shader ? strdup(shader) : NULL, values ? strdup(values) : NULL, pixels ? memcpy(malloc(bytes), pixels, bytes) : NULL, layer, width, height};
+}
 // the drawing shown in the window's surface, by the encoder, waiting for the display's next refresh (vsync); a window
 // out of sight (hidden, minimized, covered) shows nothing and is no failure
 static int presented(WGPUCommandEncoder encoder, const Drawing* drawing) {
 	WGPUSurfaceTexture current = WGPU_SURFACE_TEXTURE_INIT;
 	wgpuSurfaceGetCurrentTexture(surface, &current);
-	if (current.status == (WGPUSurfaceGetCurrentTextureStatus)WGPUSurfaceGetCurrentTextureStatus_Occluded) return submitted(encoder), 1;
+	out_of_sight = current.status == (WGPUSurfaceGetCurrentTextureStatus)WGPUSurfaceGetCurrentTextureStatus_Occluded;
+	if (out_of_sight) return submitted(encoder), 1;
 	if (current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal && current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
 		snprintf(failure, sizeof failure, "the window's surface gave no image to draw (status %d)", (int)current.status);
 		surface_width = 0;
@@ -487,6 +500,7 @@ int warp_gpu_show(const char* shader, const char* values, void* layer, int32_t w
 		image_done(&drawing, image);
 	} else shown = presented(encoder, &drawing);
 	drawing_released(&drawing);
+	unshown_kept(shader, values, NULL, layer, width, height);
 	return shown ? 0 : -1;
 }
 // pixels (RGBA, a byte each, row by row) shown in the window's layer at width × height; 0, else -1
@@ -502,7 +516,18 @@ int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int3
 	wgpuQueueWriteTexture(queue, &into, pixels, (size_t)width * height * PIXEL_BYTES, &rows, &extent);
 	int shown = picture_presented(wgpuDeviceCreateCommandEncoder(device, NULL), picture, width, height);
 	wgpuTextureRelease(picture);
+	unshown_kept(NULL, NULL, pixels, layer, width, height);
 	return shown ? 0 : -1;
+}
+// the painting kept from a window out of sight shown again (libwarp_window asks when its window comes into sight); 0
+// also when none waits, else -1
+int warp_gpu_shown_again(void) {
+	Unshown again = unshown;
+	unshown = (Unshown){0};
+	int shown = again.shader ? warp_gpu_show(again.shader, again.values, again.layer, again.width, again.height)
+		: again.pixels ? warp_gpu_show_pixels(again.pixels, again.layer, again.width, again.height) : 0;
+	free(again.shader), free(again.values), free(again.pixels);
+	return shown;
 }
 
 // --- gpu_compute(shader, arrays, workgroups) (card host-word): a WGSL compute shader, its entry point `main`, run over
