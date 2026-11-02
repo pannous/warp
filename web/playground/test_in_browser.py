@@ -27,6 +27,9 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 
 # --samples (scripts/samples-web.sh): every samples/**/*.warp in the page, its output against the native run's
 SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one a line, like test/samples.txt
+# a sample that fails on purpose says why on a line of its own, `# expected failure: deliberate parse errors`: EXP
+# instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE)
+EXPECTED_FAILURE = re.compile(r"^# expected failure: ", re.M)
 NATIVE_RESULTS = "test/samples.txt"  # scripts/samples.sh: WIN samples need a C window library, never run in a page
 # scripts/samples.sh: <sample with / as _>.txt, what the native run printed (samples-web.sh names the main checkout's)
 NATIVE_OUTPUTS = os.environ.get("WARP_NATIVE_OUTPUTS", "data/samples/out")
@@ -1213,6 +1216,8 @@ def page_report(source, path, page_url):
 def sample_answer(source, path):
 	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS"""
 	started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
+	if started != '"started"' and wait_for_playground():  # the page was still (re)loading: its API came since
+		started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
 	if started != '"started"':
 		return {"error": True, "stuck": None, "value": f"(the page did not start it: {(started or browser_complaint)[:200]})"}
 	deadline = time.time() + SAMPLE_ANSWER_SECONDS
@@ -1231,9 +1236,19 @@ def open_samples_page(page_url):
 	"""the page opened, isolated and its playground API defined (after a crashed renderer the first eval met none)"""
 	open_page(page_url)
 	wait_for_isolation()
+	if not wait_for_playground():
+		print(f"the page defined no playground API in {LAUNCH_SECONDS} s", file=sys.stderr)
+
+
+def wait_for_playground():
+	"""whether the page's playground API is defined, waiting up to LAUNCH_SECONDS for it (a sample that crashed the
+	renderer leaves a page that reloads, the sweep's next sample met no API: card playground-samples)"""
 	deadline = time.time() + LAUNCH_SECONDS
-	while browser("eval", "typeof playground") != '"object"' and time.time() < deadline:
+	while time.time() < deadline:
+		if browser("eval", "typeof playground") == '"object"':
+			return True
 		time.sleep(0.5)
+	return False
 
 
 def check_samples(paths, tree):
@@ -1258,6 +1273,8 @@ def check_samples(paths, tree):
 			compared = native.get(path) == "ok" and os.path.isfile(native_file)
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
 			status, detail = sample_verdict(report, native_output)
+			if status == "FAIL" and EXPECTED_FAILURE.search(source):
+				status = "EXP"
 			with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
 				shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
 		print(f"{status:<4} {path}" + (f": {detail}" if detail and status != "ok" else ""))
@@ -1270,7 +1287,7 @@ def check_samples(paths, tree):
 		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
 	# a run of some samples keeps the whole run's report too
 	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(details) + "\n")
-	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "TIME", "ran", "WIN")}
+	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "DIFF", "FAIL", "EXP", "TIME", "ran", "WIN")}
 	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
 
 
