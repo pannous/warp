@@ -74,13 +74,11 @@ is_word_keyed(e: Node): bool := (is_key(e, Op.Colon) or is_key(e, Op.None)) and 
 # list word aside (decision data-names: what the program binds is a value)
 names_function_only(body: Body, name: text): bool := name in module.functions and #module.functions[name].signature.parameters > 0 and name not in body.names and not is_global(body, name) and name not in module.variants
 is_bound(body: Body, name: text): bool := name in body.names or is_global(body, name) or name in module.functions or name in module.variants
-# a function of the program's, its libraries' or the runtime's (`sort xs` in `p{…}` is its call)
-is_function_name(name: text): bool := name in module.functions or module.runtime.has(name)
 # the words of e nothing binds, a field's name (`todo.text`) and an entry's key not counted
 unbound_words(body: Body, e: Node): list := {
 	if e is symbol { return if is_bound(body, name_of(e)) and not names_function_only(body, name_of(e)) then [] else [name_of(e)] }
 	# `f(x)`: the call of a function, its arguments the words to ask
-	if bracket_of(e) == "(" and #e > 0 and e#1 is symbol and is_function_name(name_of(e#1)) { return items_of(e)[1..].flat_map(item => unbound_words(body, item)) }
+	if bracket_of(e) == "(" and #e > 0 and e#1 is symbol and name_of(e#1) in module.functions { return items_of(e)[1..].flat_map(item => unbound_words(body, item)) }
 	# a lambda the lambdas pass lifted, `closure_new(closure_lambda_1, n)`: a function value (`div{ p{ () => n } }`)
 	if is_quote(e) or is_spliced_quote(e) or is_closure_value(e) { return [] }
 	# `.box` of a style sheet reads no field: a selector, its name a word

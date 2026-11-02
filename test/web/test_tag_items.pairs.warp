@@ -1,6 +1,5 @@
 # An element's content calls a phrase headed by a bound function; an attribute's value keeps its words as data
 # (decision tag-items-calls)
 
-'use markup; xs = [1, 2]; to_html(p{ reverse xs })'	'<p>[2, 1]</p>'
 'use markup; greet(name) := "hi " + name; to_html(p{ greet "Ann" })'	'<p>hi Ann</p>'
 'use markup; to_html(div { p{"x"} })'	'<div><p>x</p></div>'
