@@ -1219,12 +1219,14 @@ varying_values(): map := {
 	if not rule_varying_known {
 		rule_varying = varying_of(statements_in(rule_program))
 		rule_written_later = {}
-		for name in written_later(rule_program, no) { rule_written_later[name] = yes }
+		main_level = statements_in(rule_program).map(changed_variable).filter(name => name != ø)
+		for name in written_later(rule_program, no) { if name in main_level { rule_written_later[name] = yes } }
 		rule_varying_known = yes
 	}
 	rule_varying
 }
-# the variables a handler or a block running later writes (`on click { count += 1 }`): code reading one where it runs
+# the main-level variables a handler or a block running later writes (`count = 0 … on click { count += 1 }`; a
+# function's local, `listed` of markup's `option{ value: …; html_content(listed) }`, is none): code reading one where it runs
 # is varying, but a word itself stays as varying_of says (a `h := …` reading it is no function, lib/sugar/heads.warp)
 later_written(): map := {
 	varying_values()
