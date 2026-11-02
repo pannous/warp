@@ -27,3 +27,7 @@ rewrite (def $d) => $d
 rewrite ($f of a $t = $e) => ($f(it: $t) := $e) where $t is type
 rewrite ($f of an $t = $e) => ($f(it: $t) := $e) where $t is type
 rewrite ($f of $t = $e) => ($f(it: $t) := $e) where $t is type
+# Ruby's and Swift's block given to a method, `xs.map { |x| x + 1 }`, `xs.sum { |x| x * 2 }` (card emitter-refuses-block):
+# the block's one lambda (the parser reads the bars, `{ |a, b| a + b }` too) is the call's last argument, `xs.map(x => x + 1)`, early, so the
+# overloads (arity_overloads) see the lambda
+rewrite ($x.$f $b) => $x.$f($l) where $f is symbol and $b is block and $l = block_lambda($b)
