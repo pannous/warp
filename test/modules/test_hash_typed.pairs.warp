@@ -1,0 +1,4 @@
+# notes/stdlib.md: hash returns a SHA-256 hex text and CRC-32 number for text or bytes
+'use hash; sha256("abc")'	"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+'use hash; crc32("abc")'	891568578
+'use hash; crc32([104, 0, 105])'	2381027958
