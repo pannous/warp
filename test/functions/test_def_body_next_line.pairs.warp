@@ -1,0 +1,20 @@
+# a def/fn header ending its line takes its body below: a `{…}` opening the next line (Allman) or the indented lines,
+# as `if c` does (card def-body-next-line)
+'def f(x)
+{ x * 2 }
+f(3)'	6
+'def f(x) // double
+{ x * 2 }
+f(3)'	6
+'fn f(x)
+{
+  x * 2
+}
+f(3)'	6
+'def f(x)
+  x * 2
+f(3)'	6
+# a call followed by a block on the next line stays a call and a block
+'f(x) := x
+f(3)
+{ 9 }'	{9}
