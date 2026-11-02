@@ -603,8 +603,8 @@ function_positions_of(written: list): map := {
 # a parameter declared a function, or an untyped one the body calls: `matrix(r, c, f) := [[f() …]]` takes a function,
 # so a function of no parameters given for it is passed, not called (`matrix(2, 4, weight)`)
 takes_function_at(parts: Definition, parameter: Node): bool := is_function_parameter(parameter) or (parameter is symbol and called_in(parts.body, parameter))
-called_in(body: Node, name: Node): bool := nodes_in(body).any(part => calls(part, name))
-calls(n: Node, name: Node): bool := match n {
+called_in(body: Node, name: Node): bool := nodes_in(body).any(part => is_call_of(part, name))
+is_call_of(n: Node, name: Node): bool := match n {
 	List(items, Bracket.Round, Separator.None): #items > 0 and items#1 == name
 	_: no
 }
