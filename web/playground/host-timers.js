@@ -19,7 +19,7 @@ function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) 
 	return 7 * DAY_MILLISECONDS;
 }
 
-// a run's timers started: `fire(id)` runs the program's timer_fired(id) for each when it is due (runTimer); a program
+// a run's timers started: `fire(id)` runs the program's timer_fired(id) for each when it is due (driver.js timerFired); a program
 // without that export is refused loudly, once; stopTimers ends them
 function startTimers(holder, fire) {
 	const handles = [];

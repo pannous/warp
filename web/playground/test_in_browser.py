@@ -161,6 +161,13 @@ PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who
 PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
+# scripts/build-site.sh: a markup program built as a static site, its page loaded and its button clicked (card
+# blockcompiler-entries: built sites on page_render/page_event); checked last, it leaves the playground's page
+BUILT_SITE = "(a site scripts/build-site.sh built shows its page and runs its handlers)"
+BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } }\n'
+BUILT_SITE_FOLDER = "data/site-check"
+BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
+BUILT_SITE_WAIT_MS = 20000
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -687,6 +694,31 @@ def page_elements_wrong():
 	return [] if shown == PAGE_ELEMENTS_SHOWN else [f"typed {PAGE_ELEMENTS_NAME!r} and clicked: shown {shown!r}, expected {PAGE_ELEMENTS_SHOWN!r}"]
 
 
+def built_site_wrong():
+	"""the site's heading after main and after a click on its button"""
+	program = os.path.join(REPOSITORY, BUILT_SITE_FOLDER, "app.warp")
+	os.makedirs(os.path.dirname(program), exist_ok=True)
+	with open(program, "w") as file:
+		file.write(BUILT_SITE_CODE)
+	built = subprocess.run([os.path.join(REPOSITORY, "scripts", "build-site.sh"), program], capture_output=True, text=True)
+	if built.returncode:
+		return [f"scripts/build-site.sh failed: {(built.stderr or built.stdout).strip()[-300:]}"]
+	browser("open", f"http://127.0.0.1:{PORT}/{BUILT_SITE_FOLDER}/site/index.html")
+	shown = browser("eval", f"""(async () => {{
+		const heading = async before => {{
+			const deadline = Date.now() + {BUILT_SITE_WAIT_MS};
+			const text = () => document.querySelector("#warp-root h1")?.textContent;
+			while (text() === before && Date.now() < deadline) await new Promise(done => setTimeout(done, 100));
+			return text() ?? null;
+		}};
+		const first = await heading(undefined);
+		document.querySelector("#warp-root button")?.click();
+		return JSON.stringify([first, await heading(first)]);
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
+	return [] if shown == BUILT_SITE_SHOWN else [f"headings {shown!r}, expected {BUILT_SITE_SHOWN!r}"]
+
+
 def clipboard_read_wrong():
 	"""a program reads what the page copied; skipped loudly when the browser refuses the page its own clipboard"""
 	refused = browser("eval", f"""(async () => {{
@@ -1128,7 +1160,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if not page_url and not site else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
