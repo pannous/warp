@@ -8,6 +8,7 @@
 use os
 use sqlite3
 use signals
+use units
 
 rewrite stored $name: [$kind] in $table => $name = stored_table($table, $kind)
 rewrite stored $name: [$kind] => $name = stored_table($table, $kind) where $table = spelled($name)
@@ -32,7 +33,9 @@ IN_MEMORY = ":memory:"
 // the table of the values kept under a name, `stored visits default 0`, `database.score`
 VALUES_TABLE = "stored_values"
 // the column of a field's value, by the type its default has
-COLUMN_TYPES = {bool: "INTEGER", int: "INTEGER", float: "REAL", text: "TEXT"}
+COLUMN_TYPES = {bool: "INTEGER", int: "INTEGER", float: "REAL", text: "TEXT", any: ""}
+// the unit of each column holding quantities, by table and field: a quantity's column holds its amount in SI units
+UNITS_TABLE = "stored_units"
 // a stored instance's row id field, SQLite's rowid
 ROW_ID = "id"
 ROWID = "rowid"
@@ -53,8 +56,8 @@ opened_database() := {
 without_extension(program: text) := if program.ends_with(PROGRAM_EXTENSION) then program[0 ..< count(program) - count(PROGRAM_EXTENSION)] else program
 // a name as SQL quotes it, whatever it is
 quoted_name(name: text) := "\"" + name.replace("\"", "\"\"") + "\""
-// the type of a field's default value: bool, int, float or text
-value_type(value: any) := if value is bool then "bool" else if value is int then "int" else if value is float then "float" else "text"
+// the type of a field's default value: bool, int, float, text, or any for none (`distance: km` defaults to ø)
+value_type(value: any) := if value == ø then "any" else if value is bool then "bool" else if value is int then "int" else if value is float then "float" else "text"
 
 // the table holding the class's instances, made, and widened by the fields it lacks, from the class's fields: the rows
 // it holds take a new field's default. A row's id is SQLite's rowid, no column; the columns' fields
@@ -77,9 +80,10 @@ migrated(name: text, model: any) := {
 }
 
 // the instance given a row's values: its fields from the row's columns in the class's order, its id the row's
-row_read(made: any, fields: list, row: list) := {
+row_read(made: any, fields: list, row: list, units: map) := {
 	for i in 1 to count(fields) {
 		value = row#i
+		if units.has(fields#i) and value != ø { value = quantity_in(value, units[fields#i]) }
 		made[fields#i] = if made[fields#i] is bool then value == 1 else value
 	}
 	if has_row_id(made) { made[ROW_ID] = row#(count(fields) + 1) }
@@ -92,7 +96,7 @@ selected(fields: list) := (fields.map(quoted_name) + [ROWID]).join(", ")
 // the table's rows as instances of the class, each kept for a rollback
 stored_table(name: text, model: any) := {
 	fields = migrated(name, model)
-	rows(opened_database(), "select " + selected(fields) + " from " + quoted_name(name)).map(row => kept_instance(row_read(model(), fields, row)))
+	rows(opened_database(), "select " + selected(fields) + " from " + quoted_name(name)).map(row => kept_instance(row_read(model(), fields, row, units_of(name))))
 }
 kept_instance(instance: any) := {
 	kept_instances += [instance]
@@ -103,7 +107,7 @@ kept_instance(instance: any) := {
 stored_add(name: text, instance: any) := {
 	fields = migrated(name, type(instance))
 	marks = fields.map(field => "?").join(", ")
-	run_bound(opened_database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", fields.map(field => instance[field]))
+	run_bound(opened_database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", column_values(name, instance, fields))
 	if has_row_id(instance) { instance[ROW_ID] = sqlite3_last_insert_rowid(opened_database()) }
 	kept_instance(instance)
 }
@@ -112,8 +116,30 @@ stored_written(instance: any, value: any) := {
 	name = kept_tables["${type(instance)}"]
 	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return value }
 	fields = keys(instance).filter(field => field != ROW_ID)
-	run_bound(opened_database(), "update " + quoted_name(name) + " set " + fields.map(field => quoted_name(field) + " = ?").join(", ") + " where " + ROWID + " = ?", fields.map(field => instance[field]) + [instance[ROW_ID]])
+	run_bound(opened_database(), "update " + quoted_name(name) + " set " + fields.map(field => quoted_name(field) + " = ?").join(", ") + " where " + ROWID + " = ?", column_values(name, instance, fields) + [instance[ROW_ID]])
 	value
+}
+// the fields' values as their columns hold them: a quantity as its amount in SI units, a float (REAL), its unit kept for the column
+column_values(name: text, instance: any, fields: list) := fields.map(field => column_value(name, field, instance[field]))
+column_value(name: text, field: text, value: any) := {
+	if not (value is Quantity) { return value }
+	run_bound(units_database(), "insert or replace into " + quoted_name(UNITS_TABLE) + " (tbl, field, unit) values (?, ?, ?)", [name, field, value.unit])
+	value.float()
+}
+units_database() := {
+	run_query(opened_database(), "create table if not exists " + quoted_name(UNITS_TABLE) + " (tbl TEXT, field TEXT, unit TEXT, primary key (tbl, field))")
+	opened_database()
+}
+// the unit of each of the table's columns holding quantities, by field
+units_of(name: text) := {
+	found = {}
+	for row in rows_bound(units_database(), "select field, unit from " + quoted_name(UNITS_TABLE) + " where tbl = ?", [name]) { found[row#1] = row#2 }
+	found
+}
+// an amount in SI units as the quantity shown in the unit
+quantity_in(amount: number, unit: text) := {
+	one = unit_named(unit)
+	measured(amount, one.dims, unit, one.scale)
 }
 // the instance's row deleted, the instance keeping its fields with id 0; the instance
 stored_removed(name: text, instance: any) := {
@@ -143,7 +169,7 @@ row_restored(instance: any) := {
 	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return instance }
 	fields = keys(instance).filter(field => field != ROW_ID)
 	found = rows_bound(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
-	if count(found) == 0 { instance[ROW_ID] = 0 } else { row_read(instance, fields, found#1) }
+	if count(found) == 0 { instance[ROW_ID] = 0 } else { row_read(instance, fields, found#1, units_of(name)) }
 	instance
 }
 

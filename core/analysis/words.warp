@@ -3,7 +3,7 @@
 
 # the words naming a type a value is held as, lowercase (Rust twin: analyzer type_word_kind, from BUILTIN_TYPES in
 # rust-harness:src/lowering/types/type_tests.rs and FIXED_WIDTHS in rust-harness:src/numbers/fixed_width.rs)
-type_words = ["int", "nat", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32",
+type_words = ["int", "nat", "integer", "long", "i64", "i32", "rational", "exact", "float", "double", "f64", "f32",
 	"float32", "float64", "fast", "number", "text", "str", "string", "codepoint", "char", "character", "bool", "boolean", "symbol",
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
 	"uint64"]
@@ -19,7 +19,7 @@ enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·ste
 	ViewOpaque = "view·opaque", ViewAttribute = "view·attribute", DataSpliced = "data·spliced", GlueName = "glue·name",
 	GlueHidden = "glue·hidden", MatchSubject = "match·subject", MatchBound = "match·bound", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",
-	UncaughtError = "uncaught·error", CaughtError = "caught·error", StoredValue = "store·value" }
+	UncaughtError = "uncaught·error", CaughtError = "caught·error", StoredValue = "store·value", InstanceOf = "instance·of" }
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
 implicit_parameter = "it"
 # the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
@@ -74,7 +74,7 @@ binding_operators = assigning_operators + [":=", ":"]
 type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
 	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
-	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", real: "empty", exact: "empty"}
+	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", exact: "empty"}
 
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word

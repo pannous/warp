@@ -1,5 +1,9 @@
 # A range as a value (notes/layers.md, sugar): `a to b` (also `a … b`) is the list of the ints from a through b, `a..b`
 # the same without b, each end computed once. A loop over a range counts without the list (lib/sugar/iteration.warp), and the
-# rest of a list pattern, `rest...`, has no end.
+# rest of a list pattern, `rest...`, has no end. A range of whole numbers holds only its two ends (decision
+# lazy-range-value, runtime/lists.warp range_value): count, #, sum and r#i answer from them, any other list word makes
+# its items
+rewrite $a to $b => range_value($a, $b) where $a is int and $b is not missing
+rewrite $a .. $b => range_value($a, $b - 1) where $a is int and $b is not missing
 rewrite $a to $b => ($xs = ø; $i = $a; $end = $b; while $i <= $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing
 rewrite $a .. $b => ($xs = ø; $i = $a; $end = $b; while $i < $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing

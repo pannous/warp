@@ -10,8 +10,15 @@
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
 set -euo pipefail
 
-# the installed compilers: lib/ beside the warp on $PATH (~/dev/bin/lib links to the current build), else WARP_LIB
-INSTALLED_LIBRARY="${WARP_LIB:-$(dirname "$(command -v warp)")/lib}"
+page="$(cd "$(dirname "$0")" && pwd)"
+repository="$(cd "$page/../.." && pwd)"
+# the compilers: WARP_LIB, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else the
+# installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
+OWN_LIBRARY="$repository/lib"
+[ -f "$OWN_LIBRARY/warp.wasm.inputs" ] || OWN_LIBRARY="$(dirname "$(command -v warp)")/lib"
+INSTALLED_LIBRARY="${WARP_LIB:-$OWN_LIBRARY}"
+# the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
+COMPILER_SOURCES=(core 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
 NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dylib' --exclude='*.so' --exclude='*.kept'
 	--exclude='*.stale' --exclude='*.inputs' --exclude='warp-self.wasm*' --exclude='data/')
@@ -22,13 +29,24 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 	reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
 	keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
+# the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources)
+PRELOADED_SOURCES=('*.warp' 'sugar/*.warp' 'modules/words.tsv')
+# the exports of warp.wasm the page calls (driver.js, values.js): the browser's copy keeps only these, and Binaryen drops
+# what they never reach and the name section (1.35 → 1.26 MB gzipped); an export missing here fails the tour loudly
+COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at returned_error
+	error_of new_empty new_int new_bool new_float new_codepoint new_text new_symbol new_key new_list new_type new_bytes new_ints
+	new_floats new_spelled_key new_spelled_list item_count item_at int_item_at float_item_at gpu_list_place gpu_list_cell
+	is_textual)
+# core/commands/commands.warp WASM_OPT's features: Binaryen's -all would add exact references Firefox refuses
+WASM_OPT_FEATURES=(--enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext
+	--enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const
+	--enable-multimemory --enable-exception-handling)
 
-page="$(cd "$(dirname "$0")" && pwd)"
-repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
 build_compiler() {
 	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
+	refuse_lagging_compiler
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
 	# the tree's library over it, so the page runs this checkout's lib/ before an install: a module whose source
@@ -39,7 +57,67 @@ build_compiler() {
 		name=$(basename "$module" .wasm)
 		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
 	done
+	write_sources "$page/warp-lib"
+	slim_compiler "$page/warp-lib/warp.wasm"
 	echo "built $page/warp-lib from $INSTALLED_LIBRARY and lib/ ($(du -sh "$page/warp-lib" | cut -f1))"
+}
+
+# the compiler's commit (warp.wasm.inputs) must have this checkout's COMPILER_SOURCES, else the page runs an older
+# language than its lib/ (card playground-gaps: ~30 samples failed on "no field coefficient"); WARP_LAGGING_COMPILER=1
+# takes it anyway
+refuse_lagging_compiler() {
+	local commit
+	commit=$(sed -n 's/.* commit=\([^ ]*\).*/\1/p' "$INSTALLED_LIBRARY/warp.wasm.inputs" 2>/dev/null || true)
+	if [ -z "$commit" ]; then echo "warning: $INSTALLED_LIBRARY/warp.wasm.inputs names no commit: the compiler may lag lib/" >&2; return; fi
+	git diff --quiet "$commit" -- "${COMPILER_SOURCES[@]}" 2>/dev/null && return
+	[ "${WARP_LAGGING_COMPILER:-}" = 1 ] && { echo "warning: $INSTALLED_LIBRARY/warp.wasm lags this checkout (built from $commit), taken anyway" >&2; return; }
+	echo "error: $INSTALLED_LIBRARY/warp.wasm was built from $commit, whose core/ or lib/ differs from this checkout's: the page would run its lag. scripts/rebuild.sh pure $repository builds this checkout's own, which build.sh takes (or WARP_LAGGING_COMPILER=1)" >&2
+	exit 1
+}
+
+# the compiler with only the COMPILER_EXPORTS, without what they never reach and without names; without wasm-opt as it is
+slim_compiler() {
+	command -v wasm-opt >/dev/null || { echo "warning: no wasm-opt (brew install binaryen): $1 keeps all its exports" >&2; return; }
+	python3 -c 'import sys
+module, keep = sys.argv[1], set(sys.argv[2:])
+data = open(module, "rb").read()
+def number(at):
+	value = shift = 0
+	while True:
+		byte = data[at]; at += 1; value |= (byte & 0x7f) << shift; shift += 7
+		if byte < 0x80: return value, at
+def encoded(value):
+	out = bytearray()
+	while True:
+		byte, value = value & 0x7f, value >> 7
+		out.append(byte | (0x80 if value else 0))
+		if not value: return bytes(out)
+EXPORT_SECTION = 7
+out, at = bytearray(data[:8]), 8
+while at < len(data):
+	section, (size, body) = data[at], number(at + 1)
+	if section == EXPORT_SECTION:
+		count, entry = number(body)
+		kept = []
+		for _ in range(count):
+			length, name = number(entry)
+			_, after = number(name + length + 1)
+			if data[name:name + length].decode() in keep: kept.append(data[entry:after])
+			entry = after
+		exports = encoded(len(kept)) + b"".join(kept)
+		out += bytes([section]) + encoded(len(exports)) + exports
+	else:
+		out += data[at:body + size]
+	at = body + size
+open(module, "wb").write(out)' "$1" "${COMPILER_EXPORTS[@]}"
+	wasm-opt "${WASM_OPT_FEATURES[@]}" --remove-unused-module-elements --strip-debug "$1" -o "$1"
+}
+
+# <lib>/sources.json: {name: text} of the PRELOADED_SOURCES
+write_sources() {
+	(cd "$1" && python3 -c 'import glob, json, sys
+names = sorted(name for pattern in sys.argv[1:] for name in glob.glob(pattern))
+json.dump({name: open(name, encoding="utf-8").read() for name in names}, open("sources.json", "w"), ensure_ascii=False)' "${PRELOADED_SOURCES[@]}")
 }
 
 # served-files.js: the files the server has, so the compiler's module and header searches ask only for those that exist
@@ -53,8 +131,14 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
-	# plus the compiler's lib/, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
+	# plus the compiler's lib/ and the packages, which git ignores
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; } | write_served_files "$page/served-files.js"
+}
+
+# the files of packages/ (scripts/link-packages.sh, the registry's folders linked in), which samples use by path,
+# `use "../../packages/colors/colors.warp"` (decision package-use-by-path)
+package_files() {
+	[ -d packages ] && find -L packages -type f -not -path '*/.git/*' -not -name .DS_Store || true
 }
 
 write_site_served_files() {
@@ -80,6 +164,7 @@ collect_site() {
 	git ls-files -z samples | while IFS= read -r -d '' file; do
 		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
 	done
+	package_files | while IFS= read -r file; do mkdir -p "$site/$(dirname "$file")" && cp -L "$file" "$site/$file"; done
 	echo "$DOMAIN" > "$site/CNAME"
 	# the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
 	write_site_served_files "$site"

@@ -117,7 +117,7 @@ comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers", "tasks"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
@@ -173,6 +173,9 @@ global rule_method_part = ø
 # the block of the word key being walked and the item of it walked next
 global rule_item = ø
 global rule_item_block = ø
+# how many structures `div{…}` the walk is inside; whether in an attribute's value of one, `animation: pop 400ms`
+global rule_tag_depth = 0
+global rule_in_attribute = no
 global rule_next_item = ø
 global rule_binding = []
 # the word whose definition the rules walk inside: a rule producing that word leaves its definition as written, so
@@ -1099,6 +1102,9 @@ condition_holds(condition: Node, bound: map): bool := {
 	}
 	if is_takes(condition) {
 		hole = rule_hole(condition#1)
+		# in an attribute's value a library word before a value stays data, `li{ animation: pop 400ms }` the CSS
+		# keyframes pop; in an element's content it is a call, `p{ reverse xs }` (decision tag-items-calls)
+		if rule_in_attribute and bound[hole] is symbol and not program_word(name_of(bound[hole])) { return no }
 		if not first_parameter_fits(bound[hole], name_of(condition#3)) { return no }
 		# `$f takes one` binds the word the synonym calls: `size xs` is count(xs)
 		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(unaliased(name_of(bound[hole]))), bound[hole]) }
@@ -1531,8 +1537,16 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		rule_next_item = ø
 		holds_items = rule_item_block != ø and n == rule_item_block
 		if holds_items { rule_item_block = ø }
-		if is_word_block(n) { rule_item_block = value_of(n) }
+		tag = is_word_block(n)
+		outer_attribute = rule_in_attribute
+		if tag {
+			rule_item_block = value_of(n)
+			rule_tag_depth += 1
+			rule_in_attribute = no
+		} else if rule_tag_depth > 0 and is_key(n, Op.Colon) { rule_in_attribute = yes }
 		walked = children(n, x => walked_item(x, holds_items, f, inner))
+		if tag { rule_tag_depth -= 1 }
+		rule_in_attribute = outer_attribute
 		rule_maps = maps
 		outer_item = rule_item
 		rule_item = if at_item then walked else ø

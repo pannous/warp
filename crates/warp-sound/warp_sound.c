@@ -6,6 +6,7 @@
 #define MA_NO_ENCODING
 #define MA_NO_GENERATION
 #include "miniaudio.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 enum { MOST_SOUNDS = 256, HEARD_OUT_POLL_MS = 10 };
@@ -114,6 +115,60 @@ typedef struct {
 static decoded_file decoded[MOST_DECODED];
 static int decoded_count;
 
+// An MP3's true length (decision mp3-true-length), as the page's decodeAudioData gives it: the Xing/Info frame's LAME
+// tag counts the frames and names the encoder's delay and padding, silence the decoder hands out around the music;
+// miniaudio decodes the Info frame and that silence too
+enum { MP3_HEADER_BYTES = 1 << 16, XING_FRAMES = 1, XING_BYTES = 2, XING_TOC = 4, XING_QUALITY = 8, LAME_GAPS_AT = 21 };
+typedef struct {
+	ma_uint64 samples; // per channel, at the file's own rate
+	ma_uint32 padding, rate;
+} mp3_length;
+
+static ma_uint32 big_endian(const unsigned char* at) { return (ma_uint32)at[0] << 24 | at[1] << 16 | at[2] << 8 | at[3]; }
+static ma_uint32 id3_size(const unsigned char* at, size_t size) {
+	if (size < 10 || memcmp(at, "ID3", 3) != 0) return 0;
+	ma_uint32 tag = (ma_uint32)(at[6] & 0x7F) << 21 | (at[7] & 0x7F) << 14 | (at[8] & 0x7F) << 7 | (at[9] & 0x7F);
+	return 10 + tag + (at[5] & 0x10 ? 10 : 0);
+}
+// the length the tag names; 0 samples for a file without one (a WAV, an MP3 of no LAME tag)
+static mp3_length mp3_tagged_length(const char* path) {
+	static const ma_uint32 RATES[4][3] = {{11025, 12000, 8000}, {0}, {22050, 24000, 16000}, {44100, 48000, 32000}};
+	mp3_length length = {0};
+	unsigned char* bytes = malloc(MP3_HEADER_BYTES);
+	FILE* file = bytes ? fopen(path, "rb") : NULL;
+	size_t size = file ? fread(bytes, 1, MP3_HEADER_BYTES, file) : 0;
+	if (file) fclose(file);
+	size_t frame = id3_size(bytes, size);
+	if (frame + 4 <= size && bytes[frame] == 0xFF && (bytes[frame + 1] & 0xE6) == 0xE2) {
+		int version = bytes[frame + 1] >> 3 & 3, rate_index = bytes[frame + 2] >> 2 & 3, mono = bytes[frame + 3] >> 6 == 3;
+		int mpeg1 = version == 3;
+		size_t xing = frame + 4 + (mpeg1 ? (mono ? 17 : 32) : (mono ? 9 : 17));
+		if (rate_index < 3 && xing + 12 <= size && (memcmp(bytes + xing, "Xing", 4) == 0 || memcmp(bytes + xing, "Info", 4) == 0)) {
+			ma_uint32 flags = big_endian(bytes + xing + 4);
+			size_t lame = xing + 8 + (flags & XING_FRAMES ? 4 : 0) + (flags & XING_BYTES ? 4 : 0) + (flags & XING_TOC ? 100 : 0) + (flags & XING_QUALITY ? 4 : 0);
+			if (flags & XING_FRAMES && lame + LAME_GAPS_AT + 3 <= size) {
+				const unsigned char* gaps = bytes + lame + LAME_GAPS_AT;
+				ma_uint32 delay = gaps[0] << 4 | gaps[1] >> 4, padding = (gaps[1] & 0x0F) << 8 | gaps[2];
+				ma_uint64 samples = (ma_uint64)big_endian(bytes + xing + 8) * (mpeg1 ? 1152 : 576);
+				if (samples > delay + padding) length = (mp3_length){samples - delay - padding, padding, RATES[version][rate_index]};
+			}
+		}
+	}
+	free(bytes);
+	return length;
+}
+// the decoded frames cut to the tagged length: the Info frame and the delay off the front, the padding off the end
+static ma_uint64 trimmed_to_length(const char* path, ma_int16* values, ma_uint64 frames, int frame_size, ma_uint32 rate) {
+	mp3_length length = mp3_tagged_length(path);
+	if (!length.samples || !length.rate) return frames;
+	double scale = (double)rate / length.rate;
+	ma_uint64 kept = (ma_uint64)(length.samples * scale + 0.5), tail = (ma_uint64)(length.padding * scale + 0.5);
+	if (kept + tail > frames) return frames;
+	ma_uint64 leading = frames - kept - tail;
+	memmove(values, values + leading * frame_size, kept * frame_size * sizeof *values);
+	return kept;
+}
+
 static int decoded_found(const char* path, int rate, int channels) {
 	for (int i = 0; i < decoded_count; i++)
 		if (decoded[i].asked_rate == rate && decoded[i].asked_channels == channels && strcmp(decoded[i].path, path) == 0) return i;
@@ -142,6 +197,7 @@ int warp_sound_decode(const char* path, int rate, int channels) {
 		ma_decoder_read_pcm_frames(&decoder, values + frames * frame_size, DECODE_CHUNK_FRAMES, &read);
 		frames += read;
 	} while (read == DECODE_CHUNK_FRAMES);
+	frames = trimmed_to_length(path, values, frames, frame_size, decoder.outputSampleRate);
 	decoded[decoded_count] = (decoded_file){strdup(path), rate, channels, (int)decoder.outputSampleRate, frame_size, values, frames};
 	decoded_count++;
 	ma_decoder_uninit(&decoder);

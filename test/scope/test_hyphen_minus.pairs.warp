@@ -1,0 +1,7 @@
+# hyphen as minus (card kebab-or-minus): an unbound hyphenated name whose parts are bound is their difference
+'a=5; b=1; a-b'	4
+'f(a,b):=a-b; f(5,1)'	4
+'j=5; i=2; j-i'	3
+'a=5; b=1; c=1; a-b-c'	3
+'a-b=7; a=5; b=1; a-b'	7
+'a=5; b=1; a - b'	4
