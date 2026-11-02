@@ -894,10 +894,13 @@ type_module_providers(): map := {
 root_words(program: Node): list := if not own_heads(program).has("sqrt") and nodes_in(program).any(n => is_group(n) and #n == 2 and n#1 == symbol("sqrt") and not surely_float(n#2)) then [exact_root_word] else []
 # `2.5`, `x as f64`, `(n as float)`: a value written a float, whose root is the float's (a primitive program's too)
 surely_float(n: Node): bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
-# the classes the program converts to, tests for or types a name with, `3 as real`, `x is real`, `b: real`: a type
+# the classes the program converts to, tests for or types a name with (written_types), `3 as real`, `x is real`, `b: real`: a type
 # module's class comes with its conversions (`x as text` brings no text module)
-type_naming_ops = [Op.As, Op.Is, Op.Colon]
-named_types(program: Node): list := nodes_in(program).filter(n => type_naming_ops.any(op => is_key(n, op)) and value_of(n) is symbol and (is_capitalized(name_of(value_of(n))) or not is_tested_type_word(name_of(value_of(n))))).map(n => name_of(value_of(n)))
+type_naming_ops = [Op.As, Op.Is]
+named_types(program: Node): list := {
+	named = nodes_in(program).filter(n => type_naming_ops.any(op => is_key(n, op)) and value_of(n) is symbol).map(n => name_of(value_of(n)))
+	(named + written_types(program).map(written => written#1)).filter(name => is_capitalized(name) or not is_tested_type_word(name))
+}
 # the words the program calls, `f(x)` and `x.f(y)`, each once
 called_words(n: Node): list := {
 	found = {}

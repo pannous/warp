@@ -785,6 +785,8 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 # its fields, or a case of T), a node; a value known only at run time is checked then (runtime.warp object_checked
 # fails with "not a T", as Rust's), one of another kind refused
 def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
+	# `x: real = 1/3` holds any real number, an int and a float as well as an exact real (decision real-canonical)
+	if type_name == REAL_CLASS and value.kind in [ValueKind.Int, ValueKind.Float, ValueKind.Node] { return assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value))) }
 	if value.kind != ValueKind.Node and value.kind != pending { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
