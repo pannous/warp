@@ -2,15 +2,6 @@
 // imports of a compiler instance (warpHost, for the playground's workers), and the blocks a program builds at run time
 // (run_block), compiled by a compiler instance of their own
 
-// a page event in the last listening run: the page value its handler leaves, else the handler's own outcome (worker.js
-// showHandled shows the same)
-function pageEventOutcome(hooks, event, detail) {
-	if (!listeningRun) return { failure: `no running page handles ${event}` };
-	const handled = runPageEvent(listeningRun, hooks, event, detail);
-	const binding = listeningRun.exports[PAGE_VALUE_EXPORT];
-	return handled.result && binding ? outcomeOf(listeningRun, hooks, binding) : handled;
-}
-
 // The compiler that runs the blocks a program builds at run time (run_block): loaded on first use, an instance of its own,
 // so it never re-enters the compiler whose program is running. A page sets BLOCK_COMPILER_URL to its compiler's URL, or
 // BLOCK_COMPILER to a function giving the exports of a new compiler instance (test-worker.js: the test binary itself).
@@ -105,11 +96,6 @@ function warpHost(memory, hooks, awaited = false) {
 	return {
 		run: awaited && JSPI ? new WebAssembly.Suspending(run) : run,
 		take: into => new Uint8Array(memory().buffer, into, pendingOutcome.length).set(pendingOutcome),
-		page_event: (eventPointer, eventLength, detailPointer, detailLength) => {
-			const text = (pointer, length) => utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length));
-			pendingOutcome = utf8.encode(JSON.stringify(pageEventOutcome(hooks, text(eventPointer, eventLength), JSON.parse(text(detailPointer, detailLength)))));
-			return pendingOutcome.length;
-		},
 		now_ms: () => Date.now(),
 		panicked: (pointer, length) => hooks.panicked(utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length))),
 		// a file for the compiler (module, package source, C header): a path of the served repository, of the page, or a URL
@@ -145,13 +131,8 @@ addHostPart({
 			}
 			return buildValue(module, report.result);
 		},
-		// the code of a text known only at run time (src/host.rs parse_code): parsed by the same compiler instance
-		parse_code: text => {
-			const module = program();
-			const report = evalBlock(hooks, JSON.stringify({ parse: readNode(module, text) }));
-			if (report.error !== undefined) return errorInProgram(module, report.error);
-			return buildValue(module, report.result);
-		},
+		// the code of a text known only at run time: the page's warp.wasm parses it (driver.js codeParsed)
+		parse_code: text => codeParsed(program(), text),
 		// the path a file word opens, its links followed (core/runtime/extended/wasi.warp opened_entry): the browser's
 		// files have no links, -1 says the path is itself
 		real_path: () => -1,

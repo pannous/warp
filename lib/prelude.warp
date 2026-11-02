@@ -42,7 +42,10 @@ count(m: map): int from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
-fetch(url: text, options...): text from emitter
+// fetch(url): the text a GET of the url answers, through the adapter std_io as lib/net.warp's post (the page answers
+// it with a request; the native warp has no HTTP client yet and says so: no declared result, so that error comes through
+// as itself, not as a failed cast to text)
+fetch(url: text) := std_io("net", "get", [url])
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
 map(xs: list, f: function): list from emitter
@@ -181,6 +184,25 @@ count_in(y, x) := if y is text then count_of(y, "" + x) else count_item(y, x)
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
 first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
+// `sort(words, {it.length})`: the items ordered by the key the function gives each (lib/sugar/calls.warp)
+sorted_by_key(xs: list, key: function): list := list_sorted_by(xs, xs.map(key))
+// `people.sort_by(p => -p.age)`
+sort_by(xs: list, key: function): list := sorted_by_key(xs, key)
+// `sort(xs, (a, b) => a > b)`: the items in the order the function of two gives, yes where a goes before b; equal
+// items keep their order (a merge sort)
+sorted_in_order(xs: list, before: function): list := {
+	if #xs < 2 { return xs }
+	middle = int(#xs / 2)
+	left = sorted_in_order([xs#i for i in 1 to middle], before)
+	right = sorted_in_order([xs#i for i in middle + 1 to #xs], before)
+	out = []
+	i = 1
+	j = 1
+	while i <= #left or j <= #right {
+		if j > #right or (i <= #left and not before(right#j, left#i)) { out += [left#i]; i += 1 } else { out += [right#j]; j += 1 }
+	}
+	out
+}
 // x rounded to that many digits after the point
 round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
@@ -193,6 +215,14 @@ sum(xs: list) := fold(xs, 0, +)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (lib/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
+// help(x), function(x).definition of a value only the run knows (lib/sugar/reflection.warp gives the program's and its
+// modules' words and their texts): the text of the word a text names, or of an instance's class; a name that is no
+// word is an error naming it
+looked_up_word(x, asked, names, texts) := {
+	name = if x is text then x else "${type(x).name}"
+	for at in 1 to #names { if names#at == name { return texts#at } }
+	raise "${asked}: ${name} is no word or class of the program or its modules"
+}
 dir_of_value(x, list_words, text_words, map_words) := if x is map then x.keys + map_words else if x is list then list_words else if x is text then text_words else []
 // a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
 // The template names no helper word (card after-sum): it lands in the program's code, where a program's own word of
@@ -503,6 +533,8 @@ window_width() := system_value("window_width")
 window_height() := system_value("window_height")
 display_width() := system_value("display_width")
 display_height() := system_value("display_height")
+// the text on the clipboard, by the host word clipboard_text (the page asks the browser for it)
+clipboard() := clipboard_text()
 display_dpi() := system_value("display_dpi")
 // the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
 // listens; written, the window resizes
@@ -944,10 +976,6 @@ global event_listeners = {}
 global listener_numbers = {}
 global listening_once = {}
 global listener_counts = {}
-// `button{ "+1", on click {…} }`: an item `on e {…}` of a structure is that structure's own listener, kept in it as a
-// value (lib/markup.warp: the element's handler), no listener of the whole program (lib/sugar/events.warp)
-class Handler { event: text; action: function }
-handler(name: any, action: function): Handler := Handler(name_of(name), action)
 listen(name: any, listener: function, once: bool): int := {
 	key = name_of(name)
 	if not (key in event_listeners) {

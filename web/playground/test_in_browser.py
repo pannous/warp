@@ -50,6 +50,13 @@ CASE_ANSWER_SECONDS = CASE_RUN_SECONDS + 10  # a page that finished no case in t
 CASE_BATCH = 100  # cases the page runs in one go, its reports collected as they finish
 CASE_FILE = "test_case.warp"  # a case runs as a file of its test file's folder, so its uses resolve beside it
 STOPPED = "stopped after"  # playground.js: the report of a run the page stopped (the native run's `timeout`)
+# a section of a test file the browser cannot run (a C window library, a shell command) says why in its heading,
+# `# raylib_calls — native only: raylib, a C library the browser has not`: EXP instead of PAGE for the cases below it, up
+# to the next blank line (night decision N20, as the samples' EXPECTED_FAILURE; in the heading, as a line of its own
+# would move the cases' lines the native verdicts are stored by)
+NATIVE_ONLY = re.compile(r"^#.* native only: ")
+CASE_PLACE = re.compile(r"^(\S+):(\d+) ")
+PAGE_LOST = "playground is not defined"  # a report of a page that lost its API mid-batch: no verdict, the case runs again
 # a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
 VERDICT = re.compile(r"^([✓✗]) (.*?)(?:: got .*)?$")
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
@@ -122,11 +129,11 @@ RUN_SNIPPET = """(async () => {
 	return JSON.stringify(report.stuck ? report : { value: report.value, printed: (report.printed || []).filter(part => part.stream !== 2).map(part => part.text).join("") });
 })()"""
 TEXT_HOLE = "(a computed text between children changes alone)"  # card web-fine-text-nodes: markup.rs text_holes
-TEXT_HOLE_CODE = 'n = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 } "add" } "clicked " + n + " times" } }'
+TEXT_HOLE_CODE = 'use web\nn = 0\ndiv{ section{ h1{ "Counter" } button{ on click { n += 1 }, "add" } "clicked " + n + " times" } }'
 TEXT_HOLE_CLICKS = 3
 TEXT_HOLE_SHOWN = "Counteraddclicked 3 times"
 COMPONENT_HOLE = "(a component instance's text changes alone)"  # card web-fine-components: component_state.rs hole_bindings
-COMPONENT_HOLE_CODE = 'def Tally(start) {\n\tn = start\n\tsection{ button{ on click { n += 1 } "add" } "clicked " + n + " times" }\n}\ndiv{ Tally(2) Tally(7) }'
+COMPONENT_HOLE_CODE = 'use web\ndef Tally(start) {\n\tn = start\n\tsection{ button{ on click { n += 1 }, "add" } "clicked " + n + " times" }\n}\ndiv{ Tally(2) Tally(7) }'
 COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
 REPORT_CODE = 'print "reported"'
@@ -163,7 +170,7 @@ MEMBERS_LISTED = ["count", "sum", "map", "unique"]
 MEMBERS_WAIT_MS = 10000
 ASSISTANT_PAUSE_MS = 1500  # assistant.js PAUSE_BEFORE_COMPLETION_MS and a margin
 PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who)"  # card page-ids: host-foreign.js callOnPage
-PAGE_ELEMENTS_CODE = 'greeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who } "Greet" } p{ greeting } }'
+PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
@@ -956,7 +963,9 @@ def show_example(name):
 		const name = {json.dumps(name)};
 		{RUN_EXAMPLE % json.dumps(name)}
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
-		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
+		// a page of markup shows its HTML (driver.js page_render), anything else its value
+		const shownValue = () => {{ const page = document.getElementById("rendered"); return !page.hidden && page.shadowRoot ? page.shadowRoot.innerHTML : document.getElementById("value").textContent; }};
+		const shown = {{ value: shownValue(), printed: document.getElementById("printed").textContent,
 			canvases: document.querySelectorAll("#paintings canvas").length,
 			failed: document.getElementById("status").classList.contains("failed") ? document.getElementById("status").textContent : "" }};
 		const clicks = EXAMPLES[name].clicks ?? [];
@@ -983,7 +992,7 @@ def show_example(name):
 		const kept = elements.every(element => element.isConnected);
 		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-warp-key") === keys[index]);
 		const clickedPrinted = document.getElementById("printed").textContent;
-		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
+		return JSON.stringify({{ ...shown, clicked: shownValue(), clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown or browser_complaint})", "printed": ""}
@@ -1292,6 +1301,7 @@ def check_samples(paths, tree):
 
 # the page runs the cases [[code, file]…] one after the other, each as `warp test` runs one, its report pushed as it ends
 RUN_CASES = """window.caseReports = []; (async cases => { for (const [code, file] of cases) {
+	if (typeof playground !== "object") { window.caseReports.push({ error: true, value: "%s" }); return; }
 	let report; try { report = await playground.evaluate(code, file, { asData: true }); } catch (failure) { report = { error: true, value: String(failure) }; }
 	window.caseReports.push(report); } })(%s); "started";"""
 TAKE_REPORTS = "JSON.stringify((window.caseReports ?? []).splice(0))"
@@ -1313,18 +1323,18 @@ def case_written(work, run, report, milliseconds):
 	status = "timeout" if report.get("stuck") or value.startswith(STOPPED) else "1" if report.get("error") else "0"
 	files = {"out": stdout, "err": stderr + (value + "\n" if report.get("error") else ""), "status": status, "ms": str(int(milliseconds))}
 	for extension, content in files.items():
-		open(os.path.join(work, f"{run}.{extension}"), "w", encoding="utf-8").write(content)
+		open(os.path.join(work, f"{run}.{extension}"), "w", encoding="utf-8", newline="").write(content)
 
 
 def cases_ran(work, runs, page_url):
 	"""each run of the work folder run in the page, CASE_BATCH at a time; a page that ends no run in CASE_ANSWER_SECONDS
 	is opened anew, the run it stuck on written as timed out"""
-	done = 0
+	done, lost_at = 0, None
 	while done < len(runs):
 		batch = runs[done:done + CASE_BATCH]
-		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
-		if browser("eval", RUN_CASES % json.dumps(cases)) != '"started"':
-			open_samples_page(page_url)
+		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8", newline="").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
+		if browser("eval", RUN_CASES % (PAGE_LOST, json.dumps(cases))) != '"started"':
+			page_opened(page_url)
 			continue
 		ended, last = 0, time.time()
 		while ended < len(batch):
@@ -1332,18 +1342,39 @@ def cases_ran(work, runs, page_url):
 			answer = browser("eval", TAKE_REPORTS)
 			reports = json.loads(json.loads(answer)) if answer.startswith('"') else []
 			now = time.time()
+			lost = any(PAGE_LOST in str(report.get("value")) for report in reports)
 			for report in reports:
+				if PAGE_LOST in str(report.get("value")):
+					break
 				case_written(work, batch[ended][0], report, (now - last) * 1000 / len(reports))
 				ended += 1
+			if lost:
+				# a case that loses the page twice is that case's failure, so the run goes on past it
+				current = batch[ended][0]
+				if lost_at == current:
+					case_written(work, current, {"error": True, "value": f"the page lost its API running it ({PAGE_LOST})"}, 0)
+					ended += 1
+					lost_at = None
+				else:
+					lost_at = current
+				page_opened(page_url)
+				break
 			if reports:
 				last = now
 			elif now - last > CASE_ANSWER_SECONDS:
 				case_written(work, batch[ended][0], {"stuck": True}, CASE_ANSWER_SECONDS * 1000)
 				ended += 1
-				open_samples_page(page_url)
+				page_opened(page_url)
 				break
 		done += ended
 		print(f"     {done} of {len(runs)} runs")
+
+
+def page_opened(page_url):
+	"""the page opened anew with its playground API, else the run stops: verdicts of a page without one are no verdicts"""
+	open_samples_page(page_url)
+	if browser("eval", "typeof playground") != '"object"':
+		sys.exit(f"error: the page has no playground API after it was opened anew ({page_url}): {browser_complaint}")
 
 
 def verdicts_of(lines):
@@ -1351,10 +1382,27 @@ def verdicts_of(lines):
 	return {found.group(2): found.group(1) for found in map(VERDICT.match, lines) if found}
 
 
+@functools.cache
+def native_only_lines(tree, path):
+	"""the line numbers a `# native only:` line covers in the test file at `path`"""
+	covered, inside = set(), False
+	for number, line in enumerate(open(os.path.join(tree, path), encoding="utf-8"), 1):
+		inside = bool(inside or NATIVE_ONLY.match(line)) and line.strip() != ""
+		if inside:
+			covered.add(number)
+	return covered
+
+
+def native_only(tree, case):
+	"""whether a `# native only:` line of its test file covers the case"""
+	path, line = CASE_PLACE.match(case).groups()
+	return int(line) in native_only_lines(tree, path)
+
+
 def check_tests(paths, tree):
 	"""every case of the test files under `paths` (default test/) run in the page served from `tree`, its verdict by the
 	page's compiler against the native one of the stored baseline: ok, PAGE (fails only in the page), BOTH (fails
-	natively too), NONE (failing, no native verdict stored)"""
+	natively too), EXP (failing in the page where its test file says native only), NONE (failing, no native verdict stored)"""
 	data = os.path.join(tree, TESTS_WEB_DATA)
 	work = os.path.join(data, "work")
 	subprocess.run(["rm", "-rf", work])
@@ -1367,16 +1415,19 @@ def check_tests(paths, tree):
 	cases_ran(work, runs, page_url)
 	browser("close")
 	server.shutdown()
-	page = verdicts_of(compiler_said(tree, "test-verdicts", work, "--each", *paths).split("\n"))
+	said = compiler_said(tree, "test-verdicts", work, "--each", *paths)
+	page = verdicts_of(said.split("\n"))
+	if not page:
+		sys.exit(f"error: test-verdicts gave no verdicts (the runs are kept in {work}): {said[-500:]}")
 	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True)
 	native = verdicts_of(baseline.stdout.split("\n"))
-	status_of = lambda case: "ok" if page[case] == "✓" else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
+	status_of = lambda case: "ok" if page[case] == "✓" else "EXP" if native.get(case) == "✓" and native_only(tree, case) else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
 	lines = [f"{status_of(case):<4} {case}" for case in page]
 	written = not paths  # a run of some folders leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, TESTS_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
 	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(lines) + "\n")
-	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "PAGE", "BOTH", "NONE")}
+	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "PAGE", "EXP", "BOTH", "NONE")}
 	print(f"tests in the page: {counts['ok']} of {len(lines)} hold; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, TESTS_WEB_RESULTS)}" if written else ""))
 
 
