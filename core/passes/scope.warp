@@ -71,6 +71,8 @@ function_meanings(head: Node): list := {
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
 assignment_meanings(op: Op, target: Node, value: Node): list := {
 	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
+	# a write of a field or an item, `database.score = 42`, `local["name"] = "Ada"`, binds no name
+	if is_key(target, Op.Dot) or is_key(target, Op.Hash) { return [] }
 	[[binding_name(target), if op == Op.Define or is_lambda(value) then Meaning.Function else Meaning.Variable]]
 }
 
