@@ -80,3 +80,6 @@ Cover foreign-spellings R compatibility functions before adding non-narrowing si
 
 ## library-typed list sequence slice
 Cover heterogeneous take, drop, flatten and chunk outcomes before adding non-narrowing signatures; verify the module build and smoke.
+
+## library-typed list composition slice
+Cover adjacent pairs, splitting, interleaving and deduplication before typing their generic inputs and list results; verify behavior and smoke.
