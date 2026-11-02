@@ -25,6 +25,8 @@ def error_node(message: text): Node := opaque(["error", ["text", message]])
 def parse_error_message(n: Node): text? := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" then value_of(n)#2#2 else ø
 def template_node(holed: text): Node := opaque(["template", holed])
 def attributed(name: text, value: Node, node: Node): Node := Key(symbol(attribute_word), Op.Colon, [name, value, node])
+# the mark of a signed item after a space, `+1` of `1 +1`: [what was written before it, it as written] (parser.warp spaced_sign_marked)
+SPACED_SIGN_MARK = "spaced_sign"
 
 // [bracket, separator, items] of a group, an empty one too; ø for any other node
 def group_parts(node: Node): list? := match node {
