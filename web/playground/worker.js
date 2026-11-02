@@ -24,7 +24,7 @@ function inTurn(work) {
 	compilerTurn = done.catch(() => {});
 	return done;
 }
-let live; // the run whose page events are handled (host.js runProgram), until the next run
+let live; // the run whose page events are handled (driver.js programRan), until the next run
 let panicMessage; // the compiler's last panic message
 
 let warming = false; // the warm-up's run says nothing to the page
@@ -62,8 +62,6 @@ const hooks = {
 		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
 		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
 	},
-	// a fetch's reply arrived (host.js startFetch): its handler runs like a timer's, and the page shows the outcome
-	arrived: (holder, handler) => holder === live && runHandler(holder, handler),
 	panicked: message => { panicMessage = message; },
 };
 
@@ -176,14 +174,6 @@ function timerShown(holder, id) {
 	if (failure === undefined && value === undefined) return;
 	post({ type: "handled", value: failure ?? value, error: failure !== undefined });
 	if (failure !== undefined) holder.stopTimers();
-}
-
-// a fetch's handler run; only a failing one is shown, and it stops the timers
-function runHandler(holder, handler) {
-	const handled = runTimer(holder, hooks, handler);
-	if (handled.result !== undefined) return;
-	post({ type: "handled", value: handled.failure ?? handled.trap ?? String(handled.error), error: true });
-	holder.stopTimers();
 }
 
 // the run's timers (host.js addTimer), each running its handler until the next run

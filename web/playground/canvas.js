@@ -1,5 +1,5 @@
 // The canvas of paint (src/host.rs paint, lib/draw.warp) and the pointer over it, for the playground (playground.js)
-// and for a built site that paints (card site-frames, src/web/site.rs, site-thread.js)
+// and for a built site that paints (site.js)
 
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 // mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running

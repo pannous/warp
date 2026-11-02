@@ -237,7 +237,7 @@ function programRan(bytes, file, hooks) {
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(module, programImports(holder, hooks)), wasi)).exports;
+		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(bytes, programImports(holder, hooks)), wasi)).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
@@ -286,7 +286,10 @@ function pageEventHandled(holder, event, detail) {
 	const { exports } = holder;
 	const n = BigInt(event.slice(event.lastIndexOf("·") + 1));
 	try {
-		const given = newGuestValue(exports, detail ?? null);
+		// a module using no host word of nodes exports no constructors (core/emitter/host.warp exported_builders): its
+		// handlers get ø, and a detail they would read is said lost
+		if (!exports.new_empty && detail != null && Object.keys(detail).length) console.warn(`${event}: the module exports no constructors, its handler gets ø for the detail ${JSON.stringify(detail)}`);
+		const given = exports.new_empty ? newGuestValue(exports, detail ?? null) : null;
 		try {
 			exports.page_event(n, given);
 		} catch (failure) {
