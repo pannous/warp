@@ -119,3 +119,7 @@ Check markup rendering outcomes before and after annotating the public renderer;
 # library-typed markup handler predicates
 
 Cover rendering and dispatch of a click handler, then annotate handler predicates while preserving generic inputs. Verify the focused outcome, module build and smoke.
+
+# library-typed markup text helpers
+
+Cover escaping and numeric rendering before declaring text results for the shared rendering helpers. Preserve generic inputs and verify outcomes and smoke.
