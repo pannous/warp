@@ -146,7 +146,14 @@ subscript_name(index: Node): any := {
 is_shifted_index(index: Node): bool := op_of(index) == Op.Add and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
 # else the run ends in no_field_<name>, which Rust's run reports as "no field name"
+# a bool field of a receiver of a known class (`p: P`) reads as a yes/no, not a value known only at run time:
+# `rest and p.s` stays yes/no (card bool-and-field-int), where a boxed read beside a yes/no made it 1 or 0
 def field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
+	read = boxed_field_read(body, target, name, class_name)
+	if read.kind != ValueKind.Node or class_name == "" or struct_field(class_name, name) == ø or field_kind(module.classes[class_name][name]) != ValueKind.Bool { return read }
+	TypedCode(ValueKind.Bool, converted(read, ValueKind.Bool))
+}
+def boxed_field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
 	held = TypedCode(ValueKind.Node, [op.local_get] + uleb(fresh_local(body, ValueKind.Node)))
 	named = text_value_of(name)
 	missing = ended_in(ValueKind.Node, no_field_prefix + name)
