@@ -1,0 +1,4 @@
+# a whole number n counts 1 to n: `for i in 3` is `for i in 1 to 3` (card range-loop-syntax)
+'s=0; for i in 3 { s += i }; s'	6
+'s=0; for i in 0 { s += 1 }; s'	0
+'s=[]; for i in 2 { s = s + [i] }; s'	[1, 2]

@@ -1,0 +1,6 @@
+// Source: notes/stdlib.md; map construction and transformations preserve outcomes with typed signatures.
+'use map; merge({a: 1}, {b: 2}).get("b")'	2
+'use map; map_values({a: 2}, x => x * 2).get("a")'	4
+'use map; invert({a: "x"}).get("x")'	'a'
+'use map; from_pairs([["k", 3]]).get("k")'	3
+'use map; [get_or({a: 1}, "a", 7), get_or({a: 1}, "b", 7)]'	[1, 7]

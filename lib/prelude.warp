@@ -528,6 +528,9 @@ random(a, b) := random_between(a, b)
 battery() := system_value("battery")
 charging() := system_value("charging") != 0
 online() := system_value("online") != 0
+// whether the system shows dark mode (the page: the browser's prefers-color-scheme; natively the window library asks
+// the system); `on change dark mode {…}` hears it switch (lib/signals.warp)
+dark_mode() := system_value("dark mode") != 0
 mouse_x() := system_value("mouse_x") as float
 mouse_y() := system_value("mouse_y") as float
 mouse_down() := system_value("mouse_down") != 0

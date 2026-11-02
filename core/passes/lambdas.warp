@@ -353,6 +353,20 @@ function_parameters_of(written: list): map := {
 	found
 }
 
+# the parameters declared functions (found) and those a call of their function is given one for: `f` of
+# `apply(f, x) := f x` in `apply(inc, 1)`
+parameters_given_functions(written: list, arities: map, found: map): map := {
+	definitions = written.map(statement => definition_of(statement)).filter(parts => parts != ø)
+	for n in nodes_in(block_of(written)) {
+		if not (is_round(n) and #n > 1 and n#1 is symbol) { continue }
+		for parts in definitions.filter(parts => parts.name == name_of(n#1)) {
+			given = arguments_of(items_of(n))
+			for i in 1 to min(#given, #parts.parameters) { if gives_function(given#i, arities, {}) { found[parameter_name(parts.parameters#i)] = yes } }
+		}
+	}
+	found
+}
+
 # the method call after a `.`: its name kept
 lowered_method(n: Node, locals: list, lowering: Lowering): Node := match n {
 	List(items, Bracket.Round, Separator.None): call_node(items#1, arguments_of(items).map(item => lowered_lambdas(item, locals, lowering)))
@@ -652,9 +666,11 @@ lambdas(program: Node): Node := {
 		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
 	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions}
-	function_parameters = function_parameters_of(written)
+	function_parameters = parameters_given_functions(written, arities, function_parameters_of(written))
 	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
 	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)
+	# a parameter holding a function, declared so or given one, is called spaced too: `f x` as `f(x)`
+	for name in function_parameters.keys { lowering.function_values[name] = yes }
 	for statement in written {
 		parts = definition_of(statement)
 		function = if parts == ø then ø else iteration_function(parts)

@@ -35,3 +35,5 @@ else warp_installed_follows_main=${WARP_INSTALLED_FOLLOWS_MAIN:-0}; fi
 libraries_beside() { eval "export $warp_library_path_variable=\"$1\${$warp_library_path_variable:+:\$$warp_library_path_variable}\""; }
 # the native warp's harmless stderr line under the wasm2c runtime (Linux), dropped before a run's last line is judged
 without_runtime_noise() { grep -v '^wasm-rt warning'; }
+# the SHA-256 of a file, 64 hex digits (sha256sum on Linux, shasum on the Mac)
+sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-64; }
