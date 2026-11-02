@@ -9,7 +9,7 @@
 # is missing, and is copied under the new name.
 #   1. lib/<compiler>.wasm (warp, warp-self) whose lib/<compiler>.wasm.inputs names the current inputs hash (compiler-inputs.sh): kept
 #   2. else the shared store's pair of that hash, copied: /workspace/cow/compilers/<hash>/ on the box,
-#      /Volumes/Build/compilers/<hash>/ on the Mac (WARP_COMPILER_STORE names another)
+#      <store>/<hash>/: scripts/lib/platform.sh warp_store (WARP_COMPILER_STORE names another)
 #   3. else, unless --check, `warp rebuild`, the result published to the store; the store's `main` link moves to it only for a build of origin/main
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
 # A failed build is kept too, so every build of a hash happens once (user 2026-10-30): <store>/<hash>/<compiler>.failed/
@@ -39,11 +39,8 @@ done
 tree=$(cd "${tree:-$(git rev-parse --show-toplevel)}" && pwd) || exit 1
 scripts=$(cd "$(dirname "$0")" && pwd)
 lib=$tree/lib compilers=$tree/lib
-if [ "$(uname)" = Darwin ]; then
-	store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers} main_warp=/Users/me/dev/bin/warp
-else
-	store=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers} main_warp=$(command -v warp)
-fi
+source "$scripts/lib/platform.sh"
+store=$warp_store main_warp=$warp_binary
 warp=${WARP_BINARY:-$main_warp}
 [ -x "$warp" ] || { echo "rebuild.sh: no warp binary at $warp (WARP_BINARY names one)" >&2; exit 1; }
 
@@ -56,7 +53,7 @@ hash=$("$scripts/compiler-inputs.sh" "$lib") || exit 1
 baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
-copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
+copied() { clone "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 inputs_line() { echo "$hash commit=$(git -C "$tree" rev-parse --short HEAD 2>/dev/null) built=$(date '+%Y-%m-%dT%H:%M:%S%z')"; }
 
 # a file into the store under its hash, by its name or the path given, never over one there (write-once)
