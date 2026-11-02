@@ -111,13 +111,18 @@ static void events_taken(void) {
 	// a window out of sight has no refresh to wait for: its frames idle instead of spinning
 	if (SDL_GetWindowFlags(window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) SDL_Delay(OUT_OF_SIGHT_MS);
 }
-// a run that painted one picture leaves it in the window until the window is closed (or Escape); an animation's
-// window closes with its run
+// what shows the last painting again, the window out of sight when it was painted (libwarp_gpu's warp_gpu_shown_again,
+// given by lib/native/foreign.c)
+static int32_t (*painting_shown_again)(void);
+void warp_window_repainted_by(int32_t (*shown_again)(void)) { painting_shown_again = shown_again; }
+// a run that painted one picture leaves it in the window until the window is closed (or Escape), shown again as the
+// window comes into sight (it opens behind the app in front); an animation's window closes with its run
 static void held_open(void) {
 	SDL_Event event;
 	while (open_now && frames == 1 && SDL_WaitEvent(&event)) {
 		int escaped = event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE;
 		if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED || escaped) window_closed();
+		else if (event.type == SDL_EVENT_WINDOW_EXPOSED && painting_shown_again) painting_shown_again();
 	}
 }
 
