@@ -50,6 +50,11 @@ export page_render(value: any) := {
 	to_html(value)
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
+// a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
+// markup (decision html-render-mode; the emitter's _start)
+export page_shown(value: any): any := if html_is_page(value) then page_render(value) else ø
+// an element, or a group of nothing but elements (`{div{…}}`, `[li{…} li{…}]`)
+html_is_page(value: any) := html_is_element(value) or (html_is_group(value) and #html_elements_in(value) > 0 and #html_elements_in(value) == #value)
 export page_event(n: int, detail: any) := {
 	action = page_handlers#n
 	action(detail)

@@ -593,7 +593,31 @@ with_type_module_uses(program: Node): Node := {
 	}
 	# in the order of type_modules, Rust's sorted one
 	modules = type_modules.filter(module => module in wanted and module not in used)
-	with_module_uses(program, modules + global_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used))
+	with_module_uses(program, modules + global_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used) + markup_modules(program, own, used))
+}
+# `div{ button{…} p{…} }`: a program writing an HTML element (one of markup's html_elements, a name it binds not) uses
+# web by itself, so its value renders as a page, natively too (decision html-render-mode)
+markup_module = "markup"
+page_module = "web"
+element_names_list = "html_elements = ["
+markup_modules(program: Node, own: any, used: list): list := {
+	if page_module in used or markup_module in used { return [] }
+	bound = names_bound_in(program)
+	names = element_names()
+	writes_element = nodes_in(program).any(n => { parts = tag_parts(n); #parts == 2 and name_of(parts#1) in names and name_of(parts#1) not in own and name_of(parts#1) not in bound })
+	if writes_element then [page_module] else []
+}
+# markup's html_elements, the texts of its list (read once)
+global element_names_read = ø
+element_names(): list := {
+	if element_names_read == ø {
+		parts = used_module_text(markup_module).split(element_names_list)
+		pieces = if #parts < 2 then [] else parts#2.split("]")#1.split("\"")
+		# the quoted names are every other piece: `"html", "head"` → ["", "html", ", ", "head", ""]
+		element_names_read = []
+		for i in 1 to #pieces { if i % 2 == 0 { element_names_read += [pieces#i] } }
+	}
+	element_names_read
 }
 # the modules of the global words a program names, or a sugar rule reaching it writes (`x.json` json_text), and binds
 # nothing to, each once
