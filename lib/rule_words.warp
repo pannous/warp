@@ -644,6 +644,7 @@ rule_words = {
 	signaled: signaled,
 	signature_text: signature_text,
 	spelled: spelled,
+	hyphen_difference: hyphen_difference,
 	tables_kept: tables_kept,
 	task_steps: task_steps,
 	tasked: tasked,
@@ -808,4 +809,17 @@ shorthand_closure(block: Node): any := {
 	body = block
 	for at in 0 to count - 1 { body = renamed(body, "$" + at, symbol("shorthand·" + at)) }
 	Key(List([symbol("shorthand·" + at) for at in 0 to count - 1], Bracket.Round, Separator.Comma), Op.Arrow, body)
+}
+
+# `a=5; b=1; a-b` (decision kebab-or-minus): a hyphenated name the program binds nothing to, whose parts it binds
+# (anywhere: a parameter too), is their difference `a - b - c`; ø for one the program binds, or of a part it doesn't
+hyphen_difference(name: Node, program: Node): any := {
+	parts = spelled(name).split("-")
+	if #parts < 2 or parts.any(part => part == "") { return ø }
+	bound = names_bound_in_kept(program)
+	if bound.has(spelled(name)) or not parts.all(part => bound.has(part)) { return ø }
+	difference = symbol(parts#1)
+	# each difference in its own round group, as `(a - b)` parses: a bare Key reads as the spaced list `a -b`
+	for part in parts[1..] { difference = List([Key(difference, Op.Sub, symbol(part))], Bracket.Round, Separator.None) }
+	difference
 }
