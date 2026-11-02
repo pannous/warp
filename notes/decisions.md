@@ -8,6 +8,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 
 ## Process
 - clean-compiler-first (user): the specification unfolds from a clean compiler built on first principles; a spec form needing special-case core code is cut or parked unless leaving it out is nonsensical; the wiki follows (rule in notes/agents/common.md Principles).
+- emergent-forms-welcome (user): minimize the core and see what beauty arises: a form that follows from general rules is kept however esoteric (`"x" * yes` → "x", text-times-bool); a form needing its own phrase rule or core code is bloat and goes (no-element-array-phrase: `x is a 100 element array` removed; no-if-call: `if(c, a, b)` / `if{c, a, b}` refused; no-implicit-it-definition: `fib = it < 2 ? 1 : …` refused, `fib(n) := …` exists).
 - restructuring-hold (user 2026-11-01): all restructuring (core-hygiene A–E, sugar-in-core, number-words-table) is on hold until the current worktrees are cleaned up and every branch is integrated or dismissed.
 - extension-oks (user): core extensions not required for rebuilding the compiler need no strong confirmation if they are generic and/or small (FYI to the Interviewer); undecided spellings, new passes and the compiler proper still ask first.
 - extension-wording (user): a rewrite rule giving the language a new spelling (lib/sugar) is a compiler extension, not a library; "library" means modules programs import.
@@ -354,6 +355,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
+- def-brace-body (user): a brace body without `:=` defines a function only after `def` or its alias words (`def f(x){x*2}`, fun, fn, function …), at no extra core cost; a bare `g(n) { … }` stays the call with a block argument (cards gap-brace-def-no-assign, gap-fib-brace-body).
 - map-all-test (user): the test reads as English, `all xs are even` and `are all xs even`, `any xs is even` and `is any xs even` (lib/sugar/broadcasting.warp); the call all(xs, f) / xs.all(f) stays yes/no for newcomers.
 - map-all-canonical (user): `f all xs` is the canonical map (`moved all particles`), `xs.map(f)` its alias; the yes/no test over a list gets a different syntax (map-all-test).
 - int-overflow-shape (user): int-boxed-overflow-big keeps its ~23 lines with named overflow tests; no bit-trick or float shortcut.

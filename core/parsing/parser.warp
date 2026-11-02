@@ -4381,6 +4381,8 @@ def global_declaration(p: Parser, keyword: text): Node := {
 		p.at = after
 	}
 	declaration = expression(p, 0)
+	# `export square := it * 2`, `global int k := 7`: a definition is the module's already, the words add nothing
+	if is_key(declaration, Op.Define) { return declaration }
 	if type_word != ø { declaration = typed_default(declaration, symbol(type_word), declaration) }
 	names = [declaration]
 	while keyword == "global" and is_symbol(names#(names.length)) and is_at(p.code, p.at, ',', p.n) {
