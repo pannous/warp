@@ -1,0 +1,5 @@
+# a filter may name the item's fields bare (decision P223, card guide-gaps line 576)
+'class P{name: text; age: int}; ps = [P("Bo", 30), P("Al", 9)]; (ps where age > 18)#1.name'	'Bo'
+'class P{name: text; age: int}; ps = [P("Bo", 30), P("Al", 9)]; count(ps where age < 18)'	1
+'class P{name: text; age: int}; ps = [P("Bo", 30), P("Al", 9)]; (ps where it.age > 18)#1.name'	'Bo'
+'[1, 2, 3] where it > 1'	[2 3]
