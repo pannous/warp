@@ -1296,6 +1296,11 @@ context_holds(code: Node, context: text): bool := {
 	locally_bound(starting_word(code))
 }
 
+# the names a function binds inside it, else ø: a definition's (bound_by_definition), a lambda's parameters and the
+# names its body declares (`xs.map(x => x.f(1))`: x is the lambda's)
+bound_inside(n: Node): list? := if is_key(n, Op.Define) then bound_by_definition(n) else if is_key(n, Op.Arrow) then declared_within(value_of(n), lambda_bound_names(key_of(n))) else ø
+# the names a lambda's parameters bind, typed ones too: `x`, `(a: int, b)`
+lambda_bound_names(taken: Node): list := (if is_group(taken) then items_of(taken) else [taken]).map(leftmost_name).filter(name => name != ø)
 # the names a definition binds inside it: its parameters, the names its body's statements declare
 bound_by_definition(definition: Node): list := {
 	names = []
@@ -1440,7 +1445,7 @@ map_names_in(nodes: list, outer: map): map := {
 }
 
 # bottom-up for the rules, keeping where the node they try stands: the method part of a `.` tried as such, a
-# definition's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
+# definition's or lambda's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
 # hold a map where f meets each node, a function's own inside it (merge of engine-rule-conditions with main's
 # map scoping)
 placed_map_scoped(n: Node, f: function, maps: map): Node := {
@@ -1456,6 +1461,8 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		rule_maps = maps
 		return f(Key(left, Op.Dot, right))
 	}
+	outer = rule_binding
+	rule_binding = rule_binding + (bound_inside(n) ?? [])
 	if not is_key(n, Op.Define) {
 		at_item = rule_next_item != ø and n == rule_next_item
 		rule_next_item = ø
@@ -1463,6 +1470,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		if holds_items { rule_item_block = ø }
 		if is_word_block(n) { rule_item_block = value_of(n) }
 		walked = children(n, x => walked_item(x, holds_items, f, inner))
+		rule_binding = outer
 		rule_maps = maps
 		outer_item = rule_item
 		rule_item = if at_item then walked else ø
@@ -1470,9 +1478,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		rule_item = outer_item
 		return result
 	}
-	outer = rule_binding
 	outer_defining = rule_defining
-	rule_binding = rule_binding + bound_by_definition(n)
 	rule_defining = head_word(key_of(n))
 	# `square(x) := …` names its parameters, no call: only they are tried, so broadcasting leaves the head as it is
 	walked = if is_called_head(key_of(n)) then placed(Key(head_with_parameters(key_of(n), x => placed_map_scoped(x, f, inner)), Op.Define, placed_map_scoped(value_of(n), f, inner)), n) else children(n, x => placed_map_scoped(x, f, inner))
