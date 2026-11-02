@@ -747,8 +747,12 @@ def headed_phrase(p: Parser): Node := {
 	spaced(words)
 }
 // `on every day at 9:30 {…}`: in a block head, where a colon ends the head, a time glued as digits:digits stays one
-// value (decision prefix-keyword-condition)
-def glued_time_at(p: Parser, left: Node): bool := p.header and left is int and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n))
+// value (decision prefix-keyword-condition) where the block follows it; `if 2:3` keeps its colon body
+def glued_time_at(p: Parser, left: Node): bool := p.header and left is int and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n)) and block_after_digits(p, p.at + 1)
+def block_after_digits(p: Parser, at: int): bool := {
+	while at < p.n and is_digit(p.code[at]) { at = at + 1 }
+	peek(p.code, blank_end(p, at), p.n) == '{'
+}
 def follows_clause_word(found: list): bool := found.length > 0 and ends_with_clause_word(found#(found.length)#1)
 
 // `where`, `match`, alone or the last word of `for i in xs where`: a word whose condition or subject follows
