@@ -1103,8 +1103,9 @@ has_property(code: Node, property: text): bool := {
 	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
 	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
 	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_classes.has(name_of(code#1)) }
-	# `"count: " + count`: code reading, where it runs, a varying value or a variable code running later writes
-	if property == "varying" and not (code is symbol) { return read_now(code).any(name => varying_values().has(name) or later_written().has(name)) }
+	# `p{ "count: " + count }`: a structure's item reading, where it runs, a varying value or a variable code running
+	# later writes. Only an item: the head `f(a: int)` of heads.warp's `$h := $e` is no varying code
+	if property == "varying" and not (code is symbol) and rule_item != ø { return read_now(code).any(name => varying_values().has(name) or later_written().has(name)) }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
