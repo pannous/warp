@@ -24,6 +24,16 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 DOMAIN=warp.pannous.com
 # the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources)
 PRELOADED_SOURCES=('*.warp' 'sugar/*.warp' 'modules/words.tsv')
+# the exports of warp.wasm the page calls (driver.js, values.js): the browser's copy keeps only these, and Binaryen drops
+# what they never reach and the name section (1.35 → 1.26 MB gzipped); an export missing here fails the tour loudly
+COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at returned_error
+	error_of new_empty new_int new_bool new_float new_codepoint new_text new_symbol new_key new_list new_type new_bytes new_ints
+	new_floats new_spelled_key new_spelled_list item_count item_at int_item_at float_item_at gpu_list_place gpu_list_cell
+	is_textual)
+# core/commands/commands.warp WASM_OPT's features: Binaryen's -all would add exact references Firefox refuses
+WASM_OPT_FEATURES=(--enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext
+	--enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const
+	--enable-multimemory --enable-exception-handling)
 
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
@@ -42,7 +52,46 @@ build_compiler() {
 		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
 	done
 	write_sources "$page/warp-lib"
+	slim_compiler "$page/warp-lib/warp.wasm"
 	echo "built $page/warp-lib from $INSTALLED_LIBRARY and lib/ ($(du -sh "$page/warp-lib" | cut -f1))"
+}
+
+# the compiler with only the COMPILER_EXPORTS, without what they never reach and without names; without wasm-opt as it is
+slim_compiler() {
+	command -v wasm-opt >/dev/null || { echo "warning: no wasm-opt (brew install binaryen): $1 keeps all its exports" >&2; return; }
+	python3 -c 'import sys
+module, keep = sys.argv[1], set(sys.argv[2:])
+data = open(module, "rb").read()
+def number(at):
+	value = shift = 0
+	while True:
+		byte = data[at]; at += 1; value |= (byte & 0x7f) << shift; shift += 7
+		if byte < 0x80: return value, at
+def encoded(value):
+	out = bytearray()
+	while True:
+		byte, value = value & 0x7f, value >> 7
+		out.append(byte | (0x80 if value else 0))
+		if not value: return bytes(out)
+EXPORT_SECTION = 7
+out, at = bytearray(data[:8]), 8
+while at < len(data):
+	section, (size, body) = data[at], number(at + 1)
+	if section == EXPORT_SECTION:
+		count, entry = number(body)
+		kept = []
+		for _ in range(count):
+			length, name = number(entry)
+			_, after = number(name + length + 1)
+			if data[name:name + length].decode() in keep: kept.append(data[entry:after])
+			entry = after
+		exports = encoded(len(kept)) + b"".join(kept)
+		out += bytes([section]) + encoded(len(exports)) + exports
+	else:
+		out += data[at:body + size]
+	at = body + size
+open(module, "wb").write(out)' "$1" "${COMPILER_EXPORTS[@]}"
+	wasm-opt "${WASM_OPT_FEATURES[@]}" --remove-unused-module-elements --strip-debug "$1" -o "$1"
 }
 
 # <lib>/sources.json: {name: text} of the PRELOADED_SOURCES
