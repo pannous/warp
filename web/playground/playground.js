@@ -954,14 +954,17 @@ function servingRequests({ shared, port }) {
 	if (waiting) servedRequest(...waiting);
 }
 
-// a request as HTTP text into the waiting program's buffer, else kept until it waits again
+// a request as HTTP text into the waiting program's buffer, else kept until it waits again; a body is a form's fields,
+// urlencoded, as a browser posts them (submitForm)
+const FORM_TYPE = "application/x-www-form-urlencoded";
 function servedRequest(method, target, body = "") {
 	showAddress(target);
 	const { shared } = worker.serving;
 	if (!shared) return worker.serving.waiting = [method, target, body];
 	worker.serving = {};
 	const length = new TextEncoder().encode(body).length;
-	answerInto(shared, async () => ({ request: `${method} ${target} HTTP/1.1\r\nHost: localhost\r\nContent-Length: ${length}\r\n\r\n${body}` }));
+	const typed = body ? `Content-Type: ${FORM_TYPE}\r\n` : "";
+	answerInto(shared, async () => ({ request: `${method} ${target} HTTP/1.1\r\nHost: localhost\r\n${typed}Content-Length: ${length}\r\n\r\n${body}` }));
 }
 
 // the program's HTTP answer: an HTML body rendered, any other shown as the value, a failing status's body as the error
