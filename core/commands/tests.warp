@@ -17,6 +17,7 @@ EXPECTED_RUN = "e"
 # the work folder's file of the listed cases' places
 LISTED = "cases"
 TIMED_OUT = "timeout"
+TYPE_SHOWN = "class "
 NEVER_RAN = "·never ran"
 CASE_SECONDS = 30
 # a case slower than this is no part of `warp test` (decision no-slow-tests): said with its time, it belongs in
@@ -103,7 +104,11 @@ run_result(work: text, run: text): any := {
 # how long a run took, 0 for a run there was none of
 run_milliseconds(work: text, run: text): int := int(try read(work + "/" + run + ".ms") else "0")
 last_line_of(t: text): text := t.trim().split("\n").last() ?? ""
-value_view(printed: text): any := literals_folded(view_of(plain_node(parsed(printed))))
+# a type value printed `class nat` reads back as the type's name, which compares as the symbol does (type-result-shown)
+value_view(printed: text): any := {
+	if printed.starts_with(TYPE_SHOWN) { return ["symbol", printed[#TYPE_SHOWN ..< #printed]] }
+	literals_folded(view_of(plain_node(parsed(printed))))
+}
 # a float printed with an exponent, `9.007199254740994e15`, parses as `… as float`: the number it is
 literals_folded(view: any): any := {
 	form = kind(view)
