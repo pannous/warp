@@ -286,7 +286,10 @@ function pageEventHandled(holder, event, detail) {
 	const { exports } = holder;
 	const n = BigInt(event.slice(event.lastIndexOf("·") + 1));
 	try {
-		const given = newGuestValue(exports, detail ?? null);
+		// a module using no host word of nodes exports no constructors (core/emitter/host.warp exported_builders): its
+		// handlers get ø, and a detail they would read is said lost
+		if (!exports.new_empty && detail != null && Object.keys(detail).length) console.warn(`${event}: the module exports no constructors, its handler gets ø for the detail ${JSON.stringify(detail)}`);
+		const given = exports.new_empty ? newGuestValue(exports, detail ?? null) : null;
 		try {
 			exports.page_event(n, given);
 		} catch (failure) {

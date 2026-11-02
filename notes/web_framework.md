@@ -265,49 +265,19 @@ Each step is useful on its own and is what the next ones stand on.
   component's elements still match).
 - The parser bits (`.card { … }` without quotes, `8px` as a length) are done: step 7 above.
 
-## Built sites (card web-ssr)
-- `warp build --site app.warp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
-  host.js, markup.js, site.js, carried in the warp binary (src/web/site.rs include_str!, one source with the playground).
-- One renderer, written in warp (warp is wasm-first): lib/markup.warp's to_html (`use markup`; not `html`,
-  which samples/web/html.warp would shadow) is the one renderer: the CLI and the playground render a markup value with it
-  too (src/web/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
-  compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/web/page_html.rs); its
-  page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
-  definition, print, use). `warp build --site` runs main and page·html natively (wasm_reader::read_export_after_main)
-  for index.html, so the page reads without JavaScript; the page calls the same export after each handler. Page builds also export the reflection getters
-  the browser host needs and draw no "a native run never raises it" warning for page events.
-- Hydration (web/playground/site.js): the loader runs app.wasm with host.js in the page; main runs once as it ran at
-  build time, so the component instances count alike. The DOM stays; click and input on the root find their element's
-  handler (markup.js elementEvent), and after a handler (or a fetch reply) the page morphs (markup.js morphChildren) in
-  the HTML of page·html.
-- lib/markup.warp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
-  inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
-- Scoped style sheets (card web-scoped): an element with data-warp-scope:"Card" prefixes the selectors of the sheets
-  inside it with `[data-warp-scope="Card"] `; src/web/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
-- Timers in a built page: site.js starts them after main (host.js startTimers, shared with the playground worker),
-  each handler morphs the page; a failing handler stops them (probes/site/ticker.warp).
-- A program serving its own page: `warp run app.warp` with `serve 8080 {…}` and a page as its last line answers GET /
-  with the page rendered when the server starts (src/web/site.rs render, the page build without the serve statement) and
-  /app.wasm, /site.js … beside it; a route wins over a file of the same path. The page hydrates and fetches the
-  program's own routes (probes/site/served.warp). Page events draw no "never raises it" warning there. Only program
-  files serve a page (the host builds it from modules::program_file).
-- A page asking the server is rendered per request with the replies carried along (P221 step 3); the page build has
-  an RPC stub (cards rpc-stub, rpc-everywhere; notes/server_routes.md). Left there: a page's
-  main-level statement reading server data (card web-page-server-data), access rules (card route-access).
-- Programs in a Worker (card site-worker, step 1): a module importing task words (task_/channel_/shared_, site.rs
-  runs_in_a_worker) runs in site-worker.js, where a blocking await may wait (Atomics.wait) and its tasks run together on
-  the task Workers. The page loads site-thread.js, markup.js and site.js only; its root lists the Worker's scripts
-  (data-warp-worker="reader.js,host.js,host-tasks.js…"), and site.js calls startSiteWorker instead of hydrate: the page
-  sends the module, kept values, path and element events, the Worker answers html/stored/print/failure. A static host
-  gets cross-origin isolation through coi-serviceworker.js (one reload). A plain page stays on the page's thread (bundle
-  budget). Routes (step 2, card site-worker-step): the page keeps host-routes.js (links, back button, focus) and sends
-  the Worker {navigate: path}; the Worker loads that route's module and answers its markup with `navigated`, after
-  which the page focuses the route. Probe: probes/site_worker.py (also probes/site/routed_tasks.warp).
-- Paintings (card site-frames): a module importing paint runs in the Worker too (an animation sleeps between frames
-  and reads the pointer while it runs). The site ships canvas.js (the playground's paint and pointer code, moved out
-  of playground.js): the Worker posts {paint}, site-thread.js draws it into one canvas after the root (outside the
-  morphed markup; a new size replaces it) and shares the SharedArrayBuffer pointer for mouse_x/mouse_y/mouse_down.
-  Checked natively by test_site a_painting_site_runs_in_a_worker_with_its_canvas; the page side has no browser test.
+## Built sites (scripts/build-site.sh, card blockcompiler-entries)
+- `scripts/build-site.sh app.warp [folder]` writes site/ beside the program (until `warp build --site`, core's
+  UNBUILT_OPTIONS): app.wasm is `warp build --wasm`'s module, index.html an empty root and the page's scripts, the
+  folder mirrors the repository (web/playground/ holds the scripts) so file reads resolve against the site's root, and
+  served-files.js lists the site's files. Any static host serves it; coi-serviceworker.js gives the isolation.
+- One path with the playground: site-worker.js runs app.wasm through driver.js programRan, renders it with
+  lib/markup.warp page_render after main, each handler (page_event, the element's data-warp-<event>="n") and each timer
+  (timerFired); site.js morphs the HTML in (markup.js morphChildren). A program serving requests (lib/web.warp
+  page_serve, WARP_SERVE=page) gets the page's address, then each link, back button and form, HTTP text both ways
+  (host-routes.js requestText, answerOf, shared with the playground's address bar).
+- The Rust compiler's sites (index.html rendered at build time, holes, route modules, server replies, `warp deploy`'s
+  Cloudflare Worker) went with it; cards build-site-prerender, deploy-self.
+- Checked: `test_in_browser.py --examples` BUILT_SITE builds a counter site, loads it and clicks its button.
 
 - Page facts (card html-meta, default A): `html{ lang: "en" title: "Shop" description: "…" meta: { author:
   "Ann" } body{…} }` puts `<title>` and `<meta name content>` into the head (lib/markup.warp html_is_page_fact,
