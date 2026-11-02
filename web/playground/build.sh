@@ -10,8 +10,15 @@
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
 set -euo pipefail
 
-# the installed compilers: lib/ beside the warp on $PATH (~/dev/bin/lib links to the current build), else WARP_LIB
-INSTALLED_LIBRARY="${WARP_LIB:-$(dirname "$(command -v warp)")/lib}"
+page="$(cd "$(dirname "$0")" && pwd)"
+repository="$(cd "$page/../.." && pwd)"
+# the compilers: WARP_LIB, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else the
+# installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
+OWN_LIBRARY="$repository/lib"
+[ -f "$OWN_LIBRARY/warp.wasm.inputs" ] || OWN_LIBRARY="$(dirname "$(command -v warp)")/lib"
+INSTALLED_LIBRARY="${WARP_LIB:-$OWN_LIBRARY}"
+# the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
+COMPILER_SOURCES=(core 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
 NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dylib' --exclude='*.so' --exclude='*.kept'
 	--exclude='*.stale' --exclude='*.inputs' --exclude='warp-self.wasm*' --exclude='data/')
@@ -35,12 +42,11 @@ WASM_OPT_FEATURES=(--enable-gc --enable-reference-types --enable-bulk-memory --e
 	--enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const
 	--enable-multimemory --enable-exception-handling)
 
-page="$(cd "$(dirname "$0")" && pwd)"
-repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
 build_compiler() {
 	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
+	refuse_lagging_compiler
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
 	# the tree's library over it, so the page runs this checkout's lib/ before an install: a module whose source
@@ -54,6 +60,19 @@ build_compiler() {
 	write_sources "$page/warp-lib"
 	slim_compiler "$page/warp-lib/warp.wasm"
 	echo "built $page/warp-lib from $INSTALLED_LIBRARY and lib/ ($(du -sh "$page/warp-lib" | cut -f1))"
+}
+
+# the compiler's commit (warp.wasm.inputs) must have this checkout's COMPILER_SOURCES, else the page runs an older
+# language than its lib/ (card playground-gaps: ~30 samples failed on "no field coefficient"); WARP_LAGGING_COMPILER=1
+# takes it anyway
+refuse_lagging_compiler() {
+	local commit
+	commit=$(sed -n 's/.* commit=\([^ ]*\).*/\1/p' "$INSTALLED_LIBRARY/warp.wasm.inputs" 2>/dev/null || true)
+	if [ -z "$commit" ]; then echo "warning: $INSTALLED_LIBRARY/warp.wasm.inputs names no commit: the compiler may lag lib/" >&2; return; fi
+	git diff --quiet "$commit" -- "${COMPILER_SOURCES[@]}" 2>/dev/null && return
+	[ "${WARP_LAGGING_COMPILER:-}" = 1 ] && { echo "warning: $INSTALLED_LIBRARY/warp.wasm lags this checkout (built from $commit), taken anyway" >&2; return; }
+	echo "error: $INSTALLED_LIBRARY/warp.wasm was built from $commit, whose core/ or lib/ differs from this checkout's: the page would run its lag. scripts/rebuild.sh pure $repository builds this checkout's own, which build.sh takes (or WARP_LAGGING_COMPILER=1)" >&2
+	exit 1
 }
 
 # the compiler with only the COMPILER_EXPORTS, without what they never reach and without names; without wasm-opt as it is
