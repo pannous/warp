@@ -2,7 +2,6 @@
 // changes only what differs (morphChildren), and an event inside it names its element's handler (elementEvent). The page
 // also keeps the values of `stored x = v` and those a `warp dev` page keeps across reloads (keptValues, keepValue).
 
-const INSTANCE_ATTRIBUTE = "data-warp-instance"; // a component instance's elements (src/lowering/web/element_events.rs)
 const KEY_ATTRIBUTE = "data-warp-key"; // a list item's element (lib/markup.warp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 const LEAVING_ATTRIBUTE = "data-warp-leaving"; // an element animating out: no longer matched, removed when done
@@ -76,13 +75,11 @@ function dispatchToPage({ name, detail }) {
 }
 
 // an event inside shown markup, for the handler of the element it happened in (data-warp-click="1": click·1), with
-// its detail; in a component (data-warp-instance="2", element_events.rs) the detail names its instance
+// its detail
 function elementEvent(event, happened, detail) {
 	const attribute = `data-warp-${event}`;
-	const path = happened.composedPath();
-	const element = path.find(node => node.getAttribute?.(attribute));
-	const instance = path.find(node => node.getAttribute?.(INSTANCE_ATTRIBUTE))?.getAttribute(INSTANCE_ATTRIBUTE);
-	return element && { event: `${event}·${element.getAttribute(attribute)}`, detail: instance ? { ...detail, instance: Number(instance) } : detail };
+	const element = happened.composedPath().find(node => node.getAttribute?.(attribute));
+	return element && { event: `${event}·${element.getAttribute(attribute)}`, detail };
 }
 
 // the element events that are no page events (card click-key, event_signals.rs FIELD_EVENTS), by the DOM event that
