@@ -95,9 +95,8 @@ read(path): text from emitter
 // the caller's names: eval(code, with: {x: 5}) names them, each bound to its value as data before the code (card
 // eval-explicit-names)
 eval(code) := eval_code(code)
-eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} = ${code_of(names[name])}").join("\n") + "\n" + code)
-// a value as warp code that gives it back: text_form quotes the texts inside a list, not a text itself
-code_of(value) := text_form([value]) + "#1"
+// each name bound to warp code giving its value back: text_form quotes the texts inside a list, not a text itself
+eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} = ${text_form([names[name]])}#1").join("\n") + "\n" + code)
 warning(message): text from emitter
 raise(message): same as message from emitter
 error(message): any from emitter
