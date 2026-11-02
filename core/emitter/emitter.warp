@@ -723,6 +723,10 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if is_key(target, Op.Colon) and key_of(target) is symbol and union_spelling(value_of(target)) != ø {
 		return union_declaration(body, name_of(key_of(target)), union_spelling(value_of(target)), value)
 	}
+	# `xs: [int] = [1]`, `xs: [U] = …`: a list as `list` declares it
+	if is_key(target, Op.Colon) and key_of(target) is symbol and bracket_of(value_of(target)) == "[" {
+		return declaration(body, name_of(key_of(target)), "list", value)
+	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
