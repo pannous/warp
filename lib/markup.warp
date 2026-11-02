@@ -166,13 +166,13 @@ html_render(live: any, scope: any, chosen: any) := {
 	html_escaped(html_plain(value))
 }
 
-html_is_element(value: any) := html_is_listed_element(value) or (value is pair and html_is_custom_element(html_name(value)))
+html_is_element(value: any): bool := html_is_listed_element(value) or (value is pair and html_is_custom_element(html_name(value)))
 
-html_is_listed_element(value: any) := value is pair and contains(html_elements, html_name(value))
+html_is_listed_element(value: any): bool := value is pair and contains(html_elements, html_name(value))
 
 // `my-card{…}`: a page's own element is named with a dash, unlike data-, aria- and the listed attributes (decision unknown-tag)
 // str(name): a one-letter key (`"s": "small"`) is a Char, which contains refuses (card contains-fails)
-html_is_custom_element(name: any) := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
+html_is_custom_element(name: any): bool := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
 	let items = html_items(content)
@@ -267,10 +267,10 @@ html_items(content: any) := {
 }
 
 // a block `{…}` or a list `[…]`: at run time a block is a map, no list (card inside-function)
-html_is_group(value: any) := value is list or value is map
+html_is_group(value: any): bool := value is list or value is map
 
 // `class:"box"` inside an element: an attribute when its name is one and its value plain (or inline CSS for style)
-html_is_attribute(item: any, tag: any) := {
+html_is_attribute(item: any, tag: any): bool := {
 	if not (item is pair) { return false }
 	let name = html_name(item)
 	let value = html_content(item)
@@ -281,7 +281,7 @@ html_is_attribute(item: any, tag: any) := {
 }
 
 // `class:["btn" "btn-info"]` is an attribute, `style{ ".card": {…} }` an element: its items are rules
-html_holds_pairs(value: any) := {
+html_holds_pairs(value: any): bool := {
 	for item in value { if item is pair { return true } }
 	false
 }
