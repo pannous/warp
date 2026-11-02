@@ -1261,7 +1261,7 @@ def wait_for_playground():
 
 def check_samples(paths, tree):
 	"""every sample (or the given ones) in the page served from `tree`, its output against the native run's"""
-	native = dict(line.split(None, 1)[::-1] for line in open(os.path.join(tree, NATIVE_RESULTS), encoding="utf-8").read().split("\n") if line.strip())
+	native = dict(line.split(None, 1)[::-1] for line in open(os.path.join(tree, NATIVE_RESULTS), encoding="utf-8").read().split("\n") if line.strip() and not line.startswith("#"))
 	native = {path.strip(): status for path, status in native.items()}
 	paths = paths or sorted(native)
 	data = os.path.join(tree, SAMPLES_WEB_DATA)
