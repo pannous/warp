@@ -1,0 +1,3 @@
+# a program's function named as a library word, beside a local of that name, keeps the local its own
+'round(x, y) := 0; f(round) := round + 1; f(2)'	3
+'handler(name, action) := 0; g(hs) := { handler = hs#1; handler(5) }; g([x => x * 2])'	10

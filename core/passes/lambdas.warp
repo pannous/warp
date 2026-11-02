@@ -504,15 +504,36 @@ last_assignments(statements: list): map := {
 assigned_names(n: Node, operators: list): list := nodes_in(n).filter(part => part is key and (op_of(part) in operators or op_of(part) in counting_steps) and key_of(part) is symbol).map(part => name_of(key_of(part)))
 cell_of(name: text): Node := Key(symbol(name + cell_suffix), Op.Dot, symbol("value"))
 # the statements of a scope, its parameters and the blocks it gives functions as lambdas, its shared names in cells
-# made first, a parameter's holding its value
-celled_scope(statements: list, parameters: list, positions: map): list := {
+# made first, a parameter's holding its value. A shared name the program's functions read too (`read_elsewhere`, main's
+# `price` of `total := price * count` beside `on key { price = 10 }`) is one variable for them all: a global, its first
+# `price = 3` declaring it, as `global price = 3` would (card lambda-mutable-capture)
+celled_scope(statements: list, parameters: list, positions: map, read_elsewhere: list): list := {
 	blocks = statements.flat_map(statement => blocks_given(statement, positions))
 	statements = statements.map(statement => with_block_arguments(statement, positions))
 	locals = parameters + statements.fold([], (found, statement) => names_bound(statement, found))
 	statements = statements.map(statement => undeclared_in_lambdas(statement, locals))
 	shared = shared_names(statements, locals, blocks)
+	made_global = shared.filter(name => name in read_elsewhere and first_assignment(statements, name) >= 0)
+	statements = made_global.fold(statements, with_global_declaration)
+	shared = shared.filter(name => name not in made_global)
 	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(part, name, cell_of(name))))
 	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
+}
+# where the scope first assigns the name as a statement of its own, `price = 3`, else -1
+first_assignment(statements: list, name: text): int := {
+	for at in 0 ..< #statements { if is_key(statements[at], Op.Assign) and key_of(statements[at]) == symbol(name) { return at } }
+	-1
+}
+with_global_declaration(statements: list, name: text): list := {
+	at = first_assignment(statements, name)
+	statements[0 ..< at] + [Key(symbol(global_word), Op.Colon, statements[at])] + statements[at + 1 ..]
+}
+# the names a function definition reads from outside it: not its parameters, nor what it binds itself
+read_from_outside(statement: Node): list := {
+	parts = definition_of(statement)
+	if parts == ø { return [] }
+	own = parts.parameters.map(parameter_name) + names_bound(parts.body, [])
+	mentioned_names(parts.body, []).filter(name => name not in own)
 }
 # a lambda's `global n` or `nonlocal n` of a name its scope binds says what sharing does already: it goes, else it
 # would declare a global n of the lambda's own
@@ -528,7 +549,7 @@ celled_definition(statement: Node, positions: map): Node := {
 	if parts == ø { return statement }
 	statements = if is_curly_group(parts.body) then items_of(parts.body) else [parts.body]
 	match statement {
-		Key(signature, Op.Define, body): Key(signature, Op.Define, block_of(celled_scope(statements, parts.parameters.map(parameter_name), positions)))
+		Key(signature, Op.Define, body): Key(signature, Op.Define, block_of(celled_scope(statements, parts.parameters.map(parameter_name), positions, [])))
 		_: statement
 	}
 }
@@ -613,7 +634,8 @@ lambdas(program: Node): Node := {
 	positions = function_positions_of(statements_in(program))
 	written = statements_in(program).map(statement => with_function_parameters(celled_definition(statement, positions)))
 	main_statements = written.filter(statement => definition_of(statement) == ø)
-	written = written.filter(statement => definition_of(statement) != ø) + celled_scope(main_statements, [], positions)
+	read_by_functions = written.flat_map(statement => read_from_outside(statement))
+	written = written.filter(statement => definition_of(statement) != ø) + celled_scope(main_statements, [], positions, read_by_functions)
 	arities = {}
 	for statement in written {
 		parts = definition_of(statement)

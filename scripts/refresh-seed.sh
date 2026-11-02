@@ -20,6 +20,7 @@ TIMEFORMAT="%U %S"
 check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
+scripts=$(cd "$(dirname "$0")" && pwd)
 warp=${WARP_BINARY:-warp}
 seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
 compilers=$tree/lib
@@ -33,26 +34,43 @@ trap 'rm -rf "$scratch"' EXIT
 # stage <compiler> <output>: `warp rebuild pure` with <compiler> as the seed, the one thing a seed is asked to do (a seed
 # older than the harness may lack its newer commands: the seed of 14:52 traps in `warp self build` since the build
 # moved into compiler.warp, 2026-10-28). It leaves the tree's lib/ compilers those of the last stage's rebuild.
+# in_slot <log> <command…>: the command in the machine's fair build line (scripts/build-slot.sh), as every compile of
+# the compiler is, then the log's last lines
+in_slot() {
+  local log=$1 lines=$2
+  shift 2
+  : >"$log"
+  (cd "$tree" && "$scripts/build-slot.sh" "$log" "$@")
+  local status=$?
+  tail -"$lines" "$log"
+  return $status
+}
 stage() {
-  (cd "$tree" && WARP_SEED=$1 "$warp" rebuild seed 2>&1 | tail -2)  # its machine code and runtime, outside the time
+  WARP_SEED=$1 in_slot "$scratch/warm.log" 2 "$warp" rebuild seed  # its machine code and runtime, outside the time
   rm -f "$built"
-  local start=$SECONDS
-  # the CPU seconds (user + system) are the speed guard's measure: wall time swings with the box's load (2026-10-28:
-  # the same compile took 95 s at load 10, 233 s at load 89)
+  local start=$SECONDS record=$scratch/$(basename "$2" .wasm).record
+  # the speed guard's measure is the instructions the rebuild retired (build-slot.sh's record, /usr/bin/time -l): the
+  # same work retires the same count whatever the load and the cores it ran on, where the CPU seconds don't (2026-11-02:
+  # one compile took 268 s CPU on a quiet Mac, 869 s at load 30 on efficiency cores, both 4.7e12 instructions); the CPU
+  # seconds (user + system) only where no record counts instructions (no lockf, no time -l)
   # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
-  { time (cd "$tree" && WARP_SEED=$1 "$warp" rebuild pure 2>&1 | tail -5); } 2>"$scratch/cpu" &&
+  # the line's messages (stderr) go with the output: the cpu file holds only time's line
+  { time (WARP_SEED=$1 WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "$warp" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
     [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
   cp "$built" "$2"
-  stage_seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
-  echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, $stage_seconds s CPU, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
+  local seconds instructions
+  seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
+  instructions=$(awk '/instructions retired/ { print $1 }' "$record/time" 2>/dev/null)
+  if [ -n "$instructions" ]; then stage_cost=$instructions stage_unit=instructions; else stage_cost=$seconds stage_unit="s CPU"; fi
+  echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, $seconds s CPU, ${instructions:-?} instructions, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
 }
 previous=$seed
 chosen=
-old_seconds=
-new_seconds=
+old_cost=
+new_cost=
 for name in $STAGES; do
   stage "$previous" "$scratch/$name.wasm"
-  if [ -z "$old_seconds" ]; then old_seconds=$stage_seconds; elif [ -z "$new_seconds" ]; then new_seconds=$stage_seconds; fi
+  if [ -z "$old_cost" ]; then old_cost=$stage_cost old_unit=$stage_unit; elif [ -z "$new_cost" ]; then new_cost=$stage_cost new_unit=$stage_unit; fi
   [ "$previous" != "$seed" ] && chosen=$previous
   if [ "$previous" != "$seed" ] && cmp -s "$previous" "$scratch/$name.wasm"; then
     echo "refresh-seed: $name is the same bytes as the stage before: a fixpoint"
@@ -67,10 +85,11 @@ echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .was
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
 # a seed is what every `warp rebuild` runs: one that builds warp.wasm clearly slower than the seed it replaces is no
 # refresh (card rebuild-pure-went: two seeds made rebuilds 2.7x slower unnoticed). Stage A is the old seed's rebuild,
-# stage B the new compiler's of the same source: their times are the comparison, no extra rebuilds (decision
+# stage B the new compiler's of the same source: their retired instructions are the comparison, no extra rebuilds (decision
 # seed-speed-from-stages). WARP_SEED_SLOWER_OK=1 takes a slower one anyway
-echo "refresh-seed: a rebuild took $new_seconds s CPU with the new compiler, $old_seconds s CPU with the seed it replaces"
-if [ $((new_seconds * 100)) -gt $((old_seconds * SLOWER_PERCENT)) ] && [ -z "${WARP_SEED_SLOWER_OK-}" ]; then
+echo "refresh-seed: a rebuild took $new_cost $new_unit with the new compiler, $old_cost $old_unit with the seed it replaces"
+[ "$old_unit" = "$new_unit" ] || { echo "refresh-seed: the stages were measured in different units; the seed stays" >&2; exit 1; }
+if [ $((new_cost * 100)) -gt $((old_cost * SLOWER_PERCENT)) ] && [ -z "${WARP_SEED_SLOWER_OK-}" ]; then
   echo "refresh-seed: the new compiler takes over ${SLOWER_PERCENT}% of the old seed's time; the seed stays (WARP_SEED_SLOWER_OK=1 takes it)" >&2
   exit 1
 fi

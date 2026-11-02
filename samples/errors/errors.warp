@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# expected failure: deliberate parse errors, the errors warp reports
 {
   "errors can be disabled by setting:": "bool throwing=true;// otherwise fallover beautiful-soup style generous parsing",
   dasf }{SFd][sdaf][]{}{sdfa][fds]a[]as[f][asdf][dasf][fsda][fsda][}{}{]asd[f][asdf][asdf][]}]

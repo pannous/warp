@@ -539,10 +539,14 @@ with_own_words(program: Node, library: list): Node := {
 	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX))
 	for name in owned {
 		mine = own_word(name)
-		program = bottom_up(renamed(program, name, symbol(mine)), n => if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(mine) and not shadows(heads, name, #n - 1) then group_like(n, [symbol(name)] + items_of(n)[1 ..]) else n)
+		program = separated(bracketed(statements_in(program).map(statement => if binds_locally(statement, name) then statement else own_named(statement, name, mine, heads)), ""), ";")
 	}
 	program
 }
+own_named(code: Node, name: text, mine: text, heads: map): Node := bottom_up(renamed(code, name, symbol(mine)), n => if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(mine) and not shadows(heads, name, #n - 1) then group_like(n, [symbol(name)] + items_of(n)[1 ..]) else n)
+# a statement binding the name itself, not defining it: a local `handler = page_handlers#n` (lib/markup.warp
+# page_event beside its handler(name, action)), whose uses are that local's
+binds_locally(statement: Node, name: text): bool := declared_name(statement) != name and names_bound_in(statement).has(name)
 own_word(name: text): text := name + name_joiner + "own"
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
@@ -598,7 +602,7 @@ global_word_modules(program: Node, own: any, used: list): list := {
 # word the program names free (never a member's, `c.pi`) that neither it, the prelude nor a module it uses defines,
 # by the index `warp rebuild` writes beside the prebuilt modules (write_word_index); a module's `global` word is its
 # own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
-implicit_modules(source: text, index_file: text): list := {
+implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 	index = word_index(index_file)
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
@@ -609,9 +613,13 @@ implicit_modules(source: text, index_file: text): list := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
-	used = used_module_sources(flat_statements(program), ".", [])#2
+	used = used_module_sources(flat_statements(program), folder, [])#2
 	known = {}
 	for module in used { for slice in definition_slices(used_module_text(module)) { known[slice#1] = yes } }
+	# a file used by its path defines words too: the colors package's mix(a, b, t) is no use of sound's mix
+	for file in flat_statements(program).map(s => file_used(s, folder)).filter(file => file != ø) {
+		for slice in definition_slices(file_text(file) ?? "") { known[slice#1] = yes }
+	}
 	globals = global_words()
 	providers = type_module_providers()
 	free = free_words(program)
@@ -664,7 +672,7 @@ prelude_definitions(): list := {
 	if prelude_definition_names == ø { prelude_definition_names = definition_slices(module_source("prelude")).map(slice => slice#1) }
 	prelude_definition_names
 }
-with_implicit_uses(source: text, index_file: text): text := source + implicit_modules(source, index_file).map(module => "\nuse " + module).join("")
+with_implicit_uses(source: text, index_file: text, folder: text = "."): text := source + implicit_modules(source, index_file, folder).map(module => "\nuse " + module).join("")
 # word → the standard modules defining it, read from the index `warp rebuild` writes (a line `word<TAB>module …`
 # each); none before the first rebuild
 global word_indices = {}
@@ -764,10 +772,11 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	with_module_uses(program, wanted)
 }
 # the module that defines a word a program names without using it, as the fix of its unknown name: `x = 3ms` gives
-# ": `use units` defines it" (decision expected-type-names); "" when none or several do
+# ": `use units` defines it" (decision expected-type-names); "" when none or several do. Never the prelude: every
+# program has it, so a `use prelude` fixes nothing (`animation: pop 400ms` names a CSS keyframes, not its pop)
 module_hint(word: text): text := {
 	modules = bundled_slices()
-	definers = modules.keys.filter(module => modules[module].any(slice => slice#1 == word))
+	definers = modules.keys.filter(module => module != "prelude" and modules[module].any(slice => slice#1 == word))
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
 # module name → the slices of each module at the top of lib/, `units` → lib/units.warp's

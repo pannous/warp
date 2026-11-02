@@ -35,21 +35,28 @@ held_key() := key_name(system_value("key code held")) as Key
 on(key: Key, body: block) := frame_listened(event => if held_key == key then body() else ø, no)
 // `on key {…}`: the block runs once as a key goes down, `key` that key (`if key == ESC`, `key == "s"`), checked each
 // frame of the window before the frame's own listeners (lib/frames.warp)
+// The listeners are the key event's (lib/prelude.warp listen), so `emit key{key: "a"}` reaches them too
 rewrite listen(data key, $listener, $once) => key_listened($listener)
-global key_listeners = []
+KEY_EVENT = "key"
 global pressed_key = Key.none
-global code_before = 0
+global presses_seen = 0
 key() := pressed_key
 key_listened(listener: function): int := {
-	if count(key_listeners) == 0 { frame_listened(event => keys_went_down(), no) }
-	key_listeners = key_listeners + [listener]
-	count(key_listeners)
-}
-keys_went_down() := {
-	code = system_value("key code held")
-	if code != 0 and code != code_before {
-		pressed_key = key_name(code) as Key
-		for listener in key_listeners { listener(pressed_key) }
+	// the presses before the program listened (the page counts them across runs) are not its own
+	if count(listeners_of(KEY_EVENT)) == 0 {
+		presses_seen = system_value("keys pressed")
+		frame_listened(event => keys_went_down(), no)
 	}
-	code_before = code
+	listen(KEY_EVENT, pressed => { pressed_key = key_of_press(pressed); listener(pressed) }, no)
+}
+// a press as the frames tell it, a Key, or as `emit key{key: "q"}` does, the key's name in its data
+key_of_press(pressed) := if pressed is Key then pressed else pressed.key as Key
+// a press counts though the key is up again before the frame looks: the host counts the keys that went down
+keys_went_down() := {
+	presses = system_value("keys pressed")
+	if presses != presses_seen {
+		presses_seen = presses
+		pressed_key = key_name(system_value("key code pressed")) as Key
+		emitted(KEY_EVENT, pressed_key)
+	}
 }

@@ -21,6 +21,8 @@ is_head(n: Node): bool := match n {
 }
 is_parameter(n: Node): bool := match n {
 	Key(name, Op.Colon, _): is_name(name)
+	# a default, `def f(n, i = 2) = …` (decision default-parameter-def)
+	Key(name, Op.Assign, _): is_name(name)
 	_: is_name(n)
 }
 

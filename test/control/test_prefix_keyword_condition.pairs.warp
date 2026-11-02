@@ -1,0 +1,6 @@
+# an assigned block head takes its whole condition up to its body, and a glued 9:30 in a head stays one time (decision
+# prefix-keyword-condition)
+'t = 0; alarm = whenever t > 30 { print 1 }; remove alarm from listeners of t; t = 40; count listeners of t'	0
+'x = 0; n = 0; h = on change x : n += 1; x = 1; remove h from listeners of x; x = 2; n'	1
+'n = 1; on every day at 9:30 { n = 2 }; n'	1
+'xs = [1, 2, 3]; xs[1:2]'	[2]

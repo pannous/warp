@@ -1,0 +1,5 @@
+# Translation outcomes: notes/i18n.md
+'use i18n; plural_category("pl", 22)'	"few"
+'use i18n; plural_category("en", 1)'	"one"
+'use i18n; translate({en: {hello: "Hello {name}"}}, "en", "hello", {name: "Ada"})'	"Hello Ada"
+'use i18n; translate({en: {cart: {one: "{count} item", other: "{count} items"}}}, "en", "cart", {count: 3})'	"3 items"

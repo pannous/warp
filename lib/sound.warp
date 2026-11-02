@@ -871,7 +871,9 @@ plain_hertz(pitch) := {
 }
 // a signal function, `play(hum, 2s)`, or a pair of them [left, right] plays as play_signal (user 2026-10-12: no snake
 // case for signals)
-play(tone, for duration) := if is_signal(tone) then play_signal(tone, duration) else sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
+play(tone, for duration) := played_tone(tone, duration)
+// a tone or a signal played: the overloads call it by this name, an untyped tone would take play(fill: …) (card overload-untyped-function)
+played_tone(tone, duration) := if is_signal(tone) then play_signal(tone, duration) else sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
 // block-wise (decision music-plain-details): hum(block: samples, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; play(hum, 2s) calls hum once a block, t its first sample's time, and plays
 // the blocks one after another; class Sample is a clip, a list of them `list of Sample`
@@ -919,7 +921,7 @@ new_samples(n: int): samples := {
 }
 is_signal(tone) := tone is function or tone is list and count(tone) == 2 and tone[0] is function
 // the note played through a bus (card shared-buses stage 2): play(C4, 1s, bus: room)
-play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), play(tone, duration))
+play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), played_tone(tone, duration))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3", through the system's player as
 // it is, its line on stderr `sound file: song.mp3`
 play_file(path) := {
@@ -1254,7 +1256,7 @@ midi_file(notes) := {
 	// by tick, a note's end before a note's start at the same tick
 	track = [0, MIDI_META, MIDI_TEMPO, 3] + big_endian(MIDI_MICROSECONDS_PER_QUARTER, 3)
 	now = 0
-	for event in in_key_order(events, [event#1 * 2 + event#2 for event in events]) {
+	for event in list_sorted_by(events, [event#1 * 2 + event#2 for event in events]) {
 		track = track + midi_variable_length(event#1 - now) + event#3
 		now = event#1
 	}
@@ -1327,20 +1329,7 @@ midi_notes(bytes) := {
 			}
 		}
 	}
-	[[note#1 / 1000.0, midi_hertz(note#2), note#3 / 1000.0, note#4] for note in in_key_order(notes, [note#1 * 128 + note#2 for note in notes])]
-}
-// the items in the order of their keys, the smallest first, equal keys as they came: sort refuses in a module that
-// defines compare, as units does (card sort-refuses-compare)
-in_key_order(items, keys) := {
-	left = [at for at in 0..count(items)]
-	ordered = []
-	while count(left) > 0 {
-		first = left#1
-		for at in left { if keys[at] < keys[first] { first = at } }
-		ordered = ordered + [items[first]]
-		left = left.filter(at => at != first)
-	}
-	ordered
+	[[note#1 / 1000.0, midi_hertz(note#2), note#3 / 1000.0, note#4] for note in list_sorted_by(notes, [note#1 * 128 + note#2 for note in notes])]
 }
 // the milliseconds at a tick of a file whose tempo changes at the ticks of tempi ([tick, microseconds a quarter])
 midi_milliseconds(tick, tempi, division) := {

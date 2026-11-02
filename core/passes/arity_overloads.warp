@@ -27,8 +27,13 @@ definition_call(n: Node): Node := match n {
 	_: ø
 }
 
-# [how many arguments a call must pass, how many it may]: `b = 1` may be left out
-arity_of(call: Node): list := arity(signature_of(items_of(call)))
+# [how many arguments a call must pass, how many it may, -1 for any more]: `b = 1` may be left out, `more...` hold none
+arity_of(call: Node): list := {
+	signature = signature_of(items_of(call))
+	span = arity(signature)
+	if signature.parameters.any(parameter => parameter.rest) then [span#1 - 1, -1] else span
+}
+span_takes(span: list, count: int): bool := span#1 <= count and (span#2 < 0 or count <= span#2)
 
 # name → its arities, for each name defined with several parameter counts, no two of them the same
 overloaded_arities(program: Node): map := {
@@ -58,7 +63,7 @@ distinct_totals(variants: list): bool := {
 	yes
 }
 
-variant_name(name: text, total: int): text := name + "·" + total
+variant_name(name: text, total: int): text := name + "·" + (if total < 0 then "more" else "" + total)
 
 # the definition's target naming its variant: `twice(a, b): int` as `twice·2(a, b): int`
 renamed_target(target: Node, name: text): Node := match target {
@@ -75,7 +80,7 @@ variant_call(n: Node, overloaded: map, receivers: int): Node := {
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	count = #n - 1 + receivers
-	fitting = overloaded[name].filter(span => span#1 <= count and count <= span#2)
+	fitting = overloaded[name].filter(span => span_takes(span, count))
 	if #fitting != 1 { return n }
 	group_like(n, [symbol(variant_name(name, fitting#1#2))] + items_of(n)[1 ..])
 }
@@ -143,7 +148,7 @@ passed_variants(n: Node, overloaded: map, called: map): Node := {
 passed_variant(argument: Node, key: text, overloaded: map, called: map): Node := {
 	if not (argument is symbol and name_of(argument) in overloaded and key in called) { return argument }
 	count = called[key]
-	fitting = overloaded[name_of(argument)].filter(span => span#1 <= count and count <= span#2)
+	fitting = overloaded[name_of(argument)].filter(span => span_takes(span, count))
 	if #fitting == 1 then symbol(variant_name(name_of(argument), fitting#1#2)) else argument
 }
 

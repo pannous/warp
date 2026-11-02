@@ -287,6 +287,7 @@ match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" }
 A case can list several values, or name a type.
 
 ```warp => "weekend"
+enum Day { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
 day = Sunday
 match day { Saturday | Sunday => "weekend"; other => "workday" }
 ```
@@ -317,7 +318,7 @@ A list keeps several values in order, like a shopping list.
 `#` counts the items.
 
 ```warp => 2
-friends = [Alf, Bob]
+friends = ["Alf", "Bob"]
 #friends
 ```
 
@@ -521,7 +522,7 @@ Examples: closures
 
 Every value has a type: a number, a text, a list...
 
-```warp => class int
+```warp => class nat
 type(3)
 ```
 

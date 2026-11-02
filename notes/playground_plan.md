@@ -33,7 +33,11 @@ This supersedes decision playground-after-parity (the user: "the bigger local is
   module goes through host-foreign.js wasmLibraryImports and typedExports (arguments fitted to the wasm signature).
 - FFI and Python: callC follows driver.warp c_called (warp.c_functions section; only the first out-pointer gets a
   slot); `use python` runs in Pyodide through python_capi.py, the C API by handle.
-## Tour gaps (2026-11-01: 13 of 57 tour checks pass on the self-hosted page)
+## Tour gaps (2026-11-02: 19 of 52 tour examples pass in the self-hosted page, `test_in_browser.py --examples --firefox`; 2026-11-01: 13 of 57)
+Failing on 2026-11-02: constants, lazy ranges, linear arrays, matching, arguments, polyglot calls, broadcasting,
+closures, classes, properties, welcoming errors, signals, listeners, signals in lists, events, timers, system values,
+tasks, channels, markup, element events, fine updates, components, cleanup, keyed list, form binding, styles, routes,
+forms, transitions, wasm components, C libraries, kitchen sink. The table below is from 2026-11-01.
 The page gives what the native warp gives, so these are native gaps. Repro: the example's code in
 web/playground/examples.js, run with `warp <file>`. Each example is extracted with its name's spaces as `_`:
 `node -e 'const vm=require("vm"),fs=require("fs");const c={self:{}};vm.createContext(c);vm.runInContext(fs.readFileSync("web/playground/examples.js","utf8")+";this.E=EXAMPLES",c);for(const[n,e]of Object.entries(c.E))try{fs.writeFileSync("data/web/examples/"+n.replace(/ /g,"_")+".warp",e.code)}catch{}'`
@@ -64,7 +68,7 @@ web/playground/examples.js, run with `warp <file>`. Each example is extracted wi
 
 | markup | `div: {h2: {"Alice"} …}` | `div{h2:"Alice" …}`, the markup shown form | show |
 
-## Guide gaps (2026-11-01: 54 of 82 guide.md snippets hold in the page; `test_in_browser.py --examples --firefox --guide`)
+## Guide gaps (2026-11-02: 60 of 83 guide.md snippets hold in the page, `test_in_browser.py --examples --firefox --guide`; 2026-11-01: 54 of 82)
 The page gives what the native warp gives for all 28. Each snippet is guide.md at its line.
 
 | guide.md line | snippet | native | the guide |
@@ -85,8 +89,16 @@ The page gives what the native warp gives for all 28. Each snippet is guide.md a
 | 587 | `write "f" "milk"; read "f"` | unknown name read | "milk" |
 | 799 | `law square(-x) == square(x)` | unknown name law | 9 |
 
-Markup DOM examples (element events, fine updates, components, keyed list, form binding, styles, transitions) are
-warp-web-samples' page work. Still open: lists (`[#fruits, fruits#1]` writes a comma, so native's `[3, "apple"]` may be
+Markup DOM examples (element events, fine updates, components, keyed list, form binding, styles, transitions):
+warp-web-host's page work now, on lib/markup.warp's two exports (card markup-keeps): page_render(value) is the HTML,
+handlers numbered from 1 per render as data-warp-<event>="n"; page_event(n, detail) runs one. driver.js already
+renders and handles through them (pageEventHandled). State 2026-11-01: a program exports them only with `use markup`;
+`on click {…}` in a tag becomes a markup Handler and the examples get `use web` with warp-markup's next step, so
+the tour checks wait for it. Then, verified by `test_in_browser.py --examples --firefox`, the Rust-era paths go:
+host.js page·value/page·render/page·hole(s)/on·<event>·node (renderedHtml, pageHoles, holePatches, pageEvents,
+runPageEvent, listeningRun), worker.js PAGE_VALUE and showHoles, host-compiler.js page_event, markup.js
+data-warp-instance; site.js and site-worker.js (built sites) move to page_render/page_event as driver.js did.
+Still open: lists (`[#fruits, fruits#1]` writes a comma, so native's `[3, "apple"]` may be
 right) and welcoming errors (native's new sentence carries no position).
 
 - Samples that fail natively fail identically in the page. These are core or language gaps, reported to the supervisor:
