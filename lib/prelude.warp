@@ -534,6 +534,8 @@ window_width() := system_value("window_width")
 window_height() := system_value("window_height")
 display_width() := system_value("display_width")
 display_height() := system_value("display_height")
+// the text on the clipboard, by the host word clipboard_text (the page asks the browser for it)
+clipboard() := clipboard_text()
 display_dpi() := system_value("display_dpi")
 // the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
 // listens; written, the window resizes
