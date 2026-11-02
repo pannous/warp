@@ -56,7 +56,7 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
   its commits, leaves conflicting cards out and names them, then runs the smoke test
   <!-- GO TO worktree / branch which wants to be merged.  -->
   (`scripts/rebuild.sh pure`, hello, self-check.sh when core/ changed); `merge.sh --tip <commit>` runs only the smoke
-  test on a merged tip handed over. `scripts/integrate/land.sh` pushes exactly the tested hash, closes the cards with
+  test on a merged tip handed over. `scripts/integrate/land.sh --tree <tree>` (required, workers never run it) pushes exactly the tested hash, closes the cards with
   their merge commits, deletes the branches and starts after-push.sh. Run both from the main checkout's copy.
 - Conflicts: formatting, list-of-lines and adjacent additions you resolve yourself; a move of code (re-apply the
   change where it now lives); logic touched on both sides goes to `todo move <card> Now` + `todo note`. Never "take
