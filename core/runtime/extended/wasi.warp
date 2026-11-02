@@ -117,7 +117,7 @@ real_file_path(path: text): text := {
 }
 file_failure(word: text, path: text, error: int): Node := {
 	reason = if error == wasi_no_entry() then "No such file or directory" else "WASI error " + error
-	error_of(word + " " + path + " failed: " + reason)
+	failure_of(word + " " + path + " failed: " + reason)
 }
 
 # `read(path)`: the file's text, or the Error of why not

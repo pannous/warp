@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# scripts/integrate/land.sh [--tree <worktree>]: step 2 of landing the branches of retired sessions, after merge.sh's
+# scripts/integrate/land.sh --tree <worktree>: step 2 of landing the branches of retired sessions, after merge.sh's
 # tier 0 went green. Pushes exactly the tested hash to main, closes each merged card with its merge commit, deletes its
 # remote branch, then watches the push like any other (after-push.sh, in the background).
+# --tree is required: a worker that ran land.sh bare from its own worktree landed the Integrator's tested batch
+# (warp-web-host, 2026-11-02); workers push with plain git.
 # A refused push (main moved) is tried again up to LAND_RETRIES times: when the commits pushed meanwhile leave the
 # compiler's code alone (core/ and the files it bakes in, scripts/compiler-inputs.sh --baked-files) they are merged onto
 # the tested hash as they are (a library change needs no rebuild, its pusher smoke-tested it; after-push checks hello on
 # the result), else merge.sh merges and smoke-tests the batch anew. Main moves every few minutes with library pushes, so
 # re-testing each of them kept a batch from ever landing (2026-11-02).
 set -uo pipefail
-DEFAULT_TREE=/Volumes/Worktrees/integrate
 LAND_RETRIES=${LAND_RETRIES:-8}
 
-tree=$DEFAULT_TREE
-[ "${1-}" = --tree ] && { tree=$2; shift 2; }
+[ "${1-}" = --tree ] && [ -n "${2-}" ] || { echo "usage: scripts/integrate/land.sh --tree <worktree> (the Integrator's merge.sh tree; workers push with plain git)" >&2; exit 2; }
+tree=$2
+shift 2
 tree=$(cd "$tree" && pwd) || exit 1
 batch=$tree/data/integrate/batch
 say() { echo "land: $*"; }
