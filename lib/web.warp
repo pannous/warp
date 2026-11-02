@@ -36,6 +36,8 @@ BACKLOG = 64
 READ_BYTES = 65536
 LINE_END = "\r\n"
 HEAD_END = "\r\n\r\n"
+// the body of an HTML form's POST: its fields as a query's, `item=tea&n=2`
+FORM_TYPE = "application/x-www-form-urlencoded"
 // AF_INET, SOCK_STREAM; SOL_SOCKET and SO_REUSEADDR, of the BSDs (macOS) else Linux
 INTERNET = 2
 STREAM = 1
@@ -45,7 +47,7 @@ REUSE_ADDRESS = {Darwin: 4, Linux: 2}
 SYSTEM_NAME_BYTES = 256
 // struct sockaddr_in: its bytes 3 and 4 the port, the high byte first
 SOCKET_ADDRESS_BYTES = 16
-STATUS_REASONS = {200: "OK", 201: "Created", 204: "No Content", 301: "Moved Permanently", 302: "Found", 400: "Bad Request", 404: "Not Found", 418: "I'm a teapot", 500: "Internal Server Error"}
+STATUS_REASONS = {200: "OK", 201: "Created", 204: "No Content", 301: "Moved Permanently", 302: "Found", 303: "See Other", 400: "Bad Request", 404: "Not Found", 418: "I'm a teapot", 500: "Internal Server Error"}
 
 socket(domain: i32, kind: i32, protocol: i32): i32 from 'c'
 setsockopt(fd: i32, level: i32, name: i32, value: bytes, size: length): i32 from 'c'
@@ -127,21 +129,27 @@ head_and_body(raw: text) := {
 	[sections#1, sections[1 ..].join(HEAD_END)]
 }
 // the Content-Length of the head's header lines, 0 without one
-content_length(head: text) := {
-	for line in split(head, LINE_END) {
-		if lower(line).starts_with("content-length:") { return int(trim(line[16 ..])) }
+content_length(head: text) := int(header_fields(head).get("content-length") ?? "0")
+// the header lines of a request's head by their lower-case names, `{"content-type": "text/plain"}`
+header_fields(head: text) := {
+	fields = {}
+	for line in split(head, LINE_END)[1 ..] {
+		colon = line.index_of(":")
+		if colon > 0 { fields[lower(trim(line[.. colon - 1]))] = trim(line[colon ..]) }
 	}
-	0
+	fields
 }
 
-// the request as lib/router.warp's routes read it: method, path, query fields and body
+// the request as lib/router.warp's routes read it: method, path, query fields, headers and body, a form's its
+// fields (`request.body.item`)
 request_of(raw: text) := {
 	parts = head_and_body(raw)
 	words = split(split(parts#1, LINE_END)#1, " ")
 	target = if count(words) > 1 then words#2 else "/"
 	target_parts = split(target, "?")
 	query = if count(target_parts) > 1 then target_parts#2 else ""
-	{method: words#1, path: target_parts#1, query: wagi_query(query), body: parts#2}
+	headers = header_fields(parts#1)
+	{method: words#1, path: target_parts#1, query: wagi_query(query), headers: headers, body: if is_form(headers) then wagi_query(parts#2) else parts#2}
 }
 
 // the HTTP answer of a route's value, with the status and headers it set; the next request starts without them
@@ -158,7 +166,17 @@ http_failure(message: text) := {
 }
 
 // the HTTP answer of the program's routes to a request as the client sent it
-http_served(raw: text) := try http_answer(route_answer(request_of(raw))) catch e { http_failure(str(e)) }
+http_served(raw: text) := try http_answer(form_redirected(request_of(raw))) catch e { http_failure(str(e)) }
+// the route's answer to the request; after a form's POST whose route set no status of its own the browser's
+// post/redirect/get: 303 See Other, back to the page the form was on (its Referer, else "/")
+form_redirected(request: any) := {
+	answer = route_answer(request)
+	if not (request.method == "POST" and is_form(request.headers) and answer_status == 200) { return answer }
+	status(303)
+	header("Location", request.headers.get("referer") ?? "/")
+	""
+}
+is_form(headers: any) := (headers.get("content-type") ?? "").starts_with(FORM_TYPE)
 
 // what a program says as it starts serving
 serving_line(port: int) := "serving http://localhost:" + port + " (`warp run` runs the program once without serving)"

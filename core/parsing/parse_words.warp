@@ -1,14 +1,15 @@
 # `parse(text)` is the code the text holds, as data (card pure-parse-call; Rust twin: rust-harness:src/lowering/words/parse_word.rs):
 # a constant text folds here into `as_code(data …)`, any other is parsed at run time by the host word parse_code.
-# `eval(text)` runs that code where it is written: `interpret(parse(text))`. A program's own `parse` stays its own, and
-# so does a method `x.parse(…)`.
+# `eval(text)` is the value of that code run as a program of its own: the host word eval_code, which the host compiles
+# with its own warp.wasm (decision N31; core/native/driver.warp code_evaluated, the page's driver.js). A program's own
+# `parse` stays its own, and so does a method `x.parse(…)`.
 use "../passes/walk.warp"
 use "parser.warp"
 use "../passes/uses.warp"
 
 parse_word = "parse"
 eval_word = "eval"
-interpret_word = "interpret"
+eval_code_word = "eval_code"
 as_code_word = "as_code"
 parse_code_word = "parse_code"
 
@@ -38,7 +39,7 @@ parse_call(n: Node): Node := {
 eval_call(n: Node): Node := {
 	given = word_argument(n, eval_word)
 	if given == ø { return n }
-	called_word(interpret_word, [called_word(parse_word, [given])])
+	called_word(eval_code_word, [given])
 }
 
 # the words rewritten everywhere but on the right of `.` and inside a definition binding the word itself (notes/

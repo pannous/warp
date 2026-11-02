@@ -408,17 +408,21 @@ function stopListening(holder) {
 // native harness links it (src/run/wasm_reader.rs link_runtime; notes/runtime_linking.md "Separate modules")
 const RUNTIME_MODULE = "warp_runtime";
 const RUNTIME_URL = "runtime.wasm";
-let runtimeModule; // compiled at the first such program
-function withRuntime(module, imports) {
-	if (!WebAssembly.Module.imports(module).some(entry => entry.module === RUNTIME_MODULE)) return imports;
-	runtimeModule ??= new WebAssembly.Module(getSync(RUNTIME_URL, 0, true));
-	const runtime = new WebAssembly.Instance(runtimeModule, withUnlinkedTrapping(runtimeModule, imports));
-	return { ...imports, [RUNTIME_MODULE]: runtime.exports };
+let runtime; // {module, descriptors}, compiled at the first such program
+// imports read from the bytes (imports.js importDescriptors): Safari's WebAssembly.Module.imports throws for GC signatures
+function withRuntime(bytes, imports) {
+	if (!importDescriptors(bytes).some(entry => entry.module === RUNTIME_MODULE)) return imports;
+	if (!runtime) {
+		const runtimeBytes = getSync(RUNTIME_URL, 0, true);
+		runtime = { module: new WebAssembly.Module(runtimeBytes), descriptors: importDescriptors(runtimeBytes) };
+	}
+	const instance = new WebAssembly.Instance(runtime.module, withUnlinkedTrapping(runtime.descriptors, imports));
+	return { ...imports, [RUNTIME_MODULE]: instance.exports };
 }
 // runtime.wasm declares every host word: one this page does not give fails when reached, not at instantiation
-function withUnlinkedTrapping(module, imports) {
+function withUnlinkedTrapping(descriptors, imports) {
 	const completed = { ...imports };
-	for (const { module: library, name, kind } of WebAssembly.Module.imports(module)) {
+	for (const { module: library, name, kind } of descriptors) {
 		if (kind !== "function" || completed[library]?.[name]) continue;
 		completed[library] = { ...completed[library], [name]: () => { throw new Error(`${library}.${name} is not linked in the browser`); } };
 	}

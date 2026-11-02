@@ -67,23 +67,12 @@ jobs:
     - uses: actions/checkout@v7 # the workflow's own commit, whose release-bootstrap.sh fits any older tag
       with:
         path: .workflow
-    - name: wabt and binaryen
-      # the bootstrap's `warp build native` runs wasm2c, the rebuild optimizes warp.wasm with wasm-opt, as locally
-      run: |
-        gh release download "version_$BINARYEN" --repo WebAssembly/binaryen --pattern "binaryen-version_$BINARYEN-x86_64-linux.tar.gz"
-        tar -xzf "binaryen-version_$BINARYEN-x86_64-linux.tar.gz" -C "$RUNNER_TEMP"
-        echo "$RUNNER_TEMP/binaryen-version_$BINARYEN/bin" >>"$GITHUB_PATH"
-        gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-linux-x64.tar.gz"
-        tar -xzf "wabt-$WABT-linux-x64.tar.gz" -C "$RUNNER_TEMP"
-        echo "$RUNNER_TEMP/wabt-$WABT/bin" >>"$GITHUB_PATH"
-    - name: the previous release's native warp, brought up to the tag's host words
-      run: .workflow/scripts/release-bootstrap.sh x86_64-unknown-linux-gnu "$RUNNER_TEMP/bootstrap" .
     - name: build
+      # wabt and binaryen, the previous release's native warp brought up to the tag's host words, the newest seed
+      run: .workflow/scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"
+    - name: self test
       run: |
-        seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
-        gh release download "$seed" --repo pannous/warp --pattern warp-seed.wasm --dir "$RUNNER_TEMP/bootstrap" --clobber
         export WARP_LIB=$PWD/lib
-        "$RUNNER_TEMP/bootstrap/warp" rebuild pure
         "$RUNNER_TEMP/bootstrap/warp" rebuild self
         "$RUNNER_TEMP/bootstrap/warp" samples/hello/hello.warp | grep Hello
     - uses: actions/upload-artifact@v7
