@@ -1,0 +1,3 @@
+s = clock()
+sleep 300 ms
+clock() - s >= 300
