@@ -123,3 +123,7 @@ Cover rendering and dispatch of a click handler, then annotate handler predicate
 # library-typed markup text helpers
 
 Cover escaping and numeric rendering before declaring text results for the shared rendering helpers. Preserve generic inputs and verify outcomes and smoke.
+
+## library-typed markup CSS helpers
+
+Cover rendered CSS declarations and attributes before declaring text results; keep generic inputs and verify focused outcomes and merged-main smoke.
