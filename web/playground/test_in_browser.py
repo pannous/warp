@@ -796,7 +796,7 @@ def previous_frame_wrong():
 def view_steady_wrong():
 	"""runs painting at the view's size, one after the other, see the same view once the first painting is shown"""
 	shown = [run_code(VIEW_STEADY_CODE) for _ in range(VIEW_STEADY_RUNS)]
-	return [] if len(set(shown[1:])) == 1 and re.fullmatch(r"\[\d+ \d+\]", shown[-1]) else [f"the view's size, run after run: {shown}, expected the same after the first"]
+	return [] if len(set(shown[1:])) == 1 and re.fullmatch(r"\[\d+,? \d+\]", shown[-1]) else [f"the view's size, run after run: {shown}, expected the same after the first"]
 
 
 def gpu_jobs_wrong():

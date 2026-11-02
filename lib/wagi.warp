@@ -3,7 +3,7 @@
 // environment (REQUEST_METHOD, PATH_INFO, QUERY_STRING), the answer goes CGI-style to stdout: headers, a blank line, the
 // body. A text answers as text, anything else as JSON, as `warp serve` answers (rust-harness:src/web/web_server.rs Answer::of).
 // A route's `status 418` and `header "name" "value"` (card wagi-build) are lib/router.warp's answer state: the answer
-// carries them. Not yet: request bodies (stdin), percent-decoded query values.
+// carries them. Not yet: request bodies (stdin).
 use router
 
 wagi_variable(name: any) := {
@@ -18,10 +18,46 @@ wagi_query(query: any) := {
 	for part in split(query, "&") {
 		if part {
 			let pair = split(part, "=")
-			fields[pair#1] = if count(pair) > 1 then pair#2 else ""
+			fields[url_decoded(pair#1)] = if count(pair) > 1 then url_decoded(pair[1 ..].join("=")) else ""
 		}
 	}
 	fields
+}
+
+// a query's or form's name or value as sent: `+` a space, `%XX` its byte, the bytes read as UTF-8 ("caf%C3%A9" is "café")
+url_decoded(t: any) := {
+	if not (t.contains("%") or t.contains("+")) { return t }
+	sent = bytes(t)
+	decoded = []
+	at = 1
+	while at <= count(sent) {
+		if sent#at == PERCENT_BYTE and at + 2 <= count(sent) {
+			decoded = decoded + [hex_value(sent#(at + 1)) * 16 + hex_value(sent#(at + 2))]
+			at = at + 3
+		} else {
+			decoded = decoded + [if sent#at == PLUS_BYTE then SPACE_BYTE else sent#at]
+			at = at + 1
+		}
+	}
+	utf8_text(decoded)
+}
+PERCENT_BYTE = 37
+PLUS_BYTE = 43
+SPACE_BYTE = 32
+hex_value(byte: int) := if byte >= 97 then byte - 87 else if byte >= 65 then byte - 55 else byte - 48
+// the text of UTF-8 bytes: a lead byte's high bits say how many continuation bytes follow, each giving 6 bits
+utf8_text(bytes: list) := {
+	out = ""
+	at = 1
+	while at <= count(bytes) {
+		lead = bytes#at
+		width = if lead < 128 then 1 else if lead >= 240 then 4 else if lead >= 224 then 3 else 2
+		code = if width == 1 then lead else lead % (1 << (7 - width))
+		for k in 1 to width - 1 { code = code * 64 + bytes#(at + k) % 64 }
+		out = out + chr(code)
+		at = at + width
+	}
+	out
 }
 
 wagi_request() := {method: wagi_variable("REQUEST_METHOD"), path: wagi_variable("PATH_INFO"), query: wagi_query(wagi_variable("QUERY_STRING")), body: ""}

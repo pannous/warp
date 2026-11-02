@@ -263,7 +263,7 @@ function programRan(bytes, file, hooks) {
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(module, programImports(holder, hooks)), wasi)).exports;
+		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(bytes, programImports(holder, hooks)), wasi)).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
