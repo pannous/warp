@@ -2257,11 +2257,19 @@ def guarded(p: Parser, word: text): Node := {
 	marker = GUARD_MARKERS[word]
 	p.at = p.at + word.length
 	skip_spaces(p)
+	python_block = is_at(p.code, p.at, ':', p.n)
 	skip_python_colon(p)
 	start = p.at
 	guarded_part = guarded_phrase(p)
 	written_part = p.code[start .. p.at].trim()
 	skip_spaces(p)
+	// the one-line `try x except y` is `x default y`, y when x raises or is ø (decision nullish-default); the block
+	// `try: … except: …` handles errors
+	if word == "try" and not python_block and fallback_word_ahead(p) == "except" {
+		p.at = p.resumes[p.at] + 6
+		skip_spaces(p)
+		return Key(guarded_part, Op.Coalesce, guarded_phrase(p))
+	}
 	if fallback_word_ahead(p) {
 		// `except A: a except B: b`: an Error A does not catch passes on to the next one; an `else` after the
 		// fallback is an enclosing `if`'s

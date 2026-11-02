@@ -83,6 +83,8 @@ kept_raise(v: Node): Node := {
 # `a or b`, emitter.warp logical, too)
 handled_form(n: Node): Node := match n {
 	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and is_call(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
+	# `x ?? y`, `x default y` (decision nullish-default): y when x raises or is ø, a falsy x kept
+	Key(x, Op.Coalesce, y): if is_call(x) then Key(lowered_try(x, ø, ø), Op.Coalesce, y) else n
 	_: n
 }
 
