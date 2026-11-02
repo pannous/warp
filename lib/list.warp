@@ -10,7 +10,7 @@ drop(xs: any, n: any): list := { out = []; for i in n + 1 to count(xs) { out = o
 flatten(xs: any): list := { out = []; for x in xs { out += x }; out }
 chunk(xs: any, n: any): list := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
 window(xs, n) := [xs[i:i + n] for i in 0 to count(xs) - n]
-median(xs) := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
+median(xs: any): number := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
 flat_map(xs, f) := { out = []; for x in xs { out += f(x) }; out }
 // [kept, rest]: the elements f holds for, and the others
 partition(xs, f) := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
@@ -33,8 +33,8 @@ scan(xs, start, f) := { out = []; acc = start; for x in xs { acc = f(acc, x); ou
 take_while(xs, f) := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
 drop_while(xs, f) := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
 // the index (from 0, like xs[i]) of the greatest element, the first of equal ones
-argmax(xs) := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
-argmin(xs) := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
+argmax(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
+argmin(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
 pairwise(xs: any): list := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
 // [the first n, the rest]
@@ -52,7 +52,7 @@ last_n(xs, n) := drop(xs, max(count(xs) - n, 0))
 // n copies of value: fill(3, 0) is [0 0 0]
 fill(n, value) := filled_list(n, value)
 // [smallest, greatest]
-minmax(xs) := [min(xs), max(xs)]
+minmax(xs: any): list := [min(xs), max(xs)]
 // Python's list methods (card python-stdlib): extend appends each of ys in place, index is the position from 0
 extend(xs, ys) := { for y in ys { xs.append(y) }; xs }
 // JavaScript's concat: a new list of xs then ys
