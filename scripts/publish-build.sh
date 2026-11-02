@@ -3,6 +3,7 @@
 # machines, which take them in scripts/fetch-build.sh (rebuild.sh does on a store miss): the store entry
 # <store>/<hash>/ (warp.wasm, warp-self.wasm, runtime.wasm, modules/*.wasm, their .inputs; no machine code, which
 # is per host) as the asset build-<hash>.tar.gz of the pre-release `builds` of pannous/warp, with a SHA256SUMS manifest.
+# With a passed self test (<store>/self-tested mark) also build-<hash>-self.tar.gz: warp-self.wasm and the marks.
 # Run after a landing (handbook "Done"). Write-once: an asset there is kept. Keeps the newest KEEP assets.
 set -euo pipefail
 REPO=pannous/warp TAG=builds KEEP=${WARP_BUILDS_KEEP:-40}
@@ -15,23 +16,32 @@ asset=build-$hash.tar.gz
 gh release view "$TAG" -R "$REPO" >/dev/null 2>&1 ||
 	gh release create "$TAG" -R "$REPO" --prerelease --title "compiler builds by inputs hash" \
 		--notes "Built compilers keyed by scripts/compiler-inputs.sh hash; scripts/fetch-build.sh installs one into a store." >/dev/null
-if gh release view "$TAG" -R "$REPO" --json assets --jq '.assets[].name' | grep -qx "$asset"; then
-	echo "publish-build: $asset is there already"; exit 0
-fi
+present=$(gh release view "$TAG" -R "$REPO" --json assets --jq '.assets[].name')
 scratch=$(mktemp -d) && trap 'rm -rf "$scratch"' EXIT
-mkdir "$scratch/$hash"
-(cd "$entry" && for f in warp.wasm warp-self.wasm runtime.wasm modules/*.wasm; do
-	[ -f "$f" ] || continue
-	mkdir -p "$scratch/$hash/$(dirname "$f")"; cp "$f" "$scratch/$hash/$f"; [ -f "$f.inputs" ] && cp "$f.inputs" "$scratch/$hash/$f.inputs"
-done)
+# pack <asset> <folder>: <folder> (named <hash>) with its SHA256SUMS manifest as <asset>, uploaded; one there is kept
+pack() {
+	if grep -qx "$1" <<<"$present"; then echo "publish-build: $1 is there already"; return; fi
+	(cd "$2" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort | while read -r f; do sha256_of "$f"; echo "  $f"; done | paste -d '' - - > SHA256SUMS)
+	tar -C "$(dirname "$2")" -czf "$scratch/$1" "$hash"
+	gh release upload "$TAG" -R "$REPO" "$scratch/$1" >/dev/null
+	echo "publish-build: $1 ($(ls "$2" | tr '\n' ' '))"
+}
 # the self-tested marks of this hash (rebuild.sh self_passed: <store>/self-tested/<baked hash>, its line naming the hash)
-for mark in "$warp_store"/self-tested/*; do
-	[ -f "$mark" ] && [ "$(cut -d' ' -f1 "$mark")" = "$hash" ] && { mkdir -p "$scratch/$hash/self-tested"; cp "$mark" "$scratch/$hash/self-tested/"; }
-done
-(cd "$scratch/$hash" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort | while read -r f; do sha256_of "$f"; echo "  $f"; done | paste -d '' - - > SHA256SUMS)
-tar -C "$scratch" -czf "$scratch/$asset" "$hash"
-gh release upload "$TAG" -R "$REPO" "$scratch/$asset" >/dev/null
-echo "publish-build: $asset ($(ls "$scratch/$hash" | tr '\n' ' '))"
+marks=()
+for mark in "$warp_store"/self-tested/*; do [ -f "$mark" ] && [ "$(cut -d' ' -f1 "$mark")" = "$hash" ] && marks+=("$mark"); done
+copy_into() { local folder=$1 f; shift; for f in "$@"; do [ -f "$entry/$f" ] || continue; mkdir -p "$folder/$(dirname "$f")"; cp "$entry/$f" "$folder/$f"; [ -f "$entry/$f.inputs" ] && cp "$entry/$f.inputs" "$folder/$f.inputs"; done; }
+mkdir -p "$scratch/main/$hash"
+(cd "$entry" && copy_into "$scratch/main/$hash" warp.wasm warp-self.wasm runtime.wasm modules/*.wasm)
+((${#marks[@]})) && { mkdir -p "$scratch/main/$hash/self-tested"; cp "${marks[@]}" "$scratch/main/$hash/self-tested/"; }
+pack "$asset" "$scratch/main/$hash"
+# the self build and its marks apart (build-<hash>-self.tar.gz), only for a hash whose self test passed here: a main
+# asset published before the self build stays as it is (write-once), this one adds what it lacked
+if ((${#marks[@]})) && [ -f "$entry/warp-self.wasm" ]; then
+	mkdir -p "$scratch/self/$hash/self-tested"
+	copy_into "$scratch/self/$hash" warp-self.wasm
+	cp "${marks[@]}" "$scratch/self/$hash/self-tested/"
+	pack "build-$hash-self.tar.gz" "$scratch/self/$hash"
+fi
 # the oldest beyond KEEP go
 gh release view "$TAG" -R "$REPO" --json assets --jq '.assets | sort_by(.createdAt) | reverse | .['"$KEEP"':][].name' |
 	while read -r old; do gh release delete-asset "$TAG" "$old" -R "$REPO" -y >/dev/null; done

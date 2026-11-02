@@ -3015,7 +3015,8 @@ def phrase_redefinition(p: Parser, name: text, parameters: list): text {
 // Whether a statement starts at the parser's position, no end of one, `then`, `else` or `do`
 // Rust twin: blocks.rs at_body_start
 def at_body_start(p: Parser): bool {
-	c = peek(p.code, p.at, p.n)
+	// the code after blanks and comments: `if n == 0 // zero` ends its line, its body on the next (card comment-after)
+	c = if p.at >= p.n then '\n' else code_after(p, p.at)
 	not (p.at >= p.n or "\n;,})]".contains(c)) and not keyword_at(p, "do") and not keyword_at(p, "then") and not keyword_at(p, "else")
 }
 
