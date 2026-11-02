@@ -4,7 +4,10 @@
 // the tasks run until one sent a value and takes the oldest, `for v in ch {…}` receives until the channel is closed or
 // no task is left to send.
 use units
+use timers
 use tasks
+// how often `on message from …` looks for messages that arrived
+MESSAGE_POLL = 20ms
 rewrite channel() => Channel()
 rewrite send $v to $c => $c.send($v) where $c = channel()
 rewrite (for $item in $c $body) => while $c.more() { $item = $c.receive(); $body } where $c = channel()
@@ -36,9 +39,17 @@ rewrite $c.send($v) => channel_send($c#1, $v) where $c = channel $name
 rewrite send $v to $c => channel_send($c#1, $v) where $c = channel $name
 rewrite $c.receive() => machine_receive($c#2) where $c = channel $name
 
+// `on message from "chat" {…}`: the block runs for each message that arrives on the machine-wide channel, the message as
+// `event`; a timer looks for them (lib/timers.warp: the page runs it, natively none starts)
+rewrite on message from $name $body: block => message_listened($name, event => $body)
+
 // listener ids of channel variables, apart from those system_signals counts from 0
 global last_listener = 1048576
 
 machine_channel(name) := { last_listener += 1; channel_listen(last_listener, name); [name, last_listener] }
 // a receive looks for a message every 5 ms
 machine_receive(listener) := { while channel_pending(listener) == 0 { sleep(5 ms) }; channel_next(listener) }
+message_listened(name, handler: function): int := {
+	listener = machine_channel(name)#2
+	timer_every(MESSAGE_POLL, () => { while channel_pending(listener) > 0 { handler(channel_next(listener)) } })
+}

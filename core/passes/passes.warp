@@ -117,7 +117,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	timed("with_uses")
 	used = with_uses(program, folder)
 	timed("interpolation, early sugar")
-	own = early_sugared(interpolation(used))
+	own = with_result_word(early_sugared(interpolation(used)))
 	writes_templates = writes_template_in(own)
 	timed("sugar rules kept")
 	bindings = rule_bindings(own)

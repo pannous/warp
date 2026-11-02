@@ -25,5 +25,6 @@ rewrite $x as decimal => as_decimal($x)
 # random(x: list or number) takes
 rewrite random $t => random_of_type($t) where $t is symbol and $t in [int, bool, codepoint, float]
 # `a=5; b=1; a-b` is 4 (decision kebab-or-minus): a hyphenated name nothing binds, of parts the program binds, is
-# their difference (lib/rule_words.warp hyphen_difference); a function can't say it, as the lexer reads one word
+# their difference (lib/rule_words.warp hyphen_difference), noted; a bound one stays the name, warned when its parts
+# are bound too; a function can't say it, as the lexer reads one word
 rewrite $n => $d where $n is symbol and $d = hyphen_difference($n, $program)
