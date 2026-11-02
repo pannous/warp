@@ -218,7 +218,9 @@ Principles and Talking live only in common.md.
      a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
   3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then `git push origin HEAD:main`
      (fast-forward only; rejected: merge origin/main again, rerun the smoke test only if the new commits touch core/
-     or lib/). Then `todo done <card> <commit>`, with a `todo note` naming new tests, "docs: <page>" and the sample.
+     or lib/). On the box, then `scripts/publish-build.sh <worktree>`: the build of the landed inputs goes to the
+     `builds` pre-release, where rebuild.sh on the Mac (after-push) fetches it instead of compiling (scripts/fetch-build.sh).
+     Then `todo done <card> <commit>`, with a `todo note` naming new tests, "docs: <page>" and the sample.
      When the user says "quickly", they expect about a minute: one targeted test or none, give the user a try line
      with `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`, land it right after.
   4. Report one line to the Supervisor.

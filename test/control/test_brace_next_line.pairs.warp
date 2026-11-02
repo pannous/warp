@@ -1,0 +1,27 @@
+# Allman style: a block body `{ … }` opening the line after its header, as on the header's line (card brace-next-line)
+'n = 0
+if n == 0
+{ n = 5 }
+n'	5
+'n = 0
+if n == 1 // one
+{ n = 5 }
+else
+{ n = 7 }
+n'	7
+'n = 0
+if n == 1
+{ n = 5 }
+else if n == 0
+{ n = 9 }
+n'	9
+'n = 3
+while n > 0
+{ n -= 1 }
+n'	0
+'s = 0
+for i in 1 to 3
+{ s += i }
+s'	6
+'x = 1
+{ y: 2 }'	{y: 2}
