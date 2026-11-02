@@ -137,3 +137,5 @@ Scan signatures declare `any` inputs and `list` results; direct outcomes match b
 Scan verification: scratch-copy standalone build succeeded, and merged-main smoke printed Hello. Formatting touched only two unrelated slice spacings, which were restored. The focused runner remains active; direct before/after results match. Next land this slice and check focused feedback, then continue remaining signatures and the compiler issues. No existing tests were modified.
 
 Scan slice landed on main at `63ab15c4934631cac5d1a3109bd125279e5dc7ab`; scratch module build and merged-main smoke passed, with direct results matching before and after. The focused runner was still active when checked; inspect its result if available. The installer again reported run 8396 will take the newest tip. Next audit the remaining list and other library signatures, then R variadics and typed-return/color/infix; keep `any` where narrowing is not established. Preserve untracked module build artifacts in lib/. No existing tests were modified.
+
+Scan focused feedback completed: all 3 outcomes passed; the run overlapped the signature edit, while direct before/after checks supplied the baseline.
