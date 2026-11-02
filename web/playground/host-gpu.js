@@ -26,6 +26,9 @@ const TRIANGLE_CORNERS = 3;
 const PIXEL_BYTES = 4;
 const ROW_ALIGNMENT = 256; // a copied row is padded to 256 bytes
 const OPAQUE = 0xFF000000;
+// what a painting shows before a shader colored it: the paper of lib/draw.warp (host-media.js PAINT_PAPER), not black
+const PAPER_SHADE = 250 / 255;
+const PAPER = { r: PAPER_SHADE, g: PAPER_SHADE, b: PAPER_SHADE, a: 1 };
 const VALUES_NAME = "values"; // gpu_render's values as the shader names them
 const VALUES_BINDING = 0;
 // `$previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size, black
@@ -178,8 +181,14 @@ async function gpuCanvas({ id, replaces }) {
 	// COPY_DST: a shader reading $previous draws into a texture it keeps, copied here
 	context.configure({ device, format, alphaMode: "opaque", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
 	paintCanvases.set(id, { context, format });
+	// an opaque canvas shows black until its first frame: paper at once, as a page's paintings start
+	const encoder = device.createCommandEncoder();
+	encoder.beginRenderPass({ colorAttachments: [paperAttachment(context.getCurrentTexture())] }).end();
+	device.queue.submit([encoder.finish()]);
 	return id;
 }
+
+const paperAttachment = image => ({ view: image.createView(), loadOp: "clear", clearValue: PAPER, storeOp: "store" });
 
 // the pixels the fragment shader colored, row by row; given a `canvas` id, drawn into that page canvas instead
 async function gpuRendered({ shader, width, height, values, canvas }) {
@@ -210,7 +219,7 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const previous = readsPrevious ? previousFrame(device, `${format}\n${shader}`, image) : undefined;
 	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous) : undefined;
 	const encoder = device.createCommandEncoder();
-	const pass = encoder.beginRenderPass({ colorAttachments: [{ view: image.createView(), loadOp: "clear", storeOp: "store" }] });
+	const pass = encoder.beginRenderPass({ colorAttachments: [paperAttachment(image)] });
 	pass.setPipeline(pipeline);
 	if (uniform) pass.setBindGroup(0, uniform.bindings);
 	pass.draw(TRIANGLE_CORNERS);

@@ -9,6 +9,9 @@
 // Built by scripts/wasmtime-c-api.sh where SDL3 is installed
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#endif
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -122,6 +125,18 @@ static void held_open(void) {
 static int64_t in_painting(float point, int32_t painted, int window_points) {
 	return painted > 0 && window_points > 0 ? (int64_t)(point * painted / window_points) : (int64_t)point;
 }
+// whether the system shows dark mode, asked without a window (SDL's theme needs its video started): macOS keeps it as
+// the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light
+static int dark_mode(void) {
+#ifdef __APPLE__
+	CFStringRef style = CFPreferencesCopyAppValue(CFSTR("AppleInterfaceStyle"), kCFPreferencesAnyApplication);
+	int dark = style && CFStringCompare(style, CFSTR("Dark"), kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+	if (style) CFRelease(style);
+	return dark;
+#else
+	return 0;
+#endif
+}
 static int full_screen(void) { return window && (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0; }
 
 // the value of a system value this library owns into *value; 0 for a name it does not own
@@ -138,6 +153,7 @@ int32_t warp_system_value(const char* name, int64_t* value) {
 		if (open_now) SDL_GetWindowSize(window, &points_wide, &points_high);
 		*value = !open_now ? 0 : named(name, "mouse_x") ? in_painting(mouse_x, painted_width, points_wide) : in_painting(mouse_y, painted_height, points_high);
 	} else if (named(name, "window_fullscreen")) *value = full_screen();
+	else if (named(name, "dark mode")) *value = dark_mode();
 	else if (named(name, "mouse_down")) *value = open_now && mouse_down;
 	else if (named(name, "mouse_wheel")) *value = open_now ? (int64_t)wheel : 0;
 	else return 0;

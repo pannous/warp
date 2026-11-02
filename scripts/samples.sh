@@ -8,6 +8,7 @@
 # grouped by their first error.
 set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
+source "$(dirname "$0")/lib/results-header.sh"
 WARP=${WARP:-$warp_binary}
 SECONDS_EACH=30
 PARALLEL=${WARP_SAMPLES_PARALLEL:-1}  # user 2026-11-01: four warps at once, the sweep is the one test run beside 3 builds
@@ -49,6 +50,7 @@ export tree results WARP SECONDS_EACH WINDOW_LIBRARIES SERVING SERVER_PORT EXPEC
 report=$results/report.txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$report"
 cut -d: -f1 "$report" >"$tree/test/samples.txt"
+results_header "$tree/test/samples.txt" "$(git -C "$tree" rev-parse --short=10 HEAD)" 'ok|SRV'
 echo "samples: $(grep -c '^ok\|^SRV' "$report") of $(wc -l <"$report" | tr -d ' ') run, $(grep -c '^WIN' "$report") need a window, $(grep -c '^SRV' "$report") serve, $(grep -c '^EXP' "$report") fail on purpose ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $tree/test/samples.txt"
 # the failures by first error, its position and quotes left out so one cause groups
 grep -a '^FAIL' "$report" | sed 's/^FAIL [^:]*: //; s/"[^"]*"/"…"/g; s/ at samples\/[^ ]*//; s/ (no owner)//' | sort | uniq -c | sort -rn

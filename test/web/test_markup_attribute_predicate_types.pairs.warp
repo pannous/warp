@@ -1,0 +1,4 @@
+# Markup attributes and style declarations, as in markup.warp's element examples
+'use markup; to_html(input{disabled: true})'	'<input disabled>'
+'use markup; to_html(input{disabled: false})'	'<input>'
+'use markup; to_html(div{style: {color: "red"}, "Hi"})'	'<div style="color: red">Hi</div>'

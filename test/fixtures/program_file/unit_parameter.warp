@@ -1,0 +1,4 @@
+use units
+m(d) := d
+m(0.5 as float)
+m(5 * ms) == 5ms

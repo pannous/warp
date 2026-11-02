@@ -111,3 +111,19 @@ Cover map construction, mapping and fallback outcomes before adding generic sign
 ## library-typed map entries
 
 Cover entry lists and mutating helpers before typing their generic signatures; verify direct outcomes and merged-main smoke.
+
+# library-typed markup slice
+
+Check markup rendering outcomes before and after annotating the public renderer; preserve its generic input domain and existing tests.
+
+# library-typed markup handler predicates
+
+Cover rendering and dispatch of a click handler, then annotate handler predicates while preserving generic inputs. Verify the focused outcome, module build and smoke.
+
+# library-typed markup text helpers
+
+Cover escaping and numeric rendering before declaring text results for the shared rendering helpers. Preserve generic inputs and verify outcomes and smoke.
+
+## library-typed markup CSS helpers
+
+Cover rendered CSS declarations and attributes before declaring text results; keep generic inputs and verify focused outcomes and merged-main smoke.

@@ -1,6 +1,0 @@
-# card gap-element-array: an element array phrase declares the list
-
-# an_element_array_phrase_declares_the_list
-'x is a 100 element array; x.length'	100
-'x is a 3 element array; x#2'	0
-'n = 7; ys is a n element array; ys.length'	7
