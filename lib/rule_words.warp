@@ -380,8 +380,50 @@ declared_local(declaration: Node): Node := {
 	declaration
 }
 
-# the words by name, as a rule's `where` calls them
-rule_words = {shorthand_closure: shorthand_closure, class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, page_valued: page_valued, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check, bare_fields_read: bare_fields_read}
+# the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
+rule_words = {
+	bare_fields_read: bare_fields_read,
+	body_of: body_of,
+	class_help: class_help,
+	counted_question: counted_question,
+	declared_local: declared_local,
+	definition_text: definition_text,
+	dir_words: dir_words,
+	doc_of: doc_of,
+	exited: exited,
+	framed: framed,
+	function_help: function_help,
+	gpu_list_made: gpu_list_made,
+	gpu_lists_packed: gpu_lists_packed,
+	gpu_packed: gpu_packed,
+	gpu_packed_as: gpu_packed_as,
+	law_check: law_check,
+	misnamed: misnamed,
+	module_help: module_help,
+	module_named: module_named,
+	once_listens: once_listens,
+	page_valued: page_valued,
+	paint_size: paint_size,
+	parameters_named: parameters_named,
+	path_parameters: path_parameters,
+	return_kind: return_kind,
+	route_bindings: route_bindings,
+	route_verb: route_verb,
+	served: served,
+	shader_values: shader_values,
+	shader_values_of: shader_values_of,
+	shorthand_closure: shorthand_closure,
+	signaled: signaled,
+	signature_text: signature_text,
+	spelled: spelled,
+	typed_json: typed_json,
+	unit_bound: unit_bound,
+	unit_led: unit_led,
+	value_dir_words: value_dir_words,
+	wgsl_painting: wgsl_painting,
+	wgsl_shader: wgsl_shader,
+	whenever_listens: whenever_listens
+}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
@@ -489,24 +531,28 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 # nor finds defined (the program's, the library's)
 law_trial_values = "[0, 1, -1, 2, -2, 3, -7, 10, -100, 1000]"
 law_placeholder = "law_proposition_placeholder"
+law_variable_prefix = "law_"
 law_check(law: Node, program: Node): Node := {
 	is_named_law = is_key(law, Op.Colon) and key_of(law) is symbol
 	lines = if is_named_law then statements_in(value_of(law)) else [law]
+	if is_named_law and #lines == 1 and is_group(lines#1) { lines = items_of(lines#1) }
 	proposition = lines.last
 	given = lines[0 ..< #lines - 1].map(law_given).filter(name => name != "")
 	defined = level_statements(program).map(declared_name)
 	variables = if #given > 0 then given else law_variables(proposition, []).filter(name => name not in defined and not is_declared_word(name))
 	law_shown = (if is_named_law then name_of(key_of(law)) else as_code(proposition).replace("ø-", "-")).replace("\"", "'")
-	failure = "\"law " + law_shown + " fails for \"" + variables.map(name => " + \"" + name + " = \" + " + name).join(" + \", \"")
+	failure = "\"law " + law_shown + " fails for \"" + variables.map(name => " + \"" + name + " = \" + " + law_variable_prefix + name).join(" + \", \"")
 	code = "if not (" + law_placeholder + ") { raise " + failure + " }"
-	for name in variables.reverse() { code = "for " + name + " in " + law_trial_values + " { " + code + " }" }
+	# each variable held as law_<name>, which no rule of a library word takes (c, m)
+	for name in variables { proposition = renamed(proposition, name, plain_node(parsed(law_variable_prefix + name))) }
+	for name in variables.reverse() { code = "for " + law_variable_prefix + name + " in " + law_trial_values + " { " + code + " }" }
 	renamed(plain_node(parsed(code)), law_placeholder, proposition)
 }
 # `for x: int` of a named law: x
 law_given(line: Node): text := {
 	line_code = as_code(line)
 	if not line_code.starts_with("for ") { return "" }
-	line_code[4 ..].split(":")#1.trim()
+	line_code[4 ..].replace(":", " ").split(" ").filter(word => word != "")#1
 }
 # the names a law reads, in order, each once: none a call's head (`square` of `square(x)`)
 law_variables(n: Node, found: list): list := {
