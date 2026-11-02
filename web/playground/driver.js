@@ -337,18 +337,31 @@ function warningOf(code, line) {
 	return { level: "normal", message, ...at, fix, fixes };
 }
 
-// a fix replaces what the warning names at its place, the longest start of its message written there (`a-b reads as
-// a - b` at a-b, `"3" + 4 joins the texts` at "3" + 4): {label, meaning, written, start, edits}, start null when the code
-// does not show it there (the button then stays disabled)
+// a fix replaces what the warning names, the longest start of its message written at its place (`a-b reads as a - b`
+// at a-b, `"3" + 4 joins the texts` at "3" + 4), everywhere the code writes it so (a kebab key and its read alike):
+// {label, meaning, written, start, edits}, the last edit first; start null when the code does not show it there (the
+// button then stays disabled)
 function fixOf(code, message, at, meant) {
 	const start = utf16Index(code, at);
 	const rest = start === null ? "" : code.slice(start);
 	let written = message;
 	while (written && !rest.startsWith(written)) written = written.slice(0, -1);
 	written = written.trimEnd();
-	const found = written.length > 0;
-	return { label: `I meant: ${meant}`, meaning: message, written: found ? written : message, start: found ? start : null,
-		edits: found ? [{ start, end: start + written.length, replacement: meant }] : [] };
+	if (!written) return { label: `I meant: ${meant}`, meaning: message, written: message, start: null, edits: [] };
+	const edits = placesOf(code, written).reverse().map(place => ({ start: place, end: place + written.length, replacement: meant }));
+	return { label: `I meant: ${meant}`, meaning: message, written, start, edits };
+}
+
+// where the code writes the text as a whole, not inside a longer name
+const NAME_CHARACTER = /[\p{L}\p{N}_-]/u;
+function placesOf(code, text) {
+	const places = [];
+	for (let place = code.indexOf(text); place >= 0; place = code.indexOf(text, place + text.length)) {
+		const whole = !(NAME_CHARACTER.test(code[place - 1] ?? "") && NAME_CHARACTER.test(text[0])) &&
+			!(NAME_CHARACTER.test(code[place + text.length] ?? "") && NAME_CHARACTER.test(text.at(-1)));
+		if (whole) places.push(place);
+	}
+	return places;
 }
 
 // the UTF-16 index of a line and column in characters (as the compiler counts), null outside the code
