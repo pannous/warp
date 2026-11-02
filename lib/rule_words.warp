@@ -54,6 +54,22 @@ served(program: Node): any := ended_by(program, "route_add", routes_end_word)
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
 exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
+# `ticks` after `on every 1 second { ticks += 1 }`: a program that listens (a timer, an event, a variable's listener)
+# defines page_value(), its last expression again, which the page shows anew after each firing
+# (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
+page_value_word = "page_value"
+listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
+event_heads = [symbol("on"), symbol("once")]
+page_valued(program: Node): any := {
+	statements = level_statements(program)
+	# (the sugar reads the program before its `on click {…}` became a listen call)
+	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_of(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
+	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
+	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
+	last = statements[ending.last()]
+	if is_declaration(last) or listens(last) { return ø }
+	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
+}
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
 # that declares
@@ -365,7 +381,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check, bare_fields_read: bare_fields_read}
+rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, page_valued: page_valued, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check, bare_fields_read: bare_fields_read}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
