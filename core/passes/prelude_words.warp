@@ -11,6 +11,7 @@ use "../analysis/builtin_signatures.warp"
 use "scope.warp"
 use "lambdas.warp"
 use "../emitter/c_imports.warp"
+use "../extensions/components.warp"
 
 # each function a library file brought, by name: [the file, the line its definition starts on], the place a refusal
 # inside it names (emitter.warp note_emitting): its slice was parsed alone, its nodes keep no line of the file
@@ -250,8 +251,12 @@ lowering_words(program: Node): list := {
 is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
 # data view) a time's fields (emitter/times.warp time_field), its + - * where the program writes one
-# (time_operation_call); the exact root of a program taking one (root_words)
-emitted_words(program: Node): list := time_literal_words(program) + root_words(program)
+# (time_operation_call); the exact root of a program taking one (root_words); the library words the extension passes
+# write calls of (extension_writes)
+emitted_words(program: Node): list := time_literal_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))
+# each extension pass that writes calls of library words the program may never write declares them here, by its
+# function of the program giving them: the next such pass is one entry, no other edit
+extension_writes = [component_words]
 # a value called, `room(signal)` (closure_call_1 once lowered), may be an instance its class's `call` takes (emitter
 # closures.warp instance_calls): the module's call is reached and kept for it
 callable_word = "call"
@@ -536,7 +541,7 @@ shadows(own: map, name: text, count: int): bool := {
 # its value and the calls it takes; a call it doesn't take keeps the library's word
 with_own_words(program: Node, library: list): Node := {
 	heads = own_heads(program)
-	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX))
+	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(heads[name]))
 	for name in owned {
 		mine = own_word(name)
 		program = separated(bracketed(statements_in(program).map(statement => if binds_locally(statement, name) then statement else own_named(statement, name, mine, heads)), ""), ";")
@@ -548,6 +553,10 @@ own_named(code: Node, name: text, mine: text, heads: map): Node := bottom_up(ren
 # page_event beside its handler(name, action)), whose uses are that local's
 binds_locally(statement: Node, name: text): bool := declared_name(statement) != name and names_bound_in(statement).has(name)
 own_word(name: text): text := name + name_joiner + "own"
+# `sin(x: Real) := …`: a definition typing its parameters overloads the library's word beside it (arity_overloads.warp
+# library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its own body too,
+# reaches the library's; only an untyped one, `round(x) := …`, is the program's own
+is_typed_overload(head: Node): bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
 own_heads(program: Node): any := {
@@ -579,7 +588,7 @@ with_type_module_uses(program: Node): Node := {
 	providers = type_module_providers()
 	wanted = {}
 	# a function taking nothing is called bare too: `now` as `now()`
-	for word in called_words(program) + bare_calls(program, providers) + converted_types(program) + root_words(program) {
+	for word in called_words(program) + bare_calls(program, providers) + named_types(program) + root_words(program) {
 		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, Rust's sorted one
@@ -947,9 +956,13 @@ type_module_providers(): map := {
 root_words(program: Node): list := if not own_heads(program).has("sqrt") and nodes_in(program).any(n => is_group(n) and #n == 2 and n#1 == symbol("sqrt") and not surely_float(n#2)) then [exact_root_word] else []
 # `2.5`, `x as f64`, `(n as float)`: a value written a float, whose root is the float's (a primitive program's too)
 surely_float(n: Node): bool := if is_round(n) and #n == 1 then surely_float(n#1) else n is float or (is_key(n, Op.As) and value_of(n) is symbol and type_word_kind(name_of(value_of(n))) == "float")
-# the classes the program converts to, `3 as Real`: a type module's class comes with its conversions (`x as text`
-# brings no text module)
-converted_types(program: Node): list := nodes_in(program).filter(n => is_key(n, Op.As) and value_of(n) is symbol and (is_capitalized(name_of(value_of(n))) or not is_tested_type_word(name_of(value_of(n))))).map(n => name_of(value_of(n)))
+# the classes the program converts to, tests for or types a name with (written_types), `3 as real`, `x is real`, `b: real`: a type
+# module's class comes with its conversions (`x as text` brings no text module)
+type_naming_ops = [Op.As, Op.Is]
+named_types(program: Node): list := {
+	named = nodes_in(program).filter(n => type_naming_ops.any(op => is_key(n, op)) and value_of(n) is symbol).map(n => name_of(value_of(n)))
+	(named + written_types(program).map(written => written#1)).filter(name => is_capitalized(name) or not is_tested_type_word(name))
+}
 # the words the program calls, `f(x)` and `x.f(y)`, each once
 called_words(n: Node): list := {
 	found = {}

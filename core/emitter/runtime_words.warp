@@ -191,7 +191,7 @@ library_words = {numerator: "numerator", denominator: "denominator", gpu_zeros: 
 	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment"}
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (rust-harness:src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
-core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
+core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
@@ -208,11 +208,15 @@ covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKin
 kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
 descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
+# the runtime word's test of the value against the class and those extending it
+def class_test_code(body: Body, subject: Node, spec: text, word: text): TypedCode {
+	runtime_call(word, [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))])
+}
 def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	# `x is real` (REAL_CLASS) also of any number (decision real-canonical)
 	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
-	if spec in module.classes { return runtime_call(if spec == REAL_CLASS then "real_among" else "instance_among", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))]) }
+	if spec in module.classes { return class_test_code(body, subject, spec, if spec == REAL_CLASS then "real_among" else "instance_among") }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)
