@@ -11,3 +11,7 @@
 # an untyped definition of a library word takes every type itself: no library variant joins it
 'add(a, b) := 7; add(1, 2)'	7
 'def clear(color) { 7 }; clear(3)'	7
+# a typed definition named like a library word overloads it: a value of another type still reaches the library's
+'class R { a: int }; sin(x: R) := 1; sin(0.5)'	0.479425538604203
+'class R { a: int }; sin(x: R) := 1; sin(R(2))'	1
+'use math; angle = random() * 2 * pi; x = sin(angle); x < 2'	yes
