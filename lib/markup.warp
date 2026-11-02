@@ -136,9 +136,9 @@ live(compute: function): Live := Live(compute)
 
 // an element's handler: `on click {…}` among its items (a Handler), or HTML's own spelling
 // `onclick: (event => …)`
-html_is_handler(item: any) := item is Handler or html_is_handler_pair(item)
-html_is_handler_pair(item: any) := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
-html_is_handler_name(name: any) := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
+html_is_handler(item: any): bool := item is Handler or html_is_handler_pair(item)
+html_is_handler_pair(item: any): bool := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
+html_is_handler_name(name: any): bool := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
 	page_handlers.add(action)
