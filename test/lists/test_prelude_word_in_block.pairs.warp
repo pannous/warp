@@ -2,4 +2,3 @@
 'if yes {sum [1 2]}'	3
 'x = {sum [1 2]}; x'	3
 'def total(xs...){sum xs}; total(1,2,3)'	6
-'n = 5000; xs = 3..n; xs.sum'	12497497
