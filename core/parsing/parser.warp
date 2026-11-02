@@ -1909,6 +1909,11 @@ def is_operator_glyph(glyph: text): bool {
 	beyond_ascii
 }
 
+def has_beyond_ascii(source: text): bool {
+	for c in source { if c > '~' { return true } }
+	false
+}
+
 // The operator the words after a declaration's first word declare, else "": a glyph (`operator ⊕ := …`), or for infix
 // a word or glyph with its parameters, `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`
 // Rust twin: operators.rs declared_operator, declared_glyph
@@ -1958,18 +1963,21 @@ def operators_declared_in(statements: list): list {
 def scanned_operators(source: text): list {
 	found = declared_operators(source)
 	for module in used_module_sources(source) { found += declared_operators(module) }
+	// (a glyph is beyond ASCII: a source without such a character needs no module read)
+	if not has_beyond_ascii(source) { return found }
 	for library in library_glyph_operators() {
 		if source.contains(library.glyph) and declared_level(found, library.glyph) < 0 { found += [library] }
 	}
 	found
 }
 // The glyph operators the standard modules declare, with their precedence: `[1] ∪ [2] ∩ [3]` reads ∩ first as
-// lib/list.warp says, without `use list`; scanned the first time a parse needs them
-// Rust twin: operators.rs library_glyph_operators (it scans every std module; these are the ones declaring operators)
+// lib/list.warp says, without `use list`, `6 ± 1` is uncertain's operator_±(6, 1), which brings uncertain as any word
+// of it does (implicit_modules); scanned the first time a parse needs them
+// Rust twin: operators.rs library_glyph_operators
 global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
-		statements = ["math", "list", "regex"].flat_map(name => code_statements_of(name))
+		statements = std_module_names.filter(name => join(module_sources([name]), "").contains("operator")).flat_map(name => code_statements_of(name))
 		library_operators = operators_declared_in(statements).filter(operator => not is_name_start(operator.glyph#1))
 	}
 	library_operators
