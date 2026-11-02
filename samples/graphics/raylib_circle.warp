@@ -14,3 +14,4 @@ while not WindowShouldClose() and GetTime() < seconds_shown {
 	EndDrawing()
 }
 CloseWindow()
+# DONE The window closes immediately on the Mac  ./samples/graphics/raylib_circle_forever.warp Works fine. Maybe this test is only meant as a probe Not for end-users? (card raylib-window: the frame is drawn again until the time is up)

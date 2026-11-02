@@ -19,7 +19,7 @@ while not WindowShouldClose() {
 	if IsMouseButtonDown(RIGHT_BUTTON) { dots = [] }
 
 	BeginDrawing()
-	ClearBackground(RAYWHITE)
+	ClearBackground(RAYWHITE) # DONE ClearBackground(0xFFF5F5F5) todo? Flickers horribly from black to white if uncommented  (card clearbackground-each: cleared each frame, the dots drawn again)
 	for dot in dots { DrawCircle(dot#1, dot#2, 8.0, MAROON) }
 	DrawText("Left click to draw, Right click to clear", 180, 20, 20, DARKGRAY)
 	DrawCircle(mouse_x, mouse_y, 4.0, GRAY)
