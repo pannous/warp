@@ -41,8 +41,8 @@ component_defined(statement: Node): Node := {
 is_state_assignment(item: Node): bool := is_key(item, Op.Assign) and key_of(item) is symbol
 state_entry(name: text): Node := Key(this_word, Op.Dot, symbol(name))
 # `count = start` → `component_state(this, "count", () => start)`
-state_set_once(assignment: Node): Node := call_node(symbol("component_state"), [this_word, name_of(key_of(assignment)), lambda_of(value_of(assignment))])
-lambda_of(code: Node): Node := Key(Node.Empty, Op.Arrow, code)
+state_set_once(assignment: Node): Node := call_node(symbol("component_state"), [this_word, name_of(key_of(assignment)), deferred(value_of(assignment))])
+deferred(code: Node): Node := Key(Node.Empty, Op.Arrow, code)
 
 # every call of a component given its key, `Counter(0)` → `Counter(0, ø)`, `Counter(i, key: i)` → `Counter(i, i)`; one
 # among a tag's items a live part; `Counter.instances` and `counters` the page's instances
@@ -62,7 +62,7 @@ with_live_items(n: Node, names: list): Node := {
 }
 # (reading the instances too, `p{ "sum " + sum(counters.map(c => c.count)) }`: they change as the page renders)
 calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(n) == 0 and (is_component_call(n, names + [instances_word]) or parts_of(n).any(part => calls_component(part, names)))
-live_part(item: Node): Node := call_node(symbol("live"), [lambda_of(item)])
+live_part(item: Node): Node := call_node(symbol("live"), [deferred(item)])
 instances_named(n: Node, names: list): Node := {
 	if is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and value_of(n) == symbol(instances_field) { return instances_of(name_of(key_of(n))) }
 	if n is symbol { return plural_instances(name_of(n), names) ?? n }
