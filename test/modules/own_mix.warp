@@ -1,0 +1,3 @@
+# a fixture of test_path_use_shadows: a mix of its own, beside sound's mix(a, b, c); draw as the colors package uses it
+use draw
+mix(a, b, t) := a + (b - a) * t
