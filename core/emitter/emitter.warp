@@ -861,6 +861,8 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	written = if is_key(target, Op.Colon) and value_of(target) is symbol then name_of(value_of(target)) else ø
 	name = if written != ø then key_of(target) else target
 	if not (name is symbol) { return refuse("the declaration global " + form_of(declaration)) }
+	# `global n = n + 2` in a function: the value reads the global it assigns, declared first as a bare `global n` does
+	if mentions(value_of(declaration), name_of(name)) and not is_global(body, name_of(name)) { global_declaration_code(body, name) }
 	value = expression_code(body, value_of(declaration))
 	kind = if written == ø then ø else declared_kinds.get(aliased_type(written))
 	body.globals[name_of(name)] = yes
