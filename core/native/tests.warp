@@ -32,11 +32,11 @@ MAX_SLOTS = 256
 struct Child { pid: i32; run: i64; started: i64; lock: i32 }
 CHILD_BYTES = 32
 
-tests_run(compiler: text, by_self: bool): nothing := {
+tests_run(compiler: text, by_self: bool, first: int): nothing := {
 	work = joined(text_from(compiled_path().address, compiled_path().length - 5), ".tests")
 	command_output(joined(joined("rm -rf '", work), "'"))
 	mkdir(c_string(work), FOLDER_MODE)
-	file_ran(compiler, test_words(compiler, "test-list", work))
+	file_ran(compiler, test_words(compiler, "test-list", work, first))
 	required(joined(work, "/runs"), work)
 	runs = read_file(joined(work, "/runs"))
 	setenv(c_string("WARP_NO_WINDOW"), c_string("1"), 1)
@@ -47,7 +47,7 @@ tests_run(compiler: text, by_self: bool): nothing := {
 	unsetenv(c_string("WARP_VALUE_AS_DATA"))
 	unsetenv(c_string("WARP_ONE_THREAD"))
 	required(compiler, work)
-	file_ran(compiler, test_words(compiler, "test-verdicts", work))
+	file_ran(compiler, test_words(compiler, "test-verdicts", work, first))
 	required(joined(work, "/failed"), work)
 	failed = read_file(joined(work, "/failed"))
 	command_output(joined(joined("rm -rf '", work), "'"))
@@ -61,10 +61,11 @@ required(path: text, work: text): nothing := {
 		exit(1)
 	}
 }
-# the compiler's arguments for a test command: the command, the work folder, then this warp's words after `test`
-test_words(compiler: text, command: text, work: text): Arguments := {
+# the compiler's arguments for a test command: the command, the work folder, then this warp's words after `test` (at
+# `first`, after a `self` before it)
+test_words(compiler: text, command: text, work: text, first: int): Arguments := {
 	given = words(compiler, command, work, "", "", "")
-	for i in 2..arg_count() { added(given, arg(i)) }
+	for i in (first + 1)..arg_count() { added(given, arg(i)) }
 	given
 }
 
