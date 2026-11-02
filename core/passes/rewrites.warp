@@ -37,6 +37,7 @@ use "../analysis/diagnostics.warp"
 use "../analysis/builtin_signatures.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
+use "main_globals.warp"
 use rule_words
 
 rewrite_word = "rewrite"
@@ -155,6 +156,7 @@ global rule_program = Node.Empty
 global rule_source = ""
 global rule_varying = {}
 global rule_varying_known = no
+global rule_written_later = {}
 # the program's names and functions that may give a list (`where $x is vector`), worked out when a rule first asks
 global rule_vectors = []
 global rule_vectors_known = no
@@ -411,7 +413,7 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 	for rule in rules {
 		if rule.place == place and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
-			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if changes(result, n) { return rewritten_inside_item(result, rules) }
 		}
 	}
 	n
@@ -466,12 +468,18 @@ sugar_rewritten(n: Node, rules: list): Node := {
 		if rule.place == Place.Anywhere and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
 			if not changes(result, n) and written != ø { result = regrouped(rule_applied(rule, {}, written), n) }
-			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if changes(result, n) { return rewritten_inside_item(result, rules) }
 		}
 	}
 	n
 }
 
+# a rule's result, the rules applied to its parts: none of them is the item the rule rewrote, though
+# `live(() => $e)` holds a copy equal to it, which `where item` would wrap again and again
+rewritten_inside_item(result: Node, rules: list): Node := {
+	rule_item = ø
+	bottom_up(as_value(result), part => sugar_rewritten(part, rules))
+}
 # a result of a phrase matched in its parentheses, `(match x {…})`, back in them
 regrouped(result: Node, n: Node): Node := if result != ø and is_round(n) then List([as_value(result)], Bracket.Round, separator_of(n)) else result
 
@@ -1101,6 +1109,9 @@ has_property(code: Node, property: text): bool := {
 	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
 	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
 	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_classes.has(name_of(code#1)) }
+	# `p{ "count: " + count }`: a structure's item reading, where it runs, a varying value or a variable code running
+	# later writes. Only an item: the head `f(a: int)` of heads.warp's `$h := $e` is no varying code
+	if property == "varying" and not (code is symbol) and rule_item != ø { return read_now(code).any(name => varying_values().has(name) or later_written().has(name)) }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
@@ -1213,9 +1224,19 @@ instance_names_in(program: Node, nodes: list): map := {
 varying_values(): map := {
 	if not rule_varying_known {
 		rule_varying = varying_of(statements_in(rule_program))
+		rule_written_later = {}
+		main_level = statements_in(rule_program).map(changed_variable).filter(name => name != ø)
+		for name in written_later(rule_program, no) { if name in main_level { rule_written_later[name] = yes } }
 		rule_varying_known = yes
 	}
 	rule_varying
+}
+# the main-level variables a handler or a block running later writes (`count = 0 … on click { count += 1 }`; a
+# function's local, `listed` of markup's `option{ value: …; html_content(listed) }`, is none): code reading one where it runs
+# is varying, but a word itself stays as varying_of says (a `h := …` reading it is no function, lib/sugar/heads.warp)
+later_written(): map := {
+	varying_values()
+	rule_written_later
 }
 varying_of(statements: list): map := {
 	varying = {}
@@ -1238,6 +1259,18 @@ varying_of(statements: list): map := {
 		if is_charged_value(statement) and varying.has(name_of(key_of(statement))) and not assigned.has(name_of(key_of(statement))) { values[name_of(key_of(statement))] = yes }
 	}
 	values
+}
+# the variables code that runs later writes, a lambda's or a block's: `count` of `on click { count += 1 }`
+written_later(n: Node, inside: bool): list := {
+	later = inside or is_lambda(n) or is_curly_group(n)
+	written = if later then changed_variable(n) else ø
+	(if written == ø then [] else [written]) + parts_of(n).flat_map(part => written_later(part, later))
+}
+# the names code reads where it runs, not in its lambdas or blocks, which run later
+read_now(code: Node): list := {
+	if code is symbol { return [name_of(code)] }
+	if is_lambda(code) or is_curly_group(code) { return [] }
+	parts_of(code).flat_map(read_now)
 }
 # [name, the names it mentions] of a function or value definition, else ø
 reading(statement: Node): list? := {
@@ -1488,8 +1521,10 @@ walked_item(x: Node, is_item: bool, f: function, maps: map): Node := {
 	if is_item { rule_next_item = x }
 	placed_map_scoped(x, f, maps)
 }
-# `div{ "a", on click {…} }`: a word keying a block, whose items are the structure's items
-is_word_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and (key_of(n) is symbol or key_of(n) is text) and is_curly_group(value_of(n))
+# `div{ "a", on click {…} }`: a word nothing binds keying a block (data_blocks.warp is_free_tag), whose items are the
+# structure's items; a class's construction `Point{ x: 1 }` is none
+is_word_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n)) and not binds_any(rule_scope, name_of(key_of(n)))
+binds_any(scope: map, name: text): bool := binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type) or rule_classes.has(name)
 
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
 # is a case of one enum (`c = Coin.Dime`, `c = Dime`); a name also given anything else holds no case for sure
