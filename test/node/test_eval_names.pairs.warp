@@ -1,5 +1,5 @@
 # eval(text, with: {…}): the names the code sees, given explicitly (card eval-explicit-names)
 'eval("x*2", with: {x: 5})'	10
-'eval("s + \"!\"", with: {s: "hi"})'	"hi!"
+'eval("s + s", with: {s: "hi"})'	"hihi"
 'eval("count xs", with: {xs: [1, 2, 3]})'	3
 'eval("a + b", with: {a: 1, b: 2})'	3
