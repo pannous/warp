@@ -630,8 +630,13 @@ implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 	free = free_words(program)
 	modules = []
 	# (the module a `use` names is no word of it: `use hash` beside color's hash)
-	for word in candidates.filter(word => word in free and word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math) {
+	for word in candidates.filter(word => word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math and ((word in free and not only_rules_lead(word, index[word])) or leads_statement(program, word, index[word]))) {
+		named = word in free and not only_rules_lead(word, index[word])
 		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
+		# a word only leading a statement brings the module whose rule goes on with it, else none: `on alarm {…}` is the
+		# core's event, `on every 1 second {…}` timers'
+		if not named { definers = definers.filter(module => rule_fits(module, word, program)) }
+		if not named and #definers == 0 { continue }
 		if #definers > 1 { definers = definers_taking(word, definers, program) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
 		if #definers == 0 { raise word + " is defined by " + index[word].join(" and ") + ", none taking these arguments: say which, " + index[word].map(module => "`use " + module + "`").join(" or ") }
@@ -642,12 +647,30 @@ implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 	}
 	modules
 }
+# whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
+# quoted code (`data(set width of p to 12)` brings no english)
+only_rules_lead(word: text, modules: list): bool := modules.all(module => not definition_slices(used_module_text(module)).any(slice => slice#1 == word))
+# a statement led by a word a module's rule starts with: `stored users: [User]`, whose `stored` declares (sound's
+# `pattern` function never takes `pattern Pair = [_, _]`)
+leads_statement(program: Node, word: text, modules: list): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word)) and modules.any(module => word in module_rule_heads(module))
+# the words a module's rules start with, read once a module
+global rule_heads_by_module = {}
+module_rule_heads(module: text): list := {
+	if not rule_heads_by_module.has(module) { rule_heads_by_module[module] = rule_heads(used_module_text(module)) }
+	rule_heads_by_module[module]
+}
 # A word several modules define is the one module's whose definitions take every call the program makes of it, by
-# the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition)
+# the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition); a module whose
+# rule the word leads takes the calls none of them takes (signals' `on change p.age {…}` beside keys' on(key, body)), else
+# the defining modules do
 definers_taking(word: text, definers: list, program: Node): list := {
 	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 	if not counts { return definers }
-	definers.filter(module => definition_arities(module, word).any(span => counts.all(count => span#1 <= count and count <= span#2)))
+	taking = definers.filter(module => definition_arities(module, word).any(span => counts.all(count => span#1 <= count and count <= span#2)))
+	if taking { return taking }
+	ruled = definers.filter(module => not definition_arities(module, word) and rule_fits(module, word, program))
+	# else the modules defining it, as when it was theirs alone: keys' on(key, body) for `on alarm {…}`
+	if ruled then ruled else definers.filter(module => definition_arities(module, word))
 }
 # [least, most] arguments of each of module's definitions of word, read off its head `word(a, b = 1)`
 definition_arities(module: text, word: text): list := {
@@ -693,12 +716,13 @@ word_index(file: text): map := {
 	word_indices[file]
 }
 # the index of the words each standard module defines but the prelude, as word_index reads it: a word of letters
-# (`red`, `minute`), no operator or made name
+# (`red`, `minute`), no operator or made name; also the word leading a rule of the module that means nothing else
+# (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 word_index_text(): text := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude") {
-		for slice in definition_slices(file_text(std_module_path(module)) ?? "") {
-			word = slice#1
+		source = file_text(std_module_path(module)) ?? ""
+		for word in definition_slices(source).map(slice => slice#1) + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not word.contains(name_joiner) {
 				known = definers.get(word) ?? []
 				if module not in known { definers[word] = known + [module] }
@@ -707,6 +731,26 @@ word_index_text(): text := {
 	}
 	definers.keys.map(word => word + "\t" + definers[word].join(" ")).join("\n")
 }
+# the word each `rewrite` line of a source starts its pattern with: `stored` of `rewrite stored $name: [$kind] => …`
+# (none of a pattern starting with a hole, `rewrite $p => …`)
+rule_heads(source: text): list := rule_patterns(source).map(leading_word).filter(word => #word > 0)
+rule_patterns(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => line[#"rewrite " ..])
+# whether one of the module's rules the word leads goes on as a statement it leads does: the word after it a hole or
+# the statement's own, `on every 1 second {…}` timers' rule, `on change x {…}` signals'
+rule_fits(module: text, word: text, program: Node): bool := {
+	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word) and n#2 is symbol).map(n => name_of(n#2))
+	rule_patterns(used_module_text(module)).filter(pattern => leading_word(pattern) == word).any(pattern => second_word(pattern).starts_with("$") or second_word(pattern) in seconds)
+}
+# the pattern's word after its leading one, "" for none
+second_word(pattern: text): text := {
+	words = (if pattern.starts_with("(") then pattern[1 ..] else pattern).split(" ")
+	if #words > 1 then words#2 else ""
+}
+leading_word(pattern: text): text := {
+	start = if pattern.starts_with("(") then 1 else 0
+	pattern[start ..< name_end(pattern, start, #pattern)]
+}
+has_meaning(word: text): bool := is_declared_word(word) or word in prelude_definitions() or is_operator_spelling(word) or keyword_form(word) != ""
 # the names a program says, as a value or a call: never a member's, `c.pi` names c, `xs.f(a)` xs and a; what of them it
 # binds itself is names_bound_in's
 free_words(n: Node): map := {
