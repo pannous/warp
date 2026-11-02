@@ -63,8 +63,10 @@ same_quantity(q: Quantity, other: any, action: text) := {
 	other
 }
 
-// other when it adds to q: of its quantity and, for temperatures, of its scale (`20°C + 50°F` asks to convert one)
+// other when it adds to q, a plain 0 as q's zero: of its quantity and, for temperatures, of its scale (`20°C + 50°F` asks to convert one)
 summand(q: Quantity, other: any, action: text) := {
+	# a plain 0 adds as nothing, the start of a sum: `sum(distances)`, `average(runs.map(r => r.distance))`
+	if other == 0 and not (other is Quantity) { return measured(unit_zero(q.unit), q.dims, q.unit, q.scale) }
 	same_quantity(q, other, action)
 	if unit_zero(q.unit) != unit_zero(other.unit) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) + ", temperatures of two scales: convert one first (`" + quantity_text(other) + " as " + q.unit + "`)" }
 	other
@@ -168,6 +170,45 @@ ml() := known_unit("ml")
 ha() := known_unit("ha")
 dpi() := known_unit("dpi")
 ppi() := known_unit("ppi")
+
+// a unit word names a type too, its dimension's class (card unit-fields): a field `distance: km` holds a Length,
+// `time: min` a Time, `load: kg` a Mass; a unit of another quantity, a speed or an area, a Quantity
+type m = Length
+type mm = Length
+type cm = Length
+type dm = Length
+type km = Length
+type inch = Length
+type ft = Length
+type yd = Length
+type mi = Length
+type kg = Mass
+type g = Mass
+type mg = Mass
+type lb = Mass
+type s = Time
+type ms = Time
+type µs = Time
+type ns = Time
+type min = Time
+type minute = Time
+type minutes = Time
+type second = Time
+type seconds = Time
+type h = Time
+type hour = Time
+type hours = Time
+type day = Time
+type K = Temperature
+type px = Pixels
+type Hz = Quantity
+type kHz = Quantity
+type N = Quantity
+type L = Quantity
+type ml = Quantity
+type ha = Quantity
+type dpi = Quantity
+type ppi = Quantity
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {
