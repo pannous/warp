@@ -601,6 +601,15 @@ declared_local(declaration: Node): Node := {
 	declaration
 }
 
+# `on change online {…}` (lib/signals.warp): the word when it is one without arguments the prelude or a used module
+# defines, `online() := …`, and the program neither defines nor binds it; ø otherwise (a variable's `on change x`)
+polled_word(name: Node, program: Node, source: text): any := {
+	word = spelled(name)
+	if word in names_bound_in_kept(program) or definition_start(source, word) != ø { return ø }
+	texts = [prelude_text] + used_modules(source).map(used_module_text)
+	if texts.any(text => definition_slices(text).any(cut => cut#1 == word and cut#2.starts_with(word + "()"))) then name else ø
+}
+
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 rule_words = {
 	awaited_operand: awaited_operand,
@@ -634,6 +643,7 @@ rule_words = {
 	paint_size: paint_size,
 	parameters_named: parameters_named,
 	path_parameters: path_parameters,
+	polled_word: polled_word,
 	return_kind: return_kind,
 	route_bindings: route_bindings,
 	route_verb: route_verb,
@@ -812,12 +822,20 @@ shorthand_closure(block: Node): any := {
 }
 
 # `a=5; b=1; a-b` (decision kebab-or-minus): a hyphenated name the program binds nothing to, whose parts it binds
-# (anywhere: a parameter too), is their difference `a - b - c`; ø for one the program binds, or of a part it doesn't
+# (anywhere: a parameter too), is their difference `a - b - c`, noted with its fix; ø for one the program binds,
+# warned when its parts are bound too, or of a part it doesn't
 hyphen_difference(name: Node, program: Node): any := {
-	parts = spelled(name).split("-")
+	written = spelled(name)
+	parts = written.split("-")
 	if #parts < 2 or parts.any(part => part == "") { return ø }
 	bound = names_bound_in_kept(program)
-	if bound.has(spelled(name)) or not parts.all(part => bound.has(part)) { return ø }
+	if not parts.all(part => bound.has(part)) { return ø }
+	spaced = parts.join(" - ")
+	if bound.has(written) {
+		warn written + " is the name " + written + ", not " + spaced + "; fix: " + spaced
+		return ø
+	}
+	warn written + " reads as " + spaced + ": " + parts.join(" and ") + " are bound, no name " + written + "; fix: " + parts.join("_") + " or " + spaced
 	difference = symbol(parts#1)
 	# each difference in its own round group, as `(a - b)` parses: a bare Key reads as the spaced list `a -b`
 	for part in parts[1..] { difference = List([Key(difference, Op.Sub, symbol(part))], Bracket.Round, Separator.None) }

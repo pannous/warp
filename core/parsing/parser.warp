@@ -806,6 +806,11 @@ def indented_block(p: Parser): Node := {
 	outer_spaces = p.spaces
 	newline = skip_blanks(p)
 	p.spaces = outer_spaces or p.code[p.at - line_blanks(p) .. p.at].contains(" ")
+	// Allman style: the header's `{…}` block opening the next line at its indent, `if c` / `{ … }`, `def f(x)` / `{ … }`
+	if newline and line_indent(p) == p.indent and is_at(p.code, p.at, '{', p.n) {
+		p.spaces = outer_spaces
+		return atom(p)
+	}
 	if not newline or line_indent(p) <= p.indent {
 		p.spaces = outer_spaces
 		p.at = before
