@@ -59,9 +59,11 @@ exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
 page_value_word = "page_value"
 listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
+event_heads = [symbol("on"), symbol("once")]
 page_valued(program: Node): any := {
 	statements = level_statements(program)
-	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_of(n, word)))
+	# (the sugar reads the program before its `on click {…}` became a listen call)
+	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_of(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
 	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
