@@ -91,3 +91,7 @@ Cover list indices and numeric median and minmax outcomes before adding non-narr
 # library-typed list statistics and construction
 
 Cover documented list construction and statistics outcomes, then declare non-narrowing argument and result types and verify the module and smoke.
+
+# library-typed list scans
+
+Cover the documented scan and predicate-based take/drop outcomes, then type their generic inputs and list results and verify the module and smoke.
