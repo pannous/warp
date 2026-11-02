@@ -968,10 +968,13 @@ def of_assignment(nodes: list): Node? := {
 // Rust twin: commands.rs grouped_list, print_call
 def comma_list(bracket: Bracket, nodes: list): Node := {
 	head = group_parts(nodes#1)
-	if not (bracket == Bracket.None or bracket == Bracket.Curly) or not prints(head) { return listed(bracket, Separator.Comma, nodes) }
-	call = call_of([PRINT] + head#3[1:] + nodes[1 ..])
+	if not (bracket == Bracket.None or bracket == Bracket.Curly) or not (prints(head) or returns(head)) { return listed(bracket, Separator.Comma, nodes) }
+	// `return a, b` so too: [[return a], b] gives back the tuple [a, b] (decision P2, tuple returns)
+	call = if returns(head) then spaced([RETURN, listed(Bracket.Square, Separator.Comma, head#3[1:] + nodes[1 ..])]) else call_of([PRINT] + head#3[1:] + nodes[1 ..])
 	if bracket == Bracket.Curly then listed(Bracket.Curly, Separator.None, [call]) else call
 }
+RETURN = symbol("return")
+def returns(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 == " " and #phrase#3 == 2 and phrase#3#1 == RETURN
 
 // The parts of an unbracketed phrase `print a`
 def prints(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 == " " and #phrase#3 > 0 and phrase#3#1 == PRINT
