@@ -56,10 +56,12 @@ is_ref(kind: ValueKind): bool := kind not in primitive_kinds
 all_of(xs: list, f: function): bool := #xs.filter(f) == #xs
 any_of(xs: list, f: function): bool := #xs.filter(f) > 0
 
+is_held_value(kind: ValueKind): bool := kind == ValueKind.Data or kind == ValueKind.Node or kind == ValueKind.Instance
 arithmetic_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
 	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
-	if (left == ValueKind.Data or left == ValueKind.Empty) and (right == ValueKind.Data or right == ValueKind.Empty or right == ValueKind.Int or right == ValueKind.Float) { return ValueKind.Data }
-	if (right == ValueKind.Data or right == ValueKind.Empty) and (left == ValueKind.Int or left == ValueKind.Float) { return ValueKind.Data }
+	# a value its class answers the operator for, `5 * ms` of a linked module's Time, is known only when it runs
+	if (is_held_value(left) or left == ValueKind.Empty) and (is_held_value(right) or right == ValueKind.Empty or right == ValueKind.Int or right == ValueKind.Float) { return ValueKind.Data }
+	if (is_held_value(right) or right == ValueKind.Empty) and (left == ValueKind.Int or left == ValueKind.Float) { return ValueKind.Data }
 	if op == "+" and (left == ValueKind.List or left == ValueKind.Empty) and (right == ValueKind.List or right == ValueKind.Empty) { return ValueKind.List }
 	if op == "+" and (left == ValueKind.Text or right == ValueKind.Text or left == ValueKind.Codepoint or right == ValueKind.Codepoint) and left != ValueKind.Function and right != ValueKind.Function { return ValueKind.Text }
 	texts = left == ValueKind.Text or left == ValueKind.Codepoint or right == ValueKind.Text or right == ValueKind.Codepoint
