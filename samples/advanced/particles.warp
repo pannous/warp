@@ -68,7 +68,7 @@ def render() {
 }
 
 canvas(width, height)
-clear(black)
+clear(paper)
 spawn(30, 40, 25)
 spawn(60, 25, 25)
 spawn(90, 45, 25)
