@@ -9,9 +9,10 @@
 # It runs on a snapshot of HEAD (/Volumes/Worktrees/full-suite, removed after), so pulls and edits in the tree never reach it.
 # Run it in the background: it takes about an hour.
 set -uo pipefail
-WARP=${WARP:-/Users/me/dev/bin/warp}
+source "$(dirname "$0")/lib/platform.sh"
+WARP=${WARP:-$warp_binary}
 LOCK=$HOME/.cache/warp/full-suite.lock
-STORE=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}
+STORE=$warp_store
 SUMMARY='failed in [0-9]* files\|tests passed in [0-9]* files'
 
 commit=0
