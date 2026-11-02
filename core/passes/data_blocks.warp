@@ -2,7 +2,7 @@
 # program as it is meant, a tree, its bound names their values (the emitter's spliced quote, emitter/quotes.warp)
 # - a parameter typed `data` takes its argument so: `style{ ul > li { color: red } }` is `style(data·spliced {…})`,
 #   which no pass rewrites
-# - a word nothing binds glued to its block, `div{ class: "box" … }`, is the data pair `div: […]`; a `for` among its
+# - a word nothing binds keying its block, `div{ class: "box" … }` or `div { … }`, is the data pair `div: […]`; a `for` among its
 #   items gives its items, the comprehension `[li{g} for g in guests]` of `for g in guests { li{g} }`
 use "walk.warp"
 use "scope.warp"
@@ -39,13 +39,18 @@ data_argued(n: Node, positions: map): Node := {
 	group_like(n, (1 to #n).map(i => if i - 1 in taken then spliced(n#i) else n#i))
 }
 
-# `div{…}` of a word the program gives no value, function or type
+# `div{…}` or `div {…}` of a word the program gives no value, function or type
 is_free_tag(n: Node, scope: map): bool := {
-	if not ((is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))) { return no }
-	name = name_of(key_of(n))
+	parts = tag_parts(n)
+	if #parts == 0 { return no }
+	name = name_of(parts#1)
 	not (binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type))
 }
-with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), items_of(value_of(n)).map(item => data_argued(as_call(loop_as_items(item), scope), positions)))) else n
+with_loops_as_items(n: Node, scope: map, positions: map): Node := {
+	if not is_free_tag(n, scope) { return n }
+	parts = tag_parts(n)
+	Key(parts#1, if n is key then op_of(n) else Op.Colon, group_like(parts#2, items_of(parts#2).map(item => data_argued(as_call(loop_as_items(item), scope), positions))))
+}
 # `greet "Ann" {…}` among a tag's items: a phrase headed by a function the program binds is its call, as anywhere else
 as_call(item: Node, scope: map): Node := if is_group(item) and bracket_of(item) == "" and separator_of(item) == " " and #item > 1 and item#1 is symbol and binds_as(scope, name_of(item#1), Meaning.Function) then call_node(item#1, items_of(item)[1..]) else item
 # `for g in guests { li{g} }` → `[li{g} for g in guests]`, any other item as it is

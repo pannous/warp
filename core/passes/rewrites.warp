@@ -1494,7 +1494,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		rule_next_item = ø
 		holds_items = rule_item_block != ø and n == rule_item_block
 		if holds_items { rule_item_block = ø }
-		if is_word_block(n) { rule_item_block = value_of(n) }
+		if is_word_block(n) { rule_item_block = tag_parts(n)#2 }
 		walked = children(n, x => walked_item(x, holds_items, f, inner))
 		rule_maps = maps
 		outer_item = rule_item
@@ -1523,7 +1523,7 @@ walked_item(x: Node, is_item: bool, f: function, maps: map): Node := {
 }
 # `div{ "a", on click {…} }`: a word nothing binds keying a block (data_blocks.warp is_free_tag), whose items are the
 # structure's items; a class's construction `Point{ x: 1 }` is none
-is_word_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n)) and not binds_any(rule_scope, name_of(key_of(n)))
+is_word_block(n: Node): bool := #tag_parts(n) == 2 and not binds_any(rule_scope, name_of(tag_parts(n)#1))
 binds_any(scope: map, name: text): bool := binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type) or rule_classes.has(name)
 
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
