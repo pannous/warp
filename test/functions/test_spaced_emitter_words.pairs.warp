@@ -1,0 +1,4 @@
+# a word the emitter expands, called spaced like any function: `chr 65` is `chr(65)`
+'chr 65'	'A'
+'x = chr 67; x'	'C'
+'chr(66) + chr 67'	"BC"
