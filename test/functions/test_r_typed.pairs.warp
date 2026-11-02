@@ -1,0 +1,5 @@
+# Source: foreign-spellings decision, R compatibility functions
+'use R; sapply([1, 2], x => x * 2)'	[2, 4]
+'use R; lapply([1, 2], x => x + 1)'	[2, 3]
+'use R; vapply([1, 2], x => x * 3)'	[3, 6]
+'use R; c(1, 2, 3)'	[1, 2, 3]

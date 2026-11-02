@@ -267,10 +267,11 @@ function evaluatedNatively(code, file, hooks) {
 // ---- a page of markup (lib/markup.warp, card markup-keeps): page_render(value) is the HTML of main's value, each
 // handler numbered anew from 1 as data-warp-<event>="<n>"; page_event(n, detail) runs handler n of the last render
 
-// the HTML of the run's value by its page_render, undefined for a program without one
+// the HTML of the run's value by its page_render (a text, the raw array as show gives one), undefined for a program
+// without one
 function pageHtml(holder) {
 	const render = holder?.exports.page_render;
-	return render && holder.value != null ? guestText(holder.exports, render(holder.value)) : undefined;
+	return render && holder.value != null ? textOfArray(render(holder.value)) : undefined;
 }
 
 // the markup's attributes of data-warp-… that name no handler (markup.js)
@@ -285,7 +286,10 @@ function pageEventHandled(holder, event, detail) {
 	const { exports } = holder;
 	const n = BigInt(event.slice(event.lastIndexOf("·") + 1));
 	try {
-		const given = newGuestValue(exports, detail ?? null);
+		// a module using no host word of nodes exports no constructors (core/emitter/host.warp exported_builders): its
+		// handlers get ø, and a detail they would read is said lost
+		if (!exports.new_empty && detail != null && Object.keys(detail).length) console.warn(`${event}: the module exports no constructors, its handler gets ø for the detail ${JSON.stringify(detail)}`);
+		const given = exports.new_empty ? newGuestValue(exports, detail ?? null) : null;
 		try {
 			exports.page_event(n, given);
 		} catch (failure) {
