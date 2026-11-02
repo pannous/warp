@@ -115,3 +115,7 @@ Cover entry lists and mutating helpers before typing their generic signatures; v
 # library-typed markup slice
 
 Check markup rendering outcomes before and after annotating the public renderer; preserve its generic input domain and existing tests.
+
+# library-typed markup handler predicates
+
+Cover rendering and dispatch of a click handler, then annotate handler predicates while preserving generic inputs. Verify the focused outcome, module build and smoke.
