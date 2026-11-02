@@ -55,3 +55,7 @@ Cover hexadecimal color output and padding before annotating helper results. Pre
 # library-typed memory slice
 
 Cover linear-memory copying and half-open slices before typing their signatures; preserve accepted inputs and check the existing interop outcomes.
+
+# library-typed extrema slice
+
+Cover integer and fractional list extrema and variadic calls before annotating the remaining list helpers. Preserve accepted numeric values and verify focused outcomes and smoke.
