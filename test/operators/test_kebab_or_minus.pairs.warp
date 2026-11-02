@@ -1,0 +1,8 @@
+# a kebab name of bound parts the program doesn't bind is their difference; a bound one is the name (decision kebab-or-minus)
+'j = 5; i = 2; j-i'	3
+'a = 10; b = 3; c = 2; a-b-c'	5
+'my-var = 3; my-var'	3
+'a = 1; b = 2; a-b = 9; a-b'	9
+'k = 4; k-zz'	error
+'f(j, i) := j-i; f(7, 2)'	5
+'j = 5; i = 2; {j-i: 1}'	{j-i: 1}
