@@ -354,7 +354,7 @@ use_target(statement: Node): any := {
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
-	if module is text { return path_in(folder, module) }
+	if module is text { return path_in(folder, rooted(module, folder)) }
 	if not (module is symbol) { return ø }
 	path = path_in(folder, name_of(module) + module_extension)
 	if file_text(path) == ø then ø else path
@@ -363,6 +363,24 @@ file_used(statement: Node, folder: text): any := {
 working_relative(file: text): text := {
 	below = cwd + "/"
 	if file.starts_with(below) then file.replace(below, "") else file
+}
+# `use "•/lib/x.warp"` (alias `@/`): the project root, the nearest folder above `folder` holding `.git`, plus the
+# rest; no such folder refuses (decision project-root-paths)
+root_markers = ["•/", "@/"]
+rooted(name: text, folder: text): text := {
+	marker = root_markers.filter(m => name.starts_with(m))
+	if #marker == 0 { return name }
+	root = project_root(folder)
+	if root == ø { raise name + ": no folder above " + working_relative(folder) + " holds .git; run `git init` at the project root or use a relative path" }
+	root + "/" + name[#marker#1 ..< #name]
+}
+project_root(folder: text): any := {
+	at = without_steps_up(folder)
+	while at != "" and at != "/" {
+		if file_text(at + "/.git") != ø or file_text(at + "/.git/HEAD") != ø { return at }
+		at = without_steps_up(at + "/..")
+	}
+	ø
 }
 path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
 # the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
