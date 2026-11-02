@@ -1,0 +1,5 @@
+# a law (notes/laws.md) is tried for a few ints of its variables when the program runs, its value untouched
+'square(x) := x * x; law square(-x) == square(x); square(3)'	9
+'add(a, b) := a + b; law add(a, b) == add(b, a); law add(x, add(y, z)) == add(add(x, y), z); add(2, 3)'	5
+# a value a law fails for stops the run, naming the law and the value
+'half(x) := x div 2; law half(x) * 2 == x'	error
