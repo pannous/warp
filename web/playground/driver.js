@@ -267,10 +267,11 @@ function evaluatedNatively(code, file, hooks) {
 // ---- a page of markup (lib/markup.warp, card markup-keeps): page_render(value) is the HTML of main's value, each
 // handler numbered anew from 1 as data-warp-<event>="<n>"; page_event(n, detail) runs handler n of the last render
 
-// the HTML of the run's value by its page_render, undefined for a program without one
+// the HTML of the run's value by its page_render (a text, the raw array as show gives one), undefined for a program
+// without one
 function pageHtml(holder) {
 	const render = holder?.exports.page_render;
-	return render && holder.value != null ? guestText(holder.exports, render(holder.value)) : undefined;
+	return render && holder.value != null ? textOfArray(render(holder.value)) : undefined;
 }
 
 // the markup's attributes of data-warp-… that name no handler (markup.js)

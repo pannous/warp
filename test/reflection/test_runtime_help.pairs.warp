@@ -1,0 +1,4 @@
+# help(x) and function(x).definition of a name or an instance only the run knows look it up then (card runtime-text-help)
+'use sound; t = "midi"; help(t)'	'midi(pitch)\nthe MIDI note nearest a frequency: midi(C4) is 60, midi(440Hz) 69'
+'class Point { x: int }; p = Point(3); help(p)'	'class Point\nfields: x\nmethods: '
+'twice(x) := x * 2; name = "twice"; function(name).definition'	'twice(x) := x * 2'
