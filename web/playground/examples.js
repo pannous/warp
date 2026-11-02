@@ -25,7 +25,7 @@ fruits = ["apple" "pear" "plum"]
 n = 10^12
 r = 1..n
 [count r, sum r, r#123456789]` },
-	"linear arrays": { value: "[1 4 9 16 25]", code: `// an array of numbers in one block of memory
+	"linear arrays": { value: '[1, 4, 9, 16, 25]', code: `// an array of numbers in one block of memory
 linear xs = int[5]
 for i in 1 to 5 { xs#i = i * i }
 xs` },
@@ -35,7 +35,7 @@ alice.age + 1` },
 	conditions: { value: '"warm"', code: `// if … then … else gives a value
 temperature = 25
 if temperature > 20 then "warm" else "cold"` },
-	matching: { value: '["logo.png" "cat.jpg"]', code: `// a pattern names the parts it wants; find collects every match, at any depth
+	matching: { value: '["logo.png", "cat.jpg"]', code: `// a pattern names the parts it wants; find collects every match, at any depth
 page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
 page find {type: "image", src}` },
 	loops: { value: "55", code: `// add up the numbers 1 to 10
@@ -57,11 +57,11 @@ twice = { |x| x * 2 }
 func greet(person name: String) -> String { "Hello " + name }
 fun Int.plus(n: Int) = this + n
 [add(1, 2), twice(21), [1 2 3].map { $0 * 10 }, plus.([1 2 3], 10), greet(person: "Swift")]` },
-	broadcasting: { value: "[[1 4 9] [1 4 9 16]]", code: `// a function of one number works on a whole list
+	broadcasting: { value: '[[1, 4, 9], [1, 4, 9, 16]]', code: `// a function of one number works on a whole list
 square := it * it
 xs = [1 2 3 4]
 [square [1 2 3], square all xs]` },
-	closures: { value: "[3 [1 2 3 5 8]]", code: `// a function remembers the variables around it
+	closures: { value: '[3, [1, 2, 3, 5, 8]]', code: `// a function remembers the variables around it
 n = 0
 tick = () => { n += 1; n }
 tick(); tick()
@@ -77,7 +77,7 @@ water.fahrenheit = 212
 class Box<T>{item:T}
 extension Int { func squared() -> Int { self * self } }
 [water.celsius, Box<int>(42).item + 3.squared()]` },
-	"welcoming errors": { value: 'Error("say 3 == 3 is ambiguous; write (say 3) == 3 or say(3 == 3) at 3:5")', code: `// an unclear line is an error that offers its readings
+	"welcoming errors": { value: '`say 3 == 3` reads two ways: say(3 == 3) or (say 3) == 3; say\'s parameter is untyped: write the parentheses or declare its type', code: `// an unclear line is an error that offers its readings
 say(x) := x
 say 3 == 3` },
 	ambiguity: { value: "6", code: `// when code could mean two things, warp says which one it took
