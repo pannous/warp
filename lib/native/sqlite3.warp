@@ -50,8 +50,11 @@ column_value(statement: int, column: int) := {
 }
 
 // the rows `query` gives on the database `db`, each the list of its columns' values
-rows(db: int, query: text) := {
+rows(db: int, query: text) := rows_bound(db, query, [])
+// the rows `query` gives with its `?`s bound to `values` in order, as run_bound binds them
+rows_bound(db: int, query: text, values: list) := {
 	statement = sqlite3_prepare_v2(db, query, -1)
+	for i in 1 to count(values) { bound(statement, i, values#i) }
 	found = []
 	while sqlite3_step(statement) == SQLITE_ROW {
 		row = []

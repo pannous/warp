@@ -3,23 +3,46 @@
 // Loaded whole and written whole for now: `users = stored_table("users", User)` gives the rows as instances, the table
 // made or widened from User's fields first; `stored_add("users", u)` inserts u; `stored_save("users", users)` makes the
 // list the table's rows. `stored users: [User]` declares users so, its table named as it is, or `in "people"`.
-// Waiting: write-through and lazy loading (card storage-write-through).
+// A table's add, remove and its instances' field writes are written through, `transaction {…}` lands whole or not
+// at all. Waiting: lazy loading and filters as SQL (card storage-write-through).
 use os
 use sqlite3
+use signals
 
 rewrite stored $name: [$kind] in $table => $name = stored_table($table, $kind)
 rewrite stored $name: [$kind] => $name = stored_table($table, $kind) where $table = spelled($name)
+// a table's add and remove, and a write of its class's field, kept in the database (lib/rule_words.warp tables_kept)
+rewrite $p => $q where program and $q = tables_kept($p)
+rewrite transaction $body: block => stored_transaction(() => $body)
+// `stored visits default 0`, `stored visits = 0`: one value kept under its name, its first run's value the default,
+// each write kept: a listener of lib/signals.warp writes it through
+rewrite stored $name default $value => ($name = stored_value($key, $value); variable_listen([$key], no, (value, old) => stored_put($key, value))) where $name is symbol and $key = spelled($name)
+rewrite (stored $name = $value) => stored $name default $value where $name is symbol
+// `database.score = 42`, `local["name"]`: a value kept under a name, natively both in the program's database, in the
+// browser local is localStorage
+rewrite $store.$name => stored_got($key) where $store in [database, local] and $name is symbol and $key = spelled($name)
+rewrite $store[$key] => stored_got($key) where $store in [database, local]
+// a write of a store's value: its read written to; the listing names the stores, so the rule comes when they are named
+rewrite ($read($key) = $value) => stored_put($key, $value) where $read in [stored_got, database, local]
 
 PROGRAM_VARIABLE = "WARP_PROGRAM"
 PROGRAM_EXTENSION = ".warp"
 DATABASE_EXTENSION = ".database.sqlite"
 IN_MEMORY = ":memory:"
+// the table of the values kept under a name, `stored visits default 0`, `database.score`
+VALUES_TABLE = "stored_values"
 // the column of a field's value, by the type its default has
 COLUMN_TYPES = {bool: "INTEGER", int: "INTEGER", float: "REAL", text: "TEXT"}
+// a stored instance's row id field, SQLite's rowid
+ROW_ID = "id"
+ROWID = "rowid"
 
 global storage_database = ø
+// the table of each class stored, by the class's name; every instance read or added, for a rollback
+global kept_tables = {}
+global kept_instances = []
 // the program's database, opened at its first use
-database() := {
+opened_database() := {
 	if storage_database == ø {
 		program = env(PROGRAM_VARIABLE)
 		storage_database = sqlite3_open(if program == ø then IN_MEMORY else without_extension(program) + DATABASE_EXTENSION)
@@ -34,53 +57,129 @@ quoted_name(name: text) := "\"" + name.replace("\"", "\"\"") + "\""
 value_type(value: any) := if value is bool then "bool" else if value is int then "int" else if value is float then "float" else "text"
 
 // the table holding the class's instances, made, and widened by the fields it lacks, from the class's fields: the rows
-// it holds take a new field's default
+// it holds take a new field's default. A row's id is SQLite's rowid, no column; the columns' fields
 migrated(name: text, model: any) := {
+	kept_tables["${model}"] = name
 	blank = model()
-	fields = keys(blank)
-	types = values(blank).map(value_type)
+	fields = keys(blank).filter(field => field != ROW_ID)
+	types = fields.map(field => value_type(blank[field]))
 	columns = (1 to count(fields)).map(i => quoted_name(fields#i) + " " + COLUMN_TYPES[types#i])
-	run_query(database(), "create table if not exists " + quoted_name(name) + " (" + columns.join(", ") + ")")
-	present = rows(database(), "select name from pragma_table_info(" + "'" + name.replace("'", "''") + "')").map(row => row#1)
-	defaults = values(blank)
+	run_query(opened_database(), "create table if not exists " + quoted_name(name) + " (" + columns.join(", ") + ")")
+	present = rows(opened_database(), "select name from pragma_table_info(" + "'" + name.replace("'", "''") + "')").map(row => row#1)
+	defaults = fields.map(field => blank[field])
 	for i in 1 to count(fields) {
 		if fields#i not in present {
-			run_query(database(), "alter table " + quoted_name(name) + " add column " + columns#i)
-			run_bound(database(), "update " + quoted_name(name) + " set " + quoted_name(fields#i) + " = ?", [defaults#i])
+			run_query(opened_database(), "alter table " + quoted_name(name) + " add column " + columns#i)
+			run_bound(opened_database(), "update " + quoted_name(name) + " set " + quoted_name(fields#i) + " = ?", [defaults#i])
 		}
 	}
 	fields
 }
 
-// the instance of the class a row holds, its fields set from the row's columns in the class's order
-instance_of(model: any, fields: list, row: list) := {
-	made = model()
+// the instance given a row's values: its fields from the row's columns in the class's order, its id the row's
+row_read(made: any, fields: list, row: list) := {
 	for i in 1 to count(fields) {
 		value = row#i
 		made[fields#i] = if made[fields#i] is bool then value == 1 else value
 	}
+	if has_row_id(made) { made[ROW_ID] = row#(count(fields) + 1) }
 	made
 }
+has_row_id(instance: any) := ROW_ID in keys(instance)
+// the columns a select reads: the fields', then the rowid
+selected(fields: list) := (fields.map(quoted_name) + [ROWID]).join(", ")
 
-// the table's rows as instances of the class
+// the table's rows as instances of the class, each kept for a rollback
 stored_table(name: text, model: any) := {
 	fields = migrated(name, model)
-	rows(database(), "select " + fields.map(quoted_name).join(", ") + " from " + quoted_name(name)).map(row => instance_of(model, fields, row))
+	rows(opened_database(), "select " + selected(fields) + " from " + quoted_name(name)).map(row => kept_instance(row_read(model(), fields, row)))
+}
+kept_instance(instance: any) := {
+	kept_instances += [instance]
+	instance
 }
 
-// the instance inserted as a row of the table, made or widened from its class first; the instance
+// the instance inserted as a row of the table, made or widened from its class first; the instance, its id the row's
 stored_add(name: text, instance: any) := {
 	fields = migrated(name, type(instance))
 	marks = fields.map(field => "?").join(", ")
-	run_bound(database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", values(instance))
+	run_bound(opened_database(), "insert into " + quoted_name(name) + " (" + fields.map(quoted_name).join(", ") + ") values (" + marks + ")", fields.map(field => instance[field]))
+	if has_row_id(instance) { instance[ROW_ID] = sqlite3_last_insert_rowid(opened_database()) }
+	kept_instance(instance)
+}
+// a kept instance's fields written to its row once a field write gave the value (lib/rule_words.warp tables_kept); the value
+stored_written(instance: any, value: any) := {
+	name = kept_tables["${type(instance)}"]
+	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return value }
+	fields = keys(instance).filter(field => field != ROW_ID)
+	run_bound(opened_database(), "update " + quoted_name(name) + " set " + fields.map(field => quoted_name(field) + " = ?").join(", ") + " where " + ROWID + " = ?", fields.map(field => instance[field]) + [instance[ROW_ID]])
+	value
+}
+// the instance's row deleted, the instance keeping its fields with id 0; the instance
+stored_removed(name: text, instance: any) := {
+	if has_row_id(instance) and instance[ROW_ID] != 0 {
+		run_bound(opened_database(), "delete from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
+		instance[ROW_ID] = 0
+	}
+	instance
+}
+
+// `transaction { … }`: every write of the block lands, or none: a failure rolls the database back, gives each kept
+// instance its row's values again and is raised again; the block's value
+stored_transaction(block: function) := {
+	run_query(opened_database(), "begin")
+	try {
+		value = block()
+		run_query(opened_database(), "commit")
+		value
+	} catch failure {
+		run_query(opened_database(), "rollback")
+		for instance in kept_instances { row_restored(instance) }
+		raise failure
+	}
+}
+row_restored(instance: any) := {
+	name = kept_tables["${type(instance)}"]
+	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return instance }
+	fields = keys(instance).filter(field => field != ROW_ID)
+	found = rows_bound(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + " where " + ROWID + " = ?", [instance[ROW_ID]])
+	if count(found) == 0 { instance[ROW_ID] = 0 } else { row_read(instance, fields, found#1) }
 	instance
 }
 
 // the table's rows made those of the list, each instance a row in its order; the list
 stored_save(name: text, instances: list) := {
 	if count(instances) > 0 { migrated(name, type(instances#1)) }
-	if table_exists(name) { run_query(database(), "delete from " + quoted_name(name)) }
+	if table_exists(name) { run_query(opened_database(), "delete from " + quoted_name(name)) }
 	for instance in instances { stored_add(name, instance) }
 	instances
 }
-table_exists(name: text) := rows(database(), "select name from sqlite_master where type = 'table'").any(row => row#1 == name)
+table_exists(name: text) := rows(opened_database(), "select name from sqlite_master where type = 'table'").any(row => row#1 == name)
+
+// the program's database with its table of named values, made at the first use
+values_database() := {
+	run_query(opened_database(), "create table if not exists " + quoted_name(VALUES_TABLE) + " (name TEXT PRIMARY KEY, value)")
+	opened_database()
+}
+kept_rows(name: text) := rows_bound(values_database(), "select value from " + quoted_name(VALUES_TABLE) + " where name = ?", [name])
+// the value kept under the name, the default the first time, which is kept then
+stored_value(name: text, default: any) := {
+	found = kept_rows(name)
+	if count(found) == 0 then stored_put(name, default) else found#1#1
+}
+// the value kept under the name, ø for none
+stored_got(name: text) := {
+	found = kept_rows(name)
+	if count(found) == 0 then ø else found#1#1
+}
+// every value kept under a name, as a map: `print(storage)`
+storage() := {
+	kept = {}
+	for row in rows(values_database(), "select name, value from " + quoted_name(VALUES_TABLE)) { kept[row#1] = row#2 }
+	kept
+}
+// the value kept under the name; the value
+stored_put(name: text, value: any) := {
+	run_bound(values_database(), "insert or replace into " + quoted_name(VALUES_TABLE) + " (name, value) values (?, ?)", [name, value])
+	value
+}
