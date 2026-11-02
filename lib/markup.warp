@@ -301,7 +301,7 @@ html_attribute_name(name: any) := if name == "key" then "data-warp-key" else if 
 
 // `{ color: theme padding: 8 }`: a block of CSS properties with plain values; a dashed one (`color-scheme: dark`) is
 // no custom element
-html_is_declarations(value: any) := {
+html_is_declarations(value: any): bool := {
 	if html_is_listed_element(value) { return false }
 	let items = html_items(value)
 	if #items == 0 { return false }
@@ -359,7 +359,7 @@ html_attribute_value(value: any) := {
 // a value as the text it shows: a text without quotes, anything else as warp writes it
 html_plain(value: any): text := if value is text then value else str(value)
 
-html_is_true(value: any) := value == true or (value is number and value != 0)
+html_is_true(value: any): bool := value == true or (value is number and value != 0)
 
 html_escaped(text: any): text := replace(replace(replace(replace(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
 
