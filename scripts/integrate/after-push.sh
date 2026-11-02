@@ -12,16 +12,16 @@
 # tree of their own (started by each install, which stops the one still running on an older tip), and installs the
 # warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
-MAIN_WARP=/Users/me/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
+MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
 # the native warp's folder by a name that outlives installs: what executables it builds find libwarp_wasmtime by
 # (their rpath, card native-rpath-builds-folder)
-MAIN_LIB=/Users/me/dev/bin/lib
-MAIN_CHECKOUT=/Users/me/dev/angles/warp
+MAIN_LIB=$HOME/dev/bin/lib
+MAIN_CHECKOUT=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 TREE=/Volumes/Worktrees/integrate2
 SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
-BUILDS=/Users/me/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
+BUILDS=$HOME/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
 
 if_moved= slow=
 arguments=("$@")

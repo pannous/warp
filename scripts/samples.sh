@@ -7,7 +7,8 @@
 # line too) and each run's output to data/samples/out/ (<sample>.txt, <sample>.err); prints the count and the failures
 # grouped by their first error.
 set -uo pipefail
-WARP=${WARP:-/Users/me/dev/bin/warp}
+source "$(dirname "$0")/lib/platform.sh"
+WARP=${WARP:-$warp_binary}
 SECONDS_EACH=30
 PARALLEL=${WARP_SAMPLES_PARALLEL:-1}  # user 2026-11-01: four warps at once, the sweep is the one test run beside 3 builds
 # a sample calling a C window library opens its window whatever WARP_NO_WINDOW says: not run, counted apart (until
