@@ -15,6 +15,7 @@ operator_characters = chars("=+-*/<>!&|%^~?:.")
 operand_ends = chars("_)]}\"'`ø")
 operand_starts = chars("_([{\"'`#.$ø-!√")
 closing_brackets = [")", "]"]
+tab_character = "\t"
 
 # the line's new text by the rule
 laid_out(rule: text, line: Scanned): text := {
@@ -78,8 +79,8 @@ indentation_length(line: Scanned): int := {
 	n
 }
 
-# runs of blanks become one; none just inside `(…)` and `[…]`, before a comma or a semicolon or at the end; the blanks
-# before a trailing comment stay
+# runs of blanks become one, a tab among them one tab (it separates a *.pairs.warp line's code from its value); none
+# just inside `(…)` and `[…]`, before a comma or a semicolon or at the end; the blanks before a trailing comment stay
 single_spaces(line: Scanned): text := {
 	cs = chars(line.text)
 	start = indentation_length(line)
@@ -96,7 +97,7 @@ single_spaces(line: Scanned): text := {
 			} else if next == "" or (is_code(line, i + run) and next in [")", "]", ",", ";"]) {
 				written += ""
 			} else if not (written.ends_with("(") or written.ends_with("[")) {
-				written += " "
+				written += if piece(cs, i, run).contains(tab_character) then tab_character else " "
 			}
 			i += run
 		} else {
