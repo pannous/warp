@@ -96,6 +96,18 @@ function servedListing(directory) {
 }
 
 const headers = new Map(); // header URL → its lazy file or null, for every test of this worker
+const servedFiles = new Map(); // repository path → its lazy file: a compile asks for list.warp four times
+// the compiler's library sources, fetched in one request as the page starts (preloadSources): a first compile reads
+// some 80 of them, each a synchronous round trip otherwise (card wasm-size-reduction)
+const preloaded = new Map(); // repository path → {bytes, size}
+
+function preloadSources(sources, folder) {
+	const encoder = new TextEncoder();
+	for (const [name, text] of Object.entries(sources)) {
+		const bytes = encoder.encode(text);
+		preloaded.set(`${folder}/${name}`, { bytes, size: bytes.length });
+	}
+}
 
 // a served file, read only when its bytes are wanted: a directory walk stats every file of the repository
 function lazyFile(url) {
@@ -117,9 +129,12 @@ function served(path) {
 	if (path === TEMPORARY_DIRECTORY) return { entries: new Set() };
 	if (path.startsWith("/")) return null; // the machine has nothing else; the overlay may
 	if (path === "") return { entries: new Set(listing("").keys()) };
+	if (preloaded.has(path)) return preloaded.get(path);
 	const isDirectory = listing(parentOf(path))?.get(nameOf(path));
 	if (isDirectory === undefined) return null;
-	return isDirectory ? { entries: new Set(listing(path).keys()) } : lazyFile(FILE_ROOT + path);
+	if (isDirectory) return { entries: new Set(listing(path).keys()) };
+	if (!servedFiles.has(path)) servedFiles.set(path, lazyFile(FILE_ROOT + path));
+	return servedFiles.get(path);
 }
 
 // what instances share of the file system they change: the written files (path → bytes, or a text), the folders made
