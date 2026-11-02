@@ -50,7 +50,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	known = #diagnosed
 	# (the standard modules it names words of without their `use`, as if it said them)
 	timed("implicit uses")
-	source = with_implicit_uses(source, word_index_file())
+	source = with_implicit_uses(source, word_index_file(), folder)
 	timed("c functions, runtime, linking")
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
 	foreign = c_functions_of(source, library_folder)
@@ -74,8 +74,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	timed("emit done")
 	# a linked module whose words won't take the program's values: said, and the program compiled with its source
 	if made is text and #module.linked_images > 0 {
-		# (a method clash is the linking's own gap, card class-method-linking, nothing the program's author did)
-		if not made.contains(LINKED_METHOD_CLASH) { warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source" }
+		warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source"
 		link_libraries([], [])
 		relinked = #diagnosed
 		program = checked_program(foreign#1, folder, prelude_source)
