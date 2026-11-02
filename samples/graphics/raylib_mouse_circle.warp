@@ -16,12 +16,12 @@ while not WindowShouldClose() {
 	BeginDrawing()
 
 	if(needsClear){
-		ClearBackground(0xFFF5F5F5)
+		# ClearBackground(0xFFF5F5F5) todo? Flickers horribly from black to white if uncommented  (card clearbackground-each)
 		needsClear = 0
 	}
 
 	if(IsMouseButtonDown(2) == 1){
-		ClearBackground(0xFFF5F5F5)
+		ClearBackground(0xFFF5F5F5) # Switches background from black to white, which is better
 	}
 
 	if(IsMouseButtonDown(0) == 1){
