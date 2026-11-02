@@ -111,7 +111,7 @@ WASM2C_RUNTIME = "/share/wabt/wasm2c"
 WABT_HEADERS = "/include"
 build_native(source_file: text, library: text) := {
 	source = read(source_file)
-	if not is_primitive_file(source) { raise "warp build native builds a primitive file, whose first line is `@primitive` (notes/primitive.md)" }
+	if not is_primitive_file(source) { raise "warp build native builds a primitive file, whose leading header holds `@primitive` (notes/primitive.md)" }
 	emitting_file(working_relative(source_file))
 	executable = source_file.remove_suffix(".warp")
 	stem = executable + ".native"

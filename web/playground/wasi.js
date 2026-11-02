@@ -321,6 +321,8 @@ function wasiImports(memory, args, output, overlay = newOverlay(), environment =
 				return open({ path, entries: existing.entries }, opened);
 			}
 			if (!existing && !(openFlags & OPEN.CREATE)) return ERRNO.NOENT;
+			// as natively, a file is made only in a folder that is there (`write("no such folder/x.txt", …)` fails)
+			if (!existing && !lookup(parentOf(path))?.entries) return ERRNO.NOENT;
 			if (existing?.entries) return open({ path, entries: existing.entries }, opened);
 			const bytes = openFlags & OPEN.TRUNCATE || !existing ? new Uint8Array() : existing.bytes;
 			if (openFlags & (OPEN.CREATE | OPEN.TRUNCATE)) {

@@ -145,13 +145,8 @@ addHostPart({
 			}
 			return buildValue(module, report.result);
 		},
-		// the code of a text known only at run time (src/host.rs parse_code): parsed by the same compiler instance
-		parse_code: text => {
-			const module = program();
-			const report = evalBlock(hooks, JSON.stringify({ parse: readNode(module, text) }));
-			if (report.error !== undefined) return errorInProgram(module, report.error);
-			return buildValue(module, report.result);
-		},
+		// the code of a text known only at run time: the page's warp.wasm parses it (driver.js codeParsed)
+		parse_code: text => codeParsed(program(), text),
 		// the path a file word opens, its links followed (core/runtime/extended/wasi.warp opened_entry): the browser's
 		// files have no links, -1 says the path is itself
 		real_path: () => -1,
