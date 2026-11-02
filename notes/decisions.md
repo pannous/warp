@@ -345,6 +345,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - kebab-or-minus (user): `a-b` is a name when declared or bound; otherwise, with a and b bound, it is subtraction with a got-it note, and `warp format` prints `a - b` (`j = 5; i = 2; j-i` → 3); both existing → the name wins, with #6's warning.
 - esoteric-phrases-commented (user): esoteric phrases in samples (`3 is at least 3`, `is at most`) are commented out with their canonical form beside them (`3 >= 3`), no rule words restored (card pure-reads).
 - operator-even-spacing (user, like Swift): a binary operator is spaced evenly, both sides or neither; `1 +1` reads as `1 -1` does (the list `[1, +1]` with its warning), never as addition.
+  Supervisor's shape: `1 -1` and `1 +1` both give two items with "warning: … is two items; fix: 1 - 1" (`1 -1` was silent); an unevenly spaced operator with no prefix form (`a *b`) keeps computing, with the same warning where cheap.
 - spaced-call-parentheses: `f (3)` is the call f(3) as `f 3` is; `f ()` calls f with no arguments as `f()` does (a one-parameter f gets ø): the result depends on the function, not a list `[f ø]`.
 - dot-space-property (user): `p. b` as `p.b` is allowed only while it costs at most 2–3 core lines; otherwise it goes (refused with the fix `p.b`).
 - default-parameter-def (Interviewer, small bug fix, 1 core line in definitions.warp is_parameter): `def f(n, i=2) = n + i` takes `i = 2` as a default parameter.
