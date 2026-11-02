@@ -1,6 +1,7 @@
 #!/bin/sh
 # scripts/build-site.sh <app.warp> [<folder>]: the program as a static site, any static host serves it (the folder
-# defaults to site/ beside the program). app.wasm is `warp build --wasm`'s module; the page runs it in a Worker with the
+# defaults to site/ beside the program). app.wasm is `warp build --wasm`'s whole module (app.full.wasm: the trimmed one
+# drops exports the page calls; app.mod.wasm's exact references load only in wasmtime). The page runs it in a Worker with the
 # playground's host (web/playground/site.js, site-worker.js, driver.js), its markup rendered by lib/markup.warp
 # page_render, its handlers run by page_event, a serving program's routes answering the page's links and forms.
 # The folder mirrors the repository's layout (web/playground/ holds the scripts), so the program's file reads resolve
@@ -25,15 +26,16 @@ title=$(basename "$stem")
 
 warp build --wasm "$source"
 mkdir -p "$folder/$SCRIPT_FOLDER/lib"
-mv "$stem.wasm" "$folder/app.wasm"
-rm -f "$stem.full.wasm" "$stem.mod.wasm"
+mv "$stem.full.wasm" "$folder/app.wasm"
+rm -f "$stem.wasm" "$stem.mod.wasm" "$stem"
 for script in $PAGE_SCRIPTS $WORKER_SCRIPTS $LIBRARIES; do cp "$PLAYGROUND/$script" "$folder/$SCRIPT_FOLDER/$script"; done
 # a static host gives no cross-origin isolation: this service worker adds it, registered from the site's root
 cp "$PLAYGROUND/coi-serviceworker.js" "$folder/"
 
 {
 	printf '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n'
-	printf '<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>%s</title>\n</head>\n<body>\n' "$title"
+	printf '<meta name="viewport" content="width=device-width, initial-scale=1">\n<link rel="icon" href="data:,">\n'
+	printf '<title>%s</title>\n</head>\n<body>\n' "$title"
 	printf '<div id="warp-root"></div>\n'
 	for script in $PAGE_SCRIPTS; do printf '<script src="%s/%s"></script>\n' "$SCRIPT_FOLDER" "$script"; done
 	printf '</body>\n</html>\n'
