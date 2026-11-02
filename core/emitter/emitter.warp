@@ -54,6 +54,9 @@ columns_per_line = 4096
 import_function_byte = 0
 # the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
 wasi_start = "_start"
+# lib/markup.warp's export giving the HTML of a value that is markup, else ø: a program using markup prints its
+# markup value as that page (decision html-render-mode)
+page_shown_word = "page_of"
 # WARP_VALUE_AS_DATA set: _start prints main's value as data after a line of its own, VALUE_MARK, as a list shows an
 # item (a text quoted, a character in single quotes: runtime node_code), ø too, so `warp test` reads back the value
 # the case gave, not its printed text (card native-warp-test)
@@ -167,8 +170,10 @@ int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>"
 # an int is wasm's i64: + - * wrap silently, never checked (decision nat-and-int); a nat that may grow is boxed
 bit_operators = ["xor", "<<", ">>"]
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
-# yes/no held as i32: only equal or not
+# yes/no held as i32: only equal or not; any other operator takes it as the int 0 or 1 (operators.warp bools_as_ints)
 bool_ops = {"==": 70, "!=": 71}
+# the operators whose result of two 0/1 values is 0 or 1 again: on two yes/no values a yes/no (user 2026-11-02, bool-as-int)
+zero_one_operators = ["xor", "&", "|", "min", "max"]
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
@@ -439,7 +444,7 @@ def defined_arities(program: Node): map {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {} }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {} }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -618,6 +623,14 @@ def gc_position(name: text): int {
 # bytes that name GC types by their names (a type's definition in gc_types, a reference in references): each name the
 # index the module takes the type under
 def gc_bytes(parts: list): list { concatenated(parts.map(part => if part is text then uleb(gc_type(part)) else [part])) }
+# _start printing main's value, in local 0, as its page where markup gives one (local 1), else as print shows it
+def page_printed(start: Function, main: Function, result: TypedCode, shown_kind: ValueKind): list {
+	start.locals = [main.result, ValueKind.Node]
+	page = call_values(module.functions[page_shown_word], [result])
+	html = TypedCode(ValueKind.Text, payload([op.local_get, 1], gc_type(gc.text)))
+	shown = printed(shown_code(unboxed_to_show(result, shown_kind))).code
+	call_code(main.index) + [op.local_set, 0] + boxed(page) + [op.local_set, 1, op.local_get, 1, op.ref_is_null, op.if, no_value, op.local_get, 0, op.ref_is_null, op.i32_eqz, op.if, no_value] + shown + [op.end, op.else] + dropped(runtime_call("print_line", [html])) + [op.end]
+}
 # _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
 def value_printed_as_data(result: TypedCode): list {
 	printed(text_value(VALUE_MARK)).code + printed(runtime_call("value_code", [TypedCode(ValueKind.Node, boxed(result))])).code
@@ -692,6 +705,10 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 	TypedCode(ValueKind.Float, kept + get_dividend + get_dividend + get_divisor + [op.f64_div, op.f64_trunc] + get_divisor + [op.f64_mul, op.f64_sub])
 }
 
+# a variable an Error raises in (decision errors-one-rule): any but an optional one (`r: json? = …`), a runtime
+# word's own, or a lowering's hidden one (try·value)
+def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and name not in body.kept
+def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
 	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
@@ -721,9 +738,14 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if is_key(target, Op.Colon) and key_of(target) is symbol and union_spelling(value_of(target)) != ø {
 		return union_declaration(body, name_of(key_of(target)), union_spelling(value_of(target)), value)
 	}
+	# `xs: [int] = [1]`, `xs: [U] = …`: a list as `list` declares it
+	if is_key(target, Op.Colon) and key_of(target) is symbol and bracket_of(value_of(target)) == "[" {
+		return declaration(body, name_of(key_of(target)), "list", value)
+	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
+	value = place_checked(body, name, value)
 	kind = value.kind
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`
@@ -769,6 +791,7 @@ admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
+	if type_name.ends_with("?") or type_name == "error" { body.kept[name] = yes }
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
@@ -785,6 +808,8 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 # its fields, or a case of T), a node; a value known only at run time is checked then (runtime.warp object_checked
 # fails with "not a T", as Rust's), one of another kind refused
 def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
+	# `x: real = 1/3` holds any real number, an int and a float as well as an exact real (decision real-canonical)
+	if type_name == REAL_CLASS and value.kind in [ValueKind.Int, ValueKind.Float, ValueKind.Node] { return assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value))) }
 	if value.kind != ValueKind.Node and value.kind != pending { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
@@ -848,11 +873,17 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 		entry = declared_global(global_key(body, name_of(declaration)), ValueKind.Node)
 		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1))
 	}
-	if not (is_key(declaration, Op.Assign) and key_of(declaration) is symbol) {
-		return refuse("the declaration global " + form_of(declaration))
-	}
-	body.globals[name_of(key_of(declaration))] = yes
-	declare_global(global_key(body, name_of(key_of(declaration))), expression_code(body, value_of(declaration)))
+	# `global int n = 0` (parser.warp global_declaration): `global n: int = 0`, the value as the type word takes it
+	target = if is_key(declaration, Op.Assign) then key_of(declaration) else ø
+	written = if is_key(target, Op.Colon) and value_of(target) is symbol then name_of(value_of(target)) else ø
+	name = if written != ø then key_of(target) else target
+	if not (name is symbol) { return refuse("the declaration global " + form_of(declaration)) }
+	# `global n = n + 2` in a function: the value reads the global it assigns, declared first as a bare `global n` does
+	if mentions(value_of(declaration), name_of(name)) and not is_global(body, name_of(name)) { global_declaration_code(body, name) }
+	value = place_checked(body, name_of(name), expression_code(body, value_of(declaration)))
+	kind = if written == ø then ø else declared_kinds.get(aliased_type(written))
+	body.globals[name_of(name)] = yes
+	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(value, kind))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
 	if name not in module.globals and value.mark != 0 { module.global_marks[name] = value.mark }
@@ -937,11 +968,13 @@ def expression_code(body: Body, n: Node): TypedCode {
 }
 
 # `f 3 4`: a program function's name before spaced arguments it takes calls it, as `f(3, 4)`; `midi_on C4` too,
-# the rest defaulted
+# the rest defaulted; a word the emitter expands as well, by its signature line (`read "s.txt"`, `chr 65`)
 is_spaced_call(body: Body, n: Node): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
-	name in module.functions and name not in body.names and takes_arguments(module.functions[name], items_of(n)[1..])
+	if name in body.names { return no }
+	if name in module.functions { return takes_arguments(module.functions[name], items_of(n)[1..]) }
+	lines_of(emitter_lines, unaliased(name)).any(line => takes(line.signature, #n - 1))
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
@@ -963,6 +996,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and is_program_call(body, name_of(n#1), items_of(n)[1..]) {
 		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
+	# `chr 65`, `read "s.txt"`: a word the emitter expands, called spaced, is its call `chr(65)`
+	if is_spaced_call(body, n) and name_of(n#1) not in module.functions { return expression_code(body, call_of(name_of(n#1), items_of(n)[1..])) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.classes {
 		return positional_instance(body, name_of(n#1), items_of(n)[1..])
 	}
@@ -987,6 +1022,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		return call(body, module.runtime[name_of(n#1)], items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test_code(body, n#2, n#3) }
+	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text { return class_test_code(body, n#2, n#3, "instance_among") }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.FloatConvertible as text) { return runtime_call("converts_to_float", [TypedCode(ValueKind.Node, boxed(expression_code(body, n#2)))]) }
 	# a match no case takes: `switch_no_case("label": value)` ends the run in no_case_<label>, which Rust's run reports
 	# as "no case for label"
@@ -1068,6 +1104,9 @@ def group_expression(body: Body, n: Node): TypedCode {
 	# a call of a program's function it can't take: refused naming the count
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return call(body, module.functions[name_of(n#1)], items_of(n)[1..]) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
+	# `div { p{"x"} }`, a word nothing knows before a block, once every word the emitter knows (return, global …) is
+	# taken: the data tag `div{…}`, one form with it
+	if is_data_tag(body, n) { return TypedCode(ValueKind.Node, spliced_code(body, n)) }
 	# `y = 2 x`: Rust's "`x` after `y=2` does nothing"
 	assigns = x => type(x) is key and op_of(x) in assignment_operators
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
@@ -1291,6 +1330,8 @@ def negation(body: Body, value: TypedCode): TypedCode {
 logical_words = {and: "and", or: "or"}
 def logical(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	a = expression_code(body, left)
+	# a value's `a or b` is b when a raises (decision errors-one-rule): a call giving a node is read under a try
+	if symbol == "or" and a.kind == ValueKind.Node and is_call(left) and not body.function.is_runtime { a = expression_code(body, kept_raise(left)) }
 	if a.kind == ValueKind.Bool and is_answered(a.code, symbol) { return a }
 	logical_code(body, symbol, a, nested(body, right, 1))
 }
@@ -1435,7 +1476,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime = {}
 	module.globals = {}
 	module.global_order = []
-	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text)
+	# (a value's `f(x) or b` too, logical reading f(x) under a try)
+	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text) or #nodes_kept(program, n => is_key(n, Op.Or) and is_call(key_of(n))) > 0
 	if module.catches_errors { declared_global(try_depth_name, ValueKind.Int) }
 	# the name of the runtime word a run failed in, which error_sentences.warp reads
 	declared_global(trap_name_global, ValueKind.Node)
@@ -1473,10 +1515,10 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime_types = 0
 	if module.prebuilding or prepended() { canonical_type_entries() }
 	if module.prebuilding { for kind in Made.keys { module.made[kind] = yes } }
+	module.global_marks = {}
 	if prepended() { behind_runtime() }
 	module.aliases = type_synonyms()
 	module.marks = int_type_kinds(statements_in(program))
-	module.global_marks = {}
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
 	declare_class_structs()
@@ -1507,6 +1549,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		module.shared = shared_names(block_statements(main.body))
 		compile_function(main, [])
 		if prepended() { linked_builders() }
+		page_builders()
 		# the host shows no ø: a program giving nothing needs no show
 		if not main.gives_nothing { shown_result(main.result) }
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
@@ -1550,6 +1593,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		absent = if main.result == ValueKind.Node then [op.local_get, 0, op.ref_is_null] else [op.i32_const, 0]
 		start.code = call_code(main.index) + [op.drop]
 		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(shown_code(unboxed_to_show(result, shown_kind))).code + [op.end] }
+		if not main.gives_nothing and module.functions.has(page_shown_word) and main.result == ValueKind.Node { start.code = page_printed(start, main, result, shown_kind) }
 		if not main.gives_nothing and value_as_data { start.code = call_code(main.index) + [op.local_set, 0] + value_printed_as_data(result) }
 		# what a host says of a run that failed in a runtime error, of a program that can fail so (a trimmed hello
 		# carried its sentences and the whole node printer: 25 KB for 1.5)

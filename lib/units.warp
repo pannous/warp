@@ -6,6 +6,7 @@
 // (notes/units_runtime.md)
 
 use unit_names
+use uncertain
 
 class Quantity {
 	amount: number
@@ -20,8 +21,8 @@ class Quantity {
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
 	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
 	compare(other) := amount - same_quantity(this, other, "compare").amount
-	// the same quantity shown in another unit of its kind: `q.to("m")`, `q as m`
-	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, u, target.scale) }
+	// the same quantity shown in another unit of its kind: `q.to("m")`, `q as m`, `q as cm^2` shown in cm²
+	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, target.unit, target.scale) }
 	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
 	in(u) := to(u).shown()
 	shown() := (amount - unit_zero(unit)) / scale
@@ -29,6 +30,10 @@ class Quantity {
 	float() := amount as float
 	text() := quantity_text(this)
 	show() := quantity_text(this)
+	// a tolerance's bounds and value, each a quantity in its unit: `(6m ± 0.3).low` is 5.7m
+	low() := measured(as_interval(amount).low, dims, unit, scale)
+	high() := measured(as_interval(amount).high, dims, unit, scale)
+	value() := measured(as_interval(amount).value, dims, unit, scale)
 }
 
 // the dimensions, each a class of its own: a parameter `duration: Time` takes a duration only
@@ -63,8 +68,10 @@ same_quantity(q: Quantity, other: any, action: text) := {
 	other
 }
 
-// other when it adds to q: of its quantity and, for temperatures, of its scale (`20°C + 50°F` asks to convert one)
+// other when it adds to q, a plain 0 as q's zero: of its quantity and, for temperatures, of its scale (`20°C + 50°F` asks to convert one)
 summand(q: Quantity, other: any, action: text) := {
+	# a plain 0 adds as nothing, the start of a sum: `sum(distances)`, `average(runs.map(r => r.distance))`
+	if other == 0 and not (other is Quantity) { return measured(unit_zero(q.unit), q.dims, q.unit, q.scale) }
 	same_quantity(q, other, action)
 	if unit_zero(q.unit) != unit_zero(other.unit) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) + ", temperatures of two scales: convert one first (`" + quantity_text(other) + " as " + q.unit + "`)" }
 	other
@@ -114,11 +121,20 @@ rewrite $e * min => $e * minute where $e is number
 rewrite $e min => $bound where $bound = unit_bound($e, minute)
 // `4 m²`, `2 m³`: a number before a unit's power multiplies the power
 rewrite $e $u^$n => $e * $u^$n where $e is number and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+// `q as km/h`, `36km/h in m/s`: the quantity shown in a compound unit, the unit of one of it (lib/units unit_named),
+// tried before the rules of a single unit word, which take a compound unit for its leading word
+rewrite $q as $u => $q.to($unit) where not unit_led($q) and $w = leading_unit($u) and $w in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $unit = compound_unit($u)
+rewrite $q in $u => $q.to($unit) where not unit_led($q) and $w = leading_unit($u) and $w in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $unit = compound_unit($u)
 // `3km as m`: the quantity shown in that unit; `3 km as m`, parsed 3 (km as m), takes its amount first
 rewrite $q as $u => $q.to($u.unit) where not unit_led($q) and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 rewrite $e $u as $t => ($e $u) as $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `2 hours in minutes`: the same, spelled with in
 rewrite $q in $u => $q.to($u.unit) where not unit_led($q) and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+// `q as km/h` binds as (q as km) / h, as tightly as `as` takes its type: the rest of a unit written whole joins the
+// unit converted to, q as (km/h), taken top-down before its parts convert (`(q as km) / h` written so stays a quotient)
+rewrite $a / $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a / $b)
+rewrite $a * $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a * $b)
+rewrite $a ^ $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a ^ $b)
 // `3 cm is Length` and `2 km/h is speed` parse as 3 (cm is Length): the unit goes with its amount first
 rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, Quantity, Length, Mass, Time, Temperature, Pixels]
 // `3 cm is length`, `2 km/h is speed`: a quantity measures a named dimension, after its unit went with its amount (no
@@ -159,6 +175,45 @@ ml() := known_unit("ml")
 ha() := known_unit("ha")
 dpi() := known_unit("dpi")
 ppi() := known_unit("ppi")
+
+// a unit word names a type too, its dimension's class (card unit-fields): a field `distance: km` holds a Length,
+// `time: min` a Time, `load: kg` a Mass; a unit of another quantity, a speed or an area, a Quantity
+type m = Length
+type mm = Length
+type cm = Length
+type dm = Length
+type km = Length
+type inch = Length
+type ft = Length
+type yd = Length
+type mi = Length
+type kg = Mass
+type g = Mass
+type mg = Mass
+type lb = Mass
+type s = Time
+type ms = Time
+type µs = Time
+type ns = Time
+type min = Time
+type minute = Time
+type minutes = Time
+type second = Time
+type seconds = Time
+type h = Time
+type hour = Time
+type hours = Time
+type day = Time
+type K = Temperature
+type px = Pixels
+type Hz = Quantity
+type kHz = Quantity
+type N = Quantity
+type L = Quantity
+type ml = Quantity
+type ha = Quantity
+type dpi = Quantity
+type ppi = Quantity
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {
@@ -204,4 +259,9 @@ exact_decimal(t: text) := {
 
 // a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
-sleep(duration) := sleep_ms((if duration is Time then duration.amount else duration) * 1000)
+sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)
+
+// `6.0m ± 0.3`: a tolerance of a quantity, its amount an interval; a plain spread counts in the value's unit, a
+// quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
+infix operator ±(q: Quantity, spread: number) := measured(plus_minus(q.amount, spread * q.scale), q.dims, q.unit, q.scale)
+infix operator ±(q: Quantity, spread: Quantity) := measured(plus_minus(q.amount, same_quantity(q, spread, "spread").amount), q.dims, q.unit, q.scale)

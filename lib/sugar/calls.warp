@@ -5,6 +5,9 @@
 rewrite ($f $x) => $f($x) where $f takes one
 # before several words it takes the phrase they make: `reverse sort xs` is `reverse(sort xs)`, then `reverse(sort(xs))`
 rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one
+# a function of the library written in warp (`first`, `last`, `sum`: no typed `from` line) before such a word and its
+# value takes their call: `first sorted xs` is first(sorted(xs))
+rewrite ($f $g $x) => $f(($g $x)) where $f is function and $g takes one
 # A type word before its value converts it, as its call does: `int 3.7` is int(3.7), `text int 3.7` text(int(3.7))
 # (braceless and braced calls take one path). Its line takes any value, `int(x): int from emitter`, so `takes one`
 # (one typed value) leaves it out. Not a name nothing binds: `int x = 3` declares x; before several words it takes

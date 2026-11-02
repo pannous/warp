@@ -152,6 +152,7 @@ passed_variant(argument: Node, key: text, overloaded: map, called: map): Node :=
 	if #fitting == 1 then symbol(variant_name(name_of(argument), fitting#1#2)) else argument
 }
 
+overloaded_phrase(n: Node, overloaded: map): Node := if is_curly_group(n) and #n > 1 and n#1 is symbol and name_of(n#1) in overloaded then phrase_block(n) else n
 # top-down, so a definition is renamed by its own parameters and a method call counts its receiver
 resolved(n: Node, overloaded: map, called: map): Node := {
 	call = definition_call(n)
@@ -160,7 +161,9 @@ resolved(n: Node, overloaded: map, called: map): Node := {
 	}
 	match n {
 		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded, called), Op.Dot, variant_call(children(method, x => resolved(x, overloaded, called)), overloaded, 1))
-		_: children(variant_call(passed_variants(n, overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
+		# a one-line block calling an overloaded word, `{sum [1 2]}`, is its phrase, as typed_resolved reads it (card
+		# prelude-word-in-block); a class's fields, `{name text}`, stay as they are
+		_: children(variant_call(passed_variants(overloaded_phrase(n, overloaded), overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
 	}
 }
 
@@ -183,7 +186,7 @@ any_fit = 100
 list_fit = 2
 # the kind each type word an overload tells apart stands for
 overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
-	f64: "float", f32: "float", real: "float", number: "number", text: "text", str: "text", string: "text",
+	f64: "float", f32: "float", number: "number", text: "text", str: "text", string: "text",
 	codepoint: "codepoint", char: "codepoint", character: "codepoint", bool: "bool", boolean: "bool", function: "function",
 	block: "function"}
 
@@ -477,6 +480,8 @@ takes_widened(type: text): bool := type == "float" or type == "number"
 run_time_test(argument: Node, type: text): Node := {
 	if is_union(type) { return union_members(type).map(member => run_time_test(argument, member)).fold(ø, (tests, test) => if tests == ø then test else Key(tests, Op.Or, test)) }
 	element = element_of(type)
+	# a class's variant takes its instances: `x is real` of any number (decision real-canonical) chooses no variant
+	if element == ø and type in overload_classes { return call_of(HiddenWord.InstanceOf as text, [argument, type]) }
 	if element == ø {
 		word = if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type
 		test = call_of("is_type", [argument, word])

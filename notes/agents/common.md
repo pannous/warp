@@ -5,6 +5,8 @@ Supervisor. Never wait for user input: work until your task is done, then report
 sessions it names via SendMessage, not to the user, unless the user talks to you directly. A Supervisor message that
 relays an explicit user decision counts as the user's decision.
 
+At night (until the user is back, usually 10:00) notes/agents/night.md applies too: decide yourself, log, never wait.
+
 Startup reading is this file plus your role file, nothing more (AGENTS.md is already loaded). Everything else is
 looked up when a task needs it: notes/agents/handbook.md (the detailed procedures: worktree build tweak,
 gate tiers, bisects, Grok box, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),
@@ -16,6 +18,13 @@ before asking a question). After a context swap, this file and your role file be
   most beautiful, most general code would look (a library function over a general feature beats a rewrite plus core
   patches), and build that; if it needs a missing language feature, build or card the feature instead of a workaround.
   Recommended options in questions and plans are the elegant ones.
+- Clean compiler first (user 2026-11-02): the specification unfolds from a clean compiler built on first principles, not
+  the other way round. A spec form that would need special-case code in core is cut or parked, unless leaving it out
+  is nonsensical; what the general rules give is the spec (the wiki follows the compiler then). Every question to the
+  user names the core cost of each option.
+  A form that falls out of the general rules, however esoteric (`"x" * yes` is "x" by bool-as-int), is welcome and
+  never suppressed; a form that needs its own rule or core code for one phrase (`x is a 100 element array`) is bloat:
+  ask the Interviewer before building it. Old commented-out Rust tests (`gap-*` cards) are not spec.
 - No special cases: a fix is the general rule, holding for the siblings of the example. A test that seems to force a
   special case goes to warp-interviewer.
 - Never degrade the input to suit a tool (compiler stage, parser, harness): fix or card the tool. Warp source, the
@@ -84,7 +93,8 @@ before asking a question). After a context swap, this file and your role file be
   by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push. Never leave unpushed commits on main.
 - Anything compiled (core/, the harness in src/, Cargo.*): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
-  /Volumes/Worktrees/warp or /integrator.
+  /Volumes/Worktrees/warp or /integrator. At most 2 open worktrees per worker (user 2026-11-02: 23 were far too
+  many): the one landing and the one being built; land before opening another, waiting work is a plan on its card.
 - Output (logs, dumps, builds, scratch) goes in your own worktree's data/ and goes with it; never into the main
   checkout's data/. Logs that must outlive your session: ~/Library/Logs/warp/<role or card>/.
 - The user's uncommitted edits are integrated at once by whoever meets them: complete, run, commit as "(user)", push.

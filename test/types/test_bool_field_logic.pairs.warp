@@ -1,0 +1,5 @@
+# a bool field of a parameter typed with its class, read beside a yes/no, stays yes/no (card bool-and-field-int)
+'class P { s: bool }; def f(p: P, closer: text): bool := { rest = closer == "rest"; p.s = closer == "end" or (rest and p.s); p.s }; f(P(no), " ")'	no
+'class P { s: bool }; def f(p: P, closer: text): bool := { p.s = closer == "end"; p.s }; f(P(no), "end")'	yes
+'class P { s: bool }; def f(p: P): bool := { r = no; p.s = r and p.s; p.s }; f(P(yes))'	no
+'class P { s: bool }; def f(p: P): bool := yes and p.s; f(P(yes))'	yes

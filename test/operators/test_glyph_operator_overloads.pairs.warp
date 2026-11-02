@@ -1,0 +1,12 @@
+# a declared glyph operator is a function: its typed definitions are overloads a call picks by its operands' types (card operator-overloads-by-type)
+'infix operator ±(v, r) := v * 10 + r; 6 ± 3'	63
+'infix operator ×(v, r) := v * 10 + r; 6 × 3'	63
+'class Q { a: int }; infix operator ⊕(q: Q, r: int) := q.a + r; infix operator ⊕(q: int, r: int) := q * r; [Q(1) ⊕ 2, 3 ⊕ 4]'	[3, 12]
+'class Q { a: int }; infix operator ⊕(q: Q, r: int) := q.a + r; infix operator ⊕(q: int, r: int) := q * r; f(x) := x ⊕ 2; [f(Q(1)), f(3)]'	[3, 6]
+# a standard module's glyph operator brings its module as its words do: ± is uncertain's (notes/plus_minus.md)
+'str(6.0 ± 0.3)'	'6.00 ± 0.30'
+# on a quantity ± is units': a plain spread counts in the value's unit, a quantity's converts (P220)
+'str(6.0m ± 0.3)'	'6.00 ± 0.30m'
+'str(5m ± 1cm)'	'5.000 ± 0.010m'
+'str((5m ± 1cm) + 20cm)'	'5.200 ± 0.010m'
+'str((6m ± 0.3).low)'	'5.7m'
