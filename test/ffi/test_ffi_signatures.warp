@@ -23,7 +23,7 @@ pow(2.0, 10.0)» 1024.0
 is! «import ldexpf from 'c'
 ldexpf(1.5, 2)» 6.0
 
-# raylib_signatures_without_a_window
+# raylib_signatures_without_a_window — native only: raylib, a C library the browser has not
 is! «import IsWindowReady from 'raylib'
 IsWindowReady()» 0
 is! «import GetMouseX from 'raylib'

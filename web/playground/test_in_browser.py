@@ -50,6 +50,12 @@ CASE_ANSWER_SECONDS = CASE_RUN_SECONDS + 10  # a page that finished no case in t
 CASE_BATCH = 100  # cases the page runs in one go, its reports collected as they finish
 CASE_FILE = "test_case.warp"  # a case runs as a file of its test file's folder, so its uses resolve beside it
 STOPPED = "stopped after"  # playground.js: the report of a run the page stopped (the native run's `timeout`)
+# a section of a test file the browser cannot run (a C window library, a shell command) says why in its heading,
+# `# raylib_calls — native only: raylib, a C library the browser has not`: EXP instead of PAGE for the cases below it, up
+# to the next blank line (night decision N20, as the samples' EXPECTED_FAILURE; in the heading, as a line of its own
+# would move the cases' lines the native verdicts are stored by)
+NATIVE_ONLY = re.compile(r"^#.* native only: ")
+CASE_PLACE = re.compile(r"^(\S+):(\d+) ")
 PAGE_LOST = "playground is not defined"  # a report of a page that lost its API mid-batch: no verdict, the case runs again
 # a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
 VERDICT = re.compile(r"^([✓✗]) (.*?)(?:: got .*)?$")
@@ -1374,10 +1380,27 @@ def verdicts_of(lines):
 	return {found.group(2): found.group(1) for found in map(VERDICT.match, lines) if found}
 
 
+@functools.cache
+def native_only_lines(tree, path):
+	"""the line numbers a `# native only:` line covers in the test file at `path`"""
+	covered, inside = set(), False
+	for number, line in enumerate(open(os.path.join(tree, path), encoding="utf-8"), 1):
+		inside = bool(inside or NATIVE_ONLY.match(line)) and line.strip() != ""
+		if inside:
+			covered.add(number)
+	return covered
+
+
+def native_only(tree, case):
+	"""whether a `# native only:` line of its test file covers the case"""
+	path, line = CASE_PLACE.match(case).groups()
+	return int(line) in native_only_lines(tree, path)
+
+
 def check_tests(paths, tree):
 	"""every case of the test files under `paths` (default test/) run in the page served from `tree`, its verdict by the
 	page's compiler against the native one of the stored baseline: ok, PAGE (fails only in the page), BOTH (fails
-	natively too), NONE (failing, no native verdict stored)"""
+	natively too), EXP (failing in the page where its test file says native only), NONE (failing, no native verdict stored)"""
 	data = os.path.join(tree, TESTS_WEB_DATA)
 	work = os.path.join(data, "work")
 	subprocess.run(["rm", "-rf", work])
@@ -1396,13 +1419,13 @@ def check_tests(paths, tree):
 		sys.exit(f"error: test-verdicts gave no verdicts (the runs are kept in {work}): {said[-500:]}")
 	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True)
 	native = verdicts_of(baseline.stdout.split("\n"))
-	status_of = lambda case: "ok" if page[case] == "✓" else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
+	status_of = lambda case: "ok" if page[case] == "✓" else "EXP" if native.get(case) == "✓" and native_only(tree, case) else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
 	lines = [f"{status_of(case):<4} {case}" for case in page]
 	written = not paths  # a run of some folders leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, TESTS_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
 	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(lines) + "\n")
-	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "PAGE", "BOTH", "NONE")}
+	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "PAGE", "EXP", "BOTH", "NONE")}
 	print(f"tests in the page: {counts['ok']} of {len(lines)} hold; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, TESTS_WEB_RESULTS)}" if written else ""))
 
 
