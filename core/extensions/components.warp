@@ -7,6 +7,7 @@
 # else the n-th call of that render. `Counter.instances` are the page's instances in order, `counters` too (plural_instances).
 use "../passes/walk.warp"
 use "../passes/lambdas.warp"
+use "../analysis/words.warp"
 
 this_word = symbol("this·component")
 key_parameter = "key"
@@ -26,7 +27,6 @@ component_name(statement: Node): text := {
 	# (a function of markup without state, `Card(t) := div{…}`, is a plain function)
 	if #tag_parts(parts.body#(#parts.body)) == 2 and items_of(parts.body).any(is_state_assignment) then parts.name else ""
 }
-is_capitalized(name: text): bool := #name > 0 and name#1 >= "A" and name#1 <= "Z"
 
 # `Counter(start) := {…}` as `Counter(start, key) := { this = component("Counter", key); component_state(this, "count", () => start); … }`
 component_defined(statement: Node): Node := {
