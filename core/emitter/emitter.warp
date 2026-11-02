@@ -54,6 +54,9 @@ columns_per_line = 4096
 import_function_byte = 0
 # the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
 wasi_start = "_start"
+# lib/markup.warp's export giving the HTML of a value that is markup, else ø: a program using markup prints its
+# markup value as that page (decision html-render-mode)
+page_shown_word = "page_of"
 # WARP_VALUE_AS_DATA set: _start prints main's value as data after a line of its own, VALUE_MARK, as a list shows an
 # item (a text quoted, a character in single quotes: runtime node_code), ø too, so `warp test` reads back the value
 # the case gave, not its printed text (card native-warp-test)
@@ -620,6 +623,14 @@ def gc_position(name: text): int {
 # bytes that name GC types by their names (a type's definition in gc_types, a reference in references): each name the
 # index the module takes the type under
 def gc_bytes(parts: list): list { concatenated(parts.map(part => if part is text then uleb(gc_type(part)) else [part])) }
+# _start printing main's value, in local 0, as its page where markup gives one (local 1), else as print shows it
+def page_printed(start: Function, main: Function, result: TypedCode, shown_kind: ValueKind): list {
+	start.locals = [main.result, ValueKind.Node]
+	page = call_values(module.functions[page_shown_word], [result])
+	html = TypedCode(ValueKind.Text, payload([op.local_get, 1], gc_type(gc.text)))
+	shown = printed(shown_code(unboxed_to_show(result, shown_kind))).code
+	call_code(main.index) + [op.local_set, 0] + boxed(page) + [op.local_set, 1, op.local_get, 1, op.ref_is_null, op.if, no_value, op.local_get, 0, op.ref_is_null, op.i32_eqz, op.if, no_value] + shown + [op.end, op.else] + dropped(runtime_call("print_line", [html])) + [op.end]
+}
 # _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
 def value_printed_as_data(result: TypedCode): list {
 	printed(text_value(VALUE_MARK)).code + printed(runtime_call("value_code", [TypedCode(ValueKind.Node, boxed(result))])).code
@@ -1582,6 +1593,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		absent = if main.result == ValueKind.Node then [op.local_get, 0, op.ref_is_null] else [op.i32_const, 0]
 		start.code = call_code(main.index) + [op.drop]
 		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(shown_code(unboxed_to_show(result, shown_kind))).code + [op.end] }
+		if not main.gives_nothing and module.functions.has(page_shown_word) and main.result == ValueKind.Node { start.code = page_printed(start, main, result, shown_kind) }
 		if not main.gives_nothing and value_as_data { start.code = call_code(main.index) + [op.local_set, 0] + value_printed_as_data(result) }
 		# what a host says of a run that failed in a runtime error, of a program that can fail so (a trimmed hello
 		# carried its sentences and the whole node printer: 25 KB for 1.5)

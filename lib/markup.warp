@@ -4,7 +4,7 @@
 // time and its updates in the browser (page·html). A key named after an HTML element is an element; inside it a key
 // named after an attribute with a plain value is an attribute (`style: { fontSize: 12 }` inline CSS), anything else a
 // child in order.
-html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
+global html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
 	"header", "footer", "main", "nav", "section", "article", "aside", "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
 	"a", "em", "strong", "b", "i", "u", "small", "code", "pre", "blockquote", "br", "hr", "img", "figure", "figcaption",
 	"ul", "ol", "li", "dl", "dt", "dd", "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
@@ -50,6 +50,11 @@ export page_render(value: any) := {
 	to_html(value)
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
+// a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
+// markup (decision html-render-mode; the emitter's _start)
+export page_of(value: any): any := if html_is_page(value) then page_render(value) else ø
+// an element, or a group of nothing but elements (`{div{…}}`, `[li{…} li{…}]`)
+html_is_page(value: any) := html_is_element(value) or (html_is_group(value) and #html_elements_in(value) > 0 and #html_elements_in(value) == #value)
 export page_event(n: int, detail: any) := {
 	action = page_handlers#n
 	action(detail)

@@ -13,7 +13,7 @@ global canvas_pixels = int[pixels_for(view_width, view_height)]
 // paper: the canvas before anything is drawn, as paint shows 0 (rust-harness:src/graphics/pixels.rs PAPER; test_paint_shades)
 paper = 0xFFFAFAFA
 // the pixel a coordinate falls in
-cell(v) := floor(v) as int
+cell(v: float): int := floor(v) as int
 
 // what draw_shape's kind says to shape_shader (clear_shape: gpu_canvas.rs CLEAR; test_paint_shades)
 clear_shape = 0
@@ -72,7 +72,7 @@ def clear(color) {
 }
 
 // the color over what is there, mixed by its alpha
-def mixed(below, color) {
+def mixed(below: int, color: int): int {
 	a = alpha_of(color)
 	under = if below == 0 then paper else below
 	if a >= 255 { return color }
@@ -81,9 +81,9 @@ def mixed(below, color) {
 }
 
 // one channel (its place 65536, 256 or 1) of color over under, by alpha a from 0 to 255
-channel_mix(color, under, a, place) := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
+channel_mix(color: int, under: int, a: int, place: int): int := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
 
-def dot(x, y, color) {
+def dot(x: float, y: float, color: int) {
 	col = cell(x)
 	row = cell(y)
 	if drawing_on_gpu { draw_shape(rect_shape, col, row, 1, 1, color) }
@@ -104,7 +104,7 @@ def circle(x, y, radius, color) {
 	else { circle_pixels(x, y, radius, color) }
 }
 
-def circle_pixels(x, y, radius, color) {
+def circle_pixels(x: float, y: float, radius: float, color: int) {
 	for row in cell(y - radius)..cell(y + radius) + 1 {
 		for col in cell(x - radius)..cell(x + radius) + 1 {
 			if (col + 0.5 - x) ^ 2 + (row + 0.5 - y) ^ 2 <= radius ^ 2 { dot(col, row, color) }
