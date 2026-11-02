@@ -50,7 +50,7 @@ EndDrawing()
 # Busy wait delay to keep window visible
 delay = 0
 while(delay < 500000000) {
-	delay++
+	delay++ // todo Doesn't help on the Mac see raylib_circle.warp / raylib_circle_forever.warp
 	}
 
 # Clean up
