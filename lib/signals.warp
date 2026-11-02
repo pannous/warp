@@ -8,28 +8,16 @@ rewrite whenever $c $body: block => $listens where $listens = whenever_listens($
 rewrite once $c $body: block => $listens where $listens = once_listens($c, $body)
 rewrite $p => $q where program and $q = signaled($p)
 
-// each watched name's listeners in order, and whether each runs only on a change, as two lists of the same length
-global signal_listeners = {}
-global signal_changes_only = {}
-variable_listen(names: list, changes_only: bool, listener: function): any := {
-	for name in names {
-		if not (name in signal_listeners) {
-			signal_listeners[name] = []
-			signal_changes_only[name] = []
-		}
-		signal_listeners[name] += [listener]
-		signal_changes_only[name] += [changes_only]
-	}
-	ø
+// a watched name's listeners are the listeners of the event of that name (lib/prelude.warp listen), so a listener is
+// numbered as an event's: `h = on set x {…}`, `listeners of x`, `remove h from listeners of x`; the number within the
+// last name it listens to
+variable_listen(names: list, changes_only: bool, listener: function): int := {
+	number = 0
+	for name in names { number = listen(name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }
+	number
 }
-// the listeners of the name told of its write, from old to value; the value
+// the listeners of the name told of its write, from old to value, as its event with [value, old]; the value
 signal_notify(name: text, value: any, old: any): any := {
-	if name in signal_listeners {
-		listeners = signal_listeners[name]
-		for i in 1 ..< #listeners + 1 {
-			listener = listeners#i
-			if not signal_changes_only[name]#i or value != old { listener(value, old) }
-		}
-	}
+	emitted(name, [value, old])
 	value
 }
