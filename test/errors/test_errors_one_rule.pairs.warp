@@ -1,0 +1,9 @@
+# decision errors-one-rule (user): an Error raises unless it reaches an optional place or a handler
+'r = write("no such folder/x.txt", "hi"); 1'	error	a failed write put in a plain variable stops the run
+'f(p) := write(p, "hi"); r = f("no such folder/x.txt"); 2'	error	an Error a program's own word gives back too
+'r: text? = parse_json("{oops"); r failed'	true
+'parse_json("{oops") or 7'	7
+'0 or 10'	10
+'try { 1 / 0 } catch e { "caught" }'	"caught"	the caught Error's name is a handler's place
+# decision N19: only a failure raises; printing, equality and `is error` see a failed Error as any Error
+'r: text? = write("no such folder/x.txt", "hi"); [r is error, r == r, "${r}"]'	[yes, yes, "write no such folder/x.txt failed: No such file or directory"]

@@ -21,6 +21,7 @@ source_checks(program: Node, prelude: text): Node := {
 		located_error(n)
 		spelled_number_join(n)
 		bare_sleep(n)
+		spaced_sign(n)
 		text_index_of(n, program)
 		assigned_mutation(n, aliases)
 		lints_of(without_mark(n))
@@ -50,6 +51,14 @@ located_error(n: Node) := {
 	ø
 }
 
+# `1 +1`, `x -1`: a sign spaced before but not after starts an item of its own (parser.warp signed_item_at), which
+# reads as an operation spaced unevenly: the fix spaces it evenly, `1 + 1`
+spaced_sign(n: Node) := {
+	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == SPACED_SIGN_MARK) { return ø }
+	written = items_of(value_of(n)#2)
+	item = written#2
+	diagnose(call_of("spaced_sign", [written#1, item, written#1 + " " + item[0 ..< 1] + " " + item[1 ..]]), n)
+}
 # `x!` as parser.warp writes it, `unwrap(x)`, and the node it marks
 has_mutation_mark(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
 without_mark(n: Node): Node := if has_mutation_mark(n) then without_mark(n#2) else if n is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n

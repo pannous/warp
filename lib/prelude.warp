@@ -52,7 +52,13 @@ map(xs: list, f: function): list from emitter
 map(t: text, f: function): list from emitter
 filter(xs: list, f: function): list from emitter
 filter(t: text, f: function): list from emitter
-reduce(xs: list, f: function): element of xs from emitter
+// the first element, combined with every later one in turn: `[3, 1, 2].reduce((a, b) => a + b)` is 6
+reduce(xs: list, f: function) := {
+	if count(xs) == 0 { raise "reduce of an empty list" }
+	combined = xs#1
+	for i in 2 to count(xs) { combined = f(combined, xs#i) }
+	combined
+}
 fold(xs: list, start, f: function): same as start from emitter
 any(xs: list, f: function): bool from emitter
 any(t: text, f: function): bool from emitter
@@ -90,6 +96,13 @@ int_marked(x, kind: int): any from emitter
 int_mark_of(x): int from emitter
 chr(code): codepoint from emitter
 read(path): text from emitter
+// eval(code): the value of the code run as a program of its own, by the host word eval_code, which the host compiles
+// with its own warp.wasm (decision N31; core/native/driver.warp code_evaluated, the page's driver.js). It sees none of
+// the caller's names: eval(code, with: {x: 5}) names them, each bound to its value as data before the code (card
+// eval-explicit-names)
+eval(code) := eval_code(code)
+// each name bound to warp code giving its value back: text_form quotes the texts inside a list, not a text itself
+eval(code: text, with names: map) := eval_code(names.keys.map(name => "${name} = ${text_form([names[name]])}#1").join("\n") + "\n" + code)
 warning(message): text from emitter
 raise(message): same as message from emitter
 error(message): any from emitter
@@ -211,8 +224,9 @@ round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
 // own sum: rust-harness:src/lowering/words/library_words.rs)
-// `any`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first
-sum(xs: any) := if is_range(xs) then range_sum(xs) else fold(xs, 0, +)
+// `list or number`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first;
+// not `any`, which takes a yes/no: `sum xs == 3` would be sum(xs == 3) (card xs-sum). Of one number that number, as max
+sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else fold(xs, 0, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (lib/sugar/reflection.warp gives the words of a list, a text and a map): a map's

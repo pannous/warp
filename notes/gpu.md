@@ -338,3 +338,14 @@ and the bundled WebGL obj demo moved to github.com/pannous/shaders (warp/compute
 author, source and license; they run there with `warp <file>`. Our own compute.toys kernels: samples/gpu/lava_lamp,
 northern_lights. test_compute_toys::no_sample_or_library_is_a_third_party_shader keeps ports (a compute.toys or
 Shadertoy view URL) out of samples/ and lib/. The old files remain in git history.
+
+## A window out of sight shows nothing (card show-black-native, 2026-11-02)
+wgpu's Metal surface answers Occluded while NSWindow.occlusionState lacks "visible" (wgpu-hal metal/surface.rs,
+workaround for gfx-rs/wgpu#8309), and presented() then skips the frame. A native window opens behind the app in front
+(a run from a terminal or an agent is not activated), so a still picture's only present was dropped: black until
+closed. libwarp_gpu keeps the painting it could not show (unshown_kept) and warp_gpu_shown_again shows it;
+libwarp_window's held_open calls that on SDL_EVENT_WINDOW_EXPOSED (foreign.c window_layer connects the two). An
+animation needs nothing: its next frame shows. SDL_RaiseWindow/SyncWindow don't help (SDL's OCCLUDED flag lags).
+Checking a window by eye: capture it by window id (Quartz CGWindowList by the run's pid, screencapture -l), bring it
+to the front with System Events `set frontmost of (first process whose unix id is <pid>)`; SIGTERM does not end a
+held still picture, kill -9 by pid.
