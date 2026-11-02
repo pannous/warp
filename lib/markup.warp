@@ -45,14 +45,19 @@ export page_render(value: any) := {
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 export page_event(n: int, detail: any) := {
-	handler = page_handlers#n
-	handler(detail)
+	action = page_handlers#n
+	action(detail)
 }
 
 // a live part's value as it is now
 html_now(value: any) := if value is function then html_now(value()) else value
 
-// an element's handler: `on click {…}` among its items (a Handler, lib/prelude.warp), or HTML's own spelling
+// `button{ "+1", on click {…} }`: an item `on e {…}` of an element is that element's own handler, kept in it as a
+// value (no listener of the whole program); markup's own class, which its module sees when built on its own
+class Handler { event: text; action: function }
+handler(name: any, action: function): Handler := Handler(name_of(name), action)
+
+// an element's handler: `on click {…}` among its items (a Handler), or HTML's own spelling
 // `onclick: (event => …)`
 html_is_handler(item: any) := item is Handler or html_is_handler_pair(item)
 html_is_handler_pair(item: any) := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
