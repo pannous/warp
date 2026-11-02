@@ -413,7 +413,7 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 	for rule in rules {
 		if rule.place == place and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
-			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if changes(result, n) { return rewritten_inside_item(result, rules) }
 		}
 	}
 	n
@@ -468,12 +468,18 @@ sugar_rewritten(n: Node, rules: list): Node := {
 		if rule.place == Place.Anywhere and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
 			if not changes(result, n) and written != ø { result = regrouped(rule_applied(rule, {}, written), n) }
-			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if changes(result, n) { return rewritten_inside_item(result, rules) }
 		}
 	}
 	n
 }
 
+# a rule's result, the rules applied to its parts: none of them is the item the rule rewrote, though
+# `live(() => $e)` holds a copy equal to it, which `where item` would wrap again and again
+rewritten_inside_item(result: Node, rules: list): Node := {
+	rule_item = ø
+	bottom_up(as_value(result), part => sugar_rewritten(part, rules))
+}
 # a result of a phrase matched in its parentheses, `(match x {…})`, back in them
 regrouped(result: Node, n: Node): Node := if result != ø and is_round(n) then List([as_value(result)], Bracket.Round, separator_of(n)) else result
 
@@ -1109,7 +1115,7 @@ has_property(code: Node, property: text): bool := {
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
-	if property == "varying" { return varying_values().has(word) }
+	if property == "varying" { return varying_values().has(word) or (rule_item != ø and later_written().has(word)) }
 	if property == "instance" { return rule_instances.has(word) }
 	if property == "type" { return word == any_word or is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }

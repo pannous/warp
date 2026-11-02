@@ -74,7 +74,7 @@ html_is_handler_name(name: any) := name is text and starts_with(name, handler_pr
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
 	page_handlers.add(action)
-	" " + handler_attribute_prefix + event + "=\"" + count(page_handlers) + "\""
+	" " + handler_attribute_prefix + event + "=\"" + #page_handlers + "\""
 }
 
 // a pair's name and content, `div{…}` or `class: "box"` (a one-entry map as Rust's pair)
@@ -123,7 +123,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		if html_is_handler(item) { attributes = attributes + html_handler(item) }
 		else if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(html_name(item), html_content(item)) }
 		else if html_is_attribute(item, tag) and html_name(item) == "style" {
-			if count(styles) == 0 { attributes = attributes + html_style_mark }
+			if #styles == 0 { attributes = attributes + html_style_mark }
 			styles.add(if html_is_declarations(html_content(item)) then html_css(html_content(item)) else html_attribute_value(html_content(item)))
 		}
 		else if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
@@ -133,7 +133,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
 	// the option whose value, else text, is the select's
-	if count(styles) > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
+	if #styles > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
 	if tag == "option" and chosen != ø and (if value == ø then children else html_escaped(value)) == html_escaped(chosen) { attributes = attributes + " selected" }
 	if contains(html_void_elements, tag) { return "<" + tag + attributes + ">" }
 	if tag == "style" { children = trim(children) }
@@ -229,7 +229,7 @@ html_attribute_name(name: any) := if name == "key" then "data-warp-key" else if 
 html_is_declarations(value: any) := {
 	if html_is_listed_element(value) { return false }
 	let items = html_items(value)
-	if count(items) == 0 { return false }
+	if #items == 0 { return false }
 	for item in items {
 		if not (item is pair) { return false }
 		let inner = html_content(item)
@@ -368,7 +368,7 @@ style_items(block: any) := {
 		if rule != ø {
 			output.add(style_rule(style_joined(pending, rule#1, joiner), rule#2))
 			pending = []
-		} else if count(pending) > 0 and style_is_block(item) {
+		} else if #pending > 0 and style_is_block(item) {
 			// `.card { … }`: a leading-dot name stays apart from its block
 			output.add(style_rule(style_joined(pending, "", ""), item))
 			pending = []
@@ -377,7 +377,7 @@ style_items(block: any) := {
 		} else if style_is_declaration(item) {
 			let length = style_length(item.value)
 			output.add(key(item.key, ":", if length == ø then item.value else length))
-		} else if count(output) > 0 and style_is_declaration(output#count(output)) and style_continued(output#count(output).value, item) != ø {
+		} else if #output > 0 and style_is_declaration(output#(#output)) and style_continued(output#(#output).value, item) != ø {
 			let last = output.pop()
 			output.add(key(last.key, ":", style_continued(last.value, item)))
 		} else if style_selector_text(item) != ø {
@@ -397,7 +397,7 @@ style_entries(items: any, separator: any, leading: any) := {
 	var entries = []
 	for item in items {
 		for part in style_unchained(item) {
-			let joiner = if count(entries) == 0 and leading != ø then leading else list_joiner
+			let joiner = if #entries == 0 and leading != ø then leading else list_joiner
 			if not (part is pair) and str(part.bracket) is empty { entries = entries + style_entries(part, part.separator, joiner) }
 			else { entries.add([part, joiner]) }
 		}
@@ -414,7 +414,7 @@ style_unchained(node: any) := {
 	if style_rule_parts(last) != ø {
 		parts.add(last)
 		parts.add(key(ø, node.op, node.value))
-	} else if count(parts) == 0 { return [node] }
+	} else if #parts == 0 { return [node] }
 	else { parts.add(key(last, node.op, node.value)) }
 	parts
 }
@@ -523,11 +523,11 @@ css_style(property: any, value: any) := key(symbol("style"), ":", bracketed([key
 // → "fade 1000ms ease-out"; a text leading the spec as written
 css_parts(spec: any) := {
 	let items = css_items(spec)
-	if items#1 is text { return [items#1, [items#i for i in 2 to count(items)]] }
+	if items#1 is text { return [items#1, [items#i for i in 2 to #items]] }
 	var words = []
 	var children = []
 	for item in items {
-		if count(children) == 0 and css_is_word(item) { words.add(css_word(item)) }
+		if #children == 0 and css_is_word(item) { words.add(css_word(item)) }
 		else { children.add(item) }
 	}
 	[join(words, " "), children]
