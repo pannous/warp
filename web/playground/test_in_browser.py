@@ -1315,7 +1315,7 @@ def case_written(work, run, report, milliseconds):
 	status = "timeout" if report.get("stuck") or value.startswith(STOPPED) else "1" if report.get("error") else "0"
 	files = {"out": stdout, "err": stderr + (value + "\n" if report.get("error") else ""), "status": status, "ms": str(int(milliseconds))}
 	for extension, content in files.items():
-		open(os.path.join(work, f"{run}.{extension}"), "w", encoding="utf-8").write(content)
+		open(os.path.join(work, f"{run}.{extension}"), "w", encoding="utf-8", newline="").write(content)
 
 
 def cases_ran(work, runs, page_url):
@@ -1324,7 +1324,7 @@ def cases_ran(work, runs, page_url):
 	done, lost_at = 0, None
 	while done < len(runs):
 		batch = runs[done:done + CASE_BATCH]
-		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
+		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8", newline="").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
 		if browser("eval", RUN_CASES % (PAGE_LOST, json.dumps(cases))) != '"started"':
 			page_opened(page_url)
 			continue
