@@ -30,7 +30,7 @@ padded_hex(n: any, digits: any): text := join([hex_digits[(n >> 4 * (digits - 1 
 // r, g, b from 0 to 255
 rgb(r: any, g: any, b: any): Color := (opaque + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)) as Color
 // hue in degrees, saturation and value from 0 to 1
-def hsv(h: any, s: any, v: any): Color {
+hsv(h: any, s: any, v: any): Color := {
 	hue = (h % 360) / 60.0
 	c = v * s
 	x = c * (1 - abs(hue % 2 - 1))
