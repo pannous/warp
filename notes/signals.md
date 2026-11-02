@@ -101,7 +101,9 @@ tests/control/test_reactive_ports.rs.
   anywhere but a main-level literal.
 - Lists of signals: a function subscribing to the loop variable of `for s in xs {…}` over its parameter xs takes a
   list of signals; a list literal of variables passed there holds the signals themselves (the one place a list keeps
-  no copy; tests/control/test_signal_lists.rs).
+  no copy): `watch_all([a, b])` passes `[Signal("a", a), Signal("b", b)]` (lib/signals.warp), the loop's listener
+  listens to the item's variable, and a bare read of the item is the variable's value as last written
+  (lib/rule_words.warp signal_list_takers; test/control/test_signal_lists.pairs.warp).
 
 ## Listener lists
 - Variables: `listeners of x` is the list of functions listening to x (`count listeners of x`, `(listeners of x)#1`,

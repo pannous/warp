@@ -24,6 +24,7 @@ rewrite $x as decimal => as_decimal($x)
 # `random int`, `random(bool)`: a random value of the type (lib/prelude.warp random_of_type), the type no number or list
 # random(x: list or number) takes
 rewrite random $t => random_of_type($t) where $t is symbol and $t in [int, bool, codepoint, float]
-# `j = 5; i = 2; j-i`: a kebab name the program doesn't bind, of parts it binds, is their difference, noted
-# (decision kebab-or-minus, lib/rule_words.warp kebab_difference); a bound one stays the name
-rewrite $n => $d where $n is symbol and $d = kebab_difference($n, $program)
+# `a=5; b=1; a-b` is 4 (decision kebab-or-minus): a hyphenated name nothing binds, of parts the program binds, is
+# their difference (lib/rule_words.warp hyphen_difference), noted; a bound one stays the name, warned when its parts
+# are bound too; a function can't say it, as the lexer reads one word
+rewrite $n => $d where $n is symbol and $d = hyphen_difference($n, $program)

@@ -10,3 +10,6 @@ at bars(0) { play([C3 G3], bar 1) }                     # a pad under bar 1
 at bar(1) { play([F2 C3], bar 1) }                      # and under bar 2
 at bars(2) { play([C3 E3 G3 C4], beats 2) }             # the last chord
 wait_sound()
+
+# todo ~/dev/angles/warp/ ./samples/sound/arrangement.warp : (card wasm-trap)
+# wasm trap: cast failure at samples/sound/arrangement.warp:34:56  todo wrong line number!?!?

@@ -7,6 +7,7 @@ use units
 use reals
 use os
 use file
+use tasks
 global sample_rate = 22050
 // a frequency's or duration's plain number in SI units (Hz, seconds): a quantity's amount (lib/units.warp), a plain
 // number as it is

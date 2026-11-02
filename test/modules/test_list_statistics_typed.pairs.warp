@@ -1,0 +1,6 @@
+# Outcomes from test/modules/test_std_list.pairs.warp
+'use list; last_n([1, 2, 3], 2)'	[2 3]
+'use list; fill(3, "x")'	["x" "x" "x"]
+'use list; mode([1, 2, 2, 3])'	2
+'use list; variance([1, 2, 3, 4])'	1.25
+'use list; stdev([2, 4, 4, 4, 5, 5, 7, 9])'	2

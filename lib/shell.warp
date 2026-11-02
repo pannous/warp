@@ -7,55 +7,76 @@ use regex
 use text
 use list
 // the names in a folder, the working directory by default, sorted and without the hidden ones, as ls shows them
-ls(folder:text = ".") := [name for name in list_files(folder) if not name.starts_with(".")]
+ls(folder: text = ".") := [name for name in list_files(folder) if not name.starts_with(".")]
 // the working directory, as cwd gives it
 pwd := cwd
 // `cd ~/projects`: the working directory changes, for this program and the commands it runs; the new one
-cd(folder:text = "~") := std_io("os", "cd", [folder])
+cd(folder: text = "~") := std_io("os", "cd", [folder])
 // a file's text
-cat(path:text) := read(path)
+cat(path: text) := read(home_expanded(path))
 // prints its value, as print does
-echo(value:any) := print(value)
+echo(value: any) := print(value)
 // a folder made with the folders above it, if missing
-mkdir(folder:text) := std_io("file", "mkdir", [folder])
+mkdir(folder: text) := std_io("file", "mkdir", [folder])
 // a file copied, to a folder (keeping its name) or a file
-cp(from:text, to:text) := std_io("file", "copy", [from, to])
+cp(from: text, to: text) := std_io("file", "copy", [from, to])
 // a file or folder moved or renamed, into a folder or to a new name
-mv(from:text, to:text) := std_io("file", "move", [from, to])
+mv(from: text, to: text) := std_io("file", "move", [from, to])
 // an empty file made if missing, else its time of change set to now
-touch(path:text) := std_io("file", "touch", [path])
+touch(path: text) := std_io("file", "touch", [path])
 // `rm "old.txt"`: a file or an empty folder moved to the Trash; never a pattern, a full folder, the root, the home
 // folder or the working directory and the folders above it
-rm(path:text) := std_io("file", "remove", [path])
+rm(path: text) := std_io("file", "remove", [path])
 // a file's lines without their line ends: the first n, the last n
-file_lines(path:text) := split(remove_suffix(read(path), "\n"), "\n")
-head(path:text, n:int = 10) := file_lines(path).first(n)
-tail(path:text, n:int = 10) := file_lines(path).last(n)
+file_lines(path: text) := split(remove_suffix(cat(path), "\n"), "\n")
+head(path: text, n: int = 10) := file_lines(path).first(n)
+tail(path: text, n: int = 10) := file_lines(path).last(n)
 // `wc ./a.txt` → {lines: 3, words: 5, bytes: 20}
-wc(path:text) := {
+wc(path: text) := {
 	all = file_lines(path)
 	{"lines": count(all), "words": sum([count(words(line)) for line in all]), "bytes": file_size(path)}
 }
 // a file's lines sorted, without repeats
-sort_lines(path:text) := sort(file_lines(path))
-unique_lines(path:text) := unique(file_lines(path))
-// `grep "fn " "main.rs"`: the lines of a file the regular expression matches
-grep(pattern:text, path:text) := [line for line in file_lines(path) if matches(line, pattern)]
-// `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches, hidden folders skipped (find itself
-// searches a list)
-find_files(folder:text, pattern:text) := std_io("file", "find", [folder, pattern])
+sort_lines(path: text) := sort(file_lines(path))
+unique_lines(path: text) := unique(file_lines(path))
+// `grep "fn " "main.rs"`: the lines of a file the regular expression matches; `grep("^a", lines)` the texts of a list,
+// so a text's own lines are `grep("^a", text.split("\n"))`
+grep(pattern: text, source: any): list := [line for line in (if source is list then source else file_lines(source)) if line matches pattern]
+// whether the path is a folder: one that lists
+is_folder(path: text) := list_files(path) is list
+// `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches the wildcards * and ?, sorted, hidden
+// folders skipped (find itself searches a list)
+find_files(folder: text, pattern: text) := sort(paths_named(folder, wildcard_regex(pattern)))
+paths_named(folder: text, wanted: text): list := {
+	found = []
+	for name in list_files(folder) {
+		path = folder.remove_suffix("/") + "/" + name
+		if name matches wanted { found += [path] }
+		if not name.starts_with(".") and is_folder(path) { found += paths_named(path, wanted) }
+	}
+	found
+}
+// `*.json` → `^[^/]*\.json$`: a wildcard pattern as the regular expression of the names it matches
+wildcard_regex(pattern: text) := "^" + [wildcard_piece(c) for c in pattern].join("") + "$"
+wildcard_piece(c: text) := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
 // the bytes of a file or of all files below a folder, as du counts them (size itself is a list's)
-file_size(path:text) := std_io("file", "size", [path])
+file_size(path: text): int := if is_folder(path) then sum([file_size(path.remove_suffix("/") + "/" + name) for name in list_files(path)]) else count(read_bytes(path))
 // `info ./a.txt` → {size: 20, modified: 1760536980000, kind: "file"}, modified in milliseconds as clock() counts
-info(path:text) := std_io("file", "info", [path])
+info(path: text) := std_io("file", "info", [path])
 // `open ./photo.png`: the file in its app; natively only
-open(path:text) := std_io("os", "open", [path])
+open(path: text) := std_io("os", "open", [path])
 // the path of the program a command runs, ø when no folder of the PATH has it
-which(name:text) := std_io("os", "which", [name])
+which(name: text): text? := {
+	if name.contains("/") { return if exists(name) then name else ø }
+	for folder in split(env("PATH") ?? "", ":") {
+		if folder and exists(folder + "/" + name) { return folder + "/" + name }
+	}
+	ø
+}
 // A path written without quotes is a Path where a word has a method for one (card cross-module-overload): `sort
 // ./names.txt` sorts the file's lines, `sort [3 1 2]` stays the list's sort; the same for unique, find and size
 class Path { name: text }
-sort(file:Path) := sort_lines(file.name)
-unique(file:Path) := unique_lines(file.name)
-find(folder:Path, pattern:text) := find_files(folder.name, pattern)
-size(file:Path) := file_size(file.name)
+sort(file: Path) := sort_lines(file.name)
+unique(file: Path) := unique_lines(file.name)
+find(folder: Path, pattern: text) := find_files(folder.name, pattern)
+size(file: Path) := file_size(file.name)

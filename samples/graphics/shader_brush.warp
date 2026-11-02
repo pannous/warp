@@ -1,4 +1,6 @@
 #!/usr/bin/env warp
+# TODO On the Mac, I can see beautiful colors. Unfortunately, they are not anchored correctly at the mouse. They're like scaled The mouse position is like scaled by a factor of twenty, but the trace is still very fat  (card mac-mouse)
+
 # a brush drawn by a WGSL fragment shader itself: the pointer is the hole $mouse, the button $mouse_down, and $time
 # moves the colors. The host fills these holes at each paint, so each frame is one render on the GPU.
 # Not needed for speed: `use draw` (samples/graphics/finger_paint.warp) draws its shapes on the GPU anyway when a window shows.

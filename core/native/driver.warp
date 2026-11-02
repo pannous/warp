@@ -61,6 +61,7 @@ SET_SYSTEM_VALUE_WORD = 12
 PARSE_CODE_WORD = 13
 REAL_PATH_WORD = 14
 SIGNAL_LISTEN_WORD = 15
+EVAL_CODE_WORD = 16
 # the end of a field in warp.wasm's parse-code encoding (core/parsing/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -105,6 +106,8 @@ wasi_config_inherit_stdin(config: handle) from "warp_wasmtime"
 wasi_config_inherit_env(config: handle) from "warp_wasmtime"
 wasi_config_inherit_stdout(config: handle) from "warp_wasmtime"
 wasi_config_inherit_stderr(config: handle) from "warp_wasmtime"
+wasi_config_set_stdout_file(config: handle, path: text): bool from "warp_wasmtime"
+wasi_config_set_stderr_file(config: handle, path: text): bool from "warp_wasmtime"
 wasi_config_preopen_dir(config: handle, host_path: text, guest_path: text, mutable: bool): bool from "warp_wasmtime"
 wasmtime_context_set_wasi(context: handle, config: handle): handle from "warp_wasmtime"
 wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module: pointer): handle from "warp_wasmtime"
@@ -171,6 +174,8 @@ gcvt(value: f64, digits: i32, buffer: pointer): handle from "c"
 getenv(name: text): text from "c"
 getpid(): i32 from "c"
 unlink(path: text): i32 from "c"
+setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
+unsetenv(name: pointer): i32 from "c"
 _NSGetExecutablePath(buffer: pointer, size: pointer): i32 from "c"
 readlink(path: pointer, buffer: pointer, size: i64): i64 from "c"
 access(path: pointer, mode: i32): i32 from "c"
@@ -250,6 +255,27 @@ failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 	}
 	if raised.length > 0 { complain(raised) }
 	exit(1)
+}
+# a run's stdout and stderr: this process's, else the file `output`
+output_to(config: handle, output: text): nothing := {
+	if output.length == 0 {
+		wasi_config_inherit_stdout(config)
+		return wasi_config_inherit_stderr(config)
+	}
+	wasi_config_set_stdout_file(config, output)
+	wasi_config_set_stderr_file(config, output)
+}
+# what a run that failed says, as failed_raising says it without ending this process: "" for an exit with status 0
+failure_said(error: handle, trap: pointer, raised: text): text := {
+	status = allocate(4)
+	if error != 0 and wasmtime_error_exit_status(error, status) {
+		if word_at(status).value == 0 { return "" }
+		return joined("exit status ", text_of(word_at(status).value as i64))
+	}
+	if raised.length > 0 { return raised }
+	message = allocate(VECTOR_BYTES)
+	if error != 0 { wasmtime_error_message(error, message) } else { wasm_trap_message(long_at(trap).value, message) }
+	native_vector_text(native_pointer(message))
 }
 checked(error: handle, trap: pointer): nothing := {
 	if error != 0 or long_at(trap).value != 0 { failed(error, trap) }
@@ -531,6 +557,7 @@ answered_word(name: text): i64 := {
 	if same_text(name, "system_value") { return SYSTEM_VALUE_WORD }
 	if same_text(name, "set_system_value") { return SET_SYSTEM_VALUE_WORD }
 	if same_text(name, "parse_code") { return PARSE_CODE_WORD }
+	if same_text(name, "eval_code") { return EVAL_CODE_WORD }
 	if same_text(name, "real_path") { return REAL_PATH_WORD }
 	if same_text(name, "std_pure") { return STD_PURE_WORD }
 	if same_text(name, "paint") { return PAINT_WORD }
@@ -571,7 +598,10 @@ word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing 
 
 # the module run with the arguments and a GC heap starting at `heap_bytes`; its machine code kept in the file
 # `machine_code` when one is named
-run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothing := {
+run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothing := run_into(module, given, machine_code, heap_bytes, "")
+# so, what it prints written to the file `output` when one is named (an eval's run): its failure then said in the text
+# given back ("" for none) instead of ending this process
+run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, output: text): text := {
 	outer = crash_context_running(given.pointers, given.count)
 	fuel = fuel_of(module, machine_code)
 	engine = wasm_engine_new_with_config(warp_config(fuel > 0, heap_bytes))
@@ -584,8 +614,7 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	config = wasi_config_new()
 	wasi_config_set_argv(config, given.count, given.pointers)
 	wasi_config_inherit_stdin(config)
-	wasi_config_inherit_stdout(config)
-	wasi_config_inherit_stderr(config)
+	output_to(config, output)
 	wasi_config_inherit_env(config)
 	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
 	wasi_config_preopen_dir(config, ".", ".", yes)
@@ -608,8 +637,12 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	results = allocate(VALUE_BYTES * MAX_RESULTS)
 	error = wasmtime_func_call(context, function, 0, 0, results, results_count, trap)
 	out_of_fuel(trap, fuel)
-	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
-	if results_count > 0 { print_result(results) }
+	failure = ""
+	if error != 0 or long_at(trap).value != 0 {
+		if output.length == 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
+		failure = failure_said(error, trap, raised_message(context, instance, trap))
+	}
+	if results_count > 0 and output.length == 0 { print_result(results) }
 	crash_context_restored(outer)
 	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
 	# behind the last (it peaked at 4.8 GB with all of them kept)
@@ -617,6 +650,7 @@ run(module: text, given: Arguments, machine_code: text, heap_bytes: i64): nothin
 	wasmtime_linker_delete(linker)
 	wasmtime_module_delete(compiled)
 	wasm_engine_delete(engine)
+	failure
 }
 # what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
 # engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
@@ -821,7 +855,8 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
-	if word == PARSE_CODE_WORD { return code_parsed(caller, wasmtime_caller_context(caller), given, results) }
+	if word == PARSE_CODE_WORD { return code_parsed(caller, context, given, results) }
+	if word == EVAL_CODE_WORD { return code_evaluated(caller, context, given, results) }
 	if word == REAL_PATH_WORD { return real_path_written(caller, context, given, results) }
 	if word == SET_SYSTEM_VALUE_WORD { return system_value_set(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64), long_at(given + VALUE_BYTES + VALUE_OFFSET).value) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
@@ -928,13 +963,63 @@ system_value(name: text): i64 := {
 	exit(1)
 	0
 }
+# eval_code(t) (decision N31, core/parsing/parse_words.warp eval_call): warp.wasm compiles t as a program of its own,
+# beside the compiled program, its value printed as data after the value mark; it runs with what it prints written to a
+# file, what it printed before the value goes on to this run's output, and the value is built again in the module as
+# parse_code builds a tree. A text that fails to compile or run gives an Error saying why
+code_evaluated(caller: handle, context: handle, given: pointer, result: pointer): nothing := {
+	stem = joined(compiled_path(), ".eval")
+	source = joined(stem, ".warp")
+	module = joined(stem, ".wasm")
+	printed = joined(stem, ".out")
+	write_file(source, shown(caller, context, given))
+	library = library_folder()
+	compiling = compiler_arguments(compiler_path())
+	added(compiling, source)
+	added(compiling, module)
+	added(compiling, ".")
+	added(compiling, library)
+	added(compiling, joined(library, "/runtime.wasm"))
+	setenv(value_as_data_variable(), c_string("1"), 1)
+	failure = run_into(read_file(compiler_path()), compiling, machine_code_file(compiler_path(), COMPILER_GC_HEAP_BYTES), COMPILER_GC_HEAP_BYTES, printed)
+	unsetenv(value_as_data_variable())
+	if failure.length == 0 { failure = run_into(read_file(module), program_arguments(source, arg_count()), "", PROGRAM_GC_HEAP_BYTES, printed) }
+	output = read_file(printed)
+	unlink(source)
+	unlink(module)
+	unlink(printed)
+	mark = text_found(output, value_mark())
+	if failure.length > 0 or mark < 0 {
+		if failure.length == 0 { failure = output }
+		guest_text_of(caller, context, joined("eval: ", failure), result)
+		return guest_call(caller, context, "error_of", result, 1, result)
+	}
+	before: u32 = mark as u32
+	fd_write(1, text_from(output.address, before), 1, allocate(4))
+	start: u32 = before + value_mark().length + 1
+	code_parsed_from(caller, context, text_from(output.address + start as i32, output.length - start), result)
+}
+# an eval's program prints its value as data after a line of the mark (core/emitter/emitter.warp VALUE_MARK); a
+# primitive program's texts are words, not globals
+value_as_data_variable(): pointer := c_string("WARP_VALUE_AS_DATA")
+value_mark(): text := "§warp value§"
+# where `part` first starts in t, -1 when nowhere
+text_found(t: text, part: text): i64 := {
+	at = 0
+	while at + part.length <= t.length {
+		if memcmp(t.address + at, part.address, part.length) == 0 { return at as i64 }
+		at = at + 1
+	}
+	-1
+}
 # parse_code(t): warp.wasm parses t (its parse-code command, the compiler's own parser) and the tree is built again in
 # the module, node by node through its builders
-code_parsed(caller: handle, context: handle, given: pointer, result: pointer): nothing := {
+code_parsed(caller: handle, context: handle, given: pointer, result: pointer): nothing := code_parsed_from(caller, context, shown(caller, context, given), result)
+code_parsed_from(caller: handle, context: handle, code: text, result: pointer): nothing := {
 	output = joined(compiled_path(), ".code")
 	parsing = compiler_arguments(compiler_path())
 	added(parsing, "parse-code")
-	added(parsing, shown(caller, context, given))
+	added(parsing, code)
 	added(parsing, output)
 	file_ran(compiler_path(), parsing)
 	encoding = read_file(output)

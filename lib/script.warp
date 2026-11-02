@@ -1,0 +1,6 @@
+// The standard library module script (decision use-script, card unix-words): `use script` is the scripting set at
+// once, the os, file and net words with the shell's Unix words, whose results are warp lists, maps and texts
+use os
+use file
+use net
+use shell

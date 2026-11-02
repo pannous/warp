@@ -835,9 +835,8 @@ function renderedRoot(host) {
 	return root;
 }
 
-// a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
-// route (lowering/web/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
-// GET (src/web/web_server.rs request_node), not a request leaving here
+// a form of the shown markup with `on submit` runs that handler (card web-submit); any other is a request to the program
+// serving the page, as a browser sends it to `warp serve`: its fields urlencoded, the body of a POST, the query of a GET
 function submitForm(submitted) {
 	submitted.preventDefault();
 	const form = submitted.target;
@@ -849,7 +848,7 @@ function submitForm(submitted) {
 	const posted = method !== "GET";
 	const encoded = new URLSearchParams(fields).toString();
 	if (worker.serving) return servedRequest(method, posted ? path : `${path}?${encoded}`, posted ? encoded : "");
-	worker.postMessage({ submit: { method, path, query: posted ? {} : fields, body: posted ? fields : null } });
+	showUnserved(`a form sent ${method} ${path}`);
 }
 
 function showPaintings(paintings) {
@@ -934,48 +933,54 @@ function followLink(click) {
 	return true;
 }
 
+// a form or link of a page no program serves (only a serving program has paths, lib/web.warp page_serve): said beside it
+const showUnserved = what => showValue(`${what}, but no program serves its requests here`, true);
+
 // a path of the program: a request to the program serving them (lib/web.warp page_serve), else its page there
 function goTo(url) {
 	if (worker.serving) servedRequest("GET", url.pathname + url.search);
-	else worker.postMessage({ navigate: url.pathname });
+	else showUnserved(`a link went to ${url.pathname}`);
 }
 
 // ---- a program serving requests (lib/web.warp page_serve): the page is its client ------------------------------
 
 const SERVING_RUN = { value: "", error: false, status: 0, warnings: [], runtime_warnings: [], hints: [], notes: [] };
 const SERVED_ROOT = "/";
-// the program waits for a request in `shared` (host-routes.js PAGE_SERVING): its run is shown as it is so far, and
-// the page asks for its root at once, as a browser opening the address; a request made while it was busy goes now
+// the program waits for a request in `shared` (host-routes.js PAGE_SERVING): the page asks for its root at once, as a
+// browser opening the address, and the run is shown with that first page (firstServed); a request made while it was
+// busy goes now
+let firstServed; // {run, report}: the serving run, finished once its first page is answered
 function servingRequests({ shared, port }) {
 	const first = !worker.serving;
 	const waiting = worker.serving?.waiting ?? (first ? ["GET", SERVED_ROOT] : undefined);
 	worker.serving = { shared };
-	if (first && pending) finish(pending, { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT });
+	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT } };
 	if (waiting) servedRequest(...waiting);
 }
 
-// a request as HTTP text into the waiting program's buffer, else kept until it waits again
-function servedRequest(method, target, body = "") {
+// a request into the waiting program's buffer, else kept until it waits again (host-routes.js requestText)
+function servedRequest(method, target, body = "", referer = $("address").value) {
 	showAddress(target);
 	const { shared } = worker.serving;
-	if (!shared) return worker.serving.waiting = [method, target, body];
+	if (!shared) return worker.serving.waiting = [method, target, body, referer];
 	worker.serving = {};
-	const length = new TextEncoder().encode(body).length;
-	answerInto(shared, async () => ({ request: `${method} ${target} HTTP/1.1\r\nHost: localhost\r\nContent-Length: ${length}\r\n\r\n${body}` }));
+	answerInto(shared, async () => ({ request: requestText(method, target, body, referer) }));
 }
 
-// the program's HTTP answer: an HTML body rendered, any other shown as the value, a failing status's body as the error
-// (whatever its content type: lib/web.warp http_failure answers text/html)
+// the program's HTTP answer (host-routes.js answerOf): an HTML body rendered, any other shown as the value, a failure's
+// body as the error; a redirect followed
 function showServed(response) {
-	const [head, ...body] = response.split("\r\n\r\n");
-	const text = body.join("\r\n\r\n");
-	const failed = Number(head.split(" ")[1]) >= 400;
-	const html = !failed && /^content-type:\s*text\/html/im.test(head) ? text : undefined;
-	showValue(html ? "" : text, failed, html);
+	const { redirect, failed, html, text } = answerOf(response);
+	if (redirect) return servedRequest("GET", redirect);
+	const value = html ? "" : text;
+	const first = firstServed;
+	firstServed = undefined;
+	if (first) return finish(first.run, { ...first.report, value, error: failed, html });
+	showValue(value, failed, html);
 	showRendered(html);
 }
 
-// the address bar shows the path of a program with routes (worker.js addressOf); a path typed there goes to that page
+// the address bar shows the path of a serving program (showServed); a path typed there goes to that page
 function showAddress(path) {
 	$("address").hidden = path === undefined;
 	$("address").value = path ?? "";
@@ -1010,11 +1015,9 @@ function showEventOutput(data) {
 	// a frame of `on frame` (cards https-pannous, very-fast: its GPU canvas showed as its id, and a pixel frame made a
 	// new canvas each time)
 	if (data.type === "paint") showFrame([paintingOf(data)]);
-	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) showValue(data.value, data.error, data.html);
 	if (data.html !== undefined) showRendered(data.html);
-	(data.patches ?? []).forEach(patch => showPatch($("rendered").shadowRoot, patch));
 }
 
 async function show(code) {

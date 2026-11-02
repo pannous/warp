@@ -1,4 +1,4 @@
-// A small WASI preview1 for the test binary in the browser (test-worker.js): arguments, clocks, randomness, stdout and
+// A small WASI preview1 for the programs and the compiler in the page (driver.js): arguments, clocks, randomness, stdout and
 // stderr to a callback, and a file system whose "." is the repository root, read with synchronous GETs (FILE_ROOT;
 // directories through the static server's listing page (?listing: test_in_browser.py lists a directory even when it
 // holds an index.html), cached per worker) and whose /include holds the C headers warp's FFI reads (WARP_INCLUDE), with an empty /tmp. Writes land in an in-memory overlay that lives as
@@ -96,6 +96,18 @@ function servedListing(directory) {
 }
 
 const headers = new Map(); // header URL → its lazy file or null, for every test of this worker
+const servedFiles = new Map(); // repository path → its lazy file: a compile asks for list.warp four times
+// the compiler's library sources, fetched in one request as the page starts (preloadSources): a first compile reads
+// some 80 of them, each a synchronous round trip otherwise (card wasm-size-reduction)
+const preloaded = new Map(); // repository path → {bytes, size}
+
+function preloadSources(sources, folder) {
+	const encoder = new TextEncoder();
+	for (const [name, text] of Object.entries(sources)) {
+		const bytes = encoder.encode(text);
+		preloaded.set(`${folder}/${name}`, { bytes, size: bytes.length });
+	}
+}
 
 // a served file, read only when its bytes are wanted: a directory walk stats every file of the repository
 function lazyFile(url) {
@@ -117,9 +129,12 @@ function served(path) {
 	if (path === TEMPORARY_DIRECTORY) return { entries: new Set() };
 	if (path.startsWith("/")) return null; // the machine has nothing else; the overlay may
 	if (path === "") return { entries: new Set(listing("").keys()) };
+	if (preloaded.has(path)) return preloaded.get(path);
 	const isDirectory = listing(parentOf(path))?.get(nameOf(path));
 	if (isDirectory === undefined) return null;
-	return isDirectory ? { entries: new Set(listing(path).keys()) } : lazyFile(FILE_ROOT + path);
+	if (isDirectory) return { entries: new Set(listing(path).keys()) };
+	if (!servedFiles.has(path)) servedFiles.set(path, lazyFile(FILE_ROOT + path));
+	return servedFiles.get(path);
 }
 
 // what instances share of the file system they change: the written files (path → bytes, or a text), the folders made
@@ -321,6 +336,8 @@ function wasiImports(memory, args, output, overlay = newOverlay(), environment =
 				return open({ path, entries: existing.entries }, opened);
 			}
 			if (!existing && !(openFlags & OPEN.CREATE)) return ERRNO.NOENT;
+			// as natively, a file is made only in a folder that is there (`write("no such folder/x.txt", …)` fails)
+			if (!existing && !lookup(parentOf(path))?.entries) return ERRNO.NOENT;
 			if (existing?.entries) return open({ path, entries: existing.entries }, opened);
 			const bytes = openFlags & OPEN.TRUNCATE || !existing ? new Uint8Array() : existing.bytes;
 			if (openFlags & (OPEN.CREATE | OPEN.TRUNCATE)) {
