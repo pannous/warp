@@ -484,7 +484,10 @@ shader_value(value) := if value is list then value.map(shader_value) else float(
 // paint(shader) of a WGSL shader text, at the view's size (wiki/graphics.md)
 paint(shader: text) := paint(shader, view_width(), view_height(), ø)
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
-sleep(amount) := sleep_ms(amount * 1000)
+sleep(amount) := slept(amount * 1000)
+
+// the wait of a sleep, ms: the tasks module's runs the tasks due meanwhile, which replaces this
+slept(ms) := sleep_ms(ms)
 // what a module holds per task, kept around a task and given back after it (lib/sugar/tasks.warp): nothing here, a
 // module holding some (sound's voice) defines both, which replace these
 task_context() := ø

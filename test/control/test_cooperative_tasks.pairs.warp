@@ -1,0 +1,10 @@
+# `go {…}` is a cooperative task (decision N29, card go-cooperative): it starts when main yields (a sleep, an await,
+# main's end) and gives the others their turn at its own sleeps
+'global log = []; job = go { sleep(50ms); log += ["late"] }; log += ["first"]; await job; log'	["first", "late"]
+'global log = []; a = go { sleep(60ms); log += ["a"] }; b = go { sleep(20ms); log += ["b"] }; await all [a, b]; log'	["b", "a"]
+'global log = []; a = go { log += ["a1"]; sleep(40ms); log += ["a2"] }; b = go { log += ["b1"]; sleep(10ms); log += ["b2"] }; await all [a, b]; log'	["a1", "b1", "b2", "a2"]
+'global log = []; go { log += ["task"] }; sleep(10ms); log += ["main"]; log'	["task", "main"]
+'started = clock(); go { sleep(300ms) }; clock() - started < 200'	true
+'job = go { sleep(10ms); 6 * 7 }; await job'	42
+# an await takes the operand before an operator
+'a = go { sleep(20ms); 2 }; b = go { 3 }; await a + await b'	5

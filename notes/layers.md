@@ -191,7 +191,7 @@ Sugar passes, with the rule each would become:
 | 88 | comprehensions | `rewrite [$e for $x in $xs] => (r = []; for $x in $xs { r += [$e] }; r)`: F3 |
 | 86 | prefix_comparisons | `sq 2 == 4` done: prefix_calls.warp fitted_comparison, by the parameter's fit (decisions juxtaposition, untyped-fit-ambiguous); `print #xs`, `f -x` stay a pass, prefix_calls.warp: no `where` condition for "a word taking a value" (untyped parameters, builtins) |
 | 65 | number_words | `rewrite one => 1` per word, works today (module rules skip bound words); keys/members stay: F1 |
-| 65 | parse_words | `rewrite eval($t) => interpret(parse($t))` works today; folding a constant text is a pass |
+| 65 | parse_words | `eval(t)` is the host word eval_code (N31: the host's warp.wasm compiles and runs t, its value built back); folding a constant text is a pass |
 | 64 | multiple_assignments | stays a pass (supervisor, 2026-10-22): as rules it needs zip over two rest holes, an index binding (`x, y = [1, 2]`), two rest holes in one pattern (the matcher has one, rewrites.warp rest_at) and conditions over a rest hole (all names, equal counts), ~60–100 engine lines for a 64-line pass. Built once a second pass needs them (comprehensions' zip, F4 enum values) |
 | 61 | list_methods | `rewrite $xs.push($v) => $xs += [$v]` (add, append alike): works today |
 | 44 | interpolation | F8 |

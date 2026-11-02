@@ -1,15 +1,16 @@
 // Channels (P155, notes/channels.md): a channel inside one run, written in warp, and `channel "chat"`, the
 // machine-wide channel (rust-harness:src/host/channels.rs). The words are rewrite rules (card compiler-modules): every program
-// mentioning them gets them, no `use` needed. A task `go {…}` runs to its end where it is started
-// (lib/sugar/tasks.warp), so what it sends waits in the channel: `ch.receive()` takes the oldest value, `for v in ch {…}`
-// receives until none is left.
+// mentioning them gets them, no `use` needed. A task `go {…}` is cooperative (lib/tasks.warp): `ch.receive()` lets
+// the tasks run until one sent a value and takes the oldest, `for v in ch {…}` receives until the channel is closed or
+// no task is left to send.
 use units
 use timers
+use tasks
 // how often `on message from …` looks for messages that arrived
 MESSAGE_POLL = 20ms
 rewrite channel() => Channel()
 rewrite send $v to $c => $c.send($v) where $c = channel()
-rewrite (for $item in $c $body) => while #$c.waiting > 0 { $item = $c.receive(); $body } where $c = channel()
+rewrite (for $item in $c $body) => while $c.more() { $item = $c.receive(); $body } where $c = channel()
 
 class Channel {
 	waiting: list = []
@@ -18,8 +19,13 @@ class Channel {
 		if closed { raise "send on a closed channel" }
 		waiting += [value]
 	}
+	// the tasks run until one sent a value or the channel closed
+	more() := {
+		tasks_run_while(() => #waiting == 0 and not closed, ø)
+		#waiting > 0
+	}
 	receive() := {
-		if #waiting == 0 { raise "receive on a channel no task sends to: every task has ended" }
+		if not more() { raise "receive on a channel no task sends to: every task has ended" }
 		oldest = waiting#1
 		waiting = waiting[1..]
 		oldest
