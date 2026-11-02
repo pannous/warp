@@ -1,0 +1,4 @@
+# a variadic overload takes its fixed arguments alone too, beside an overload of another count
+'total(xs: list) := fold(xs, 0, +); total(a: number, b: number, more...): number := fold([a, b] + more, 0, +); total(1, 2)'	3
+'total(xs: list) := fold(xs, 0, +); total(a: number, b: number, more...): number := fold([a, b] + more, 0, +); total(1, 2, 3, 4)'	10
+'total(xs: list) := fold(xs, 0, +); total(a: number, b: number, more...): number := fold([a, b] + more, 0, +); total([5, 6])'	11
