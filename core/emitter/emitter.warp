@@ -56,7 +56,7 @@ import_function_byte = 0
 wasi_start = "_start"
 # lib/markup.warp's export giving the HTML of a value that is markup, else ø: a program using markup prints its
 # markup value as that page (decision html-render-mode)
-page_shown_word = "page_shown"
+page_shown_word = "page_of"
 # WARP_VALUE_AS_DATA set: _start prints main's value as data after a line of its own, VALUE_MARK, as a list shows an
 # item (a text quoted, a character in single quotes: runtime node_code), ø too, so `warp test` reads back the value
 # the case gave, not its printed text (card native-warp-test)
