@@ -22,6 +22,8 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 	reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
 	keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
+# the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources)
+PRELOADED_SOURCES=('*.warp' 'sugar/*.warp' 'modules/words.tsv')
 
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
@@ -39,7 +41,15 @@ build_compiler() {
 		name=$(basename "$module" .wasm)
 		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
 	done
+	write_sources "$page/warp-lib"
 	echo "built $page/warp-lib from $INSTALLED_LIBRARY and lib/ ($(du -sh "$page/warp-lib" | cut -f1))"
+}
+
+# <lib>/sources.json: {name: text} of the PRELOADED_SOURCES
+write_sources() {
+	(cd "$1" && python3 -c 'import glob, json, sys
+names = sorted(name for pattern in sys.argv[1:] for name in glob.glob(pattern))
+json.dump({name: open(name, encoding="utf-8").read() for name in names}, open("sources.json", "w"), ensure_ascii=False)' "${PRELOADED_SOURCES[@]}")
 }
 
 # served-files.js: the files the server has, so the compiler's module and header searches ask only for those that exist
