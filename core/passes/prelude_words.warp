@@ -772,10 +772,11 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	with_module_uses(program, wanted)
 }
 # the module that defines a word a program names without using it, as the fix of its unknown name: `x = 3ms` gives
-# ": `use units` defines it" (decision expected-type-names); "" when none or several do
+# ": `use units` defines it" (decision expected-type-names); "" when none or several do. Never the prelude: every
+# program has it, so a `use prelude` fixes nothing (`animation: pop 400ms` names a CSS keyframes, not its pop)
 module_hint(word: text): text := {
 	modules = bundled_slices()
-	definers = modules.keys.filter(module => modules[module].any(slice => slice#1 == word))
+	definers = modules.keys.filter(module => module != "prelude" and modules[module].any(slice => slice#1 == word))
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
 # module name → the slices of each module at the top of lib/, `units` → lib/units.warp's
