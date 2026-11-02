@@ -3,6 +3,7 @@
 // The exports have the C headers' types as the native FFI sees them (size_t and long are 64 bits there, 32 in wasm32):
 // those few go through wrappers, the rest are exported as they are (build_libc.sh EXPORTS)
 #include <ctype.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,3 +15,4 @@ EXPORT(strspn) long long warp_strspn(const char *text, const char *accepted) { r
 EXPORT(strcspn) long long warp_strcspn(const char *text, const char *rejected) { return strcspn(text, rejected); }
 EXPORT(atol) long long warp_atol(const char *text) { return atoll(text); }
 EXPORT(labs) long long warp_labs(long long number) { return llabs(number); }
+EXPORT(strtol) long long warp_strtol(const char *text, char **end, int base) { return strtoll(text, end, base); }
