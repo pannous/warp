@@ -1,0 +1,4 @@
+# Source: foreign-spellings decision, PHP compatibility functions
+'use PHP; array_map(x => x * 2, [1, 2])'	[2, 4]
+'use PHP; array_filter([1, 2, 3], x => x > 1)'	[2, 3]
+'use PHP; array_sum([1, 2, 3])'	6

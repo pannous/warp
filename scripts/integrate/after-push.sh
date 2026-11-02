@@ -106,12 +106,15 @@ copy_compilers() {
 	done
 }
 
-# the tree's compilers into the installed native warp's folder (the slow lane's promoted warp-self.wasm)
+# the tree's compilers into the installed native warp's folder (the slow lane's promoted warp-self.wasm), and with them
+# the tree's lib/ sources they were built with (stage one left the previous ones beside the previous compilers)
 install_compilers() {
 	[ -n "$slow" ] && [ "$(cat "$installed_state/watched")" != "$tip" ] && return  # a newer tip is installed meanwhile
 	local folder lane got
 	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
-	copy_compilers "$TREE/lib" "$folder"
+	copy_compilers "$TREE/lib" "$folder" &&
+		rsync -aL --exclude /data --exclude /warp --exclude '/*.wasm*' --exclude /modules --exclude '/*.kept' \
+			"$TREE/lib/" "$folder/" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
 		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
@@ -168,7 +171,15 @@ install_native() {
 	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got made failed=(red) early=${1-}
 	[ -n "$early" ] && failed=(early_failed)
 	rm -rf "$folder.new" && mkdir -p "$folder.new" || return 1
-	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; return 1; }
+	# early, the lib/ beside the installed compilers is the one they were built with, and only the native warp's own
+	# sources are the tip's: a tip's lib/*.warp arrives with its compilers (stage two), never beside older ones (card
+	# after-push-stage: 677282ce44's reals.warp on b5eb834c40's compilers made π / 2 'no field coefficient' for 30 min)
+	if [ -n "$early" ]; then
+		rsync -aL --exclude /warp "$(dirname "$(readlink -f "$MAIN_WARP")")/" "$folder.new/" &&
+			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
+	else
+		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
+	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1

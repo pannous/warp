@@ -1,0 +1,6 @@
+# Outcomes from test/modules/test_std_list.pairs.warp
+'use list; argmax([2, 9, 4])'	1
+'use list; argmin([2, 9, 4])'	0
+'use list; minmax([2, 9, 4])'	[2 9]
+'use list; median([1, 3, 5])'	3
+'use list; median([1, 2, 3, 4])'	2.5

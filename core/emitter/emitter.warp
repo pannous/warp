@@ -785,6 +785,8 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 # its fields, or a case of T), a node; a value known only at run time is checked then (runtime.warp object_checked
 # fails with "not a T", as Rust's), one of another kind refused
 def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
+	# `x: real = 1/3` holds any real number, an int and a float as well as an exact real (decision real-canonical)
+	if type_name == REAL_CLASS and value.kind in [ValueKind.Int, ValueKind.Float, ValueKind.Node] { return assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value))) }
 	if value.kind != ValueKind.Node and value.kind != pending { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
@@ -937,11 +939,13 @@ def expression_code(body: Body, n: Node): TypedCode {
 }
 
 # `f 3 4`: a program function's name before spaced arguments it takes calls it, as `f(3, 4)`; `midi_on C4` too,
-# the rest defaulted
+# the rest defaulted; a word the emitter expands as well, by its signature line (`read "s.txt"`, `chr 65`)
 is_spaced_call(body: Body, n: Node): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
-	name in module.functions and name not in body.names and takes_arguments(module.functions[name], items_of(n)[1..])
+	if name in body.names { return no }
+	if name in module.functions { return takes_arguments(module.functions[name], items_of(n)[1..]) }
+	lines_of(emitter_lines, unaliased(name)).any(line => takes(line.signature, #n - 1))
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
@@ -963,6 +967,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and is_program_call(body, name_of(n#1), items_of(n)[1..]) {
 		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
+	# `chr 65`, `read "s.txt"`: a word the emitter expands, called spaced, is its call `chr(65)`
+	if is_spaced_call(body, n) and name_of(n#1) not in module.functions { return expression_code(body, call_of(name_of(n#1), items_of(n)[1..])) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.classes {
 		return positional_instance(body, name_of(n#1), items_of(n)[1..])
 	}
@@ -987,6 +993,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		return call(body, module.runtime[name_of(n#1)], items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test_code(body, n#2, n#3) }
+	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol(HiddenWord.InstanceOf as text) and n#3 is text { return class_test_code(body, n#2, n#3, "instance_among") }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.FloatConvertible as text) { return runtime_call("converts_to_float", [TypedCode(ValueKind.Node, boxed(expression_code(body, n#2)))]) }
 	# a match no case takes: `switch_no_case("label": value)` ends the run in no_case_<label>, which Rust's run reports
 	# as "no case for label"
@@ -1068,6 +1075,9 @@ def group_expression(body: Body, n: Node): TypedCode {
 	# a call of a program's function it can't take: refused naming the count
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return call(body, module.functions[name_of(n#1)], items_of(n)[1..]) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
+	# `div { p{"x"} }`, a word nothing knows before a block, once every word the emitter knows (return, global …) is
+	# taken: the data tag `div{…}`, one form with it
+	if is_data_tag(body, n) { return TypedCode(ValueKind.Node, spliced_code(body, n)) }
 	# `y = 2 x`: Rust's "`x` after `y=2` does nothing"
 	assigns = x => type(x) is key and op_of(x) in assignment_operators
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
@@ -1507,6 +1517,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		module.shared = shared_names(block_statements(main.body))
 		compile_function(main, [])
 		if prepended() { linked_builders() }
+		page_builders()
 		# the host shows no ø: a program giving nothing needs no show
 		if not main.gives_nothing { shown_result(main.result) }
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so

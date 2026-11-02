@@ -157,6 +157,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P107 the playground offers only the .wasm download plus a `warp hello.warp` line. P108 Warp.sublime-syntax takes .wasp/.warp/.a/.angle. P229 double-clicking a .warp file opens the editor.
 
 ## Welcoming, diagnostics and newcomer forms
+- kebab-hint-both-fixes: the kebab warning offers both fixes, "a_b or a - b".
 - errors-name-file (user): every error, warning and hint, in every lane (Rust, pure, self), prints file:line:column and the source line; a refusal never names internal words (`view·opaque`) but the user's code. Cards error-names, pure-error-candidate. Runtime errors and warnings keep their "at line:col" too (Supervisor, card appends-line: the 9 tests pinning the old text are updated, not the positions dropped).
 - Newcomer syntax is eaten, its intent compiled and the warp form hinted, only where it does not clash with a known footgun.
 - Asks become got-it warnings; error-fallback cases (`[x]*n`, insert order, `[1 2 3]+4`, `1+2 squared`) stay loud errors naming the explicit forms (D3, D9/P5).
@@ -199,6 +200,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
+- bool-int-fallthrough: a bool falls through to the int implementation of any operator.
+- element-wise-scalars: element-wise operators apply to a non-list value directly (`3 .* 3` → 9).
 - type-shows-nat (user): type(3) and an undeclared whole value show `nat`, a declared int shows `int`.
 - fast-int-readings (user): a literal beside a fast int stays int (`xs[i + 1]` in a range loop); `i++`/`i--` on an undeclared counter stay int; `s += i` grows like + (a nat).
 - int-boxed-overflow-big (user; asked whether it can be done in fewer than ~25 core lines): + - * of two boxed ints that overflow give the big-int result instead of trapping (`xs = [2^62]; xs#1 * 4`).
@@ -418,6 +421,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cleanup-cuts: dropped compile-time lambdas, generators/yield, type-name parameters `fib int i`, scoped handlers `on … in {…}`, the defined-twice diagnostic, all phrase calls (until prepositions-call: `move x from: a to: b`). Kept: return-type overloads, tuple returns, list element checks, instance destructuring, object-shaped parameters, dispatch by class, version literals (rebuilt small). Traits are a thin alias of classes with default methods; ORM keeps only `stored people: [Person]`; `a of b` ≡ `b.a`.
 
 ## Lists, maps and indexing
+- each-field-broadcast: `xs.each.count` broadcasts a field or method over the items (`sum(counters.each.count)`); a list's own `.count` keeps its meaning; no field-wins-when-all-have-it (card xs-each).
 - lazy-range-value (user; ~28 core lines in kinds.warp, runtime/lists.warp, emitter/runtime_words.warp, analysis/words.warp, runtime/types.warp; a range is a list node marked KindUnit.Range holding its ends, `range` a type word): `a..b` / `a to b` hold only their two ends; count, #, sum, indexing and iteration answer from the ends; any other list operation makes the items once, so a range stays a list everywhere (`(1..3) + [4]` is [1, 2, 3, 4]).
 - pair-items (user, core OK ~4 lines node_at/node_length, the minimal change): a key-value pair reads as two items, `p = (a: 1); p#1` → a (the name), `p#2` → 1 (the value), `#p` → 2; host item_count/item_at the same.
 - bare-pair (user): `a:1` as a value is a pair; a word key stays the word as written, as `{a:1}`'s keys (`a = 5; x = a:1` is a:1, `x is pair` yes); any other key is its value (`1:4`); a computed key is `(a):1` → 5:1.
@@ -492,6 +496,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - page-ids: an id in the program's own markup is a name in scope (`who.focus()`); a clash with a variable or function is a compile error naming both; kebab ids resolve; `$who` is the element's value and `$who = "Ann"` writes it; dynamic ids via `element("user-name")`; `$` means something only in warp code.
 
 ## Signals, events and tasks
+- go-unified (revises the immediate `go f(x)`): `go f(x)` means `go { f(x) }`, a cooperative task that starts when main yields; tests relying on the immediate run are updated under this decision (card go-go).
+- eval-explicit-with (refines N31): eval runs its text as a separate program; values go in explicitly, `eval("x*2", with: {x: 5})` → 10; bare `eval("x*2")` keeps refusing x as unknown; no caller scope (card eval-explicit-names).
 - P109 every variable can be watched; checks only where a listener watches. P111 writes through `global x` in called functions run the listeners. P112 no batching block; a multi-assignment notifies once.
 - P163 `emit alarm{…}` runs `on alarm` handlers and continues; `raise`/`throw` are errors; fire/trigger/signal alias emit with a note; `send alarm{…}` without `to` is emit. P202 an emit no handler receives warns.
 - P129 `broadcast v on "chat"` / `send v to "chat"` reach `on message from "chat"` machine-wide; P129b named events cross programs. P155 channels: `channel()` local, `channel "chat"` machine-wide.
@@ -523,6 +529,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
+- markup-auto-render (user, overrides keep-use-web-explicit): as in the Rust version, an HTML element in a program's result switches on render mode by itself, natively and in the page: no `use web`, no `render page` needed (card html-render-mode).
+- instances-not-plural: no magic plural `counters` for a component's instances (the sugar goes); `Counter.instances` and `instances of Counter` (the same thing). The idea of `counters` meaning a list of Counter is too ambiguous and to be revisited (card counters-sugar-removal).
 - click-by-id (user): a program or test clicks an element through page-ids: `button{ id: "plus", "+1", on click {…} }; click plus` (page-ids rebuilt in warp: ids are names, `$who` values); click-by-label (night, Interviewer, the Rust mechanism the user remembered: src/web/headless.rs): `click "+1"`, `fill "name" with "Ada"`, `check text is "Add1"` act on the page `render` last showed, finding the element by trimmed text, then placeholder, aria-label, name, id, with a handler for that event; none → "no element showing "+1" handles click; the page: …".
 - web-words (user): a page program reads `use web; render page`; host plumbing words (page_render, page_event) never appear in programs, samples, docs or try lines; a simulated click gets a readable word (spelling to be proposed).
 - markup-keeps (user): interactive markup is library-first. Core: (1) a tag block's items are expressions like any block's (module rules walk them, a phrase headed by a bound function is a call, unbound words stay data), ~15–25 lines; (2) automatic liveness, ~20 lines: an item reading a variable written later is kept as code (`is varying`), so `p{ "count: " + count }` updates after a click. Library: `on(event, handler: block)` (comma allowed before it), live parts re-evaluated after a handler with only changed output patched, a Live class showing its current value natively, `input{ bind: name }` as a lib/sugar rule, keyed instances by hand `instance(t, () => Counter(t))` (automatic keying ~20 core lines later if programs need it). General, not web: any library (terminal UI, native canvas, sound, `on change`) uses the same live API; core names carry no web words. Rejected: React-style re-render.
@@ -545,6 +553,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - gpu-multipass: `waves = render(height_field, 256, 256)` paints off-screen, the image stays on the GPU (alias `texture`); another painted function reads it as a function, `waves(uv)`, like `$previous(at)` (Interviewer's decision; notes/gpu.md "Several passes").
 
 ## Sound
+- mp3-true-length: an MP3's length excludes encoder padding (the browser's 0.5, not miniaudio's 0.5747): native trims too, and the test line `sound_seconds(tune.mp3) > 0.5` becomes `>= 0.5`.
 - play-dispatch: `play` dispatches on what it plays (signal, stereo pair, block function); `play(hum, 2s)` until prepositions-call.
 - sound-at: `at 2 beats play C4` places sounds from the voice's first sound.
 - note-value: note names are frequencies (`C4 * 2` = 523.25); `note(C4)` is a Note printing "C4", `note(445Hz)` "A4+20c".
@@ -554,6 +563,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - signal-samples: samples/signal*.warp are siren_sound/stereo_sound.
 
 ## Compiler internals (technical, decided by the Supervisor or Interviewer)
+- slice-parses-rederive (user OK, core): SLICE_PARSES is no longer baked (659 KB of the web compiler); a slice's parse is re-derived on demand from LIBRARY_PARSES.
 - core-hygiene-build (user): build A1 (libraries declare host imports as `… from host` lines, −60/+25), A2 (std modules read from lib/, −1/+10), A3 (property modules derived, −6/+15), B (GPU lists behind generic list hooks, −20/+15), C (one named-language literal for shader/wgsl/sql/sh, −300/+70 core, +150 lib; its spelling comes back as its own question), A4 (rule words marked in their modules, +30) and light E (one extension table for @primitive and C FFI, +30); order A1, A2, A3, B, C, A4, E. sugar-in-core (user): lib/sugar/ moves under core/extensions/, accepting a full compiler build and a core OK per rule edit. number-words-table (user): the number word table moves to lib/english.warp, the core pass stays and reads it.
 - core-hygiene (user, notes/core_hygiene.md): all five moves go ahead. D (tuples, safe_navigation → lib/sugar; number_words → lib/english; entities.tsv → lib data; durations → runtime/extended) at once as plain relocation; A (libraries declare their host imports and compile-time words, removing host_words, std_module_names, canvas words, the rule_words table, wgsl baking), B (GPU lists an extension behind list-kind hooks), C (one parser rule for a named language's literal with holes: shader, wgsl, sql, sh) and E (@primitive, times, C FFI loaded only when used) are sized first, core line counts back to the user before building.
 - method-clash-from-source (replaced 2026-11-02, card bind-linked): the program owns every dispatcher it makes over all its classes, a linked module's among them; the module's own methods bind, nothing is compiled from source for a shared method name. A link still refused falls back with a one-line warning.

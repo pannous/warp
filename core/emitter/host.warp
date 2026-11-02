@@ -42,6 +42,10 @@ host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], 
 	["new_bytes", [ValueKind.Char, ValueKind.Char, ValueKind.Int], "built_bytes"], ["new_ints", [ValueKind.Char, ValueKind.Char, ValueKind.Int], "built_ints"],
 	["new_floats", [ValueKind.Char, ValueKind.Char, ValueKind.Int], "built_floats"], ["new_spelled_key", [ValueKind.Node, ValueKind.Node, ValueKind.Node], "key_node"],
 	["new_spelled_list", [ValueKind.Node, ValueKind.Node, ValueKind.Node], "built_spelled_list"]]
+# a page's handler entry (lib/markup.warp page_event): the host builds the event's detail with the builders, so a
+# module defining it exports them though it reaches no host word of nodes
+page_event_word = "page_event"
+def page_builders() { if page_event_word in module.functions.keys { exported_builders() } }
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left (rust-harness:src/host/native.rs raised)
 def exported_builders(): any {
