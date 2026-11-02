@@ -90,6 +90,8 @@ int_marked(x, kind: int): any from emitter
 int_mark_of(x): int from emitter
 chr(code): codepoint from emitter
 read(path): text from emitter
+// eval(code, with: {x: 5}) (card eval-explicit-names): the code with each name bound first, to its value as data
+eval_named(code: text, names: map): text := names.keys.map(name => name + " = " + names[name].json).join("\n") + "\n" + code
 warning(message): text from emitter
 raise(message): same as message from emitter
 error(message): any from emitter
