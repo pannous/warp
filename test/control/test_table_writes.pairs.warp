@@ -1,0 +1,8 @@
+# a stored table's add, remove and field writes reach its rows; a transaction lands whole or not at all (card storage-table-writes)
+'class P{name: text; age: int}; stored ps: [P]; ps.add(P("Bo", 30)); ps#1.id'	1
+'class P{name: text; age: int}; stored ps: [P]; bo = P("Bo", 30); ps.add(bo); bo.age += 1; stored_table("ps", P)#1.age'	31
+'class P{name: text; age: int}; stored ps: [P]; bo = P("Bo", 30); ps.add(bo); ps.remove(bo); count(stored_table("ps", P))'	0
+'class A{owner: text; balance: int}; stored accounts: [A]; al = A("Al", 100); accounts.add(al); try transaction { al.balance -= 500; raise "no" } catch e { 0 }; al.balance'	100
+'class A{owner: text; balance: int}; stored accounts: [A]; al = A("Al", 100); accounts.add(al); transaction { al.balance -= 30 }; stored_table("accounts", A)#1.balance'	70
+'total = 0; for p in [1, 5, 9] where p > 3 { total += p }; total'	14
+'[3, 1, 2].sort_by(x => -x)'	[3 2 1]
