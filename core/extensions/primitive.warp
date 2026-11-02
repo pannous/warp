@@ -111,12 +111,21 @@ global primitive_constants = {}
 # warp's own host would answer them with its GC conventions, wrongly
 global native_build = no
 
-# a source whose first line, after a `#!` line, is the mark builds whole in primitive mode
+# a source whose leading header, its `#!` line, comments and blank lines before the code, holds the mark builds whole
+# in primitive mode; the mark on its own line below the code is refused, the file would compile as GC warp unmarked
 is_primitive_file(source: text): bool := mark_line(source.split("\n")) != ø
 mark_line(lines: list): int? := {
-	first = if lines#1.starts_with("#!") and #lines > 1 then 2 else 1
-	if lines#first.trim() == PRIMITIVE_MARK then first else ø
+	for at in 1 to #lines {
+		if lines#at.trim() == PRIMITIVE_MARK { return at }
+		if not is_header_line(lines#at.trim()) {
+			later = (at to #lines).filter(i => lines#i.trim() == PRIMITIVE_MARK)
+			if #later > 0 { raise "`@primitive` at line ${later#1} marks a file only in its leading header, the comments and blank lines before the code (notes/primitive.md)" }
+			return ø
+		}
+	}
+	ø
 }
+is_header_line(line: text): bool := line == "" or line.starts_with("#") or line.starts_with("//")
 
 # a primitive file's text with its mark's line left empty, so lines keep their numbers: the mark marks the file, never
 # its first statement; any other text as it is. A file the program uses comes so too (uses.warp file_parsed)
