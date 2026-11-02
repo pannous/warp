@@ -71,3 +71,27 @@ Cover matrix shape, transposition and multiplication, then add signatures withou
 
 ## library-typed fast math slice
 Cover documented fast math approximations, then declare float results while retaining float inputs. Verify the module and focused outcomes before smoke and landing.
+
+## library-typed PHP slice
+Cover the foreign-spellings PHP compatibility functions before adding non-narrowing signatures; verify behavior and module build before smoke.
+
+## library-typed R slice
+Cover foreign-spellings R compatibility functions before adding non-narrowing signatures; verify direct behavior and module build.
+
+## library-typed list sequence slice
+Cover heterogeneous take, drop, flatten and chunk outcomes before adding non-narrowing signatures; verify the module build and smoke.
+
+## library-typed list composition slice
+Cover adjacent pairs, splitting, interleaving and deduplication before typing their generic inputs and list results; verify behavior and smoke.
+
+# library-typed extrema helpers
+
+Cover list indices and numeric median and minmax outcomes before adding non-narrowing signatures; verify the module and smoke on merged main.
+
+# library-typed list statistics and construction
+
+Cover documented list construction and statistics outcomes, then declare non-narrowing argument and result types and verify the module and smoke.
+
+# library-typed list scans
+
+Cover the documented scan and predicate-based take/drop outcomes, then type their generic inputs and list results and verify the module and smoke.
