@@ -11,6 +11,7 @@ use "../analysis/builtin_signatures.warp"
 use "scope.warp"
 use "lambdas.warp"
 use "../emitter/c_imports.warp"
+use "../extensions/components.warp"
 
 # each function a library file brought, by name: [the file, the line its definition starts on], the place a refusal
 # inside it names (emitter.warp note_emitting): its slice was parsed alone, its nodes keep no line of the file
@@ -250,8 +251,8 @@ lowering_words(program: Node): list := {
 is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
 # data view) a time's fields (emitter/times.warp time_field), its + - * where the program writes one
-# (time_operation_call); the exact root of a program taking one (root_words)
-emitted_words(program: Node): list := time_literal_words(program) + root_words(program)
+# (time_operation_call); the exact root of a program taking one (root_words); the instances of a program's components
+emitted_words(program: Node): list := time_literal_words(program) + root_words(program) + component_words(program)
 # a value called, `room(signal)` (closure_call_1 once lowered), may be an instance its class's `call` takes (emitter
 # closures.warp instance_calls): the module's call is reached and kept for it
 callable_word = "call"

@@ -12,6 +12,9 @@ use "../analysis/words.warp"
 this_word = symbol("this·component")
 key_parameter = "key"
 instances_field = "instances"
+instances_word = "component_instances"
+# the words of lib/markup.warp the calls this pass writes need, reached though the program writes none (prelude_words.warp)
+component_words(program: Node): list := if statements_in(program).any(statement => component_name(statement) != "") then ["component", "component_state", instances_word, "live"] else []
 
 components(program: Node): Node := {
 	statements = statements_in(program)
@@ -70,7 +73,6 @@ instances_named(n: Node, names: list): Node := {
 	if n is symbol { return plural_instances(name_of(n), names) ?? n }
 	n
 }
-instances_word = "component_instances"
 instances_of(name: text): Node := call_node(symbol(instances_word), [name])
 # `counters`, a component's name in lower case and plural, as `Counter.instances` (a spelling the user may drop: then
 # only this goes)
