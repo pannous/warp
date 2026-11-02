@@ -3,4 +3,5 @@
 
 'use markup; xs = [1, 2]; to_html(p{ reverse xs })'	'<p>[2, 1]</p>'
 'use markup; greet(name) := "hi " + name; to_html(p{ greet "Ann" })'	'<p>hi Ann</p>'
-'div { p{"x"} }'	'div: {p: {"x"}}'
+'use markup; to_html(div { p{"x"} })'	'<div><p>x</p></div>'
+'use markup; to_html(li{ key: 1, animation: pop 400ms })'	'<li data-warp-key="1">animation: pop 400ms</li>'
