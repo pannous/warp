@@ -42,6 +42,7 @@ use rule_words
 
 rewrite_word = "rewrite"
 where_word = "where"
+use_line_start = "use "
 rule_hole_mark = "$"
 # the characters of a word in a rule's text besides letters and digits
 rule_word_marks = "_$"
@@ -193,11 +194,12 @@ own_rules_applied(program: Node, source: text): Node := {
 	mentioned = word_set(symbol_words(program))
 	module_rules = []
 	needs = rule_needs_by_module()
-	for module in std_module_names.filter(module => needs.has(module)) {
-		if needs[module].split(" ").any(word => mentioned.has(word)) {
-			# (a rule of the whole program, `where program`, comes with the module's others)
-			module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program or needed_words(rule).any(word => mentioned.has(word)))
-		}
+	taken = std_module_names.filter(module => needs.has(module) and needs[module].split(" ").any(word => mentioned.has(word)))
+	# (a rule of the whole program, `where program`, comes with the module's others)
+	for module in taken { module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program or needed_words(rule).any(word => mentioned.has(word))) }
+	# and with a module using its module: lib/storage.warp's stored values written through by lib/signals.warp's rule
+	for module in taken.flat_map(modules_used_by).filter(module => needs.has(module) and module not in taken) {
+		module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program)
 	}
 	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
 	rules += unbound_rules(module_rules, program)
@@ -229,6 +231,8 @@ store_word = HiddenWord.StoredValue as text
 stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if is_store(part) then Key(part#2, Op.Assign, part#3) else part) else n
 is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
 
+# the standard modules a module's `use` lines name
+modules_used_by(module: text): list := used_module_text(module).split("\n").filter(line => line.starts_with(use_line_start)).map(line => line[#use_line_start ..].trim())
 # the program rewritten by the rules of its whole, `where program`, each once, after the rules inside it fired
 # (`$program` their program): lib/web.warp's ending of a program with routes
 with_program_rules(program: Node, rules: list, origins: list): Node := {
