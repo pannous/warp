@@ -601,6 +601,15 @@ declared_local(declaration: Node): Node := {
 	declaration
 }
 
+# `on change online {…}` (lib/signals.warp): the word when it is one without arguments the prelude or a used module
+# defines, `online() := …`, and the program neither defines nor binds it; ø otherwise (a variable's `on change x`)
+polled_word(name: Node, program: Node, source: text): any := {
+	word = spelled(name)
+	if word in names_bound_in_kept(program) or definition_start(source, word) != ø { return ø }
+	texts = [prelude_text] + used_modules(source).map(used_module_text)
+	if texts.any(text => definition_slices(text).any(cut => cut#1 == word and cut#2.starts_with(word + "()"))) then name else ø
+}
+
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 rule_words = {
 	awaited_operand: awaited_operand,
@@ -634,6 +643,7 @@ rule_words = {
 	paint_size: paint_size,
 	parameters_named: parameters_named,
 	path_parameters: path_parameters,
+	polled_word: polled_word,
 	return_kind: return_kind,
 	route_bindings: route_bindings,
 	route_verb: route_verb,
