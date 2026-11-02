@@ -619,6 +619,8 @@ def word_at(p: Parser): text := p.code[p.at .. name_end(p.code, p.at, p.n)]
 // Rust twin: lists.rs parse_list_with_separators
 def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 	found = []
+	// where the item before started, for the mark of a signed item after it (spaced_sign_marked)
+	previous_start = p.at
 	opener = p.at - 1
 	outer = p.group
 	closer = closer_of(bracket, ends)
@@ -647,7 +649,10 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if stray and p.group.grouped { break }
 		if stray { raise "`" + c + "` closes no group" }
 		before = p.at
+		signed = found and found#(found.length)#2 == Separator.Space and signed_item_at(p)
 		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
+		if signed { item = spaced_sign_marked(p, p.code[previous_start ..< before].trim(), before, item) }
+		previous_start = before
 		tabbed = tab_separates(p)
 		newline = skip_blanks(p)
 		if bracket == Bracket.None and newline and line_indent(p) > p.indent {
@@ -1153,12 +1158,15 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = operator_call(glyph, [left, expression(p, fixity_level(Fixity.Infix) + 1)])
 				continue
 			}
-			if op.length == 0 or negative_item_at(p) {
+			signed = signed_item_at(p)
+			if op.length == 0 or signed {
 				if not applies(p, left, min_power) or comprehension_filter_at(p) { break }
+				sign_at = p.at
 				// `s + f 2 each: 3`: the labelled arguments after the argument are the call's too
 				labelled = labelled_argument(p)
 				// `ys = xs where it > 2`: after a clause word its whole condition or subject, as a statement's (follows_clause_word)
 				given = [if labelled != ø then labelled else if ends_with_clause_word(left) then header_expression(p, 0) else argument(p, not applies_otherwise(p, min_power))]
+				if signed and labelled == ø { given = [spaced_sign_marked(p, written_before(p, left, sign_at), sign_at, given#1)] }
 				labelled = labelled_argument(p)
 				while labelled != ø {
 					given = given + [labelled]
@@ -1708,12 +1716,23 @@ def is_element(n: Node): bool := match n {
 	Key(target, op, index): op == Op.Hash
 	_: false
 }
-// `[a -1]`, `f it -1`, `x -1`: a minus spaced before and glued after starts a negative operand, a new item, not a
-// subtraction (decision glued-negative); `a - 1` and `a-1` subtract, so does `-` inside an index, `xs[i -1]`
-def negative_item_at(p: Parser): bool {
-	if p.indexing or not is_at(p.code, p.at, '-', p.n) or p.at == 0 or not is_blank(p.code[p.at - 1]) { return false }
+// `[a -1]`, `f it -1`, `x -1`, `1 +1`: a sign spaced before and glued after starts a signed operand, a new item, not a
+// subtraction or sum: a binary operator is spaced evenly (decisions glued-negative, binary-operator-spacing); `a - 1`
+// and `a-1` compute, so does a sign inside an index, `xs[i -1]`
+def signed_item_at(p: Parser): bool {
+	if p.indexing or p.at == 0 or not is_blank(p.code[p.at - 1]) or not (is_at(p.code, p.at, '-', p.n) or is_at(p.code, p.at, '+', p.n)) { return false }
 	next = peek(p.code, p.at + 1, p.n)
-	not is_blank(next) and not "=->".contains(next)
+	not is_blank(next) and not "=->+".contains(next)
+}
+// the signed item, written from the source's offset `sign_at` to the parser's position, marked with what was written
+// before it, `1` of `1 +1`: the analyzer warns that these are two items (source_checks.warp spaced_sign)
+def spaced_sign_marked(p: Parser, before: text, sign_at: int, item: Node): Node := attributed(SPACED_SIGN_MARK, listed(Bracket.Square, Separator.Space, [before, p.code[sign_at ..< p.at].trim()]), item)
+// the source written from the node's place to the offset `end`, "" for a node of no place
+def written_before(p: Parser, n: Node, end: int): text := {
+	line = line_of(n)
+	column = column_of(n)
+	if not (line is int and column is int) { return if is_group(n) and #n > 0 then written_before(p, n#1, end) else "" }
+	p.code[p.line_starts[line - 1] + column - 1 ..< end].trim()
 }
 
 // The left power of `#`, which a glued `[` indexes with
@@ -1978,7 +1997,8 @@ def library_glyph_operators(): list {
 // What the bundled modules at the top of lib/ declare for every program, read off their text once a run: "words",
 // word → the module declaring it global, `global play(file: text) := …` (decision bizarre-global: a program naming it
 // uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
-// expected-type-names: a parameter typed Time finds its values there)
+// expected-type-names: a parameter typed Time finds its values there); "tags", tag → its module, each text of a global
+// list, `global html_elements = ["div", …]` of markup (decision html-render-mode: a program writing `div{…}` uses it)
 global module_declarations = ø
 def bundled_declarations(): map {
 	if module_declarations == ø {
@@ -1991,19 +2011,37 @@ def declared_classes_modules(): map := bundled_declarations()["classes"]
 def declarations_scanned(): map {
 	words = {}
 	classes = {}
+	tags = {}
 	for path in LIBRARY_FILES.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
+			listing = no
 			for line in LIBRARY_FILES[path].split("\n") {
-				if line.starts_with(GLOBAL_MARK) {
+				if listing {
+					for tag in quoted_texts(line) { tags[tag] = module }
+					listing = not line.contains("]")
+				} else if line.starts_with(GLOBAL_MARK) {
 					word = name_starting(line[#GLOBAL_MARK ..])
-					if word and line[#GLOBAL_MARK + #word ..].starts_with("(") { words[word] = module }
+					rest = line[#GLOBAL_MARK + #word ..]
+					if word and rest.starts_with("(") { words[word] = module }
+					if word and rest.starts_with(" = [") {
+						for tag in quoted_texts(rest) { tags[tag] = module }
+						listing = not rest.contains("]")
+					}
 				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
 			}
 		}
 	}
-	{"words": words, "classes": classes}
+	{"words": words, "classes": classes, "tags": tags}
+}
+def declared_tags(): map := bundled_declarations()["tags"]
+// the texts quoted in a line of a list, `"a", "b",` → ["a", "b"]: every other piece between its quotes
+def quoted_texts(line: text): list {
+	pieces = line.split("\"")
+	texts = []
+	for i in 1 to #pieces { if i % 2 == 0 { texts += [pieces#i] } }
+	texts
 }
 GLOBAL_MARK = "global "
 CLASS_MARK = "class "

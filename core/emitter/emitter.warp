@@ -54,6 +54,9 @@ columns_per_line = 4096
 import_function_byte = 0
 # the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
 wasi_start = "_start"
+# lib/markup.warp's export giving the HTML of a value that is markup, else ø: a program using markup prints its
+# markup value as that page (decision html-render-mode)
+page_shown_word = "page_of"
 # WARP_VALUE_AS_DATA set: _start prints main's value as data after a line of its own, VALUE_MARK, as a list shows an
 # item (a text quoted, a character in single quotes: runtime node_code), ø too, so `warp test` reads back the value
 # the case gave, not its printed text (card native-warp-test)
@@ -441,7 +444,7 @@ def defined_arities(program: Node): map {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {} }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {} }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -620,6 +623,14 @@ def gc_position(name: text): int {
 # bytes that name GC types by their names (a type's definition in gc_types, a reference in references): each name the
 # index the module takes the type under
 def gc_bytes(parts: list): list { concatenated(parts.map(part => if part is text then uleb(gc_type(part)) else [part])) }
+# _start printing main's value, in local 0, as its page where markup gives one (local 1), else as print shows it
+def page_printed(start: Function, main: Function, result: TypedCode, shown_kind: ValueKind): list {
+	start.locals = [main.result, ValueKind.Node]
+	page = call_values(module.functions[page_shown_word], [result])
+	html = TypedCode(ValueKind.Text, payload([op.local_get, 1], gc_type(gc.text)))
+	shown = printed(shown_code(unboxed_to_show(result, shown_kind))).code
+	call_code(main.index) + [op.local_set, 0] + boxed(page) + [op.local_set, 1, op.local_get, 1, op.ref_is_null, op.if, no_value, op.local_get, 0, op.ref_is_null, op.i32_eqz, op.if, no_value] + shown + [op.end, op.else] + dropped(runtime_call("print_line", [html])) + [op.end]
+}
 # _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
 def value_printed_as_data(result: TypedCode): list {
 	printed(text_value(VALUE_MARK)).code + printed(runtime_call("value_code", [TypedCode(ValueKind.Node, boxed(result))])).code
@@ -694,6 +705,10 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 	TypedCode(ValueKind.Float, kept + get_dividend + get_dividend + get_divisor + [op.f64_div, op.f64_trunc] + get_divisor + [op.f64_mul, op.f64_sub])
 }
 
+# a variable an Error raises in (decision errors-one-rule): any but an optional one (`r: json? = …`), a runtime
+# word's own, or a lowering's hidden one (try·value)
+def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and name not in body.kept
+def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
 	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
@@ -730,6 +745,7 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
+	value = place_checked(body, name, value)
 	kind = value.kind
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`
@@ -775,6 +791,7 @@ admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
+	if type_name.ends_with("?") or type_name == "error" { body.kept[name] = yes }
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
@@ -863,7 +880,7 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	if not (name is symbol) { return refuse("the declaration global " + form_of(declaration)) }
 	# `global n = n + 2` in a function: the value reads the global it assigns, declared first as a bare `global n` does
 	if mentions(value_of(declaration), name_of(name)) and not is_global(body, name_of(name)) { global_declaration_code(body, name) }
-	value = expression_code(body, value_of(declaration))
+	value = place_checked(body, name_of(name), expression_code(body, value_of(declaration)))
 	kind = if written == ø then ø else declared_kinds.get(aliased_type(written))
 	body.globals[name_of(name)] = yes
 	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(value, kind))
@@ -1314,6 +1331,8 @@ def negation(body: Body, value: TypedCode): TypedCode {
 logical_words = {and: "and", or: "or"}
 def logical(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	a = expression_code(body, left)
+	# a value's `a or b` is b when a raises (decision errors-one-rule): a call giving a node is read under a try
+	if symbol == "or" and a.kind == ValueKind.Node and is_call(left) and not body.function.is_runtime { a = expression_code(body, kept_raise(left)) }
 	if a.kind == ValueKind.Bool and is_answered(a.code, symbol) { return a }
 	logical_code(body, symbol, a, nested(body, right, 1))
 }
@@ -1458,7 +1477,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime = {}
 	module.globals = {}
 	module.global_order = []
-	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text)
+	# (a value's `f(x) or b` too, logical reading f(x) under a try)
+	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text) or #nodes_kept(program, n => is_key(n, Op.Or) and is_call(key_of(n))) > 0
 	if module.catches_errors { declared_global(try_depth_name, ValueKind.Int) }
 	# the name of the runtime word a run failed in, which error_sentences.warp reads
 	declared_global(trap_name_global, ValueKind.Node)
@@ -1574,6 +1594,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		absent = if main.result == ValueKind.Node then [op.local_get, 0, op.ref_is_null] else [op.i32_const, 0]
 		start.code = call_code(main.index) + [op.drop]
 		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(shown_code(unboxed_to_show(result, shown_kind))).code + [op.end] }
+		if not main.gives_nothing and module.functions.has(page_shown_word) and main.result == ValueKind.Node { start.code = page_printed(start, main, result, shown_kind) }
 		if not main.gives_nothing and value_as_data { start.code = call_code(main.index) + [op.local_set, 0] + value_printed_as_data(result) }
 		# what a host says of a run that failed in a runtime error, of a program that can fail so (a trimmed hello
 		# carried its sentences and the whole node printer: 25 KB for 1.5)
