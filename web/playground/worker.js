@@ -156,8 +156,18 @@ const NOT_SELF_HOSTED = "not in the self-hosted playground yet";
 // composes its Worker of, `{query, module}` or `{error}`
 const workerBundle = () => ({ error: `deploy: ${NOT_SELF_HOSTED}` });
 
-// the members to offer after the code and a dot (completion.js): a list of names
-const memberNames = () => [];
+// the members to offer after the code and a dot (completion.js): the words `dir` gives for its last statement,
+// `xs = [1 2]; dir(xs)` (lib/rule_words.warp), none when that fails
+function memberNames(code) {
+	const last = Math.max(code.lastIndexOf(";"), code.lastIndexOf("\n")) + 1;
+	const { data } = ranAsData(`${code.slice(0, last)}dir(${code.slice(last)})`);
+	try {
+		const names = JSON.parse(data ?? "[]");
+		return Array.isArray(names) ? names : [];
+	} catch {
+		return [];
+	}
+}
 
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {

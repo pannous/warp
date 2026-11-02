@@ -1,0 +1,7 @@
+# a compound unit after as or in is the unit converted to, never a conversion then divided by its rest
+'str(10km / 50min as km/h)'	'12km/h'
+'str(90km/h as m/s)'	'25m/s'
+'d = 3km; t = 15min; str(d / t as km / h)'	'12km/h'
+'str(2m * 3m as cm^2)'	'60000cm²'
+'str(1kg * 1m / 1s^2 as g*cm/s^2)'	'100000g·cm/s²'
+'x = 36km/h in m/s; x == 10m/s'	true

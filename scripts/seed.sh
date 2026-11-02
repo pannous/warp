@@ -5,7 +5,8 @@
 # commit's compiler can be built again (user 2026-10-30: "we must be able to reconstruct them")
 set -uo pipefail
 REPO=pannous/warp
-if [ "$(uname)" = Darwin ]; then STORE=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}/seeds; else STORE=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers}/seeds; fi
+source "$(dirname "$0")/lib/platform.sh"
+STORE=$warp_store/seeds
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 lock=$tree/seed.lock
 fail() { echo "seed.sh: $*" >&2; exit 1; }
