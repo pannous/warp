@@ -349,7 +349,7 @@ use_target(statement: Node): any := {
 file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
 	if module is text { return path_in(folder, rooted(module, folder)) }
-	if not (module is symbol) { return ø }
+	if not (module is symbol) or name_of(module) in implicitly_used { return ø }
 	path = path_in(folder, name_of(module) + module_extension)
 	if file_text(path) == ø then ø else path
 }
