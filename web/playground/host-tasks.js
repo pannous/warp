@@ -164,7 +164,7 @@ function liveLoopNames(module) {
 	return section ? decode(new Uint8Array(section)).split("\n") : [];
 }
 
-// the pool of task Workers of the workers that run programs (worker.js, test-worker.js), asked for when they start, one
+// the pool of task Workers of the workers that run programs (worker.js, site-worker.js), asked for when they start, one
 // after the other
 function prepareTaskPool(size = TASK_POOL_SIZE) {
 	if (!hasTaskWorkers()) return;

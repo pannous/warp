@@ -1,6 +1,6 @@
 // What a host gives the warp compiler built without the native feature (src/web/mod.rs `page`): `warp_host` runs the modules
 // it compiles. A compiled program's imports mirror what the CLI's wasmtime runner links (src/host.rs, WASI fd_write,
-// libm). Shared by the playground (worker.js), the browser test runner (test-worker.js) and built sites (site.js);
+// libm). Shared by the playground (worker.js) and built sites (site.js);
 // needs reader.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
 
 const TEXT_HEAP_EXPORT = "text_heap";
@@ -570,7 +570,6 @@ function outcomeOf(holder, hooks, call) {
 	const failed = trap => {
 		eachHostPart("ended", holder);
 		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, exited: holder.exitCode, warnings };
-		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
 		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = exports[TRAP_DETAIL_EXPORT]?.value;

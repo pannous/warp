@@ -1,4 +1,4 @@
-// A small WASI preview1 for the test binary in the browser (test-worker.js): arguments, clocks, randomness, stdout and
+// A small WASI preview1 for the programs and the compiler in the page (driver.js): arguments, clocks, randomness, stdout and
 // stderr to a callback, and a file system whose "." is the repository root, read with synchronous GETs (FILE_ROOT;
 // directories through the static server's listing page (?listing: test_in_browser.py lists a directory even when it
 // holds an index.html), cached per worker) and whose /include holds the C headers warp's FFI reads (WARP_INCLUDE), with an empty /tmp. Writes land in an in-memory overlay that lives as

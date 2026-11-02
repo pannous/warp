@@ -1,6 +1,6 @@
 // Timers in the page (a part of host.js, which says how parts work; crates/warp-runtime/src/system_signals.rs): main
 // records them, the page starts them after it (startTimers, in the playground's worker.js and a built site's site.js); a
-// host without a page that stays (test-worker.js) only warns
+// host without a page that stays only warns
 
 function addTimer(holder, hooks, id, timer, written) {
 	if (!hooks.listen) return holder.warnings.push(`${written}: timers do not run here`);
