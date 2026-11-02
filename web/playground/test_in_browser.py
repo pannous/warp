@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Cargo runner for wasm32-wasip1 (.cargo/config.toml): runs the Rust test binary in headless Chrome.
-`cargo browser-test [filter…]` builds tests/main.rs without the native feature for wasm32-wasip1 and calls
-`test_in_browser.py <tests.wasm> [libtest arguments]`: this serves the repository root and the binary, opens
-web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
+"""The playground checked in a headless browser, the repository root served.
 `test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
 `test_in_browser.py --examples --url https://warp.pannous.com/ [--site _site] [name…]` checks the tour of a deployed
@@ -20,7 +17,7 @@ file, and compares its output with the native run's (scripts/samples.sh: data/sa
 each is! line) in the page, judged as the native `warp test` judges (core/commands/tests.warp: warp.wasm lists the
 cases, the page runs them, warp.wasm gives the verdicts), against the native verdicts of the stored baseline
 (scripts/baseline.sh); writes test/tests-web.txt.
-`test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
+`test_in_browser.py --serve` only serves (http://127.0.0.1:PORT/web/playground/), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/formats/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
@@ -61,13 +58,9 @@ PAGE_LOST = "playground is not defined"  # a report of a page that lost its API 
 VERDICT = re.compile(r"^([✓✗]) (.*?)(?:: got .*)?$")
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
-WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", str(os.cpu_count() or 2))  # tests in flight: one per core
-SHARD = os.environ.get("WARP_BROWSER_TEST_SHARD")  # i/n: every n-th test from the i-th (pages.yml's matrix)
 # the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
 # CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
 SLOW_START_MS = 2000
-COMPONENTS_BUILT = os.environ.get("WARP_COMPONENTS_BUILT") == "1"
-PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
 SESSION = f"warp-browser-tests-{os.getpid()}"
 LAUNCH_ATTEMPTS = 3
@@ -76,14 +69,11 @@ LAUNCH_SECONDS = 90  # a page that is not loaded by then did not start: relaunch
 # playground-verify: right after a deploy the CDN served a mix of old and new files, 58 examples failing)
 DEPLOYED_WAIT_SECONDS = 600
 DEPLOYED_POLL_SECONDS = 10
-POLL_SECONDS = 3
-BINARY_PATH = "/__tests__.wasm"
 INCLUDE_PREFIX = "/__include__/"
 # where /__include__/<header> looks (wasi.js WARP_INCLUDE): the Rust compiler's FFI parser read its list from
 # src/formats/ffi_parser.rs, gone with src/
 HEADER_DIRECTORIES = ("/opt/homebrew/include", "/usr/local/include", "/usr/include")
 HEADER_NAME = re.compile(r"^[\w.+-]+(/[\w.+-]+)*\.h$")
-RESULTS_PATH = "/__results__"
 LISTING_QUERY = "listing"
 STUB_PATH = "/__stub__"  # answers with the status and body its query names, after `delay` milliseconds: the fetch tests' HTTP stub (tests/common serve)
 CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup comes back
@@ -91,10 +81,8 @@ ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its 
 # serve without the isolation headers, as GitHub Pages does, so the page isolates itself under coi-serviceworker.js
 # (card firefox-coi-worker)
 UNISOLATED = os.environ.get("WARP_SERVE_UNISOLATED") == "1"
-STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CI_ONLY = "browser tests run in CI only: skipped here, Chrome is not started outside CI (dispatch the Playground workflow on your branch)"
-IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
 # the console of the page and its workers (console_watch.mjs): any error or warning there fails the tour check
 CONSOLE_WATCHER = os.path.join(REPOSITORY, "web", "playground", "console_watch.mjs")
 FIREFOX_DRIVER = os.path.join(REPOSITORY, "web", "playground", "firefox_driver.mjs")
@@ -173,6 +161,13 @@ PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who
 PAGE_ELEMENTS_CODE = 'use web\ngreeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } p{ greeting } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
+# scripts/build-site.sh: a markup program built as a static site, its page loaded and its button clicked (card
+# blockcompiler-entries: built sites on page_render/page_event); checked last, it leaves the playground's page
+BUILT_SITE = "(a site scripts/build-site.sh built shows its page and runs its handlers)"
+BUILT_SITE_CODE = 'use web\ncount = 0\ndiv{ h1{ "Count " + count } button{ on click { count += 1 }, "add" } }\n'
+BUILT_SITE_FOLDER = "data/site-check"
+BUILT_SITE_SHOWN = ["Count 0", "Count 1"]  # the heading after main, after the click
+BUILT_SITE_WAIT_MS = 20000
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -306,13 +301,11 @@ def show_served():
 SERVER_STARTED = time.time()
 
 
-def serve(binary, root=REPOSITORY):
+def serve(root=REPOSITORY):
 
 	class Handler(http.server.SimpleHTTPRequestHandler):
 		def translate_path(self, path):
 			path = urllib.parse.unquote(urllib.parse.urlsplit(path).path)
-			if path == BINARY_PATH and binary:
-				return binary
 			if path.startswith(INCLUDE_PREFIX):
 				return find_header(path[len(INCLUDE_PREFIX):]) or "/nonexistent"
 			return super().translate_path(path)
@@ -341,17 +334,9 @@ def serve(binary, root=REPOSITORY):
 			self.wfile.write(body)
 
 		def do_POST(self):
-			"""tests.html posts its summary here: data/browser_tests_<browser>.json, e.g. from a Firefox tab"""
-			if urllib.parse.urlsplit(self.path).path == STUB_PATH:
-				return self.echo()
-			if self.path != RESULTS_PATH:
+			if urllib.parse.urlsplit(self.path).path != STUB_PATH:
 				return self.send_error(404)
-			summary = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-			os.makedirs(os.path.join(REPOSITORY, "data"), exist_ok=True)
-			with open(os.path.join(REPOSITORY, "data", f"browser_tests_{summary.get('browser', 'unknown')}.json"), "w") as file:
-				json.dump(summary, file, indent=1)
-			self.send_response(204)
-			self.end_headers()
+			self.echo()
 
 		def echo(self):
 			"""a POST to the stub answers what it got, as httpbin.org/post does: {data, headers} (tests/common echo_url)"""
@@ -374,7 +359,7 @@ def serve(binary, root=REPOSITORY):
 		def log_message(self, *_):
 			pass
 	class Server(http.server.ThreadingHTTPServer):
-		request_queue_size = 512  # every worker fetches the binary at once
+		request_queue_size = 512  # the page's workers fetch their scripts at once
 	global PORT
 	try:
 		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=root))
@@ -707,6 +692,31 @@ def page_elements_wrong():
 	}})()""")
 	shown = json.loads(shown) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
 	return [] if shown == PAGE_ELEMENTS_SHOWN else [f"typed {PAGE_ELEMENTS_NAME!r} and clicked: shown {shown!r}, expected {PAGE_ELEMENTS_SHOWN!r}"]
+
+
+def built_site_wrong():
+	"""the site's heading after main and after a click on its button"""
+	program = os.path.join(REPOSITORY, BUILT_SITE_FOLDER, "app.warp")
+	os.makedirs(os.path.dirname(program), exist_ok=True)
+	with open(program, "w") as file:
+		file.write(BUILT_SITE_CODE)
+	built = subprocess.run([os.path.join(REPOSITORY, "scripts", "build-site.sh"), program], capture_output=True, text=True)
+	if built.returncode:
+		return [f"scripts/build-site.sh failed: {(built.stderr or built.stdout).strip()[-300:]}"]
+	browser("open", f"http://127.0.0.1:{PORT}/{BUILT_SITE_FOLDER}/site/index.html")
+	shown = browser("eval", f"""(async () => {{
+		const heading = async before => {{
+			const deadline = Date.now() + {BUILT_SITE_WAIT_MS};
+			const text = () => document.querySelector("#warp-root h1")?.textContent;
+			while (text() === before && Date.now() < deadline) await new Promise(done => setTimeout(done, 100));
+			return text() ?? null;
+		}};
+		const first = await heading(undefined);
+		document.querySelector("#warp-root button")?.click();
+		return JSON.stringify([first, await heading(first)]);
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
+	return [] if shown == BUILT_SITE_SHOWN else [f"headings {shown!r}, expected {BUILT_SITE_SHOWN!r}"]
 
 
 def clipboard_read_wrong():
@@ -1103,13 +1113,14 @@ def check_examples(names, page_url=None, site=None):
 	`site` directory, or the deployed one at `page_url`), and neither loading the page nor showing an example or a sample
 	writes an error or warning to the console (card console-errors); exit code 101 on a difference"""
 	server = None
+	serves_repository = not site and not page_url  # the checks that build files into data/ see them served
 	if site:
-		server = serve(None, os.path.abspath(site))
+		server = serve(os.path.abspath(site))
 		page_url = f"http://127.0.0.1:{PORT}/"
 	elif not page_url:
 		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp-lib", "warp.wasm")):
 			sys.exit("error: web/playground/warp-lib/warp.wasm is missing; build it with web/playground/build.sh")
-		server = serve(None)
+		server = serve()
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
 	console = WebDriverConsole() if webdriver else ConsoleWatch()  # before the page, so its loading is watched too
@@ -1150,7 +1161,7 @@ def check_examples(names, page_url=None, site=None):
 	snippets = guide_snippets() if GUIDE in names else []
 	for line, code, value, printed in snippets:
 		verdict(f"{GUIDE_FILE}:{line}", snippet_wrong(code, value, printed))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url)), *([(BUILT_SITE, built_site_wrong)] if serves_repository else [])) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -1163,17 +1174,6 @@ def check_examples(names, page_url=None, site=None):
 	checked = len(chosen) + 1 + len(snippets) + len(extra_checks)
 	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
-
-
-def build_components():
-	"""the components `use wasm` tests call, transpiled for the page (components.js); a failure only warns: those tests
-	then fail naming build.sh. COMPONENTS_BUILT: built elsewhere already (scripts/browser-dry-run.sh builds them on the
-	Mac, the server has no cargo)"""
-	if COMPONENTS_BUILT:
-		return
-	built = subprocess.run([os.path.join(REPOSITORY, "web", "playground", "build.sh"), "components"], capture_output=True, text=True)
-	if built.returncode:
-		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
 
 
 # one sample started in the page as its own file (%s: path and source as JSON), its report kept as JSON in
@@ -1266,7 +1266,7 @@ def check_samples(paths, tree):
 	paths = paths or sorted(native)
 	data = os.path.join(tree, SAMPLES_WEB_DATA)
 	os.makedirs(os.path.join(data, "out"), exist_ok=True)
-	server = serve(None, tree)
+	server = serve(tree)
 	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={SAMPLE_RUN_SECONDS}"
 	open_samples_page(page_url)
 	lines, details = [], []
@@ -1409,7 +1409,7 @@ def check_tests(paths, tree):
 	os.makedirs(work)
 	compiler_said(tree, "test-list", work, *paths)
 	runs = [line.split("\t") for line in open(os.path.join(work, "runs"), encoding="utf-8").read().split("\n") if line]
-	server = serve(None, tree)
+	server = serve(tree)
 	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={CASE_RUN_SECONDS}"
 	open_samples_page(page_url)
 	cases_ran(work, runs, page_url)
@@ -1486,51 +1486,10 @@ def main():
 	if sys.argv[1:2] == ["--tests"]:
 		return check_tests(sys.argv[2:], REPOSITORY)
 	if sys.argv[1:2] == ["--serve"]:
-		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
-		serve(binary)
-		tests = f"tests.html?wasm={BINARY_PATH}" if binary else "tests.html (after copying the binary to web/playground/tests.wasm)"
-		print(f"serving {REPOSITORY}\n  playground: http://127.0.0.1:{PORT}/web/playground/\n  tests:      http://127.0.0.1:{PORT}/web/playground/{tests}")
+		serve()
+		print(f"serving {REPOSITORY}\n  playground: http://127.0.0.1:{PORT}/web/playground/")
 		threading.Event().wait()
-	binary, arguments = sys.argv[1], [argument for argument in sys.argv[2:] if not argument.startswith(IGNORED_ARGUMENTS)]
-	build_components()
-	server = serve(binary)
-	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {}), **({"shard": SHARD} if SHARD else {})})
-	open_page(f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
-	summary, shown, changed = None, "", time.time()
-	while summary is None:
-		time.sleep(POLL_SECONDS)
-		progress = browser("get", "text", "#progress")
-		if progress != shown:
-			print(progress, file=sys.stderr)
-			shown, changed = progress, time.time()
-		elif time.time() - changed > STALL_SECONDS:
-			print(f"error: no progress for {STALL_SECONDS} s: {shown}", file=sys.stderr)
-			subprocess.run(["agent-browser", "--session", SESSION, "close"], capture_output=True, timeout=60)
-			sys.exit(101)
-		result = browser("eval", "JSON.stringify(window.testSummary ?? null)")
-		summary = json.loads(json.loads(result)) if result.startswith('"') else None
-	browser("close")
-	server.shutdown()
-	if "error" in summary:
-		print(f"error: {summary['error']}")
-		sys.exit(101)
-	for failure in summary["failed"]:
-		print(f"\n---- {failure['name']} {'timed out' if failure['timedOut'] else 'failed'} ----\n{failure['output'].strip()}")
-	if summary["failed"]:
-		print("\nfailures:")
-		for failure in summary["failed"]:
-			print(f"    {failure['name']}")
-	if summary.get("memoryResets"):
-		print(f"\nWasm memory ran out {len(summary['memoryResets'])} times; all workers were replaced and these tests ran again: {', '.join(summary['memoryResets'])}")
-	if summary.get("timeoutRetries"):
-		retried = ", ".join(summary["timeoutRetries"])
-		print(f"\n{len(summary['timeoutRetries'])} tests timed out once and ran again on a fresh worker: {retried}")
-		if os.environ.get("GITHUB_ACTIONS"):
-			print(f"::warning title=A browser test timed out once (card find-why)::{retried}")
-	verdict = "FAILED" if summary["failed"] else "ok"
-	print(f"\ntest result: {verdict}. {summary['passed']} passed; {len(summary['failed'])} failed; {summary['ignored']} ignored; "
-		f"finished in {summary['seconds']:.2f}s (in the browser)")
-	sys.exit(101 if summary["failed"] else 0)
+	sys.exit(__doc__)
 
 
 if __name__ == "__main__":

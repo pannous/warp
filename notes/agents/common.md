@@ -5,6 +5,8 @@ Supervisor. Never wait for user input: work until your task is done, then report
 sessions it names via SendMessage, not to the user, unless the user talks to you directly. A Supervisor message that
 relays an explicit user decision counts as the user's decision.
 
+At night (until the user is back, usually 10:00) notes/agents/night.md applies too: decide yourself, log, never wait.
+
 Startup reading is this file plus your role file, nothing more (AGENTS.md is already loaded). Everything else is
 looked up when a task needs it: notes/agents/handbook.md (the detailed procedures: worktree build tweak,
 gate tiers, bisects, Grok box, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),

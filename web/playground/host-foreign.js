@@ -13,12 +13,7 @@ const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the 
 // (core/emitter/c_functions.warp, read as core/native/driver.warp foreign_of reads it)
 const C_FUNCTIONS_SECTION = "warp.c_functions";
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
-// a promise is awaited only by an awaited run's main (host.js JSPI), not where the browser has no JSPI (Safari), nor in a
-// page event's handler, nor in a warp function JavaScript calls back (a JavaScript frame between: the engine refuses
-// to suspend it, SUSPENSION_FAILURE)
-const PROMISE_REFUSAL = "gives a promise, which a program here cannot wait for: only its main waits, in a browser with JSPI (not Safari); natively (the warp CLI) node awaits it";
-const NESTED_PROMISE_REFUSAL = "gives a promise, which a warp function called back by JavaScript cannot wait for";
-const SUSPENSION_FAILURE = /suspend/i;
+const PROMISE_REFUSAL = "gives a promise, which a program in the page cannot wait for; natively (the warp CLI) node awaits it";
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
 // hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
@@ -344,45 +339,10 @@ const isWarpModule = exports => typeof exports.reflect_data === "function" && ty
 const isNode = value => value !== null && typeof value === "object";
 const copied = (from, to, value) => isNode(value) && isWarpModule(from) && isWarpModule(to) ? buildValue(to, readNode(from, value)) : value;
 
-// a promise a foreign call gave, awaited (the call suspends main, host.js JSPI); a refusal where main cannot wait
-function awaitedPromise(holder, called, promise, valueOf) {
-	if (!holder.waiting) {
-		promise.then(undefined, () => {}); // its failure is not the program's: no unhandled rejection
-		throw new Error(`${called}: ${PROMISE_REFUSAL}`);
-	}
-	holder.lastPromised = called; // the engine may refuse to suspend (host.js outcomeOf)
-	const awaited = Promise.resolve(promise).then(valueOf, reason => { throw new Error(`${called}: the promise was rejected: ${reason?.message ?? reason}`); });
-	awaited.catch(() => {}); // a refused suspension leaves it: no unhandled rejection
-	return awaited;
-}
-
-// a program's foreign_call where its main waits (host.js JSPI) goes through this module: host.call gives the value, and
-// when that is a promise (host.pending), host.await, a Suspending import, waits for it. The engine suspends wasm frames
-// only, and a Suspending import always suspends, so the module calls it only for a promise.
-// Assembled by wasm-tools from:
-// (func (export "foreign_call") (param anyref anyref anyref anyref anyref) (result anyref) (local $given anyref)
-//   (local.set $given (call $call (local.get 0) (local.get 1) (local.get 2) (local.get 3) (local.get 4)))
-//   (if (result anyref) (call $pending) (then (call $await)) (else (local.get $given))))
-const AWAITING_CALL_WASM = "AGFzbQEAAAABEgNgBW5ubm5uAW5gAAF/YAABbgIpAwRob3N0BGNhbGwAAARob3N0B3BlbmRpbmcAAQRob3N0BWF3YWl0AAIDAgEABxABDGZvcmVpZ25fY2FsbAADCh4BHAEBbiAAIAEgAiADIAQQACEFEAEEbhACBSAFCwsAKgRuYW1lARcDAARjYWxsAQdwZW5kaW5nAgVhd2FpdAIKAQMBBQVnaXZlbg==";
-let awaitingCallModule;
-function awaitingCall(call) {
-	awaitingCallModule ??= new WebAssembly.Module(Uint8Array.from(atob(AWAITING_CALL_WASM), letter => letter.charCodeAt(0)));
-	let promised;
-	const host = {
-		call: (...parts) => {
-			const given = call(...parts);
-			if (!(given instanceof Promise)) return given;
-			promised = given;
-			return null;
-		},
-		pending: () => Number(promised !== undefined),
-		await: new WebAssembly.Suspending(() => {
-			const promise = promised;
-			promised = undefined;
-			return promise;
-		}),
-	};
-	return new WebAssembly.Instance(awaitingCallModule, { host }).exports.foreign_call;
+// a promise a foreign call gave: refused, as no run here waits (core/native/driver.warp's node awaits it)
+function refusedPromise(called, promise) {
+	promise.then(undefined, () => {}); // its failure is not the program's: no unhandled rejection
+	throw new Error(`${called}: ${PROMISE_REFUSAL}`);
 }
 
 addHostPart({
@@ -398,10 +358,10 @@ addHostPart({
 			const valueOf = result => buildValue(program_, treeOfPlain(result));
 			const result = foreign.call(moduleName, memberName, argumentValues, hooks);
 			const called = `${runtimeName} ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}`;
-			return typeof result?.then === "function" ? awaitedPromise(holder, called, result, valueOf) : valueOf(result);
+			return typeof result?.then === "function" ? refusedPromise(called, result) : valueOf(result);
 		};
 		return {
-			foreign_call: holder.awaited ? awaitingCall(foreignCall) : foreignCall,
+			foreign_call: foreignCall,
 		};
 	},
 	imports: (holder, hooks) => ({
