@@ -155,8 +155,19 @@ mark_main() {
 
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
 # beside warp.wasm (card runtime-prebuilt) with its machine code, which linked runs load (card runtime-cwasm-shipped),
-# the standard modules in modules/ (card modules-prebuilt)
-companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm 2>/dev/null); }
+# the standard modules in modules/ (card modules-prebuilt) and their word index, which implicit module pulls read
+# (compiler.warp WORD_INDEX; card store-hit-words-index)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/words.tsv 2>/dev/null); }
+# an entry stored or fetched before words.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
+# the modules step of its own compiler into a scratch folder, only the index taken (store-hit-words-index)
+words_kept() {
+	local entry=$store/$hash scratch
+	[ -f "$entry/warp.wasm" ] && [ -f "$entry/runtime.wasm" ] && [ ! -f "$entry/modules/words.tsv" ] || return 0
+	scratch=$(mktemp -d)
+	(cd "$tree" && WARP_LIB=$lib "$warp" "$entry/warp.wasm" modules "$scratch" "$entry/runtime.wasm") >/dev/null 2>&1
+	[ -f "$scratch/words.tsv" ] && publish "$scratch/words.tsv" modules/words.tsv && logged warp words-index-made
+	rm -rf "$scratch"
+}
 # a compiler's name before the rename (transition)
 legacy() { case $1 in warp) echo compiler ;; warp-self) echo compiler-self ;; *) echo "$1" ;; esac; }
 # a failed build's compiler moved aside, the old name's too: lib/ holds none older than its sources, so no smoke test
@@ -272,6 +283,7 @@ one() {
 	[ -f "$stored" ] || stored=$store/$hash/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ -f "$stored" ]; then
 		copied "$stored" "$file.new-$$" && mv "$file.new-$$" "$file" && inputs_line >"$file.inputs"
+		[ "$name" = warp ] && words_kept
 		for companion in $(companions "$name" "$store/$hash"); do mkdir -p "$(dirname "$compilers/$companion")" && copied "$store/$hash/$companion" "$compilers/$companion"; done
 		logged "$name" hit-store
 		return 0

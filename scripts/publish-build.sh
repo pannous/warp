@@ -31,7 +31,7 @@ marks=()
 for mark in "$warp_store"/self-tested/*; do [ -f "$mark" ] && [ "$(cut -d' ' -f1 "$mark")" = "$hash" ] && marks+=("$mark"); done
 copy_into() { local folder=$1 f; shift; for f in "$@"; do [ -f "$entry/$f" ] || continue; mkdir -p "$folder/$(dirname "$f")"; cp "$entry/$f" "$folder/$f"; [ -f "$entry/$f.inputs" ] && cp "$entry/$f.inputs" "$folder/$f.inputs"; done; }
 mkdir -p "$scratch/main/$hash"
-(cd "$entry" && copy_into "$scratch/main/$hash" warp.wasm warp-self.wasm runtime.wasm modules/*.wasm)
+(cd "$entry" && copy_into "$scratch/main/$hash" warp.wasm warp-self.wasm runtime.wasm modules/*.wasm modules/words.tsv)
 ((${#marks[@]})) && { mkdir -p "$scratch/main/$hash/self-tested"; cp "${marks[@]}" "$scratch/main/$hash/self-tested/"; }
 pack "$asset" "$scratch/main/$hash"
 # the self build and its marks apart (build-<hash>-self.tar.gz), only for a hash whose self test passed here: a main
