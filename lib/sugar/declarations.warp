@@ -43,5 +43,6 @@ rewrite (linear $d) => global: $d
 # bundled_declarations reads off the module's text); as code, the definition itself
 rewrite global: $d => $d where $d is definition
 
-# `x is a 100 element array` declares x as the list of 100 zeros (card gap-element-array)
-rewrite ($x is a $n element array) => ($x = zero_fill($n, 0))
+# `x is a 100 element array` would declare x as the list of 100 zeros (card gap-element-array): parked as esoteric
+# syntax (user 2026-11-02), and its pattern needs a parser hole case that was removed
+# rewrite ($x is a $n element array) => ($x = zero_fill($n, 0))
