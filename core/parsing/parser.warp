@@ -1978,7 +1978,8 @@ def library_glyph_operators(): list {
 // What the bundled modules at the top of lib/ declare for every program, read off their text once a run: "words",
 // word → the module declaring it global, `global play(file: text) := …` (decision bizarre-global: a program naming it
 // uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
-// expected-type-names: a parameter typed Time finds its values there)
+// expected-type-names: a parameter typed Time finds its values there); "tags", tag → its module, each text of a global
+// list, `global html_elements = ["div", …]` of markup (decision html-render-mode: a program writing `div{…}` uses it)
 global module_declarations = ø
 def bundled_declarations(): map {
 	if module_declarations == ø {
@@ -1991,19 +1992,37 @@ def declared_classes_modules(): map := bundled_declarations()["classes"]
 def declarations_scanned(): map {
 	words = {}
 	classes = {}
+	tags = {}
 	for path in LIBRARY_FILES.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
+			listing = no
 			for line in LIBRARY_FILES[path].split("\n") {
-				if line.starts_with(GLOBAL_MARK) {
+				if listing {
+					for tag in quoted_texts(line) { tags[tag] = module }
+					listing = not line.contains("]")
+				} else if line.starts_with(GLOBAL_MARK) {
 					word = name_starting(line[#GLOBAL_MARK ..])
-					if word and line[#GLOBAL_MARK + #word ..].starts_with("(") { words[word] = module }
+					rest = line[#GLOBAL_MARK + #word ..]
+					if word and rest.starts_with("(") { words[word] = module }
+					if word and rest.starts_with(" = [") {
+						for tag in quoted_texts(rest) { tags[tag] = module }
+						listing = not rest.contains("]")
+					}
 				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
 			}
 		}
 	}
-	{"words": words, "classes": classes}
+	{"words": words, "classes": classes, "tags": tags}
+}
+def declared_tags(): map := bundled_declarations()["tags"]
+// the texts quoted in a line of a list, `"a", "b",` → ["a", "b"]: every other piece between its quotes
+def quoted_texts(line: text): list {
+	pieces = line.split("\"")
+	texts = []
+	for i in 1 to #pieces { if i % 2 == 0 { texts += [pieces#i] } }
+	texts
 }
 GLOBAL_MARK = "global "
 CLASS_MARK = "class "
