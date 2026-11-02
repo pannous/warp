@@ -14,6 +14,11 @@ const COMPILED_PATH = "/tmp/warp-program.wasm";
 const TYPED_FILE = "playground.warp";
 // the compiler reads the standard modules of this lib/ (core/parsing/parser.warp warp_lib), as the native warp tells it
 const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
+// a run of `warp test` (worker.js valueAsData): the compiler makes _start print main's value as data after a mark
+// (core/emitter/emitter.warp VALUE_MARK), which the native verdicts read (core/commands/tests.warp run_result), and
+// says no hints, as core/native/tests.warp has its runs
+const TEST_RUN_ENVIRONMENT = ["WARP_VALUE_AS_DATA=1", "WARP_HINTS=0"];
+const compilerEnvironment = () => self.valueAsData ? [...COMPILER_ENVIRONMENT, ...TEST_RUN_ENVIRONMENT] : COMPILER_ENVIRONMENT;
 // a program runs as `warp <file>` runs it (core/native/warp.warp), which names the program (lib/storage.warp keeps its
 // tables beside it) and serves its routes: here the page's requests (lib/web.warp)
 const programEnvironment = file => [...ENVIRONMENT, "WARP_SERVE=page", `WARP_PROGRAM=${file}`];
@@ -150,7 +155,7 @@ function ranSaying(exports, print, exitCode, valued = false) {
 function compiledProgram(file, print) {
 	let exports;
 	const args = [COMPILER_LIBRARY + "/warp.wasm", file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`];
-	const wasi = wasiImports(() => exports.memory, args, print, programFiles, COMPILER_ENVIRONMENT);
+	const wasi = wasiImports(() => exports.memory, args, print, programFiles, compilerEnvironment());
 	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
 	const { status, said } = ranSaying(exports, print);
 	const module = programFiles.written.get(COMPILED_PATH);
@@ -172,7 +177,7 @@ function programRan(bytes, file, hooks) {
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
-	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode, true);
+	const ran = ranSaying(holder.exports, hooks.print, () => holder.exitCode, !self.valueAsData);
 	eachHostPart("finished", holder, hooks);
 	holder.value = ran.result;
 	return { ...ran, holder };

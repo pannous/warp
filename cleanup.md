@@ -62,3 +62,6 @@ Cover integer and fractional list extrema and variadic calls before annotating t
 
 ## library-typed i18n slice
 Add outcome coverage for documented translations and plural categories, then annotate results without narrowing message data. Verify the module build and smoke before landing.
+
+## library-typed JSON slice
+Cover JSON serialization and parsing outcomes, then annotate public results while preserving heterogeneous values; verify the module and smoke before landing.
