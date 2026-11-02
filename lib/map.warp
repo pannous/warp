@@ -13,15 +13,15 @@ omit(m: any, unwanted: any): any := { out = {}; ks = keys(m); for k in ks { if n
 // the entries whose value f holds for
 filter_values(m: any, f: any): any := { out = {}; ks = keys(m); for k in ks { if f(m.get(k)) { out[k] = m.get(k) } }; out }
 // {a:1 b:2} → [["a", 1] ["b", 2]], the opposite of from_pairs
-entries(m) := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]] }; out }
+entries(m: any): list := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]] }; out }
 // the value of key, or fallback when m has none
 get_or(m: any, key: any, fallback: any): any := if m.has(key) then m.get(key) else fallback
 // the first key whose value f holds for, ø when none
 find_key(m: any, f: any): any := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; ø }
 // Python's dict methods (card python-stdlib): update merges in place, items are the entries, setdefault keeps the
 // default for a missing key and gives the key's value
-update(m, other) := merge(m, other)
-items(m) := entries(m)
+update(m: any, other: any): any := merge(m, other)
+items(m: any): list := entries(m)
 setdefault(m: any, key: any, fallback: any): any := { if not m.has(key) { m[key] = fallback }; m.get(key) }
 // the last entry as [key value], removed from m in place (Python's dict.popitem)
-popitem(m) := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }
+popitem(m: any): list := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }
