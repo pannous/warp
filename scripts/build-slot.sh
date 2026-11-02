@@ -6,11 +6,14 @@
 # WARP_BUILD_RECORD=<dir>: the run measured into that folder (user 2026-10-31: every build profiled, all of it kept):
 # time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (WARP_PROFILE=perfmap)
 set -uo pipefail
-BUILD_SLOTS=${WARP_BUILD_SLOTS:-3}  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
+DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
 LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
 FIRST_IN_LINE_RETRY=2  # seconds between the oldest waiter's tries of the slots
 IN_LINE_RETRY=5  # seconds between the others' looks at the line
 if [ "$(uname)" = Darwin ]; then store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}; else store=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers}; fi
+# <store>/build-slots/count, when present, sets the slots for every session at once (user 2026-11-02: at night as many
+# as the load allows; the Supervisor raises and lowers it watching the load, notes/agents/night.md)
+build_slots() { echo "${WARP_BUILD_SLOTS:-$(cat "$store/build-slots/count" 2>/dev/null || echo "$DAY_BUILD_SLOTS")}"; }
 scripts=$(cd "$(dirname "$0")" && pwd)
 log=${1:?usage: build-slot.sh <log> <command…>}
 shift
@@ -55,12 +58,12 @@ while :; do
 	[ -e "$ticket" ] || touch "$ticket"
 	place=$(place_in_line)
 	if [ "$place" = 1 ]; then
-		for slot in $(seq "$BUILD_SLOTS"); do
+		for slot in $(seq "$(build_slots)"); do
 			lockf -s -t 0 "$store/build-slots/$slot" bash -c 'rm -f "$ticket"; measured "$@"' measured "$@" >>"$log" 2>&1
 			status=$?
 			[ $status = $LOCK_HELD_ELSEWHERE ] || exit $status
 		done
 	fi
-	[ -n "$waited" ] || { echo "build-slot.sh: all $BUILD_SLOTS build slots taken, waiting: number $place in line" >&2; waited=1; }
+	[ -n "$waited" ] || { echo "build-slot.sh: all $(build_slots) build slots taken, waiting: number $place in line" >&2; waited=1; }
 	if [ "$place" = 1 ]; then sleep $FIRST_IN_LINE_RETRY; else sleep $IN_LINE_RETRY; fi
 done

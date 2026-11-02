@@ -369,14 +369,46 @@ misnamed(function: Node, word: Node, meant: Node): Node := {
 # `help(x)` (wiki/reflection.md): a class's fields and methods, a function's signature and the doc below it, a
 # module's words; ø where the program has its own help or x is none of them
 class_help(name: Node, program: Node, source: text): any := {
-	# the class as written: the class methods pass has lifted its methods out of the program's view by now
-	statement = if owns_word("help", program) then ø else declared_class(spelled(name), plain_node(parsed(source)))
+	members = if owns_word("help", program) then ø else class_members(spelled(name), source)
+	if members == ø then ø else ["class " + spelled(name), "fields: " + members#1.join(" "), "methods: " + members#2.join(" ")].join("\n")
+}
+# [fields, methods] of the class as written, ø when the program declares none of that name: the class methods pass
+# has lifted its methods out of the program's view by now
+class_members(class_name: text, source: text): any := {
+	statement = declared_class(class_name, plain_node(parsed(source)))
 	if statement == ø { return ø }
 	view = class_view(statement)
-	declared = class_declared(statement, view)
 	# a method by the name it is written with, `length` (read, it is its alias's word, count)
 	methods = view#3[3 ..].map(member => defined_word(node_of(member)) ?? defined_word(member_read(member))).filter(word => word != ø)
-	["class " + spelled(name), "fields: " + declared.fields.join(" "), "methods: " + methods.join(" ")].join("\n")
+	[class_declared(statement, view).fields, methods]
+}
+# the classes the program declares, `Point` of a line `class Point {`
+class_names(source: text): list := source.split("\n").flat_map(line => line.split(";")).map(statement => statement.trim()).filter(line => line.starts_with("class ")).map(line => line[6 ..].split(" ")#1.split("{")#1.trim())
+# `p.fields`, `p.methods`, `dir(p)` (wiki/reflection.md): the names of the members of the class p is made of everywhere the
+# program assigns it, `p = Point(3, 4)`; ø when it is not so known or the class has a member of that name itself
+# (then `p.fields` is that member, as a map's `m.fields` its key)
+instance_members(variable: Node, part: Node, source: text): any := {
+	made = class_made_as(spelled(variable), source)
+	members = if made == ø then ø else class_members(made, source)
+	if members == ø or spelled(part) in members#1 + members#2 { return ø }
+	fields = members#1.map(field => "${field}")
+	texts_list(if spelled(part) == "fields" then fields else if spelled(part) == "methods" then members#2 else fields + members#2)
+}
+# the names as a list of texts, parsed: a one-letter name in List(…) would be a character, and the compiler compiling
+# itself has no node constructors
+texts_list(names: list): Node := plain_node(parsed("[" + names.map(name => "\"" + name + "\"").join(", ") + "]"))
+# the class every assignment of the variable makes, `Point` of `p = Point(3, 4)`; ø when one makes something else
+class_made_as(variable: text, source: text): any := {
+	classes = class_names(source)
+	made = source.split("\n").flat_map(line => line.split(";")).map(statement => statement.trim()).filter(line => line.starts_with(variable + " = ")).map(line => line[#variable + 3 ..].split("(")#1.trim())
+	if #made > 0 and made.all(name => name == made#1 and name in classes) then made#1 else ø
+}
+# `area.full`: what printing area shows, its doc as comment lines above its definition as written
+full_definition(name: Node, program: Node, source: text): any := {
+	definition = definition_text(name, program, source)
+	if definition == ø { return ø }
+	doc = doc_of(name, program, source)
+	if doc == "" then definition else doc.split("\n").map(line => "# " + line).join("\n") + "\n" + definition
 }
 function_help(name: Node, program: Node, source: text): any := {
 	# a used module's word, not the program's: its head and comment as the module writes them (module_word_help)
@@ -415,10 +447,7 @@ value_helps(program: Node, source: text): any := {
 	if owns_word("help", program) { return ø }
 	helps = {}
 	for word in definition_slices(source).map(cut => cut#1) { helps[word] = function_help(symbol(word), program, source) ?? word_help_in(source, word) }
-	for line in source.split("\n").filter(line => line.starts_with("class ")) {
-		named = line[6 ..].split(" ")#1.split("{")#1.trim()
-		helps[named] = class_help(symbol(named), program, source)
-	}
+	for named in class_names(source) { helps[named] = class_help(symbol(named), program, source) }
 	for module in used_modules(source) {
 		module_text = used_module_text(module)
 		for word in definition_slices(module_text).map(cut => cut#1).filter(is_listed_word) { if not helps.has(word) { helps[word] = word_help_in(module_text, word) } }
@@ -489,11 +518,13 @@ rule_words = {
 	doc_of: doc_of,
 	exited: exited,
 	framed: framed,
+	full_definition: full_definition,
 	function_help: function_help,
 	gpu_list_made: gpu_list_made,
 	gpu_lists_packed: gpu_lists_packed,
 	gpu_packed: gpu_packed,
 	gpu_packed_as: gpu_packed_as,
+	instance_members: instance_members,
 	law_check: law_check,
 	misnamed: misnamed,
 	module_help: module_help,
