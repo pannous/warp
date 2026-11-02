@@ -8,9 +8,8 @@ const WAV_HEADER_BYTES = 44;
 // play of a signal (src/sound/mod.rs play_signal): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
-// a published site ships only the host parts its words need (src/host/host_parts.rs), without the compiler that measures
-// a spectrum or the page that decodes a sound file
-const WITHOUT_PLAYGROUND = "measured in the playground and by the warp CLI, not on a published site yet";
+// a published site has no page that decodes a sound file
+const WITHOUT_PLAYGROUND = "decoded in the playground and by the warp CLI, not on a published site yet";
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
@@ -159,22 +158,7 @@ function wavOf(samples, rate, channels = 1) {
 	return bytes;
 }
 
-// ["delay", 0.25, 0.4, 0.5] with plain numbers, as JSON takes them
-const plainEffect = effect => Array.from(effect, setting => typeof setting === "bigint" ? Number(setting) : setting);
-
-// the samples through the effects of the bus the run sends to (card shared-buses stage 2), a delay's or reverb's tail
-// added; each sound apart, which is the bus's sound for its linear effects (filters, delay, reverb, gain), while compress
-// and distort act on each sound alone
-function onBus(holder, samples, rate, channels) {
-	const chain = holder.run.busChains?.[holder.run.sentBus ?? 0];
-	if (!chain?.length) return samples;
-	const floats = Float32Array.from(samples, sample => (Number(sample) - SAMPLE_OFFSET) / SAMPLE_OFFSET);
-	const processed = holder.effected(chain, floats, rate, channels);
-	return Array.from(processed, sample => Math.round(Math.max(-1, Math.min(1, sample)) * (SAMPLE_OFFSET - 1)) + SAMPLE_OFFSET);
-}
-
-// a sound file's first channel, amplitudes around 0, decoded once per run (lib/sound.warp spectrum of a file,
-// sound_seconds): a WAV here, any other format by the page, since a Worker has no decodeAudioData (task-workers.js
+// a sound file's first channel, amplitudes around 0, decoded once per run (sound_seconds): a WAV here, any other format by the page, since a Worker has no decodeAudioData (task-workers.js
 // decodeSoundInto, while the Worker waits)
 function monoOf(holder, path) {
 	const name = besideProgram(contentText(path), programFileOf(holder.run)); // host-files.js
@@ -264,18 +248,13 @@ function resampled({ rate: own, channels, values }, rate) {
 addHostPart({
 	imports: holder => ({ warp_sound: soundLibrary(holder) }),
 	words: (holder, hooks, { program }) => {
-		holder.effected = (chain, floats, rate, channels) => effectsProcessed(hooks, chain, floats, rate, channels); // host-compiler.js
-		holder.spectrum = (window, rate, bands, low, high) => {
-			if (typeof spectrumLevels !== "function") throw new Error(`spectrum: ${WITHOUT_PLAYGROUND}`);
-			return spectrumLevels(hooks, window, rate, Number(bands), Number(low), Number(high)); // host-compiler.js
-		};
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
 		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
 		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
 			while (self.pageSystemValues?.heard && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
-			const sound = { samples: onBus(holder, samples, rate, channels), rate, channels };
+			const sound = { samples, rate, channels };
 			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
@@ -331,26 +310,6 @@ addHostPart({
 				self.fadeSound?.(handle, gain, seconds);
 				return null;
 			},
-			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively, its chain ([["reverb", 0.4], …]) kept
-			// for the sounds sent to it (onBus)
-			bus(number, chain) {
-				const id = Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
-				(this.holder.run.busChains ??= {})[id] = Array.from(chain ?? [], plainEffect);
-				return id;
-			},
-			// a list signal through one effect (lib/sound.warp effected): the DSP in warp.wasm as natively, on amplitudes of
-			// the full scale
-			effect(effect, signal, rate, fullScale) {
-				const scale = Number(fullScale) || 1;
-				const floats = Float32Array.from(signal, amplitude => Number(amplitude) / scale);
-				return Array.from(this.holder.effected([plainEffect(effect)], floats, Number(rate), 1), sample => sample * scale);
-			},
-			// the bus before, as natively, so out(signal, bus) restores it
-			send(number) {
-				const before = this.holder.run.sentBus ?? 0;
-				this.holder.run.sentBus = Number(number);
-				return before;
-			},
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
@@ -362,18 +321,7 @@ addHostPart({
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats
 			load: path => wavFrames(readBytes(contentText(path)), contentText(path)),
-			// spectrum(samples, seconds, bands): the bands of the window, the samples around sample_offset (src/sound/spectrum.rs in warp.wasm);
-			// a window past the end is the empty list, ø: null here
-			spectrum(window, rate, bands, low, high) {
-				return this.holder.spectrum(Array.from(window ?? [], sample => Number(sample) - SAMPLE_OFFSET), Number(rate), bands, low, high);
-			},
-			// spectrum("song.mp3", seconds, bands) of the file's window then, and how long a file sounds
-			file_spectrum(path, seconds, windowSeconds, bands, low, high) {
-				const { rate, amplitudes } = monoOf(this.holder, path);
-				const start = Math.min(amplitudes.length, Math.round(Math.max(0, Number(seconds)) * rate));
-				const window = amplitudes.subarray(start, Math.min(amplitudes.length, start + Math.round(Number(windowSeconds) * rate)));
-				return this.holder.spectrum(window, rate, bands, low, high);
-			},
+			// how long a file sounds
 			file_seconds(path) {
 				const { rate, amplitudes } = monoOf(this.holder, path);
 				return amplitudes.length / rate;
