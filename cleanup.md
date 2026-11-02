@@ -65,3 +65,6 @@ Add outcome coverage for documented translations and plural categories, then ann
 
 ## library-typed JSON slice
 Cover JSON serialization and parsing outcomes, then annotate public results while preserving heterogeneous values; verify the module and smoke before landing.
+
+## library-typed matrix slice
+Cover matrix shape, transposition and multiplication, then add signatures without narrowing inputs; verify focused outcomes and the module build.
