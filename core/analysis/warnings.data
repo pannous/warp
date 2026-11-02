@@ -2,6 +2,8 @@
 
 # a text spelling a number added to a number (source_checks.warp, card print-oldest)
 spelled_number_join($written, $spelled, $as_sum, $as_text)	"{written} joins the texts; {spelled} spells a number"	"{as_sum} or {as_text}"
+# a binary operator is spaced evenly (decision binary-operator-spacing): a sign glued to what follows it only starts an item
+spaced_sign($before, $item, $fix)	"{before} {item} is two items"	"{fix}"
 # user issue #17: sleep counts seconds, a bare number gets the units named
 bare_sleep($amount)	"sleep needs a unit: sleep {amount}s or sleep {amount}ms (a bare number is seconds)"
 # decision byte-index-of: a text names the unit it counts a place in
