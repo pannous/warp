@@ -62,7 +62,7 @@ const hooks = {
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
-		startTimers(holder, handler => runHandler(holder, handler));
+		startTimers(holder, id => timerShown(holder, id));
 		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
 		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches], address: addressOf(holder) });
 	},
@@ -237,7 +237,16 @@ function showHoles(holder) {
 	return true;
 }
 
-// a timer's or fetch's handler run and its outcome shown; a failing handler stops the timers
+// a timer fired (driver.js timerFired): what it printed went out meanwhile, the program's value shown anew (its
+// page_value, main's last expression again); a failing one is shown and stops the timers
+function timerShown(holder, id) {
+	const { failure, value } = timerFired(holder, id);
+	if (failure === undefined && value === undefined) return;
+	post({ type: "handled", value: failure ?? value, error: failure !== undefined });
+	if (failure !== undefined) holder.stopTimers();
+}
+
+// a fetch's handler run and its outcome shown; a failing handler stops the timers
 function runHandler(holder, handler) {
 	const handled = runTimer(holder, hooks, handler);
 	showHandled(holder, handled, true);
