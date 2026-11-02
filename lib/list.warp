@@ -9,13 +9,13 @@ take(xs: any, n: any): list := { out = []; for i in 1 to min(n, count(xs)) { out
 drop(xs: any, n: any): list := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
 flatten(xs: any): list := { out = []; for x in xs { out += x }; out }
 chunk(xs: any, n: any): list := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
-window(xs, n) := [xs[i:i + n] for i in 0 to count(xs) - n]
+window(xs: any, n: any): list := [xs[i:i + n] for i in 0 to count(xs) - n]
 median(xs: any): number := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
 flat_map(xs: any, f: any): list := { out = []; for x in xs { out += f(x) }; out }
 // [kept, rest]: the elements f holds for, and the others
 partition(xs: any, f: any): list := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
-max_by(xs, f) := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }
-min_by(xs, f) := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; best }
+max_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }
+min_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; best }
 // {key: [elements]}: the elements by the text of f's value
 group_by(xs, f) := { out = {}; for x in xs { k = "" + f(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
 // {element: how often}
@@ -40,14 +40,14 @@ pairwise(xs: any): list := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
 // [the first n, the rest]
 split_at(xs: any, n: any): list := [take(xs, n), drop(xs, n)]
 // every pair of an element of a and one of b
-cartesian(a, b) := [[x, y] for x in a for y in b]
+cartesian(a: any, b: any): list := [[x, y] for x in a for y in b]
 // the most frequent element, the first of equally frequent ones
 mode(xs: any): any := { best = xs#1; most = 0; for x in xs { n = count_by(xs, y => y == x); if n > most { best = x; most = n } }; best }
 // the population variance and standard deviation
 variance(xs: any): number := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
 stdev(xs: any): number := sqrt(variance(xs))
 // the position (from 1, like index_of) of the first element f holds for, 0 when none does
-index_where(xs, f) := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
+index_where(xs: any, f: any): int := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
 last_n(xs: any, n: any): list := drop(xs, max(count(xs) - n, 0))
 // n copies of value: fill(3, 0) is [0 0 0]
 fill(n: any, value: any): list := filled_list(n, value)
