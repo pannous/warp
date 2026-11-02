@@ -1,6 +1,6 @@
 // Timers in the page (a part of host.js, which says how parts work; crates/warp-runtime/src/system_signals.rs): main
 // records them, the page starts them after it (startTimers, in the playground's worker.js and a built site's site.js); a
-// host without a page that stays (test-worker.js) only warns
+// host without a page that stays only warns
 
 function addTimer(holder, hooks, id, timer, written) {
 	if (!hooks.listen) return holder.warnings.push(`${written}: timers do not run here`);
@@ -19,7 +19,7 @@ function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) 
 	return 7 * DAY_MILLISECONDS;
 }
 
-// a run's timers started: `fire(id)` runs the program's timer_fired(id) for each when it is due (runTimer); a program
+// a run's timers started: `fire(id)` runs the program's timer_fired(id) for each when it is due (driver.js timerFired); a program
 // without that export is refused loudly, once; stopTimers ends them
 function startTimers(holder, fire) {
 	const handles = [];

@@ -22,7 +22,7 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
   watch round fires (2026-10-31: one question froze the fleet's Supervisor 3 h 43 min, 20:07 to 23:50). While
   workers run, write the question with its recommended default into the open-questions file, tell the asker to go
   on with the default or other work, and keep supervising. Pop up a question only right after the user typed, with
-  nothing waiting on you; at night decide yourself.
+  nothing waiting on you; at night decide yourself (notes/agents/night.md).
 - Never mirror to the user the decisions they made with the Interviewer (rulings, audits, OKs) nor the questions you forward there (user 2026-10-29).
 
 ## Team

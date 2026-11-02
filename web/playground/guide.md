@@ -76,7 +76,7 @@ Numbers stay exact. Fractions and decimals are exact numbers: no rounding, ever.
 Roots and π are real numbers, and warp keeps them exact too: the square root of 2, squared, is exactly 2.
 
 ```warp => 2
-sqrt(2) * sqrt(2)
+√2 * √2
 ```
 
 Fast numbers (floats) are what the computer's chip calculates with: quick, but rounded. Ask for one with the suffix `f`
@@ -603,13 +603,13 @@ Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser,
 
 Things go wrong sometimes. In warp an error is a value that says what happened.
 
-```warp => Error("divide by zero at 1:1")
+```warp => divide by zero at playground.warp:1:1
 1 / 0
 ```
 
 `raise` makes your own error.
 
-```warp => Error("boom at 1:7")
+```warp => boom at playground.warp:1:1
 raise "boom"
 ```
 
