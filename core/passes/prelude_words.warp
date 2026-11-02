@@ -606,20 +606,20 @@ with_type_module_uses(program: Node): Node := {
 	}
 	# in the order of type_modules, Rust's sorted one
 	modules = type_modules.filter(module => module in wanted and module not in used)
-	with_module_uses(program, modules + global_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used) + tag_modules(program, own, used))
+	with_module_uses(program, modules + global_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used) + tag_modules(program, used))
 }
 # the modules giving the tags a program writes their meaning, `div{…}` markup's (a text of a module's global list,
-# parser.warp declared_tags; decision html-render-mode: its value renders as a page), unless the program binds the name
-tag_modules(program: Node, own: any, used: list): list := {
+# parser.warp declared_tags; decision html-render-mode: its value renders as a page). A tag `div: {…}` reads as
+# binding div, so neither the names bound nor the program's own are a test
+tag_modules(program: Node, used: list): list := {
 	tags = declared_tags()
-	bound = names_bound_in(program)
 	modules = []
 	for n in nodes_in(program) {
 		parts = tag_parts(n)
 		if #parts == 2 {
 			name = name_of(parts#1)
 			module = tags.get(name)
-			if module != ø and module not in used and module not in modules and name not in own and name not in bound { modules += [module] }
+			if module != ø and module not in used and module not in modules { modules += [module] }
 		}
 	}
 	modules
