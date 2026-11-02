@@ -948,6 +948,8 @@ is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or
 def group_expression(body: Body, n: Node): TypedCode {
 	if is_quote(n) { return TypedCode(ValueKind.Node, quoted_code(body, n#2)) }
 	if is_spliced_quote(n) { return TypedCode(ValueKind.Node, spliced_code(body, n#2)) }
+	# `div { p{"x"} }`, a word nothing knows before a block: the data tag `div{…}`, one form with it
+	if is_data_tag(body, n) { return TypedCode(ValueKind.Node, spliced_code(body, n)) }
 	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, items_of(n)[2..]) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
