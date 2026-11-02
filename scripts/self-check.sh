@@ -9,9 +9,10 @@ rebuild=
 [[ ${1-} == --rebuild ]] && { rebuild=1; shift; }
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
 # the native warp checked with: WARP_BINARY (a branch changing the driver brings its own build), else the shared one
-main_warp=${WARP_BINARY:-/Users/me/dev/bin/warp}
-main_checkout=/Users/me/dev/angles/warp
-store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}  # scripts/rebuild.sh's, where stage 2's outcome is kept too
+source ${0:A:h}/lib/platform.sh
+main_warp=$warp_binary
+main_checkout=$warp_main_checkout
+store=$warp_store  # scripts/rebuild.sh's, where stage 2's outcome is kept too
 shown_lines=60  # of a failed stage 2's output
 expected="Hello"
 
@@ -41,7 +42,7 @@ export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
 # warp.wasm once it compiles itself, self_lane below); a lib/ that passed self alone broke main's `warp rebuild pure`
 # twice on 2026-10-22
 check_lane() {
-  said=$($warp $1 samples/hello/hello.warp 2>&1 | tail -1)
+  said=$($warp $1 samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"
 }
@@ -53,6 +54,7 @@ warp=$scratch/warp
 cp $main_warp $warp || exit 1
 # its wasmtime beside the copy, where its rpath looks
 cp ${main_warp:A:h}/libwarp_wasmtime.* $scratch/ || exit 1
+libraries_beside $scratch
 # the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>)
 # with its runtime (warp-seed.runtime.wasm), the one it compiles compiler.warp behind
 for seed_file in warp-seed.wasm warp-seed.runtime.wasm; do
@@ -104,7 +106,7 @@ stage_two() {
   cat $log.runtime >>$log
   [[ $built == 0 && -s $stage/runtime.wasm ]] && ! grep -q Error $log.runtime ||
     { stage_two_failed "stage 2 (compiler.warp built by warp.wasm) does not build runtime.wasm"; return 1; }
-  said=$(WARP_LIB=$stage $native samples/hello/hello.warp 2>&1 | tail -1)
+  said=$(WARP_LIB=$stage $native samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
   [[ $said == *$expected* ]] || { print -r -- "hello said: $said" >>$log; stage_two_failed "stage 2's hello said: $said"; return 1; }
   mkdir -p ${record:h} && mv $log $measured/build.log && { [[ -d $record.record ]] || mv $measured $record.record }
   print -r -- "$hash commit=$(git -C $worktree rev-parse --short HEAD) passed=$(date '+%Y-%m-%dT%H:%M:%S%z')" >$record.passed

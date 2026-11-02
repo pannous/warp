@@ -1,0 +1,4 @@
+# a library word written in warp before a typed library word and its value takes their call (card xs-first)
+'xs = [3, 1, 2]; last reverse xs'	3
+'xs = [3, 1, 2]; first reverse xs'	2
+'last sorted [3, 1, 2]'	3
