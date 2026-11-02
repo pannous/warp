@@ -300,7 +300,7 @@ match [1, 2] { [a, b] => a + b; other => 0 }
 
 Patterns reach into data nested at any depth: `find` collects every match, here the `src` of each image.
 
-```warp => ["logo.png" "cat.jpg"]
+```warp => ["logo.png", "cat.jpg"]
 page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
 page find {type: "image", src}
 ```
@@ -311,7 +311,7 @@ Examples: matching; samples: matching, tree_patterns
 
 A list keeps several values in order, like a shopping list.
 
-```warp => [1 2 3]
+```warp => [1, 2, 3]
 [1 2 3]
 ```
 
@@ -336,13 +336,13 @@ sum 1 2 3
 
 `sort` puts them in order.
 
-```warp => [1 2 3]
+```warp => [1, 2, 3]
 sort [3 1 2]
 ```
 
 `+=` adds items.
 
-```warp => [1 2 3]
+```warp => [1, 2, 3]
 xs = [1 2]
 xs += [3]
 xs
@@ -350,7 +350,7 @@ xs
 
 Make a new list from another one.
 
-```warp => [1 4 9 16]
+```warp => [1, 4, 9, 16]
 [x² for x in [1 2 3 4]]
 ```
 
@@ -358,14 +358,14 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" bel
 
 `where` keeps only some items.
 
-```warp => [3 4]
+```warp => [3, 4]
 [1 2 3 4] where it > 2
 ```
 
 `it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
 here the shortest word first.
 
-```warp => ["fig" "kiwi" "apple" "banana"]
+```warp => ["fig", "kiwi", "apple", "banana"]
 sort(["banana" "fig" "apple" "kiwi"], {it.length})
 ```
 
@@ -373,14 +373,14 @@ sort(["banana" "fig" "apple" "kiwi"], {it.length})
 
 A function for one number also works on a whole list.
 
-```warp => [1 4 9]
+```warp => [1, 4, 9]
 square := it * it
 square [1 2 3]
 ```
 
 `map` spells the same out, handy for a function written in place.
 
-```warp => [2 4 6]
+```warp => [2, 4, 6]
 [1 2 3].map(x => x * 2)
 ```
 
@@ -392,7 +392,7 @@ Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting,
 
 An object keeps values that belong together, each with a name, like a contact card.
 
-```warp => {name:"Ada" age:36}
+```warp => {name: "Ada", age: 36}
 {name: "Ada" age: 36}
 ```
 
@@ -502,7 +502,7 @@ Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci,
 ## Closures
 
 Closures are anonymous functions, tiny ad-hoc pieces of code without a name, very useful in the comparisons:
-```warp => [8 5 3 2 1]
+```warp => [8, 5, 3, 2, 1]
 sort([8 3 1 5 2], {$0 > $1})
 ```
 
@@ -682,19 +682,19 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 A web page is made of tags. In warp, tags are values.
 
-```warp => p:"hello"
+```warp => p: {"hello"}
 p{ "hello" }
 ```
 
 Attributes look like HTML.
 
-```warp => b{class:"fat" "hello"}
+```warp => b: {class: "fat" "hello"}
 b{class:"fat" "hello" }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => div{h1:"Fruit" p{"Fresh " b:"pears" " today"}}
+```warp => div: {h1: {"Fruit"} p: {"Fresh " b: {"pears"} " today"}}
 div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
