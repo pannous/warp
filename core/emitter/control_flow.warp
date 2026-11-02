@@ -1,5 +1,7 @@
 # Statements and control flow (emitter.warp's part): try, if, loops with break and continue, statements for effect,
 # sequences, appends in place
+# the dispatcher of the classes' `+` (class_methods.warp), which `x += y` of an instance adds by
+plus_dispatcher = "+·operator"
 # `ran·without·error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
 # in it; the depth goes up for the statement and back down on both paths (a jump out of it would skip that: refused)
 def ran_without_error(body: Body, statement: Node): TypedCode {
@@ -182,9 +184,12 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
 	if target.kind == ValueKind.List and added.kind == ValueKind.Node { added = runtime_call("appended_items", [added]) }
 	if target.kind == ValueKind.List { return runtime_call("list_append", [target, added]) }
+	# an instance whose class defines `+` adds by it, `total += run.distance` (the compound operators' arithmetic)
+	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return ø }
 	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
 }
+adds_by_dispatcher(body: Body): bool := plus_dispatcher in module.functions and body.function.name != plus_dispatcher
 # the statements in order, the value that of the last
 def sequence(body: Body, items: list): TypedCode {
 	if #items == 0 { return refuse("an empty block") }
