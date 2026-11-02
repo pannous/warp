@@ -1197,6 +1197,8 @@ def page_report(source, path, page_url):
 def sample_answer(source, path):
 	"""the report of the sample started in the page, {stuck} when none came in SAMPLE_ANSWER_SECONDS"""
 	started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
+	if started != '"started"' and wait_for_playground():  # the page was still (re)loading: its API came since
+		started = browser("eval", START_SAMPLE % (json.dumps(source), json.dumps(path)))
 	if started != '"started"':
 		return {"error": True, "stuck": None, "value": f"(the page did not start it: {(started or browser_complaint)[:200]})"}
 	deadline = time.time() + SAMPLE_ANSWER_SECONDS
@@ -1215,9 +1217,19 @@ def open_samples_page(page_url):
 	"""the page opened, isolated and its playground API defined (after a crashed renderer the first eval met none)"""
 	open_page(page_url)
 	wait_for_isolation()
+	if not wait_for_playground():
+		print(f"the page defined no playground API in {LAUNCH_SECONDS} s", file=sys.stderr)
+
+
+def wait_for_playground():
+	"""whether the page's playground API is defined, waiting up to LAUNCH_SECONDS for it (a sample that crashed the
+	renderer leaves a page that reloads, the sweep's next sample met no API: card playground-samples)"""
 	deadline = time.time() + LAUNCH_SECONDS
-	while browser("eval", "typeof playground") != '"object"' and time.time() < deadline:
+	while time.time() < deadline:
+		if browser("eval", "typeof playground") == '"object"':
+			return True
 		time.sleep(0.5)
+	return False
 
 
 def check_samples(paths, tree):
