@@ -1115,7 +1115,7 @@ has_property(code: Node, property: text): bool := {
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
-	if property == "varying" { return varying_values().has(word) or (rule_item != ø and later_written().has(word)) }
+	if property == "varying" { return varying_values().has(word) }
 	if property == "instance" { return rule_instances.has(word) }
 	if property == "type" { return word == any_word or is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
