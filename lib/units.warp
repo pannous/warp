@@ -6,6 +6,7 @@
 // (notes/units_runtime.md)
 
 use unit_names
+use uncertain
 
 class Quantity {
 	amount: number
@@ -29,6 +30,10 @@ class Quantity {
 	float() := amount as float
 	text() := quantity_text(this)
 	show() := quantity_text(this)
+	// a tolerance's bounds and value, each a quantity in its unit: `(6m ± 0.3).low` is 5.7m
+	low() := measured(as_interval(amount).low, dims, unit, scale)
+	high() := measured(as_interval(amount).high, dims, unit, scale)
+	value() := measured(as_interval(amount).value, dims, unit, scale)
 }
 
 // the dimensions, each a class of its own: a parameter `duration: Time` takes a duration only
@@ -255,3 +260,8 @@ exact_decimal(t: text) := {
 // a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
 sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)
+
+// `6.0m ± 0.3`: a tolerance of a quantity, its amount an interval; a plain spread counts in the value's unit, a
+// quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
+infix operator ±(q: Quantity, spread: number) := measured(plus_minus(q.amount, spread * q.scale), q.dims, q.unit, q.scale)
+infix operator ±(q: Quantity, spread: Quantity) := measured(plus_minus(q.amount, same_quantity(q, spread, "spread").amount), q.dims, q.unit, q.scale)
