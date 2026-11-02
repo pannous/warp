@@ -42,3 +42,6 @@ rewrite (linear $d) => global: $d
 # `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which parser.warp
 # bundled_declarations reads off the module's text); as code, the definition itself
 rewrite global: $d => $d where $d is definition
+
+# `x is a 100 element array` declares x as the list of 100 zeros (card gap-element-array)
+rewrite ($x is a $n element array) => ($x = zero_fill($n, 0))
