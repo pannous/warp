@@ -109,6 +109,64 @@ function raisedMessage(exports, failure) {
 	return sentence || String(failure.message ?? failure);
 }
 
+// parse_code(t) (driver.warp code_parsed): warp.wasm parses t (its parse-code command, the compiler's own parser) and
+// the tree it encodes is built again in the program, node by node through its builders
+const PARSED_CODE_PATH = "/tmp/warp-parsed.code";
+const FIELD_END = 1; // driver.warp FIELD_END
+const ENCODED = { empty: 101, yes: 84, no: 70, int: 105, float: 102, codepoint: 99, symbol: 115, error: 120, key: 107, list: 108 };
+function codeParsed(program, code) {
+	let said = "";
+	const { status } = compilerRan(["parse-code", guestText(program, code), PARSED_CODE_PATH], text => said += text);
+	const encoding = programFiles.written.get(PARSED_CODE_PATH);
+	programFiles.written.delete(PARSED_CODE_PATH);
+	if (status !== 0 || !encoding) return newGuestError(program, said.trim() || `parse-code wrote nothing (status ${status})`);
+	return codeBuilt(program, typeof encoding === "string" ? utf8.encode(encoding) : encoding, { at: 0 });
+}
+// the field at `cursor.at`, up to its FIELD_END, the cursor past it
+function encodedField(encoding, cursor) {
+	const end = encoding.indexOf(FIELD_END, cursor.at);
+	const field = utf8Decoder.decode(encoding.subarray(cursor.at, end));
+	cursor.at = end + 1;
+	return field;
+}
+// the node encoded at the cursor, built in the program (driver.warp code_built)
+function codeBuilt(program, encoding, cursor) {
+	const tag = encoding[cursor.at++];
+	if (tag === ENCODED.empty) return program.new_empty();
+	if (tag === ENCODED.yes || tag === ENCODED.no) return program.new_bool(tag === ENCODED.yes ? 1n : 0n);
+	const field = encodedField(encoding, cursor);
+	if (tag === ENCODED.int) return program.new_int(BigInt(field));
+	if (tag === ENCODED.float) return program.new_float(Number(field));
+	if (tag === ENCODED.codepoint) return program.new_codepoint(Number(field));
+	if (tag === ENCODED.symbol) return newGuestBytes(program, field, "new_symbol");
+	if (tag === ENCODED.error) return newGuestError(program, field);
+	if (tag === ENCODED.key) {
+		const key = codeBuilt(program, encoding, cursor);
+		return program.new_spelled_key(key, newGuestText(program, field), codeBuilt(program, encoding, cursor));
+	}
+	if (tag === ENCODED.list) {
+		const [bracket, separator] = [encodedField(encoding, cursor), encodedField(encoding, cursor)];
+		const items = Array.from({ length: Number(field) }, () => codeBuilt(program, encoding, cursor));
+		const cells = items.reduceRight((rest, item) => program.new_list(item, rest, SQUARE_BRACKET), null);
+		return program.new_spelled_list(cells, newGuestText(program, bracket), newGuestText(program, separator));
+	}
+	return newGuestText(program, field);
+}
+
+// a timer's firing (lib/timers.warp): the program's timer_fired(id), what its block prints going out as it goes;
+// { value } the program's value anew by its VALUE_ANEW_EXPORT (main's last expression again, as _start shows it),
+// { failure } the sentence its trap or raise says, as a run's (raisedMessage)
+const VALUE_ANEW_EXPORT = "page_value";
+function timerFired(holder, id) {
+	const { exports } = holder;
+	try {
+		exports.timer_fired(BigInt(id));
+		return exports[VALUE_ANEW_EXPORT] ? { value: shownValue(exports, exports[VALUE_ANEW_EXPORT]()) } : {};
+	} catch (failure) {
+		return { failure: failure instanceof WasiExit ? `the timer's block exited (status ${failure.code})` : raisedMessage(exports, failure) };
+	}
+}
+
 // the host words warp.wasm calls itself (driver.warp answered_word): no window, no system values, paths as given
 function compilerHostWords(exports) {
 	return {
@@ -151,13 +209,17 @@ function ranSaying(exports, print, exitCode, valued = false) {
 	return { status, said: said.trimEnd(), value, result };
 }
 
+// warp.wasm run with the words after its own path (driver.warp file_ran), each run a fresh instance: { status, said }
+function compilerRan(words, print) {
+	let exports;
+	const wasi = wasiImports(() => exports.memory, [COMPILER_LIBRARY + "/warp.wasm", ...words], print, programFiles, compilerEnvironment());
+	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
+	return ranSaying(exports, print);
+}
+
 // warp.wasm compiles the file: { module } the bytes it wrote, else { failure } what it said
 function compiledProgram(file, print) {
-	let exports;
-	const args = [COMPILER_LIBRARY + "/warp.wasm", file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`];
-	const wasi = wasiImports(() => exports.memory, args, print, programFiles, compilerEnvironment());
-	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
-	const { status, said } = ranSaying(exports, print);
+	const { status, said } = compilerRan([file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`], print);
 	const module = programFiles.written.get(COMPILED_PATH);
 	programFiles.written.delete(COMPILED_PATH);
 	if (status !== 0 || !module?.length) return { failure: said || `warp.wasm wrote no module of ${file} (status ${status})` };
@@ -193,7 +255,9 @@ function evaluatedNatively(code, file, hooks) {
 		hooks.module?.(compiled.module);
 		const { status, said, value, holder } = programRan(compiled.module, source, hooks);
 		const html = status === 0 ? pageHtml(holder) : undefined;
-		if (html !== undefined && holder.exports.page_event) hooks.listen?.(holder, pageEventsOf(html));
+		const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
+		// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
+		if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
 		return { ...report(status === 0 ? value : said, status), html };
 	});
 }
