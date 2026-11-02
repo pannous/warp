@@ -357,11 +357,11 @@ html_attribute_value(value: any) := {
 }
 
 // a value as the text it shows: a text without quotes, anything else as warp writes it
-html_plain(value: any) := if value is text then value else str(value)
+html_plain(value: any): text := if value is text then value else str(value)
 
 html_is_true(value: any) := value == true or (value is number and value != 0)
 
-html_escaped(text: any) := replace(replace(replace(replace(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
+html_escaped(text: any): text := replace(replace(replace(replace(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
 
 // `js{…}` is the element script
 html_tag(name: any) := if name == "js" then "script" else name
