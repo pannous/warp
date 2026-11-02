@@ -1,0 +1,4 @@
+# Matrix rows and operations: lib/matrix.warp and notes/stdlib.md
+'use matrix; shape(identity(2))'	[2 2]
+'use matrix; transpose([[1, 2], [3, 4]])'	[[1 3] [2 4]]
+'use matrix; matmul([[1, 2]], [[3], [4]])'	[[11]]
