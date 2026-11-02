@@ -76,6 +76,8 @@ is_call_form(n: Node): bool := is_group(n) and ((bracket_of(n) == "(" and separa
 # the call naming the variant that takes its arguments, `receivers` of them before the dot; the call itself when its
 # name is not overloaded or no single variant takes them
 variant_call(n: Node, overloaded: map, receivers: int): Node := {
+	# `xs.sum`, a method named bare: called with its receiver alone
+	if n is symbol and receivers > 0 { return variant_call(call_of(name_of(n), []), overloaded, receivers)#1 }
 	if not (is_call_form(n) and #n > 0 and n#1 is symbol) { return n }
 	name = name_of(n#1)
 	if name not in overloaded { return n }
@@ -160,7 +162,8 @@ resolved(n: Node, overloaded: map, called: map): Node := {
 	}
 	match n {
 		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded, called), Op.Dot, variant_call(children(method, x => resolved(x, overloaded, called)), overloaded, 1))
-		_: children(variant_call(passed_variants(n, overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
+		# a one-line block's words are its phrase, `{sum [1 2]}`, as typed_resolved reads them (card prelude-word-in-block)
+		_: children(variant_call(passed_variants(phrase_block(n), overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
 	}
 }
 
