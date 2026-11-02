@@ -38,18 +38,23 @@ on(key: Key, body: block) := frame_listened(event => if held_key == key then bod
 rewrite listen(data key, $listener, $once) => key_listened($listener)
 global key_listeners = []
 global pressed_key = Key.none
-global code_before = 0
+global presses_seen = 0
 key() := pressed_key
 key_listened(listener: function): int := {
-	if count(key_listeners) == 0 { frame_listened(event => keys_went_down(), no) }
+	// the presses before the program listened (the page counts them across runs) are not its own
+	if count(key_listeners) == 0 {
+		presses_seen = system_value("keys pressed")
+		frame_listened(event => keys_went_down(), no)
+	}
 	key_listeners = key_listeners + [listener]
 	count(key_listeners)
 }
+// a press counts though the key is up again before the frame looks: the host counts the keys that went down
 keys_went_down() := {
-	code = system_value("key code held")
-	if code != 0 and code != code_before {
-		pressed_key = key_name(code) as Key
+	presses = system_value("keys pressed")
+	if presses != presses_seen {
+		presses_seen = presses
+		pressed_key = key_name(system_value("key code pressed")) as Key
 		for listener in key_listeners { listener(pressed_key) }
 	}
-	code_before = code
 }
