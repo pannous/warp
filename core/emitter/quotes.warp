@@ -71,14 +71,9 @@ def spliced_code(body: Body, e: Node): list {
 # `class: "box"`, `"nav a": {…}`, `p{…}`: a key whose left is a word or text, kept as written
 is_word_keyed(e: Node): bool := (is_key(e, Op.Colon) or is_key(e, Op.None)) and (key_of(e) is symbol or key_of(e) is text)
 is_bound(body: Body, name: text): bool := name in body.names or is_global(body, name) or name in module.functions or name in module.variants
-# a phrase headed by a function a library brought, not the program's (prelude_words.warp defined_origins): in data
-# its words stay words, `animation: pop 400ms` the CSS keyframes pop, no list's pop (decision data-names: what the
-# program binds; data_blocks.warp as_call: a phrase of the program's function is its call)
-is_library_phrase(body: Body, e: Node): bool := is_group(e) and bracket_of(e) == "" and separator_of(e) == " " and #e > 1 and e#1 is symbol and name_of(e#1) not in body.names and not is_global(body, name_of(e#1)) and defined_origins.has(name_of(e#1))
 # the words of e nothing binds, a field's name (`todo.text`) and an entry's key not counted
 unbound_words(body: Body, e: Node): list := {
 	if e is symbol { return if is_bound(body, name_of(e)) then [] else [name_of(e)] }
-	if is_library_phrase(body, e) { return [name_of(e#1)] }
 	# a lambda the lambdas pass lifted, `closure_new(closure_lambda_1, n)`: a function value (`div{ p{ () => n } }`)
 	if is_quote(e) or is_spliced_quote(e) or is_closure_value(e) { return [] }
 	# `.box` of a style sheet reads no field: a selector, its name a word
