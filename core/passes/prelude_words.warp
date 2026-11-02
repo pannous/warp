@@ -668,7 +668,13 @@ prelude_definitions(): list := {
 	if prelude_definition_names == ø { prelude_definition_names = definition_slices(module_source("prelude")).map(slice => slice#1) }
 	prelude_definition_names
 }
-with_implicit_uses(source: text, index_file: text): text := source + implicit_modules(source, index_file).map(module => "\nuse " + module).join("")
+# (an implicit use is always the standard module, never a same-named file beside the program: only an explicit
+# `use x` takes one, decision implicit-use-lib-first)
+global implicitly_used = []
+with_implicit_uses(source: text, index_file: text): text := {
+	implicitly_used = implicit_modules(source, index_file)
+	source + implicitly_used.map(module => "\nuse " + module).join("")
+}
 # word → the standard modules defining it, read from the index `warp rebuild` writes (a line `word<TAB>module …`
 # each); none before the first rebuild
 global word_indices = {}
