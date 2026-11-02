@@ -835,9 +835,8 @@ function renderedRoot(host) {
 	return root;
 }
 
-// a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
-// route (lowering/web/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
-// GET (src/web/web_server.rs request_node), not a request leaving here
+// a form of the shown markup with `on submit` runs that handler (card web-submit); any other is a request to the program
+// serving the page, as a browser sends it to `warp serve`: its fields urlencoded, the body of a POST, the query of a GET
 function submitForm(submitted) {
 	submitted.preventDefault();
 	const form = submitted.target;
@@ -849,7 +848,7 @@ function submitForm(submitted) {
 	const posted = method !== "GET";
 	const encoded = new URLSearchParams(fields).toString();
 	if (worker.serving) return servedRequest(method, posted ? path : `${path}?${encoded}`, posted ? encoded : "");
-	worker.postMessage({ submit: { method, path, query: posted ? {} : fields, body: posted ? fields : null } });
+	showUnserved(`a form sent ${method} ${path}`);
 }
 
 function showPaintings(paintings) {
@@ -934,10 +933,13 @@ function followLink(click) {
 	return true;
 }
 
+// a form or link of a page no program serves (only a serving program has paths, lib/web.warp page_serve): said beside it
+const showUnserved = what => showValue(`${what}, but no program serves its requests here`, true);
+
 // a path of the program: a request to the program serving them (lib/web.warp page_serve), else its page there
 function goTo(url) {
 	if (worker.serving) servedRequest("GET", url.pathname + url.search);
-	else worker.postMessage({ navigate: url.pathname });
+	else showUnserved(`a link went to ${url.pathname}`);
 }
 
 // ---- a program serving requests (lib/web.warp page_serve): the page is its client ------------------------------
@@ -990,7 +992,7 @@ function showServed(response) {
 	showRendered(html);
 }
 
-// the address bar shows the path of a program with routes (worker.js addressOf); a path typed there goes to that page
+// the address bar shows the path of a serving program (showServed); a path typed there goes to that page
 function showAddress(path) {
 	$("address").hidden = path === undefined;
 	$("address").value = path ?? "";
@@ -1025,11 +1027,9 @@ function showEventOutput(data) {
 	// a frame of `on frame` (cards https-pannous, very-fast: its GPU canvas showed as its id, and a pixel frame made a
 	// new canvas each time)
 	if (data.type === "paint") showFrame([paintingOf(data)]);
-	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) showValue(data.value, data.error, data.html);
 	if (data.html !== undefined) showRendered(data.html);
-	(data.patches ?? []).forEach(patch => showPatch($("rendered").shadowRoot, patch));
 }
 
 async function show(code) {
