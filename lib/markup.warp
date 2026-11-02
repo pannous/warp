@@ -28,7 +28,7 @@ html_style_mark = "<style>"
 // CSS properties whose number has no unit; any other number is pixels
 html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"]
 
-to_html(value: any) := html_render(value, ø, ø)
+to_html(value: any): text := html_render(value, ø, ø)
 
 // A page's markup keeps its live parts as code (card markup-keeps): `p{ "count: " + count }` reading a variable a
 // handler changes is the part `() => …`, recomputed each time the markup renders; `on click { count += 1 }` is the
@@ -37,10 +37,16 @@ to_html(value: any) := html_render(value, ø, ø)
 global page_handlers = []
 handler_prefix = "on"
 handler_attribute_prefix = "data-warp-"
+// how a handler shows, its code left out: `on click {…}`
+handler_body_shown = "{" + "…" + "}"
 
 // the HTML of the page's value, its handlers numbered anew from 1 in render order
 export page_render(value: any) := {
 	page_handlers = []
+	page_handler_events = []
+	page_handler_labels = []
+	component_calls = {}
+	component_order = []
 	to_html(value)
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
@@ -49,23 +55,96 @@ export page_event(n: int, detail: any) := {
 	action(detail)
 }
 
+// `use web; render page`, then `click "+1"` or `click plus` (card use-web, decisions click-by-label, click-by-id): the
+// page acts as the Rust page tests did, on the element showing a label (its text, else its placeholder, aria-label,
+// name or id) among those handling the event; the value is the page's HTML after it
+global page_shown = ø
+global page_handler_events = []
+global page_handler_labels = []
+handler_label_attributes = ["placeholder", "aria-label", "name", "id"]
+
+render(value: any) := {
+	page_shown = value
+	page_render(value)
+}
+click(label: any) := page_act("click", name_of(label), ø)
+// `click plus`: an id, a word the program binds nothing to
+rewrite click $who => click(data $who) where $who is symbol and $who is unbound
+
+page_act(event: text, label: text, detail: any) := {
+	for handler_number in 1 to #page_handlers {
+		labels = page_handler_labels#handler_number
+		if page_handler_events#handler_number == event and label in labels {
+			page_event(handler_number, detail)
+			return page_render(page_shown)
+		}
+	}
+	raise "no element showing " + label + " handles " + event + "; the page: " + page_render(page_shown)
+}
+
+// A component's instances (core/extensions/components.warp): `component("Counter", key)` is the instance a call of
+// Counter renders with, kept across renders by its key, else by its place among this render's Counter calls; its
+// state its entries, each made once (component_state). `Counter.instances` lists this render's in page order
+global component_states = {}
+global component_calls = {}
+global component_order = []
+component(name: text, key: any): map := {
+	calls = (if component_calls.has(name) then component_calls[name] else 0) + 1
+	component_calls[name] = calls
+	id = name + "·" + str(key ?? calls)
+	if not component_states.has(id) { component_states[id] = {} }
+	instance = component_states[id]
+	component_order.add([name, instance])
+	instance
+}
+component_state(instance: map, name: text, made: function) := { if not instance.has(name) { instance[name] = made() } }
+component_instances(name: text): list := component_order.filter(entry => entry#1 == name).map(entry => entry#2)
+
+// what an element shows to be found by: its text, its tags left out, and its labelling attributes
+html_labels(tag: any, items: list, children: text): list := [html_shown_text(children)] + items.filter(item => html_is_attribute(item, tag) and html_name(item) in handler_label_attributes).map(item => html_plain(html_content(item)))
+html_shown_text(html: text): text := {
+	var shown = ""
+	var inside = no
+	for c in html {
+		if c == "<" { inside = yes }
+		else if c == ">" { inside = no }
+		else if not inside { shown = shown + c }
+	}
+	trim(shown)
+}
+
 // a live part's value as it is now
-html_now(value: any) := if value is function then html_now(value()) else value
+html_now(value: any) := if value is Live then html_now(value.now()) else if value is function then html_now(value()) else value
 
 // `button{ "+1", on click {…} }`: an item `on e {…}` of an element is that element's own handler, kept in it as a
 // value (no listener of the whole program); markup's own class, which its module sees when built on its own
-class Handler { event: text; action: function }
+class Handler {
+	event: text
+	action: function
+	show() := "on " + event + " " + handler_body_shown
+}
 handler(name: any, action: function): Handler := Handler(name_of(name), action)
+// a live value: code kept to run each time its value is wanted, shown as its value now; an item reading a variable a
+// handler writes is one (lib/sugar/events.warp), `p{ "count: " + count }`. A general library type, here beside
+// Handler until a module built on its own sees the prelude's classes (card prelude-class-visibility)
+class Live {
+	compute: function
+	now() := { value = compute; value() }
+	show() := str(now())
+}
+live(compute: function): Live := Live(compute)
 
 // an element's handler: `on click {…}` among its items (a Handler), or HTML's own spelling
 // `onclick: (event => …)`
-html_is_handler(item: any) := item is Handler or html_is_handler_pair(item)
-html_is_handler_pair(item: any) := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
-html_is_handler_name(name: any) := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
+html_is_handler(item: any): bool := item is Handler or html_is_handler_pair(item)
+html_is_handler_pair(item: any): bool := item is pair and html_is_handler_name(html_name(item)) and html_raw_content(item) is function
+html_is_handler_name(name: any): bool := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
 	page_handlers.add(action)
-	" " + handler_attribute_prefix + event + "=\"" + count(page_handlers) + "\""
+	page_handler_events.add(event)
+	page_handler_labels.add([])
+	" " + handler_attribute_prefix + event + "=\"" + #page_handlers + "\""
 }
 
 // a pair's name and content, `div{…}` or `class: "box"` (a one-entry map as Rust's pair)
@@ -87,13 +166,13 @@ html_render(live: any, scope: any, chosen: any) := {
 	html_escaped(html_plain(value))
 }
 
-html_is_element(value: any) := html_is_listed_element(value) or (value is pair and html_is_custom_element(html_name(value)))
+html_is_element(value: any): bool := html_is_listed_element(value) or (value is pair and html_is_custom_element(html_name(value)))
 
-html_is_listed_element(value: any) := value is pair and contains(html_elements, html_name(value))
+html_is_listed_element(value: any): bool := value is pair and contains(html_elements, html_name(value))
 
 // `my-card{…}`: a page's own element is named with a dash, unlike data-, aria- and the listed attributes (decision unknown-tag)
 // str(name): a one-letter key (`"s": "small"`) is a Char, which contains refuses (card contains-fails)
-html_is_custom_element(name: any) := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
+html_is_custom_element(name: any): bool := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
 	let items = html_items(content)
@@ -110,11 +189,15 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var facts = ""
 	// `style: { color: red }` and a transition's style: one attribute
 	var styles = []
+	var own_handlers = []
 	for item in items {
-		if html_is_handler(item) { attributes = attributes + html_handler(item) }
+		if html_is_handler(item) {
+			attributes = attributes + html_handler(item)
+			own_handlers.add(#page_handlers)
+		}
 		else if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(html_name(item), html_content(item)) }
 		else if html_is_attribute(item, tag) and html_name(item) == "style" {
-			if count(styles) == 0 { attributes = attributes + html_style_mark }
+			if #styles == 0 { attributes = attributes + html_style_mark }
 			styles.add(if html_is_declarations(html_content(item)) then html_css(html_content(item)) else html_attribute_value(html_content(item)))
 		}
 		else if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
@@ -123,8 +206,9 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		else if tag == "select" and not html_is_element(item) { children = children + html_options(item, own_chosen) }
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
+	for own in own_handlers { page_handler_labels#own = html_labels(tag, items, children) }
 	// the option whose value, else text, is the select's
-	if count(styles) > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
+	if #styles > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
 	if tag == "option" and chosen != ø and (if value == ø then children else html_escaped(value)) == html_escaped(chosen) { attributes = attributes + " selected" }
 	if contains(html_void_elements, tag) { return "<" + tag + attributes + ">" }
 	if tag == "style" { children = trim(children) }
@@ -183,10 +267,10 @@ html_items(content: any) := {
 }
 
 // a block `{…}` or a list `[…]`: at run time a block is a map, no list (card inside-function)
-html_is_group(value: any) := value is list or value is map
+html_is_group(value: any): bool := value is list or value is map
 
 // `class:"box"` inside an element: an attribute when its name is one and its value plain (or inline CSS for style)
-html_is_attribute(item: any, tag: any) := {
+html_is_attribute(item: any, tag: any): bool := {
 	if not (item is pair) { return false }
 	let name = html_name(item)
 	let value = html_content(item)
@@ -197,12 +281,12 @@ html_is_attribute(item: any, tag: any) := {
 }
 
 // `class:["btn" "btn-info"]` is an attribute, `style{ ".card": {…} }` an element: its items are rules
-html_holds_pairs(value: any) := {
+html_holds_pairs(value: any): bool := {
 	for item in value { if item is pair { return true } }
 	false
 }
 
-html_attribute(item: any) := {
+html_attribute(item: any): text := {
 	let name = html_attribute_name(html_name(item))
 	let value = html_content(item)
 	if html_is_declarations(value) { return " " + name + "=\"" + html_escaped(html_css(value)) + "\"" }
@@ -217,10 +301,10 @@ html_attribute_name(name: any) := if name == "key" then "data-warp-key" else if 
 
 // `{ color: theme padding: 8 }`: a block of CSS properties with plain values; a dashed one (`color-scheme: dark`) is
 // no custom element
-html_is_declarations(value: any) := {
+html_is_declarations(value: any): bool := {
 	if html_is_listed_element(value) { return false }
 	let items = html_items(value)
-	if count(items) == 0 { return false }
+	if #items == 0 { return false }
 	for item in items {
 		if not (item is pair) { return false }
 		let inner = html_content(item)
@@ -230,15 +314,15 @@ html_is_declarations(value: any) := {
 }
 
 // `color: red; padding: 8px`: camelCase names in kebab-case, numbers in pixels unless the property has no unit
-html_css(value: any) := join([html_declaration(item) for item in html_items(value)], "; ")
+html_css(value: any): text := join([html_declaration(item) for item in html_items(value)], "; ")
 
-html_declaration(item: any) := {
+html_declaration(item: any): text := {
 	let property = html_kebab(html_name(item))
 	property + ": " + html_css_value(property, html_content(item))
 }
 
 // a number in pixels unless the property has no unit
-html_css_value(property: any, value: any) := {
+html_css_value(property: any, value: any): text := {
 	if value is number and not contains(html_unitless_properties, property) { return str(value) + "px" }
 	html_attribute_value(value)
 }
@@ -260,24 +344,24 @@ html_scoped(selectors: any, scope: any) := {
 }
 
 // CSS names are ASCII: lowered by hand, so a page carries no Unicode case table (card web-bundle-growth)
-html_kebab(name: any) := {
+html_kebab(name: any): text := {
 	var out = ""
 	for c in name { out = if c >= 'A' and c <= 'Z' then out + "-" + chr(ord(c) - ord('A') + ord('a')) else out + c }
 	out
 }
 
 // `class:['btn' 'btn-info']` is the attribute `btn btn-info`
-html_attribute_value(value: any) := {
+html_attribute_value(value: any): text := {
 	if not html_is_group(value) { return html_plain(value) }
 	join([html_plain(item) for item in value], " ")
 }
 
 // a value as the text it shows: a text without quotes, anything else as warp writes it
-html_plain(value: any) := if value is text then value else str(value)
+html_plain(value: any): text := if value is text then value else str(value)
 
-html_is_true(value: any) := value == true or (value is number and value != 0)
+html_is_true(value: any): bool := value == true or (value is number and value != 0)
 
-html_escaped(text: any) := replace(replace(replace(replace(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
+html_escaped(text: any): text := replace(replace(replace(replace(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
 
 // `js{…}` is the element script
 html_tag(name: any) := if name == "js" then "script" else name
@@ -359,7 +443,7 @@ style_items(block: any) := {
 		if rule != ø {
 			output.add(style_rule(style_joined(pending, rule#1, joiner), rule#2))
 			pending = []
-		} else if count(pending) > 0 and style_is_block(item) {
+		} else if #pending > 0 and style_is_block(item) {
 			// `.card { … }`: a leading-dot name stays apart from its block
 			output.add(style_rule(style_joined(pending, "", ""), item))
 			pending = []
@@ -368,7 +452,7 @@ style_items(block: any) := {
 		} else if style_is_declaration(item) {
 			let length = style_length(item.value)
 			output.add(key(item.key, ":", if length == ø then item.value else length))
-		} else if count(output) > 0 and style_is_declaration(output#count(output)) and style_continued(output#count(output).value, item) != ø {
+		} else if #output > 0 and style_is_declaration(output#(#output)) and style_continued(output#(#output).value, item) != ø {
 			let last = output.pop()
 			output.add(key(last.key, ":", style_continued(last.value, item)))
 		} else if style_selector_text(item) != ø {
@@ -388,7 +472,7 @@ style_entries(items: any, separator: any, leading: any) := {
 	var entries = []
 	for item in items {
 		for part in style_unchained(item) {
-			let joiner = if count(entries) == 0 and leading != ø then leading else list_joiner
+			let joiner = if #entries == 0 and leading != ø then leading else list_joiner
 			if not (part is pair) and str(part.bracket) is empty { entries = entries + style_entries(part, part.separator, joiner) }
 			else { entries.add([part, joiner]) }
 		}
@@ -405,7 +489,7 @@ style_unchained(node: any) := {
 	if style_rule_parts(last) != ø {
 		parts.add(last)
 		parts.add(key(ø, node.op, node.value))
-	} else if count(parts) == 0 { return [node] }
+	} else if #parts == 0 { return [node] }
 	else { parts.add(key(last, node.op, node.value)) }
 	parts
 }
@@ -514,11 +598,11 @@ css_style(property: any, value: any) := key(symbol("style"), ":", bracketed([key
 // → "fade 1000ms ease-out"; a text leading the spec as written
 css_parts(spec: any) := {
 	let items = css_items(spec)
-	if items#1 is text { return [items#1, [items#i for i in 2 to count(items)]] }
+	if items#1 is text { return [items#1, [items#i for i in 2 to #items]] }
 	var words = []
 	var children = []
 	for item in items {
-		if count(children) == 0 and css_is_word(item) { words.add(css_word(item)) }
+		if #children == 0 and css_is_word(item) { words.add(css_word(item)) }
 		else { children.add(item) }
 	}
 	[join(words, " "), children]

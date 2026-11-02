@@ -6,6 +6,7 @@ use "characters.warp"
 use "errors.warp"
 use "text.warp"
 use "gpu_lists.warp"
+use "instructions.warp"
 list_join(a: list, b: list): list := {
 	out = new_list(#a + #b)
 	copy_items(out, 0, a, 0, #a)
@@ -31,6 +32,7 @@ list_append(a: list, b: list): list := {
 node_at(n: Node, index: int): Node := {
 	if is_null(n) { index_out_of_range_of(index, 0) }
 	if is_gpu_list(n) { return gpu_list_at(n, index) }
+	if is_range(n) { return range_at(n, index) }
 	if kind_code(n) == Kind.List { return unboxed_list(n)#index }
 	if kind_code(n) == Kind.Text { return text_char(unboxed_text(n), index) }
 	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
@@ -50,6 +52,7 @@ node_length(n: Node): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) { return 0 }
 	if is_gpu_list(n) { return gpu_list_count(n) }
+	if is_range(n) { return range_count(n) }
 	if kind_code(n) == Kind.List { return #unboxed_list(n) }
 	if kind_code(n) == Kind.Text { return text_count(unboxed_text(n)) }
 	if kind_code(n) == Kind.Codepoint { return 1 }
@@ -151,4 +154,31 @@ forget_map_index(entries: list): int := {
 	slot = index_slot(entries)
 	if slot > 0 { index_covered#slot = -1 }
 	0
+}
+# A range `1 to n`, `1..n` (decision lazy-range-value): a list node marked KindUnit.Range holding its two ends and no
+# items; #, xs#i and sum answer from the ends, any other list word makes its items (unlisted_items)
+range_value(first: int, last: int): Node := keyed(Kind.List + BracketCode.Square * KindUnit.Info + KindUnit.Range, fresh_int_node(first), fresh_int_node(last))
+is_range(n: Node): bool := not is_null(n) and kind_code(n) == Kind.List and bits_and(marked_kind(n), KindUnit.Range) != 0
+range_first(n: Node): int := unboxed_int(entry_key(n))
+range_count(n: Node): int := max_int(unboxed_int(key_value(n)) - range_first(n) + 1, 0)
+range_at(n: Node, index: int): Node := {
+	if index < 1 or index > range_count(n) { index_out_of_range_of(index, range_count(n)) }
+	fresh_int_node(range_first(n) + index - 1)
+}
+range_items(n: Node): list := {
+	out = new_list(range_count(n))
+	for i in 1 to #out { out#i = range_at(n, i) }
+	out
+}
+# Gauss's sum, count · (first + last) / 2, halving whichever of the two is even
+range_sum(n: Node): Node := {
+	count = range_count(n)
+	ends = range_first(n) + unboxed_int(key_value(n))
+	if int_remainder(count, 2) == 0 then grown_product(int_quotient(count, 2), ends) else grown_product(count, int_quotient(ends, 2))
+}
+# the items of a list node whose data is no $list (emitter unboxed_list_code): a range's made, a GPU list's refused
+unlisted_items(n: Node): list := {
+	if is_range(n) { return range_items(n) }
+	gpu_list_refused_as(n)
+	new_list(0)
 }

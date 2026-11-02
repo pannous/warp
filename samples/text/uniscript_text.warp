@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # Uniscript: ASCII names for Unicode characters, and back (wiki/uniscript.md)
-use uniscript
+use "../../packages/uniscript/uniscript.warp"
 print uniscript("<:alpha/> <:fracture A/> <:infinity/>")   # α 𝔄 ∞
 print uniscript("<:fracture> warp <:/fracture>")            # a whole run in one style: 𝔴𝔞𝔯𝔭
 print unicode_to_uniscript("α 𝔄 ∞")                         # back to names

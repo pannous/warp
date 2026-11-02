@@ -1,5 +1,5 @@
 // The canvas of paint (src/host.rs paint, lib/draw.warp) and the pointer over it, for the playground (playground.js)
-// and for a built site that paints (card site-frames, src/web/site.rs, site-thread.js)
+// and for a built site that paints (site.js)
 
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 // mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
@@ -7,7 +7,9 @@ const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), 
 // then "held 0" … the codes of the keys held, in the order they went down (host.js key_held, card allow-diagonals)
 const KEYS_HELD_KEPT = 8;
 // mouse_wheel: the wheel steps turned over a canvas, up adding (crates/warp-runtime host_words.rs MOUSE_WHEEL)
-const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`)];
+// "keys pressed", "key code pressed": the keys that went down so far and the last of them, as natively
+// (crates/warp-window): `on key {…}` runs for a press let go before the program's frame looks (lib/keys.warp)
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`), "keys pressed", "key code pressed"];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
 const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9, Shift: 0xF750, Control: 0xF751, Alt: 0xF752, Meta: 0xF753 };
@@ -133,8 +135,14 @@ function trackKey(event) {
 	if (!pointer || code === undefined || event.target.closest?.(TYPING_TARGETS)) return;
 	if (keysHeld.includes(code)) keysHeld.splice(keysHeld.indexOf(code), 1);
 	if (event.type === "keydown") keysHeld.push(code);
+	if (event.type === "keydown" && !event.repeat) keyWentDown(code);
 	keysHeld.splice(0, keysHeld.length - KEYS_HELD_KEPT);
 	tellKeysHeld();
+}
+
+function keyWentDown(code) {
+	Atomics.add(pointer, POINTER_NAMES.indexOf("keys pressed"), 1);
+	Atomics.store(pointer, POINTER_NAMES.indexOf("key code pressed"), code);
 }
 
 function tellKeysHeld() {

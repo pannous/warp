@@ -146,7 +146,16 @@ subscript_name(index: Node): any := {
 is_shifted_index(index: Node): bool := op_of(index) == Op.Add and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
 # else the run ends in no_field_<name>, which Rust's run reports as "no field name"
+# a bool field of a receiver of a known class (`p: P`) reads as a yes/no, not a value known only at run time:
+# `rest and p.s` stays yes/no (card bool-and-field-int), where a boxed read beside a yes/no made it 1 or 0
 def field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
+	read = boxed_field_read(body, target, name, class_name)
+	if read.kind != ValueKind.Node or class_name == "" or struct_field(class_name, name) == ø { return read }
+	entry = module.classes[class_name][name]
+	if not (entry is text) or field_kind(entry) != ValueKind.Bool { return read }
+	TypedCode(ValueKind.Bool, converted(read, ValueKind.Bool))
+}
+def boxed_field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
 	held = TypedCode(ValueKind.Node, [op.local_get] + uleb(fresh_local(body, ValueKind.Node)))
 	named = text_value_of(name)
 	missing = ended_in(ValueKind.Node, no_field_prefix + name)
@@ -349,7 +358,8 @@ collect_types(n: Node): any := {
 declares_type(n: Node): bool := type(n) is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 # `type Name = text`, `type View = list or int`: a declaration of no body naming another type or a union
 is_type_alias(n: Node): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and aliased_spelling(value_of(n)) != ø
-aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
+# (a function type `T -> bool`, `(T, T) -> T` names function)
+aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else if is_key(type, Op.Arrow) then "function" else union_spelling(type)
 # a case of a variants declaration, `A`, or one spelled otherwise, `A = "a"`
 variant_name(variant: any): text := if kind_of(variant) == "key" then variant#3#2 else variant#2
 record_type(name: any, body: any): any := {
@@ -412,6 +422,8 @@ def texted(type: text?, value: TypedCode): TypedCode { if value.kind == ValueKin
 # instance of a class is a node, as Rust's class-typed fields take it
 def admits(type: text?, kind: ValueKind): bool {
 	if type != ø and is_union(aliased_type(type)) { return fits_union(aliased_type(type), kind) }
+	# a real field takes any real number, an int and a float too (decision real-canonical)
+	if type != ø and aliased_type(type) == REAL_CLASS and kind in [ValueKind.Int, ValueKind.Float] { return yes }
 	type == ø or field_kind(type) == ValueKind.Node or field_kind(type) == kind or (kind == ValueKind.Node and aliased_type(type) in module.classes)
 }
 # a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value

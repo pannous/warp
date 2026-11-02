@@ -1,0 +1,127 @@
+// The standard module tasks (decision N29, card go-cooperative): `go {…}` is a cooperative task, no thread: it starts
+// when main yields (its sleep, an await, a channel's receive, main's end) and gives the others their turn at its own
+// sleeps, natively and in a page alike, its block split there (lib/rule_words.warp task_steps); `go x` of an expression its value.
+// `await job` runs the tasks until it is done and gives its value, `await all jobs` their values, `await any`/`first`
+// the first done's, `await job within t or d` its value if done within t, else d.
+// A task keeps what a module holds per task (task_context: sound's voice), its starter's when it was started
+use units
+// (`await go …` is one rule: `await $x` taking the go would leave it unrewritten)
+rewrite await go $body: block => task_awaited(task_go(() => $steps)) where $steps = task_steps($body)
+rewrite await go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
+rewrite go $body: block => task_go(() => $steps) where $steps = task_steps($body)
+// a task of an expression, `go f(x)`, is its value at once, run where it is started (`job + 1`, `[a, b]` read it
+// as a value: an implicit await), in a context of its own as a block's
+rewrite go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
+rewrite await all $xs => $xs.map(task_awaited)
+rewrite await any $xs => task_awaited_any($xs)
+rewrite await first $xs => task_awaited_any($xs)
+rewrite await $x within $t or $d => task_awaited_within($x, $t / 1ms, () => $d)
+rewrite await $x within $t => task_awaited_within($x, $t / 1ms, () => raise "the task took longer than " + str($t))
+rewrite await $x => $awaited where $awaited = awaited_operand($x)
+// (a rule's result ø reads as no match: the task is stopped, and then nothing)
+rewrite stop $x => (task_stopped($x); ø) where statement
+rewrite cancel $x => (task_stopped($x); ø) where statement
+// a program that starts tasks runs them all before it ends, its value kept
+rewrite $p => $q where program and $q = tasked($p)
+
+// the scheduler: each step of a task runs to the task's next sleep, which queues the rest
+class Task { due: int; next: any; done: bool = no; value: any = ø; failed: any = ø; awaited: bool = no; context: any = ø }
+global task_queue = []
+global running_task = ø
+global failed_tasks = []
+global task_sleep_said = no
+// the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
+task_go(first: function) := {
+	task = Task(clock(), first)
+	task.context = task_context()
+	task_queue = task_queue + [task]
+	task
+}
+// a sleep's amount in ms: a duration's, a plain number's seconds (as sleep)
+sleep_ms_of(amount) := (if amount is Time then amount.amount else amount) * 1000
+// the rest of the running task, due once it slept that long (ms)
+task_sleep(ms, rest: function) := {
+	running_task.due = clock() + ms
+	running_task.next = rest
+	ø
+}
+// a sleep of main runs the tasks due meanwhile; one inside a function a task calls holds the task there, and the
+// others with it, said once
+slept(ms) := {
+	if running_task == ø {
+		tasks_run_while(ø, clock() + ms)
+	} else {
+		if #task_queue > 1 and not task_sleep_said {
+			task_sleep_said = yes
+			warning("a task's sleep inside a function it calls holds every task until it wakes: sleep in the task's own block to let the others run")
+		}
+		sleep_ms(ms)
+	}
+	ø
+}
+// the queued steps, the earliest due first, while the condition holds (ø: always) and each is due before the deadline
+// (ø: none): sleeping until each is due, and until the deadline at the end
+tasks_run_while(holds: any, deadline: any) := {
+	while #task_queue > 0 and (holds == ø or holds()) {
+		task = task_queue.fold(task_queue#1, (soonest, t) => if t.due < soonest.due then t else soonest)
+		if deadline != ø and task.due > deadline { break }
+		if task.due > clock() { sleep_ms(task.due - clock()) }
+		task_stepped(task)
+	}
+	if deadline != ø and deadline > clock() { sleep_ms(deadline - clock()) }
+	ø
+}
+// one step of the task, in its own context: its last step's value is the task's, an error it raised its failure
+task_stepped(task: Task) := {
+	step = task.next
+	task.next = ø
+	running_task = task
+	starter = task_context()
+	task_context_back(task.context)
+	value = try step() catch e { task.failed = e; failed_tasks = failed_tasks + [task]; ø }
+	task.context = task_context()
+	task_context_back(starter)
+	running_task = ø
+	if task.next == ø {
+		task.done = yes
+		task.value = value
+		task_queue = task_queue.filter(t => not t.done)
+	}
+}
+// `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is
+task_awaited(x) := if x is Task then task_value(x) else x
+task_value(x: Task) := {
+	tasks_run_while(() => not x.done, ø)
+	x.awaited = yes
+	if x.failed != ø { raise str(x.failed) }
+	x.value
+}
+// `await any jobs`: the value of the first to be done
+task_awaited_any(xs) := {
+	tasks_run_while(() => not xs.any(is_done), ø)
+	task_awaited(xs.filter(is_done)#1)
+}
+// `await job within t or d`: its value if it is done within t (ms), else d (an error without one)
+task_awaited_within(x, ms, fallback: function) := if x is Task then task_value_within(x, ms, fallback) else x
+task_value_within(x: Task, ms, fallback: function) := {
+	tasks_run_while(() => not x.done, clock() + ms)
+	if x.done then task_value(x) else fallback()
+}
+// a value is done, a task once its last step ran
+is_done(x) := if x is Task then task_finished(x) else yes
+task_finished(x: Task) := x.done
+task_stopped(x) := {
+	if x is Task { task_ended(x) }
+	ø
+}
+task_ended(x: Task) := {
+	x.done = yes
+	task_queue = task_queue.filter(t => not t.done)
+}
+// main's end: every task runs to its end, the program's value kept; a task's error that nobody awaited ends it loudly
+tasks_end(value: any = ø) := {
+	tasks_run_while(ø, ø)
+	unawaited = failed_tasks.filter(task => not task.awaited)
+	if #unawaited > 0 { raise "a task failed and nobody awaited it: " + str(unawaited#1.failed) }
+	value
+}

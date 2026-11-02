@@ -10,6 +10,9 @@ rewrite for $i in $a to $b {$body...} => ($i: int = $a; $end = $b; while $i <= $
 rewrite for $i in $a to $b {$body...} => ($i = $a; $end = $b; while $i <= $end { $body...; loop··step: $i++ }) where $i is symbol
 rewrite for $i in reverse($a to $b) {$body...} => ($i: int = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol and $b is int
 rewrite for $i in reverse($a to $b) {$body...} => ($i = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol
+# A whole number n counts 1 to n: `for i in 3 {…}` is `for i in 1 to 3 {…}` (card range-loop-syntax); a written number
+# only: a rule hole knows no variable to be an int (card written-rule-fires)
+rewrite for $i in $n {$body...} => for $i in 1 to $n {$body...} where $i is symbol and $n is int
 # The count and the sum of a range of whole numbers without its items (card count-sum): `count(1..10^12)` is n - m,
 # `sum(1 to n)` Gauss's (m + n)·(n - m + 1)/2; an empty range counts and sums 0
 rewrite count($a..$b) => ($start = $a; $end = $b; if $end > $start then $end - $start else 0) where $a is int

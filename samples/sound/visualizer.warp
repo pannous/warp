@@ -27,13 +27,13 @@ started = clock()
 elapsed = 0.0
 while elapsed < seconds {
 	levels = spectrum(song, elapsed, bands)
-	clear(black)
+	clear(paper)
 	for band in 0..bands {
 		shown[band] = max(min(1.0, levels[band] * gain) * height, shown[band] * bar_fall)
 		peaks[band] = max(shown[band], peaks[band] - peak_fall)
 		x = band * bar_width + gap / 2
 		rect(x, height - shown[band], bar_width - gap, shown[band], hsv(band * 280 / bands, 1, 1))
-		rect(x, height - peaks[band] - 2, bar_width - gap, 2, white)
+		rect(x, height - peaks[band] - 2, bar_width - gap, 2, black)
 	}
 	show()
 	sleep(frame_milliseconds / 1000)

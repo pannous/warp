@@ -1,0 +1,6 @@
+# an if without else inside a loop body runs as a statement, never a compiler crash (card if-without-else)
+'s = 0; for y in 1 to 3 { if y > 1 then s += y }; s'	5
+'s = 0; for y in 1 to 3 { if y > 1 { s += y } }; s'	5
+'s = 0; for y in [1, 2, 3]: if y > 1 then s += y
+s'	5
+'s = 0; i = 0; while i < 3 { i += 1; if i > 1 then s += i }; s'	5

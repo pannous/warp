@@ -1,0 +1,24 @@
+# card unix-words-native; decisions use-script and unix-words (notes/decisions.md), notes/shell_words.md
+# fixtures: test/fixtures/unix (poem.txt, configs/ with a.json, sub/b.json, .hidden/c.json, notes.txt)
+
+# ~ is the home folder wherever a path is used
+'use script; exists(~/)'	true
+'use script; ls(~/) == ls(env("HOME"))'	true
+'use script; exists("~/surely-no-such-file.txt")'	false
+# which: the program's path from the PATH, ø when none has it
+'use script; which("sh").ends_with("/sh")'	true
+'use script; which "surely-no-such-program" == ø'	true
+# wc, head, tail: a file's lines
+'use script; (wc "../fixtures/unix/poem.txt").lines'	3
+'use script; (wc "../fixtures/unix/poem.txt").words'	9
+'use script; (wc "../fixtures/unix/poem.txt").bytes'	43
+'use script; head("../fixtures/unix/poem.txt", 2)'	["roses are red", "violets are blue"]
+'use script; tail("../fixtures/unix/poem.txt", 1)'	["warp is new"]
+# grep: the lines of a file, or the texts of a list, the regular expression matches
+'use script; grep("^v", "../fixtures/unix/poem.txt")'	["violets are blue"]
+'use script; grep("are", "../fixtures/unix/poem.txt")'	["roses are red", "violets are blue"]
+'use script; grep("^w", "red\nwarp\nblue".split("\n"))'	["warp"]
+# find_files: the paths below a folder matching the wildcards, sorted, hidden folders skipped
+'use script; find_files("../fixtures/unix/configs", "*.json")'	["../fixtures/unix/configs/a.json", "../fixtures/unix/configs/sub/b.json"]
+'use script; find_files("../fixtures/unix/configs", "?.txt")'	[]
+'use script; file_size "../fixtures/unix/poem.txt"'	43

@@ -1,0 +1,4 @@
+# the sum of a list before a comparison is compared, not the comparison summed, a range's too (card xs-sum)
+'xs = [1, 2]; sum xs == 3'	yes
+'r = 1..5; sum r > 9'	yes
+'sum 5'	5

@@ -71,6 +71,8 @@ function_meanings(head: Node): list := {
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
 assignment_meanings(op: Op, target: Node, value: Node): list := {
 	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
+	# a write of a field or an item, `database.score = 42`, `local["name"] = "Ada"`, binds no name
+	if is_key(target, Op.Dot) or is_key(target, Op.Hash) { return [] }
 	[[binding_name(target), if op == Op.Define or is_lambda(value) then Meaning.Function else Meaning.Variable]]
 }
 
@@ -233,3 +235,33 @@ is_word_of_item(part: Node, accepts: function): bool := match part {
 }
 # the opaque view of a type whose name is a word accepts takes
 is_declaration_word(view: View, accepts: function): bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))
+
+# `3+4; result * 2`: the word result reads the value of the statement before it (decision result-keyword): the printed
+# value after a print, the branch's taken after an if, a block's last; a program binding result itself keeps its own
+last_value_word = "result"
+with_result_word(program: Node): Node := {
+	if not reads_last_value(program) or binds_value(scope_of(program), last_value_word) { return program }
+	bottom_up(program, n => if is_statement_sequence(n) then group_like(n, valued_before_result(items_of(n))) else n)
+}
+valued_before_result(statements: list): list := (1 to #statements).map(i => if i < #statements and reads_last_value(statements#(i + 1)) then valued(statements#i) else statements#i)
+# a read of the word result, not a field of that name: `p.result`, `{result: 3}`
+reads_last_value(n: Node): bool := match n {
+	Symbol(name): name == last_value_word
+	Key(left, Op.Dot, right): reads_last_value(left)
+	Key(left, Op.Colon, right): reads_last_value(right)
+	_: parts_of(n).any(reads_last_value)
+}
+# the statement s, also keeping its value as result
+valued(s: Node): Node := match s {
+	Key(Key(test, Op.Then, yes_branch), Op.Else, no_branch): Key(Key(test, Op.Then, valued(yes_branch)), Op.Else, valued(no_branch))
+	List(items, bracket, separator): valued_group(s, items, bracket)
+	_: kept_result(s)
+}
+# `print e` (spaced or `print(e)`) as `result = e; print result`; a block `{x = 2; print x}` or group `(print "ho")` by
+# its last statement
+valued_group(s: Node, items: list, bracket: Bracket): Node := {
+	if bracket != Bracket.Square and #items == 2 and items#1 == symbol("print") { return List([kept_result(items#2), group_like(s, [items#1, symbol(last_value_word)])], Bracket.Round, Separator.Semicolon) }
+	if #items > 0 and (bracket == Bracket.Curly or (bracket == Bracket.Round and #items == 1)) { return group_like(s, items[0 ..< #items - 1] + [valued(items.last)]) }
+	kept_result(s)
+}
+kept_result(value: Node): Node := Key(symbol(last_value_word), Op.Assign, value)

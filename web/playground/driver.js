@@ -9,6 +9,7 @@
 const COMPILER_FOLDER = "web/playground/warp-lib";
 const COMPILER_LIBRARY = `${REPOSITORY_DIRECTORY}/${COMPILER_FOLDER}`;
 const COMPILER_URL = `../../${COMPILER_FOLDER}/warp.wasm`;
+const SOURCES_URL = `../../${COMPILER_FOLDER}/sources.json`; // its library sources in one file (build.sh write_sources)
 const COMPILED_PATH = "/tmp/warp-program.wasm";
 // the program typed in the page when it is no sample's file: at the repository root, as `warp playground.warp` there
 const TYPED_FILE = "playground.warp";
@@ -20,8 +21,10 @@ const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
 const TEST_RUN_ENVIRONMENT = ["WARP_VALUE_AS_DATA=1", "WARP_HINTS=0"];
 const compilerEnvironment = () => self.valueAsData ? [...COMPILER_ENVIRONMENT, ...TEST_RUN_ENVIRONMENT] : COMPILER_ENVIRONMENT;
 // a program runs as `warp <file>` runs it (core/native/warp.warp), which names the program (lib/storage.warp keeps its
-// tables beside it) and serves its routes: here the page's requests (lib/web.warp)
-const programEnvironment = file => [...ENVIRONMENT, "WARP_SERVE=page", `WARP_PROGRAM=${file}`];
+// tables beside it) and serves its routes: here the page's requests (lib/web.warp); a test run (valueAsData) does
+// neither, as core/native/tests.warp's `warp run <code>` does not: a program with routes gives its value, tables stay
+// in memory
+const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page", `WARP_PROGRAM=${file}`])];
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
@@ -29,10 +32,18 @@ const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
 let compilerModule; // warp.wasm compiled once; each compile gets a fresh instance, as each native run a fresh store
 
 async function loadDriverCompiler(progress = () => {}) {
-	const response = await fetch(COMPILER_URL);
+	const [response] = await Promise.all([fetch(COMPILER_URL), preloadedSources()]);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
-	const bytes = await progress(response);
-	compilerModule = await WebAssembly.compile(bytes);
+	// compiled as it streams in, so Chrome and Safari keep its machine code with the cached response: a second visit
+	// skips the compile; the clone feeds the progress. A server without the application/wasm type compiles the bytes
+	const [compiled, bytes] = await Promise.all([WebAssembly.compileStreaming(response.clone()).catch(() => null), progress(response)]);
+	compilerModule = compiled ?? await WebAssembly.compile(bytes);
+}
+
+async function preloadedSources() {
+	const response = await fetch(SOURCES_URL);
+	if (!response.ok) return console.warn(`${SOURCES_URL}: HTTP ${response.status}, each library source is fetched on its own; build it with web/playground/build.sh`);
+	preloadSources(await response.json(), COMPILER_FOLDER);
 }
 
 // the folder of a path, "." for a bare name
@@ -109,6 +120,98 @@ function raisedMessage(exports, failure) {
 	return sentence || String(failure.message ?? failure);
 }
 
+// parse_code(t) (driver.warp code_parsed): warp.wasm parses t (its parse-code command, the compiler's own parser) and
+// the tree it encodes is built again in the program, node by node through its builders
+const PARSED_CODE_PATH = "/tmp/warp-parsed.code";
+const FIELD_END = 1; // driver.warp FIELD_END
+const ENCODED = { empty: 101, yes: 84, no: 70, int: 105, float: 102, codepoint: 99, symbol: 115, error: 120, key: 107, list: 108 };
+const codeParsed = (program, code) => codeParsedFrom(program, guestText(program, code));
+function codeParsedFrom(program, code) {
+	let said = "";
+	const { status } = compilerRan(["parse-code", code, PARSED_CODE_PATH], text => said += text);
+	const encoding = programFiles.written.get(PARSED_CODE_PATH);
+	programFiles.written.delete(PARSED_CODE_PATH);
+	if (status !== 0 || !encoding) return newGuestError(program, said.trim() || `parse-code wrote nothing (status ${status})`);
+	return codeBuilt(program, typeof encoding === "string" ? utf8.encode(encoding) : encoding, { at: 0 });
+}
+// eval_code(t) (decision N31, driver.warp code_evaluated): warp.wasm compiles t as a program of its own, beside the
+// typed program; it runs with its value printed as data after the value mark, what it printed before that goes on to
+// the run's output, and the value is built again in the program as parse_code builds a tree. A text that fails to
+// compile or run gives an Error saying why
+const EVAL_FILE = "playground.eval.warp";
+const VALUE_MARK = "§warp value§\n"; // core/emitter/emitter.warp VALUE_MARK, on a line of its own
+function codeEvaluated(program, code, hooks) {
+	const { failure, printed, data } = ranAsData(guestText(program, code));
+	if (failure !== undefined) return newGuestError(program, `eval: ${failure}`);
+	hooks.print?.(printed, STDOUT);
+	return codeParsedFrom(program, data);
+}
+
+// the code compiled and run apart from the page's program, its value as data (WARP_VALUE_AS_DATA, no serving):
+// {printed, data} before and after the value mark, or {failure}
+function ranAsData(code) {
+	let printed = "";
+	const capture = text => printed += text;
+	const asData = self.valueAsData;
+	self.valueAsData = true; // compilerEnvironment, programEnvironment
+	try {
+		return withSource(code, EVAL_FILE, () => {
+			const compiled = compiledProgram(EVAL_FILE, capture);
+			const { status, said } = compiled.failure ? { status: FAILURE_STATUS, said: compiled.failure } : programRan(compiled.module, EVAL_FILE, { print: capture });
+			const mark = printed.indexOf(VALUE_MARK);
+			if (status !== 0 || mark < 0) return { failure: said || printed };
+			return { printed: printed.slice(0, mark), data: printed.slice(mark + VALUE_MARK.length) };
+		});
+	} finally {
+		self.valueAsData = asData;
+	}
+}
+
+// the field at `cursor.at`, up to its FIELD_END, the cursor past it
+function encodedField(encoding, cursor) {
+	const end = encoding.indexOf(FIELD_END, cursor.at);
+	const field = utf8Decoder.decode(encoding.subarray(cursor.at, end));
+	cursor.at = end + 1;
+	return field;
+}
+// the node encoded at the cursor, built in the program (driver.warp code_built)
+function codeBuilt(program, encoding, cursor) {
+	const tag = encoding[cursor.at++];
+	if (tag === ENCODED.empty) return program.new_empty();
+	if (tag === ENCODED.yes || tag === ENCODED.no) return program.new_bool(tag === ENCODED.yes ? 1n : 0n);
+	const field = encodedField(encoding, cursor);
+	if (tag === ENCODED.int) return program.new_int(BigInt(field));
+	if (tag === ENCODED.float) return program.new_float(Number(field));
+	if (tag === ENCODED.codepoint) return program.new_codepoint(Number(field));
+	if (tag === ENCODED.symbol) return newGuestBytes(program, field, "new_symbol");
+	if (tag === ENCODED.error) return newGuestError(program, field);
+	if (tag === ENCODED.key) {
+		const key = codeBuilt(program, encoding, cursor);
+		return program.new_spelled_key(key, newGuestText(program, field), codeBuilt(program, encoding, cursor));
+	}
+	if (tag === ENCODED.list) {
+		const [bracket, separator] = [encodedField(encoding, cursor), encodedField(encoding, cursor)];
+		const items = Array.from({ length: Number(field) }, () => codeBuilt(program, encoding, cursor));
+		const cells = items.reduceRight((rest, item) => program.new_list(item, rest, SQUARE_BRACKET), null);
+		return program.new_spelled_list(cells, newGuestText(program, bracket), newGuestText(program, separator));
+	}
+	return newGuestText(program, field);
+}
+
+// a timer's firing (lib/timers.warp): the program's timer_fired(id), what its block prints going out as it goes;
+// { value } the program's value anew by its VALUE_ANEW_EXPORT (main's last expression again, as _start shows it),
+// { failure } the sentence its trap or raise says, as a run's (raisedMessage)
+const VALUE_ANEW_EXPORT = "page_value";
+function timerFired(holder, id) {
+	const { exports } = holder;
+	try {
+		exports.timer_fired(BigInt(id));
+		return exports[VALUE_ANEW_EXPORT] ? { value: shownValue(exports, exports[VALUE_ANEW_EXPORT]()) } : {};
+	} catch (failure) {
+		return { failure: failure instanceof WasiExit ? `the timer's block exited (status ${failure.code})` : raisedMessage(exports, failure) };
+	}
+}
+
 // the host words warp.wasm calls itself (driver.warp answered_word): no window, no system values, paths as given
 function compilerHostWords(exports) {
 	return {
@@ -151,13 +254,17 @@ function ranSaying(exports, print, exitCode, valued = false) {
 	return { status, said: said.trimEnd(), value, result };
 }
 
+// warp.wasm run with the words after its own path (driver.warp file_ran), each run a fresh instance: { status, said }
+function compilerRan(words, print) {
+	let exports;
+	const wasi = wasiImports(() => exports.memory, [COMPILER_LIBRARY + "/warp.wasm", ...words], print, programFiles, compilerEnvironment());
+	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
+	return ranSaying(exports, print);
+}
+
 // warp.wasm compiles the file: { module } the bytes it wrote, else { failure } what it said
 function compiledProgram(file, print) {
-	let exports;
-	const args = [COMPILER_LIBRARY + "/warp.wasm", file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`];
-	const wasi = wasiImports(() => exports.memory, args, print, programFiles, compilerEnvironment());
-	exports = new WebAssembly.Instance(compilerModule, withWasi(compilerHostWords(() => exports), wasi)).exports;
-	const { status, said } = ranSaying(exports, print);
+	const { status, said } = compilerRan([file, COMPILED_PATH, folderOf(file), COMPILER_LIBRARY, `${COMPILER_LIBRARY}/runtime.wasm`], print);
 	const module = programFiles.written.get(COMPILED_PATH);
 	programFiles.written.delete(COMPILED_PATH);
 	if (status !== 0 || !module?.length) return { failure: said || `warp.wasm wrote no module of ${file} (status ${status})` };
@@ -166,14 +273,14 @@ function compiledProgram(file, print) {
 
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
-	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks };
-	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, programEnvironment(file));
+	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: programEnvironment(file) };
+	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment);
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(module, programImports(holder, hooks)), wasi)).exports;
+		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(bytes, programImports(holder, hooks)), wasi)).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
@@ -188,23 +295,91 @@ function programRan(bytes, file, hooks) {
 function evaluatedNatively(code, file, hooks) {
 	const source = file || TYPED_FILE;
 	return withSource(code, source, () => {
-		const compiled = compiledProgram(source, hooks.print);
-		if (compiled.failure) return report(compiled.failure, FAILURE_STATUS);
+		const warnings = [];
+		const compiled = compiledProgram(source, withWarnings(code, warnings, hooks.print));
+		if (compiled.failure) return { ...report(compiled.failure, FAILURE_STATUS), warnings };
 		hooks.module?.(compiled.module);
 		const { status, said, value, holder } = programRan(compiled.module, source, hooks);
 		const html = status === 0 ? pageHtml(holder) : undefined;
-		if (html !== undefined && holder.exports.page_event) hooks.listen?.(holder, pageEventsOf(html));
-		return { ...report(status === 0 ? value : said, status), html };
+		const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
+		// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
+		if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
+		return { ...report(status === 0 ? value : said, status), html, warnings };
 	});
+}
+
+// ---- a compile's warnings (core/analysis/diagnostics.warp said_text): `warning: <message> at [file:]line:column;
+// fix: <fix>` on stderr, each the report's warning, its fix an "I meant: …" button (playground.js fixButtons)
+
+const WARNING_LINE = /^warning: (.*?)(?: at (?:[^ ]*:)?(\d+):(\d+))?(?:; fix: (.*))?$/;
+const FIX_ALTERNATIVES = " or "; // warnings.data: "{as_sum} or {as_text}"
+
+// the print of a compile, its warning lines collected into `warnings` instead of printed
+function withWarnings(code, warnings, print) {
+	return (text, stream) => {
+		if (stream !== STDERR) return print(text, stream);
+		const rest = text.split("\n").filter(line => {
+			const warning = warningOf(code, line);
+			if (warning) warnings.push(warning);
+			return !warning;
+		}).join("\n");
+		if (rest.trim()) print(rest, stream);
+	};
+}
+
+// a warning line as the report has it, null for another line
+function warningOf(code, line) {
+	const match = line.match(WARNING_LINE);
+	if (!match) return null;
+	const [, message, row, column, fix] = match;
+	const at = row ? { line: Number(row), column: Number(column) } : { line: 0, column: 0 };
+	const fixes = fix ? fix.split(FIX_ALTERNATIVES).map(meant => fixOf(code, message, at, meant)) : [];
+	return { level: "normal", message, ...at, fix, fixes };
+}
+
+// a fix replaces what the warning names, the longest start of its message written at its place (`a-b reads as a - b`
+// at a-b, `"3" + 4 joins the texts` at "3" + 4), everywhere the code writes it so (a kebab key and its read alike):
+// {label, meaning, written, start, edits}, the last edit first; start null when the code does not show it there (the
+// button then stays disabled)
+function fixOf(code, message, at, meant) {
+	const start = utf16Index(code, at);
+	const rest = start === null ? "" : code.slice(start);
+	let written = message;
+	while (written && !rest.startsWith(written)) written = written.slice(0, -1);
+	written = written.trimEnd();
+	if (!written) return { label: `I meant: ${meant}`, meaning: message, written: message, start: null, edits: [] };
+	const edits = placesOf(code, written).reverse().map(place => ({ start: place, end: place + written.length, replacement: meant }));
+	return { label: `I meant: ${meant}`, meaning: message, written, start, edits };
+}
+
+// where the code writes the text as a whole, not inside a longer name
+const NAME_CHARACTER = /[\p{L}\p{N}_-]/u;
+function placesOf(code, text) {
+	const places = [];
+	for (let place = code.indexOf(text); place >= 0; place = code.indexOf(text, place + text.length)) {
+		const whole = !(NAME_CHARACTER.test(code[place - 1] ?? "") && NAME_CHARACTER.test(text[0])) &&
+			!(NAME_CHARACTER.test(code[place + text.length] ?? "") && NAME_CHARACTER.test(text.at(-1)));
+		if (whole) places.push(place);
+	}
+	return places;
+}
+
+// the UTF-16 index of a line and column in characters (as the compiler counts), null outside the code
+function utf16Index(code, { line, column }) {
+	const lines = code.split("\n");
+	if (line < 1 || line > lines.length) return null;
+	const before = lines.slice(0, line - 1).reduce((sum, text) => sum + text.length + 1, 0);
+	return before + Array.from(lines[line - 1]).slice(0, column - 1).join("").length;
 }
 
 // ---- a page of markup (lib/markup.warp, card markup-keeps): page_render(value) is the HTML of main's value, each
 // handler numbered anew from 1 as data-warp-<event>="<n>"; page_event(n, detail) runs handler n of the last render
 
-// the HTML of the run's value by its page_render, undefined for a program without one
+// the HTML of the run's value by its page_render (a text, the raw array as show gives one), undefined for a program
+// without one
 function pageHtml(holder) {
 	const render = holder?.exports.page_render;
-	return render && holder.value != null ? guestText(holder.exports, render(holder.value)) : undefined;
+	return render && holder.value != null ? textOfArray(render(holder.value)) : undefined;
 }
 
 // the markup's attributes of data-warp-… that name no handler (markup.js)
