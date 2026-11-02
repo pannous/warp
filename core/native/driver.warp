@@ -62,9 +62,6 @@ PARSE_CODE_WORD = 13
 REAL_PATH_WORD = 14
 SIGNAL_LISTEN_WORD = 15
 EVAL_CODE_WORD = 16
-# an eval's program prints its value as data after a line of the mark (core/emitter/emitter.warp VALUE_MARK)
-VALUE_AS_DATA_VARIABLE = "WARP_VALUE_AS_DATA"
-VALUE_MARK = "§warp value§"
 # the end of a field in warp.wasm's parse-code encoding (core/parsing/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -259,10 +256,22 @@ failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 	if raised.length > 0 { complain(raised) }
 	exit(1)
 }
+# a run's stdout and stderr: this process's, else the file `output`
+output_to(config: handle, output: text): nothing := {
+	if output.length == 0 {
+		wasi_config_inherit_stdout(config)
+		return wasi_config_inherit_stderr(config)
+	}
+	wasi_config_set_stdout_file(config, output)
+	wasi_config_set_stderr_file(config, output)
+}
 # what a run that failed says, as failed_raising says it without ending this process: "" for an exit with status 0
 failure_said(error: handle, trap: pointer, raised: text): text := {
 	status = allocate(4)
-	if error != 0 and wasmtime_error_exit_status(error, status) { return if word_at(status).value == 0 then "" else joined("exit status ", text_of(word_at(status).value as i64)) }
+	if error != 0 and wasmtime_error_exit_status(error, status) {
+		if word_at(status).value == 0 { return "" }
+		return joined("exit status ", text_of(word_at(status).value as i64))
+	}
 	if raised.length > 0 { return raised }
 	message = allocate(VECTOR_BYTES)
 	if error != 0 { wasmtime_error_message(error, message) } else { wasm_trap_message(long_at(trap).value, message) }
@@ -605,13 +614,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	config = wasi_config_new()
 	wasi_config_set_argv(config, given.count, given.pointers)
 	wasi_config_inherit_stdin(config)
-	if output.length == 0 {
-		wasi_config_inherit_stdout(config)
-		wasi_config_inherit_stderr(config)
-	} else {
-		wasi_config_set_stdout_file(config, output)
-		wasi_config_set_stderr_file(config, output)
-	}
+	output_to(config, output)
 	wasi_config_inherit_env(config)
 	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
 	wasi_config_preopen_dir(config, ".", ".", yes)
@@ -977,27 +980,36 @@ code_evaluated(caller: handle, context: handle, given: pointer, result: pointer)
 	added(compiling, ".")
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
-	setenv(c_string(VALUE_AS_DATA_VARIABLE), c_string("1"), 1)
+	setenv(value_as_data_variable(), c_string("1"), 1)
 	failure = run_into(read_file(compiler_path()), compiling, machine_code_file(compiler_path(), COMPILER_GC_HEAP_BYTES), COMPILER_GC_HEAP_BYTES, printed)
-	unsetenv(c_string(VALUE_AS_DATA_VARIABLE))
+	unsetenv(value_as_data_variable())
 	if failure.length == 0 { failure = run_into(read_file(module), program_arguments(source, arg_count()), "", PROGRAM_GC_HEAP_BYTES, printed) }
 	output = read_file(printed)
 	unlink(source)
 	unlink(module)
 	unlink(printed)
-	mark = text_found(output, VALUE_MARK)
+	mark = text_found(output, value_mark())
 	if failure.length > 0 or mark < 0 {
-		said = if failure.length > 0 then failure else output
-		guest_text_of(caller, context, joined("eval: ", said), result)
+		if failure.length == 0 { failure = output }
+		guest_text_of(caller, context, joined("eval: ", failure), result)
 		return guest_call(caller, context, "error_of", result, 1, result)
 	}
-	write(text_from(output.address, mark as u32))
-	value_at = mark + VALUE_MARK.length + 1
-	code_parsed_from(caller, context, text_from(output.address + value_at as i32, (output.length as i64 - value_at) as u32), result)
+	before: u32 = mark as u32
+	fd_write(1, text_from(output.address, before), 1, allocate(4))
+	start: u32 = before + value_mark().length + 1
+	code_parsed_from(caller, context, text_from(output.address + start as i32, output.length - start), result)
 }
+# an eval's program prints its value as data after a line of the mark (core/emitter/emitter.warp VALUE_MARK); a
+# primitive program's texts are words, not globals
+value_as_data_variable(): pointer := c_string("WARP_VALUE_AS_DATA")
+value_mark(): text := "§warp value§"
 # where `part` first starts in t, -1 when nowhere
 text_found(t: text, part: text): i64 := {
-	for at in 0..(t.length as i64 - part.length as i64 + 1) { if memcmp(t.address + at as i32, part.address, part.length) == 0 { return at } }
+	at = 0
+	while at + part.length <= t.length {
+		if memcmp(t.address + at, part.address, part.length) == 0 { return at as i64 }
+		at = at + 1
+	}
 	-1
 }
 # parse_code(t): warp.wasm parses t (its parse-code command, the compiler's own parser) and the tree is built again in
