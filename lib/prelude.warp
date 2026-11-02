@@ -184,6 +184,23 @@ count_in(y, x) := if y is text then count_of(y, "" + x) else count_item(y, x)
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
 first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
+// `sort(words, {it.length})`: the items ordered by the key the function gives each (lib/sugar/calls.warp)
+sorted_by_key(xs: list, key: function): list := list_sorted_by(xs, xs.map(key))
+// `sort(xs, (a, b) => a > b)`: the items in the order the function of two gives, yes where a goes before b; equal
+// items keep their order (a merge sort)
+sorted_in_order(xs: list, before: function): list := {
+	if #xs < 2 { return xs }
+	middle = int(#xs / 2)
+	left = sorted_in_order([xs#i for i in 1 to middle], before)
+	right = sorted_in_order([xs#i for i in middle + 1 to #xs], before)
+	out = []
+	i = 1
+	j = 1
+	while i <= #left or j <= #right {
+		if j > #right or (i <= #left and not before(right#j, left#i)) { out += [left#i]; i += 1 } else { out += [right#j]; j += 1 }
+	}
+	out
+}
 // x rounded to that many digits after the point
 round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may

@@ -381,7 +381,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, page_valued: page_valued, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check, bare_fields_read: bare_fields_read}
+rule_words = {shorthand_closure: shorthand_closure, class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, page_valued: page_valued, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check, bare_fields_read: bare_fields_read}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
@@ -517,4 +517,15 @@ law_variables(n: Node, found: list): list := {
 	read_items = if #items > 1 and items#1 is symbol then items[1 ..] else items
 	for item in read_items { found = law_variables(item, found) }
 	found
+}
+# `{$0 > $1}` → `(shorthand·0, shorthand·1) => {shorthand·0 > shorthand·1}`: a block reading Swift's shorthand
+# arguments as the lambda of as many as it reads, up to the highest, renamed since `$0` in a rule's result would be a
+# hole; ø for a block reading none
+shorthand_closure(block: Node): any := {
+	count = 0
+	for at in 0 to 9 { if mentions(block, "$" + at) { count = at + 1 } }
+	if count == 0 { return ø }
+	body = block
+	for at in 0 to count - 1 { body = renamed(body, "$" + at, symbol("shorthand·" + at)) }
+	Key(List([symbol("shorthand·" + at) for at in 0 to count - 1], Bracket.Round, Separator.Comma), Op.Arrow, body)
 }
