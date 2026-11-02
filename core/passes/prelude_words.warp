@@ -624,12 +624,17 @@ global_word_modules(program: Node, own: any, used: list): list := {
 # word the program names free (never a member's, `c.pi`) that neither it, the prelude nor a module it uses defines,
 # by the index `warp rebuild` writes beside the prebuilt modules (write_word_index); a module's `global` word is its
 # own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
+# how a program writes an indexed word: a glyph operator's function by its glyph, operator_± as ±
+spelling_of(word: text): text := {
+	glyph = word.remove_prefix(OPERATOR_FUNCTION_PREFIX)
+	if glyph != word and is_operator_glyph(glyph) then glyph else word
+}
 implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 	index = word_index(index_file)
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
-	candidates = index.keys.filter(word => mentions_word(source, word))
+	candidates = index.keys.filter(word => mentions_word(source, spelling_of(word)))
 	if #candidates == 0 { return [] }
 	program = interpolation(plain_node(parsed(source)))
 	own = own_heads(program)
