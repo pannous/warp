@@ -111,3 +111,7 @@ Cover map construction, mapping and fallback outcomes before adding generic sign
 ## library-typed map entries
 
 Cover entry lists and mutating helpers before typing their generic signatures; verify direct outcomes and merged-main smoke.
+
+# library-typed markup slice
+
+Check markup rendering outcomes before and after annotating the public renderer; preserve its generic input domain and existing tests.
