@@ -286,7 +286,7 @@ html_holds_pairs(value: any): bool := {
 	false
 }
 
-html_attribute(item: any) := {
+html_attribute(item: any): text := {
 	let name = html_attribute_name(html_name(item))
 	let value = html_content(item)
 	if html_is_declarations(value) { return " " + name + "=\"" + html_escaped(html_css(value)) + "\"" }
@@ -314,15 +314,15 @@ html_is_declarations(value: any): bool := {
 }
 
 // `color: red; padding: 8px`: camelCase names in kebab-case, numbers in pixels unless the property has no unit
-html_css(value: any) := join([html_declaration(item) for item in html_items(value)], "; ")
+html_css(value: any): text := join([html_declaration(item) for item in html_items(value)], "; ")
 
-html_declaration(item: any) := {
+html_declaration(item: any): text := {
 	let property = html_kebab(html_name(item))
 	property + ": " + html_css_value(property, html_content(item))
 }
 
 // a number in pixels unless the property has no unit
-html_css_value(property: any, value: any) := {
+html_css_value(property: any, value: any): text := {
 	if value is number and not contains(html_unitless_properties, property) { return str(value) + "px" }
 	html_attribute_value(value)
 }
@@ -344,14 +344,14 @@ html_scoped(selectors: any, scope: any) := {
 }
 
 // CSS names are ASCII: lowered by hand, so a page carries no Unicode case table (card web-bundle-growth)
-html_kebab(name: any) := {
+html_kebab(name: any): text := {
 	var out = ""
 	for c in name { out = if c >= 'A' and c <= 'Z' then out + "-" + chr(ord(c) - ord('A') + ord('a')) else out + c }
 	out
 }
 
 // `class:['btn' 'btn-info']` is the attribute `btn btn-info`
-html_attribute_value(value: any) := {
+html_attribute_value(value: any): text := {
 	if not html_is_group(value) { return html_plain(value) }
 	join([html_plain(item) for item in value], " ")
 }
