@@ -50,9 +50,6 @@ rewrite ($b $x) => (it => $b) $x where $b is function_block
 # `{$0 > $1}` is `($0, $1) => {$0 > $1}` (wiki/reference.md)
 rewrite $f($a..., $b) => $f($a..., $c) where $b is block and $c = shorthand_closure($b)
 rewrite ($x = $b) => ($x = $c) where $b is block and $c = shorthand_closure($b)
-# Ruby's and Swift's block given to a method, `xs.map { |x| x + 1 }`, `xs.sum { |x| x * 2 }` (card emitter-refuses-block):
-# the block's one lambda (the parser reads the bars, `{ |a, b| a + b }` too) is the call's last argument, `xs.map(x => x + 1)`
-rewrite ($x.$f $b) => $x.$f($l) where $f is symbol and $b is block and $l = block_lambda($b)
 # `sort(xs, (a, b) => a > b)`: a function of two items orders them, yes where the first goes before; any other
 # function, `sort(words, {it.length})`, gives the key each item sorts by (guide "Closures")
 rewrite sort($xs, ($a, $b) => $body) => sorted_in_order($xs, ($a, $b) => $body)
