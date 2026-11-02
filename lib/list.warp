@@ -5,12 +5,12 @@ zip(a: any, b: any): list := [[a#i, b#i] for i in 1 to min(count(a), count(b))]
 enumerate(xs: any): list := [[i, xs#i] for i in 1 to count(xs)]
 product(xs: any): any := fold(xs, 1, *)
 // loops, not slices: the type model's W0 (tests/types/test_type_model.rs) reads take and drop, and has no slices
-take(xs, n) := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
-drop(xs, n) := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
-flatten(xs) := { out = []; for x in xs { out += x }; out }
-chunk(xs, n) := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
+take(xs: any, n: any): list := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
+drop(xs: any, n: any): list := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
+flatten(xs: any): list := { out = []; for x in xs { out += x }; out }
+chunk(xs: any, n: any): list := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
 window(xs, n) := [xs[i:i + n] for i in 0 to count(xs) - n]
-median(xs) := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
+median(xs: any): number := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
 flat_map(xs, f) := { out = []; for x in xs { out += f(x) }; out }
 // [kept, rest]: the elements f holds for, and the others
 partition(xs, f) := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
@@ -25,34 +25,34 @@ sum_by(xs, f) := sum([f(x) for x in xs])
 count_by(xs, f) := count([x for x in xs if f(x)])
 // the elements moved n places to the left
 rotate(xs, n) := { k = n % count(xs); xs[k:] + xs[:k] }
-interleave(a, b) := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
+interleave(a: any, b: any): list := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
 // without runs of equal neighbours
-dedupe(xs) := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
+dedupe(xs: any): list := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
 // the running results of f: scan([1, 2, 3], 0, (a, b) => a + b) is [1 3 6]
-scan(xs, start, f) := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
-take_while(xs, f) := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
-drop_while(xs, f) := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
+scan(xs: any, start: any, f: any): list := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
+take_while(xs: any, f: any): list := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
+drop_while(xs: any, f: any): list := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
 // the index (from 0, like xs[i]) of the greatest element, the first of equal ones
-argmax(xs) := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
-argmin(xs) := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
+argmax(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
+argmin(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
-pairwise(xs) := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
+pairwise(xs: any): list := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
 // [the first n, the rest]
-split_at(xs, n) := [take(xs, n), drop(xs, n)]
+split_at(xs: any, n: any): list := [take(xs, n), drop(xs, n)]
 // every pair of an element of a and one of b
 cartesian(a, b) := [[x, y] for x in a for y in b]
 // the most frequent element, the first of equally frequent ones
-mode(xs) := { best = xs#1; most = 0; for x in xs { n = count_by(xs, y => y == x); if n > most { best = x; most = n } }; best }
+mode(xs: any): any := { best = xs#1; most = 0; for x in xs { n = count_by(xs, y => y == x); if n > most { best = x; most = n } }; best }
 // the population variance and standard deviation
-variance(xs) := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
-stdev(xs) := sqrt(variance(xs))
+variance(xs: any): number := { m = mean(xs); sum_by(xs, x => (x - m) * (x - m)) / count(xs) }
+stdev(xs: any): number := sqrt(variance(xs))
 // the position (from 1, like index_of) of the first element f holds for, 0 when none does
 index_where(xs, f) := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
-last_n(xs, n) := drop(xs, max(count(xs) - n, 0))
+last_n(xs: any, n: any): list := drop(xs, max(count(xs) - n, 0))
 // n copies of value: fill(3, 0) is [0 0 0]
-fill(n, value) := filled_list(n, value)
+fill(n: any, value: any): list := filled_list(n, value)
 // [smallest, greatest]
-minmax(xs) := [min(xs), max(xs)]
+minmax(xs: any): list := [min(xs), max(xs)]
 // Python's list methods (card python-stdlib): extend appends each of ys in place, index is the position from 0
 extend(xs, ys) := { for y in ys { xs.append(y) }; xs }
 // JavaScript's concat: a new list of xs then ys
