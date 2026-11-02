@@ -1,0 +1,4 @@
+# a prelude word reached inside a block or a body, as at the top (card prelude-word-in-block)
+'if yes {sum [1 2]}'	3
+'x = {sum [1 2]}; x'	3
+'def total(xs...){sum xs}; total(1,2,3)'	6
