@@ -77,3 +77,6 @@ Cover the foreign-spellings PHP compatibility functions before adding non-narrow
 
 ## library-typed R slice
 Cover foreign-spellings R compatibility functions before adding non-narrowing signatures; verify direct behavior and module build.
+
+## library-typed list sequence slice
+Cover heterogeneous take, drop, flatten and chunk outcomes before adding non-narrowing signatures; verify the module build and smoke.
