@@ -29,6 +29,13 @@ pack() {
 # the self-tested marks of this hash (rebuild.sh self_passed: <store>/self-tested/<baked hash>, its line naming the hash)
 marks=()
 for mark in "$warp_store"/self-tested/*; do [ -f "$mark" ] && [ "$(cut -d' ' -f1 "$mark")" = "$hash" ] && marks+=("$mark"); done
+# and the mark of its code (the baked hash its build recorded) when this hash's own self test passed (self-check.sh
+# stage two, <entry>/stage-two.passed) though the mark names the hash first self-tested: a lib/-only change, its
+# warp-self.wasm promoted by that mark (rebuild.sh hit-baked; card publish-self-mark)
+baked=$(awk '$1=="baked"{print $2; exit}' "$entry/warp.record/inputs.txt" 2>/dev/null)
+mark=$warp_store/self-tested/$baked
+if [ -n "$baked" ] && [ -f "$mark" ] && [ "$(cut -d' ' -f1 "$entry/stage-two.passed" 2>/dev/null)" = "$hash" ] &&
+	[[ " ${marks[*]-} " != *" $mark "* ]]; then marks+=("$mark"); fi
 copy_into() { local folder=$1 f; shift; for f in "$@"; do [ -f "$entry/$f" ] || continue; mkdir -p "$folder/$(dirname "$f")"; cp "$entry/$f" "$folder/$f"; [ -f "$entry/$f.inputs" ] && cp "$entry/$f.inputs" "$folder/$f.inputs"; done; }
 mkdir -p "$scratch/main/$hash"
 (cd "$entry" && copy_into "$scratch/main/$hash" warp.wasm warp-self.wasm runtime.wasm modules/*.wasm modules/words.tsv)
