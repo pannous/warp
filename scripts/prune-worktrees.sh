@@ -16,7 +16,7 @@
 #   prune-worktrees.sh            prune, print what it did
 #   prune-worktrees.sh --dry-run  only print what it would do
 # Run every 12 hours by cron.
-WARP=/Users/me/dev/angles/warp
+WARP=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 # worktrees live on the Worktrees volume (notes/churn_volume.md); integrator/ there is a plain folder, not a worktree
 WORKTREE_ROOTS=(/Volumes/Worktrees)
 DONOR=/Volumes/Worktrees/warp  # named after the project: the volume may hold other projects
@@ -27,7 +27,7 @@ KEPT_BRANCHES=(main HEAD)
 KEPT_WORKTREES=(/Volumes/Worktrees/me)  # the user's own worktree: never removed, its branch never deleted 
 STALE_HOURS=${STALE_HOURS:-12}
 SUPERVISOR_TMUX=warp-supervisor
-TODO=/Users/me/dev/bin/todo  # cron's PATH lacks ~/dev/bin
+TODO=$HOME/dev/bin/todo  # cron's PATH lacks ~/dev/bin
 RESULT_BRANCHES='^(cloud-(jobs|results)/|vendor$)'  # test-lane results and the cloud lane's vendored crates (scripts/cloud-test.sh), never merged
 GH_TOKEN=${GH_TOKEN:-$(cat ~/.config/gh/cron-token 2>/dev/null)}; export GH_TOKEN
 

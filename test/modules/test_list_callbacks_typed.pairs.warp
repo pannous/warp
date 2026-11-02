@@ -1,0 +1,5 @@
+# Outcomes based on test/modules/test_std_list.pairs.warp and test/modules/test_std_list.warp
+'use list; flat_map([1, 2], x => [x, x])'	[1 1 2 2]
+'use list; partition([1, 2, 3], x => x > 1)'	[[2 3] [1]]
+'use list; zip_with([1, 2], [3, 4], (a, b) => a + b)'	[4 6]
+'use list; count_by([1, 2, 3], x => x > 1)'	2

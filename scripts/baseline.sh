@@ -7,8 +7,9 @@
 # and without any, test/results.txt at its
 # commit, said loudly, since that is tied to a commit, not to the compiler a branch was built on.
 set -uo pipefail
-WARP=${WARP:-/Users/me/dev/bin/warp}
-STORE=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}
+source "$(dirname "$0")/lib/platform.sh"
+WARP=${WARP:-$warp_binary}
+STORE=$warp_store
 FALLBACK=$(git rev-parse --show-toplevel)/test/results.txt
 
 compiler_hash=$(cut -d' ' -f1 "$(dirname "$(readlink -f "$WARP")")/warp.wasm.inputs" 2>/dev/null)
