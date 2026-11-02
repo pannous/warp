@@ -1,2 +1,2 @@
 # an implicit use is the standard module, never a same-named file beside the program (decision implicit-use-lib-first)
-'test/fixtures/implicit_lib/main.warp'	6
+'../fixtures/implicit_lib/main.warp'	6
