@@ -535,6 +535,9 @@ shadows(own: map, name: text, count: int): bool := {
 # the program with each function it defines named as one of `library` under its own name (name·own): its definition,
 # its value and the calls it takes; a call it doesn't take keeps the library's word
 with_own_words(program: Node, library: list): Node := {
+	# a library module being built exports its words under their written names, which a program linking it calls
+	# (units' sleep beside the prelude's, card program-file): the prelude's word is the one set aside, as kept() sets it
+	if module.relocating { return program }
 	heads = own_heads(program)
 	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX))
 	for name in owned {
