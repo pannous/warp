@@ -496,8 +496,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - page-ids: an id in the program's own markup is a name in scope (`who.focus()`); a clash with a variable or function is a compile error naming both; kebab ids resolve; `$who` is the element's value and `$who = "Ann"` writes it; dynamic ids via `element("user-name")`; `$` means something only in warp code.
 
 ## Signals, events and tasks
-- go-unified (revises the immediate `go f(x)`): `go f(x)` means `go { f(x) }`, a cooperative task that starts when main yields; tests relying on the immediate run are updated under this decision (card go-cooperative-task).
-- eval-explicit-with (refines N31): eval runs its text as a separate program; values go in explicitly, `eval("x*2", with: {x: 5})` → 10; bare `eval("x*2")` keeps refusing x as unknown; no caller scope (card eval-explicit-values).
+- go-unified (revises the immediate `go f(x)`): `go f(x)` means `go { f(x) }`, a cooperative task that starts when main yields; tests relying on the immediate run are updated under this decision (card go-go).
+- eval-explicit-with (refines N31): eval runs its text as a separate program; values go in explicitly, `eval("x*2", with: {x: 5})` → 10; bare `eval("x*2")` keeps refusing x as unknown; no caller scope (card eval-explicit-names).
 - P109 every variable can be watched; checks only where a listener watches. P111 writes through `global x` in called functions run the listeners. P112 no batching block; a multi-assignment notifies once.
 - P163 `emit alarm{…}` runs `on alarm` handlers and continues; `raise`/`throw` are errors; fire/trigger/signal alias emit with a note; `send alarm{…}` without `to` is emit. P202 an emit no handler receives warns.
 - P129 `broadcast v on "chat"` / `send v to "chat"` reach `on message from "chat"` machine-wide; P129b named events cross programs. P155 channels: `channel()` local, `channel "chat"` machine-wide.
@@ -529,7 +529,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-forms: packages.warp entries take short forms (`uniscript`, `name: owner/repo`, `"github:owner/repo"`); `version: latest` follows the default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## Web, markup and server
-- markup-auto-render (user, overrides keep-use-web-explicit): as in the Rust version, an HTML element in a program's result switches on render mode by itself, natively and in the page: no `use web`, no `render page` needed (card html-element).
+- markup-auto-render (user, overrides keep-use-web-explicit): as in the Rust version, an HTML element in a program's result switches on render mode by itself, natively and in the page: no `use web`, no `render page` needed (card html-render-mode).
 - instances-not-plural: no magic plural `counters` for a component's instances (the sugar goes); `Counter.instances` and `instances of Counter` (the same thing). The idea of `counters` meaning a list of Counter is too ambiguous and to be revisited (card counters-sugar-removal).
 - click-by-id (user): a program or test clicks an element through page-ids: `button{ id: "plus", "+1", on click {…} }; click plus` (page-ids rebuilt in warp: ids are names, `$who` values); click-by-label (night, Interviewer, the Rust mechanism the user remembered: src/web/headless.rs): `click "+1"`, `fill "name" with "Ada"`, `check text is "Add1"` act on the page `render` last showed, finding the element by trimmed text, then placeholder, aria-label, name, id, with a handler for that event; none → "no element showing "+1" handles click; the page: …".
 - web-words (user): a page program reads `use web; render page`; host plumbing words (page_render, page_event) never appear in programs, samples, docs or try lines; a simulated click gets a readable word (spelling to be proposed).
