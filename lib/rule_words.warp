@@ -35,7 +35,7 @@ kebab_difference(name: Node, program: Node): any := {
 		warn written + " is the name " + written + ", not " + difference + "; fix: " + difference
 		return ø
 	}
-	warn written + " reads as " + difference + ": " + parts.join(" and ") + " are bound, no name " + written + "; fix: " + difference
+	warn written + " reads as " + difference + ": " + parts.join(" and ") + " are bound, no name " + written + "; fix: " + parts.join("_") + " or " + difference
 	subtracted = symbol(parts#1)
 	for part in parts[1 ..] { subtracted = Key(subtracted, Op.Sub, symbol(part)) }
 	subtracted
