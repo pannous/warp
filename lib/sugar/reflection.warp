@@ -14,6 +14,11 @@ rewrite $f.description => $refused where $f is symbol and $f is function and $re
 rewrite $f.returns => $refused where $f is symbol and $f is function and $refused = misnamed($f, returns, return_type)
 rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)
 rewrite $f.definition => $d where $f is symbol and $f is function and $d = definition_text($f, $program, $source)
+rewrite $f.full => $d where $f is symbol and $f is function and $d = full_definition($f, $program, $source)
+# `p.fields`, `p.methods` of an instance the program makes of a class, `p = Point(3, 4)` (lib/rule_words.warp
+# instance_members)
+rewrite $p.fields => [$names...] where $p is symbol and $names = instance_members($p, fields, $source)
+rewrite $p.methods => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
 
 # `dir(time)`, `dir text`: the words of a module or type named as written (lib/rule_words.warp dir_words); `dir(v)` of
@@ -21,6 +26,7 @@ rewrite $f.dump => $refused where $f is symbol and $f is function and $refused =
 # dir_of_value). A program's own dir wins
 rewrite dir $x => dir($x)
 rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)
+rewrite dir($p) => [$names...] where $p is symbol and $names = instance_members($p, dir, $source)
 rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
 
 # `help(Point)`, `help(area)`, `help(sound)`: what a class, a function or a module is, as text (lib/rule_words.warp

@@ -1,0 +1,4 @@
+# p.fields, p.methods, dir(p) of an instance the program makes, f.full its doc and definition (card reflection-members)
+'class Point { x: int; y: int; length() := sqrt(x*x + y*y) }; p = Point(3, 4); p.fields == ["x", "y"] and p.methods == ["length"]'	'yes'
+'class Point { x: int; y: int; length() := sqrt(x*x + y*y) }; p = Point(3, 4); dir(p) == ["x", "y", "length"]'	'yes'
+'# the area\narea(w: int, h: int) := w * h\narea.full'	'# the area\narea(w: int, h: int) := w * h'
