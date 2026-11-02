@@ -31,3 +31,43 @@ Keep the retained experimental branch intact. Upgrade the root outcome to the mo
 # tests-leave
 
 Keep the sound overload assertions and generated WAV bytes; use per-process names and remove each recording after saving. Add an outcome test for save and cleanup, then run the focused tests and smoke.
+
+# library-typed
+
+Type one library module at a time, preserving accepted input domains and observable results. Start with hash; verify real text and byte-list hashes before and after adding result signatures. Leave the remaining modules on the card.
+
+# library-typed random slice
+
+Cover choice on text and lists, shuffle and sample on text lists, and repeatable seeding before adding signatures that preserve accepted inputs; verify the focused outcomes and smoke.
+
+# library-typed UTF-8 slice
+
+Cover empty and supplementary-plane UTF-8 conversions, then annotate their results while retaining the existing input domains. Compare focused outcomes with the stored baseline and run smoke before landing.
+
+# library-typed color slice
+
+Cover color conversions and opacity before declaring types; retain accepted numeric domains with `any`, and validate color results without changing existing tests.
+
+# library-typed color helpers
+
+Cover hexadecimal color output and padding before annotating helper results. Preserve the existing numeric inputs and verify the focused outcomes and smoke.
+
+# library-typed memory slice
+
+Cover linear-memory copying and half-open slices before typing their signatures; preserve accepted inputs and check the existing interop outcomes.
+
+# library-typed extrema slice
+
+Cover integer and fractional list extrema and variadic calls before annotating the remaining list helpers. Preserve accepted numeric values and verify focused outcomes and smoke.
+
+## library-typed i18n slice
+Add outcome coverage for documented translations and plural categories, then annotate results without narrowing message data. Verify the module build and smoke before landing.
+
+## library-typed JSON slice
+Cover JSON serialization and parsing outcomes, then annotate public results while preserving heterogeneous values; verify the module and smoke before landing.
+
+## library-typed matrix slice
+Cover matrix shape, transposition and multiplication, then add signatures without narrowing inputs; verify focused outcomes and the module build.
+
+## library-typed fast math slice
+Cover documented fast math approximations, then declare float results while retaining float inputs. Verify the module and focused outcomes before smoke and landing.

@@ -1,0 +1,4 @@
+# Linear-memory helpers retain their byte and count results
+'use memory; memory.copy([65, 66, 67], 60000)'	3
+'use memory; memory.copy([65, 66, 67], 60000); memory.slice(60000, 60003)'	[65 66 67]
+'use memory; memory.slice(60000, 60000)'	[]

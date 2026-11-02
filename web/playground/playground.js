@@ -644,14 +644,15 @@ function finish(run, report) {
 // evaluate code in the worker: the report of src/web/mod.rs evaluate plus `printed` [{text, stream}]. The worker runs one
 // program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several).
 // `file`: the program's path in the served repository (samples/…), so its `use` and file reads resolve beside it, as
-// the chosen sample's do (scripts/samples-web.sh runs every sample so)
-function evaluate(code, file = programFile()) {
-	const run = runs.then(() => runInWorker(code, file));
+// the chosen sample's do (scripts/samples-web.sh runs every sample so). `asData`: the program prints its value as data
+// after the value mark, as a native `warp test` run does (test_in_browser.py --tests)
+function evaluate(code, file = programFile(), { asData = false } = {}) {
+	const run = runs.then(() => runInWorker(code, file, asData));
 	runs = run.catch(() => {});
 	return run;
 }
 
-async function runInWorker(code, file) {
+async function runInWorker(code, file, asData) {
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
 		worker.terminate();
@@ -667,7 +668,7 @@ async function runInWorker(code, file) {
 		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
 		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover });
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file, arguments: programArguments(), liveHandover, asData });
 		liveHandover = {};
 	});
 }

@@ -3,12 +3,12 @@
 
 # todo Expose basic WASM primitives as small built-in functions peek poke
 
-def slice(start, end) {
+def slice(start: any, end: any): list {
 	bytes = []
 	for address in start until end { bytes = bytes + [memory_byte(address)] }
 	bytes
 }
-def copy(bytes, at) {
+def copy(bytes: any, at: any): int {
 	for i in 0 until count(bytes) { memory_set_byte(at + i, bytes[i]) }
 	count(bytes)
 }
