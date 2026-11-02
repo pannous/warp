@@ -1,0 +1,4 @@
+# a clock timer runs its block at that time of day in a page, once (at) or daily; natively none starts (card traps-day)
+'t = 0; at 9:00 { print 1 }; t'	0
+'n = 1; on every day at 9:30 { n = 2 }; n'	1
+'n = 1; on every day at 21:15 {}; n + 1'	2
