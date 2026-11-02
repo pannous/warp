@@ -1,0 +1,8 @@
+# an HTML form's POST (Content-Type application/x-www-form-urlencoded) gives its route the form's fields, `+` and
+# %XX decoded, and is answered 303 back to the page it was on (lib/web.warp, card urlencoded-post-body)
+'global got = ""; post "/items" { got = request.body.item }; use web; http_served("POST /items HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nitem=tea"); got'	'tea'
+'global got = ""; post "/items" { got = request.body.name }; use web; http_served("POST /items HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 19\r\n\r\nname=caf%C3%A9+noir"); got'	'café noir'
+'post "/items" { 1 }; use web; http_served("POST /items HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nReferer: /list\r\nContent-Length: 8\r\n\r\nitem=tea").split("\r\n")#1'	'HTTP/1.1 303 See Other'
+'post "/items" { 1 }; use web; http_served("POST /items HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nReferer: /list\r\nContent-Length: 8\r\n\r\nitem=tea").split("\r\n")#3'	'Location: /list'
+# a POST of any other body keeps its text, its route's answer as it gives it
+'post "/echo" { request.body }; use web; http_served("POST /echo HTTP/1.1\r\nContent-Type: text/plain\r\nContent-Length: 8\r\n\r\nitem=tea").split("\r\n\r\n")#2'	'item=tea'

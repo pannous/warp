@@ -119,7 +119,7 @@ gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a mea
   page clears the flag). index.html's `pageStarts` resolves only when no reload is coming (isolated, no service
   workers, already tried, registration failed, or 5 s passed), and playground.js initializes then (site-thread.js
   siteStarts likewise), so no Worker starts before the reload.
-- The page makes the task Workers (task-workers.js serveTaskWorkers, used by playground.js, tests.js,
+- The page makes the task Workers (task-workers.js serveTaskWorkers, used by playground.js and
   site-thread.js): Firefox's nested `new Worker` waits for the page's thread and stalled starts. The program's Worker
   asks {taskWorker: {id, url}}, gets a MessagePort to the new Worker, and asks {endTaskWorker: id} to stop one; the pool
   holds the ports. A check that leaves a page runs a program on it first (a run waits for taskPoolReady).
@@ -163,65 +163,19 @@ gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a mea
   (probes/firefox_jspi_terminate.html); test_in_browser.py expects the line for STOP_BUTTON.
 - Not ours: `TypeError … shiftKey … inject.js` in a user's Firefox is a browser extension's content script.
 
-## The test suite in the browser: `cargo browser-test [filter]`
-In CI only: outside CI (no `CI` variable) the runner starts no Chrome and prints "browser tests run in CI only", exit 0;
-the tour likewise (`--firefox` and `--serve` start no Chrome). Run them on GitHub: dispatch the Playground workflow on a
-branch. Its job browser-suite runs the whole suite beside the deploy, in four shards, on a branch only when it changes
-src/, tests/, web/ or the build.
-- The job clones each pinned package of packages.warp the way the native fetch does (the browser runs no git).
-- CI's Chrome has SwiftShader's software WebGPU adapter, whose sin and exp are off by up to 5.2e-5 (within WGSL's
-  2^-11): test-worker.js names the adapter as WARP_GPU_ADAPTER, and tests/common gpu_tolerance() loosens the @gpu
-  checks for a software adapter only.
-- One configuration (.cargo/config.toml): the alias builds tests/main.rs for wasm32-wasip1 with `--no-default-features`,
-  and the wasm32-wasip1 runner web/playground/test_in_browser.py serves the repository root plus the binary, opens
-  web/playground/tests.html in headless Chrome (agent-browser, session warp-browser-tests) and prints a libtest summary
-  (exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default: the cores), `WARP_BROWSER_TEST_SHARD` (`i/n`: every
-  n-th test from the i-th), `WARP_BROWSER_TEST_PORT` (default: a free port per run; a taken one fails naming its PID)
-  and `WARP_BROWSER_TEST_PER_WORKER` (tests.js TESTS_PER_WORKER, 100 tests before a worker is replaced) tune it.
-- A test that runs out of Wasm memory makes the page replace every worker (terminating an isolate frees its memories at
-  once), re-send the tests in flight and run it once more; the runner prints "Wasm memory ran out N times …".
-- test-worker.js posts its stage; a crashed worker fails the test at once with the stage and message, and a timed-out
-  test runs once more on a fresh worker; the summary's `timeoutRetries` names each with its stage (test_in_browser.py
-  prints them and a CI `::warning`). Only a second timeout fails.
-- tests.js lists the tests with libtest's own `--list` (filters, `--ignored`, `--include-ignored` pass through) and runs
-  every test in a fresh instance of the compiled binary on test-worker.js workers: wasm panics abort the instance.
-- The binary is the whole compiler: `is!`/`eval` compile in wasm and run the program through warp_host (host.js),
-  the same path as the playground. wasi.js: args, clocks, random, stdout/stderr, a file system whose "." is the served
-  repository (directories via http.server's listing page) with an in-memory overlay for writes, per test.
-- Blocks known only at run time (`!`, `interpret`, host.js run_block) compile with the test binary itself: it exports
-  web_eval_block like warp.wasm, and test-worker.js hands host.js `BLOCK_COMPILER`, which makes a compiler instance of
-  it per test.
-- C headers in the browser tests: WARP_INCLUDE=/include, served by name as /__include__/<header> from INCLUDE_DIRS.
-- A test that reads a compiled module natively (wasm_reader) must be `#[cfg(feature = "native")]`, else the browser
-  build of the tests does not compile.
-
-### What cannot run in the browser, and why
-- Not compiled (`#[cfg(feature = "native")]` on their mod lines in tests/main.rs): wasmtime APIs (test_gc_struct,
-  test_person_struct, test_struct_types, test_text_getters, test_wasm_reader, test_wasm_emitter, test_utils,
-  test_compile_only, test_host, test_footguns (one wasmtime test in it)), network/ureq (test_web), the package tool
-  runner (test_package_tools, test_uniscript).
-- Skipped by libtest itself: the `#[should_panic]` tests: with panic=abort libtest ignores them.
-- Ignored in the browser build only (P79, `#[cfg_attr(not(feature = "native"), ignore = "browser: …")]`):
-  git clones / tags of packages (test_package_pin), Lean (test_law), threads (test_eval_state).
-- Made to run in the browser (P79):
-  - downloads: tests/common `serve` is test_in_browser.py's `/__stub__?status=…&body=…` there (URL in WARP_HTTP_STUB)
-  - scratch files: tests/common `scratch_directory` is below /tmp, an overlay-only preopen of wasi.js (TMPDIR), since
-    std::env::temp_dir and std::process::id panic on WASI; web.rs fetch_text reads module files through the WASI file
-    system first in the tests build, so modules a test writes are found
-  - directory walks: wasi.js asks `<dir>/?listing`, which test_in_browser.py lists even when the directory holds an
-    index.html
-- Need packages/ cloned by a native run first (a fresh worktree has none): test_packages::a_package_is_fetched_once_into_packages,
-  test_text_bytes::read_loads_a_file_as_bytes
-- libc in the browser (P147): host.js `c` calls web/playground/lib/libc.wasm, wasi-libc built by lib/build_libc.sh
+## test/ in the browser: `scripts/tests-web.sh` (test_in_browser.py --tests)
+Every case of test/ runs in the page and is judged as the native `warp test` judges it (notes/playground_plan.md "test/
+in the page"). The Rust test binary's runner (tests.html, tests.js, test-worker.js, a wasm32-wasip1 build of tests/main.rs)
+went with the Rust compiler; so did the block compiler it handed host.js (run_block, web_eval_block): the self-hosted
+compiler parses run-time code through parse_code, and effects and spectrum are warp in lib/sound.warp.
+- test_in_browser.py serves `/__stub__?status=…&body=…&delay=…` (a POST there echoes what it got, as httpbin.org/post) for
+  fetch tests, `/__include__/<header>` (WARP_INCLUDE=/include) for C headers, and `<dir>/?listing` for wasi.js's walks.
+- CI's Chrome has SwiftShader's software WebGPU adapter, whose sin and exp are off by up to 5.2e-5 (within WGSL's 2^-11).
+- libc in the browser (P147): host-foreign.js calls web/playground/lib/libc.wasm, wasi-libc built by lib/build_libc.sh
   (deployed with the page: pages.yml SITE_FILES `lib`), one instance per worker. Its exports have the native FFI's
-  types (lib/libc.c wraps strlen, strncmp, strspn, strcspn, atol, labs to 64 bits), so numbers pass through; texts
-  cross by the program's custom section warp.c_calls (src/modules/wasm_modules/mod.rs c_calls: `t` a NUL-terminated
-  text, `l` the length after strcmp's text, `n` a number; result `t` a text): copied into libc.wasm's malloc and freed
-  after the call, a char * result read back (NULL is ø). Functions: lib/libc.h; anything else of libc throws "c.X is
-  not available in the browser".
-- Samples: tests/programs/test_samples_run_cleanly.rs runs every sample but raylib/SDL in both hosts.
-- Ideas: should_panic needs panic=unwind (nightly -Zbuild-std with wasm exception handling); git/lean/process tests could
-  get a host import that asks the static server to run them, which defeats the point of the browser run.
+  types (lib/libc.c wraps strlen, strncmp, strspn, strcspn, atol, labs, strtol to 64 bits), so numbers pass through;
+  texts cross by the program's warp.c_functions section: copied into libc.wasm's malloc and freed after the call, a
+  char * result read back (NULL is ø). Anything else of libc throws "c.X is not available in the browser".
 
 ## Modules and packages in the browser
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached

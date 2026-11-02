@@ -1,0 +1,20 @@
+# card elementwise-operations (user 2026-11-02): a `.op` of plain values is the plain operator, a scalar is the one-element case
+
+# every element-wise operator on two numbers
+'3 .* 3'	9
+'6 ./ 2'	3
+'3 .+ 4'	7
+'5 .- 2'	3
+'2 .^ 3'	8
+'7 .% 4'	3
+'3 .< 4'	1
+'3 .== 3'	1
+'x = 3; x .* x'	9
+'square(x) := x .* x; square(3)'	9
+'x = 2.5; x .* 2'	5
+
+# any plain value, not only numbers
+'"a" .+ "b"'	"ab"
+
+# mixed: a number beside a list maps over the list
+'3 .* [1, 2]'	[3 6]
