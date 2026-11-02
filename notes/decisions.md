@@ -288,7 +288,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Duck typing: a truly unknown type is duck typed; a known different type with the right fields is an error teaching `image like photo` (P22); a written map is accepted structurally; `p.word` on an untyped parameter is a run-time "no field word".
 - #30 only `is` tests types (`3 == int` educates toward `is`). type-equal: `is` is the subtype test, `==` between types exact; a bare type name is the type as a value. is-union: `v is int or text` means `v is (int or text)`.
 - type-value-is: a type value tested against a type word (`is`, a match arm) is the subtype test: `float is float` and `float is number` yes, `int is float` no; `name(t: type) := match t { int: …; float: "real" }` gives "real" for float, also for an undeclared `x = float`.
-- type-text (also type-print): a type value is `class int` in every text form; `type(int)` is class type. time-word: every type value prints `class X`, which reads back as a reference.
+- type-text (also type-print): a type value is `class int` in every text form; `type(int)` is class type. time-word: every type value prints `class X`, which reads back as a reference; a shown result too (`type(3)` → class nat), warp test reads `class X` back as the type (type-result-shown).
 - unknown-type: an unknown declared type is an error with the near type as fix.
 - union-or: in types `or` = `|` (`x: int or text`); in values `or` is boolean.
 - return-as (also union-return): return types are `def f(x) as int or text`; `->` works with a hint; no `returns`.

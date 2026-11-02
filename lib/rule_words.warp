@@ -54,6 +54,22 @@ served(program: Node): any := ended_by(program, "route_add", routes_end_word)
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
 exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
+# `ticks` after `on every 1 second { ticks += 1 }`: a program that listens (a timer, an event, a variable's listener)
+# defines page_value(), its last expression again, which the page shows anew after each firing
+# (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
+page_value_word = "page_value"
+listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
+event_heads = [symbol("on"), symbol("once")]
+page_valued(program: Node): any := {
+	statements = level_statements(program)
+	# (the sugar reads the program before its `on click {…}` became a listen call)
+	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_of(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
+	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
+	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
+	last = statements[ending.last()]
+	if is_declaration(last) or listens(last) { return ø }
+	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
+}
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
 # that declares
@@ -92,7 +108,7 @@ became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key
 # program without listeners
 signaled(program: Node): any := {
 	statements = level_statements(program)
-	watched = statements.flat_map(names_listened)
+	watched = distinct(statements.flat_map(names_listened))
 	if #watched == 0 { return ø }
 	derived = derived_inputs(statements)
 	live = []
@@ -101,7 +117,7 @@ signaled(program: Node): any := {
 		later = is_key(statement, Op.Define) or nodes_in(statement).any(is_lambda)
 		names = if later then watched else live
 		written += [if #names == 0 then statement else bottom_up(statement, part => notifying(part, names, derived))]
-		live += names_listened(statement)
+		live = distinct(live + names_listened(statement))
 	}
 	separated(bracketed(written, ""), ";")
 }
@@ -116,6 +132,8 @@ gpu_lists_packed(program: Node): any := {
 }
 # a list made right in a GPU word's call made as a GPU list, else ø
 gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
+# each name once, in the order first named: two listeners of total notify its listeners once a write
+distinct(names: list): list := names.fold([], (kept, name) => if name in kept then kept else kept + [name])
 # the names the statement's variable_listen calls listen to
 names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
 # each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
@@ -164,6 +182,27 @@ counted_question(items: Node, item: Node): Node := {
 }
 # a value as code to paste: a text in its quotes
 as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
+
+# `people where age > 18` (decision P223, lib/sugar/lists.warp): a name the program binds nothing to that a class of it
+# declares as a field reads the item's field, `it.age`; a name the program binds keeps its value
+bare_fields_read(condition: Node, program: Node): Node := {
+	fields = statements_in(program).flat_map(s => declared_field_names(s))
+	if #fields == 0 { return condition }
+	bound = names_bound_in_kept(program)
+	readable = fields.filter(name => not bound.has(name))
+	item_field_read(condition, readable)
+}
+declared_field_names(statement: Node): list := {
+	view = class_view(statement)
+	if view == ø then [] else class_declared(statement, view).fields
+}
+# the code with each of the field names read from `it`; the field part of `x.f` stays as written
+item_field_read(n: Node, fields: list): Node := {
+	if n is symbol { return if name_of(n) in fields then Key(symbol("it"), Op.Dot, n) else n }
+	if n is key { return Key(item_field_read(key_of(n), fields), op_of(n), if op_of(n) == Op.Dot then value_of(n) else item_field_read(value_of(n), fields)) }
+	if is_group(n) { return placed(separated(bracketed(items_of(n).map(item => item_field_read(item, fields)), bracket_of(n)), separator_of(n)), n) }
+	n
+}
 
 # --- a function's own words (lib/sugar/reflection.warp's rules, card name-params) ---
 
@@ -342,7 +381,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check}
+rule_words = {shorthand_closure: shorthand_closure, class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, page_valued: page_valued, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check, bare_fields_read: bare_fields_read}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
@@ -478,4 +517,15 @@ law_variables(n: Node, found: list): list := {
 	read_items = if #items > 1 and items#1 is symbol then items[1 ..] else items
 	for item in read_items { found = law_variables(item, found) }
 	found
+}
+# `{$0 > $1}` → `(shorthand·0, shorthand·1) => {shorthand·0 > shorthand·1}`: a block reading Swift's shorthand
+# arguments as the lambda of as many as it reads, up to the highest, renamed since `$0` in a rule's result would be a
+# hole; ø for a block reading none
+shorthand_closure(block: Node): any := {
+	count = 0
+	for at in 0 to 9 { if mentions(block, "$" + at) { count = at + 1 } }
+	if count == 0 { return ø }
+	body = block
+	for at in 0 to count - 1 { body = renamed(body, "$" + at, symbol("shorthand·" + at)) }
+	Key(List([symbol("shorthand·" + at) for at in 0 to count - 1], Bracket.Round, Separator.Comma), Op.Arrow, body)
 }
