@@ -1,0 +1,6 @@
+# a program's function of numbers called spaced, without parentheses, applies to each item too (guide 375)
+'square := it * it; square [1 2 3]'	[1, 4, 9]
+'square(x) := x * x; xs = [1, 2]; square xs'	[1, 4]
+'square := it * it; square 3'	9
+'twice(x) := x + x; twice "ab"'	"abab"
+'f(x) := #x; f [1 2 3]'	3

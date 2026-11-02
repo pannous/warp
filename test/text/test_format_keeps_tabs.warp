@@ -1,0 +1,3 @@
+# warp format keeps a tab between items: a *.pairs.warp line's code and value are tab-separated (card format-pairs-file)
+is! 'use "../../lib/fix/fix.warp"; line = "x" + "\t" + "2"; fixed(line, layout_rules, no)#1 == line + "\n"' yes
+is! 'use "../../lib/fix/fix.warp"; fixed("a   b", layout_rules, no)#1' "a b\n"

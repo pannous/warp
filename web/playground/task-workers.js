@@ -60,15 +60,27 @@ const reportBareErrors = (target, label) => target.addEventListener("error", eve
 // button then asks for it, and its click reads (card dir-clipboard)
 const pasteInto = shared => answerInto(shared, async () => ({ text: await withPermission(CLIPBOARD_ASK, () => navigator.clipboard.readText()) }));
 // a sound file decoded for a waiting Worker, which has no decodeAudioData (host-sound.js pageDecoded, spectrum of a
-// file): its first channel at DECODED_RATE, whole amplitudes; `bytes` a file the run wrote, else fetched from `url`
+// file): its first channel at the file's own rate as natively (an MP3's), else DECODED_RATE, whole amplitudes; `bytes`
+// a file the run wrote, else fetched from `url`
 const DECODED_RATE = 22050; // band_high (5000 Hz) is well below its half
 const decodeSoundInto = (shared, url, bytes) => answerInto(shared, async () => {
 	const response = bytes ? undefined : await fetch(url);
 	if (response && !response.ok) throw new Error(`HTTP status ${response.status} for ${url}`);
 	const encoded = bytes ? bytes.slice().buffer : await response.arrayBuffer();
-	const audio = await new OfflineAudioContext(1, 1, DECODED_RATE).decodeAudioData(encoded);
+	const audio = await new OfflineAudioContext(1, 1, mp3Rate(new Uint8Array(encoded)) ?? DECODED_RATE).decodeAudioData(encoded);
 	return { rate: audio.sampleRate, amplitudes: Array.from(audio.getChannelData(0), amplitude => Math.round(amplitude * 32767)) };
 });
+// an MP3's sample rate, from its first frame header, at the start or after an ID3v2 tag (whose size is syncsafe, 7 bits
+// a byte; padding may follow it): by the header's version bits (MPEG 2.5, -, 2, 1) and its rate index; undefined for
+// another format
+const MP3_RATES = { 0: [11025, 12000, 8000], 2: [22050, 24000, 16000], 3: [44100, 48000, 32000] };
+const ID3_HEADER_BYTES = 10;
+function mp3Rate(bytes) {
+	const tagged = bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33; // "ID3"
+	let at = tagged ? ID3_HEADER_BYTES + ((bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9]) : 0;
+	for (const end = tagged ? bytes.length - 2 : 1; at < end; at++)
+		if (bytes[at] === 0xff && (bytes[at + 1] & 0xe0) === 0xe0) return MP3_RATES[(bytes[at + 1] >> 3) & 3]?.[(bytes[at + 2] >> 2) & 3];
+}
 // a Worker's call of a global only the page has (host-foreign.js callOnPage, card browser-interaction): its value when
 // plain, else the object kept here as {$page: id, type, text}, which the Worker's later calls name; the same object keeps
 // its id, so reading `$who` again and again keeps one entry. Each Worker holding it counts how often it got the

@@ -162,12 +162,13 @@ methods_lifted(program: Node): Node := {
 		rewritten = rewritten.map(top_statement => routed(top_statement, Routing(classes, liftable, routes, statement_types(top_statement, program_types, self_types, classes))))
 	}
 	floaters = float_converters(classes, liftable, routes)
+	dispatchers = []
 	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
 		owners = owners_of(classes, liftable, name)
 		# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 		# call (list.warp's tally(xs) beside a class's tally(x))
 		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, taken_count(classes, liftable, name) + 1)
-		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
+		dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
 	}
 	for word in entry_words {
 		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
@@ -180,11 +181,14 @@ methods_lifted(program: Node): Node := {
 			}
 		}
 		operator = spelled_operator(operator_table, spellings#1)
-		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions, floaters)]
+		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions, floaters)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, liftable, name, routes) }
-	rewritten += derived_dispatchers(classes, liftable, routes, promotions, operator_table)
-	group_like(program, rewritten)
+	dispatchers += derived_dispatchers(classes, liftable, routes, promotions, operator_table)
+	# a dispatcher is the program's own over all its classes, a linked module's among them: the module's of that name
+	# knows its own classes only (card bind-linked)
+	own_words_unlinked(dispatchers.map(defined_word))
+	group_like(program, rewritten + dispatchers)
 }
 # `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
 # class gives its instances, as if the class declared it (as_operator_method); the class's name, else ø
