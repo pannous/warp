@@ -16,6 +16,10 @@ lines); with example names, both.
 the deploy forgot fails here, not on the live page.
 `test_in_browser.py --samples [samples/….warp…]` (scripts/samples-web.sh) runs every sample in the page, each as its own
 file, and compares its output with the native run's (scripts/samples.sh: data/samples/out); writes test/samples-web.txt.
+`test_in_browser.py --tests [test/<topic>…]` (scripts/tests-web.sh) runs every case of test/ (each pair of a *.pairs.warp,
+each is! line) in the page, judged as the native `warp test` judges (core/commands/tests.warp: warp.wasm lists the
+cases, the page runs them, warp.wasm gives the verdicts), against the native verdicts of the stored baseline
+(scripts/baseline.sh); writes test/tests-web.txt.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/formats/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
@@ -34,6 +38,17 @@ SAMPLE_ANSWER_SECONDS = SAMPLE_RUN_SECONDS + 10
 SHOWN_DIFFERENCE = 300  # characters of each side in report.txt
 # a duration a sample measures (`painted in 53 ms`) differs on every run: both sides compare with it masked
 MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
+# --tests (scripts/tests-web.sh): every case of test/ in the page, its verdict against the native baseline's
+TESTS_WEB_RESULTS = "test/tests-web.txt"  # tracked: status and case, one a line
+TESTS_WEB_DATA = "data/tests-web"  # work/ (the native test work folder, its runs' results written by the page), report.txt
+PAGE_COMPILER = "web/playground/warp-lib/warp.wasm"  # the page's compiler lists and judges the cases natively too
+CASE_RUN_SECONDS = 30  # core/commands/tests.warp CASE_SECONDS: the page stops a run after it (?run_seconds)
+CASE_ANSWER_SECONDS = CASE_RUN_SECONDS + 10  # a page that finished no case in this long is stuck
+CASE_BATCH = 100  # cases the page runs in one go, its reports collected as they finish
+CASE_FILE = "test_case.warp"  # a case runs as a file of its test file's folder, so its uses resolve beside it
+STOPPED = "stopped after"  # playground.js: the report of a run the page stopped (the native run's `timeout`)
+# a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
+VERDICT = re.compile(r"^([✓✗]) (.*?)(?:: got .*)?$")
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", str(os.cpu_count() or 2))  # tests in flight: one per core
@@ -1270,13 +1285,104 @@ def check_samples(paths, tree):
 	print(f"samples in the page: {counts['ok']} of {len(lines)} print what the native warp prints; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, SAMPLES_WEB_RESULTS)}" if written else ""))
 
 
+# the page runs the cases [[code, file]…] one after the other, each as `warp test` runs one, its report pushed as it ends
+RUN_CASES = """window.caseReports = []; (async cases => { for (const [code, file] of cases) {
+	let report; try { report = await playground.evaluate(code, file, { asData: true }); } catch (failure) { report = { error: true, value: String(failure) }; }
+	window.caseReports.push(report); } })(%s); "started";"""
+TAKE_REPORTS = "JSON.stringify((window.caseReports ?? []).splice(0))"
+
+
+def compiler_said(tree, *words):
+	"""what the page's compiler printed for a command of core/commands/tests.warp, run natively in `tree`"""
+	ran = subprocess.run(["warp", os.path.join(tree, PAGE_COMPILER), *words], cwd=tree, capture_output=True, text=True)
+	if ran.returncode not in (0, 1):
+		sys.exit(f"error: warp {PAGE_COMPILER} {words[0]} failed ({ran.returncode}): {ran.stderr[-500:]}")
+	return ran.stdout
+
+
+def case_written(work, run, report, milliseconds):
+	"""the page's report of a run written as the native runner writes one (core/native/tests.warp run_ended)"""
+	stdout = "".join(part["text"] for part in report.get("printed", []) if part.get("stream", 1) == 1)
+	stderr = "".join(part["text"] for part in report.get("printed", []) if part.get("stream", 1) == 2)
+	value = str(report.get("value") or "")
+	status = "timeout" if report.get("stuck") or value.startswith(STOPPED) else "1" if report.get("error") else "0"
+	files = {"out": stdout, "err": stderr + (value + "\n" if report.get("error") else ""), "status": status, "ms": str(int(milliseconds))}
+	for extension, content in files.items():
+		open(os.path.join(work, f"{run}.{extension}"), "w", encoding="utf-8").write(content)
+
+
+def cases_ran(work, runs, page_url):
+	"""each run of the work folder run in the page, CASE_BATCH at a time; a page that ends no run in CASE_ANSWER_SECONDS
+	is opened anew, the run it stuck on written as timed out"""
+	done = 0
+	while done < len(runs):
+		batch = runs[done:done + CASE_BATCH]
+		cases = [[open(os.path.join(work, f"{run}.code"), encoding="utf-8").read(), f"{folder}/{CASE_FILE}"] for run, folder in batch]
+		if browser("eval", RUN_CASES % json.dumps(cases)) != '"started"':
+			open_samples_page(page_url)
+			continue
+		ended, last = 0, time.time()
+		while ended < len(batch):
+			time.sleep(SAMPLE_POLL_SECONDS)
+			answer = browser("eval", TAKE_REPORTS)
+			reports = json.loads(json.loads(answer)) if answer.startswith('"') else []
+			now = time.time()
+			for report in reports:
+				case_written(work, batch[ended][0], report, (now - last) * 1000 / len(reports))
+				ended += 1
+			if reports:
+				last = now
+			elif now - last > CASE_ANSWER_SECONDS:
+				case_written(work, batch[ended][0], {"stuck": True}, CASE_ANSWER_SECONDS * 1000)
+				ended += 1
+				open_samples_page(page_url)
+				break
+		done += ended
+		print(f"     {done} of {len(runs)} runs")
+
+
+def verdicts_of(lines):
+	"""case → ✓ or ✗ of verdict lines (test-verdicts --each, the stored baseline)"""
+	return {found.group(2): found.group(1) for found in map(VERDICT.match, lines) if found}
+
+
+def check_tests(paths, tree):
+	"""every case of the test files under `paths` (default test/) run in the page served from `tree`, its verdict by the
+	page's compiler against the native one of the stored baseline: ok, PAGE (fails only in the page), BOTH (fails
+	natively too), NONE (failing, no native verdict stored)"""
+	data = os.path.join(tree, TESTS_WEB_DATA)
+	work = os.path.join(data, "work")
+	subprocess.run(["rm", "-rf", work])
+	os.makedirs(work)
+	compiler_said(tree, "test-list", work, *paths)
+	runs = [line.split("\t") for line in open(os.path.join(work, "runs"), encoding="utf-8").read().split("\n") if line]
+	server = serve(None, tree)
+	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={CASE_RUN_SECONDS}"
+	open_samples_page(page_url)
+	cases_ran(work, runs, page_url)
+	browser("close")
+	server.shutdown()
+	page = verdicts_of(compiler_said(tree, "test-verdicts", work, "--each", *paths).split("\n"))
+	baseline = subprocess.run([os.path.join(tree, "scripts", "baseline.sh"), *(paths or ["test"])], cwd=tree, capture_output=True, text=True)
+	native = verdicts_of(baseline.stdout.split("\n"))
+	status_of = lambda case: "ok" if page[case] == "✓" else {"✓": "PAGE", "✗": "BOTH"}.get(native.get(case), "NONE")
+	lines = [f"{status_of(case):<4} {case}" for case in page]
+	written = not paths  # a run of some folders leaves the tracked results alone
+	if written:
+		open(os.path.join(tree, TESTS_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
+	open(os.path.join(data, "report.txt" if written else "report-some.txt"), "w", encoding="utf-8").write("\n".join(lines) + "\n")
+	counts = {status: sum(line.startswith(status) for line in lines) for status in ("ok", "PAGE", "BOTH", "NONE")}
+	print(f"tests in the page: {counts['ok']} of {len(lines)} hold; " + ", ".join(f"{count} {status}" for status, count in counts.items() if count and status != "ok") + (f" -> {os.path.join(tree, TESTS_WEB_RESULTS)}" if written else ""))
+
+
 WEBDRIVERS = {"--firefox": FirefoxDriver, "--safari": SafariDriver}
 
 
 def chrome_allowed():
 	"""Chrome runs only in CI (user, 2026-10-09: no test launches Chrome or Chromium on the Mac): --serve starts none,
-	--firefox runs Firefox, --safari Safari; --samples runs headless Chrome (user 2026-11-01, notes/playground_plan.md)"""
-	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
+	--firefox runs Firefox, --safari Safari; --samples runs headless Chrome (user 2026-11-01, notes/playground_plan.md),
+	and so does --tests, its twin for test/ (night decision N6, notes/night_2026-11-02.md)"""
+	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"], ["--tests"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
 def live_differences(url, site):
@@ -1321,6 +1427,8 @@ def main():
 		check_examples(names, place.get("--url"), place.get("--site"))
 	if sys.argv[1:2] == ["--samples"]:
 		return check_samples(sys.argv[2:], REPOSITORY)
+	if sys.argv[1:2] == ["--tests"]:
+		return check_tests(sys.argv[2:], REPOSITORY)
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)
