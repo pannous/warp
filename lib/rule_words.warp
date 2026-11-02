@@ -67,7 +67,8 @@ page_valued(program: Node): any := {
 	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
-	if is_declaration(last) or listens(last) { return ø }
+	# (a write, `x = 3` once signaled notifies its listeners, is no value to read again: run again it would write anew)
+	if is_declaration(last) or listens(last) or nodes_in(last).any(writes) { return ø }
 	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
