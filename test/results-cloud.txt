@@ -1,32 +1,7 @@
-cloud full suite 2026-11-02T15:19:19Z at c410c73 on x86_64: BOOTSTRAP FAILED, suite not run
+cloud full suite 2026-11-02T20:12:34Z at 0c669da on x86_64: BOOTSTRAP FAILED, no tests run
 
-Commands: warp v1.6.0 (x86_64-unknown-linux-gnu release) + seed-2026-11-02-d8a7f287 warp-seed.wasm beside it; WARP_LIB=<checkout>/lib warp rebuild (11m21s, exit 0)
-Then: warp samples/hello/hello.warp -> "no module at /home/user/warp/lib/warp.wasm"
-
-Last 30 lines of warp rebuild:
+Binary: warp-v1.6.0-x86_64-unknown-linux-gnu.tar.gz (latest release, published 2026-10-31); seed: seed-2026-11-02-8cd33789 (sha256 matches seed.lock), placed beside warp.
+Commands: WARP_LIB=$PWD/lib warp rebuild  (1m05s, deterministic on 3 runs); then WARP_LIB=$PWD/lib warp samples/hello/hello.warp -> 'no module at lib/warp.wasm'
+Last lines of the failed 'warp rebuild':
 rebuild step seed
-warning: the rule word leading_unit is not in this compiler (an older seed): its rules are skipped
-warning: the rule word converted_unit is not in this compiler (an older seed): its rules are skipped
-warning: the rule word hyphen_difference is not in this compiler (an older seed): its rules are skipped
-warning: os.wasm not linked: built behind another runtime.wasm (warp rebuild writes it anew); compiled from source
-warning: the rule word leading_unit is not in this compiler (an older seed): its rules are skipped
-warning: the rule word converted_unit is not in this compiler (an older seed): its rules are skipped
-warning: the rule word hyphen_difference is not in this compiler (an older seed): its rules are skipped
-warning: plain can answer ø; declare `: View?` at core/compiler.warp:78:20; fix: View → View?
-warning: bridged can answer ø; declare `: View?` at core/compiler.warp:82:22; fix: View → View?
-warning: without_layers can answer ø; declare `: View?` at core/compiler.warp:86:47; fix: View → View?
-warning: blank_end can answer ø; declare `: int?` at core/compiler.warp:4447:38; fix: int → int?
-warning: kind_of_list can answer ø; declare `: ValueKind?` at core/compiler.warp:142:38; fix: ValueKind → ValueKind?
-warning: kind_of_key can answer ø; declare `: ValueKind?` at core/compiler.warp:187:37; fix: ValueKind → ValueKind?
-warning: operand_kind can answer ø; declare `: ValueKind?` at core/compiler.warp:312:38; fix: ValueKind → ValueKind?
-warning: inferred_kind can answer ø; declare `: ValueKind?` at core/compiler.warp:316:39; fix: ValueKind → ValueKind?
-warning: does `steps = …` inside root_text make a new local of root_text, or change the main-level steps? (taking a new local of root_text) at core/compiler.warp:31:11; fix: let steps = …
-rebuild step stage-two
-the host word file.write is not in warp yet
-the host word file.write is not in warp yet
-rebuild: the baked library is not this compiler's (), built once more
-the host word file.write_bytes is not in warp yet
-read /home/user/warp/lib/warp.wasm.new.runtime.wasm failed: No such file or directory
-
-real	11m20.947s
-user	11m45.140s
+index out of range: 96 not in 1…10
