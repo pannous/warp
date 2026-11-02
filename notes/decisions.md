@@ -7,6 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- clean-compiler-first (user): the specification unfolds from a clean compiler built on first principles; a spec form needing special-case core code is cut or parked unless leaving it out is nonsensical; the wiki follows (rule in notes/agents/common.md Principles).
 - restructuring-hold (user 2026-11-01): all restructuring (core-hygiene A–E, sugar-in-core, number-words-table) is on hold until the current worktrees are cleaned up and every branch is integrated or dismissed.
 - extension-oks (user): core extensions not required for rebuilding the compiler need no strong confirmation if they are generic and/or small (FYI to the Interviewer); undecided spellings, new passes and the compiler proper still ask first.
 - extension-wording (user): a rewrite rule giving the language a new spelling (lib/sugar) is a compiler extension, not a library; "library" means modules programs import.
