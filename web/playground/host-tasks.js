@@ -58,7 +58,6 @@ self.addEventListener("message", event => {
 	madeTaskWorkers.delete(event.data.taskWorker);
 });
 
-// a built site's task Worker loads the site's scripts (site-worker.js siteScripts), the playground's all of them
 function addTaskWorker(loaded) {
 	const id = taskWorkersAsked++;
 	madeTaskWorkers.set(id, worker => {
@@ -71,8 +70,7 @@ function addTaskWorker(loaded) {
 			loaded?.();
 		};
 	});
-	const url = self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER;
-	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
+	self.postMessage({ taskWorker: { id, url: new URL(TASK_WORKER, self.location.href).href } });
 }
 
 // a voice (card playground-go, natively src/sound/mod.rs Voice): when this Worker's queued sounds end on the clock the
@@ -164,7 +162,7 @@ function liveLoopNames(module) {
 	return section ? decode(new Uint8Array(section)).split("\n") : [];
 }
 
-// the pool of task Workers of the workers that run programs (worker.js, test-worker.js), asked for when they start, one
+// the pool of task Workers of the workers that run programs (worker.js, site-worker.js), asked for when they start, one
 // after the other
 function prepareTaskPool(size = TASK_POOL_SIZE) {
 	if (!hasTaskWorkers()) return;

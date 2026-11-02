@@ -1,7 +1,6 @@
-// What a host gives the warp compiler built without the native feature (src/web/mod.rs `page`): `warp_host` runs the modules
-// it compiles. A compiled program's imports mirror what the CLI's wasmtime runner links (src/host.rs, WASI fd_write,
-// libm). Shared by the playground (worker.js), the browser test runner (test-worker.js) and built sites (site.js);
-// needs reader.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
+// The host words of a program warp compiled, run in the page (driver.js programRan): its imports mirror what the native
+// warp answers (core/native/driver.warp, WASI, libm). Shared by the playground (worker.js) and built sites
+// (site-worker.js); needs reader.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
@@ -10,8 +9,6 @@ const RETURNED_ERROR_EXPORT = "returned_error";
 // the position of the statement a trapped run was in, line << 12 | column (src/wasm_emitter/globals.rs emit_trap_position)
 const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
-const PAGE_ROUTES_EXPORT = "page·routes";
-const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/web/serve.rs PAGE_SUBMITTED
 const PAGE_BITS = 16;
 const STDERR = 2;
 // display.dpi where the page told none (a Worker without its page, the browser tests): CSS fixes 96 px to the inch, as
@@ -129,11 +126,6 @@ function programImports(holder, hooks) {
 			},
 			// `serve 8080 {…}` (src/web/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
-			// `header "name" "value"` and `status 418` in a route: the answer's headers (runSubmitted), which a Worker's HTTP
-			// answer carries (cloud-worker.js); a form the page itself answers has no HTTP answer to carry them
-			response_header: (name, value) => {
-				(holder.answerHeaders ??= {})[plainOfTree(readNode(program(), name))] = String(plainOfTree(readNode(program(), value)));
-			},
 			// the host words (src/host.rs)
 			sleep_ms: holder.sleep,
 			clock: () => BigInt(Date.now()),
@@ -411,22 +403,6 @@ function stopListening(holder) {
 	holder.stopTimers?.();
 }
 
-// JSPI (WebAssembly.Suspending and promising; Safari has none): an awaited run's main waits for the promise a foreign
-// call gives, suspended until it settles (card jspi-page). Its outcome is then a promise too
-const JSPI = typeof WebAssembly.Suspending === "function" && typeof WebAssembly.promising === "function";
-// next(value), once value settles when it is a promise
-const whenSettled = (value, next) => value instanceof Promise ? value.then(next) : next(value);
-
-// run a compiled program: the outcome src/web/mod.rs run_outcome reads
-function runProgram(bytes, hooks, awaited = false) {
-	const holder = instantiateProgram(bytes, hooks, undefined, awaited && JSPI);
-	return holder.failure ? holder : runMain(holder, hooks);
-}
-
-// the program's instance, its main not run yet (a built site first loads the module of the route it shows, site.js);
-// { failure } when it cannot be instantiated
-// `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js);
-// `awaited`: main may wait for promises (JSPI)
 // a program built separately (`warp build --separate`) imports its runtime words, memory, error tag and hooks table
 // from runtime.wasm (beside warp.wasm, build.sh): an instance of it for each run, with the run's host words, as the
 // native harness links it (src/run/wasm_reader.rs link_runtime; notes/runtime_linking.md "Separate modules")
@@ -449,172 +425,5 @@ function withUnlinkedTrapping(module, imports) {
 	return completed;
 }
 
-function instantiateProgram(bytes, hooks, compiled, awaited = false) {
-	// the runtime warnings go back to the compiler, which reports them (src/web/mod.rs); the page's path is the page's own
-	const holder = { warnings: [], pagePath: hooks.pagePath?.(), awaited };
-	try {
-		const module = compiled ?? new WebAssembly.Module(bytes);
-		holder.run = { module, bytes };
-		self.joinVoice?.(); // a program's sounds start now on a fresh voice, not behind an earlier run's (host-tasks.js)
-		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(holder.run.module, withRuntime(holder.run.module, programImports(holder, hooks))).exports;
-		hooks.instantiated?.(holder);
-	} catch (failure) {
-		return { failure: String(failure.message ?? failure) };
-	}
-	return holder;
-}
-
-// main of an instantiated program, and what it left
-function runMain(holder, hooks) {
-	const { exports } = holder;
-	// a foreign call's promise suspends main only while it runs: a page event's handler cannot wait (host-foreign.js)
-	const main = holder.awaited ? WebAssembly.promising(exports.main) : exports.main;
-	holder.waiting = holder.awaited;
-	return whenSettled(outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => main())), outcome => {
-		holder.waiting = false;
-		const events = pageEvents(exports);
-		// a program with routes stays for its links (lowering/web/routes.rs page·routes)
-		if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-		return outcome;
-	});
-}
-
-const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/web/page_html.rs PAGE_RENDER
-
-// the HTML of a value by the program's own renderer (lib/markup.warp's to_html, exported as page·render by a program
-// holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
-// renders the value itself, src/web/mod.rs html_of)
-function renderedHtml(exports, value) {
-	const render = exports[PAGE_RENDER_EXPORT];
-	if (!render || value === null || typeof value !== "object") return undefined;
-	try {
-		return plainOfTree(readNode(exports, render(value)));
-	} catch {
-		return undefined;
-	}
-}
-
-const PAGE_HOLE = "page·hole"; // page·hole·<path>: an element of the shown markup holding computed parts (card web-fine-holes)
-const PAGE_HOLES = "page·holes"; // a page with components renders once, its holes are parts of that rendering (card web-fine-components)
-const PATH_JOINER = "·";
-const TEXT_HOLE = "text"; // page·hole·<path>·text·<n>: the text after n children of that element (card web-fine-text-nodes)
-
-// the holes of a page's markup (src/lowering/signals/event_signals.rs hole_name): each binding's name and where it shows, its
-// element's path from the root and, for a text, the element's children before it
-function pageHoles(exports) {
-	return Object.keys(exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER)).map(name => {
-		const [element, after] = name.split(PATH_JOINER + TEXT_HOLE + PATH_JOINER);
-		const path = element.split(PATH_JOINER).slice(PAGE_HOLE.split(PATH_JOINER).length).map(Number);
-		return { name, path, after: after === undefined ? undefined : Number(after) };
-	});
-}
-
-// a built site's holes anew after a handler (card web-fine-rest, as worker.js showHoles for the playground): markup.js
-// showPatch shows each; undefined when it has none or one fails, so the whole page·html shows (and its failure)
-function holePatches(exports) {
-	const holes = pageHoles(exports);
-	if (!holes.length) return undefined;
-	try {
-		exports[PAGE_HOLES]?.();
-		const patches = holes.map(({ name, path, after }) => {
-			const value = exports[name]();
-			if (after !== undefined) return { path, after, text: String(plainOfTree(readNode(exports, value))) };
-			return { path, html: renderedHtml(exports, value) };
-		});
-		return patches.every(patch => patch.text !== undefined || patch.html !== undefined) ? patches : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-// `on exit {…}` (src/lowering/signals/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
-// main returns or `exit(code)` ends it, never after a failure
-function withExitHandler(holder, exports, call) {
-	const handler = exports["on·exit"];
-	if (!handler) return call();
-	// `event` is the exit code (P134), 0 when main returned: an i64 parameter takes a BigInt, a Node one a new_int
-	const withCode = () => {
-		const code = BigInt(holder.exitCode ?? 0);
-		try {
-			return handler(code);
-		} catch (failure) {
-			if (!(failure instanceof TypeError)) throw failure; // the parameter is a Node: the call never started
-			return handler(exports.new_int(code));
-		}
-	};
-	const runHandler = () => (handler.length ? withCode() : handler());
-	const failed = trap => {
-		if (holder.exitCode !== undefined) runHandler();
-		throw trap;
-	};
-	let result;
-	try {
-		result = call();
-	} catch (trap) {
-		failed(trap);
-	}
-	if (result instanceof Promise) return result.then(value => (runHandler(), value), failed);
-	runHandler();
-	return result;
-}
-
-// the outcome of a call into a run's instance (main, or a page event's handler), as src/web/mod.rs run_outcome reads it
-function outcomeOf(holder, hooks, call) {
-	const { warnings, exports } = holder;
-	const finished = result => {
-		const unread = eachHostPart("finished", holder, hooks).find(Boolean);
-		if (unread) return { failure: unread, warnings };
-		return { result: readResult(exports, result), warnings };
-	};
-	const failed = trap => {
-		eachHostPart("ended", holder);
-		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, exited: holder.exitCode, warnings };
-		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
-		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
-		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
-		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
-		const position = exports[TRAP_POSITION_EXPORT]?.value;
-		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, position: position ? String(position) : null, warnings };
-	};
-	try {
-		const result = call();
-		return result instanceof Promise ? result.then(finished).catch(failed) : finished(result);
-	} catch (trap) {
-		return failed(trap);
-	}
-}
-
-// the page events a program handles (src/lowering/signals/event_signals.rs PAGE_EVENTS, and an element's FIELD_EVENTS):
-// `on click {…}` exports on·click·node
-const PAGE_EVENT_HANDLER = /^on·((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)·node$/;
-function pageEvents(exports) {
-	return Object.keys(exports).map(name => name.match(PAGE_EVENT_HANDLER)?.[1]).filter(Boolean);
-}
-
-// a page event of a program that handles it, after its main ran: the handler with the event's data, its outcome
-function runPageEvent(holder, hooks, event, detail) {
-	holder.warnings = [];
-	const handler = holder.exports[`on·${event}·node`];
-	return outcomeOf(holder, hooks, () => handler(buildValue(holder.exports, treeOfPlain([detail]))));
-}
-
-// a form's request {method, path, query, body} for the program's own routes, without a server (worker.js handleSubmit,
-// lowering/web/serve.rs with_local_routes)
-function runSubmitted(holder, hooks, request) {
-	holder.warnings = [];
-	holder.answerHeaders = {};
-	const submitted = holder.exports[PAGE_SUBMITTED_EXPORT];
-	if (!submitted) return { failure: `a form sent ${request.method} ${request.path}, but the program has no route (post "${request.path}" {…})`, warnings: [] };
-	return { ...outcomeOf(holder, hooks, () => submitted(buildValue(holder.exports, treeOfPlain(request)))), headers: holder.answerHeaders };
-}
-
-// a handler run: a timer's by its id through the program's one export timer_fired(id: int) (host-timers.js), a
-// fetch's by its export name, given ø when it reads `event`
+// the one export a program with timers fires them by, timer_fired(id: int) (host-timers.js, driver.js timerFired)
 const TIMER_FIRED_EXPORT = "timer_fired";
-function runTimer(holder, hooks, handler) {
-	holder.warnings = [];
-	if (typeof handler === "number") return outcomeOf(holder, hooks, () => holder.exports[TIMER_FIRED_EXPORT](BigInt(handler)));
-	const named = holder.exports[handler];
-	return outcomeOf(holder, hooks, () => named.length ? named(holder.exports.new_empty()) : named());
-}
