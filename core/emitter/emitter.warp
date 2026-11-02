@@ -167,8 +167,10 @@ int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>"
 # an int is wasm's i64: + - * wrap silently, never checked (decision nat-and-int); a nat that may grow is boxed
 bit_operators = ["xor", "<<", ">>"]
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
-# yes/no held as i32: only equal or not
+# yes/no held as i32: only equal or not; any other operator takes it as the int 0 or 1 (operators.warp bools_as_ints)
 bool_ops = {"==": 70, "!=": 71}
+# the operators whose result of two 0/1 values is 0 or 1 again: on two yes/no values a yes/no (user 2026-11-02, bool-as-int)
+zero_one_operators = ["xor", "&", "|", "min", "max"]
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
@@ -939,11 +941,13 @@ def expression_code(body: Body, n: Node): TypedCode {
 }
 
 # `f 3 4`: a program function's name before spaced arguments it takes calls it, as `f(3, 4)`; `midi_on C4` too,
-# the rest defaulted
+# the rest defaulted; a word the emitter expands as well, by its signature line (`read "s.txt"`, `chr 65`)
 is_spaced_call(body: Body, n: Node): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
-	name in module.functions and name not in body.names and takes_arguments(module.functions[name], items_of(n)[1..])
+	if name in body.names { return no }
+	if name in module.functions { return takes_arguments(module.functions[name], items_of(n)[1..]) }
+	lines_of(emitter_lines, unaliased(name)).any(line => takes(line.signature, #n - 1))
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
@@ -965,6 +969,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and is_program_call(body, name_of(n#1), items_of(n)[1..]) {
 		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
+	# `chr 65`, `read "s.txt"`: a word the emitter expands, called spaced, is its call `chr(65)`
+	if is_spaced_call(body, n) and name_of(n#1) not in module.functions { return expression_code(body, call_of(name_of(n#1), items_of(n)[1..])) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.classes {
 		return positional_instance(body, name_of(n#1), items_of(n)[1..])
 	}
