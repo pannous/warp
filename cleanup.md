@@ -95,3 +95,15 @@ Cover documented list construction and statistics outcomes, then declare non-nar
 # library-typed list scans
 
 Cover the documented scan and predicate-based take/drop outcomes, then type their generic inputs and list results and verify the module and smoke.
+
+## library-typed callback helpers
+
+Check callback outcomes before annotating generic parameters and results; preserve existing accepted values, verify the module and smoke on current main, and continue the library audit.
+
+## library-typed map selection
+
+Cover map selection and lookup outcomes before adding non-narrowing signatures; verify focused tests and merged-main smoke.
+
+## library-typed map transformations
+
+Cover map construction, mapping and fallback outcomes before adding generic signatures; verify focused results and merged-main smoke.
