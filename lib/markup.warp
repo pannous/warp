@@ -4,7 +4,7 @@
 // time and its updates in the browser (page·html). A key named after an HTML element is an element; inside it a key
 // named after an attribute with a plain value is an attribute (`style: { fontSize: 12 }` inline CSS), anything else a
 // child in order.
-html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
+global html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
 	"header", "footer", "main", "nav", "section", "article", "aside", "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
 	"a", "em", "strong", "b", "i", "u", "small", "code", "pre", "blockquote", "br", "hr", "img", "figure", "figcaption",
 	"ul", "ol", "li", "dl", "dt", "dd", "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
