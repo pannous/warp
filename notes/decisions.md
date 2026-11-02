@@ -429,6 +429,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cleanup-cuts: dropped compile-time lambdas, generators/yield, type-name parameters `fib int i`, scoped handlers `on … in {…}`, the defined-twice diagnostic, all phrase calls (until prepositions-call: `move x from: a to: b`). Kept: return-type overloads, tuple returns, list element checks, instance destructuring, object-shaped parameters, dispatch by class, version literals (rebuilt small). Traits are a thin alias of classes with default methods; ORM keeps only `stored people: [Person]`; `a of b` ≡ `b.a`.
 
 ## Lists, maps and indexing
+- ordinal-dot-index (user: "if it's not a one-liner, something's wrong with our architecture"): no core rule and no plural guessing (`1.friend` is not a form). A program that wants `1.friends` as `friends#1` writes one overload of the dot, `infix operator .(i: int, a: any) := a#i`; that works on int literals and is good enough. The general hook would be an overridable attribute access (`attribute(of, name)`), not built.
 - each-field-broadcast: `xs.each.count` broadcasts a field or method over the items (`sum(counters.each.count)`); a list's own `.count` keeps its meaning; no field-wins-when-all-have-it (card xs-each).
 - lazy-range-value (user; ~28 core lines in kinds.warp, runtime/lists.warp, emitter/runtime_words.warp, analysis/words.warp, runtime/types.warp; a range is a list node marked KindUnit.Range holding its ends, `range` a type word): `a..b` / `a to b` hold only their two ends; count, #, sum, indexing and iteration answer from the ends; any other list operation makes the items once, so a range stays a list everywhere (`(1..3) + [4]` is [1, 2, 3, 4]).
 - pair-items (user, core OK ~4 lines node_at/node_length, the minimal change): a key-value pair reads as two items, `p = (a: 1); p#1` → a (the name), `p#2` → 1 (the value), `#p` → 2; host item_count/item_at the same.
@@ -455,6 +456,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
+- comparison-after-arms (user): a comparison after a switch/match compares its value, never swallows the arms block: `switch 3 {1: "one" 3: "three"} == "three"` is yes, `match n {…} > 15` likewise; one general case in prefix_calls.warp fitted_comparison (~6 core lines), no per-operator rules.
 - raw-rules (user, ~15 lines core/passes/rewrites.warp): a rule marked `where raw` fires top-down on its code as written, before the rules inside it; its result is rewritten bottom-up as usual (law, quote, test bodies).
 - prefix-keyword-condition (user, small parser change, count named before building): a prefix keyword (whenever/when/on/at) takes its whole condition up to the trailing block (`alarm = whenever t > 30 {…}` is a listener handle); a glued digits:digits after a word stays one time value (`at 9:30 {…}`).
 - for-over-iterator (user): a construction of a program class counts as an instance, so `for x in Countdown(3)` iterates by next() until ø.
@@ -482,6 +484,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   types only in a text pattern's hole position, nothing reserved (a variable `digits` stays plain; Interviewer's decision).
 
 ## Classes, objects and enums
+- valued-field-default (user): a class field given a value declares its default, type from the value: `class Animal { name: "?" }` is `name: text = "?"` (2 core lines, instances.warp declared_field).
 - capitalized-field-list (user): a capitalized plural field named after a declared class declares a list of it under the lowercase name: `class Signature { Parameters = [] }` is `parameters: list[Parameter] = []`, read as `sig.parameters`; otherwise an ordinary field.
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).
 - setter-calls: a setter is called by `canvas.width = 12`, `canvas.width(12)`, `width(canvas, 12)`; `width of canvas = 12` is `canvas.width = 12`; `set x to y` is `x = y` with a style hint.

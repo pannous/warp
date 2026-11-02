@@ -1,0 +1,9 @@
+# a decimal literal is exact (decision exact-decimals): rational, not float; `as float` makes a float
+
+# a_decimal_is_rational
+'x=3.5; x is rational'	yes
+'x=3.5; x is float'	no
+'type(3.5)'	"rational"
+
+# as_float_makes_a_float
+'x=3.5; x as float is float'	yes

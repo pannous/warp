@@ -205,11 +205,12 @@ class_words(view: Node): list := {
 	parts.flat_map(symbol_words).filter(word => word not in own)
 }
 
-# the field `r: int` or `pi = 3`, the method `f() := …`
+# the field `r: int` or `pi = 3`, the method `f() := …`, one read as the class reads it, `int bar(){ 42 }`: a
+# method's name is the class's own, never a module's word (sound's bar)
 member_name(statement: Node): any := match statement {
 	Symbol(name): name
 	Key(Symbol(name), op, value): name
-	_: declared_name(statement)
+	_: declared_name(statement) ?? defined_word(member_node_read(statement))
 }
 
 # the words a slice mentions, those inside a class's methods too (the opaque view of `class Instant { … text() :=
@@ -640,12 +641,17 @@ global_word_modules(program: Node, own: any, used: list): list := {
 # word the program names free (never a member's, `c.pi`) that neither it, the prelude nor a module it uses defines,
 # by the index `warp rebuild` writes beside the prebuilt modules (write_word_index); a module's `global` word is its
 # own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
+# how a program writes an indexed word: a glyph operator's function by its glyph, operator_± as ±
+spelling_of(word: text): text := {
+	glyph = word.remove_prefix(OPERATOR_FUNCTION_PREFIX)
+	if glyph != word and is_operator_glyph(glyph) then glyph else word
+}
 implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 	index = word_index(index_file)
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
-	candidates = index.keys.filter(word => mentions_word(source, word))
+	candidates = index.keys.filter(word => mentions_word(source, spelling_of(word)))
 	if #candidates == 0 { return [] }
 	program = interpolation(plain_node(parsed(source)))
 	own = own_heads(program)
@@ -670,7 +676,7 @@ implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 		# core's event, `on every 1 second {…}` timers'
 		if not named { definers = definers.filter(module => rule_fits(module, word, program)) }
 		if not named and #definers == 0 { continue }
-		if #definers > 1 { definers = definers_taking(word, definers, program) }
+		if #definers > 1 { definers = base_definers(definers_taking(word, definers, program)) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
 		if #definers == 0 { raise word + " is defined by " + index[word].join(" and ") + ", none taking these arguments: say which, " + index[word].map(module => "`use " + module + "`").join(" or ") }
 		if definers#1 not in modules and definers#1 not in used {
@@ -696,6 +702,9 @@ module_rule_heads(module: text): list := {
 # the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition); a module whose
 # rule the word leads takes the calls none of them takes (signals' `on change p.age {…}` beside keys' on(key, body)), else
 # the defining modules do
+# the definers no other of them builds on: units' ± overloads uncertain's, which it uses, so `6 ± 1` is uncertain's
+# and `5m ± 1cm` brings units by its unit beside it
+base_definers(definers: list): list := definers.filter(module => not used_modules(used_module_text(module)).any(used => used in definers))
 definers_taking(word: text, definers: list, program: Node): list := {
 	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 	if not counts { return definers }
