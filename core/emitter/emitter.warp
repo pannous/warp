@@ -727,6 +727,10 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if is_key(target, Op.Colon) and key_of(target) is symbol and union_spelling(value_of(target)) != ø {
 		return union_declaration(body, name_of(key_of(target)), union_spelling(value_of(target)), value)
 	}
+	# `xs: [int] = [1]`, `xs: [U] = …`: a list as `list` declares it
+	if is_key(target, Op.Colon) and key_of(target) is symbol and bracket_of(value_of(target)) == "[" {
+		return declaration(body, name_of(key_of(target)), "list", value)
+	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
@@ -858,12 +862,17 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 		entry = declared_global(global_key(body, name_of(declaration)), ValueKind.Node)
 		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1))
 	}
-	if not (is_key(declaration, Op.Assign) and key_of(declaration) is symbol) {
-		return refuse("the declaration global " + form_of(declaration))
-	}
-	name = name_of(key_of(declaration))
-	body.globals[name] = yes
-	declare_global(global_key(body, name), place_checked(body, name, expression_code(body, value_of(declaration))))
+	# `global int n = 0` (parser.warp global_declaration): `global n: int = 0`, the value as the type word takes it
+	target = if is_key(declaration, Op.Assign) then key_of(declaration) else ø
+	written = if is_key(target, Op.Colon) and value_of(target) is symbol then name_of(value_of(target)) else ø
+	name = if written != ø then key_of(target) else target
+	if not (name is symbol) { return refuse("the declaration global " + form_of(declaration)) }
+	# `global n = n + 2` in a function: the value reads the global it assigns, declared first as a bare `global n` does
+	if mentions(value_of(declaration), name_of(name)) and not is_global(body, name_of(name)) { global_declaration_code(body, name) }
+	value = place_checked(body, name_of(name), expression_code(body, value_of(declaration)))
+	kind = if written == ø then ø else declared_kinds.get(aliased_type(written))
+	body.globals[name_of(name)] = yes
+	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(value, kind))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
 	if name not in module.globals and value.mark != 0 { module.global_marks[name] = value.mark }

@@ -1,0 +1,2 @@
+# card tests-data-folders: write makes the folders a path lies in where missing, as mkdir -p
+'write("data/test_write_makes_folders/sub/deeper/note.txt", "hi"); read("data/test_write_makes_folders/sub/deeper/note.txt")'	"hi"

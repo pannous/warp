@@ -1,0 +1,5 @@
+'use list; window([1, 2, 3], 2)'	[[1 2] [2 3]]
+'use list; max_by([1, 3, 2], x => x)'	3
+'use list; min_by([1, 3, 2], x => x)'	1
+'use list; cartesian([1, 2], [3, 4])'	[[1 3] [1 4] [2 3] [2 4]]
+'use list; index_where([1, 2, 3], x => x > 1)'	2
