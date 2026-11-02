@@ -245,4 +245,4 @@ exact_decimal(t: text) := {
 
 // a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
-sleep(duration) := sleep_ms((if duration is Time then duration.amount else duration) * 1000)
+sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)

@@ -796,7 +796,7 @@ def previous_frame_wrong():
 def view_steady_wrong():
 	"""runs painting at the view's size, one after the other, see the same view once the first painting is shown"""
 	shown = [run_code(VIEW_STEADY_CODE) for _ in range(VIEW_STEADY_RUNS)]
-	return [] if len(set(shown[1:])) == 1 and re.fullmatch(r"\[\d+ \d+\]", shown[-1]) else [f"the view's size, run after run: {shown}, expected the same after the first"]
+	return [] if len(set(shown[1:])) == 1 and re.fullmatch(r"\[\d+,? \d+\]", shown[-1]) else [f"the view's size, run after run: {shown}, expected the same after the first"]
 
 
 def gpu_jobs_wrong():
@@ -1437,8 +1437,9 @@ WEBDRIVERS = {"--firefox": FirefoxDriver, "--safari": SafariDriver}
 def chrome_allowed():
 	"""Chrome runs only in CI (user, 2026-10-09: no test launches Chrome or Chromium on the Mac): --serve starts none,
 	--firefox runs Firefox, --safari Safari; --samples runs headless Chrome (user 2026-11-01, notes/playground_plan.md),
-	and so does --tests, its twin for test/ (night decision N6, notes/night_2026-11-02.md)"""
-	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"], ["--tests"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
+	and so does --tests, its twin for test/ (night decision N6, notes/night_2026-11-02.md), and --examples, the tour and
+	the guide, in headless Chromium, Chrome for Testing (user 2026-11-02)"""
+	return bool(os.environ.get("CI")) or sys.argv[1:2] in (["--serve"], ["--samples"], ["--tests"], ["--examples"]) or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
 def live_differences(url, site):
