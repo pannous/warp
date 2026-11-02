@@ -1,0 +1,11 @@
+# super in a method is the parent class: its method called on the instance (wiki/keyword.md super; the tour's classes
+# example; card pure-class-super)
+
+# a_property_calls_the_parents_property_with_super
+'class animal { name; speak := name + " makes a sound" }; class dog extends animal { speak := super.speak + ": woof" }; dog("Rex").speak'	'Rex makes a sound: woof'
+
+# super_reaches_the_nearest_ancestor_declaring_the_method
+'class a { n; shown := "a" + n }; class b extends a { size := 1 }; class c extends b { shown := super.shown + "c" }; c("1").shown'	'a1c'
+
+# a_parent_field_through_super_is_the_instances
+'class animal { name }; class dog extends animal { called := "dog " + super.name }; dog("Rex").called'	'dog Rex'
