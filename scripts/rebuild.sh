@@ -265,6 +265,9 @@ one() {
 		copied "$old" "$file" && cp "$old.inputs" "$file.inputs" && logged "$name" hit-lib-old-name
 	fi
 	if [ -z "$force" ] && [ -f "$file" ] && [ "$(cut -d' ' -f1 "$file.inputs" 2>/dev/null)" = "$hash" ]; then logged "$name" hit-lib; return 0; fi
+	# a build another machine published for these inputs (scripts/publish-build.sh), into the store first
+	[ -z "$force" ] && [ ! -f "$store/$hash/$name.wasm" ] && [ "${WARP_FETCH_BUILDS:-1}" = 1 ] &&
+		"$scripts/fetch-build.sh" "$hash" "$store" >/dev/null 2>&1 && [ -f "$store/$hash/$name.wasm" ] && logged "$name" fetched
 	local stored=$store/$hash/$name.wasm
 	[ -f "$stored" ] || stored=$store/$hash/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ -f "$stored" ]; then
