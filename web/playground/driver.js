@@ -295,16 +295,81 @@ function programRan(bytes, file, hooks) {
 function evaluatedNatively(code, file, hooks) {
 	const source = file || TYPED_FILE;
 	return withSource(code, source, () => {
-		const compiled = compiledProgram(source, hooks.print);
-		if (compiled.failure) return report(compiled.failure, FAILURE_STATUS);
+		const warnings = [];
+		const compiled = compiledProgram(source, withWarnings(code, warnings, hooks.print));
+		if (compiled.failure) return { ...report(compiled.failure, FAILURE_STATUS), warnings };
 		hooks.module?.(compiled.module);
 		const { status, said, value, holder } = programRan(compiled.module, source, hooks);
 		const html = status === 0 ? pageHtml(holder) : undefined;
 		const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
 		// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
 		if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
-		return { ...report(status === 0 ? value : said, status), html };
+		return { ...report(status === 0 ? value : said, status), html, warnings };
 	});
+}
+
+// ---- a compile's warnings (core/analysis/diagnostics.warp said_text): `warning: <message> at [file:]line:column;
+// fix: <fix>` on stderr, each the report's warning, its fix an "I meant: …" button (playground.js fixButtons)
+
+const WARNING_LINE = /^warning: (.*?)(?: at (?:[^ ]*:)?(\d+):(\d+))?(?:; fix: (.*))?$/;
+const FIX_ALTERNATIVES = " or "; // warnings.data: "{as_sum} or {as_text}"
+
+// the print of a compile, its warning lines collected into `warnings` instead of printed
+function withWarnings(code, warnings, print) {
+	return (text, stream) => {
+		if (stream !== STDERR) return print(text, stream);
+		const rest = text.split("\n").filter(line => {
+			const warning = warningOf(code, line);
+			if (warning) warnings.push(warning);
+			return !warning;
+		}).join("\n");
+		if (rest.trim()) print(rest, stream);
+	};
+}
+
+// a warning line as the report has it, null for another line
+function warningOf(code, line) {
+	const match = line.match(WARNING_LINE);
+	if (!match) return null;
+	const [, message, row, column, fix] = match;
+	const at = row ? { line: Number(row), column: Number(column) } : { line: 0, column: 0 };
+	const fixes = fix ? fix.split(FIX_ALTERNATIVES).map(meant => fixOf(code, message, at, meant)) : [];
+	return { level: "normal", message, ...at, fix, fixes };
+}
+
+// a fix replaces what the warning names, the longest start of its message written at its place (`a-b reads as a - b`
+// at a-b, `"3" + 4 joins the texts` at "3" + 4), everywhere the code writes it so (a kebab key and its read alike):
+// {label, meaning, written, start, edits}, the last edit first; start null when the code does not show it there (the
+// button then stays disabled)
+function fixOf(code, message, at, meant) {
+	const start = utf16Index(code, at);
+	const rest = start === null ? "" : code.slice(start);
+	let written = message;
+	while (written && !rest.startsWith(written)) written = written.slice(0, -1);
+	written = written.trimEnd();
+	if (!written) return { label: `I meant: ${meant}`, meaning: message, written: message, start: null, edits: [] };
+	const edits = placesOf(code, written).reverse().map(place => ({ start: place, end: place + written.length, replacement: meant }));
+	return { label: `I meant: ${meant}`, meaning: message, written, start, edits };
+}
+
+// where the code writes the text as a whole, not inside a longer name
+const NAME_CHARACTER = /[\p{L}\p{N}_-]/u;
+function placesOf(code, text) {
+	const places = [];
+	for (let place = code.indexOf(text); place >= 0; place = code.indexOf(text, place + text.length)) {
+		const whole = !(NAME_CHARACTER.test(code[place - 1] ?? "") && NAME_CHARACTER.test(text[0])) &&
+			!(NAME_CHARACTER.test(code[place + text.length] ?? "") && NAME_CHARACTER.test(text.at(-1)));
+		if (whole) places.push(place);
+	}
+	return places;
+}
+
+// the UTF-16 index of a line and column in characters (as the compiler counts), null outside the code
+function utf16Index(code, { line, column }) {
+	const lines = code.split("\n");
+	if (line < 1 || line > lines.length) return null;
+	const before = lines.slice(0, line - 1).reduce((sum, text) => sum + text.length + 1, 0);
+	return before + Array.from(lines[line - 1]).slice(0, column - 1).join("").length;
 }
 
 // ---- a page of markup (lib/markup.warp, card markup-keeps): page_render(value) is the HTML of main's value, each

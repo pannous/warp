@@ -1,0 +1,7 @@
+# A parameter the body calls takes a function: a function of no parameters named for it is passed, not called
+# (decision P83: an argument to a function parameter stays bare; samples/advanced/neural_net.warp's matrix(2, 4, weight))
+
+# a_function_of_no_parameters_passed_by_name
+'weight() := 7; twice(f) := f() + f(); twice(weight)'	14
+'weight() := 2; rows(f) := [f() for j in 1 to 3]; rows(weight)'	[2 2 2]
+'use matrix; one() := 1; matrix(2, 2, one)'	[[1 1] [1 1]]
