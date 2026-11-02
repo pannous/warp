@@ -1,15 +1,25 @@
 // The standard module timers (card registers-page): `on every 500ms {…}` and `on every 2 seconds {…}` run their block at
-// each period. A page runs them (web/playground/host-timers.js): the program tells the host each timer by the host word
+// each period, `at 9:30 {…}` once at that time of day, `on every day at 9:30 {…}` each day at it. A page runs them (web/playground/host-timers.js): the program tells the host each timer by the host word
 // signal_listen(kind, id, argument) and the page calls back the exported timer_fired(id) at each firing. Natively
 // nothing runs beside the program (the pure lane), so the native warp says that it starts none
 use units
 TIMER_EVERY = 0
+TIMER_CLOCK = 2
+// a clock timer's argument, weekdays * 10000 + minute of the day: the weekdays a mask (bit 0 Sunday), 0 once
+WEEKDAYS_SHIFT = 10000
+EVERY_DAY = 127
+ONCE = 0
+rewrite on every day at $time $body: block => timer_at($time, EVERY_DAY, () => $body)
+rewrite on every day at $time {} => timer_at($time, EVERY_DAY, () => ø)
+rewrite at $time $body: block => timer_at($time, ONCE, () => $body)
 rewrite on every $period $body: block => timer_every($period, () => $body)
 rewrite on every $count $unit $body: block => timer_every($count $unit, () => $body)
 rewrite on every $period: $body => timer_every($period, () => $body)
 // an empty block, `{}`, reads as a map, which no block hole takes
 rewrite on every $period {} => timer_every($period, () => ø)
 rewrite on every $count $unit {} => timer_every($count $unit, () => ø)
+// the page shows main's last expression anew after each firing (lib/rule_words.warp page_valued)
+rewrite $p => $q where program and $q = page_valued($p)
 
 // the handlers of the program's timers, a timer's id its position
 global timer_handlers = []
@@ -20,4 +30,10 @@ timer_started(kind: int, argument: int, handler: function): int := {
 	id
 }
 timer_every(period: any, handler: function): int := timer_started(TIMER_EVERY, floor(period / 1ms) as int, handler)
-export timer_fired(id: int) := timer_handlers#id()
+// `9:30`, the pair of an hour and its minutes
+timer_at(time: any, weekdays: int, handler: function): int := timer_started(TIMER_CLOCK, weekdays * WEEKDAYS_SHIFT + key_of(time) * 60 + value_of(time), handler)
+// the handler named before its call: `timer_handlers#id()` calls no function ("not a function")
+export timer_fired(id: int) := {
+	handler = timer_handlers#id
+	handler()
+}
