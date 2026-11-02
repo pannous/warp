@@ -74,3 +74,6 @@ Cover documented fast math approximations, then declare float results while reta
 
 ## library-typed PHP slice
 Cover the foreign-spellings PHP compatibility functions before adding non-narrowing signatures; verify behavior and module build before smoke.
+
+## library-typed R slice
+Cover foreign-spellings R compatibility functions before adding non-narrowing signatures; verify direct behavior and module build.
