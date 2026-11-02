@@ -35,7 +35,7 @@ CACHE_READ_FACTOR = 0.1
 CACHE_WRITE_FACTOR = 1.25
 BATCH_POLL_SECONDS = 30
 
-WARP = os.environ.get("WARP", "/Users/me/dev/bin/warp")  # main's debug build, refreshed per pushed batch
+WARP = os.environ.get("WARP", os.path.expanduser("~/dev/bin/warp"))  # main's debug build, refreshed per pushed batch
 WARP_FLAGS = ["--sandbox", "--no-ask"]  # no shell, C or file runtime; never wait for "got it?"
 RUN_TIMEOUT_SECONDS = 20
 PARALLEL_RUNS = 4
