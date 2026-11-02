@@ -9,7 +9,7 @@
 set -uo pipefail
 WARP=${WARP:-/Users/me/dev/bin/warp}
 SECONDS_EACH=30
-PARALLEL=4
+PARALLEL=${WARP_SAMPLES_PARALLEL:-1}  # user 2026-11-01: four warps at once, the sweep is the one test run beside 3 builds
 # a sample calling a C window library opens its window whatever WARP_NO_WINDOW says: not run, counted apart (until
 # FFI windows honour WARP_NO_WINDOW, warp-native-harness)
 WINDOW_LIBRARIES='raylib|SDL|glfw'

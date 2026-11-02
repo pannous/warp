@@ -1,0 +1,3 @@
+# stopping or cancelling a finished task does nothing (card task-stop)
+'f(x) := x; t = go f(1); stop t; 3'	3
+'f(x) := x; t = go f(2); cancel t; await t'	2

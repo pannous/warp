@@ -4,6 +4,8 @@
 // `window_open = 1` or the first painting opens it, never under WARP_NO_WINDOW or CI. Each painting is a frame, its
 // title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
 // ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
+// The window resizes keeping the painting's aspect (the layer scales the painting to it), and goes full screen by
+// the system value window_fullscreen or its green button; the pointer is told in the painting's pixels
 // Built by scripts/wasmtime-c-api.sh where SDL3 is installed
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
@@ -25,6 +27,7 @@ static SDL_Window* window;
 static SDL_MetalView view;
 static int open_now, sized_by_program, closed_by_user;
 static int64_t width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT;
+static int32_t painted_width, painted_height; // the last painting's size: the pointer is told in its pixels
 static int64_t held[MOST_HELD];
 static int held_count;
 static float mouse_x, mouse_y, wheel;
@@ -53,7 +56,7 @@ static void window_opened(void) {
 	static int holding;
 	if (!holding) holding = 1, atexit(held_open);
 	if (!SDL_Init(SDL_INIT_VIDEO)) { fprintf(stderr, "window: %s\n", SDL_GetError()); return; }
-	window = SDL_CreateWindow(WINDOW_TITLE, (int)width, (int)height, SDL_WINDOW_METAL);
+	window = SDL_CreateWindow(WINDOW_TITLE, (int)width, (int)height, SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE);
 	if (!window) { fprintf(stderr, "window: %s\n", SDL_GetError()); return; }
 	view = SDL_Metal_CreateView(window);
 	open_now = 1;
@@ -108,6 +111,12 @@ static void held_open(void) {
 	}
 }
 
+// a pointer position in the window's points as a pixel of the painting the window shows scaled
+static int64_t in_painting(float point, int32_t painted, int window_points) {
+	return painted > 0 && window_points > 0 ? (int64_t)(point * painted / window_points) : (int64_t)point;
+}
+static int full_screen(void) { return window && (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0; }
+
 // the value of a system value this library owns into *value; 0 for a name it does not own
 int32_t warp_system_value(const char* name, int64_t* value) {
 	if (named(name, "window_open")) {
@@ -115,8 +124,11 @@ int32_t warp_system_value(const char* name, int64_t* value) {
 		*value = open_now;
 	} else if (named(name, "key_down")) *value = open_now && held_count > 0;
 	else if (named(name, "key code held")) *value = open_now && held_count ? held[held_count - 1] : 0;
-	else if (named(name, "mouse_x")) *value = open_now ? (int64_t)mouse_x : 0;
-	else if (named(name, "mouse_y")) *value = open_now ? (int64_t)mouse_y : 0;
+	else if (named(name, "mouse_x") || named(name, "mouse_y")) {
+		int points_wide = 0, points_high = 0;
+		if (open_now) SDL_GetWindowSize(window, &points_wide, &points_high);
+		*value = !open_now ? 0 : named(name, "mouse_x") ? in_painting(mouse_x, painted_width, points_wide) : in_painting(mouse_y, painted_height, points_high);
+	} else if (named(name, "window_fullscreen")) *value = full_screen();
 	else if (named(name, "mouse_down")) *value = open_now && mouse_down;
 	else if (named(name, "mouse_wheel")) *value = open_now ? (int64_t)wheel : 0;
 	else return 0;
@@ -127,6 +139,10 @@ int32_t warp_system_value(const char* name, int64_t* value) {
 int32_t warp_set_system_value(const char* name, int64_t value) {
 	if (named(name, "window_open")) {
 		if (value) window_opened(); else window_closed();
+		return 1;
+	}
+	if (named(name, "window_fullscreen")) {
+		if (window) SDL_SetWindowFullscreen(window, value != 0);
 		return 1;
 	}
 	if (named(name, "window_width")) width = value, sized_by_program = 1;
@@ -146,6 +162,12 @@ void* warp_window_layer(int32_t painting_width, int32_t painting_height) {
 	events_taken();
 	if (closed_by_user) exit(0);
 	frame_timed();
+	if (painting_width != painted_width || painting_height != painted_height) {
+		painted_width = painting_width;
+		painted_height = painting_height;
+		float aspect = (float)painting_width / (float)painting_height;
+		SDL_SetWindowAspectRatio(window, aspect, aspect);
+	}
 	if (!sized_by_program && frames == 1 && (painting_width != width || painting_height != height)) {
 		width = painting_width;
 		height = painting_height;

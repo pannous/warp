@@ -50,7 +50,7 @@ hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block", "instance", "vector"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
-context_words = ["method", "shadowed"]
+context_words = ["method", "shadowed", "item"]
 # `where $f is in [add, push]`: the hole bound one of the words listed
 listed_word = "in"
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
@@ -86,7 +86,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # `where $f takes number`: a first parameter typed one of these
 number_word = "number"
-numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real"]
+numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real", "real"]
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
@@ -112,7 +112,7 @@ comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime", "web", "storage", "frames", "signals", "timers"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
@@ -163,6 +163,11 @@ global rule_vector_scope = ""
 # where the node the rules try stands, for `where not method` and `where not shadowed`: the method part of the `.`
 # being walked (the right of `x.f(…)`), else ø; the names the definitions around it bind
 global rule_method_part = ø
+# `where item`: the item of a word's block being walked, `on click {…}` of `button{ "+1", on click {…} }`, else ø;
+# the block of the word key being walked and the item of it walked next
+global rule_item = ø
+global rule_item_block = ø
+global rule_next_item = ø
 global rule_binding = []
 # the word whose definition the rules walk inside: a rule producing that word leaves its definition as written, so
 # frames' `listen(data frame, …) => frame_listened(…)` never makes frame_listened call itself (card frame-self-rule)
@@ -1287,6 +1292,7 @@ starting_word(code: Node): Node := {
 context_holds(code: Node, context: text): bool := {
 	if code == ø { return no }
 	if context == "method" { return rule_method_part != ø and code == rule_method_part }
+	if context == "item" { return rule_item != ø and code == rule_item }
 	locally_bound(starting_word(code))
 }
 
@@ -1451,9 +1457,18 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		return f(Key(left, Op.Dot, right))
 	}
 	if not is_key(n, Op.Define) {
-		walked = children(n, x => placed_map_scoped(x, f, inner))
+		at_item = rule_next_item != ø and n == rule_next_item
+		rule_next_item = ø
+		holds_items = rule_item_block != ø and n == rule_item_block
+		if holds_items { rule_item_block = ø }
+		if is_word_block(n) { rule_item_block = value_of(n) }
+		walked = children(n, x => walked_item(x, holds_items, f, inner))
 		rule_maps = maps
-		return f(walked)
+		outer_item = rule_item
+		rule_item = if at_item then walked else ø
+		result = f(walked)
+		rule_item = outer_item
+		return result
 	}
 	outer = rule_binding
 	outer_defining = rule_defining
@@ -1466,6 +1481,15 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 	rule_maps = maps
 	f(walked)
 }
+
+# a child walked, marked as the item of a word's block it is for `where item` (a global set here, not in a lambda,
+# which would bind its own)
+walked_item(x: Node, is_item: bool, f: function, maps: map): Node := {
+	if is_item { rule_next_item = x }
+	placed_map_scoped(x, f, maps)
+}
+# `div{ "a", on click {…} }`: a word keying a block, whose items are the structure's items
+is_word_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and (key_of(n) is symbol or key_of(n) is text) and is_curly_group(value_of(n))
 
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
 # is a case of one enum (`c = Coin.Dime`, `c = Dime`); a name also given anything else holds no case for sure

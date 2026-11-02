@@ -1,0 +1,5 @@
+# a main variable a lambda or a handler changes is the one a function reads too (card lambda-mutable-capture)
+'p = 3; t := p * 2; f = () => { p = 10 }; t'	6
+'p = 3; t := p * 2; f = () => { p = 10 }; f(); t'	20
+'price = 3; total := price * 2; on key { price = 10 }; total'	6
+'n = 1; f = () => { n += 1 }; f(); n'	2
