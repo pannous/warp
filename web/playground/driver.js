@@ -9,6 +9,7 @@
 const COMPILER_FOLDER = "web/playground/warp-lib";
 const COMPILER_LIBRARY = `${REPOSITORY_DIRECTORY}/${COMPILER_FOLDER}`;
 const COMPILER_URL = `../../${COMPILER_FOLDER}/warp.wasm`;
+const SOURCES_URL = `../../${COMPILER_FOLDER}/sources.json`; // its library sources in one file (build.sh write_sources)
 const COMPILED_PATH = "/tmp/warp-program.wasm";
 // the program typed in the page when it is no sample's file: at the repository root, as `warp playground.warp` there
 const TYPED_FILE = "playground.warp";
@@ -31,10 +32,18 @@ const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
 let compilerModule; // warp.wasm compiled once; each compile gets a fresh instance, as each native run a fresh store
 
 async function loadDriverCompiler(progress = () => {}) {
-	const response = await fetch(COMPILER_URL);
+	const [response] = await Promise.all([fetch(COMPILER_URL), preloadedSources()]);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
-	const bytes = await progress(response);
-	compilerModule = await WebAssembly.compile(bytes);
+	// compiled as it streams in, so Chrome and Safari keep its machine code with the cached response: a second visit
+	// skips the compile; the clone feeds the progress. A server without the application/wasm type compiles the bytes
+	const [compiled, bytes] = await Promise.all([WebAssembly.compileStreaming(response.clone()).catch(() => null), progress(response)]);
+	compilerModule = compiled ?? await WebAssembly.compile(bytes);
+}
+
+async function preloadedSources() {
+	const response = await fetch(SOURCES_URL);
+	if (!response.ok) return console.warn(`${SOURCES_URL}: HTTP ${response.status}, each library source is fetched on its own; build it with web/playground/build.sh`);
+	preloadSources(await response.json(), COMPILER_FOLDER);
 }
 
 // the folder of a path, "." for a bare name
