@@ -379,6 +379,8 @@ class_help(name: Node, program: Node, source: text): any := {
 	["class " + spelled(name), "fields: " + declared.fields.join(" "), "methods: " + methods.join(" ")].join("\n")
 }
 function_help(name: Node, program: Node, source: text): any := {
+	# a used module's word, not the program's: its head and comment as the module writes them (module_word_help)
+	if definition_start(source, spelled(name)) == ø and used_word_help(spelled(name), source) != ø { return ø }
 	signature = if owns_word("help", program) then ø else signature_text(name, program)
 	if signature == ø { return ø }
 	doc = doc_of(name, program, source)
@@ -387,6 +389,54 @@ function_help(name: Node, program: Node, source: text): any := {
 module_help(name: Node, program: Node): any := {
 	words = if owns_word("help", program) then ø else dir_words(name, program)
 	if words == ø then ø else "module " + spelled(name) + ": " + items_of(words).map(word => "${word}").join(" ")
+}
+# `help(lowpass)` of a used module's word: each of its definitions' heads as the module writes them, then the comment
+# above the first (wiki/reflection.md "Modules"); ø when the program has its own help or no used module defines it
+module_word_help(name: Node, program: Node, source: text): any := if owns_word("help", program) then ø else used_word_help(spelled(name), source)
+used_word_help(word: text, source: text): any := {
+	for module in used_modules(source) {
+		help = word_help_in(used_module_text(module), word)
+		if help != ø { return help }
+	}
+	ø
+}
+word_help_in(module_text: text, word: text): any := {
+	heads = definition_slices(module_text).filter(cut => cut#1 == word).map(cut => definition_head(cut#2))
+	if #heads == 0 { return ø }
+	doc = comment_above(module_text, word)
+	heads.join("\n") + (if doc == "" then "" else "\n" + doc)
+}
+# `midi(pitch)` of `midi(pitch) := …`: a definition's first line up to its `:=`
+definition_head(definition: text): text := definition.split("\n")#1.split(":=")#1.trim()
+# `help(trick)` of a value only the run knows (the prelude's looked_up_word): [names, helps] of the program's classes and
+# functions and its used modules' words, the help of a text naming one or of an instance of a class; ø when the
+# program has its own help
+value_helps(program: Node, source: text): any := {
+	if owns_word("help", program) { return ø }
+	helps = {}
+	for word in definition_slices(source).map(cut => cut#1) { helps[word] = function_help(symbol(word), program, source) ?? word_help_in(source, word) }
+	for line in source.split("\n").filter(line => line.starts_with("class ")) {
+		named = line[6 ..].split(" ")#1.split("{")#1.trim()
+		helps[named] = class_help(symbol(named), program, source)
+	}
+	for module in used_modules(source) {
+		module_text = used_module_text(module)
+		for word in definition_slices(module_text).map(cut => cut#1).filter(is_listed_word) { if not helps.has(word) { helps[word] = word_help_in(module_text, word) } }
+	}
+	named = helps.keys.filter(word => helps[word] != ø)
+	List([List(named, Bracket.Square, Separator.Comma), List(named.map(word => helps[word]), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma)
+}
+# `function(trick).definition` of a name only the run knows: [names, definitions] of the program's words and its used
+# modules', each definition as its source writes it, to its `;` or line's end (all of a word's, one a line)
+value_definitions(program: Node, source: text): any := {
+	definitions = {}
+	for text in [source] + used_modules(source).map(used_module_text) {
+		found = {}
+		for cut in definition_slices(text).filter(cut => is_listed_word(cut#1) and not definitions.has(cut#1)) { found[cut#1] = (found.get(cut#1) ?? []) + [written_definition(cut#2, cut#1) ?? cut#2.trim()] }
+		for word in found.keys { definitions[word] = found[word].join("\n") }
+	}
+	named = definitions.keys
+	List([List(named, Bracket.Square, Separator.Comma), List(named.map(word => definitions[word]), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma)
 }
 dir_words(name: Node, program: Node): any := if owns_dir(program) or "${name}" in names_bound_in_kept(program) then ø else module_dir("${name}")
 owns_dir(program: Node): bool := owns_word("dir", program)
@@ -448,6 +498,7 @@ rule_words = {
 	misnamed: misnamed,
 	module_help: module_help,
 	module_named: module_named,
+	module_word_help: module_word_help,
 	once_listens: once_listens,
 	page_valued: page_valued,
 	paint_size: paint_size,
@@ -467,7 +518,9 @@ rule_words = {
 	typed_json: typed_json,
 	unit_bound: unit_bound,
 	unit_led: unit_led,
+	value_definitions: value_definitions,
 	value_dir_words: value_dir_words,
+	value_helps: value_helps,
 	wgsl_painting: wgsl_painting,
 	wgsl_shader: wgsl_shader,
 	whenever_listens: whenever_listens

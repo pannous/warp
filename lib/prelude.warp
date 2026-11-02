@@ -216,6 +216,14 @@ sum(xs: list) := fold(xs, 0, +)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (lib/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
+// help(x), function(x).definition of a value only the run knows (lib/sugar/reflection.warp gives the program's and its
+// modules' words and their texts): the text of the word a text names, or of an instance's class; a name that is no
+// word is an error naming it
+looked_up_word(x, asked, names, texts) := {
+	name = if x is text then x else "${type(x).name}"
+	for at in 1 to #names { if names#at == name { return texts#at } }
+	raise "${asked}: ${name} is no word or class of the program or its modules"
+}
 dir_of_value(x, list_words, text_words, map_words) := if x is map then x.keys + map_words else if x is list then list_words else if x is text then text_words else []
 // a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
 // The template names no helper word (card after-sum): it lands in the program's code, where a program's own word of
