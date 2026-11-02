@@ -80,6 +80,26 @@ served(program: Node): any := ended_by(program, "route_add", routes_end_word)
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
 exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
+# a program that starts tasks, ending in running them all (lib/tasks.warp tasks_end)
+tasked(program: Node): any := ended_by(program, "task_go", "tasks_end")
+
+# --- cooperative tasks (lib/tasks.warp, decision N29) ---
+
+# a task's block split at its own sleeps: `a; sleep t; b` as `a; task_sleep(t, () => { b })`, the rest of the block
+# the next step, which the scheduler runs once the task slept; a block without one as it is
+task_steps(block: Node): Node := {
+	statements = (if is_curly_group(block) then items_of(block) else [block]).flat_map(flat_statements)
+	at = (1 to #statements).filter(i => sleep_of(statements#i) != ø)
+	if #at == 0 { return block }
+	rest = List(statements[at#1 ..], Bracket.Curly, Separator.Semicolon)
+	pause = call_of("task_sleep", [call_of("sleep_ms_of", [sleep_of(statements#(at#1))]), Key(List([], Bracket.Round, Separator.Comma), Op.Arrow, task_steps(rest))])
+	List(statements[.. at#1 - 1] + [pause], Bracket.Curly, Separator.Semicolon)
+}
+# `await a + await b`: an await takes the operand before an operator, as a prefix does, not the whole expression
+awaited_operand(x: Node): Node := if x is key and op_of(x) in awaited_ops then Key(awaited_operand(key_of(x)), op_of(x), value_of(x)) else call_of("task_awaited", [x])
+awaited_ops = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne, Op.And, Op.Or, Op.Xor, Op.Coalesce]
+# the amount of a statement `sleep(t)` or `sleep t`, else ø
+sleep_of(statement: Node): any := if is_call_of(statement, "sleep") and #statement == 2 then statement#2 else if is_group(statement) and bracket_of(statement) == "" and #statement == 2 and statement#1 == symbol("sleep") then statement#2 else ø
 # `ticks` after `on every 1 second { ticks += 1 }`: a program that listens (a timer, an event, a variable's listener)
 # defines page_value(), its last expression again, which the page shows anew after each firing
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
@@ -583,6 +603,7 @@ declared_local(declaration: Node): Node := {
 
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 rule_words = {
+	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
 	class_help: class_help,
@@ -624,6 +645,8 @@ rule_words = {
 	signature_text: signature_text,
 	spelled: spelled,
 	tables_kept: tables_kept,
+	task_steps: task_steps,
+	tasked: tasked,
 	typed_json: typed_json,
 	unit_bound: unit_bound,
 	unit_led: unit_led,
