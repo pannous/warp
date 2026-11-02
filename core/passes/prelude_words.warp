@@ -327,7 +327,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	# names, which a program linking it calls (units' sleep beside the prelude's, card program-file): the prelude's word
 	# is the one set aside, as kept() sets it; beside a module it uses its word stays its own (storage's column_value
 	# beside sqlite3's)
-	if in_front or not module.relocating { program = with_own_words(program, module_names + (if in_front then [] else runtime_words_of_math)) }
+	if in_front or not building_a_module() { program = with_own_words(program, module_names + (if in_front then [] else runtime_words_of_math)) }
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
 	aliases = with_call_forms(module_aliases(module), module_names + own.keys)
@@ -564,6 +564,8 @@ own_named(code: Node, name: text, mine: text, heads: map): Node := bottom_up(ren
 # page_event beside its handler(name, action)), whose uses are that local's
 binds_locally(statement: Node, name: text): bool := declared_name(statement) != name and names_bound_in(statement).has(name)
 own_word(name: text): text := name + name_joiner + "own"
+# whether a library module is being built (prebuilt.warp sets it), not a program
+building_a_module(): bool := module.relocating
 # `sin(x: Real) := …`: a definition typing its parameters overloads the library's word beside it (arity_overloads.warp
 # library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its own body too,
 # reaches the library's; only an untyped one, `round(x) := …`, is the program's own
