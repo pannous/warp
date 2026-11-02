@@ -183,7 +183,13 @@ void* library_word(char* name) {
 static void* window_layer(int64_t width, int64_t height) {
 	static void* (*layer_of)(int32_t, int32_t);
 	static int32_t asked;
-	if (!asked) asked = 1, layer_of = (void* (*)(int32_t, int32_t))library_function("warp_window", "warp_window_layer");
+	if (!asked) {
+		asked = 1;
+		layer_of = (void* (*)(int32_t, int32_t))library_function("warp_window", "warp_window_layer");
+		void (*repainted_by)(int32_t (*)(void)) = (void (*)(int32_t (*)(void)))library_function("warp_window", "warp_window_repainted_by");
+		int32_t (*shown_again)(void) = (int32_t (*)(void))library_function("warp_gpu", "warp_gpu_shown_again");
+		if (repainted_by && shown_again) repainted_by(shown_again);
+	}
 	return layer_of && gpu_paints() ? layer_of((int32_t)width, (int32_t)height) : NULL;
 }
 static int32_t shown_or_told(int32_t failed) {
