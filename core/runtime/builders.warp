@@ -43,5 +43,9 @@ built_floats(address: int, count: int, info: int): Node := list_node(info * Kind
 built_spelled_list(items: Node, bracket: Node, separator: Node): Node := separated_node(bracketed_node(items, bracket), separator)
 # a type declaration as written, `class P { x: int }`: its name and body
 built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
+# the Error of a failure, which raises in a plain variable (decision N19); printing, equality and `is error` see it as
+# any Error
+failure_of(message: text): Node := with_kind(error_of(message), Marked.FailedError)
+is_failure(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.FailedError
 # a parse failure the program's `try` catches: the Error of the host's message
 built_error(message: Node): Node := error_of(node_text(message))

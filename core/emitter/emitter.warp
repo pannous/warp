@@ -444,7 +444,7 @@ def defined_arities(program: Node): map {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {} }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {} }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
@@ -705,6 +705,10 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 	TypedCode(ValueKind.Float, kept + get_dividend + get_dividend + get_divisor + [op.f64_div, op.f64_trunc] + get_divisor + [op.f64_mul, op.f64_sub])
 }
 
+# a variable an Error raises in (decision errors-one-rule): any but an optional one (`r: json? = …`), a runtime
+# word's own, or a lowering's hidden one (try·value)
+def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and name not in body.kept
+def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
 	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
@@ -741,6 +745,7 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
+	value = place_checked(body, name, value)
 	kind = value.kind
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`
@@ -786,6 +791,7 @@ admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
 	type_name = aliased_type(written_type)
+	if type_name.ends_with("?") or type_name == "error" { body.kept[name] = yes }
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name in admitted_numbers { return assignment(body, symbol(name), runtime_call(admitted_numbers[type_name], [TypedCode(ValueKind.Node, boxed(value))])) }
@@ -874,7 +880,7 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	if not (name is symbol) { return refuse("the declaration global " + form_of(declaration)) }
 	# `global n = n + 2` in a function: the value reads the global it assigns, declared first as a bare `global n` does
 	if mentions(value_of(declaration), name_of(name)) and not is_global(body, name_of(name)) { global_declaration_code(body, name) }
-	value = expression_code(body, value_of(declaration))
+	value = place_checked(body, name_of(name), expression_code(body, value_of(declaration)))
 	kind = if written == ø then ø else declared_kinds.get(aliased_type(written))
 	body.globals[name_of(name)] = yes
 	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(value, kind))
@@ -1324,6 +1330,8 @@ def negation(body: Body, value: TypedCode): TypedCode {
 logical_words = {and: "and", or: "or"}
 def logical(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 	a = expression_code(body, left)
+	# a value's `a or b` is b when a raises (decision errors-one-rule): a call giving a node is read under a try
+	if symbol == "or" and a.kind == ValueKind.Node and is_call(left) and not body.function.is_runtime { a = expression_code(body, kept_raise(left)) }
 	if a.kind == ValueKind.Bool and is_answered(a.code, symbol) { return a }
 	logical_code(body, symbol, a, nested(body, right, 1))
 }
@@ -1468,7 +1476,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime = {}
 	module.globals = {}
 	module.global_order = []
-	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text)
+	# (a value's `f(x) or b` too, logical reading f(x) under a try)
+	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text) or #nodes_kept(program, n => is_key(n, Op.Or) and is_call(key_of(n))) > 0
 	if module.catches_errors { declared_global(try_depth_name, ValueKind.Int) }
 	# the name of the runtime word a run failed in, which error_sentences.warp reads
 	declared_global(trap_name_global, ValueKind.Node)
