@@ -1,0 +1,4 @@
+'use list; sum_by([1, 2, 3], x => x * 2)'	12
+'use list; rotate([1, 2, 3], 1)'	[2 3 1]
+'use list; concat([1, 2], [3])'	[1 2 3]
+'use list; index(["a", "b"], "b")'	1
