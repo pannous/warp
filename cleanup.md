@@ -87,3 +87,7 @@ Cover adjacent pairs, splitting, interleaving and deduplication before typing th
 # library-typed extrema helpers
 
 Cover list indices and numeric median and minmax outcomes before adding non-narrowing signatures; verify the module and smoke on merged main.
+
+# library-typed list statistics and construction
+
+Cover documented list construction and statistics outcomes, then declare non-narrowing argument and result types and verify the module and smoke.
