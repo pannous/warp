@@ -103,3 +103,7 @@ Check callback outcomes before annotating generic parameters and results; preser
 ## library-typed map selection
 
 Cover map selection and lookup outcomes before adding non-narrowing signatures; verify focused tests and merged-main smoke.
+
+## library-typed map transformations
+
+Cover map construction, mapping and fallback outcomes before adding generic signatures; verify focused results and merged-main smoke.
