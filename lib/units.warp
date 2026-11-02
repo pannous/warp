@@ -162,6 +162,11 @@ ha() := known_unit("ha")
 dpi() := known_unit("dpi")
 ppi() := known_unit("ppi")
 
+// a quantity shown in a unit of its own dimension, any other value as it is: a field `distance: km` given 1500m holds
+// 1.5km (lib/rule_words.warp units_shown), never a conversion of another kind of value
+shown_in(value: any, unit: text) := if value is Quantity then shown_in_dimension(value, unit) else value
+shown_in_dimension(q: Quantity, unit: text) := if q.dims == unit_named(unit).dims then q.to(unit) else q
+
 // a unit word names a type too, its dimension's class (card unit-fields): a field `distance: km` holds a Length,
 // `time: min` a Time, `load: kg` a Mass; a unit of another quantity, a speed or an area, a Quantity
 type m = Length
