@@ -2,10 +2,8 @@
 // of the program's module, and its result (or failure) and printed output go back as JSON in the shared buffer the
 // starting program waits on with Atomics.wait.
 
-// a built site's task Worker gets the site's scripts as ?scripts=… (host-tasks.js addTaskWorker)
-const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts")?.split(",");
-importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js"]));
-if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
+importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
+importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 // the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
 let program;
 self.onmessage = ({ data }) => {

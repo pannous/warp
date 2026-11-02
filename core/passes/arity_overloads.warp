@@ -152,6 +152,7 @@ passed_variant(argument: Node, key: text, overloaded: map, called: map): Node :=
 	if #fitting == 1 then symbol(variant_name(name_of(argument), fitting#1#2)) else argument
 }
 
+overloaded_phrase(n: Node, overloaded: map): Node := if is_curly_group(n) and #n > 1 and n#1 is symbol and name_of(n#1) in overloaded then phrase_block(n) else n
 # top-down, so a definition is renamed by its own parameters and a method call counts its receiver
 resolved(n: Node, overloaded: map, called: map): Node := {
 	call = definition_call(n)
@@ -160,7 +161,9 @@ resolved(n: Node, overloaded: map, called: map): Node := {
 	}
 	match n {
 		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded, called), Op.Dot, variant_call(children(method, x => resolved(x, overloaded, called)), overloaded, 1))
-		_: children(variant_call(passed_variants(n, overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
+		# a one-line block calling an overloaded word, `{sum [1 2]}`, is its phrase, as typed_resolved reads it (card
+		# prelude-word-in-block); a class's fields, `{name text}`, stay as they are
+		_: children(variant_call(passed_variants(overloaded_phrase(n, overloaded), overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
 	}
 }
 

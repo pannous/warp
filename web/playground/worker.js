@@ -24,10 +24,7 @@ function inTurn(work) {
 	compilerTurn = done.catch(() => {});
 	return done;
 }
-let live; // the run whose page events are handled (host.js runProgram), until the next run
-const PAGE_VALUE = "page·value";
-// after a handler that patched holes, the value text waits this long for the next event before it is read whole
-const VALUE_DELAY_MILLISECONDS = 50;
+let live; // the run whose page events are handled (driver.js programRan), until the next run
 let panicMessage; // the compiler's last panic message
 
 let warming = false; // the warm-up's run says nothing to the page
@@ -46,7 +43,6 @@ self.servingPage = (shared, port) => self.postMessage({ type: "serving", shared,
 self.servedPage = response => self.postMessage({ type: "served", response });
 addPageSoundWords(post); // host-tasks.js
 const hooks = {
-	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	// host-media.js paintFrame: its words move to the page, not copied
@@ -64,10 +60,8 @@ const hooks = {
 		live = holder;
 		startTimers(holder, id => timerShown(holder, id));
 		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
-		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches], address: addressOf(holder) });
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
 	},
-	// a fetch's reply arrived (host.js startFetch): its handler runs like a timer's, and the page shows the outcome
-	arrived: (holder, handler) => holder === live && runHandler(holder, handler),
 	panicked: message => { panicMessage = message; },
 };
 
@@ -151,22 +145,6 @@ registerForeignRuntime("python", {
 		.catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
 });
 
-// a link in the shown markup was followed (playground.js followLink): the live run shows the page at that path
-function handleNavigation(path) {
-	if (!live) return;
-	navigate(live, hooks, path);
-	post({ type: "address", path: addressOf(live) });
-	showHandled(live, { result: true });
-}
-
-// the page's path for the playground's address bar: only a program with routes has one (lowering/web/routes.rs)
-const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
-
-// a form of the page was sent (playground.js submitForm): the live run's route answers it, then its page shows anew
-function handleSubmit(request) {
-	if (live) showHandled(live, runSubmitted(live, hooks, request));
-}
-
 // what the Rust compiler of the page answered and the self-hosted one has no word for yet (card playground-compiles)
 const NOT_SELF_HOSTED = "not in the self-hosted playground yet";
 
@@ -179,62 +157,14 @@ const memberNames = () => [];
 
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
-	if (live?.exports.page_event) return showPageEvent(live, pageEventHandled(live, event, detail));
-	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
+	if (live?.exports.page_event) return showPageEvent(pageEventHandled(live, event, detail));
+	post({ type: "handled", value: `on ${event}: no running page handles it`, error: true });
 }
 
 // a page of markup after its handler (driver.js pageEventHandled): the value, the page, the handlers it has now
-function showPageEvent(holder, { value, html, error, events }) {
+function showPageEvent({ value, html, error, events }) {
 	post({ type: "handled", value, html, error });
-	if (events) post({ type: "listening", events: events.map(event => `on ${event}`), address: addressOf(holder) });
-}
-
-// what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/signals/event_signals.rs
-// PAGE_VALUE), the program's last name read anew, else the handler's own value (a timer's only when it failed)
-function showHandled(holder, handled, timer = false) {
-	const binding = holder.exports[PAGE_VALUE] ?? holder.exports[PAGE_ROUTED_EXPORT];
-	if (timer && !binding && handled.result) return;
-	if (handled.result && binding && showHoles(holder)) return;
-	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
-	const failed = outcome.result === undefined;
-	const { value, html } = shownOf(outcome);
-	// a failing handler (a route's raise refusing an empty title) leaves the page as it was and says why beside it
-	const page = failed && binding ? shownOf(outcomeOf(holder, hooks, binding)).html : html;
-	post({ type: "handled", value, html: page, error: failed });
-}
-
-// the value and HTML the compiler shows for a run outcome: a page event's handler, not run by the self-hosted page yet
-function shownOf(outcome) {
-	return { value: outcome.failure ?? `page events: ${NOT_SELF_HOSTED}` };
-}
-
-// markup with holes (PAGE_HOLE·<path>, src/lowering/signals/event_signals.rs, card web-fine-holes): only the elements holding
-// computed parts, or their computed texts alone between children (TEXT_HOLE), are read, the page gets those whose HTML changed; the whole value follows once the events pause.
-// False when there are none, or one fails (the whole value then shows the error)
-function showHoles(holder) {
-	const holes = pageHoles(holder.exports);
-	if (!holes.length) return false;
-	const rendering = holder.exports[PAGE_HOLES];
-	if (rendering && outcomeOf(holder, hooks, rendering).result === undefined) return false;
-	holder.holeHtml ??= new Map();
-	const patches = [];
-	for (const { name, path, after } of holes) {
-		const outcome = outcomeOf(holder, hooks, holder.exports[name]);
-		if (outcome.result === undefined) return false;
-		const shown = after === undefined ? { html: outcome.html ?? shownOf(outcome).html } : { text: String(plainOfTree(outcome.result)), after };
-		const seen = shown.html ?? shown.text;
-		if (holder.holeHtml.get(name) === seen) continue;
-		holder.holeHtml.set(name, seen);
-		patches.push({ path, ...shown });
-	}
-	post({ type: "handled", patches });
-	clearTimeout(holder.valueTimer);
-	holder.valueTimer = setTimeout(() => {
-		if (live !== holder) return;
-		const outcome = outcomeOf(holder, hooks, holder.exports[PAGE_VALUE]);
-		post({ type: "handled", value: shownOf(outcome).value, error: outcome.result === undefined });
-	}, VALUE_DELAY_MILLISECONDS);
-	return true;
+	if (events) post({ type: "listening", events: events.map(event => `on ${event}`) });
 }
 
 // a timer fired (driver.js timerFired): what it printed went out meanwhile, the program's value shown anew (its
@@ -244,13 +174,6 @@ function timerShown(holder, id) {
 	if (failure === undefined && value === undefined) return;
 	post({ type: "handled", value: failure ?? value, error: failure !== undefined });
 	if (failure !== undefined) holder.stopTimers();
-}
-
-// a fetch's handler run and its outcome shown; a failing handler stops the timers
-function runHandler(holder, handler) {
-	const handled = runTimer(holder, hooks, handler);
-	showHandled(holder, handled, true);
-	if (handled.result === undefined) holder.stopTimers();
 }
 
 // the run's timers (host.js addTimer), each running its handler until the next run
@@ -269,8 +192,6 @@ self.onmessage = async ({ data }) => {
 async function handleMessage(data) {
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
-	if (data.navigate) return handleNavigation(data.navigate);
-	if (data.submit) return handleSubmit(data.submit);
 	if (data.bundle !== undefined) { // the running program keeps running
 		if (!compiler) await loadCompiler();
 		return post({ type: "bundle", bundle: workerBundle(data.bundle) });
