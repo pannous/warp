@@ -653,6 +653,12 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
 		if signed { item = spaced_sign_marked(p, p.code[previous_start ..< before].trim(), before, item) }
 		previous_start = before
+		// `def f(x)` ending its line: its body the lines below, indented or a `{…}` opening the next line (Allman), as
+		// `if c` reads its own (card def-body-next-line); without one the header stays as it is
+		if found and found#(found.length)#2 == Separator.Space and found#(found.length)#1 is symbol and name_of(found#(found.length)#1) in function_keywords and code_after(p, p.at) == '\n' {
+			body = indented_block(p)
+			if body != ø { item = call_of([item, body]) }  // as name_or_call glues a same-line `{…}`
+		}
 		tabbed = tab_separates(p)
 		newline = skip_blanks(p)
 		if bracket == Bracket.None and newline and line_indent(p) > p.indent {
@@ -968,10 +974,13 @@ def of_assignment(nodes: list): Node? := {
 // Rust twin: commands.rs grouped_list, print_call
 def comma_list(bracket: Bracket, nodes: list): Node := {
 	head = group_parts(nodes#1)
-	if not (bracket == Bracket.None or bracket == Bracket.Curly) or not prints(head) { return listed(bracket, Separator.Comma, nodes) }
-	call = call_of([PRINT] + head#3[1:] + nodes[1 ..])
+	if not (bracket == Bracket.None or bracket == Bracket.Curly) or not (prints(head) or returns(head)) { return listed(bracket, Separator.Comma, nodes) }
+	// `return a, b` so too: [[return a], b] gives back the tuple [a, b] (decision P2, tuple returns)
+	call = if returns(head) then spaced([RETURN, listed(Bracket.Square, Separator.Comma, head#3[1:] + nodes[1 ..])]) else call_of([PRINT] + head#3[1:] + nodes[1 ..])
 	if bracket == Bracket.Curly then listed(Bracket.Curly, Separator.None, [call]) else call
 }
+RETURN = symbol("return")
+def returns(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 == " " and #phrase#3 == 2 and phrase#3#1 == RETURN
 
 // The parts of an unbracketed phrase `print a`
 def prints(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 == " " and #phrase#3 > 0 and phrase#3#1 == PRINT
