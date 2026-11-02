@@ -85,6 +85,53 @@ ended_by(program: Node, starting: text, ending_word: text): any := {
 level_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then level_statements(s) else [s])
 is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
 
+# --- stored tables (lib/storage.warp's program rule, card storage-table-writes) ---
+
+# the program with each class a stored table holds given a row id, `id: int`, each add and remove of the table's list
+# kept in its table and each write of such a class's field kept in its row: `bo.age += 1` as
+# `stored_written(bo, bo.age += 1)`; ø for a program storing no table. `stored people: [Person]` has become
+# `people = stored_table("people", Person)` by then
+tables_kept(program: Node): any := {
+	statements = level_statements(program)
+	tables = {}
+	for statement in statements { for table in stored_table_of(statement) { tables[table#1] = table } }
+	if #tables == 0 { return ø }
+	classes = tables.keys.map(name => tables[name]#3)
+	kept_classes = statements.filter(statement => declared_class_name(statement) in classes)
+	fields = kept_classes.flat_map(declared_field_names)
+	kept = statements.map(statement => if statement in kept_classes then with_row_id(statement) else bottom_up(statement, part => table_kept(part, tables, fields)))
+	separated(bracketed(kept, ""), ";")
+}
+ROW_ID = "id"
+# [list name, table name, class name] of `people = stored_table("people", Person)`, else none
+stored_table_of(statement: Node): list := {
+	if not is_key(statement, Op.Assign) or not (key_of(statement) is symbol) or not is_call_of(value_of(statement), "stored_table") { return [] }
+	call = value_of(statement)
+	[[name_of(key_of(statement)), call#2, "${call#3}"]]
+}
+declared_class_name(statement: Node): text := {
+	view = class_view(statement)
+	if view == ø then "" else declared_type_name(view#2) ?? ""
+}
+# the class with an `id: int` field, unless it has one
+with_row_id(statement: Node): Node := {
+	if ROW_ID in declared_field_names(statement) { return statement }
+	view = class_view(statement)
+	opaque([view#1, view#2, view#3 + [view_of(plain_node(parsed(ROW_ID + ": int")))]] + view[3 ..])
+}
+# a table's add and remove kept in its table, a write of a kept class's field in its row; any other node as it is
+table_kept(n: Node, tables: map, fields: list): Node := {
+	if writes(n) and is_key(key_of(n), Op.Dot) and value_of(key_of(n)) is symbol and name_of(value_of(key_of(n))) in fields {
+		return call_of("stored_written", [key_of(key_of(n)), n])
+	}
+	if not is_key(n, Op.Dot) or not (key_of(n) is symbol) or not tables.has(name_of(key_of(n))) { return n }
+	call = value_of(n)
+	table = tables[name_of(key_of(n))]#2
+	if is_call_of(call, "add") and #call == 2 { return Key(key_of(n), Op.Dot, call_of("add", [call_of("stored_add", [table, call#2])])) }
+	if is_call_of(call, "remove") and #call == 2 { return Key(key_of(n), Op.Dot, call_of("remove", [call_of("stored_removed", [table, call#2])])) }
+	n
+}
+
 # --- variable signals (lib/signals.warp's rules, card signals-lib) ---
 
 variable_listen_word = "variable_listen"
@@ -416,6 +463,7 @@ rule_words = {
 	signaled: signaled,
 	signature_text: signature_text,
 	spelled: spelled,
+	tables_kept: tables_kept,
 	typed_json: typed_json,
 	unit_bound: unit_bound,
 	unit_led: unit_led,

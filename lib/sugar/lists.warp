@@ -19,3 +19,5 @@ rewrite (count bytes in $t) => byte_size($t)
 # call's argument, `count(xs where it is Pair)`; a field named bare reads the item's (decision P223, `people where age > 18`)
 rewrite ($xs where $c...) => $xs.filter(it => $d) where $d = bare_fields_read($c..., $program)
 rewrite $f($xs where $c...) => $f($xs.filter(it => $d)) where $d = bare_fields_read($c..., $program)
+# `for p in people where p.age > 90 {…}`: the filter reads the loop's variable
+rewrite for $x in $xs.filter(it => $c) {$body...} => for $x in $xs.filter($x => $c) {$body...} where $x is symbol
