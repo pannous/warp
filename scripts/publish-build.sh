@@ -24,6 +24,10 @@ mkdir "$scratch/$hash"
 	[ -f "$f" ] || continue
 	mkdir -p "$scratch/$hash/$(dirname "$f")"; cp "$f" "$scratch/$hash/$f"; [ -f "$f.inputs" ] && cp "$f.inputs" "$scratch/$hash/$f.inputs"
 done)
+# the self-tested marks of this hash (rebuild.sh self_passed: <store>/self-tested/<baked hash>, its line naming the hash)
+for mark in "$warp_store"/self-tested/*; do
+	[ -f "$mark" ] && [ "$(cut -d' ' -f1 "$mark")" = "$hash" ] && { mkdir -p "$scratch/$hash/self-tested"; cp "$mark" "$scratch/$hash/self-tested/"; }
+done
 (cd "$scratch/$hash" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort | while read -r f; do sha256_of "$f"; echo "  $f"; done | paste -d '' - - > SHA256SUMS)
 tar -C "$scratch" -czf "$scratch/$asset" "$hash"
 gh release upload "$TAG" -R "$REPO" "$scratch/$asset" >/dev/null
