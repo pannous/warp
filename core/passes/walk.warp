@@ -213,6 +213,9 @@ union_spelling(type: Node): text? := {
 	members = [key_of(type), value_of(type)].map(member => if member is symbol then name_of(member) else union_spelling(member))
 	if members.any(member => member == ø) then ø else members.join(" or ")
 }
+# the name of the variant of a word overloaded by arity that takes `total` arguments, `sum·1`, any number from there
+# on `sum·more` (arity_overloads.warp; the emitter's method_function calls it by it)
+arity_variant(name: text, total: int): text := name + "·" + (if total < 0 then "more" else "" + total)
 # the name of a type declaration's view: `P` of ["symbol", "P"], under the attribute layers of an enum's cases or a
 # base class
 declared_type_name(name: any): text? := {

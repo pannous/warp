@@ -28,6 +28,14 @@ def is_runtime_word(body: Body, name: text): bool {
 def is_program_call(body: Body, name: text, arguments: list): bool {
 	name in module.functions and not is_runtime_word(body, name) and takes_arguments(module.functions[name], arguments)
 }
+# the program's function a member `xs.sum` calls with its receiver: the word itself, or of a word overloaded by arity the
+# variant taking the receiver alone (passes/walk.warp arity_variant); ø when none takes it
+def method_function(body: Body, name: text, arguments: list): text? {
+	for candidate in [name, arity_variant(name, #arguments), arity_variant(name, -1)] {
+		if is_program_call(body, candidate, arguments) { return candidate }
+	}
+	ø
+}
 # whether f takes these arguments: no more than its parameters (any more after a rest one), a name given once, each
 # place left out defaulted
 def takes_arguments(f: Function, arguments: list): bool {

@@ -1223,8 +1223,9 @@ def key_expression(body: Body, n: Node): TypedCode {
 		value = expression_code(body, left)
 		# `n.sq`, `parts.last`: a member naming a function of the program that takes the value is its call (a node's
 		# entry of that name first)
-		if is_program_call(body, name_of(right), [left]) {
-			called = module.functions[name_of(right)]
+		method = method_function(body, name_of(right), [left])
+		if method != ø {
+			called = module.functions[method]
 			return field_or_word(body, value, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
 		}
 		# `t.split`: a member naming a library word that takes the value alone, its other parameters defaulted
