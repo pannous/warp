@@ -1,0 +1,4 @@
+# JSON parsing and serialization: notes/stdlib.md section 7 and lib/json.warp
+'use json; to_json([true, null, "x"])'	'[true,null,"x"]'
+'use json; to_json({answer: 42})'	'{"answer":42}'
+'use json; parse_json("[true, null, 2]")#3'	2
