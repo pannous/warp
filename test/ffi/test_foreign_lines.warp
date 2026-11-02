@@ -1,5 +1,5 @@
 # from test_foreign_lines.rs: edit the Rust test, then run the script again
 
-# a_foreign_line_imports_its_function
+# a_foreign_line_imports_its_function — native only: the last digit of macOS libm's erf, which the browser's musl rounds the other way
 is! «erf(x: float): float from 'm'
 erf(1.0)» 0.8427007929497148
