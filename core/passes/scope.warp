@@ -240,10 +240,17 @@ is_declaration_word(view: View, accepts: function): bool := kind_of(view) == "ty
 # value after a print, the branch's taken after an if, a block's last; a program binding result itself keeps its own
 last_value_word = "result"
 with_result_word(program: Node): Node := {
-	if not mentions(program, last_value_word) or binds_value(scope_of(program), last_value_word) { return program }
+	if not reads_last_value(program) or binds_value(scope_of(program), last_value_word) { return program }
 	bottom_up(program, n => if is_statement_sequence(n) then group_like(n, valued_before_result(items_of(n))) else n)
 }
-valued_before_result(statements: list): list := (1 to #statements).map(i => if i < #statements and mentions(statements#(i + 1), last_value_word) then valued(statements#i) else statements#i)
+valued_before_result(statements: list): list := (1 to #statements).map(i => if i < #statements and reads_last_value(statements#(i + 1)) then valued(statements#i) else statements#i)
+# a read of the word result, not a field of that name: `p.result`, `{result: 3}`
+reads_last_value(n: Node): bool := match n {
+	Symbol(name): name == last_value_word
+	Key(left, Op.Dot, right): reads_last_value(left)
+	Key(left, Op.Colon, right): reads_last_value(right)
+	_: parts_of(n).any(reads_last_value)
+}
 # the statement s, also keeping its value as result
 valued(s: Node): Node := match s {
 	Key(Key(test, Op.Then, yes_branch), Op.Else, no_branch): Key(Key(test, Op.Then, valued(yes_branch)), Op.Else, valued(no_branch))
