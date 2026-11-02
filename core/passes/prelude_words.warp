@@ -323,8 +323,11 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	# a program's function named as a library word is the program's own (decision library-words-lexical): the program's
 	# calls it takes reach it, under its own name, any other call and every library body the library's word, so
 	# round_to's round stays math's beside a program's round(x), and round(2.345, 2) is round_to; a module brought in
-	# front replaces the prelude's word as it is
-	program = with_own_words(program, module_names + (if in_front then [] else runtime_words_of_math))
+	# front replaces the prelude's word as it is. A library module being built exports its words under their written
+	# names, which a program linking it calls (units' sleep beside the prelude's, card program-file): the prelude's word
+	# is the one set aside, as kept() sets it; beside a module it uses its word stays its own (storage's column_value
+	# beside sqlite3's)
+	if in_front or not module.relocating { program = with_own_words(program, module_names + (if in_front then [] else runtime_words_of_math)) }
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
 	aliases = with_call_forms(module_aliases(module), module_names + own.keys)
@@ -548,9 +551,6 @@ shadows(own: map, name: text, count: int): bool := {
 # the program with each function it defines named as one of `library` under its own name (name·own): its definition,
 # its value and the calls it takes; a call it doesn't take keeps the library's word
 with_own_words(program: Node, library: list): Node := {
-	# a library module being built exports its words under their written names, which a program linking it calls
-	# (units' sleep beside the prelude's, card program-file): the prelude's word is the one set aside, as kept() sets it
-	if module.relocating { return program }
 	heads = own_heads(program)
 	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(heads[name]))
 	for name in owned {
