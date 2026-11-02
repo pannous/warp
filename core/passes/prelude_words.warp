@@ -675,7 +675,7 @@ implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 		# core's event, `on every 1 second {…}` timers'
 		if not named { definers = definers.filter(module => rule_fits(module, word, program)) }
 		if not named and #definers == 0 { continue }
-		if #definers > 1 { definers = definers_taking(word, definers, program) }
+		if #definers > 1 { definers = base_definers(definers_taking(word, definers, program)) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
 		if #definers == 0 { raise word + " is defined by " + index[word].join(" and ") + ", none taking these arguments: say which, " + index[word].map(module => "`use " + module + "`").join(" or ") }
 		if definers#1 not in modules and definers#1 not in used {
@@ -701,6 +701,9 @@ module_rule_heads(module: text): list := {
 # the count of arguments: math's dot(u, v) beside draw's dot(x, y, color) (card dot-product-definition); a module whose
 # rule the word leads takes the calls none of them takes (signals' `on change p.age {…}` beside keys' on(key, body)), else
 # the defining modules do
+# the definers no other of them builds on: units' ± overloads uncertain's, which it uses, so `6 ± 1` is uncertain's
+# and `5m ± 1cm` brings units by its unit beside it
+base_definers(definers: list): list := definers.filter(module => not used_modules(used_module_text(module)).any(used => used in definers))
 definers_taking(word: text, definers: list, program: Node): list := {
 	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 	if not counts { return definers }
