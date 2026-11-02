@@ -1,0 +1,4 @@
+# Element and attribute rendering while typing markup predicates
+'use markup; to_html(div{class: "box", "Hello"})'	'<div class="box">Hello</div>'
+'use markup; to_html(my-card{"Hi"})'	'<my-card>Hi</my-card>'
+'use markup; to_html(div{data-id: "a", "ok"})'	'<div data-id="a">ok</div>'

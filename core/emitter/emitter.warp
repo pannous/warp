@@ -167,8 +167,10 @@ int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>"
 # an int is wasm's i64: + - * wrap silently, never checked (decision nat-and-int); a nat that may grow is boxed
 bit_operators = ["xor", "<<", ">>"]
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
-# yes/no held as i32: only equal or not
+# yes/no held as i32: only equal or not; any other operator takes it as the int 0 or 1 (operators.warp bools_as_ints)
 bool_ops = {"==": 70, "!=": 71}
+# the operators whose result of two 0/1 values is 0 or 1 again: on two yes/no values a yes/no (user 2026-11-02, bool-as-int)
+zero_one_operators = ["xor", "&", "|", "min", "max"]
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
@@ -721,6 +723,10 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if is_key(target, Op.Colon) and key_of(target) is symbol and union_spelling(value_of(target)) != ø {
 		return union_declaration(body, name_of(key_of(target)), union_spelling(value_of(target)), value)
 	}
+	# `xs: [int] = [1]`, `xs: [U] = …`: a list as `list` declares it
+	if is_key(target, Op.Colon) and key_of(target) is symbol and bracket_of(value_of(target)) == "[" {
+		return declaration(body, name_of(key_of(target)), "list", value)
+	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
@@ -850,11 +856,17 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 		entry = declared_global(global_key(body, name_of(declaration)), ValueKind.Node)
 		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1))
 	}
-	if not (is_key(declaration, Op.Assign) and key_of(declaration) is symbol) {
-		return refuse("the declaration global " + form_of(declaration))
-	}
-	body.globals[name_of(key_of(declaration))] = yes
-	declare_global(global_key(body, name_of(key_of(declaration))), expression_code(body, value_of(declaration)))
+	# `global int n = 0` (parser.warp global_declaration): `global n: int = 0`, the value as the type word takes it
+	target = if is_key(declaration, Op.Assign) then key_of(declaration) else ø
+	written = if is_key(target, Op.Colon) and value_of(target) is symbol then name_of(value_of(target)) else ø
+	name = if written != ø then key_of(target) else target
+	if not (name is symbol) { return refuse("the declaration global " + form_of(declaration)) }
+	# `global n = n + 2` in a function: the value reads the global it assigns, declared first as a bare `global n` does
+	if mentions(value_of(declaration), name_of(name)) and not is_global(body, name_of(name)) { global_declaration_code(body, name) }
+	value = expression_code(body, value_of(declaration))
+	kind = if written == ø then ø else declared_kinds.get(aliased_type(written))
+	body.globals[name_of(name)] = yes
+	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(value, kind))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
 	if name not in module.globals and value.mark != 0 { module.global_marks[name] = value.mark }

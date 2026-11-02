@@ -1,0 +1,2 @@
+# Outcome forms: notes/decisions.md, click-by-label
+'use markup; count = 0; page = div{ button{ "+1", on click { count += 1 } } }; page_render(page); page_event(1, ø); count'	1

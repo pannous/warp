@@ -7,11 +7,12 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 - postfix-words (user wants a discussion): `xs sorted`, `x squared`. Options: a typed sugar rule `$x $f => $f($x) where $f takes …` (typed rule conditions exist: lib/sugar/broadcasting.warp), or the original idea, an -ed/-d verb suffix fallback (`sorted` → sort when no `sorted` exists). Default: not a feature.
 - true-threads (user asked): `go` tasks are cooperative today (N29); decision P33 says real threads (wasm threads natively, Web Workers in the page). How to tell threads from cooperative tasks?
-- N1–N32 keep/undo review (notes/night_2026-11-02.md); stale wabt sudo delete; cloud credit use.
+- N1–N32 review batch 2: N8, N9, N10, N14, N18, N23, N25, N30 (batch 1 done); stale wabt sudo delete; cloud credit use.
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 
 ## Parked
+- ordinal-dot-index: `1.friend` / `1. 2nd` (a number, a dot, a word as an ordinal index, wiki/significant-whitespace.md) parked as esoteric.
 - class-text (sound notes), unit plurals, def-first (b), note tests: discuss later (user).
 - event-handlers (prose discussion with the user, no popups; block-parameters-captures landed): proposed `on(event: Event, body: block)` in the prelude, `emit(event, data)` runs the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol; (3) decided: on-frame-headless. Branch event-handlers-unknown (a4d0dde771) only a reference.
 - graphics-plain (warp-markup, parked): display alias table with notes; bare width/height as canvas sides with did-you-mean.
