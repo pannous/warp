@@ -1507,6 +1507,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		module.shared = shared_names(block_statements(main.body))
 		compile_function(main, [])
 		if prepended() { linked_builders() }
+		page_builders()
 		# the host shows no ø: a program giving nothing needs no show
 		if not main.gives_nothing { shown_result(main.result) }
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
