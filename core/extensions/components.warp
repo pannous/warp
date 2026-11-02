@@ -60,14 +60,16 @@ with_live_items(n: Node, names: list): Node := {
 	if #parts == 0 { return n }
 	Key(parts#1, Op.Colon, group_like(parts#2, items_of(parts#2).map(item => if calls_component(item, names) then live_part(item) else item)))
 }
-calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(n) == 0 and (is_component_call(n, names) or parts_of(n).any(part => calls_component(part, names)))
+# (reading the instances too, `p{ "sum " + sum(counters.map(c => c.count)) }`: they change as the page renders)
+calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(n) == 0 and (is_component_call(n, names + [instances_word]) or parts_of(n).any(part => calls_component(part, names)))
 live_part(item: Node): Node := call_node(symbol("live"), [lambda_of(item)])
 instances_named(n: Node, names: list): Node := {
 	if is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and value_of(n) == symbol(instances_field) { return instances_of(name_of(key_of(n))) }
 	if n is symbol { return plural_instances(name_of(n), names) ?? n }
 	n
 }
-instances_of(name: text): Node := call_node(symbol("component_instances"), [name])
+instances_word = "component_instances"
+instances_of(name: text): Node := call_node(symbol(instances_word), [name])
 # `counters`, a component's name in lower case and plural, as `Counter.instances` (a spelling the user may drop: then
 # only this goes)
 plural_instances(word: text, names: list): Node? := {
