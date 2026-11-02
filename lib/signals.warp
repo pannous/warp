@@ -13,6 +13,11 @@ rewrite on set $x $body: block => variable_listen([$n], no, (value, old) => $bod
 rewrite on change $x $body: block => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and $n = spelled($x)
 rewrite whenever $c $body: block => $listens where $listens = whenever_listens($c, $body)
 rewrite once $c $body: block => $listens where $listens = once_listens($c, $body)
+// the same with the block after a colon, `whenever x > 2: print "big"`
+rewrite on set $x: $body => variable_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite on change $x: $body => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and $n = spelled($x)
+rewrite whenever $c: $body => $listens where $listens = whenever_listens($c, $body)
+rewrite once $c: $body => $listens where $listens = once_listens($c, $body)
 rewrite $p => $q where program and $q = signaled($p)
 rewrite $p => $q where program and $q = page_valued($p)
 

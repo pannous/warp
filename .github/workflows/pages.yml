@@ -2,7 +2,7 @@
 name: Playground
 
 # The browser playground (web/playground, notes/playground_plan.md) on GitHub Pages, custom domain warp.pannous.com:
-# the self-hosted compiler warp.wasm with its lib/ (warp-lib/: the latest release's, this checkout's lib/ laid over it,
+# the self-hosted compiler warp.wasm with its lib/ (warp-lib/: this checkout's, built by scripts/ci-compilers.sh,
 # web/playground/build.sh), the page and samples/<chapter>/*.warp. scripts/browser-dry-run.sh runs the same tours on
 # pannous.com. The workflow is disabled on GitHub (2026-11-01): it is enabled only when the user says so.
 # Stage 2 of 2 : the Integrator pushes main after the native gate (stage 1) and never waits for this.
@@ -56,7 +56,7 @@ jobs:
     - id: since
       env:
         GH_TOKEN: ${{ github.token }}
-        SITE_PATHS: lib web/playground samples .github/workflows/pages.yml
+        SITE_PATHS: core lib web/playground samples scripts/ci-compilers.sh .github/workflows/pages.yml
       run: |
         if [ "${{ github.event_name }}" != schedule ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
         green=$(gh run list -R "$GITHUB_REPOSITORY" -w Playground -b main -s success -L 1 --json headSha -q '.[0].headSha')
@@ -70,15 +70,14 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
-    # the compiler the page runs is warp.wasm of the latest release: its archive is the lib folder itself (the native
-    # warp, warp.wasm, runtime.wasm, the standard modules); build.sh copies it and lays this checkout's lib/ over it
-    - name: The latest release's warp.wasm and lib
+    # the compiler the page runs is this checkout's (scripts/ci-compilers.sh, as the Release workflow builds it): the
+    # last release's warp.wasm dropped the rules of a newer lib/ it serves (card safari-painting-checks)
+    - name: This checkout's compilers
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        gh release download -R "$GITHUB_REPOSITORY" --pattern 'warp-v*-x86_64-unknown-linux-gnu.tar.gz' --output warp-lib.tar.gz
-        mkdir -p "$RUNNER_TEMP/warp-lib" && tar xzf warp-lib.tar.gz -C "$RUNNER_TEMP/warp-lib"
-        echo "WARP_LIB=$RUNNER_TEMP/warp-lib" >> "$GITHUB_ENV"
+        scripts/ci-compilers.sh . "$RUNNER_TEMP/bootstrap"
+        echo "WARP_LIB=$PWD/lib" >> "$GITHUB_ENV"
     - name: Build the compiler folder and samples.js
       run: web/playground/build.sh
     # the same collection as scripts/browser-dry-run.sh's (build.sh collect_site)
