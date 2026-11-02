@@ -9,8 +9,8 @@
 'inc = x => x + 1; job = go { inc(3) }; await job'	4
 
 # go_maps_in_parallel
-'twice(x) := x * 2; go [1,2,3].map(twice)'	[2, 4, 6]
-'ys = go [1,2,3].map(x => x + 1); ys'	[2, 3, 4]
+'twice(x) := x * 2; await go [1,2,3].map(twice)'	[2, 4, 6]
+'ys = await go [1,2,3].map(x => x + 1); ys'	[2, 3, 4]
 'twice(x) := x * 2; ys = [1,2].map(twice) @parallel; ys'	[2, 4]
 
 # go_for_runs_its_iterations_in_parallel

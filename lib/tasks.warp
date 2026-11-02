@@ -9,9 +9,8 @@ use units
 rewrite await go $body: block => task_awaited(task_go(() => $steps)) where $steps = task_steps($body)
 rewrite await go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
 rewrite go $body: block => task_go(() => $steps) where $steps = task_steps($body)
-// a task of an expression, `go f(x)`, is its value at once, run where it is started (`job + 1`, `[a, b]` read it
-// as a value: an implicit await), in a context of its own as a block's
-rewrite go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
+// a task of an expression is a block's (decision go-unified): `go f(x)` is `go { f(x) }`
+rewrite go $x => task_go(() => $x)
 rewrite await all $xs => $xs.map(task_awaited)
 rewrite await any $xs => task_awaited_any($xs)
 rewrite await first $xs => task_awaited_any($xs)
