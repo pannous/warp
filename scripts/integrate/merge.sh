@@ -9,7 +9,7 @@
 # The batch (tested hash, base, cards) goes to <tree>/data/integrate/batch for land.sh.
 # Exit: 0 tier 0 green, 1 red or nothing merged.
 set -uo pipefail
-MAIN_WARP=/Users/me/dev/bin/warp
+MAIN_WARP=$HOME/dev/bin/warp
 DEFAULT_TREE=/Volumes/Worktrees/integrate
 EXPECTED=Hello
 

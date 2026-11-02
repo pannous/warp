@@ -1,0 +1,4 @@
+# `use "•/x"` names x below the project root, the nearest folder holding .git; `@/` is its alias (card root-folder-marker)
+'use "•/test/fixtures/counter.warp"; counter'	10
+'use "@/test/fixtures/counter.warp"; counter'	10
+'use "•/test/fixtures/no_such_file.warp"; 1'	error

@@ -7,7 +7,8 @@
 #     `scripts/self-check.sh <worktree>` too)
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
 set -uo pipefail
-INSTALLED=$HOME/dev/bin/warp
+source "$(dirname "$0")/lib/platform.sh"
+INSTALLED=$warp_binary
 COMPILERS=(warp.wasm warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key warp.wasm.driver.build.cwasm warp.wasm.driver.build.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
 EXPECTED=Hello
 
@@ -17,8 +18,9 @@ BAKED="^(core/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --baked-files 
 installed=$(dirname "$(readlink -f "$INSTALLED")")
 base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
-if [ -n "$baked" ]; then
-	echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
+if [ -n "$baked" ] || [ "$warp_installed_follows_main" != 1 ]; then
+	if [ -n "$baked" ]; then echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
+	else echo "smoke: REBUILDING, the installed compilers do not follow main (WARP_INSTALLED_FOLLOWS_MAIN)"; fi
 	# a failed build prints its step, the step's output and the log's path in the store (and so does a hash failed before)
 	built=$("$scripts/rebuild.sh" pure "$tree" 2>&1) || { echo "smoke: rebuild failed:" >&2; echo "$built" >&2; exit 1; }
 	echo "$built" | tail -1
@@ -28,11 +30,11 @@ else
 		# machine code (.cwasm) is made at a module's first run (the 512 MB heap's at the compiler's first compile), so an
 		# install may have none yet; the run makes it
 		[[ $part == *.cwasm* && ! -e $installed/$part ]] && continue
-		rm -rf "${tree:?}/lib/$part" && cp -Rc "$installed/$part" "$tree/lib/$part" || exit 1
+		rm -rf "${tree:?}/lib/$part" && clone -R "$installed/$part" "$tree/lib/$part" || exit 1
 	done
-	for library in "$installed"/lib*warp_*.*; do cp -c "$library" "$tree/lib/" 2>/dev/null; done
+	for library in "$installed"/lib*warp_*.*; do clone "$library" "$tree/lib/" 2>/dev/null; done
 	way="the installed compilers, no rebuild"
 fi
-got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 timeout 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | tail -1)
+got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 timeout 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 [[ $got == *$EXPECTED* ]] || { echo "smoke: hello got ${got:0:160}" >&2; exit 1; }
 echo "smoke: $got ($way, WARP_LIB=$tree/lib)"
