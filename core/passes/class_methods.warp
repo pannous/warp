@@ -42,6 +42,8 @@ use "../analysis/words.warp"
 self_node = symbol("self")
 # what a method may call its instance: self, as Swift's and Python's, or this, as Java's and C++'s
 instance_names = ["self", "this"]
+# what a method calls its class's parent, as Java's, Swift's and Python's
+parent_word = "super"
 # the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
 base_layers = ["extends", "inherited_from"]
 # the constructor method, the word naming it when its body is a block, and the functions a construction becomes
@@ -180,7 +182,7 @@ methods_lifted(program: Node): Node := {
 		operator = spelled_operator(operator_table, spellings#1)
 		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions, floaters)]
 	}
-	for name in constructed.keys { rewritten += constructor_functions(classes, name, routes) }
+	for name in constructed.keys { rewritten += constructor_functions(classes, liftable, name, routes) }
 	rewritten += derived_dispatchers(classes, liftable, routes, promotions, operator_table)
 	group_like(program, rewritten)
 }
@@ -217,12 +219,12 @@ constructions(n: Node, constructed: map): Node := {
 # a class's constructor lifted, `init·C(self, …)`, and the function constructing through it: `C·new(…) := { self =
 # C(); init·C(self, …); self }` of one taking parameters (C() the instance of the fields' defaults: the calls were
 # rewritten before), else `C·made(self) := { init·C(self); self }`
-constructor_functions(classes: map, owning_class: text, routes: list): list := {
+constructor_functions(classes: map, names: list, owning_class: text, routes: list): list := {
 	method = constructor_of(classes[owning_class])
 	initializer = owned_name(method, owning_class)
 	parameters = method_parameters(method_in(classes[owning_class], method))
 	given = parameters.map(parameter => symbol(parameter_name(parameter)))
-	lifted = method_function(classes, owning_class, method, initializer, routes)
+	lifted = method_function(classes, names, owning_class, method, initializer, routes)
 	if #parameters == 0 { return [lifted, Key(call_of(made_name(owning_class), [self_node]), Op.Define, block_of([call_of(initializer, [self_node]), self_node]))] }
 	made = block_of([Key(self_node, Op.Assign, call_of(owning_class, [])), call_of(initializer, [self_node] + given), self_node])
 	[lifted, Key(call_of(constructor_name(owning_class), parameters), Op.Define, made)]
@@ -466,19 +468,46 @@ without_methods(top_statement: Node, view: list): Node := {
 # methods_lifted adds once the program is routed)
 functions_of(classes: map, names: list, method: text, routes: list): list := {
 	owners = owners_of(classes, names, method)
-	if #owners == 1 and method not in routes { return [method_function(classes, owners#1, method, method, routes)] }
-	owners.map(owning_class => method_function(classes, owning_class, method, owned_name(method, owning_class), routes))
+	if #owners == 1 and method not in routes { return [method_function(classes, names, owners#1, method, method, routes)] }
+	owners.map(owning_class => method_function(classes, names, owning_class, method, owned_name(method, owning_class), routes))
 }
 owned_name(method: text, owning_class: text): text := method + "·" + owning_class
 # the class's method as the function `name(self, parameters…)` of its instance
-method_function(classes: map, owning_class: text, method: text, name: text, routes: list): Node := {
+method_function(classes: map, names: list, owning_class: text, method: text, name: text, routes: list): Node := {
 	declared = method_in(classes[owning_class], method)
 	parameters = method_parameters(declared)
 	taken = parameters.map(parameter_name)
-	body = value_of(declared)
+	body = on_parent(value_of(declared), Parent(classes, names, owning_class, routes))
 	fields = fields_reaching(classes, owning_class).filter(field => field not in taken)
 	siblings = methods_reaching(classes, owning_class).filter(sibling => sibling not in taken and not assigns_name(body, sibling) and not overcalled(body, sibling, taking(classes, owning_class, sibling)))
 	Key(call_of(name, [self_node] + parameters), Op.Define, on_instance(body, fields, siblings, routes))
+}
+# what `super` in a method of the class reaches: the classes, the lifted ones, the class, the routed methods
+class Parent { classes: map; names: list; owning_class: text; routes: list }
+# `super.m(…)` and `super.m` in a method: the method of the nearest ancestor declaring m, called on the instance
+# (`speak := super.speak + ": woof"`); `super(…)` and `super.init(…)` its constructor; `super.name` of a field the
+# instance's
+on_parent(n: Node, parent: Parent): Node := {
+	parts = (part => on_parent(part, parent))
+	if is_called_name(n) and name_of(n#1) == parent_word { return parent_call(constructor_method, items_of(n)[1..].map(parts), parent) ?? children(n, parts) }
+	match n {
+		Key(Symbol(word), Op.Dot, member): {
+			if word != parent_word { return children(n, parts) }
+			method = if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else ø
+			arguments = if is_called_name(member) then items_of(member)[1..].map(parts) else []
+			call = if method == ø then ø else parent_call(method, arguments, parent)
+			if call != ø then call else Key(self_node, Op.Dot, parts(member))
+		}
+		_: children(n, parts)
+	}
+}
+# the call of the method of the nearest ancestor declaring it, on the instance, else ø
+parent_call(method: text, arguments: list, parent: Parent): Node? := {
+	classes = parent.classes
+	declaring = lineage(classes, parent.owning_class)[1..].filter(ancestor => ancestor in parent.names and classes[ancestor].methods.any(m => defined_word(m) == method))
+	if #declaring == 0 { return ø }
+	function = if method == constructor_method then owned_name(method, declaring#1) else lifted_name(classes, parent.names, method, declaring#1, parent.routes)
+	call_of(function, [self_node] + arguments)
 }
 # how many parameters the method of that name the class reaches takes
 taking(classes: map, owning_class: text, method: text): int := #method_parameters(lineage(classes, owning_class).flat_map(ancestor => classes[ancestor].methods).filter(m => defined_word(m) == method)#1)
