@@ -20,8 +20,8 @@ class Quantity {
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
 	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
 	compare(other) := amount - same_quantity(this, other, "compare").amount
-	// the same quantity shown in another unit of its kind: `q.to("m")`, `q as m`
-	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, u, target.scale) }
+	// the same quantity shown in another unit of its kind: `q.to("m")`, `q as m`, `q as cm^2` shown in cm²
+	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, target.unit, target.scale) }
 	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
 	in(u) := to(u).shown()
 	shown() := (amount - unit_zero(unit)) / scale
@@ -119,6 +119,14 @@ rewrite $q as $u => $q.to($u.unit) where not unit_led($q) and $u is symbol and $
 rewrite $e $u as $t => ($e $u) as $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `2 hours in minutes`: the same, spelled with in
 rewrite $q in $u => $q.to($u.unit) where not unit_led($q) and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+// `q as km/h` binds as (q as km) / h, as tightly as `as` takes its type, `in` alike: the rest of a unit written whole joins the
+// unit converted to, q as (km/h), taken top-down before its parts convert (`(q as km) / h` written so stays a quotient)
+rewrite $a / $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a / $b)
+rewrite $a * $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a * $b)
+rewrite $a ^ $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a ^ $b)
+// `q as km/h`, `36km/h in m/s`: the quantity shown in a compound unit, the unit of one of it (lib/units unit_named)
+rewrite $q as $u => $q.to($unit) where not unit_led($q) and $w = leading_unit($u) and $w in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $unit = compound_unit($u)
+rewrite $q in $u => $q.to($unit) where not unit_led($q) and $w = leading_unit($u) and $w in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $unit = compound_unit($u)
 // `3 cm is Length` and `2 km/h is speed` parse as 3 (cm is Length): the unit goes with its amount first
 rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, Quantity, Length, Mass, Time, Temperature, Pixels]
 // `3 cm is length`, `2 km/h is speed`: a quantity measures a named dimension, after its unit went with its amount (no
