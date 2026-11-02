@@ -141,18 +141,26 @@ function codeParsedFrom(program, code) {
 const EVAL_FILE = "playground.eval.warp";
 const VALUE_MARK = "§warp value§\n"; // core/emitter/emitter.warp VALUE_MARK, on a line of its own
 function codeEvaluated(program, code, hooks) {
+	const { failure, printed, data } = ranAsData(guestText(program, code));
+	if (failure !== undefined) return newGuestError(program, `eval: ${failure}`);
+	hooks.print?.(printed, STDOUT);
+	return codeParsedFrom(program, data);
+}
+
+// the code compiled and run apart from the page's program, its value as data (WARP_VALUE_AS_DATA, no serving):
+// {printed, data} before and after the value mark, or {failure}
+function ranAsData(code) {
 	let printed = "";
 	const capture = text => printed += text;
 	const asData = self.valueAsData;
-	self.valueAsData = true; // compilerEnvironment, programEnvironment: the value as data, no serving
+	self.valueAsData = true; // compilerEnvironment, programEnvironment
 	try {
-		return withSource(guestText(program, code), EVAL_FILE, () => {
+		return withSource(code, EVAL_FILE, () => {
 			const compiled = compiledProgram(EVAL_FILE, capture);
 			const { status, said } = compiled.failure ? { status: FAILURE_STATUS, said: compiled.failure } : programRan(compiled.module, EVAL_FILE, { print: capture });
 			const mark = printed.indexOf(VALUE_MARK);
-			if (status !== 0 || mark < 0) return newGuestError(program, `eval: ${said || printed}`);
-			hooks.print?.(printed.slice(0, mark), STDOUT);
-			return codeParsedFrom(program, printed.slice(mark + VALUE_MARK.length));
+			if (status !== 0 || mark < 0) return { failure: said || printed };
+			return { printed: printed.slice(0, mark), data: printed.slice(mark + VALUE_MARK.length) };
 		});
 	} finally {
 		self.valueAsData = asData;

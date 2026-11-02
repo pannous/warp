@@ -594,9 +594,19 @@ function_positions_of(written: list): map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
-		if parts != ø and parts.parameters.any(is_function_parameter) { found[parts.name] = (1 to #parts.parameters).filter(i => is_function_parameter(parts.parameters#i)) }
+		if parts == ø { continue }
+		positions = (1 to #parts.parameters).filter(i => takes_function_at(parts, parts.parameters#i))
+		if #positions > 0 { found[parts.name] = positions }
 	}
 	found
+}
+# a parameter declared a function, or one the body calls (`f` or `f: any`): `matrix(r, c, f) := [[f() …]]` takes a
+# function, so a function of no parameters given for it is passed, not called (`matrix(2, 4, weight)`)
+takes_function_at(parts: Definition, parameter: Node): bool := is_function_parameter(parameter) or called_in(parts.body, symbol(parameter_name(parameter)))
+called_in(body: Node, name: Node): bool := nodes_in(body).any(part => is_call_of(part, name))
+is_call_of(n: Node, name: Node): bool := match n {
+	List(items, Bracket.Round, Separator.None): #items > 0 and items#1 == name
+	_: no
 }
 block_lambda(block: Node): Node := Key(if mentions(block, "it") then symbol("it") else ø, Op.Arrow, block)
 takes_function(n: Node, positions: map): bool := n is symbol and positions.has(name_of(n))
