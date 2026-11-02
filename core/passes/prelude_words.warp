@@ -86,12 +86,20 @@ unbaked_slices(baked: text, source: text): list := baked.split("\n").filter(line
 # library_slices() stands); a compiler built by one that bakes none cuts them where it runs
 LIBRARY_SLICES = library_slices()
 library_slices(within: text = ""): map := {}
-# each bundled module's slice parsed with its module's use lines, packed, by `<file> <start>`: a program reaching a
-# module's definition parses none of it (uses.warp module_text writes them where slice_parses() stands, card
-# modules-prebuilt); a slice of other text, a WARP_LIB edit's, is parsed where it's reached
-SLICE_PARSES = slice_parses()
-slice_parses(within: text = ""): map := {}
-# each slice text of the bundled files → its key in SLICE_PARSES, `<file> <start>` (a slice keyed by its place, not
+# a bundled top-level module's slice parsed, by `<file> <start>`: a program reaching a module's definition parses none
+# of it, the module's slices cut from its baked parse (LIBRARY_PARSES, uses.warp slices_cut) when its first is reached
+# (card modules-prebuilt, slice-parses-rederive); ø for a slice of other text, a WARP_LIB edit's, parsed where reached
+global module_slices = {}
+slice_parse(key: text?): any := {
+	if key == ø { return ø }
+	within = key.split(" ")#1
+	if not module_slices.has(within) {
+		packed = LIBRARY_PARSES.get(within)
+		module_slices[within] = if packed == ø then {} else slices_cut(within, LIBRARY_FILES[within], unpack(packed))
+	}
+	module_slices[within].get(key)
+}
+# each slice text of the bundled files → its key, `<file> <start>` (a slice keyed by its place, not
 # its text, keeps the texts out of the compiler a second time)
 slice_keys(paths: list): map := {
 	keys = {}
@@ -351,9 +359,9 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 		for slice in slices {
 			if slice#1 == word and slice#2 not in reached {
 				key = keys.get(slice#2)
-				baked = SLICE_PARSES.get(key ?? "")
+				baked = slice_parse(key)
 				if baked == ø and uses == ø { uses = use_lines(module) }
-				slice_node = early_sugared(if baked != ø then unpack(baked) else plain_node(parsed(slice#2, uses)))
+				slice_node = early_sugared(baked ?? plain_node(parsed(slice#2, uses)))
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
 				else if slice#2 in declared { slice_node = declared_only(slice_node) }
