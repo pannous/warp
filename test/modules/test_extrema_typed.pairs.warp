@@ -1,0 +1,5 @@
+# Source: notes/stdlib.md, extrema; notes/decisions.md, library-own-words
+'use extrema; min([3, 7, 5])'	3
+'use extrema; max([3, 7, 5])'	7
+'use extrema; min([2.5, -1.5])'	-1.5
+'use extrema; max(3, 7, 5)'	7
