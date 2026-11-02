@@ -944,13 +944,15 @@ function goTo(url) {
 
 const SERVING_RUN = { value: "", error: false, status: 0, warnings: [], runtime_warnings: [], hints: [], notes: [] };
 const SERVED_ROOT = "/";
-// the program waits for a request in `shared` (host-routes.js PAGE_SERVING): its run is shown as it is so far, and
-// the page asks for its root at once, as a browser opening the address; a request made while it was busy goes now
+// the program waits for a request in `shared` (host-routes.js PAGE_SERVING): the page asks for its root at once, as a
+// browser opening the address, and the run is shown with that first page (firstServed); a request made while it was
+// busy goes now
+let firstServed; // {run, report}: the serving run, finished once its first page is answered
 function servingRequests({ shared, port }) {
 	const first = !worker.serving;
 	const waiting = worker.serving?.waiting ?? (first ? ["GET", SERVED_ROOT] : undefined);
 	worker.serving = { shared };
-	if (first && pending) finish(pending, { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT });
+	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT } };
 	if (waiting) servedRequest(...waiting);
 }
 
@@ -980,7 +982,11 @@ function showServed(response) {
 	if (REDIRECT_STATUSES.includes(status) && location) return servedRequest("GET", location);
 	const failed = status >= 400;
 	const html = !failed && /^content-type:\s*text\/html/im.test(head) ? text : undefined;
-	showValue(html ? "" : text, failed, html);
+	const value = html ? "" : text;
+	const first = firstServed;
+	firstServed = undefined;
+	if (first) return finish(first.run, { ...first.report, value, error: failed, html });
+	showValue(value, failed, html);
 	showRendered(html);
 }
 
