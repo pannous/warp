@@ -29,9 +29,9 @@ interleave(a: any, b: any): list := { out = []; for i in 1 to max(count(a), coun
 // without runs of equal neighbours
 dedupe(xs: any): list := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
 // the running results of f: scan([1, 2, 3], 0, (a, b) => a + b) is [1 3 6]
-scan(xs, start, f) := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
-take_while(xs, f) := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
-drop_while(xs, f) := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
+scan(xs: any, start: any, f: any): list := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
+take_while(xs: any, f: any): list := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
+drop_while(xs: any, f: any): list := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
 // the index (from 0, like xs[i]) of the greatest element, the first of equal ones
 argmax(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
 argmin(xs: any): int := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
