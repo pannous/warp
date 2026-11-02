@@ -13,3 +13,7 @@
 'count = 0; x = div{ button{ "+1", on click { count += 1 } } }; count'	0
 'use markup; count = 0; page = div{ button{ "+1", on click { count += 1 } } p{ "count: " + count } }; page_render(page); page_event(1, ø); page_render(page)'	'<div><button data-warp-click="1">+1</button><p>count: 1</p></div>'
 'use markup; done = no; page = p{ class: (if done then "done" else "open"), on click { done = yes }, "x" }; page_render(page); page_event(1, ø); page_render(page)'	'<p class="done" data-warp-click="1">x</p>'
+'use web; count = 0; page = div{ button{ "+1", on click { count += 1 } } p{ "count: " + count } }; render page; click "+1"'	'<div><button data-warp-click="1">+1</button><p>count: 1</p></div>'
+'use web; count = 5; page = div{ button{ id: "zero", "reset", on click { count = 0 } } p{ "count: " + count } }; render page; click zero'	'<div><button id="zero" data-warp-click="1">reset</button><p>count: 0</p></div>'
+'use web; page = div{ button{ "+1", on click { } } }; render page; click "-1"'	'no element showing -1 handles click; the page: <div><button data-warp-click="1">+1</button></div>'
+'use web; h = div{ button{ "+1", on click { } } }; str(h)'	'div: {button: {"+1", on click {…}}}'

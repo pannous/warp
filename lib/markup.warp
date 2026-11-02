@@ -41,6 +41,8 @@ handler_attribute_prefix = "data-warp-"
 // the HTML of the page's value, its handlers numbered anew from 1 in render order
 export page_render(value: any) := {
 	page_handlers = []
+	page_handler_events = []
+	page_handler_labels = []
 	to_html(value)
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
@@ -49,12 +51,55 @@ export page_event(n: int, detail: any) := {
 	action(detail)
 }
 
+// `use web; render page`, then `click "+1"` or `click plus` (card use-web, decisions click-by-label, click-by-id): the
+// page acts as the Rust page tests did, on the element showing a label (its text, else its placeholder, aria-label,
+// name or id) among those handling the event; the value is the page's HTML after it
+global page_shown = ø
+global page_handler_events = []
+global page_handler_labels = []
+handler_label_attributes = ["placeholder", "aria-label", "name", "id"]
+
+render(value: any) := {
+	page_shown = value
+	page_render(value)
+}
+click(label: any) := page_act("click", name_of(label), ø)
+// `click plus`: an id, a word the program binds nothing to
+rewrite click $who => click(data $who) where $who is unbound
+
+page_act(event: text, label: text, detail: any) := {
+	for n in 1 to #page_handlers {
+		if page_handler_events#n == event and page_handler_labels#n.has(label) {
+			page_event(n, detail)
+			return page_render(page_shown)
+		}
+	}
+	error("no element showing " + label + " handles " + event + "; the page: " + page_render(page_shown))
+}
+
+// what an element shows to be found by: its text, its tags left out, and its labelling attributes
+html_labels(tag: any, items: list, children: text): list := [html_shown_text(children)] + items.filter(item => html_is_attribute(item, tag) and html_name(item) in handler_label_attributes).map(item => html_plain(html_content(item)))
+html_shown_text(html: text): text := {
+	var shown = ""
+	var inside = no
+	for c in html {
+		if c == "<" { inside = yes }
+		else if c == ">" { inside = no }
+		else if not inside { shown = shown + c }
+	}
+	trim(shown)
+}
+
 // a live part's value as it is now
 html_now(value: any) := if value is Live then html_now(value.now()) else if value is function then html_now(value()) else value
 
 // `button{ "+1", on click {…} }`: an item `on e {…}` of an element is that element's own handler, kept in it as a
 // value (no listener of the whole program); markup's own class, which its module sees when built on its own
-class Handler { event: text; action: function }
+class Handler {
+	event: text
+	action: function
+	show() := "on " + event + " {…}"
+}
 handler(name: any, action: function): Handler := Handler(name_of(name), action)
 // a live value: code kept to run each time its value is wanted, shown as its value now; an item reading a variable a
 // handler writes is one (lib/sugar/events.warp), `p{ "count: " + count }`. A general library type, here beside
@@ -74,6 +119,8 @@ html_is_handler_name(name: any) := name is text and starts_with(name, handler_pr
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
 	page_handlers.add(action)
+	page_handler_events.add(event)
+	page_handler_labels.add([])
 	" " + handler_attribute_prefix + event + "=\"" + #page_handlers + "\""
 }
 
@@ -119,8 +166,12 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var facts = ""
 	// `style: { color: red }` and a transition's style: one attribute
 	var styles = []
+	var own_handlers = []
 	for item in items {
-		if html_is_handler(item) { attributes = attributes + html_handler(item) }
+		if html_is_handler(item) {
+			attributes = attributes + html_handler(item)
+			own_handlers.add(#page_handlers)
+		}
 		else if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(html_name(item), html_content(item)) }
 		else if html_is_attribute(item, tag) and html_name(item) == "style" {
 			if #styles == 0 { attributes = attributes + html_style_mark }
@@ -132,6 +183,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		else if tag == "select" and not html_is_element(item) { children = children + html_options(item, own_chosen) }
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
+	for n in own_handlers { page_handler_labels#n = html_labels(tag, items, children) }
 	// the option whose value, else text, is the select's
 	if #styles > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
 	if tag == "option" and chosen != ø and (if value == ø then children else html_escaped(value)) == html_escaped(chosen) { attributes = attributes + " selected" }
