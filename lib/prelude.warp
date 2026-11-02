@@ -90,8 +90,12 @@ int_marked(x, kind: int): any from emitter
 int_mark_of(x): int from emitter
 chr(code): codepoint from emitter
 read(path): text from emitter
-// eval(code, with: {x: 5}) (card eval-explicit-names): the code with each name bound first, to its value as data
-eval_named(code: text, names: map): text := names.keys.map(name => name + " = " + names[name].json).join("\n") + "\n" + code
+// eval(code): the value of the code run as a program of its own, by the host word eval_code, which the host compiles
+// with its own warp.wasm (decision N31; core/native/driver.warp code_evaluated, the page's driver.js). It sees none of
+// the caller's names: eval(code, with: {x: 5}) names them, each bound to its value as data before the code (card
+// eval-explicit-names)
+eval(code) := eval_code(code)
+eval(code: text, with names: map) := eval_code(names.keys.map(name => name + " = " + names[name].json).join("\n") + "\n" + code)
 warning(message): text from emitter
 raise(message): same as message from emitter
 error(message): any from emitter
