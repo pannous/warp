@@ -83,3 +83,15 @@ Cover heterogeneous take, drop, flatten and chunk outcomes before adding non-nar
 
 ## library-typed list composition slice
 Cover adjacent pairs, splitting, interleaving and deduplication before typing their generic inputs and list results; verify behavior and smoke.
+
+# library-typed extrema helpers
+
+Cover list indices and numeric median and minmax outcomes before adding non-narrowing signatures; verify the module and smoke on merged main.
+
+# library-typed list statistics and construction
+
+Cover documented list construction and statistics outcomes, then declare non-narrowing argument and result types and verify the module and smoke.
+
+# library-typed list scans
+
+Cover the documented scan and predicate-based take/drop outcomes, then type their generic inputs and list results and verify the module and smoke.
