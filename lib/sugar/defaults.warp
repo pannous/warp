@@ -1,0 +1,7 @@
+# `x default y` (decision nullish-default): x ?? y, y only when x raises or is ø, a falsy x kept (`0 default 10` is 0,
+# `parse_json("{oops") default []` is []); its other spellings note warp's word. Early sugar, so core/passes/tries.warp
+# reads a raise in x. A match arm `default: v` is a key, no phrase: still the catch-all
+rewrite $a otherwise $b => $a default $b where alias
+rewrite $a failing $b => $a default $b where alias
+rewrite $a except $b => $a default $b where alias
+rewrite $a default $b => $a ?? $b
