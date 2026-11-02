@@ -348,28 +348,6 @@ twice(body: block) := 2 times body
 twice(value: any) := 2 times value
 thrice(body: block) := 3 times body
 thrice(value: any) := 3 times value
-// how a ± value prints (card plus-minus, P219): the ± part to 2 significant digits, the value to the same place, 7.0 ± 2.0;
-// a ± part of 0 or ∞, or more digits than 17, as each float prints; gaussian 1 adds σ. The printer calls it with the
-// parts (wasm_emitter/numbers/uncertain.rs)
-uncertain_text(value: float, radius: float, gaussian: int) := {
-	sigma = if gaussian == 1 then "σ" else ""
-	if not (radius > 0.0 and radius < 1.0 / 0.0) { return "\(value) ± \(radius)\(sigma)" }
-	scale = 1.0
-	decimals = 0
-	while radius * scale < 9.5 and decimals <= 17 { scale = scale * 10.0; decimals += 1 }
-	while radius * scale >= 99.5 { scale = scale / 10.0 }
-	if decimals > 17 or abs(value) * scale >= 1e17 { return "\(value) ± \(radius)\(sigma)" }
-	place_text(value, scale, decimals) + " ± " + place_text(radius, scale, decimals) + sigma
-}
-// x rounded to the place of 1/scale with that many decimals: whole units half away from zero, decimals half to even
-place_text(x: float, scale: float, decimals: int) := {
-	sign = if x < 0.0 then "-" else ""
-	if decimals == 0 { return sign + to_base((floor(abs(x) * scale + 0.5) * round(1.0 / scale)) as int, 10) }
-	digits = round(abs(x) * scale) as int
-	fraction = ""
-	while #fraction < decimals { fraction = (digits % 10 + 48) as char + fraction; digits = digits /! 10 }
-	sign + to_base(digits, 10) + "." + fraction
-}
 // `x as decimal` of a ratio (card repeating-decimals): the digits before the period, then the period's overlined, 1/6
 // is 0.16̅; a terminating decimal, or a period longer than 1000 digits, as the ratio prints. The cast calls it with the
 // ratio's parts, the denominator never 0 (wasm_emitter/numbers/exact.rs)
