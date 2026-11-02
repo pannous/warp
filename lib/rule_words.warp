@@ -651,7 +651,6 @@ rule_words = {
 	shader_values: shader_values,
 	shader_values_of: shader_values_of,
 	shorthand_closure: shorthand_closure,
-	block_lambda: block_lambda,
 	signaled: signaled,
 	signature_text: signature_text,
 	spelled: spelled,
@@ -810,8 +809,6 @@ law_variables(n: Node, found: list): list := {
 	for item in read_items { found = law_variables(item, found) }
 	found
 }
-# `{ |x| x + 1 }` → `x => x + 1`: the one lambda a block holds, as the parser reads Ruby's bars; ø for another block
-block_lambda(block: Node): any := if is_curly_group(block) and #block == 1 and is_key(block#1, Op.Arrow) then block#1 else ø
 # `{$0 > $1}` → `(shorthand·0, shorthand·1) => {shorthand·0 > shorthand·1}`: a block reading Swift's shorthand
 # arguments as the lambda of as many as it reads, up to the highest, renamed since `$0` in a rule's result would be a
 # hole; ø for a block reading none
