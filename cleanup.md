@@ -107,3 +107,7 @@ Cover map selection and lookup outcomes before adding non-narrowing signatures; 
 ## library-typed map transformations
 
 Cover map construction, mapping and fallback outcomes before adding generic signatures; verify focused results and merged-main smoke.
+
+## library-typed map entries
+
+Cover entry lists and mutating helpers before typing their generic signatures; verify direct outcomes and merged-main smoke.
