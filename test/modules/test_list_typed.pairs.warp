@@ -1,0 +1,5 @@
+# List module outcomes: test/modules/test_std_list.pairs.warp
+'use list; unique(["a", "b", "a"])'	["a" "b"]
+'use list; zip([1, 2], ["a"])'	[[1 "a"]]
+'use list; enumerate(["a", "b"])'	[[1 "a"] [2 "b"]]
+'use list; product([2, 3, 4])'	24
