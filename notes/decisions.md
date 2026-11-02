@@ -455,6 +455,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
+- comparison-after-arms (user): a comparison after a switch/match compares its value, never swallows the arms block: `switch 3 {1: "one" 3: "three"} == "three"` is yes, `match n {…} > 15` likewise; one general case in prefix_calls.warp fitted_comparison (~6 core lines), no per-operator rules.
 - raw-rules (user, ~15 lines core/passes/rewrites.warp): a rule marked `where raw` fires top-down on its code as written, before the rules inside it; its result is rewritten bottom-up as usual (law, quote, test bodies).
 - prefix-keyword-condition (user, small parser change, count named before building): a prefix keyword (whenever/when/on/at) takes its whole condition up to the trailing block (`alarm = whenever t > 30 {…}` is a listener handle); a glued digits:digits after a word stays one time value (`at 9:30 {…}`).
 - for-over-iterator (user): a construction of a program class counts as an instance, so `for x in Countdown(3)` iterates by next() until ø.
@@ -482,6 +483,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   types only in a text pattern's hole position, nothing reserved (a variable `digits` stays plain; Interviewer's decision).
 
 ## Classes, objects and enums
+- valued-field-default (user): a class field given a value declares its default, type from the value: `class Animal { name: "?" }` is `name: text = "?"` (2 core lines, instances.warp declared_field).
 - capitalized-field-list (user): a capitalized plural field named after a declared class declares a list of it under the lowercase name: `class Signature { Parameters = [] }` is `parameters: list[Parameter] = []`, read as `sig.parameters`; otherwise an ordinary field.
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).
 - setter-calls: a setter is called by `canvas.width = 12`, `canvas.width(12)`, `width(canvas, 12)`; `width of canvas = 12` is `canvas.width = 12`; `set x to y` is `x = y` with a style hint.
