@@ -5,6 +5,7 @@
 /// C names of libm functions (ffi "m") that Math spells differently
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
+const LIBC_LIST = "web/playground/lib/build_libc.sh lists libc.wasm's functions";
 const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 // the C functions a module calls, one line each: import module, library, name, parameter kinds (comma-separated),
@@ -198,8 +199,10 @@ const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
 const PAGE_LIBRARY_HANDLE = 1;
 
 // the C functions of stdio a program reaches without a file (lib/sound.warp said: fdopen(2, "w"), fputs, fflush): a
-// FILE * is its descriptor, what it puts goes to the run's output; and dlopen of warp's own libraries
-const pageStdio = hooks => ({
+// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv of the run's
+// environment (driver.js programEnvironment), NULL for a name it lacks
+const pageStdio = (holder, hooks) => ({
+	getenv: name => environmentValue(holder.environment ?? ENVIRONMENT, name),
 	fdopen: descriptor => descriptor,
 	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
 	fflush: () => 0,
@@ -227,9 +230,16 @@ function libcExports() {
 
 // `use c` in the browser: the program's C calls go to libc.wasm (natively warp opens the system libc)
 function libcImports(holder, hooks) {
-	const stdio = libraryInJs(holder, "c", name => pageStdio(hooks)[name]);
-	const libc = wasmLibraryImports(holder, "c", libcExports, "web/playground/lib/build_libc.sh lists libc.wasm's functions");
-	return new Proxy({}, { get: (_, name) => name in pageStdio(hooks) ? stdio[name] : libc[name] });
+	const stdio = libraryInJs(holder, "c", name => pageStdio(holder, hooks)[name]);
+	const libc = wasmLibraryImports(holder, "c", libcExports, LIBC_LIST);
+	return new Proxy({}, { get: (_, name) => name in pageStdio(holder, hooks) ? stdio[name] : libc[name] });
+}
+const environmentValue = (environment, name) => environment.find(entry => entry.startsWith(`${name}=`))?.slice(name.length + 1) ?? null;
+
+// libm (ffi "m"): Math, under C's names where they differ, else libc.wasm's musl (erf, ldexp, sqrtf …)
+function libmImports(holder) {
+	const musl = wasmLibraryImports(holder, "m", libcExports, LIBC_LIST);
+	return new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] ?? musl[name] });
 }
 
 // a C library the page has as a WebAssembly module, natively a shared library: exportsOf() its exports, memory and
@@ -395,7 +405,7 @@ addHostPart({
 		};
 	},
 	imports: (holder, hooks) => ({
-		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
+		m: libmImports(holder),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
 		c: libcImports(holder, hooks),
 		python: pythonLibrary(holder),

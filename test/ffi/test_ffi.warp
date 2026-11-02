@@ -164,7 +164,7 @@ ceil(floor(3.7))' 3.0
 is! 'import sqrt from "m"
 sqrt(16)' 4.0
 
-# test_ffi_sdl_init
+# test_ffi_sdl_init — native only: SDL2, a C library the browser has not
 is! «import SDL_Quit from 'SDL2'
 SDL_Quit()
 42» 42
