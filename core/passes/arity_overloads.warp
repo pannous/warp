@@ -186,7 +186,7 @@ any_fit = 100
 list_fit = 2
 # the kind each type word an overload tells apart stands for
 overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
-	f64: "float", f32: "float", real: "float", number: "number", text: "text", str: "text", string: "text",
+	f64: "float", f32: "float", number: "number", text: "text", str: "text", string: "text",
 	codepoint: "codepoint", char: "codepoint", character: "codepoint", bool: "bool", boolean: "bool", function: "function",
 	block: "function"}
 
@@ -480,6 +480,8 @@ takes_widened(type: text): bool := type == "float" or type == "number"
 run_time_test(argument: Node, type: text): Node := {
 	if is_union(type) { return union_members(type).map(member => run_time_test(argument, member)).fold(ø, (tests, test) => if tests == ø then test else Key(tests, Op.Or, test)) }
 	element = element_of(type)
+	# a class's variant takes its instances: `x is real` of any number (decision real-canonical) chooses no variant
+	if element == ø and type in overload_classes { return call_of(HiddenWord.InstanceOf as text, [argument, type]) }
 	if element == ø {
 		word = if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type
 		test = call_of("is_type", [argument, word])

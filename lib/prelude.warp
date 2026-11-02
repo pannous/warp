@@ -120,6 +120,7 @@ type Float = float
 type String = text
 type Boolean = bool
 type Char = codepoint
+type Real = real
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
@@ -210,7 +211,8 @@ round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
 // own sum: rust-harness:src/lowering/words/library_words.rs)
-sum(xs: list) := fold(xs, 0, +)
+// `any`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first
+sum(xs: any) := if is_range(xs) then range_sum(xs) else fold(xs, 0, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
 // dir(v) of a value only the run knows (lib/sugar/reflection.warp gives the words of a list, a text and a map): a map's
@@ -482,7 +484,10 @@ shader_value(value) := if value is list then value.map(shader_value) else float(
 // paint(shader) of a WGSL shader text, at the view's size (wiki/graphics.md)
 paint(shader: text) := paint(shader, view_width(), view_height(), ø)
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
-sleep(amount) := sleep_ms(amount * 1000)
+sleep(amount) := slept(amount * 1000)
+
+// the wait of a sleep, ms: the tasks module's runs the tasks due meanwhile, which replaces this
+slept(ms) := sleep_ms(ms)
 // what a module holds per task, kept around a task and given back after it (lib/sugar/tasks.warp): nothing here, a
 // module holding some (sound's voice) defines both, which replace these
 task_context() := ø

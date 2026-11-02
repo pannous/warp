@@ -1,0 +1,7 @@
+# Components (core/extensions/components.warp, card def-counter): a capitalized function of markup whose locals a
+# handler writes keeps them per instance across renders; by `key:`, else by its place in the render
+
+'use web; def Counter(start) { count = start; div{ button{ on click { count += 1 }, "+" } p{ "n " + count } } }; page = div{ Counter(0) Counter(10) }; render page; click "+"; click "+"'	'<div><div><button data-warp-click="1">+</button><p>n 2</p></div><div><button data-warp-click="2">+</button><p>n 10</p></div></div>'
+'use web; def Counter(start) { count = start; div{ button{ on click { count += 1 }, "+" } p{ "n " + count } } }; page = div{ Counter(0) Counter(10) p{ "sum " + sum(Counter.instances.map(c => c.count)) } }; render page; click "+"'	'<div><div><button data-warp-click="1">+</button><p>n 1</p></div><div><button data-warp-click="2">+</button><p>n 10</p></div><p>sum 11</p></div>'
+'use web; def Counter(name) { count = 0; div{ button{ on click { count += 1 }, name } p{ name + " " + count } } }; items = ["a", "b"]; page = div{ button{ on click { items = items.reverse() }, "Reverse" } [Counter(item, key: item) for item in items] }; render page; click "a"; click "Reverse"'	'<div><button data-warp-click="1">Reverse</button><div><button data-warp-click="2">b</button><p>b 0</p></div><div><button data-warp-click="3">a</button><p>a 1</p></div></div>'
+'use markup; Card(t) := div{ p{ t } }; to_html(Card("x"))'	'<div><p>x</p></div>'

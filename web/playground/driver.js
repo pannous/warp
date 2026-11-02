@@ -9,6 +9,7 @@
 const COMPILER_FOLDER = "web/playground/warp-lib";
 const COMPILER_LIBRARY = `${REPOSITORY_DIRECTORY}/${COMPILER_FOLDER}`;
 const COMPILER_URL = `../../${COMPILER_FOLDER}/warp.wasm`;
+const SOURCES_URL = `../../${COMPILER_FOLDER}/sources.json`; // its library sources in one file (build.sh write_sources)
 const COMPILED_PATH = "/tmp/warp-program.wasm";
 // the program typed in the page when it is no sample's file: at the repository root, as `warp playground.warp` there
 const TYPED_FILE = "playground.warp";
@@ -31,10 +32,18 @@ const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
 let compilerModule; // warp.wasm compiled once; each compile gets a fresh instance, as each native run a fresh store
 
 async function loadDriverCompiler(progress = () => {}) {
-	const response = await fetch(COMPILER_URL);
+	const [response] = await Promise.all([fetch(COMPILER_URL), preloadedSources()]);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
-	const bytes = await progress(response);
-	compilerModule = await WebAssembly.compile(bytes);
+	// compiled as it streams in, so Chrome and Safari keep its machine code with the cached response: a second visit
+	// skips the compile; the clone feeds the progress. A server without the application/wasm type compiles the bytes
+	const [compiled, bytes] = await Promise.all([WebAssembly.compileStreaming(response.clone()).catch(() => null), progress(response)]);
+	compilerModule = compiled ?? await WebAssembly.compile(bytes);
+}
+
+async function preloadedSources() {
+	const response = await fetch(SOURCES_URL);
+	if (!response.ok) return console.warn(`${SOURCES_URL}: HTTP ${response.status}, each library source is fetched on its own; build it with web/playground/build.sh`);
+	preloadSources(await response.json(), COMPILER_FOLDER);
 }
 
 // the folder of a path, "." for a bare name
@@ -116,14 +125,48 @@ function raisedMessage(exports, failure) {
 const PARSED_CODE_PATH = "/tmp/warp-parsed.code";
 const FIELD_END = 1; // driver.warp FIELD_END
 const ENCODED = { empty: 101, yes: 84, no: 70, int: 105, float: 102, codepoint: 99, symbol: 115, error: 120, key: 107, list: 108 };
-function codeParsed(program, code) {
+const codeParsed = (program, code) => codeParsedFrom(program, guestText(program, code));
+function codeParsedFrom(program, code) {
 	let said = "";
-	const { status } = compilerRan(["parse-code", guestText(program, code), PARSED_CODE_PATH], text => said += text);
+	const { status } = compilerRan(["parse-code", code, PARSED_CODE_PATH], text => said += text);
 	const encoding = programFiles.written.get(PARSED_CODE_PATH);
 	programFiles.written.delete(PARSED_CODE_PATH);
 	if (status !== 0 || !encoding) return newGuestError(program, said.trim() || `parse-code wrote nothing (status ${status})`);
 	return codeBuilt(program, typeof encoding === "string" ? utf8.encode(encoding) : encoding, { at: 0 });
 }
+// eval_code(t) (decision N31, driver.warp code_evaluated): warp.wasm compiles t as a program of its own, beside the
+// typed program; it runs with its value printed as data after the value mark, what it printed before that goes on to
+// the run's output, and the value is built again in the program as parse_code builds a tree. A text that fails to
+// compile or run gives an Error saying why
+const EVAL_FILE = "playground.eval.warp";
+const VALUE_MARK = "§warp value§\n"; // core/emitter/emitter.warp VALUE_MARK, on a line of its own
+function codeEvaluated(program, code, hooks) {
+	const { failure, printed, data } = ranAsData(guestText(program, code));
+	if (failure !== undefined) return newGuestError(program, `eval: ${failure}`);
+	hooks.print?.(printed, STDOUT);
+	return codeParsedFrom(program, data);
+}
+
+// the code compiled and run apart from the page's program, its value as data (WARP_VALUE_AS_DATA, no serving):
+// {printed, data} before and after the value mark, or {failure}
+function ranAsData(code) {
+	let printed = "";
+	const capture = text => printed += text;
+	const asData = self.valueAsData;
+	self.valueAsData = true; // compilerEnvironment, programEnvironment
+	try {
+		return withSource(code, EVAL_FILE, () => {
+			const compiled = compiledProgram(EVAL_FILE, capture);
+			const { status, said } = compiled.failure ? { status: FAILURE_STATUS, said: compiled.failure } : programRan(compiled.module, EVAL_FILE, { print: capture });
+			const mark = printed.indexOf(VALUE_MARK);
+			if (status !== 0 || mark < 0) return { failure: said || printed };
+			return { printed: printed.slice(0, mark), data: printed.slice(mark + VALUE_MARK.length) };
+		});
+	} finally {
+		self.valueAsData = asData;
+	}
+}
+
 // the field at `cursor.at`, up to its FIELD_END, the cursor past it
 function encodedField(encoding, cursor) {
 	const end = encoding.indexOf(FIELD_END, cursor.at);
@@ -286,10 +329,7 @@ function pageEventHandled(holder, event, detail) {
 	const { exports } = holder;
 	const n = BigInt(event.slice(event.lastIndexOf("·") + 1));
 	try {
-		// a module using no host word of nodes exports no constructors (core/emitter/host.warp exported_builders): its
-		// handlers get ø, and a detail they would read is said lost
-		if (!exports.new_empty && detail != null && Object.keys(detail).length) console.warn(`${event}: the module exports no constructors, its handler gets ø for the detail ${JSON.stringify(detail)}`);
-		const given = exports.new_empty ? newGuestValue(exports, detail ?? null) : null;
+		const given = newGuestValue(exports, detail ?? null);
 		try {
 			exports.page_event(n, given);
 		} catch (failure) {

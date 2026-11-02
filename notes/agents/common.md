@@ -86,7 +86,8 @@ before asking a question). After a context swap, this file and your role file be
   by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push. Never leave unpushed commits on main.
 - Anything compiled (core/, the harness in src/, Cargo.*): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
-  /Volumes/Worktrees/warp or /integrator.
+  /Volumes/Worktrees/warp or /integrator. At most 2 open worktrees per worker (user 2026-11-02: 23 were far too
+  many): the one landing and the one being built; land before opening another, waiting work is a plan on its card.
 - Output (logs, dumps, builds, scratch) goes in your own worktree's data/ and goes with it; never into the main
   checkout's data/. Logs that must outlive your session: ~/Library/Logs/warp/<role or card>/.
 - The user's uncommitted edits are integrated at once by whoever meets them: complete, run, commit as "(user)", push.

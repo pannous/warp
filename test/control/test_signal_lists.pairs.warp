@@ -1,0 +1,8 @@
+# a list literal of variables passed to a function listening to its loop variable holds the variables themselves
+# (notes/signals.md "Lists of signals", card list-literal-subscribes)
+'global n = 0; watch_all(xs) := for s in xs { on change s { n += value } }; a = 1; b = 2; watch_all([a, b]); a = 10; b = 20; n'	30
+'global n = 0; tally(xs) := for s in xs { on set s { n += 1 } }; a = 1; b = 2; tally([a, b]); a = 1; b = 5; n'	2
+'global hits = 0; alarms(xs) := for s in xs { whenever s > 5 { hits += 1 } }; a = 1; b = 2; alarms([a, b]); a = 6; b = 9; hits'	2
+# a bare read of the loop variable is its variable's value, as last written
+'global last = 0; watch(xs) := for s in xs { on change s { last = s } }; a = 1; watch([a]); a = 7; last'	7
+'sum_watched(xs) := { got = 0; for s in xs { on change s { print value }; got += s }; got }; a = 1; b = 2; sum_watched([a, b])'	3
