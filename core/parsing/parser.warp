@@ -648,6 +648,12 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if stray { raise "`" + c + "` closes no group" }
 		before = p.at
 		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
+		// `def f(x)` ending its line: its body the lines below, indented or a `{…}` opening the next line (Allman), as
+		// `if c` reads its own (card def-body-next-line); without one the header stays as it is
+		if found and found#(found.length)#2 == Separator.Space and found#(found.length)#1 is symbol and name_of(found#(found.length)#1) in function_keywords and code_after(p, p.at) == '\n' {
+			body = indented_block(p)
+			if body != ø { item = call_of([item, body]) }  // as name_or_call glues a same-line `{…}`
+		}
 		tabbed = tab_separates(p)
 		newline = skip_blanks(p)
 		if bracket == Bracket.None and newline and line_indent(p) > p.indent {
