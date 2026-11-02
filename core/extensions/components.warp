@@ -17,7 +17,7 @@ components(program: Node): Node := {
 	statements = statements_in(program)
 	names = statements.map(component_name).filter(name => name != "")
 	if #names == 0 { return program }
-	separated(bracketed(statements.map(statement => if component_name(statement) != "" then component_defined(statement) else statement).map(statement => with_component_calls(statement, names)), ""), ";")
+	separated(bracketed(statements.map(statement => if component_name(statement) != "" then component_defined(statement) else statement).map(statement => with_calls_in(statement, names)), ""), ";")
 }
 
 # the name of the component a statement defines, a function of markup with state, else ""
@@ -44,6 +44,8 @@ state_entry(name: text): Node := Key(this_word, Op.Dot, symbol(name))
 state_set_once(assignment: Node): Node := call_node(symbol("component_state"), [this_word, name_of(key_of(assignment)), deferred(value_of(assignment))])
 deferred(code: Node): Node := Key(Node.Empty, Op.Arrow, code)
 
+# a definition's body so, its head kept: `Counter(start, key)` is no call
+with_calls_in(statement: Node, names: list): Node := if is_key(statement, Op.Define) then Key(key_of(statement), Op.Define, with_component_calls(value_of(statement), names)) else with_component_calls(statement, names)
 # every call of a component given its key, `Counter(0)` → `Counter(0, ø)`, `Counter(i, key: i)` → `Counter(i, i)`; one
 # among a tag's items a live part; `Counter.instances` and `counters` the page's instances
 with_component_calls(n: Node, names: list): Node := bottom_up(n, part => with_live_items(keyed_call(instances_named(part, names), names), names))
