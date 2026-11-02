@@ -1,6 +1,6 @@
 # from test_ffi_float_results.rs: edit the Rust test, then run the script again
 
-# a_raylib_float_result_is_a_float
+# a_raylib_float_result_is_a_float — native only: raylib, a C library the browser has not
 is! «import GetTime from 'raylib'
 GetTime() >= 0.0» true
 is! «import GetFrameTime from 'raylib'

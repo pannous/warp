@@ -8,3 +8,8 @@
 'use markup; n = 1; to_html(div{ p{ () => n + 1 } })'	'<div><p>2</p></div>'
 
 'use markup; greet(name: text) := p{ "hi " + name }; to_html(div{ "a", greet "Ann" })'	'<div>a<p>hi Ann</p></div>'
+'use markup; count = 0; page = div{ button{ "+1", on click { count += 1 } } }; page_render(page)'	'<div><button data-warp-click="1">+1</button></div>'
+'use markup; count = 0; page = div{ button{ "+1"\n on click { count += 1 } } }; page_render(page); page_event(1, ø); page_event(1, ø); count'	2
+'count = 0; x = div{ button{ "+1", on click { count += 1 } } }; count'	0
+'use markup; count = 0; page = div{ button{ "+1", on click { count += 1 } } p{ "count: " + count } }; page_render(page); page_event(1, ø); page_render(page)'	'<div><button data-warp-click="1">+1</button><p>count: 1</p></div>'
+'use markup; done = no; page = p{ class: (if done then "done" else "open"), on click { done = yes }, "x" }; page_render(page); page_event(1, ø); page_render(page)'	'<p class="done" data-warp-click="1">x</p>'
