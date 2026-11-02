@@ -549,7 +549,7 @@ shadows(own: map, name: text, count: int): bool := {
 # its value and the calls it takes; a call it doesn't take keeps the library's word
 with_own_words(program: Node, library: list): Node := {
 	heads = own_heads(program)
-	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX))
+	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(heads[name]))
 	for name in owned {
 		mine = own_word(name)
 		program = separated(bracketed(statements_in(program).map(statement => if binds_locally(statement, name) then statement else own_named(statement, name, mine, heads)), ""), ";")
@@ -561,6 +561,10 @@ own_named(code: Node, name: text, mine: text, heads: map): Node := bottom_up(ren
 # page_event beside its handler(name, action)), whose uses are that local's
 binds_locally(statement: Node, name: text): bool := declared_name(statement) != name and names_bound_in(statement).has(name)
 own_word(name: text): text := name + name_joiner + "own"
+# `sin(x: Real) := …`: a definition typing its parameters overloads the library's word beside it (arity_overloads.warp
+# library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its own body too,
+# reaches the library's; only an untyped one, `round(x) := …`, is the program's own
+is_typed_overload(head: Node): bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
 own_heads(program: Node): any := {
