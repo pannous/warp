@@ -20,6 +20,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
 	if a.kind == pending and b.kind != pending { a = TypedCode(b.kind, a.code) }
 	if b.kind == pending and a.kind != pending { b = TypedCode(a.kind, b.code) }
+	if symbol not in equalities and (a.kind == ValueKind.Bool or b.kind == ValueKind.Bool) and number_like(a.kind) and number_like(b.kind) { return bools_as_ints(body, symbol, a, b) }
 	kind = joint_kind(a.kind, b.kind)
 	# two results not known yet: computed as ints, but of a kind still pending, so `f(x) + g(x) + [y]` reads again
 	unknown = kind == pending
@@ -66,6 +67,16 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind_spelling(kind)) }
 	result = if symbol in comparisons then ValueKind.Bool else if unknown then pending else kind
 	TypedCode(result, converted(a, kind) + converted(b, kind) + [ops[symbol]])
+}
+
+# a yes/no is the int 0 or 1 underneath (notes/bool_type.md): any operator but equality takes it as that int, `yes + yes`
+# is 2; of two yes/no values an operator that gives 0 or 1 again gives yes/no, `yes xor no` is yes (user 2026-11-02)
+number_like(kind: ValueKind): bool := kind == ValueKind.Bool or kind == ValueKind.Int or kind == ValueKind.Float
+as_int(value: TypedCode): TypedCode := if value.kind == ValueKind.Bool then TypedCode(ValueKind.Int, converted(value, ValueKind.Int)) else value
+def bools_as_ints(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+	result = operation_code(body, symbol, as_int(a), as_int(b))
+	if a.kind == ValueKind.Bool and b.kind == ValueKind.Bool and symbol in zero_one_operators and result.kind == ValueKind.Int { return TypedCode(ValueKind.Bool, converted(result, ValueKind.Bool)) }
+	result
 }
 
 # base ^ exponent of floats: the runtime word float_pow (runtime/extended/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
