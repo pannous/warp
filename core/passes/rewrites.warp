@@ -156,6 +156,7 @@ global rule_program = Node.Empty
 global rule_source = ""
 global rule_varying = {}
 global rule_varying_known = no
+global rule_written_later = {}
 # the program's names and functions that may give a list (`where $x is vector`), worked out when a rule first asks
 global rule_vectors = []
 global rule_vectors_known = no
@@ -1103,7 +1104,7 @@ has_property(code: Node, property: text): bool := {
 	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
 	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_classes.has(name_of(code#1)) }
 	# `"count: " + count`: code reading, where it runs, a varying value or a variable code running later writes
-	if property == "varying" and not (code is symbol) { return read_now(code).any(name => varying_values().has(name)) }
+	if property == "varying" and not (code is symbol) { return read_now(code).any(name => varying_values().has(name) or later_written().has(name)) }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
@@ -1216,12 +1217,17 @@ instance_names_in(program: Node, nodes: list): map := {
 varying_values(): map := {
 	if not rule_varying_known {
 		rule_varying = varying_of(statements_in(rule_program))
-		# (a value defined `h := …` the program also writes stays a value, as varying_of leaves an assigned one)
-		defined = statements_in(rule_program).filter(is_charged_value).map(statement => name_of(key_of(statement)))
-		for name in written_later(rule_program, no) { if name not in defined { rule_varying[name] = yes } }
+		rule_written_later = {}
+		for name in written_later(rule_program, no) { rule_written_later[name] = yes }
 		rule_varying_known = yes
 	}
 	rule_varying
+}
+# the variables a handler or a block running later writes (`on click { count += 1 }`): code reading one where it runs
+# is varying, but a word itself stays as varying_of says (a `h := …` reading it is no function, lib/sugar/heads.warp)
+later_written(): map := {
+	varying_values()
+	rule_written_later
 }
 varying_of(statements: list): map := {
 	varying = {}
