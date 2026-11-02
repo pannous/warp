@@ -2,7 +2,7 @@
 # listens for the first one only; `emit alarm{level: 3}` (also fire, send, trigger) runs the listeners in order and
 # gives the last one's result. A listener is numbered within its event: `h = on alarm {…}`, `listeners of alarm`,
 # `remove h from listeners of alarm`. An item of a structure, `button{ "+1", on click {…} }`, is the structure's own
-# Handler (lib/prelude.warp). The registry is the prelude's (lib/prelude.warp listen)
+# Handler (lib/markup.warp). The registry is the prelude's (lib/prelude.warp listen)
 rewrite on $e $body: block => handler(data $e, event => $body) where $e is symbol and item
 # an item reading a variable a handler writes is live, recomputed each time it is shown (decision markup-keeps):
 # `p{ "count: " + count }`, `class: (if done then "done" else "open")`
