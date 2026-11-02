@@ -302,7 +302,6 @@ typed_element_kind(type_name: TypeWord?): ValueKind? := {
 	if element is empty { return ø }
 	if element.starts_with("list") { return ValueKind.List }
 	if element == ValueKind.Rational { return ValueKind.Int }
-	if element == "real" { return ValueKind.Float }
 	if element == "number" { return ValueKind.Empty }
 	kind = kind_named(type_kinds.get(element))
 	if kind == ValueKind.Codepoint { return ValueKind.Text }

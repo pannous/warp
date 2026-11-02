@@ -26,14 +26,21 @@ rewrite $p => $q where program and $q = page_valued($p)
 // last name it listens to
 variable_listen(names: list, changes_only: bool, listener: function): int := {
 	number = 0
-	for name in names { number = listen(name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }
+	for name in names { number = listen(if name is Signal then name.name else name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }
 	number
 }
 // the listeners of the name told of its write, from old to value, as its event with [value, old]; the value
 signal_notify(name: text, value: any, old: any): any := {
+	signal_values[name] = value
 	emitted(name, [value, old])
 	value
 }
+
+// a variable passed in a list literal to a function listening to its loop variable (notes/signals.md "Lists of
+// signals"): the variable itself, its name and its value as last written, which a bare read of the loop variable gives
+class Signal { name: text; value: any }
+global signal_values = {}
+signal_value(item) := if item is Signal then signal_values.get(item.name) ?? item.value else item
 
 // each polled word's last value, a listener's at its position
 global polled_values = []
