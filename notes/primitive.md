@@ -4,7 +4,7 @@ Decision primitive-annotation, milestone 1 of notes/roadmap_native_harness.md. T
 core/extensions/primitive.warp, an emitter of plain MVP wasm of its own: no GC types, no runtime words, no exceptions.
 
 ## Two places
-- **A primitive file**: its first line (after a `#!` line) is `@primitive`. The whole file is lowered by the usual
+- **A primitive file**: its leading header (the `#!` line, comments and blank lines before the code) holds `@primitive`; the mark below the code is an error. The whole file is lowered by the usual
   passes without the prelude (its words are GC code) and built by primitive.warp: each definition an exported function
   under its written name, the other statements `main`, plus `memory` and the arena global. wasm2c and cc make it a
   native program: test/native/test_native.sh (samples/native/fib.warp, structs.warp). `warp file` runs it too; the
