@@ -205,11 +205,12 @@ class_words(view: Node): list := {
 	parts.flat_map(symbol_words).filter(word => word not in own)
 }
 
-# the field `r: int` or `pi = 3`, the method `f() := …`
+# the field `r: int` or `pi = 3`, the method `f() := …`, one read as the class reads it, `int bar(){ 42 }`: a
+# method's name is the class's own, never a module's word (sound's bar)
 member_name(statement: Node): any := match statement {
 	Symbol(name): name
 	Key(Symbol(name), op, value): name
-	_: declared_name(statement)
+	_: declared_name(statement) ?? defined_word(member_node_read(statement))
 }
 
 # the words a slice mentions, those inside a class's methods too (the opaque view of `class Instant { … text() :=
