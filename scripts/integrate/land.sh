@@ -7,7 +7,8 @@
 # A refused push (main moved) is tried again up to LAND_RETRIES times: when the commits pushed meanwhile leave the
 # compiler's code alone (core/ and the files it bakes in, scripts/compiler-inputs.sh --baked-files) they are merged onto
 # the tested hash as they are (a library change needs no rebuild, its pusher smoke-tested it; after-push checks hello on
-# the result), else merge.sh merges and smoke-tests the batch anew. Main moves every few minutes with library pushes, so
+# the result), else merge.sh merges and smoke-tests the batch anew, with no second self-check (the batch passed one, the
+# new commits were tested by their pushers; night decision 00:50 2026-11-03: a 45 min self-check per retry never won). Main moves every few minutes with library pushes, so
 # re-testing each of them kept a batch from ever landing (2026-11-02).
 set -uo pipefail
 LAND_RETRIES=${LAND_RETRIES:-8}
@@ -32,7 +33,7 @@ catch_up() {
 		say "main moved without compiler changes: merged, no new smoke test"
 	else
 		say "main moved with compiler changes: merge.sh again"
-		"$(dirname "$0")/merge.sh" --tree "$tree" $(field card | cut -d' ' -f1)
+		"$(dirname "$0")/merge.sh" --tree "$tree" --smoke-only $(field card | cut -d' ' -f1)
 	fi
 }
 
