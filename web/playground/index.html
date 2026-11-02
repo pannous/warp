@@ -11,15 +11,23 @@
 		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js), once it is active: a reload
 		// before comes back without it. A hard reload bypasses it, so an isolated page clears the flag for the next try.
 		// The page starts (playground.js initialize) once no reload is coming: its Worker's request would be aborted
-		// (Firefox: NS_BINDING_ABORTED, card firefox-worker)
+		// (Firefox: NS_BINDING_ABORTED, card firefox-worker). A service worker not ready within 5 s leaves the page
+		// working without isolation, and a page once started never reloads: its next load is isolated (card
+		// page-reload-unintended)
 		window.pageStarts = new Promise(start => {
 			if (self.crossOriginIsolated) sessionStorage.removeItem("isolating");
 			if (self.crossOriginIsolated || !("serviceWorker" in navigator) || sessionStorage.getItem("isolating")) return start();
+			let started = false;
+			const startWithoutIsolation = () => {
+				started = true;
+				start();
+			};
 			navigator.serviceWorker.register("coi-serviceworker.js").then(() => navigator.serviceWorker.ready).then(() => {
+				if (started) return;
 				sessionStorage.setItem("isolating", "1");
 				location.reload();
-			}, start);
-			setTimeout(start, 5000); // a service worker that never gets ready leaves the page working, without isolation
+			}, startWithoutIsolation);
+			setTimeout(startWithoutIsolation, 5000);
 		});
 	</script>
 	<link rel="stylesheet" href="codemirror/codemirror.min.css">

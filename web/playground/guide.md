@@ -76,7 +76,7 @@ Numbers stay exact. Fractions and decimals are exact numbers: no rounding, ever.
 Roots and π are real numbers, and warp keeps them exact too: the square root of 2, squared, is exactly 2.
 
 ```warp => 2
-sqrt(2) * sqrt(2)
+√2 * √2
 ```
 
 Fast numbers (floats) are what the computer's chip calculates with: quick, but rounded. Ask for one with the suffix `f`
