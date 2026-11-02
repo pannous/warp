@@ -73,7 +73,7 @@ def runtime_image_of(wasm: list): any {
 	hooks = read_names(layout)
 	left = read_names(layout)
 	globals = []
-	for i in 0..<read_number(layout) { globals += [[read_name(layout), read_kind(layout)]] }
+	for i in 0..<read_number(layout) { globals += [read_global(layout)] }
 	words = {}
 	for i in 0..<read_number(layout) {
 		name = read_name(layout)
@@ -105,6 +105,13 @@ def read_names(reader: ByteReader): list {
 	names
 }
 def read_kind(reader: ByteReader): ValueKind { held_kinds[read_number(reader)] }
+# a global of warp.runtime or warp.module: [name, kind, mark]
+def read_global(reader: ByteReader): list := [read_name(reader), read_kind(reader), read_number(reader)]
+# a prebuilt global declared, its int type's mark kept, as the module that built it held it
+def declared_linked_global(entry: list) {
+	declared_global(entry#1, entry#2)
+	if entry#3 != 0 { module.global_marks[entry#1] = entry#3 }
+}
 def read_signature(reader: ByteReader): any {
 	parameters = []
 	for i in 0..<read_number(reader) {
@@ -142,7 +149,7 @@ def behind_runtime() {
 	module.catches_errors = yes
 	module.globals = {}
 	module.global_order = []
-	for entry in module.runtime_image.globals { declared_global(entry#1, entry#2) }
+	for entry in module.runtime_image.globals { declared_linked_global(entry) }
 	module.placed = module.runtime_image.functions
 	# the program's texts in segments behind the runtime's, numbered so in the linked module too (empty ones there)
 	module.first_text_segment = module.runtime_image.data
@@ -393,7 +400,7 @@ def library_image_of(name: text, wasm: list): any {
 	read_names(layout)
 	read_names(layout)
 	globals = []
-	for i in 0..<read_number(layout) { globals += [[read_name(layout), read_kind(layout)]] }
+	for i in 0..<read_number(layout) { globals += [read_global(layout)] }
 	functions = []
 	for i in 0..<read_number(layout) {
 		word = Function(read_name(layout), ø, ø)
@@ -430,7 +437,7 @@ def behind_libraries() {
 			module.closures += [[linked_closure_name(image, made#1), made#2]]
 			module.linked_closures_shown[linked_closure_name(image, made#1)] = made#3
 		}
-		for entry in image.globals { declared_global(entry#1, entry#2) }
+		for entry in image.globals { declared_linked_global(entry) }
 		module.placed += #image.functions
 		module.runtime_types += #image.functions
 		module.first_text_segment += image.texts
