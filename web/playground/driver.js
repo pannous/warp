@@ -20,9 +20,10 @@ const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
 const TEST_RUN_ENVIRONMENT = ["WARP_VALUE_AS_DATA=1", "WARP_HINTS=0"];
 const compilerEnvironment = () => self.valueAsData ? [...COMPILER_ENVIRONMENT, ...TEST_RUN_ENVIRONMENT] : COMPILER_ENVIRONMENT;
 // a program runs as `warp <file>` runs it (core/native/warp.warp), which names the program (lib/storage.warp keeps its
-// tables beside it) and serves its routes: here the page's requests (lib/web.warp); a test run (valueAsData) serves
-// none, as `warp run` of core/native/tests.warp does not, so a program with routes gives its value
-const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page"]), `WARP_PROGRAM=${file}`];
+// tables beside it) and serves its routes: here the page's requests (lib/web.warp); a test run (valueAsData) does
+// neither, as core/native/tests.warp's `warp run <code>` does not: a program with routes gives its value, tables stay
+// in memory
+const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page", `WARP_PROGRAM=${file}`])];
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
