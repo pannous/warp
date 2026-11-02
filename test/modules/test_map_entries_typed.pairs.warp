@@ -1,0 +1,5 @@
+// Source: notes/stdlib.md and card python-stdlib; map entries and update preserve their outcomes.
+'use map; entries({a: 1})'	[["a", 1]]
+'use map; items({a: 1})'	[["a", 1]]
+'use map; update({a: 1}, {b: 2}).get("b")'	2
+'use map; m = {a: 1}; [popitem(m), count(keys(m))]'	[["a", 1], 0]
