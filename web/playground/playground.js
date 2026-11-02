@@ -944,34 +944,49 @@ function goTo(url) {
 
 const SERVING_RUN = { value: "", error: false, status: 0, warnings: [], runtime_warnings: [], hints: [], notes: [] };
 const SERVED_ROOT = "/";
-// the program waits for a request in `shared` (host-routes.js PAGE_SERVING): its run is shown as it is so far, and
-// the page asks for its root at once, as a browser opening the address; a request made while it was busy goes now
+// the program waits for a request in `shared` (host-routes.js PAGE_SERVING): the page asks for its root at once, as a
+// browser opening the address, and the run is shown with that first page (firstServed); a request made while it was
+// busy goes now
+let firstServed; // {run, report}: the serving run, finished once its first page is answered
 function servingRequests({ shared, port }) {
 	const first = !worker.serving;
 	const waiting = worker.serving?.waiting ?? (first ? ["GET", SERVED_ROOT] : undefined);
 	worker.serving = { shared };
-	if (first && pending) finish(pending, { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT });
+	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT } };
 	if (waiting) servedRequest(...waiting);
 }
 
-// a request as HTTP text into the waiting program's buffer, else kept until it waits again
-function servedRequest(method, target, body = "") {
+// a request as HTTP text into the waiting program's buffer, else kept until it waits again; a body is a form's fields,
+// urlencoded, as a browser posts them (submitForm), with the page it came from
+const FORM_TYPE = "application/x-www-form-urlencoded";
+function servedRequest(method, target, body = "", referer = $("address").value) {
 	showAddress(target);
 	const { shared } = worker.serving;
-	if (!shared) return worker.serving.waiting = [method, target, body];
+	if (!shared) return worker.serving.waiting = [method, target, body, referer];
 	worker.serving = {};
 	const length = new TextEncoder().encode(body).length;
-	answerInto(shared, async () => ({ request: `${method} ${target} HTTP/1.1\r\nHost: localhost\r\nContent-Length: ${length}\r\n\r\n${body}` }));
+	const typed = body ? `Content-Type: ${FORM_TYPE}\r\nReferer: ${referer || "/"}\r\n` : "";
+	answerInto(shared, async () => ({ request: `${method} ${target} HTTP/1.1\r\nHost: localhost\r\n${typed}Content-Length: ${length}\r\n\r\n${body}` }));
 }
 
 // the program's HTTP answer: an HTML body rendered, any other shown as the value, a failing status's body as the error
 // (whatever its content type: lib/web.warp http_failure answers text/html)
+// a redirect (a form's POST answered 303 See Other, lib/web.warp) is followed as a browser follows it: the GET of its
+// Location
+const REDIRECT_STATUSES = [301, 302, 303, 307, 308];
 function showServed(response) {
 	const [head, ...body] = response.split("\r\n\r\n");
 	const text = body.join("\r\n\r\n");
-	const failed = Number(head.split(" ")[1]) >= 400;
+	const status = Number(head.split(" ")[1]);
+	const location = head.match(/^location:\s*(\S+)/im)?.[1];
+	if (REDIRECT_STATUSES.includes(status) && location) return servedRequest("GET", location);
+	const failed = status >= 400;
 	const html = !failed && /^content-type:\s*text\/html/im.test(head) ? text : undefined;
-	showValue(html ? "" : text, failed, html);
+	const value = html ? "" : text;
+	const first = firstServed;
+	firstServed = undefined;
+	if (first) return finish(first.run, { ...first.report, value, error: failed, html });
+	showValue(value, failed, html);
 	showRendered(html);
 }
 
