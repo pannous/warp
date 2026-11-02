@@ -1,7 +1,9 @@
 // The standard library module uncertain (card uncertain-warp, notes/uncertain_warp.md): `x ± r` as warp classes with
 // operator methods, the twin of rust-harness:src/wasm_emitter/numbers/uncertain.rs (decision P217). `use uncertain`, then
 // `plus_minus(5, 1) + plus_minus(2, 1)` is 7.0 ± 2.0 and `gaussian(5, 1) + gaussian(2, 1)` is 7.0 ± 1.4σ.
-// Not yet the run-time form of a ± literal: the parser still builds Kind::Uncertain nodes (card plus-minus-class).
+
+// `6.0 ± 0.3`: the interval 5.7 … 6.3 about 6.0 (P217)
+infix operator ±(value: number, radius: number) := plus_minus(value, radius)
 
 // An interval with its value: worst-case bounds, no correlation, so `x - x` is 0 ± 2
 class Interval {
@@ -106,3 +108,27 @@ contribution_added(contributions: list, extra: Contribution): list := {
 	}
 	if found then out else out + [extra]
 }
+
+// how a ± value prints (card plus-minus, P219): the ± part to 2 significant digits, the value to the same place, 7.0 ± 2.0;
+// a ± part of 0 or ∞, or more digits than 17, as each float prints; gaussian 1 adds σ
+uncertain_text(value: float, radius: float, gaussian: int) := {
+	sigma = if gaussian == 1 then "σ" else ""
+	if not (radius > 0.0 and is_finite(radius)) { return "\(value) ± \(radius)\(sigma)" }
+	scale = 1.0
+	decimals = 0
+	while radius * scale < 9.5 and decimals <= 17 { scale = scale * 10.0; decimals += 1 }
+	while radius * scale >= 99.5 { scale = scale / 10.0 }
+	if decimals > 17 or abs(value) * scale >= 1e17 { return "\(value) ± \(radius)\(sigma)" }
+	place_text(value, scale, decimals) + " ± " + place_text(radius, scale, decimals) + sigma
+}
+// x rounded to the place of 1/scale with that many decimals: whole units half away from zero, decimals half to even
+place_text(x: float, scale: float, decimals: int) := {
+	sign = if x < 0.0 then "-" else ""
+	if decimals == 0 { return sign + to_base((floor(abs(x) * scale + 0.5) * round(1.0 / scale)) as int, 10) }
+	digits = round(abs(x) * scale) as int
+	fraction = ""
+	while #fraction < decimals { fraction = (digits % 10 + 48) as char + fraction; digits = digits /! 10 }
+	sign + to_base(digits, 10) + "." + fraction
+}
+// neither ∞ nor NaN: ∞ - ∞ is NaN
+is_finite(x: float): bool := x - x == 0.0
