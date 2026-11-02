@@ -17,6 +17,9 @@ WINDOW_LIBRARIES='raylib|SDL|glfw'
 # port the system chooses (SERVER_PORT 0), so samples run at once, other runs and tests never collide
 SERVING='^serving http://'
 SERVER_PORT=0
+# a sample that fails on purpose says why on a line of its own: EXP instead of FAIL (the page sweep reads it too,
+# web/playground/test_in_browser.py EXPECTED_FAILURE)
+EXPECTED_FAILURE='^# expected failure: '
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
@@ -35,14 +38,16 @@ one() {
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
 	first=$(grep -av '^wasm-rt warning\|^warning: ' "$out.err" | grep -am1 . | tr '\t' ' ' | cut -c1-200)
 	[ $status -eq 124 ] && first="timed out after ${SECONDS_EACH} s"
-	echo "FAIL $1: ${first:-exit $status, nothing on stderr}"
+	local verdict=FAIL
+	grep -q "$EXPECTED_FAILURE" "$tree/$1" && verdict=EXP
+	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
 export -f one
-export tree results WARP SECONDS_EACH WINDOW_LIBRARIES SERVING SERVER_PORT
+export tree results WARP SECONDS_EACH WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE
 
 report=$results/report.txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$report"
 cut -d: -f1 "$report" >"$tree/test/samples.txt"
-echo "samples: $(grep -c '^ok\|^SRV' "$report") of $(wc -l <"$report" | tr -d ' ') run, $(grep -c '^WIN' "$report") need a window, $(grep -c '^SRV' "$report") serve ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $tree/test/samples.txt"
+echo "samples: $(grep -c '^ok\|^SRV' "$report") of $(wc -l <"$report" | tr -d ' ') run, $(grep -c '^WIN' "$report") need a window, $(grep -c '^SRV' "$report") serve, $(grep -c '^EXP' "$report") fail on purpose ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $tree/test/samples.txt"
 # the failures by first error, its position and quotes left out so one cause groups
 grep -a '^FAIL' "$report" | sed 's/^FAIL [^:]*: //; s/"[^"]*"/"…"/g; s/ at samples\/[^ ]*//; s/ (no owner)//' | sort | uniq -c | sort -rn
