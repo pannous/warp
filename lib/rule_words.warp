@@ -165,6 +165,27 @@ counted_question(items: Node, item: Node): Node := {
 # a value as code to paste: a text in its quotes
 as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
+# `people where age > 18` (decision P223, lib/sugar/lists.warp): a name the program binds nothing to that a class of it
+# declares as a field reads the item's field, `it.age`; a name the program binds keeps its value
+bare_fields_read(condition: Node, program: Node): Node := {
+	fields = statements_in(program).flat_map(s => declared_field_names(s))
+	if #fields == 0 { return condition }
+	bound = names_bound_in_kept(program)
+	readable = fields.filter(name => not bound.has(name))
+	item_field_read(condition, readable)
+}
+declared_field_names(statement: Node): list := {
+	view = class_view(statement)
+	if view == ø then [] else class_declared(statement, view).fields
+}
+# the code with each of the field names read from `it`; the field part of `x.f` stays as written
+item_field_read(n: Node, fields: list): Node := {
+	if n is symbol { return if name_of(n) in fields then Key(symbol("it"), Op.Dot, n) else n }
+	if n is key { return Key(item_field_read(key_of(n), fields), op_of(n), if op_of(n) == Op.Dot then value_of(n) else item_field_read(value_of(n), fields)) }
+	if is_group(n) { return placed(separated(bracketed(items_of(n).map(item => item_field_read(item, fields)), bracket_of(n)), separator_of(n)), n) }
+	n
+}
+
 # --- a function's own words (lib/sugar/reflection.warp's rules, card name-params) ---
 
 # the program's definition of the function named, `f(a, b) := …` or `f = x => …`; ø for none
@@ -342,7 +363,7 @@ declared_local(declaration: Node): Node := {
 }
 
 # the words by name, as a rule's `where` calls them
-rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check}
+rule_words = {class_help: class_help, function_help: function_help, module_help: module_help, typed_json: typed_json, spelled: spelled, unit_bound: unit_bound, unit_led: unit_led, path_parameters: path_parameters, route_verb: route_verb, route_bindings: route_bindings, served: served, framed: framed, exited: exited, whenever_listens: whenever_listens, once_listens: once_listens, counted_question: counted_question, declared_local: declared_local, signaled: signaled, parameters_named: parameters_named, body_of: body_of, doc_of: doc_of, signature_text: signature_text, return_kind: return_kind, misnamed: misnamed, definition_text: definition_text, dir_words: dir_words, value_dir_words: value_dir_words, module_named: module_named, wgsl_shader: wgsl_shader, wgsl_painting: wgsl_painting, shader_values: shader_values, shader_values_of: shader_values_of, paint_size: paint_size, gpu_lists_packed: gpu_lists_packed, gpu_list_made: gpu_list_made, gpu_packed: gpu_packed, gpu_packed_as: gpu_packed_as, law_check: law_check, bare_fields_read: bare_fields_read}
 
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
