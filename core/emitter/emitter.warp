@@ -1473,10 +1473,10 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime_types = 0
 	if module.prebuilding or prepended() { canonical_type_entries() }
 	if module.prebuilding { for kind in Made.keys { module.made[kind] = yes } }
+	module.global_marks = {}
 	if prepended() { behind_runtime() }
 	module.aliases = type_synonyms()
 	module.marks = int_type_kinds(statements_in(program))
-	module.global_marks = {}
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
 	declare_class_structs()
