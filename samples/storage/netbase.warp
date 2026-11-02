@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# expected failure: needs a netbase library (card netbase-wikidata-load)
 use netbase
 load wikidata
 results = query "all cities with population > 100000"
