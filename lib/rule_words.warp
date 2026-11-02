@@ -38,6 +38,32 @@ starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_bin
 # `km/h`, `m²`, `cm`: code led by a unit word, the unit part of `2 km/h is speed` (lib/units.warp)
 unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else code is symbol and "units" in (word_index(word_index_file()).get("${code}") ?? [])
 unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
+# `km/h`, `kg·m/s^2`, `cm^2`: a unit written whole, each part a unit word, each power a number (`km/2` is no unit)
+unit_written(code: Node): bool := {
+	if code is key and op_of(code) == Op.Pow { return unit_written(key_of(code)) and is_number_literal(value_of(code)) }
+	if code is key and op_of(code) in [Op.Div, Op.Mul] { return unit_written(key_of(code)) and unit_written(value_of(code)) }
+	code is symbol and "units" in (word_index(word_index_file()).get("${code}") ?? [])
+}
+# `km/h`, `m^2`: the text of a unit written whole of several parts, "km/h", as lib/units unit_named reads it; ø for a
+# single unit word or any other code
+compound_unit(code: Node): any := if code is key and unit_written(code) then "${code}".replace(" ", "") else ø
+# `km/h`, `kg·m/s^2`: the unit word leading a unit written of several parts, ø for other code
+leading_unit(code: Node): any := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then leading_unit(key_of(code)) else if code is symbol then code else ø
+# `q as km`, `(q as km) / h`: the unit word converted to at the bottom of the code's left operands, ø without one
+converted_unit(code: Node): any := {
+	if is_key(code, Op.As) { return if value_of(code) is symbol then value_of(code) else ø }
+	if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then converted_unit(key_of(code)) else ø
+}
+# `q as km/h`, which binds as (q as km) / h: the conversion to the compound unit, q as (km/h); ø when the code is no
+# conversion followed by the rest of a unit written whole (`in` binds looser than / and needs none)
+unit_regrouped(code: Node): any := {
+	if not (code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow]) { return ø }
+	left = key_of(code)
+	conversion = if is_key(left, Op.As) then left else unit_regrouped(left)
+	if conversion == ø { return ø }
+	unit = Key(value_of(conversion), op_of(code), value_of(code))
+	if unit_written(unit) then Key(key_of(conversion), Op.As, unit) else ø
+}
 
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
@@ -590,6 +616,8 @@ rule_words = {
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
 	class_help: class_help,
+	compound_unit: compound_unit,
+	converted_unit: converted_unit,
 	counted_question: counted_question,
 	declared_local: declared_local,
 	definition_text: definition_text,
@@ -605,6 +633,7 @@ rule_words = {
 	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
 	law_check: law_check,
+	leading_unit: leading_unit,
 	misnamed: misnamed,
 	module_help: module_help,
 	module_named: module_named,
@@ -631,6 +660,7 @@ rule_words = {
 	typed_json: typed_json,
 	unit_bound: unit_bound,
 	unit_led: unit_led,
+	unit_regrouped: unit_regrouped,
 	value_definitions: value_definitions,
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,

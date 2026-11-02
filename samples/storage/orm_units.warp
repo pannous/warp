@@ -31,6 +31,6 @@ if count(rides) == 0 {
 	rides.add(Ride(10km, 50min, 3kg))
 	rides.add(Ride(2km, 20min, 500g))
 }
-for ride in rides { print (ride.distance / ride.time).to("km/h") }  # a speed in a compound unit (card as-compound-unit)
+for ride in rides { print ride.distance / ride.time as km/h }  # a speed in a compound unit
 print sum(rides.map(ride => ride.load))
 runs#2.distance
