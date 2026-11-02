@@ -7,7 +7,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 - postfix-words (user wants a discussion): `xs sorted`, `x squared`. Options: a typed sugar rule `$x $f => $f($x) where $f takes …` (typed rule conditions exist: lib/sugar/broadcasting.warp), or the original idea, an -ed/-d verb suffix fallback (`sorted` → sort when no `sorted` exists). Default: not a feature.
 - true-threads (user asked): `go` tasks are cooperative today (N29); decision P33 says real threads (wasm threads natively, Web Workers in the page). How to tell threads from cooperative tasks?
-- comparison-swallows-arms (warp-operators, kitchensink.warp:67): `switch 3 {1: "one" 3: "three"} == "three"`. A) ~6 core lines in prefix_calls.warp fitted_comparison, every comparison; B) 2 sugar rules (== and != only). Recommended A. Also the valued field default `class Animal { name: "?" }` (2 core lines, instances.warp). The Supervisor is explaining it to the user directly.
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 

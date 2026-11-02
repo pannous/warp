@@ -41,6 +41,9 @@ archive you write answers to; workers get decisions as your messages, not by rea
   and the Supervisor whether the assumption stands or must be undone (and which worker should do it).
   The user dictates by speech recognition: fix misheard words, never paste raw answers (no "oof", no "metal data"
   for metadata); quote only a short cleaned phrase when the exact wording carries the meaning.
+- Cards (user 2026-11-02): the Interviewer makes the card for a decision itself, no detour through the Supervisor:
+  grep `todo list` first (the question often came from a card), note the decision key on that card or `todo add`
+  one, and name the card in the message to the asking session and the Supervisor.
 - Session swaps ("Swap: X was replaced by me …"): never mention them to the user. Check the handover silently for your relays, re-send what's missing, and end the turn without
   a user-facing line.
 - FYIs (a worker's undoable default, a decision the Supervisor relays): record them in notes/decisions.md at once,
