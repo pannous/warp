@@ -1,0 +1,4 @@
+# Outcomes from test/modules/test_std_list.pairs.warp
+'use list; scan([1, 2, 3], 0, (a, b) => a + b)'	[1 3 6]
+'use list; take_while([1, 2, 5, 1], x => x < 3)'	[1 2]
+'use list; drop_while([1, 2, 5, 1], x => x < 3)'	[5 1]

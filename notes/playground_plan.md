@@ -92,9 +92,14 @@ The page gives what the native warp gives for all 28. Each snippet is guide.md a
 Markup DOM examples (element events, fine updates, components, keyed list, form binding, styles, transitions):
 warp-web-host's page work now, on lib/markup.warp's two exports (card markup-keeps): page_render(value) is the HTML,
 handlers numbered from 1 per render as data-warp-<event>="n"; page_event(n, detail) runs one. driver.js already
-renders and handles through them (pageEventHandled). State 2026-11-01: a program exports them only with `use markup`;
-`on click {…}` in a tag becomes a markup Handler and the examples get `use web` with warp-markup's next step, so
-the tour checks wait for it. Then, verified by `test_in_browser.py --examples --firefox`, the Rust-era paths go:
+renders and handles through them (pageEventHandled). State 2026-11-02: the tour's markup examples say `use web` (a
+used library stays explicit; whether a handler brings markup in by itself is a morning question) and put a comma
+beside each handler; the examples check compares a markup page's rendered HTML (test_in_browser.py show_example).
+Holding: markup, element events, keyed list, routes, the computed text between children. Native gaps, warp-markup's:
+fine updates/styles (markup-done-selector, live style maps), components (def-counter), cleanup (on mount/cleanup),
+form binding (bind:), transitions (`transition:` as style); warp-speed's: forms (urlencoded body fields, 303 after a
+POST, which the page already follows). A serving program's run is reported with its first page.
+Card remove-rust (verified by `test_in_browser.py --examples --firefox`): the Rust-era paths go:
 host.js page·value/page·render/page·hole(s)/on·<event>·node (renderedHtml, pageHoles, holePatches, pageEvents,
 runPageEvent, listeningRun), worker.js PAGE_VALUE and showHoles, host-compiler.js page_event, markup.js
 data-warp-instance; site.js and site-worker.js (built sites) move to page_render/page_event as driver.js did.
@@ -110,3 +115,17 @@ right) and welcoming errors (native's new sentence carries no position).
 - When a sample needs a core change: send warp-supervisor one line (sample, error, the core place if known, a repro),
   park that sample, and go on with the next. The Supervisor hands it to a core worker.
 - Load: one background test or sweep run each; the browser sweep runs a few samples at a time.
+
+## test/ in the page (scripts/tests-web.sh, night decision N6)
+- `scripts/tests-web.sh <tree> [paths]` lists the cases with the page's compiler (test-list), runs each in the page
+  (`playground.evaluate(code, file, {asData: true})`: WARP_VALUE_AS_DATA, no hints, no WARP_SERVE/WARP_PROGRAM, as
+  core/native/tests.warp's `warp run <code>`), lets test-verdicts judge them and sorts them against the stored baseline:
+  ok, PAGE (fails only in the page), EXP (its section says native only), BOTH, NONE. A full run writes test/tests-web.txt.
+- Never merge during a run: test-verdicts refuses a tree that changed since the listing.
+- The stored baseline lags main: before calling a PAGE case a page gap, run its file natively (`warp test <file>`).
+- A section the browser cannot run says so in its heading, `# name — native only: why` (raylib, SDL2, os.command,
+  PATH, /dev/null, /etc/hosts, libm's last digit): a line of its own would move the lines the verdicts are keyed by.
+- The page compiles files; native `warp test` runs code inline. Separately linked programs differ (card program-file):
+  sleep with a unit, color/math modules, factorial.signature, patterns. Not hidden in the runner: users get files too.
+- 2026-11-02: 8988 of 11998 hold, 69 PAGE: 31 native regressions on main, 6 fixed since (emit key), 22 program-file,
+  8 zlib (N18), module_directory (the native inline run's folder), sound_seconds (a morning question).
