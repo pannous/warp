@@ -539,24 +539,28 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 # nor finds defined (the program's, the library's)
 law_trial_values = "[0, 1, -1, 2, -2, 3, -7, 10, -100, 1000]"
 law_placeholder = "law_proposition_placeholder"
+law_variable_prefix = "law_"
 law_check(law: Node, program: Node): Node := {
 	is_named_law = is_key(law, Op.Colon) and key_of(law) is symbol
 	lines = if is_named_law then statements_in(value_of(law)) else [law]
+	if is_named_law and #lines == 1 and is_group(lines#1) { lines = items_of(lines#1) }
 	proposition = lines.last
 	given = lines[0 ..< #lines - 1].map(law_given).filter(name => name != "")
 	defined = level_statements(program).map(declared_name)
 	variables = if #given > 0 then given else law_variables(proposition, []).filter(name => name not in defined and not is_declared_word(name))
 	law_shown = (if is_named_law then name_of(key_of(law)) else as_code(proposition).replace("ø-", "-")).replace("\"", "'")
-	failure = "\"law " + law_shown + " fails for \"" + variables.map(name => " + \"" + name + " = \" + " + name).join(" + \", \"")
+	failure = "\"law " + law_shown + " fails for \"" + variables.map(name => " + \"" + name + " = \" + " + law_variable_prefix + name).join(" + \", \"")
 	code = "if not (" + law_placeholder + ") { raise " + failure + " }"
-	for name in variables.reverse() { code = "for " + name + " in " + law_trial_values + " { " + code + " }" }
+	# each variable held as law_<name>, which no rule of a library word takes (c, m)
+	for name in variables { proposition = renamed(proposition, name, plain_node(parsed(law_variable_prefix + name))) }
+	for name in variables.reverse() { code = "for " + law_variable_prefix + name + " in " + law_trial_values + " { " + code + " }" }
 	renamed(plain_node(parsed(code)), law_placeholder, proposition)
 }
 # `for x: int` of a named law: x
 law_given(line: Node): text := {
 	line_code = as_code(line)
 	if not line_code.starts_with("for ") { return "" }
-	line_code[4 ..].split(":")#1.trim()
+	line_code[4 ..].replace(":", " ").split(" ").filter(word => word != "")#1
 }
 # the names a law reads, in order, each once: none a call's head (`square` of `square(x)`)
 law_variables(n: Node, found: list): list := {
