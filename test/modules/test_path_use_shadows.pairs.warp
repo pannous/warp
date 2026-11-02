@@ -1,0 +1,2 @@
+# a file used by its path defines its words: its mix is no implicit use of sound's (card path-used-shadows)
+'use "own_mix.warp"; mix(1, 3, 0.5)'	2

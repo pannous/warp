@@ -602,7 +602,7 @@ global_word_modules(program: Node, own: any, used: list): list := {
 # word the program names free (never a member's, `c.pi`) that neither it, the prelude nor a module it uses defines,
 # by the index `warp rebuild` writes beside the prebuilt modules (write_word_index); a module's `global` word is its
 # own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
-implicit_modules(source: text, index_file: text): list := {
+implicit_modules(source: text, index_file: text, folder: text = "."): list := {
 	index = word_index(index_file)
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
@@ -613,9 +613,13 @@ implicit_modules(source: text, index_file: text): list := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
-	used = used_module_sources(flat_statements(program), ".", [])#2
+	used = used_module_sources(flat_statements(program), folder, [])#2
 	known = {}
 	for module in used { for slice in definition_slices(used_module_text(module)) { known[slice#1] = yes } }
+	# a file used by its path defines words too: the colors package's mix(a, b, t) is no use of sound's mix
+	for file in flat_statements(program).map(s => file_used(s, folder)).filter(file => file != ø) {
+		for slice in definition_slices(file_text(file) ?? "") { known[slice#1] = yes }
+	}
 	globals = global_words()
 	providers = type_module_providers()
 	free = free_words(program)
@@ -668,7 +672,7 @@ prelude_definitions(): list := {
 	if prelude_definition_names == ø { prelude_definition_names = definition_slices(module_source("prelude")).map(slice => slice#1) }
 	prelude_definition_names
 }
-with_implicit_uses(source: text, index_file: text): text := source + implicit_modules(source, index_file).map(module => "\nuse " + module).join("")
+with_implicit_uses(source: text, index_file: text, folder: text = "."): text := source + implicit_modules(source, index_file, folder).map(module => "\nuse " + module).join("")
 # word → the standard modules defining it, read from the index `warp rebuild` writes (a line `word<TAB>module …`
 # each); none before the first rebuild
 global word_indices = {}
