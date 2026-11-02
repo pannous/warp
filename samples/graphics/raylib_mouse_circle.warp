@@ -1,35 +1,28 @@
 #!/usr/bin/env warp
 # Raylib FFI Example - Draw persistent trace with mouse
-# Demonstrates using raylib graphics library via FFI with mouse drawing
-
+# Demonstrates using raylib graphics library via FFI with mouse drawing.
+# raylib draws into two buffers in turn, so a picture kept by not clearing flickers between them: each frame clears
+# and draws all the dots painted so far again
 import raylib
+
+LEFT_BUTTON = 0
+RIGHT_BUTTON = 1
 
 InitWindow(800, 600, "Warp Raylib - Paint Demo")
 SetTargetFPS(60)
-
-needsClear = 1
+dots = []
 
 while not WindowShouldClose() {
-	mouseX = GetMouseX()
-	mouseY = GetMouseY()
+	mouse_x = GetMouseX()
+	mouse_y = GetMouseY()
+	if IsMouseButtonDown(LEFT_BUTTON) { dots.push([mouse_x, mouse_y]) }
+	if IsMouseButtonDown(RIGHT_BUTTON) { dots = [] }
 
 	BeginDrawing()
-
-	if(needsClear){
-		# ClearBackground(0xFFF5F5F5) todo? Flickers horribly from black to white if uncommented  (card clearbackground-each)
-		needsClear = 0
-	}
-
-	if(IsMouseButtonDown(2) == 1){
-		ClearBackground(0xFFF5F5F5) # Switches background from black to white, which is better
-	}
-
-	if(IsMouseButtonDown(0) == 1){
-		DrawCircle(mouseX, mouseY, 8.0, 0xFF2E1990)
-	}
-
-	DrawText("Left click to draw, Right click to clear", 180, 20, 20, 0xFF505050)
-	DrawCircle(mouseX, mouseY, 4.0, 0xFF808080)
+	ClearBackground(RAYWHITE)
+	for dot in dots { DrawCircle(dot#1, dot#2, 8.0, MAROON) }
+	DrawText("Left click to draw, Right click to clear", 180, 20, 20, DARKGRAY)
+	DrawCircle(mouse_x, mouse_y, 4.0, GRAY)
 	EndDrawing()
 }
 
