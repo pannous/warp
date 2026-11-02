@@ -963,7 +963,9 @@ def show_example(name):
 		const name = {json.dumps(name)};
 		{RUN_EXAMPLE % json.dumps(name)}
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
-		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
+		// a page of markup shows its HTML (driver.js page_render), anything else its value
+		const shownValue = () => {{ const page = document.getElementById("rendered"); return !page.hidden && page.shadowRoot ? page.shadowRoot.innerHTML : document.getElementById("value").textContent; }};
+		const shown = {{ value: shownValue(), printed: document.getElementById("printed").textContent,
 			canvases: document.querySelectorAll("#paintings canvas").length,
 			failed: document.getElementById("status").classList.contains("failed") ? document.getElementById("status").textContent : "" }};
 		const clicks = EXAMPLES[name].clicks ?? [];
@@ -990,7 +992,7 @@ def show_example(name):
 		const kept = elements.every(element => element.isConnected);
 		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-warp-key") === keys[index]);
 		const clickedPrinted = document.getElementById("printed").textContent;
-		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
+		return JSON.stringify({{ ...shown, clicked: shownValue(), clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
 	shown = browser("eval", script)
 	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown or browser_complaint})", "printed": ""}
