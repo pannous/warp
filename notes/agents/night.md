@@ -24,6 +24,10 @@ How the fleet works while the user sleeps, until the user is back (usually 10:00
   they add throughput where the Mac's build line is the bottleneck. Fast mode where the agent's own work is the limit.
 - Cloud workers take lib/-only cards that need no page or Mac host words; core and page work stay on the Mac.
 - The full suite runs in the cloud routine (test/results-cloud.txt).
+- No Rust in the cloud (user 2026-11-02): a cloud box needs no cargo or rustc. It takes the latest release's
+  warp-v*-<arch>-unknown-linux-gnu.tar.gz (warp with its wasmtime library) and the seed seed.lock names, then
+  `WARP_LIB=<checkout>/lib warp rebuild`. gh in a cloud session: REST only (`gh api repos/pannous/warp/...`, assets via
+  `Accept: application/octet-stream`); GraphQL, and with it `gh release download` and the `todo` board CLI, is refused.
 
 ## Morning
 - At 10:00 the Supervisor gives the user one summary: the numbers then and now, what landed, the decisions to review,
