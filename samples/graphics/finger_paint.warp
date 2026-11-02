@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# TODO This is abysmally slow. We had the same problem in Rust where we spent excessive amounts to tune this. Hopefully we can learn from there without bloating anything too much We already have ./samples/graphics/shader_brush.warp Which kind of works (card finger-paint-slow)
 # finger painting: hold the mouse button over the window (in the playground, the canvas) and draw strokes whose color
 # turns as you go; S saves the painting (in the playground, a download), space clears it. mouse_x, mouse_y and
 # mouse_down are the pointer over the painted picture, in its pixels

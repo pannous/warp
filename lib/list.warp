@@ -17,14 +17,14 @@ partition(xs: any, f: any): list := { kept = []; rest = []; for x in xs { if f(x
 max_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }
 min_by(xs: any, f: any): any := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; best }
 // {key: [elements]}: the elements by the text of f's value
-group_by(xs, f) := { out = {}; for x in xs { k = "" + f(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
+group_by(xs: any, f: any): any := { out = {}; for x in xs { k = "" + f(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
 // {element: how often}
-tally(xs) := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }
+tally(xs: any): any := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }
 zip_with(a: any, b: any, f: any): list := [f(a#i, b#i) for i in 1 to min(count(a), count(b))]
-sum_by(xs, f) := sum([f(x) for x in xs])
+sum_by(xs: any, f: any): any := sum([f(x) for x in xs])
 count_by(xs: any, f: any): int := count([x for x in xs if f(x)])
 // the elements moved n places to the left
-rotate(xs, n) := { k = n % count(xs); xs[k:] + xs[:k] }
+rotate(xs: any, n: any): any := { k = n % count(xs); xs[k:] + xs[:k] }
 interleave(a: any, b: any): list := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
 // without runs of equal neighbours
 dedupe(xs: any): list := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
@@ -54,10 +54,10 @@ fill(n: any, value: any): list := filled_list(n, value)
 // [smallest, greatest]
 minmax(xs: any): list := [min(xs), max(xs)]
 // Python's list methods (card python-stdlib): extend appends each of ys in place, index is the position from 0
-extend(xs, ys) := { for y in ys { xs.append(y) }; xs }
+extend(xs: any, ys: any): any := { for y in ys { xs.append(y) }; xs }
 // JavaScript's concat: a new list of xs then ys
-concat(xs, ys) := xs + ys
-index(xs, x) := { at = index_of(xs, x); if at == 0 { raise "ValueError: " + str(x) + " is not in the list" }; at - 1 }
+concat(xs: any, ys: any): any := xs + ys
+index(xs: any, x: any): int := { at = index_of(xs, x); if at == 0 { raise "ValueError: " + str(x) + " is not in the list" }; at - 1 }
 // sets of list items (card parse-free): the words and their math glyphs; ⊂ and ⊃ are proper, ⊆ and ⊇ allow equal sets
 union(a: any, b: any): list := unique(a + b)
 intersection(a: any, b: any): list := [x for x in unique(a) if x in b]

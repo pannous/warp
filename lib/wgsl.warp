@@ -493,10 +493,10 @@ shader_values(s: Node, given: Node, program: Node): any := shader_holes_added(s,
 # the values of a paint of shader s given none
 shader_values_of(s: Node, program: Node): any := shader_holes_added(s, [], program)
 # the size paint(s) paints at (wiki/graphics.md): the program's width and height where its main level assigns both,
-# else the view's
+# else the size of where it shows (prelude.warp shown_width: a window's, else the view's)
 paint_size(program: Node): list := {
 	if main_level_value("width", program) != ø and main_level_value("height", program) != ø { return [symbol("width"), symbol("height")] }
-	[call_of("view_width", []), call_of("view_height", [])]
+	[call_of("shown_width", []), call_of("shown_height", [])]
 }
 shader_holes_added(s: Node, entries: list, program: Node): any := {
 	shader = main_level_value(name_of(s), program)

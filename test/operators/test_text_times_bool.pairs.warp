@@ -1,0 +1,5 @@
+# a text times a yes/no is the text once or not at all, as a bool is 1 or 0 to any operator
+'"x" * yes'	"x"
+'"x" * no'	""
+'i = 9; ("Fizz" * (i % 3 == 0)) + ("Buzz" * (i % 5 == 0))'	"Fizz"
+'yes * "ab"'	"ab"
