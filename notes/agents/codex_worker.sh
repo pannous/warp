@@ -182,7 +182,7 @@ in lib/ (and samples/, test/, wiki/); never change core/ or the Rust harness. Cl
 
 Reproduce before you judge: run the card's example with WARP_NO_WINDOW=1 /Users/me/dev/bin/warp '<code>'; an old
 investigation on the card is a hint, not a verdict. A card that truly needs core is not a dead end: look for the
-library way first (common.md Principles: a function, enum, overload or lib/sugar rule); only when there is none, write
+library way first (common.md Principles: a function, enum, overload or core/extensions/sugar rule); only when there is none, write
 the smallest core shape into \`todo note <card> \"needs core: <files, functions, why in 3 lines>\"\`, release it and
 take the next card.
 
