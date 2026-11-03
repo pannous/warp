@@ -19,14 +19,9 @@ class Extension { name: text; operator_rows: text = ""; library_words: map = {};
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
-# base's entries and each of tables' (a later table's entry wins)
-with_entries(base: map, tables: list): map := {
-	merged = {}
-	for table in [base] + tables { for name in table.keys { merged[name] = table[name] } }
-	merged
-}
-extended_library_words(base: map): map := with_entries(base, EXTENSIONS.map(extension => extension.library_words))
-extended_constant_tables(base: map): map := with_entries(base, EXTENSIONS.map(extension => extension.constant_tables))
+# base's entries and each extension's (a later entry wins)
+extended_library_words(base: map): map := joined_maps([base] + EXTENSIONS.map(extension => extension.library_words))
+extended_constant_tables(base: map): map := joined_maps([base] + EXTENSIONS.map(extension => extension.constant_tables))
 # every map of entries as one map, a later one's entry winning
 joined_maps(maps: list): map := {
 	joined = {}
