@@ -38,6 +38,23 @@ injection, number_words, source_checks and lints). The hooks they share are few:
 statement head, declaration and definition head, text prefix, text pass, operator table, parse marks with checks,
 and the pass list. These ten table entries would carry them all.
 
+Against the target shape (Lessons from wasp: operators as rows, keywords through a name → handler table):
+- The rows exist half already: lib/aliases.warp is one entry per operator (operator, prefix-operator, symbol Op,
+  aliases, infix). What is still code: binding_powers (parser.warp, a 40-line if-chain of precedence and
+  associativity), DECLARED_ONLY_OPERATORS, fixity_level and the declared-operator scan (195 lines). Adding
+  `power: [left, right]` and `fixity: prefix | infix | suffix | circumfix` to the rows turns all of it into a table
+  read, and the user's `infix operator ⊕` becomes a row added at parse time.
+- Suffix and circumfix rows then cover `x²`, `x⁻¹`, `5‰`, `5%`, `|x|`, `‖x‖`, `√x`, `∛x`: superscript_power,
+  percent_ends and the circumfix functions above become rows (an extension adds a row, not code).
+- Number-form glyphs are no operators: `½`, `π`, `0x…`, `0.(3)`, glued units `5ms` want an atom table instead,
+  glyph or suffix → the function that reads the literal (the atom glyph and atom suffix hooks above).
+- Keyword handlers in this area: c_style_for, `times`, named loops, `down to`, foreign_forms' modifiers and `new`,
+  injection's `sql`/`sh` text prefix, shader and wasm raw blocks, the guard words (GUARD_MARKERS: try, assert,
+  check). Each is a name → handler entry; the statement head, declaration, raw block and text prefix hooks above
+  are that table's kinds.
+- Not now (card apply-lessons, Later): moving binding_powers and the keywords out of parser.warp, fusing the
+  passes' walks.
+
 Every spelling stays in the language (decision self-source-minimal): a row leaves the core into an extension, never
 out of warp. Where the compiler's own source is the only reason a form stays core, a minimal change to that source
 (radix constants above; the postfix/phrase row once measured) lets it go.
@@ -54,23 +71,39 @@ multiplication, a core form every number glued to a name uses), lib/unit_names.w
 
 | piece | where | lines | compiler uses | hook it needs |
 |---|---|---|---|---|
-| the degree sign: `30°`, `°C`, `°F` read as a unit name, `x°` as `x * °` | parser.warp atom's DEGREE branch, the name° case after a word, DEGREE | ~14 | no (`°` only in the constant) | **atom glyph** (parsing row above): `°` a registered glyph whose atom units reads |
-| ± as an operator: the node, its spelling, its binding power, the `+-` alias | node.warp Op.PlusMinus; node_cases.warp "PlusMinus"; parser.warp ALIAS_TARGET_NAMES `+-`, binding power 140/141 beside + and -; runtime/types.warp and runtime/nodes.warp operator name lists | ~6 entries | no | **operator table** (parsing row above): ± a declared glyph operator of uncertain, its precedence that of + and -; Op.PlusMinus stays for the seed until remove-unused |
-| ± as a value kind | analyzer.warp:192 `op == "±"` gives ValueKind.Data | 1 | no | goes with the operator table entry: the declared operator's result type, not a core special case |
+| the degree sign: `30°`, `°C`, `°F` read as a unit name, `x°` as `x * °` | parser.warp atom's DEGREE branch, the name° case after a word, DEGREE | ~14 | no (`°` only in the constant) | operator row: `°` a suffix operator of units (`symbol °, fixity suffix, precedence of a glued factor`, `°C`/`°F` its spelled forms), `30°` and `x°` read by the row as `30 * °` |
+| ± as an operator: the node, its spelling, its binding power, the `+-` alias | node.warp Op.PlusMinus; node_cases.warp "PlusMinus"; parser.warp ALIAS_TARGET_NAMES `+-`, binding power 140/141 beside + and -; runtime/types.warp and runtime/nodes.warp operator name lists | ~6 entries | no | operator row: `symbol ±, alias +-, fixity infix, precedence 140/141 (that of + and -), associativity left`, owned by uncertain; Op.PlusMinus stays for the seed until remove-unused |
+| ± as a value kind | analyzer.warp:192 `op == "±"` gives ValueKind.Data | 1 | no | the operator row's result (its function operator_±'s declared result), not a core special case |
 | which module's ± wins: units' overloads uncertain's (`5m ± 1cm` brings units) | prelude_words.warp:705 definer order | ~5 | no | stays: the general rule of module definers, units only its example |
 | `use units` linked prebuilt; a unit's expected type names its module (`sleep(duration: Time)` → units) | compiler.warp:157, prelude_words.warp 838-879 | — | — | stays: general module machinery, units the example in its comments |
 | `c` kept from units' speed-of-light rule | rewrites.warp:57 | 1 | — | stays: a general guard of a name the program binds |
-| calendar time units in literals (`2 weeks`, `1 month`) and Time values | parser.warp TIME_UNITS, time_unit_named, with_time_unit (in the time-literals row above); emitter/times.warp (147, Time kind, unit_nanos) | 147 + row above | check: the compiler's `timed` reads the clock, never a time literal | moves with the time-literals row: **atom suffix** plus the Time kind's emitter part as one extension |
+| calendar time units in literals (`2 weeks`, `1 month`) and Time values | parser.warp TIME_UNITS, time_unit_named, with_time_unit (in the time-literals row above); emitter/times.warp (147, Time kind, unit_nanos) | 147 + row above | check: the compiler's `timed` reads the clock, never a time literal | suffix rows: `week`, `day`, `month`, `year` (and plurals) after a number, the Time kind's emitter part beside them in one extension; owned by the time-literals row |
 
 Not units, though named so: index_positions.warp (179, index vs position, decision index-units) and UNIT_WORDS /
 counts_units (bytes, chars …: what a count counts) are the core's ints; operators.warp marks (`marked`, `marks_kind`)
 carry bool and int-type info for every program, so they stay.
 
-Plan once the hooks exist: the degree glyph and the ± operator entry move behind the atom-glyph and operator-table
-hooks (about 20 lines leave the core, no spelling lost); lib/units and lib/uncertain stay libraries; the module-order
-and expected-type rules stay core as general rules. Time literals with their emitter part are the one larger unit-like
-piece (~250 lines), owned by the parsing row's time entry. Nothing here needs the compiler's own source changed.
+Plan, as rows of the hook table (Lessons from wasp: operators as rows, keywords as a name → handler table): units
+and ± need no new hook. Three operator rows (± infix with its `+-` alias, ° suffix with °C and °F, and units' glued
+factor already general) and the time suffix rows replace about 20 lines of parser.warp and the analyzer's ± case; no
+keyword row is needed. lib/units and lib/uncertain stay libraries; the module-order and expected-type rules stay core
+as general rules. Time literals with their emitter part (~250 lines) are the one larger unit-like piece, owned by the
+parsing row's time entry. Nothing here needs the compiler's own source changed.
 
 ## Rules (user 2026-11-03)
 - The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).
 - The language is never simplified to shrink the core: every spelling programs may write stays (decision self-source-minimal).
+
+## Lessons from wasp (C++, ~/dev/apps/wasp/source), 2026-11-03
+Sizes: parser 1.8k (Wasp.cpp + literals) vs warp 6k; analyzer 3.8k (Angle, Keywords, Operator/FunctionAnalyzer,
+Context, NodeTypes) vs warp passes + analysis 12.6k; emitter 6.3k vs warp emitter + runtime 10.5k.
+- The parser knew only structure (the data format); operators and keywords were grouped later. warp's parser.warp
+  (5k) holds keywords (34 quoted ones) and binding powers: candidates to leave the parser for tables.
+- Operators were rows, not code: prefix/suffix/infix lists, right-associatives, precedence (², ⁻¹, ‰, √ …).
+  A row per operator is what an extension should add.
+- One analyze() dispatcher: keyword → group* handler (if, while, for, class, import …), ~120 lines. As a
+  name → handler table it is the static hook table core-is-self wants.
+- Avoid its awkward parts: string compares spread through the if-chain, global mutable state, a hash memo against
+  re-analysis, html/js special cases inline, order-sensitive groupTypes → Declarations → Calls → Operators.
+- warp has 35 passes, 32 walking the tree on their own; wasp did one recursive walk. Fusing passes into one
+  dispatch walk shrinks code and time.

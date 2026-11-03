@@ -13,14 +13,13 @@ The same notation holds your config, your markup and your program. Warp compiles
 Worker.
 
 ## Why Warp
-- Even when 99% of code is written by AI we can aim for the perfect programming language:  
-- ideal both for humans and AI: type save but not verbose  
-- Universal and fast (via aot web assembly)  
-- Highly structured and expressive:  
+Even when 99% of code is written by AI, we can aim for the perfect programming language: ideal for humans and AI
+alike, type safe but not verbose, universal and fast (compiled ahead of time to WebAssembly), highly structured and
+expressive.
 - **Data is code.** Like Lisp, but with blocks, lists, key-value pairs and tags instead of s-expressions.
   JSON-like, but no quotes around keys or symbols. Reads and writes JSON, XML and YAML.
 - **Wasm GC first.** A `class Person{name:String age:i64}` becomes a real `(struct …)` type, and the module carries
-  full name sections. Rust hosts read these objects back as typed values (see below).
+  full name sections, so any Wasm GC host sees typed objects (see below).
 - **No silent footguns.** When code could mean two things, the compiler doesn't guess quietly. It warns with the
   reading it took and the explicit form, or it refuses when a wrong guess would corrupt results
   ([Footguns](https://github.com/pannous/warp/wiki/Footguns)):
@@ -51,16 +50,6 @@ Worker.
 brew install pannous/tap/warp
 ```
 
-**Cargo** <!--(any platform with [Rust](https://rustup.rs))-->:
-```bash
-cargo install --locked warp-lang warp-runtime
-```
-
-
-**pip** (macOS, Linux; any Python 3):
-```bash
-pip install warp-language
-```
 <!--
 **Debian, Ubuntu, Fedora** (glibc 2.39 or newer: Ubuntu 24.04, Debian 13, Fedora 40): the `.deb` or `.rpm` of the
 [latest release](https://github.com/pannous/warp/releases/latest), e.g.
@@ -69,28 +58,23 @@ pip install warp-language
 `sudo apt install ./warp-lang_*_amd64.deb` or `sudo dnf install ./warp-lang-*.x86_64.rpm`.
 
 **Prebuilt binaries** (macOS arm64 and x86_64, Linux x86_64 and arm64): download the archive for your platform from the
-[latest release](https://github.com/pannous/warp/releases/latest) and put `warp` and `warp-runtime` together on your `PATH`.
+[latest release](https://github.com/pannous/warp/releases/latest) and put `warp` on your `PATH`.
 
-
-**From source:**
+**From source** (warp builds itself, so it needs an installed `warp` first):
 ```bash
 git clone https://github.com/pannous/warp && cd warp
-CARGO_NET_OFFLINE=false cargo fetch    # once: the repository builds offline, from cargo's local cache
-cargo build --release && cargo build --release -p warp-runtime   # binaries in target/release/
+warp rebuild                              # warp.wasm, the compiler written in Warp (core/)
+warp build native core/native/warp.warp   # the native warp command
 ```
-
-`warp-runtime` is the small runtime that standalone executables are made from; it belongs in the same folder as `warp`.
-`warp rebuild pure` then builds `warp.wasm`, the compiler written in Warp (core/), which `warp pure` runs.
 
 ## Run
 
 ```bash
 warp               # interactive console "repl"
 warp help                         # all commands
-warp sample.warp   # run a file, server, webapp our gui
+warp sample.warp   # run a file, server, webapp or gui
 warp build sample.warp # the standalone executable (aot native and .wasm)
-warp pure sample.warp  # compiled by the compiler written in Warp (not every form yet)
-warp test              # the tests under tests/, through that compiler
+warp test              # the tests under test/
 ```
 
 `samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
@@ -106,14 +90,14 @@ to_hex(mix(from_hex("#ff0000"), from_hex("#0000ff"), 0.5))   # "#800080"
 ```
 ([use](https://github.com/pannous/warp/wiki/use)).
 
-## Rust ⇄ Wasm GC round trip
+## Wasm GC objects
 
-```rust
-let alice = Person { name: "Alice".into(), age: 30 };
-is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
+```warp
+class Person{ name: text  age: int }
+alice = Person{ name: "Alice"  age: 30 }
+alice.age + 1                      // 31
 ```
-`is!` parses, compiles, runs the module in wasmtime and reads the GC object back. The compiler emits
-(`warp compile --wasm`, simplified):
+A class is a real GC struct, not a map in linear memory. The compiler emits (`warp compile`, simplified):
 ```wat
 (type $Text (array (mut i8)))
 (type $Person (struct (field $name (ref $Text)) (field $age i64)))
@@ -125,12 +109,10 @@ is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 ```
 Texts are GC byte arrays; linear memory is used only to hand bytes to the host or C.
 <!-- and for bootstrapping the native warp via wasm2c -->
-Declare the Rust side with `wasm_struct! { Person { name: String, age: i64 } }`, or inline:
-`wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }`.
 
 Untyped data travels as one universal GC type, `$Node {kind: i64, data: anyref, value: (ref null $Node)}`. It mirrors
-the host enum `Node` (`Text`, `Symbol`, `Number`, `Char`, `Key`, `List`, `Type`, `Meta`, `Data`, `Error`) in
-[src/node/mod.rs](src/node/mod.rs).
+the `Node` enum (`Text`, `Symbol`, `Number`, `Char`, `Key`, `List`, `Type`, `Meta`, `Data`, `Error`) in
+[core/node.warp](core/node.warp).
 
 ## Status
 
