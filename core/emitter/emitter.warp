@@ -708,6 +708,9 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 # a variable an Error raises in (decision errors-one-rule): any but an optional one (`r: json? = …`), a runtime
 # word's own, or a lowering's hidden one (try·value)
 def plain_place(body: Body, name: text): bool := not body.function.is_runtime and not name.contains("·") and name not in body.kept
+# a task given a place declared as a value, `n: int = go f(3)`, is awaited in between (decision task-to-value-awaits):
+# walk.warp's settling_word; a place declared task keeps it
+def settled(value: TypedCode, kind: ValueKind): TypedCode := if value.kind == ValueKind.Node and kind != ValueKind.Node and kind != pending and settling_word in module.functions then call_values(module.functions[settling_word], [value]) else value
 def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	# a statement assigned (`x = print "a"`) gives ø
@@ -744,7 +747,7 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
-	if name in body.declared { value = admitted(value, body.declared[name]) }
+	if name in body.declared { value = admitted(settled(value, body.declared[name]), body.declared[name]) }
 	value = place_checked(body, name, value)
 	kind = value.kind
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
@@ -885,7 +888,7 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	body.globals[name_of(name)] = yes
 	# `global w: int = 1280` wraps as a declared int local does: `r * w` of fast ints stays an i64 (card untyped-local)
 	if kind == ValueKind.Int { module.int_globals[global_key(body, name_of(name))] = yes }
-	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(value, kind))
+	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(settled(value, kind), kind))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
 	if name not in module.globals and value.mark != 0 { module.global_marks[name] = value.mark }
