@@ -495,7 +495,8 @@ run_time_test(argument: Node, type: text): Node := {
 # the places of the arguments a variant tests at run time: those of untold kind it takes no `any` for
 tested_places(kinds: list, types: list): list := (1 to #kinds).filter(at => kinds#at == ø and types#at != any_word)
 
-# the candidates testing more arguments first, of those the one widening fewer first, else in declaration order
+# the candidates testing more arguments first, of those the one widening fewer first, else in declaration order; a
+# narrower variant always before a wider one
 in_test_order(candidates: list, kinds: list): list := {
 	ordered = []
 	for tested in (0 to #kinds).reverse() {
@@ -503,7 +504,7 @@ in_test_order(candidates: list, kinds: list): list := {
 			ordered += deeper_classes_first(candidates.filter(types => #tested_places(kinds, types) == tested and #tested_places(kinds, types).filter(at => takes_widened(types#at)) == widened))
 		}
 	}
-	ordered
+	narrower_first(ordered)
 }
 
 # `f(g(), 1)`: `(overload·1 = g(); if is_type(overload·1, "text") then f·text·int(overload·1, 1) else if … else raise
@@ -534,8 +535,25 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 	if not bindings then chain else List(bindings + [chain], Bracket.Round, Separator.Semicolon)
 }
 
-# the variants the known arguments fit best
-best_fitting(candidates: list, kinds: list): list := candidates.filter(types => candidates.all(other => variant_fit(kinds, other) >= variant_fit(kinds, types)))
+# whether the other type admits every value this one admits, and more: text of `text or int`, Dog of Animal, any type of any
+admits_less(narrow: text, wide: text): bool := narrow != wide and (wide == any_word or union_members(narrow).all(member => member in union_members(wide) or union_members(wide).any(type => class_distance(member, type) != ø)))
+# a variant no wider than the other at any parameter and narrower at one: the one a call fitting both takes
+narrower_variant(narrow: list, wide: list): bool := #narrow == #wide and (1 to #narrow).all(at => narrow#at == wide#at or admits_less(narrow#at, wide#at)) and (1 to #narrow).any(at => admits_less(narrow#at, wide#at))
+# the variants, each before the first wider one, else in the order given: a run-time test passing both takes the
+# narrower whatever order the definitions came in
+narrower_first(variants: list): list := {
+	placed = []
+	for types in variants {
+		wider = (1 to #placed).filter(at => narrower_variant(types, placed#at))
+		placed = if #wider == 0 then placed + [types] else placed[0 ..< wider#1 - 1] + [types] + placed[wider#1 - 1 ..]
+	}
+	placed
+}
+# the variants the known arguments fit best, the narrowest of those that fit equally well
+best_fitting(candidates: list, kinds: list): list := {
+	best = candidates.filter(types => candidates.all(other => variant_fit(kinds, other) >= variant_fit(kinds, types)))
+	best.filter(types => not best.any(other => narrower_variant(other, types)))
+}
 # the variants the known arguments fit better first, in declaration order among equals: a run-time test that passes
 # both takes the better, `play(hum, 2s)` of a hum(block, t) the block filler, not play(tone, …)
 best_first(candidates: list, kinds: list): list := {
