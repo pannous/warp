@@ -67,6 +67,10 @@ def exported_builders(): any {
 	# an int item, a yes/no's 1 or 0 too (paint's pixels), and whether a value is a text (a shader's)
 	f = exported_function("int_item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Int)
 	f.code = runtime_call("int_admitted", [runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])])]).code
+	# a chunk of a picture's int items, 4 bytes each in linear memory (runtime/show.warp pixels_at): paint's pixels
+	# copied at once, not one call a pixel
+	f = exported_function("pixels_at", [ValueKind.Node, ValueKind.Int, ValueKind.Int], ValueKind.Int)
+	f.code = runtime_call("pixels_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1]), TypedCode(ValueKind.Int, [op.local_get, 2])]).code
 	# a float item, an int's too (gpu_compute's results), without a text of it a host parses
 	f = exported_function("float_item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Float)
 	f.code = runtime_call("float_of_node", [runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])])]).code
