@@ -65,8 +65,13 @@ copy_to_server() {
 	# the repository's files as they are, new ones too: the tours run the runner's scripts from them
 	git ls-files -z --cached --others --exclude-standard | copy --from0 --files-from=- --ignore-missing-args . "$SERVER:$run_dir/"
 	copy "$site/" "$SERVER:$run_dir/_site/"
-	# the native outputs the samples check compares with, ignored by git
-	[ -d data/samples/out ] && copy data/samples/out/ "$SERVER:$run_dir/data/samples/out/"
+	# the samples check serves the tree itself: what git ignores there too, the page's built files (the repository's
+	# served-files.js, not the site's), the packages samples use by path and the native outputs it compares with
+	if [ "${checks[*]}" = samples ]; then
+		copy --exclude warp-lib web/playground/ "$SERVER:$run_dir/web/playground/"
+		[ -d packages ] && copy -L --exclude .git packages/ "$SERVER:$run_dir/packages/"
+		[ -d data/samples/out ] && copy data/samples/out/ "$SERVER:$run_dir/data/samples/out/"
+	fi
 	ssh "$SERVER" "chown -R $SERVER_USER: $run_dir"
 }
 
@@ -110,9 +115,8 @@ tour_firefox() {
 	as_browser_user python3 web/playground/test_in_browser.py --examples --firefox --site _site "$@"
 }
 guide() { as_browser_user python3 web/playground/test_in_browser.py --examples --site _site --guide; }
-# the page served from the tree, with the site's built files (web/playground/.gitignore) and compiler
+# the page served from the tree, the site's compiler
 samples() {
-	cp -a --update=none _site/. web/playground/
 	ln -sfn "$run_dir/_site/web/playground/warp-lib" web/playground/warp-lib
 	as_browser_user python3 web/playground/test_in_browser.py --samples "$@"
 }
