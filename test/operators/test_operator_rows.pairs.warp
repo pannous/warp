@@ -1,0 +1,10 @@
+# operators bind as their rows in lib/aliases.warp say (card parser-rows): `power: [left, right]`
+'2 + 3 * 4'	14
+'2 ^ 3 ^ 2'	512
+'10 - 4 - 3'	3
+'1 < 2 and 3 > 2 or no'	yes
+'xs = [5 6 7]; xs#2 + 1'	7
+'x = ø; x ?? 1 + 2'	3
+'yes ? 1 : 2'	1
+'7 / 2 as int'	3
+'f = x -> x * 2; f(4)'	8
