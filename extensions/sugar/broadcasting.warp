@@ -3,7 +3,7 @@
 # max(u, v) the items of two lists by index (prelude each_any, element_wise_any)
 rewrite $f($x) => each_any($x, $e -> $f($e)) where $x is vector and $f takes number
 # spaced, `square [1 2 3]`: a program's own function stays spaced until the emitter calls it (a library word's
-# spaced call is round already: core/extensions/sugar/calls.warp)
+# spaced call is round already: extensions/sugar/calls.warp)
 rewrite ($f $x) => each_any($x, $e -> $f($e)) where $f is symbol and $x is vector and $f takes number and $names = parameters_named($f, $program)
 rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $a is vector and $f takes number
 rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $b is vector and $f takes number

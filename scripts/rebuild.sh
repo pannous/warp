@@ -130,7 +130,7 @@ recorded_inputs() {
 		echo "seed $(sha "$WARP_SEED") $seed"
 		echo "warp $(sha "$binary") $binary"
 		echo "uncommitted:"
-		git -C "$tree" status --short -- core lib 2>/dev/null
+		git -C "$tree" status --short -- core extensions lib 2>/dev/null
 		echo "input files (sha256, path in lib/):"
 		while IFS= read -r file; do echo "$(sha "$lib/$file") $file"; done <"$record/files"
 	} >"$record/inputs.txt"
@@ -150,7 +150,7 @@ mark_main() {
 	local head remote
 	head=$(git -C "$tree" rev-parse HEAD 2>/dev/null) || return
 	remote=$(git -C "$tree" ls-remote origin refs/heads/main 2>/dev/null | cut -f1)
-	[ -n "$remote" ] && [ "$head" = "$remote" ] && git -C "$tree" diff --quiet HEAD -- core && ln -sfn "$hash" "$store/main"
+	[ -n "$remote" ] && [ "$head" = "$remote" ] && git -C "$tree" diff --quiet HEAD -- core extensions && ln -sfn "$hash" "$store/main"
 }
 
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm

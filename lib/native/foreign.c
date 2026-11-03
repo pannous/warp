@@ -1,5 +1,5 @@
 // The C functions a primitive program imports (`import getenv from "c"`), in a native build: each import wasm2c calls
-// is written by core/extensions/primitive.warp c_function_glue, which finds the function by name in the process and
+// is written by extensions/primitive.warp c_function_glue, which finds the function by name in the process and
 // passes the module's values over with these. Included behind lib/native/wasi.c.
 #include <arpa/inet.h>
 #include <dlfcn.h>

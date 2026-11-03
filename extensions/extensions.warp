@@ -1,0 +1,3 @@
+# The extensions the compiler is built with, one Extension row each (core/extension.warp says what a row may hold)
+use "../core/extension.warp"
+EXTENSIONS = [Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}]

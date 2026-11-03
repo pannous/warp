@@ -8,8 +8,8 @@ use "analysis/host_words.warp"
 use "commands/commands.warp"
 use "commands/tests.warp"
 use "emitter/c_imports.warp"
-use "extensions/primitive.warp"
-use "extensions/extensions.warp"
+use "../extensions/primitive.warp"
+use "../extensions/extensions.warp"
 use os
 use file
 

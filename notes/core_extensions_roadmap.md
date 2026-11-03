@@ -9,7 +9,7 @@ confirms it.
 
 Method: for each feature group, its functions' lines in core/ (span from one definition to the next), and whether any
 code line of core/ outside core/parsing/ writes the form (comments and texts not counted). "Compiler uses: no" makes
-it a candidate; core/extensions/sugar counts as an extension already.
+it a candidate; extensions/sugar counts as an extension already.
 
 | feature | where | lines | compiler uses | hook it needs |
 |---|---|---|---|---|
@@ -20,7 +20,7 @@ it a candidate; core/extensions/sugar counts as an extension already.
 | URL and path literals `https://…`, `./x` | parser.warp url_text, starts_path(_at), path_literal, is_operand_end, ends_path, starts_path_name | 43 | no | atom glyph (above) |
 | circumfix operators `\|x\|`, `‖x‖` and math aliases | parser.warp circumfix_*, math_circumfix_aliases, math_operator_aliases; core/node.warp keeps Op.Abs … only for the seed (card remove-unused) | 60 | no | **operator table**: lib/aliases.warp already holds the spellings; the parser asks the table |
 | HTML entities `&amp;` | parser.warp entities, expanded_entities, entity_name_at, text_between, entity_read (table entities.tsv) | 67 | no | **text pass**: a registered rewrite of source text before parsing |
-| declared operators: `infix operator ⊕`, fixity, precedence, glyph operators beyond ASCII, operator methods | parser.warp fixity_level … operator_method_definition, binding_powers' declared part | 195 | only core/extensions/sugar (calls.warp, enums.warp: `infix operator \|`, `as`) | operator table, plus **declaration**: a statement head the parser hands to the extension. Moves together with the typed-operator rules of rewrites.warp (operator_overload, operator_rules) |
+| declared operators: `infix operator ⊕`, fixity, precedence, glyph operators beyond ASCII, operator methods | parser.warp fixity_level … operator_method_definition, binding_powers' declared part | 195 | only extensions/sugar (calls.warp, enums.warp: `infix operator \|`, `as`) | operator table, plus **declaration**: a statement head the parser hands to the extension. Moves together with the typed-operator rules of rewrites.warp (operator_overload, operator_rules) |
 | spacing diagnostics: `1 +1`, `a *b` | parser.warp signed_item_at, spaced_sign_marked, unevenly_spaced, written_before; source_checks.warp spaced_sign, uneven_spacing; warnings.data 2 lines | ~50 | no (a lint) | **parse marks**: the parser already marks with attributed(…); a lint extension registers its mark and its check |
 | other lints: `"3" + 3`, bare `sleep(1)`, charged assignments, discarded copies | source_checks.warp (192 in all), lints.warp (88), warnings.data | ~250 | no | **checks**: source_checks' list of checks becomes the registered checks |
 | loop forms: C-style `for (;;)`, `n times {…}`, named loops, `down to` | parser.warp c_style_for, at_c_style_for_head, named_loop, times_binds, repeated, down_to_at; sugar loops.warp:4 | 104 | no | **statement head**: a registered head word starts a statement form |
@@ -125,7 +125,7 @@ Cold, grouped by feature (unreached + cold inside, lines; detail per definition 
 |---|---|---|---|
 | parser forms (warp-operators' table above: atoms, time literals, c-style for, shader/wasm blocks, declared operators, radix, phrase slots, sum types, attributes, url/path, circumfix, entities) | parser.warp | 580 + ~2,000 | operator rows, atom readers, keyword handlers |
 | the @primitive native lane | extensions/primitive.warp | 693 | already an extension |
-| class method dispatch, constructors, inheritance (the compiler has no class methods) | class_methods.warp 406 + 157, instances.warp 19 + 245, class_statics 31 | ~860 | keyword handler `class` + a pass-list entry |
+| class methods: method dispatch, inheritance, statics (class declarations, fields, defaults, instances, enums and typed parameters stay core: the compiler has 44 classes, 12 enums, no methods) | class_methods.warp 406 + 157, instances.warp inherit_fields 19 and its cold method parts, class_statics 31 | up to ~860 | pass-list entry + name rows for methods (card class-methods-extension) |
 | big numbers and exact arithmetic | runtime/extended pow 112, big_ints 120, big_ratios 45, exact 97, exact_rounding 20 | ~400 | runtime registration (already split as runtime/extended) |
 | time literals and Time values | emitter/times 72 + 30, runtime/extended times 19, durations 4, parser rows | ~130 + parser | atom suffix rows + runtime registration |
 | CLI commands beyond compiling: native build, repl, show_*, help, write modules, `warp test` | commands/commands 181, commands/tests 196, compiler.warp 66 + 68 | ~510 | keyword table of commands (core/commands is one table already) |
@@ -141,7 +141,7 @@ Cold, grouped by feature (unreached + cold inside, lines; detail per definition 
 
 ### Extension rules the compiler's own source relies on (WARP_RULES_FIRED, compiling compiler.warp + runtime.wasm)
 
-24 rule shapes fire, all from core/extensions/sugar; no library rule fires. Counts are firings:
+24 rule shapes fire, all from extensions/sugar; no library rule fires. Counts are firings:
 
 | form | rule | firings | minimal source change? |
 |---|---|---|---|

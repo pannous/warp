@@ -80,10 +80,15 @@ rebuilt(first: text): nothing := {
 	start = step_number(first)
 	if step_runs("seed", start) {
 		seed = seed_path()
-		seed_runtime = joined(built, ".seed-runtime.wasm")
+		# the seed's runtime in a folder of its own: a compile links the modules beside its runtime, and lib/modules/
+		# were built behind lib/runtime.wasm, whose words may sit elsewhere (an old seed checks only their counts)
+		seed_folder = joined(built, ".seed")
+		mkdir(c_string(seed_folder), FOLDER_MODE)
+		seed_runtime = joined(seed_folder, "/runtime.wasm")
 		file_ran(seed, words(seed, "runtime", seed_runtime, "", "", ""))
 		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
 		unlink(seed_runtime)
+		rmdir(seed_folder)
 	}
 	if step_runs("stage-two", start) { rebaked(built, compiler, library) }
 	if step_runs("optimize", start) {

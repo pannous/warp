@@ -18,7 +18,7 @@ globals), so wasm2c refuses it ("unexpected type form 0x5e"). Even pure-integer 
 MVP wasm.
 
 ## Milestones
-1. **`@primitive`** (core extension core/extensions/primitive.warp, user OK; decision primitive-annotation). Marked
+1. **`@primitive`** (core extension extensions/primitive.warp, user OK; decision primitive-annotation). Marked
    code is emitted as MVP wasm: i32/i64/f64 locals, bool as i32, linear memory, no GC types, no runtime words, no
    try_table/throw (errors are return values). The mark goes on
    - a function: `@primitive add(a: i32, b: i32): i32 := a + b`. GC code calls it with conversion at the boundary,

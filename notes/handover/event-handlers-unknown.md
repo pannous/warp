@@ -7,7 +7,7 @@ declarations (card whole-table).
 
 Reference: a4d0dde771 (branch event-handlers-unknown, merged with main as 56f4eec299, green on smoke, self-check and
 gate tier 1). What it has, reusable for the new shape:
-- core/extensions/handlers.warp: `on frame/key/click {…}` as the exported on·every·N started by signal_listen(1, N, 16);
+- extensions/handlers.warp: `on frame/key/click {…}` as the exported on·every·N started by signal_listen(1, N, 16);
   key and click pumps; `emit e{data}`; key word texts (ESC, UP, F1…); `held_key == UP` through key_held.
 - lib/prelude.warp key_name / key_code (KeyboardEvent.key names <-> host codes, arrows 0xF700+).
 - core/passes/main_globals.warp made_global: the main-level names a handler function assigns are declared `global` in it

@@ -1,7 +1,7 @@
 # Primitive mode (`@primitive`)
 
 Decision primitive-annotation, milestone 1 of notes/roadmap_native_harness.md. The code is
-core/extensions/primitive.warp, an emitter of plain MVP wasm of its own: no GC types, no runtime words, no exceptions.
+extensions/primitive.warp, an emitter of plain MVP wasm of its own: no GC types, no runtime words, no exceptions.
 
 ## Two places
 - **A primitive file**: its leading header (the `#!` line, comments and blank lines before the code) holds `@primitive`; the mark below the code is an error. The whole file is lowered by the usual
