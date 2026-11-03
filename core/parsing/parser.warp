@@ -653,6 +653,12 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
 		if signed { item = spaced_sign_marked(p, p.code[previous_start ..< before].trim(), before, item) }
 		previous_start = before
+		// `def f(x)` ending its line: its body the lines below, indented or a `{…}` opening the next line (Allman), as
+		// `if c` reads its own (card def-body-next-line); without one the header stays as it is
+		if found and found#(found.length)#2 == Separator.Space and found#(found.length)#1 is symbol and name_of(found#(found.length)#1) in function_keywords and code_after(p, p.at) == '\n' {
+			body = indented_block(p)
+			if body != ø { item = call_of([item, body]) }  // as name_or_call glues a same-line `{…}`
+		}
 		tabbed = tab_separates(p)
 		newline = skip_blanks(p)
 		if bracket == Bracket.None and newline and line_indent(p) > p.indent {
@@ -667,7 +673,11 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if tabbed and after == Separator.Space { after = Separator.Tab }
 		// `ys = xs.map { |x| x+1 }`, `n = t.split " "`: what follows an assigned method belongs to its call, not to the
 		// statement
-		if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) {
+		// `xs.map { |x| x + 1 }`: a block of a lambda between bars after a method is its last argument, xs.map(x => x + 1)
+		if found and found#(found.length)#2 == Separator.Space and names_method(found#(found.length)#1) and bar_lambda(item) != ø {
+			item = method_given(found#(found.length)#1, bar_lambda(item))
+			found = found[0 .. found.length - 1]
+		} else if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) {
 			item = with_trailing_item(found#(found.length)#1, item)
 			found = found[0 .. found.length - 1]
 		}
@@ -700,8 +710,22 @@ def names_method(n: Node): bool := match n {
 // The assignment with `item` given to the method call it assigns: `ys = (xs.map {…})`, `n = (t.split " ")`
 // Rust twin: blocks.rs with_trailing_block
 def with_trailing_item(assignment: Node, item: Node): Node := match assignment {
-	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_item(value, item) else spaced((if names_method(value) then [value] else group_parts(value)#3) + [item]))
+	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_item(value, item) else if names_method(value) and bar_lambda(item) != ø then method_given(value, bar_lambda(item)) else spaced((if names_method(value) then [value] else group_parts(value)#3) + [item]))
 	_: assignment
+}
+// `{ |x| x + 1 }`, `{ |a, b| a + b }`: the one lambda a block holds, its parameters between bars (pipe_parameters); else ø
+def bar_lambda(block: Node): any {
+	parts = group_parts(block)
+	if parts == ø or not is_block(block) or #parts#3 != 1 { return ø }
+	match parts#3#1 {
+		Key(parameters, Op.Arrow, body): parts#3#1
+		_: ø
+	}
+}
+// `xs.map` given the function f: the call xs.map(f)
+def method_given(method: Node, f: Node): Node := match method {
+	Key(receiver, Op.Dot, name): Key(receiver, Op.Dot, call_of([name, f]))
+	_: method
 }
 
 // `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
@@ -968,10 +992,13 @@ def of_assignment(nodes: list): Node? := {
 // Rust twin: commands.rs grouped_list, print_call
 def comma_list(bracket: Bracket, nodes: list): Node := {
 	head = group_parts(nodes#1)
-	if not (bracket == Bracket.None or bracket == Bracket.Curly) or not prints(head) { return listed(bracket, Separator.Comma, nodes) }
-	call = call_of([PRINT] + head#3[1:] + nodes[1 ..])
+	if not (bracket == Bracket.None or bracket == Bracket.Curly) or not (prints(head) or returns(head)) { return listed(bracket, Separator.Comma, nodes) }
+	// `return a, b` so too: [[return a], b] gives back the tuple [a, b] (decision P2, tuple returns)
+	call = if returns(head) then spaced([RETURN, listed(Bracket.Square, Separator.Comma, head#3[1:] + nodes[1 ..])]) else call_of([PRINT] + head#3[1:] + nodes[1 ..])
 	if bracket == Bracket.Curly then listed(Bracket.Curly, Separator.None, [call]) else call
 }
+RETURN = symbol("return")
+def returns(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 == " " and #phrase#3 == 2 and phrase#3#1 == RETURN
 
 // The parts of an unbracketed phrase `print a`
 def prints(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 == " " and #phrase#3 > 0 and phrase#3#1 == PRINT
@@ -2332,11 +2359,19 @@ def guarded(p: Parser, word: text): Node := {
 	marker = GUARD_MARKERS[word]
 	p.at = p.at + word.length
 	skip_spaces(p)
+	python_block = is_at(p.code, p.at, ':', p.n)
 	skip_python_colon(p)
 	start = p.at
 	guarded_part = guarded_phrase(p)
 	written_part = p.code[start .. p.at].trim()
 	skip_spaces(p)
+	// the one-line `try x except y` is `x default y`, y when x raises or is ø (decision nullish-default); the block
+	// `try: … except: …` handles errors
+	if word == "try" and not python_block and fallback_word_ahead(p) == "except" {
+		p.at = p.resumes[p.at] + 6
+		skip_spaces(p)
+		return Key(guarded_part, Op.Coalesce, guarded_phrase(p))
+	}
 	if fallback_word_ahead(p) {
 		// `except A: a except B: b`: an Error A does not catch passes on to the next one; an `else` after the
 		// fallback is an enclosing `if`'s
