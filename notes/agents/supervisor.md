@@ -21,6 +21,9 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 - A discussion stays a discussion (user 2026-11-03, after the precedence relapse): a design idea, "X should be …",
   "we may even …", or "let's discuss" gets my view in prose and nothing else. No worker message, no card, no
   decisions.md entry until the user says to do it. Unsure whether it's an order: it's a discussion.
+  Still end every discussion reply with the concrete actions it could lead to, each one a short line the user can
+  approve with a word ("card it", "tell warp-x", "record the decision"), so no discussion is left hanging and
+  forgotten. When the user moves on without choosing, the actions are dropped, not done.
 - NEVER repeat a question to the user (user 2026-11-02, third relapse: Frage 2 trailed ~8 replies). Ask once; no
   answer in the next reply means hand it to warp-interviewer with its recommendation and drop it from every reply.
 - Never block on a question: an open AskUserQuestion stops this whole session, no worker message is read and no
