@@ -974,7 +974,6 @@ iteration_variables(items: list): list := {
 }
 # `x` of a parameter `x`, `x: int`, `x = 1`
 # `A | E(x) | F`: A, E(x) and F
-is_type_view(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 alternatives(n: Node): list := if is_key(n, Op.Or) or is_key(n, Op.BitOr) then alternatives(key_of(n)) + alternatives(value_of(n)) else [n]
 leftmost_symbol(n: Node): Node := {
 	while n is key { n = key_of(n) }
