@@ -116,7 +116,13 @@ shown_at(n: Node): int := {
 # driver's paint, card native-show-paint): their address; count is at most pixel_chunk()
 pixels_at(picture: Node, from: int, count: int): int := {
 	at = output_address() + c_text_at()
-	for i in 0..<count { memory_set_i32(at + 4 * i, int_admitted(node_at(picture, from + i))) }
+	if kind_code(picture) == Kind.List {
+		# a plain list's items read straight, not each through node_at's checks of every other kind
+		items = unboxed_list(picture)
+		for i in 0..<count { memory_set_i32(at + 4 * i, int_admitted(items#(from + i))) }
+	} else {
+		for i in 0..<count { memory_set_i32(at + 4 * i, int_admitted(node_at(picture, from + i))) }
+	}
 	at
 }
 pixel_chunk(): int := (output_room() - c_text_at()) / 4
