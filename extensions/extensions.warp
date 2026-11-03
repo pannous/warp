@@ -13,6 +13,7 @@ use "percent.warp"
 use "shader_blocks.warp"
 use "phrase_definitions.warp"
 use "times_loops.warp"
+use "entities.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
 use "function_clauses.warp"
@@ -31,6 +32,7 @@ EXTENSIONS = [
 	shader_blocks_extension
 	phrase_definitions_extension
 	times_loops_extension
+	entities_extension
 	tasks_extension
 	typed_templates_extension
 	function_clauses_extension

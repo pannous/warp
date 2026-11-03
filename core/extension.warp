@@ -13,6 +13,10 @@
 #   decimal_number wrote it and as the source did (`0.1f`, `1 month`), each ø where its form is not
 #   suffix_readers: functions reading what follows an operand, given the parser after it, the operand and the binding
 #   power the context needs (`x²`), each ø where its form is not or binds looser
+#   source_passes: functions run on the source before it is parsed, each giving [the new source, its shifts]: where the
+#   new source got shorter, [offset after the change, columns taken out], so nodes keep their written columns
+#   text_escape_readers: the character after a `\` in a text → the reader of the escape, given the text, the offset of
+#   the `\` and its length, giving [the characters, the length read], ø where its form is not (`\:alpha`)
 #   keyword_readers: a word → the reader of the phrase it starts, given the parser at the word and the word, ø where
 #   its form is not there (`emit alarm`)
 #   block_words: words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
@@ -24,7 +28,7 @@
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
 #   runtime: its runtime root under extensions/, whose definitions (the bridge hooks' bodies) are trapping stubs in a
 #   build leaving the row out (decision extension-row-optional, compiler.warp left_out_runtime_words)
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; keyword_readers: map = {}; block_words: list = []; value_settlers: map = {}; text_passes: list = []; passes: map = {}; commands: list = []; runs: any = ø; runtime: text = "" }
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; keyword_readers: map = {}; block_words: list = []; source_passes: list = []; text_escape_readers: map = {}; value_settlers: map = {}; text_passes: list = []; passes: map = {}; commands: list = []; runs: any = ø; runtime: text = "" }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
@@ -48,6 +52,33 @@ global keyword_reader_table = ø
 keyword_reader_of(word: text): any := {
 	if keyword_reader_table == ø { keyword_reader_table = joined_maps(EXTENSIONS.map(extension => extension.keyword_readers)) }
 	keyword_reader_table.get(word)
+}
+# the source after every extension's pass, [text, shifts] (an earlier pass's shifts moved by a later one's)
+passed_source(source: text): list := {
+	shifts = []
+	for extension in EXTENSIONS {
+		for pass in extension.source_passes {
+			passed = pass(source)
+			later = passed#2
+			shifts = shifts.map(shift => [shift#1 - taken_before(later, shift#1), shift#2]) + later
+			source = passed#1
+		}
+	}
+	[source, shifts]
+}
+# the columns the shifts took out before the offset
+taken_before(shifts: list, at: int): int := {
+	taken = 0
+	for shift in shifts { if shift#1 <= at { taken = taken + shift#2 } }
+	taken
+}
+# the escape an extension reads in a text at the `\` at `at`: [its characters, the length read], else ø
+global text_escape_table = ø
+text_escape_at(source: any, at: int, n: int): list? := {
+	if text_escape_table == ø { text_escape_table = joined_maps(EXTENSIONS.map(extension => extension.text_escape_readers)) }
+	if at + 1 >= n { return ø }
+	reader = text_escape_table.get("$(source[at + 1])")
+	if reader == ø then ø else reader(source, at, n)
 }
 # every word an extension takes a glued block for
 extension_block_words(): list := concatenated(EXTENSIONS.map(extension => extension.block_words))

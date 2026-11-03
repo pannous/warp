@@ -18,7 +18,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: map; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: map; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): View := view_of(parsed(source))
@@ -33,13 +33,6 @@ def parsed(source: text, uses: text = ""): Node := {
 	}
 }
 
-// `\:alpha` is α, `\:world` 🌍: before parsing, each known uniscript entity outside texts and comments becomes its
-// characters; an unknown one stays as written
-// Rust twin: uniscript_entities.rs expand_entities, entity_name_at
-ENTITY_MARK = "\\:"
-// `name TAB characters` lines, the table Rust include_str!s, built into the compiler as its other data
-// (module_source: user 2026-10-25, "These should all be built in")
-ENTITY_TABLE = module_source("entities.tsv")
 // The lib/ a run reads a program's standard modules from (its own data is built in, module_source): the one the run was
 // given (compiler.warp's fourth argument, given_library), else WARP_LIB, else the one above this file, or beside it when
 // the file was reached as core/ (card compiler-core-link). A compiled stage is kept for every identical lib/ and runs
@@ -207,79 +200,14 @@ def block_head_of(line: text): text {
 	name = line[0 .. name_end(line, 0, line.length)]
 	if line[name.length] == '(' then name else ""
 }
-global entity_table = ø
-def entities(): map {
-	if entity_table == ø {
-		entity_table = {}
-		lines = ENTITY_TABLE.split("\n")
-		for line in lines {
-			columns = line.split("\t")
-			if columns.length == 2 { entity_table[columns#1] = columns#2 }
-		}
-	}
-	entity_table
-}
-def expanded_entities(source: text): text {
-	if not source.contains(ENTITY_MARK) { return source }
-	points = code_points(source)
-	n = points.length
-	// the pieces between entities are copied whole: one append per character made the run quadratic (card
-	// pure-compile-speed: 69% of a pure-lane compile of uses.warp)
-	parts = []
-	copied = 0
-	at = 0
-	// each point read before the ones after it: a list of points is walked on from the point read last, so reading
-	// one back (span_end's lookahead, then entity_name_at at the same point) walked it from its head at every point,
-	// quadratic: most of the passes' list reads in `warp rebuild self` (card speed-symbol-calls). An entity starts at a
-	// backslash, a text or comment never does, so the entity is looked for first
-	while at < n {
-		name = entity_name_at(points, at, n)
-		if name != "" {
-			parts += [text_between(points, copied, at), entities()[name]]
-			at = at + 2 + name.length
-			copied = at
-		} else {
-			skipped = span_end(points, at, n)
-			at = if skipped > at then skipped else at + 1
-		}
-	}
-	join(parts + [text_between(points, copied, n)], "")
-}
-// The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
-// hyphenated parts (`\:fracture-A`)
-def entity_name_at(source: text or list, at: int, n: int): text {
-	if not (source[at] == '\\' and peek(source, at + 1, n) == ':') { return "" }
-	letters = at + 2
-	while letters < n and is_alpha(source[letters]) { letters = letters + 1 }
-	if letters == at + 2 { return "" }
-	run = letters
-	while run < n and (is_alphanumeric(source[run]) or source[run] == '-') { run = run + 1 }
-	end = run
-	while end > letters {
-		if end == run or source[end] == '-' {
-			name = text_between(source, at + 2, end)
-			if name in entities() { return name }
-		}
-		end = end - 1
-	}
-	name = text_between(source, at + 2, letters)
-	if name in entities() then name else ""
-}
-// The characters from `from` to `to` of a text or of its code points
-def text_between(source: text or list, from: int, to: int): text := if source is text then source[from .. to] else join(source[from .. to], "")
-// `\:name` inside a text at `at`: [its characters, the length read]; an unknown one stays as written
-def entity_read(source: text or list, at: int, n: int): list {
-	name = entity_name_at(source, at, n)
-	if name == "" then [ENTITY_MARK, 2] else [entities()[name], 2 + name.length]
-}
-
 // The tree as the source writes it; `uses`, the use lines of the module a slice of it comes from, whose operators
 // the slice reads as the module does (compute_toys' `use regex`: `code matches rule#1`)
 def written_tree(written: text, uses: text = ""): Node := {
-	source = expanded_entities(written)
+	passed = passed_source(written)
+	source = passed#1
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
-	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), operators: scanned_operators(source + uses), aliases: by_first_character(operator_aliases(source) + math_operator_aliases()), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), word_types: word_types, line_starts: line_starts_of(source)}
+	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), operators: scanned_operators(source + uses), aliases: by_first_character(operator_aliases(source) + math_operator_aliases()), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
 	items_until(p, Bracket.None, ItemsEnd.Source)
 }
 
@@ -1793,7 +1721,7 @@ def written_before(p: Parser, n: Node, end: int): text := {
 	line = line_of(n)
 	column = column_of(n)
 	if not (line is int and column is int) { return if is_group(n) and #n > 0 then written_before(p, n#1, end) else "" }
-	p.code[p.line_starts[line - 1] + column - 1 ..< end].trim()
+	p.code[code_offset(p, p.line_starts[line - 1], column) ..< end].trim()
 }
 
 // The left power of `#`, which a glued `[` indexes with
@@ -3254,7 +3182,22 @@ def atom(p: Parser): Node := {
 // The node, written at the source's offset `start`: its line and column
 def placed_at(p: Parser, n: Node, start: int): Node := {
 	line = line_at(p, start)
-	positioned(n, line, start - p.line_starts[line - 1] + 1)
+	line_start = p.line_starts[line - 1]
+	positioned(n, line, start - line_start + 1 + shifted(p, line_start, start))
+}
+
+// How many columns a source pass took out of the line from `line_start` before `at` (`\:alpha` written, α read), so
+// a node keeps the column it is written at (core/extension.warp source_passes)
+def shifted(p: Parser, line_start: int, at: int): int {
+	columns = 0
+	for shift in p.shifts { if shift#1 > line_start and shift#1 <= at { columns = columns + shift#2 } }
+	columns
+}
+// The offset in the parsed code of a written column of the line from `line_start`: shifted's inverse
+def code_offset(p: Parser, line_start: int, column: int): int {
+	at = line_start + column - 1
+	while at - line_start + shifted(p, line_start, at) > column - 1 { at = at - 1 }
+	at
 }
 
 // Where each line of the source starts
@@ -3353,14 +3296,6 @@ def bare_atom(p: Parser): Node := {
 		unknown = "" + p.code[p.at .. end]
 		p.at = end
 		return unknown
-	}
-	// `\alpha` written for `\:alpha`
-	// Rust twin: atoms.rs parse_atom, uniscript_entities.rs bare_entity_name_at
-	if c == '\\' and is_alpha(peek(p.code, p.at + 1, p.n)) {
-		end = p.at + 1
-		while end < p.n and is_alpha(p.code[end]) { end = end + 1 }
-		name = p.code[p.at + 1 .. end]
-		if name in entities() { raise "a uniscript entity is written \\:" + name + ", not \\" + name }
 	}
 	truth = truth_glyph_at(p)
 	if truth != "" {
@@ -4439,10 +4374,10 @@ def template(written: text) {
 			holed = yes
 			at = end
 			copied = at
-		} else if c == '\\' and at + 1 < n and next == ':' and at + 2 < n and is_alpha(written[at + 2]) {
-			entity = entity_read(written, at, n)
-			parts += [written[copied .. at], entity#1]
-			at = at + entity#2
+		} else if c == '\\' and text_escape_at(written, at, n) != ø {
+			escape = text_escape_at(written, at, n)
+			parts += [written[copied .. at], escape#1]
+			at = at + escape#2
 			copied = at
 		} else if c == '\\' and code_escape(written, at, n) != ø {
 			coded = code_escape(written, at, n)
@@ -4480,10 +4415,10 @@ def unescaped(content: text, interpolates: bool): text {
 		escaped = if at + 1 < content.length then content[at + 1] else ' '
 		if c != '\\' or at + 1 >= content.length {
 			at = at + 1
-		} else if interpolates and escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
-			entity = entity_read(content, at, content.length)
-			parts += [content[copied .. at], entity#1]
-			at = at + entity#2
+		} else if interpolates and text_escape_at(content, at, content.length) != ø {
+			escape = text_escape_at(content, at, content.length)
+			parts += [content[copied .. at], escape#1]
+			at = at + escape#2
 			copied = at
 		} else if code_escape(content, at, content.length) != ø {
 			coded = code_escape(content, at, content.length)
