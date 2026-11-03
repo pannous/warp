@@ -6,6 +6,8 @@ use "degrees.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 use "event_phrases.warp"
+use "float_suffixes.warp"
+use "durations.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
@@ -13,6 +15,8 @@ EXTENSIONS = [
 	radix_numbers_extension
 	time_literals_extension
 	event_phrases_extension
+	float_suffixes_extension
+	durations_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
 ]
