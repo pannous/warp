@@ -3669,14 +3669,9 @@ def bare_atom(p: Parser): Node := {
 		}
 		return group
 	}
-	// `°C`, `°F`: a temperature unit; `°` alone the angle unit (units.rs)
-	// Rust twin: atoms.rs parse_atom (DEGREE)
-	if c == DEGREE {
-		end = if is_alpha(peek(p.code, p.at + 1, p.n)) then name_end(p.code, p.at + 1, p.n) else p.at + 1
-		unit = symbol(p.code[p.at .. end])
-		p.at = end
-		return unit
-	}
+	// an atom an extension reads, `°C` (core/extension.warp atom_readers)
+	reader = atom_reader(c)
+	if reader != ø { return reader(p) }
 	// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing)
 	// Rust twin: atoms.rs EMPTY_SET_SIGN
 	if c == 'ø' or c == '∅' or c == ')' or c == ']' or c == '}' or c == ';' {
@@ -3702,9 +3697,6 @@ def truth_glyph_at(p: Parser): text {
 	for glyph in starting_here(TRUTH_GLYPH_STARTS, p, p.at) { if starts_at(p.code, glyph, p.at, p.n) { return glyph } }
 	""
 }
-
-// The degree sign of temperatures and angles (Rust twin: numbers/units.rs DEGREE)
-DEGREE = '°'
 
 // The Unicode blocks of symbols a program may use before anything defines them (decision unicode-symbols): arrows,
 // math operators, technical and geometric symbols, dingbat arrows, the supplemental math and arrow blocks
@@ -4053,7 +4045,7 @@ def vulgar_fraction(p: Parser, glyph: text): Node := {
 // Rust twin: literals.rs with_juxtaposed_factor
 def with_glued_factor(p: Parser, amount: Node): Node := {
 	c = peek(p.code, p.at, p.n)
-	if not (is_name_start(c) or c == '(' or c == DEGREE) or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
+	if not (is_name_start(c) or c == '(' or atom_reader(c) != ø) or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
 	}
 	factor = atom(p)
@@ -4187,11 +4179,8 @@ def named(p: Parser): Node := {
 	turbofish = if starts_at(p.code, "::", p.at, p.n) then type_application_length(p, p.at + 2) else 0
 	if turbofish > 0 { p.at = p.at + 2 + turbofish }
 	name = symbol(word)
-	// `x°`: a variable in degrees, as `30°` (Rust twin: atoms.rs, card angles-degrees)
-	if is_at(p.code, p.at, DEGREE, p.n) and not is_alpha(peek(p.code, p.at + 1, p.n)) {
-		p.at = p.at + 1
-		return Key(name, Op.Mul, symbol("$(DEGREE)"))
-	}
+	// `x°`: a name glued to an atom an extension reads multiplies it, as `30°` (core/extension.warp atom_readers)
+	if atom_reader(peek(p.code, p.at, p.n)) != ø and not is_alpha(peek(p.code, p.at + 1, p.n)) { return Key(name, Op.Mul, atom(p)) }
 	// `Point {x: 1}` with blanks constructs a declared type as the glued one does (open decision 41); a capitalized word
 	// of no declared type before a block of fields is the tagged object `Person:{…}` (card person-name)
 	declared = p.types.contains(word)
