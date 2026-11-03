@@ -69,6 +69,14 @@ td.sha a:hover, td.sha a:focus-visible { text-decoration: underline; }
 .tier .empty { color: var(--ink-3); font-size: 13px; }
 .tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 .table-wrap { overflow-x: auto; }
+td a { color: var(--shrink); text-decoration: none; font-family: var(--font-data); }
+td a:hover, td a:focus-visible { text-decoration: underline; }
+.card-title { color: var(--ink-2); }
+.flips { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.flips summary { cursor: pointer; font-family: var(--font-data); }
+.flips summary a { color: var(--shrink); text-decoration: none; }
+.flips ul { margin: 4px 0 6px; padding-left: 16px; font: 11px/1.45 var(--font-data); overflow-wrap: anywhere; }
+.flip { margin-top: 6px; font-weight: 600; }
 footer { color: var(--ink-3); font-size: 12px; }
 </style>
 
@@ -89,6 +97,7 @@ footer { color: var(--ink-3); font-size: 12px; }
     <h2>Cards on the board</h2>
     <p class="section-note" id="cards-note"></p>
     <div class="figures" id="cards"></div>
+    <div class="table-wrap"><table id="done"></table></div>
   </section>
 
   <section>
@@ -222,7 +231,7 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
   const rate = p => p[2] / p[3] * 100;
   const days = [...new Set(rows.map(dayOf))];
   document.getElementById("tiers").innerHTML = "";
-  DATA.tiers.forEach(([name, path, points]) => {
+  DATA.tiers.forEach(([name, path, points, flips]) => {
     const card = document.createElement("div"); card.className = "tier";
     if (!points.length) { card.innerHTML = `<div class="label">${name}</div><div class="empty">no committed run yet</div>`; document.getElementById("tiers").appendChild(card); return; }
     const lastPoint = points[points.length - 1], firstPoint = points[0];
@@ -240,6 +249,12 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
       element("title", {}, dot).textContent = `${p[0]} · ${p[1]} · ${p[2]}/${p[3]} (${rate(p).toFixed(1)}%)`;
       dot.addEventListener("click", () => window.open(COMMIT_URL + p[1], "_blank", "noopener"));
     });
+    if (flips && (flips[5] || flips[6])) {
+      const list = (names, count, word, mark) => names.length ? `<div class="flip ${mark}">${word} ${count}${count > names.length ? `, ${names.length} shown` : ""}</div><ul>` +
+        names.map(n => `<li>${escape(n)}</li>`).join("") + "</ul>" : "";
+      card.insertAdjacentHTML("beforeend", `<details class="flips"><summary>since the run before (${commitLink(flips[1])} → ${commitLink(flips[2])}): ${flips[5]} now pass, ${flips[6]} no longer</summary>` +
+        list(flips[3], flips[5], "now passing", "shrink") + list(flips[4], flips[6], "no longer passing", "grow") + "</details>");
+    }
     document.getElementById("tiers").appendChild(card);
   });
 })();
@@ -253,6 +268,9 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
   document.getElementById("cards-note").textContent = `Cards per column of the project board, counted ${latest.time.replace("T", " ")}. Done holds only the last day's cards: older ones are archived.` + (snapshots.length > 1 ? ` Changes since the first count, ${since}.` : "");
   holder.innerHTML = columns.map(c => { const now = latest.columns[c] || 0, then = oldest.columns[c] || 0;
     return `<div class="figure"><div class="label">${c}</div><div class="value">${format(now)}</div><div class="change">${snapshots.length > 1 ? signed(now - then) + " since " + since : "first count"}</div></div>`; }).join("");
+  const done = latest.done || [];
+  document.getElementById("done").innerHTML = done.length ? `<thead><tr><th>Done</th><th>Card</th></tr></thead><tbody>` +
+    done.map(([time, key, title, link]) => `<tr><td class="sha">${time.slice(5)}</td><td><a href="${link}" target="_blank" rel="noopener">${escape(key)}</a><br><span class="card-title">${escape(title)}</span></td></tr>`).join("") + "</tbody>" : "";
 })();
 
 (function pace() {

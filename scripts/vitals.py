@@ -28,6 +28,9 @@ HEADER = re.compile(r"^# \S+ \S+ \S+ (\d+)/(\d+)")
 STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME|ERR)\s")
 PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
 GITHUB_REPO = "pannous/warp"
+BOARD_CARD = "https://github.com/users/pannous/projects/1?pane=issue&itemId=%s"
+RECENTLY_DONE = 8
+FLIPS_SHOWN = 8  # named tests per lane that started or stopped passing
 CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/cards.jsonl")  # one line per snapshot of the board's columns
 STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build records (notes/compiler_rebuilds.md)
 BUILDS = [("warp.wasm, built by the seed", "warp.record"), ("self-compile: warp.wasm compiles itself", "warp-self.record")]
@@ -160,6 +163,32 @@ def pass_count(text):
     return (sum(s in PASSING for s in statuses), len(statuses)) if statuses else None
 
 
+def outcomes(text):
+    """Each test's name (its file without the line number, and its code) and whether it passed."""
+    named = {}
+    for line in text.splitlines():
+        if match := STATUS.match(line):
+            name = re.sub(r"(\.warp):\d+", r"\1", line[match.end():].strip().split(": got ")[0])
+            named[name] = match.group(1) in PASSING
+    return named
+
+
+def latest_flips(path):
+    """The tests the newest run of a lane passes and the run before failed, and the other way round."""
+    runs = git("log", "-2", "--format=%H %ad", "--date=iso-strict", "origin/main", "--", path).splitlines()
+    if len(runs) < 2:
+        return None
+    (new, date), (old, _) = (run.split(" ") for run in runs)
+    before, after = outcomes(git("show", f"{old}:{path}")), outcomes(git("show", f"{new}:{path}"))
+    if any(before.values()) or any(after.values()):
+        fixed = [name for name, ok in after.items() if ok and before.get(name) is False]
+        broke = [name for name, ok in after.items() if not ok and before.get(name) is True]
+    else:  # a lane listing only its failures (results-cloud.txt): a failure gone passes now, unless its test went
+        fixed = [name for name in before if name not in after]
+        broke = [name for name in after if name not in before]
+    return [date[:16].replace("T", " "), old[:10], new[:10], fixed[:FLIPS_SHOWN], broke[:FLIPS_SHOWN], len(fixed), len(broke)]
+
+
 def tier_history(path):
     points = []
     for line in git("log", "--reverse", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, "origin/main", "--", path).splitlines():
@@ -222,6 +251,18 @@ def hourly_pace():
     return hours
 
 
+def recently_done(cards):
+    """The RECENTLY_DONE newest Done cards: when, key, title and their link on the board."""
+    done = sorted((c for c in cards if c["column"] == "Done"), key=lambda c: c["column_since"])[-RECENTLY_DONE:][::-1]
+    ids = json.dumps([card["id"] for card in done])
+    nodes = json.loads(subprocess.run(["gh", "api", "graphql", "-f", "query=query { nodes(ids: %s) { ... on "
+                                       "ProjectV2Item { databaseId } } }" % ids], capture_output=True, text=True,
+                                      check=True).stdout)["data"]["nodes"]
+    local = lambda t: datetime.datetime.fromisoformat(t.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M")
+    return [[local(card["column_since"]), card["key"], card["title"], BOARD_CARD % node["databaseId"]]
+            for card, node in zip(done, nodes)]
+
+
 def card_counts():
     """The board's cards per column, one snapshot an hour kept in CARD_SNAPSHOTS (todo list costs GraphQL quota)."""
     snapshots = []
@@ -232,8 +273,10 @@ def card_counts():
     if not snapshots or now - datetime.datetime.fromisoformat(snapshots[-1]["time"]) > datetime.timedelta(hours=1):
         listing = subprocess.run(["todo", "list", "--json"], capture_output=True, text=True, cwd=REPO)
         if listing.returncode == 0:
-            counts = collections.Counter(card["column"] for card in json.loads(listing.stdout))
-            snapshots.append({"time": now.isoformat(timespec="minutes"), "columns": dict(counts)})
+            cards = json.loads(listing.stdout)
+            counts = collections.Counter(card["column"] for card in cards)
+            snapshots.append({"time": now.isoformat(timespec="minutes"), "columns": dict(counts),
+                              "done": recently_done(cards)})
             os.makedirs(os.path.dirname(CARD_SNAPSHOTS), exist_ok=True)
             with open(CARD_SNAPSHOTS, "a") as kept:
                 kept.write(json.dumps(snapshots[-1]) + "\n")
@@ -244,13 +287,13 @@ def card_counts():
 
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, "origin/main").splitlines()}
-data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))
 first, last = rows[0], rows[-1]
 core = lambda row: sum(row[3][:-1])
-latest = "; ".join(f"{name} {points[-1][2]}/{points[-1][3]}" for name, _, points in data["tiers"] if points)
+latest = "; ".join(f"{name} {points[-1][2]}/{points[-1][3]}" for name, _, points, _ in data["tiers"] if points)
 builds = "; ".join(f"{record} {points[-1][2]} s" for _, record, points in data["builds"] if points)
 print(f"{latest}; {builds}; core {core(first)} -> {core(last)}, extensions {first[3][-1]} -> {last[3][-1]}, "
       f"lib {first[6]} -> {last[6]}, test {first[7]} -> {last[7]} over {len(rows)} commits: {OUT}")
