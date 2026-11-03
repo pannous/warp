@@ -81,8 +81,6 @@ with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " e
 # the words naming the parameter after them, a preposition or `as`: `play(tone, for duration)` called `play C4 for: 2s`
 # (Rust twin: type_name_matching.rs PREPOSITIONS, AS_LABEL)
 label_words = phrase_prepositions + ["as"]
-# the words raising an event, `emit tax_rate` and its aliases (Rust twin: words.rs EMIT_WORDS, EMIT_ALIASES)
-emit_words = ["emit", "send", "fire", "trigger", "signal", "ask"]
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64), by
 # their opcodes (Rust twin: wasm_emitter/functions/wasm_bodies.rs instruction)
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,

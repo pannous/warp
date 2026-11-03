@@ -1,0 +1,35 @@
+# The phrases raising an event (card parser-rows, decision core-is-self): `emit alarm`, `send stop the machine`; the
+# rules of extensions/sugar/events.warp make them calls of emitted
+# the words raising an event, `emit tax_rate` and its aliases (Rust twin: words.rs EMIT_WORDS, EMIT_ALIASES)
+emit_words = ["emit", "send", "fire", "trigger", "signal", "ask"]
+# each of them read by event_phrase
+event_readers(): map := {
+	readers = {}
+	for word in emit_words { readers[word] = event_phrase }
+	readers
+}
+event_phrases_extension = Extension{name: "event_phrases", keyword_readers: event_readers()}
+
+# `1 + emit ask`, `emit stop the machine{reason: "x"}`: the emit word and the words of its event are one phrase, each
+# binding like the operand of a unary minus (`emit missing` raises missing, no test word); ø where an operator
+# follows, the word is then a name (`send alarm{} to "x"`)
+# Rust twin: jumps.rs try_parse_emit
+def event_phrase(p: Parser, word: text): Node := {
+	before = p.at
+	p.at = p.at + word.length
+	skip_spaces(p)
+	phrase = [symbol(word)]
+	while is_name_start(peek(p.code, p.at, p.n)) or (phrase.length > 1 and "0123456789\"'".contains(peek(p.code, p.at, p.n))) {
+		if operator_at(p).length > 0 {
+			p.at = before
+			return ø
+		}
+		phrase = phrase + [expression(p, PREFIX_POWER)]
+		skip_spaces(p)
+	}
+	if phrase.length == 1 {
+		p.at = before
+		return ø
+	}
+	spaced(phrase)
+}

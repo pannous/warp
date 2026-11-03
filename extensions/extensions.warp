@@ -5,11 +5,13 @@ use "commands.warp"
 use "degrees.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
+use "event_phrases.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
 	radix_numbers_extension
 	time_literals_extension
+	event_phrases_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 ]
