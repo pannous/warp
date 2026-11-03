@@ -57,6 +57,8 @@ th { text-align: left; font: 500 11px var(--font-data); text-transform: uppercas
 td { padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 td.sha { font-family: var(--font-data); color: var(--ink-3); white-space: nowrap; }
+td.sha a { color: var(--shrink); text-decoration: none; }
+td.sha a:hover, td.sha a:focus-visible { text-decoration: underline; }
 .grow { color: var(--grow); } .shrink { color: var(--shrink); }
 .tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 .table-wrap { overflow-x: auto; }
@@ -81,7 +83,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section>
     <h2>Bloat index per landing</h2>
-    <p class="section-note">Net lines of the core without extensions that each landing added (up) or removed (down). Hover a bar for the commit and its extension change.</p>
+    <p class="section-note">Net lines of the core without extensions that each landing added (up) or removed (down). Hover a bar for the commit and its extension change; click it to open the commit.</p>
     <div class="chart" id="bars"></div>
   </section>
 
@@ -160,8 +162,16 @@ function tooltip(container, svg, x, describe) {
     tip.style.top = Math.max(0, event.clientY - containerBox.top - tip.offsetHeight - 12) + "px";
   });
   hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+  hit.style.cursor = "pointer";
+  hit.addEventListener("click", event => {
+    const box = svg.getBoundingClientRect();
+    const index = Math.max(0, Math.min(rows.length - 1, Math.round(((event.clientX - box.left) * WIDTH / box.width - PAD.left) / (WIDTH - PAD.left - PAD.right) * (rows.length - 1))));
+    window.open(COMMIT_URL + rows[index].sha, "_blank", "noopener");
+  });
 }
 
+const COMMIT_URL = "https://github.com/pannous/warp/commit/";
+const commitLink = sha => `<a href="${COMMIT_URL}${sha}" target="_blank" rel="noopener">${sha}</a>`;
 const escape = text => text.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.date.slice(5)}</span></div>`;
 
@@ -200,7 +210,7 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
 
 function table(id, list) {
   document.getElementById(id).innerHTML = `<thead><tr><th>Commit</th><th>Landing</th><th style="text-align:right">Core</th></tr></thead><tbody>` +
-    list.map(row => `<tr><td class="sha">${row.sha}<br>${row.date.slice(5, 10)}</td><td>${escape(row.subject)}</td><td class="num ${row.delta > 0 ? "grow" : "shrink"}">${signed(row.delta)}</td></tr>`).join("") + "</tbody>";
+    list.map(row => `<tr><td class="sha">${commitLink(row.sha)}<br>${row.date.slice(5, 10)}</td><td>${escape(row.subject)}</td><td class="num ${row.delta > 0 ? "grow" : "shrink"}">${signed(row.delta)}</td></tr>`).join("") + "</tbody>";
 }
 table("grew", [...rows].sort((a, b) => b.delta - a.delta).slice(0, 8));
 table("cut", [...rows].sort((a, b) => a.delta - b.delta).slice(0, 8));
