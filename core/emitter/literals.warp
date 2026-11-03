@@ -23,8 +23,8 @@ exact_decimal(n: float): any := {
 	for i in 0..#parts#2 { denominator = denominator * 10 }
 	divisor = gcd(numerator, denominator)
 	if divisor < 0 { divisor = -divisor }
-	if divisor == denominator { return number_value(numerator / divisor) }
-	ratio_node([op.i64_const] + sleb(numerator / divisor), [op.i64_const] + sleb(denominator / divisor))
+	if divisor == denominator { return number_value(numerator ÷ divisor) }
+	ratio_node([op.i64_const] + sleb(numerator ÷ divisor), [op.i64_const] + sleb(denominator ÷ divisor))
 }
 
 # a decimal past 18 places as the parser keeps it, its own digits (decision exact-decimal-big): those digits over

@@ -1,4 +1,9 @@
 # The extensions the compiler is built with, one Extension row each (core/extension.warp says what a row may hold; the
 # parser brings it in)
 use "gpu_lists/gpu_lists.warp"
-EXTENSIONS = [Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}, gpu_lists_extension]
+use "commands.warp"
+EXTENSIONS = [
+	Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}
+	gpu_lists_extension
+	Extension{name: "commands", commands: command_words(), runs: extension_command}
+]

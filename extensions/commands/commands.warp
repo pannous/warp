@@ -1,7 +1,7 @@
 # The commands extension's commands beside compiling (card commands-extension): help, version, the shown stages
 # (parse, data, lower, uses), the REPL, and the refusals of the commands plain WASI cannot run; build.warp builds
-# executables, tests.warp lists and judges `warp test`'s cases. compiler.warp hands each command it does not know
-# itself to extension_command (extensions/commands.warp)
+# executables, tests.warp lists and judges `warp test`'s cases. compiler.warp runs each command it does not know
+# itself through this extension's row (extensions/extensions.warp): extension_command below
 # warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
 VERSION = "1.6.1"
 REPL_PROMPT = "warp> "
@@ -46,8 +46,8 @@ NOT_YET = " is not in warp yet"
 command_name(entry: list): text := entry#1.split(" ")#1
 # the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
 host_commands = ["repl-step", "test-list", "test-verdicts"]
-# the words core/commands/commands.warp is_command takes for commands beside its own
-extension_command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
+# the commands this extension answers (its Extension row, extensions/extensions.warp)
+command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
 
 # the text of the file `target` names, else `target` itself as code
 source_of(target: text): text := try read(target) else target

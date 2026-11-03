@@ -108,7 +108,7 @@ def duration_parts(written: text): list {
 	months = 0
 	days = 0
 	nanos = 0
-	for at in 0 ..< #words /! 2 {
+	for at in 0 ..< #words ÷ 2 {
 		amount = int(words[2 * at])
 		unit = words[2 * at + 1]
 		if unit.ends_with("s") { unit = unit[0 ..< #unit - 1] }

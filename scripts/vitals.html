@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one reading column; summary figures, then the core's stacked growth, then each landing's net change, then the biggest landings. */
+/* Layout: one reading column; summary figures, then the core's stacked growth, then each commit's net change, then the biggest commits. */
 :root {
   --paper: #fbfbf9;
   --panel: #f3f3ef;
@@ -86,6 +86,19 @@ footer { color: var(--ink-3); font-size: 12px; }
   </section>
 
   <section>
+    <h2>Cards on the board</h2>
+    <p class="section-note" id="cards-note"></p>
+    <div class="figures" id="cards"></div>
+  </section>
+
+  <section>
+    <h2>Pace</h2>
+    <p class="section-note" id="pace-note"></p>
+    <div class="legend"><span><i style="background:var(--s7)"></i>pushes to main</span><span><i style="background:var(--rule)"></i>commits</span></div>
+    <div class="chart" id="pace"></div>
+  </section>
+
+  <section>
     <h2>Build time</h2>
     <p class="section-note">CPU seconds of each landing's compiler build, read from the build records in the store: the seed building warp.wasm, and warp.wasm compiling itself. A lighter core should compile faster. A dot is a landing; hover for its peak memory, click to open the commit.</p>
     <div class="tiers" id="builds"></div>
@@ -100,14 +113,14 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section>
     <h2>Core lines by component</h2>
-    <p class="section-note">Every landing on main since 29 October, stacked, with the extensions on top. The extensions are extensions/, and lib/sugar/ before it moved there on 3 November.</p>
+    <p class="section-note">Every commit on main since 29 October, stacked, with the extensions on top. The extensions are extensions/, and lib/sugar/ before it moved there on 3 November.</p>
     <div class="legend" id="legend"></div>
     <div class="chart" id="stack"></div>
   </section>
 
   <section>
-    <h2>Bloat index per landing</h2>
-    <p class="section-note">Net lines of the core without extensions that each landing added (up) or removed (down). Hover a bar for the commit and its extension change; click it to open the commit.</p>
+    <h2>Bloat index per commit</h2>
+    <p class="section-note">Net lines of the core without extensions that each commit added (up) or removed (down): an atomic commit against its parent, a merge only for its own conflict resolution (merges resolving nothing have no bar). Hover a bar for the commit and its extension change; click it to open the commit.</p>
     <div class="chart" id="bars"></div>
   </section>
 
@@ -135,7 +148,7 @@ const niceStep = range => { const raw = range / 5, magnitude = 10 ** Math.floor(
 const dayOf = row => row.date.slice(0, 10);
 const shortDay = day => new Date(day + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-document.getElementById("lede").textContent = `${rows.length} landings from ${shortDay(dayOf(first))} to ${shortDay(dayOf(last))}: the core without extensions grew from ${format(first.core)} to ${format(last.core)} lines (${percent(first.core, last.core)}), the extensions from ${format(first.extensions)} to ${format(last.extensions)} (${percent(first.extensions, last.extensions)}).`;
+document.getElementById("lede").textContent = `${rows.length} commits from ${shortDay(dayOf(first))} to ${shortDay(dayOf(last))}: the core without extensions grew from ${format(first.core)} to ${format(last.core)} lines (${percent(first.core, last.core)}), the extensions from ${format(first.extensions)} to ${format(last.extensions)} (${percent(first.extensions, last.extensions)}).`;
 
 const figures = [
   ["core without extensions", first.core, last.core],
@@ -231,6 +244,44 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
   });
 })();
 
+(function cards() {
+  const snapshots = DATA.cards, holder = document.getElementById("cards");
+  if (!snapshots.length) { document.getElementById("cards-note").textContent = "No snapshot of the board yet."; return; }
+  const latest = snapshots[snapshots.length - 1], oldest = snapshots[0];
+  const columns = ["Now", "Next", "Soon", "Later", "Done", "Roadmaps"].filter(c => c in latest.columns || c in oldest.columns);
+  const since = new Date(oldest.time).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  document.getElementById("cards-note").textContent = `Cards per column of the project board, counted ${latest.time.replace("T", " ")}. Done holds only the last day's cards: older ones are archived.` + (snapshots.length > 1 ? ` Changes since the first count, ${since}.` : "");
+  holder.innerHTML = columns.map(c => { const now = latest.columns[c] || 0, then = oldest.columns[c] || 0;
+    return `<div class="figure"><div class="label">${c}</div><div class="value">${format(now)}</div><div class="change">${snapshots.length > 1 ? signed(now - then) + " since " + since : "first count"}</div></div>`; }).join("");
+})();
+
+(function pace() {
+  const hours = DATA.pace, container = document.getElementById("pace");
+  const sum = (list, i) => list.reduce((a, h) => a + h[i], 0);
+  const lastDay = hours.slice(-24);
+  document.getElementById("pace-note").textContent = `Pushes to main, from GitHub's record of the branch, and the commits reaching main, per hour. Last 24 hours: ${sum(lastDay, 1)} pushes, ${sum(lastDay, 2)} commits; since ${shortDay(hours[0][0].slice(0, 10))}: ${format(sum(hours, 1))} pushes, ${format(sum(hours, 2))} commits. Hover a bar for its hour.`;
+  const height = 200, top = Math.max(5, Math.ceil(Math.max(...hours.map(h => h[2])) / 5) * 5);
+  const svg = element("svg", { viewBox: `0 0 ${WIDTH} ${height}`, role: "img", "aria-label": "landings and commits per hour" }, container);
+  const plotWidth = WIDTH - PAD.left - PAD.right, plotHeight = height - PAD.top - PAD.bottom;
+  const slot = plotWidth / hours.length, x = i => PAD.left + i * slot, y = v => PAD.top + (1 - v / top) * plotHeight;
+  const step = niceStep(top);
+  for (let v = 0; v <= top; v += step) {
+    element("line", { x1: PAD.left, x2: WIDTH - PAD.right, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": v ? 0.6 : 1.2 }, svg);
+    element("text", { x: PAD.left - 8, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = v;
+  }
+  hours.forEach(([hour, landings, commits], i) => {
+    if (hour.endsWith(" 00")) {
+      element("line", { x1: x(i), x2: x(i), y1: PAD.top, y2: height - PAD.bottom, stroke: "var(--rule)", "stroke-width": 0.6, "stroke-dasharray": "2 3" }, svg);
+      element("text", { x: x(i) + 4, y: height - 8 }, svg).textContent = shortDay(hour.slice(0, 10));
+    }
+    const width = Math.max(1, slot - 1);
+    if (commits) element("rect", { x: x(i), y: y(commits), width, height: y(0) - y(commits), fill: "var(--rule)" }, svg);
+    if (landings) element("rect", { x: x(i), y: y(landings), width, height: y(0) - y(landings), fill: "var(--s7)" }, svg);
+    const hit = element("rect", { x: x(i), y: PAD.top, width: slot, height: plotHeight, fill: "transparent" }, svg);
+    element("title", {}, hit).textContent = `${hour}:00 · ${landings} pushes · ${commits} commits`;
+  });
+})();
+
 (function builds() {
   const time = date => new Date(date.replace(" ", "T")).getTime();
   const W = 300, H = 110, L = 34, R = 8, T = 6, B = 18;
@@ -302,5 +353,5 @@ function table(id, list) {
 table("grew", [...rows].sort((a, b) => b.delta - a.delta).slice(0, 8));
 table("cut", [...rows].sort((a, b) => a.delta - b.delta).slice(0, 8));
 
-document.getElementById("footer").textContent = `Counted from git history: every first-parent commit on main since ${shortDay(dayOf(first))}, lines of .warp, .c, .h, .js, .sh and .py files, base ${DATA.base}, last ${last.sha}.`;
+document.getElementById("footer").textContent = `Counted from git history: every commit on main since ${shortDay(dayOf(first))}, lines of .warp, .c, .h, .js, .sh and .py files, base ${DATA.base}, last ${last.sha}.`;
 </script>

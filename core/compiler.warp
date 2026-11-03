@@ -8,7 +8,6 @@ use "analysis/host_words.warp"
 use "commands/commands.warp"
 use "emitter/c_imports.warp"
 use "../extensions/primitive.warp"
-use "../extensions/commands.warp"
 use "../extensions/extensions.warp"
 use os
 use file
@@ -222,5 +221,5 @@ match command {
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
 	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
 	"optimize": trim(args#2, args#3, "optimize")
-	_: extension_command(command)
+	_: run_extension_command(command)
 }
