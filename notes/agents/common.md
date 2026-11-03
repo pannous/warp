@@ -45,13 +45,13 @@ before asking a question). After a context swap, this file and your role file be
 - Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
-- Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (even
-  while its file sits in lib/sugar/); "library" means only modules programs import.
+- Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
+  file sits in core/extensions/sugar/); "library" means only modules programs import.
 - Extension OKs (user): a core extension the compiler does not need to rebuild itself (a rule or file under
-  core/extensions/, lib/sugar/ until it moves) needs no strong confirmation when it is generic and/or small: build it,
+  core/extensions/, its sugar/ rules included) needs no strong confirmation when it is generic and/or small: build it,
   send the Interviewer an FYI. A spelling the user has not decided, a new pass or a change to the compiler proper
   still asks first.
-- No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
+- No new passes. Sugar (new spellings) → rules in core/extensions/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
   lowering case, special case or refusal path, needs an OK first (files, functions, 3-line reason to the Supervisor,
@@ -110,7 +110,7 @@ before asking a question). After a context swap, this file and your role file be
 - Build only a branch merged with origin/main: the installed native warp's rebuild steps (rebake) call main's
   compiler words, so an unmerged branch can fail to build for reasons that aren't its own (warp-shaders, 2026-10-30).
 - Only the pure pipeline counts. Smoke test, every branch: `scripts/smoke.sh <worktree>`. It rebuilds only for what
-  the compiler bakes in (user 2026-10-30: a library change needs no rebuild): lib/ only (modules, lib/sugar/ rules)
+  the compiler bakes in (user 2026-10-30: a library change needs no rebuild): lib/ only (modules; the sugar rules are core since 2026-11-03)
   runs hello on the installed compilers in seconds; core/ or prelude.warp, aliases.warp, math.warp, rule_words.warp
   make it say REBUILDING and run `scripts/rebuild.sh pure <worktree>` first (published to the shared store, so the
   install after your push reuses it). Then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test

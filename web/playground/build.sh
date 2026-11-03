@@ -30,7 +30,7 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 	keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
 # the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources)
-PRELOADED_SOURCES=('*.warp' 'sugar/*.warp' 'modules/words.tsv')
+PRELOADED_SOURCES=('*.warp' 'compiler/extensions/sugar/*.warp' 'modules/words.tsv')
 # the exports of warp.wasm the page calls (driver.js, values.js): the browser's copy keeps only these, and Binaryen drops
 # what they never reach and the name section (1.35 → 1.26 MB gzipped); an export missing here fails the tour loudly
 COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at returned_error
