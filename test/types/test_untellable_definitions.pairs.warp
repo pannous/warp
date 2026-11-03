@@ -1,0 +1,3 @@
+'f(x: Node) := "node"; f(x: text) := "text"; f("a")'	error
+'f(x: text) := "text"; f(x: Node) := "node"; f("a")'	error
+'f(n: int, x: Node) := 1; f(n: int, x: text) := 2; f(0, "a")'	error
