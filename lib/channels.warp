@@ -10,7 +10,7 @@ use tasks
 MESSAGE_POLL = 20ms
 rewrite channel() => Channel()
 rewrite send $v to $c => $c.send($v) where $c = channel()
-rewrite (for $item in $c $body) => while $c.has_more() { $item = $c.receive(); $body } where $c = channel()
+rewrite (for $item in $c $body) => while $c.more() { $item = $c.receive(); $body } where $c = channel()
 
 class Channel {
 	waiting: list = []
@@ -20,12 +20,12 @@ class Channel {
 		waiting += [value]
 	}
 	// the tasks run until one sent a value or the channel closed
-	has_more() := {
+	more() := {
 		tasks_run_while(() => #waiting == 0 and not closed, ø)
 		#waiting > 0
 	}
 	receive() := {
-		if not has_more() { raise "receive on a channel no task sends to: every task has ended" }
+		if not more() { raise "receive on a channel no task sends to: every task has ended" }
 		oldest = waiting#1
 		waiting = waiting[1..]
 		oldest

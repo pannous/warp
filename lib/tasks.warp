@@ -19,17 +19,35 @@ rewrite await first $xs => task_awaited_any($xs)
 rewrite await $x within $t or $d => task_awaited_within($x, $t / 1ms, () => $d)
 rewrite await $x within $t => task_awaited_within($x, $t / 1ms, () => raise "the task took longer than " + str($t))
 rewrite await $x => $awaited where $awaited = awaited_operand($x)
+// `finish job` is `await job` (decision finish-await), a word a program may define for itself
+rewrite finish $x => $awaited where $awaited = awaited_operand($x)
 // `shared n = 0` (wiki/async.md): one value every task sees; cooperative tasks run in one instance, so it is the
 // a global of the main level as a `linear` array is, its `+=` atomic as any step is
 rewrite (shared $d) => global: $d
+// a stopped task yields no result (decision stopped-no-result): its name reads ø from then on, an await of it ø
+rewrite stop $x => ($x = task_stopped($x)) where statement and $x is symbol
+rewrite cancel $x => ($x = task_stopped($x)) where statement and $x is symbol
+rewrite $x.stop() => ($x = task_stopped($x)) where statement and $x is symbol
 // (a rule's result ø reads as no match: the task is stopped, and then nothing)
 rewrite stop $x => (task_stopped($x); ø) where statement
 rewrite cancel $x => (task_stopped($x); ø) where statement
+// `pause job` holds a task where it stands until `resume job` (or an await of it)
+rewrite pause $x => (task_paused($x); ø) where statement
+rewrite resume $x => (task_resumed($x); ø) where statement
+// `once job finishes: …` runs when the task's last step ran, at once if it is done
+rewrite once $x finishes $body: block => task_finished_then($x, () => $body)
+rewrite once $x finishes: $body => task_finished_then($x, () => $body)
 // a program that starts tasks runs them all before it ends, its value kept
 rewrite $p => $q where program and $q = tasked($p)
 
 // the scheduler: each step of a task runs to the task's next sleep, which queues the rest
-class Task { due: int; next: any; done: bool = no; value: any = ø; failed: any = ø; awaited: bool = no; context: any = ø }
+class Task {
+	due: int; next: any; done: bool = no; value: any = ø; failed: any = ø; awaited: bool = no; context: any = ø
+	paused: bool = no; finish_handlers: list = []
+	stop() := task_stopped(self)
+	pause() := task_paused(self)
+	resume() := task_resumed(self)
+}
 global task_queue = []
 global running_task = ø
 global failed_tasks = []
@@ -67,7 +85,9 @@ slept(ms) := {
 // (ø: none): sleeping until each is due, and until the deadline at the end
 tasks_run_while(holds: any, deadline: any) := {
 	while #task_queue > 0 and (holds == ø or holds()) {
-		task = task_queue.fold(task_queue#1, (soonest, t) => if t.due < soonest.due then t else soonest)
+		ready = task_queue.filter(t => not t.paused)
+		if #ready == 0 { break }
+		task = ready.fold(ready#1, (soonest, t) => if t.due < soonest.due then t else soonest)
 		if deadline != ø and task.due > deadline { break }
 		if task.due > clock() { sleep_ms(task.due - clock()) }
 		task_stepped(task)
@@ -90,11 +110,13 @@ task_stepped(task: Task) := {
 		task.done = yes
 		task.value = value
 		task_queue = task_queue.filter(t => not t.done)
+		for handler in task.finish_handlers { handler() }
 	}
 }
 // `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is
 task_awaited(x) := if x is Task then task_value(x) else x
 task_value(x: Task) := {
+	x.paused = no
 	tasks_run_while(() => not x.done, ø)
 	x.awaited = yes
 	if x.failed != ø { raise str(x.failed) }
@@ -120,7 +142,22 @@ task_stopped(x) := {
 }
 task_ended(x: Task) := {
 	x.done = yes
+	x.value = ø
 	task_queue = task_queue.filter(t => not t.done)
+}
+task_paused(x) := {
+	if x is Task { x.paused = yes }
+	ø
+}
+task_resumed(x) := {
+	if x is Task { x.paused = no }
+	ø
+}
+task_finished_then(x, handler: function) := if x is Task then task_handled(x, handler) else handler()
+task_handled(x: Task, handler: function) := {
+	if x.done { return handler() }
+	x.finish_handlers += [handler]
+	ø
 }
 // main's end: every task runs to its end, the program's value kept; a task's error that nobody awaited ends it loudly
 tasks_end(value: any = ø) := {
