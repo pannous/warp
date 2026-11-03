@@ -1,7 +1,7 @@
 # from test_threads.rs: edit the Rust test, then run the script again
 
 # await_gives_the_result_of_the_thread
-'add(a, b) := a + b; job = go add(40, 2); job + 0'	42
+'add(a, b) := a + b; job = go add(40, 2); await job + 0'	42
 
 # await_binds_its_task_inside_an_expression
 'f(ms) := { sleep(ms / 1000); ms }; a = go f(5); x = await a * 2; x'	10

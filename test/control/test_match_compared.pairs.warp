@@ -1,0 +1,5 @@
+# a comparison after a match's arms compares the match's value: the arms are a block, never a comparison (decision comparison-after-arms)
+'switch 3 {1: "one" 3: "three" default: "many"} == "three"'	yes
+'match 3 {1: "one" 3: "three"} != "one"'	yes
+'switch 2 {1: "one" default: "many"}'	"many"
+'n = 2; match n {1: 10 2: 20} > 15'	yes

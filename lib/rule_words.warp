@@ -106,6 +106,9 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 page_value_word = "page_value"
 listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
+# `test C` (core/extensions/sugar/test_words.warp) runs where it stands, a statement: no value to read again
+test_word = "test"
+is_test_line(statement: Node): bool := is_group(statement) and #statement > 1 and statement#1 == symbol(test_word)
 page_valued(program: Node): any := {
 	statements = level_statements(program)
 	# (the sugar reads the program before its `on click {…}` became a listen call)
@@ -114,7 +117,7 @@ page_valued(program: Node): any := {
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
 	# (a write, `x = 3` once signaled notifies its listeners, is no value to read again: run again it would write anew)
-	if is_declaration(last) or listens(last) or nodes_in(last).any(writes) { return ø }
+	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) { return ø }
 	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
@@ -242,8 +245,15 @@ condition_listens(condition: Node, body: Node, flags: list): Node := {
 	unfired = flags.map(flag => Key(ø, Op.Not, Key(flag, Op.Hash, 1)))
 	block = if #flags == 0 then body else List(flags.map(flag => Key(Key(flag, Op.Hash, 1), Op.Assign, Node.True)) + [body], Bracket.Curly, Separator.Semicolon)
 	declared = flags.map(flag => Key(flag, Op.Assign, List([Node.False], Bracket.Square, Separator.Comma)))
-	listens = symbol_words(condition).map(name => call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
+	listens = symbol_words(condition).map(name => name_listener(name, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block)))
 	separated(bracketed(declared + listens, "("), ";")
+}
+# a listener of the name's changes running the code, which reads the written value as `value`, the one before as `old`
+name_listener(name: Node, code: Node): Node := call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, code)])
+# `on change b + c {…}`: a listener of each name the expression reads, running the block when the write changed its value
+change_listens(expression: Node, body: Node): Node := {
+	listens = symbol_words(expression).map(name => name_listener(name, Key(Key(ø, Op.If, Key(renamed(expression, name, symbol("value")), Op.Ne, renamed(expression, name, symbol("old")))), Op.Then, body)))
+	separated(bracketed(listens, "("), ";")
 }
 became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
 # the program with each write of a watched name notifying its listeners (signal_notify), `x = 3` as
@@ -665,6 +675,7 @@ rule_words = {
 	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
+	change_listens: change_listens,
 	class_help: class_help,
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,

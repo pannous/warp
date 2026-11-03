@@ -2,6 +2,9 @@
 # typed value the program leaves free (lib/prelude.warp, lib/math.warp: `floor(x: number): int from warp`) applies to
 # the value after it, as `reverse(xs)` does; a synonym calls its word (`sorted xs`). A word with a default or a rest
 # parameter takes no spaced argument. Rust twin: library_words.rs word_call, library_signatures.rs typed_first_arity
+# `map square xs`, `map (x -> x * 2) [1, 2, 3]`: a function before a list maps it, as `xs.map(square)` does; ahead
+# of the composition below, which would read `map floor xs` as map(floor(xs))
+rewrite (map $f $xs) => map($xs, $f) where $f is function
 # a function before an empty `()`, spaced or not, is called with nothing: `f ()` is f() (user decision calls-arguments)
 rewrite ($f ()) => $f() where $f is function
 rewrite ($f $x) => $f($x) where $f takes one
@@ -15,8 +18,6 @@ rewrite ($f $g $x) => $f(($g $x)) where $f is function and $g takes one
 # (one typed value) leaves it out. Not a name nothing binds: `int x = 3` declares x; before several words it takes
 # the phrase they make, `int float 3` is int(float(3))
 rewrite (int $x) => int($x) where $x is not unbound
-# `map square xs`, `map (x -> x * 2) [1, 2, 3]`: a function before a list maps it, as `xs.map(square)` does
-rewrite (map $f $xs) => map($xs, $f) where $f is function
 rewrite (float $x) => float($x) where $x is not unbound
 rewrite (double $x) => double($x) where $x is not unbound
 rewrite (long $x) => long($x) where $x is not unbound
