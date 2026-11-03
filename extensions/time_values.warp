@@ -1,4 +1,6 @@
-# Times (emitter.warp's part): instants, durations and zoned times as $Nodes, their intrinsics and host words
+# Times (card emitter-times, decision core-is-self; the emitter's part, used where it was until dates-times-extraction
+# makes them library values): instants, durations and zoned times as $Nodes, their intrinsics and host words. It names
+# core words without a use of core paths (lib/extensions has no ../core)
 ## times (card time-primitives; Rust twin: rust-harness:src/wasm_emitter/time, layout: rust-harness:src/time/mod.rs TimeForm): a $Node of the
 ## Kind time, its info (form, then a duration's days and months or a zoned time's zone and offset) above the kind
 ## bits, its data an $i64box of the position (days since 1970 for a date, nanoseconds for the others)
@@ -12,7 +14,6 @@ months_shift = 35
 zone_mask = 255
 offset_shift = 11
 seconds_per_minute = 60
-shift_ops = {i64_or: 132, i64_shl: 134, i64_shr_s: 135, i64_shr_u: 136, i64_mul: 126}
 # the calls a lowered program makes a time with (rust-harness:src/time/mod.rs: `now` is instant_at(clock()), a constant time_of)
 time_words = {time_of: 2, instant_at: 1}
 # the words runtime.warp reads a time with, one or two instructions each (runtime words only, as `intrinsics`)

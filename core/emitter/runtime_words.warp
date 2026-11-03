@@ -247,6 +247,8 @@ def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
 	TypedCode(ValueKind.Bool, type_value + if_else_code(ValueKind.Bool, runtime_call("node_is_type", [TypedCode(ValueKind.Node, held), text_value(type), number_value(kinds)]), passes))
 }
 # the held kind of the node `held` as one bit, as runtime held_kind_bit places it: 1 << its Kind, a yes/no, type value,
+# the i64 shift and bit opcodes the kind words are built with
+shift_ops = {i64_or: 132, i64_shl: 134, i64_shr_s: 135, i64_shr_u: 136, i64_mul: 126}
 # map or exact rational the bit of its HeldBit place, ø a list; no call, each mark picked by a select
 def held_kind_bit_code(body: Body, held: list): list {
 	field = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
@@ -303,9 +305,9 @@ shown_big_int_code(f: Function): any := {
 # (module.made), the return of the call where one of its arguments holds such a value; before that nothing, so a
 # program making none carries neither the call nor the words it reaches (a shown value no time's text). Its function
 # is noted (module.made_sites) and read again when a kind is first made (module_compiled): each maker notes its kind
-# (made_by: big_int_of, ratio_node, times.warp time_node)
+# (made_by: big_int_of, ratio_node, time_values.warp time_node)
 made_tests = {BigInt: "holds_big_int", Ratio: "holds_ratio", Time: "holds_time"}
-# the words making a value of each kind, compiled into the prepended runtime (made_by, times.warp time_node)
+# the words making a value of each kind, compiled into the prepended runtime (made_by, time_values.warp time_node)
 made_makers = {BigInt: ["big_int_of"], Ratio: ["ratio_of_parts"], Time: ["time_of", "instant_at"]}
 def made_case(body: Body, arguments: list): TypedCode {
 	made = name_of(value_of(arguments#1))
