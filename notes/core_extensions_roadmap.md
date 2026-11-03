@@ -125,7 +125,7 @@ Cold, grouped by feature (unreached + cold inside, lines; detail per definition 
 |---|---|---|---|
 | parser forms (warp-operators' table above: atoms, time literals, c-style for, shader/wasm blocks, declared operators, radix, phrase slots, sum types, attributes, url/path, circumfix, entities) | parser.warp | 580 + ~2,000 | operator rows, atom readers, keyword handlers |
 | the @primitive native lane | extensions/primitive.warp | 693 | already an extension |
-| class method dispatch, constructors, inheritance (the compiler has no class methods) | class_methods.warp 406 + 157, instances.warp 19 + 245, class_statics 31 | ~860 | keyword handler `class` + a pass-list entry |
+| class methods: method dispatch, inheritance, statics (class declarations, fields, defaults, instances, enums and typed parameters stay core: the compiler has 44 classes, 12 enums, no methods) | class_methods.warp 406 + 157, instances.warp inherit_fields 19 and its cold method parts, class_statics 31 | up to ~860 | pass-list entry + name rows for methods (card class-methods-extension) |
 | big numbers and exact arithmetic | runtime/extended pow 112, big_ints 120, big_ratios 45, exact 97, exact_rounding 20 | ~400 | runtime registration (already split as runtime/extended) |
 | time literals and Time values | emitter/times 72 + 30, runtime/extended times 19, durations 4, parser rows | ~130 + parser | atom suffix rows + runtime registration |
 | CLI commands beyond compiling: native build, repl, show_*, help, write modules, `warp test` | commands/commands 181, commands/tests 196, compiler.warp 66 + 68 | ~510 | keyword table of commands (core/commands is one table already) |
