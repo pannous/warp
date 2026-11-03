@@ -1,18 +1,17 @@
-cloud full suite 2026-11-03T09:40Z at ffd4dc7 on x86_64: 2752 of 12452 failed in 2013 files, 17 skipped (Mac: 2972 of 11858)
-note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 1831 failures are 'outside the core' errors
+cloud full suite 2026-11-03 16:17Z at b4bcfa5 on x86_64: 2787 of 12479 failed in 2018 files, 17 skipped
 ✗ test/control/test_after.warp:4 "shared done = false; go { sleep(50ms); done = true }; last = after done return \"third\"; await last" "third": got Error("outside the core: the unknown name after at 1:62 (no owner)")
 ✗ test/control/test_after.warp:5 "shared n = 0; go { for i in 1 to 5 { n += 1 } }; five = after (n == 5) return n * 2; await five" 10: got Error("outside the core: the unknown name after at 1:57 (no owner)")
 ✗ test/control/test_after.warp:8 "shared done = false; last = after done return \"third\"; cancel last; await last or \"no third\"" "no third": got Error("outside the core: the unknown name after at 1:29 (no owner)")
 ✗ test/control/test_all_with_condition.warp:4 "numbers=[1,5,3]; s=0; all numbers > 2: s += it\ns" 8: got Error("outside the core: the unknown name all at 1:23 (no owner)")
 ✗ test/control/test_all_with_condition.warp:6 "s=0; all [1,5,3] <= 3: s += it\ns" 4: got Error("outside the core: the unknown name all at 1:6 (no owner)")
 ✗ test/control/test_all_with_condition.warp:8 "s=0; all [1,5,3]: s += it\ns" 9: got Error("outside the core: the unknown name all at 1:6 (no owner)")
-✗ test/control/test_async_ports.pairs.warp:10 "job = go { sleep(2000 ms); 1 }; await job within 100 ms or 0" 0: got Error("DimensionError: cannot add 100/ms and the plain number 1793694217121 at 17:53")
-✗ test/control/test_async_ports.pairs.warp:11 "job = go { sleep(10 ms); 7 }; await job within 1000 ms or 0" 7: got Error("DimensionError: cannot add 1000/ms and the plain number 1793694217775 at 17:53")
-✗ test/control/test_async_ports.pairs.warp:15 "job = go { sleep(2000 ms); \"a\" }; await job within 100 ms or \"late\"" "late": got Error("DimensionError: cannot add 100/ms and the plain number 1793694220991 at 17:53")
+✗ test/control/test_async_ports.pairs.warp:10 "job = go { sleep(2000 ms); 1 }; await job within 100 ms or 0" 0: got Error("DimensionError: cannot add 100/ms and the plain number 1793716202533 at 17:53")
+✗ test/control/test_async_ports.pairs.warp:11 "job = go { sleep(10 ms); 7 }; await job within 1000 ms or 0" 7: got Error("DimensionError: cannot add 1000/ms and the plain number 1793716202806 at 17:53")
+✗ test/control/test_async_ports.pairs.warp:15 "job = go { sleep(2000 ms); \"a\" }; await job within 100 ms or \"late\"" "late": got Error("DimensionError: cannot add 100/ms and the plain number 1793716207209 at 17:53")
 ✗ test/control/test_async_ports.warp:5 "f(x) := { sleep(300 ms); x }; started = clock(); xs = await all [go f(1), go f(2)]; clock() - started < 550" yes: got no
 ✗ test/control/test_async_ports.warp:13 "gate = channel(); slow(g) := { g.receive(); 10 }; quick() := { sleep(10 ms); 20 }; r = await any [go slow(gate), go quick()]; gate.send(0); r" 20: got Error("a field holds no error; handle it with try … else, or declare `or error`: a field holds no error; handle it with try … else, or declare `or error` at 24:37")
-✗ test/control/test_async_ports.warp:17 "job = go { sleep(2000 ms); 1 }; x = await job within 100 ms or 5; x * 2" 10: got Error("DimensionError: cannot add 100/ms and the plain number 1793694232838 at 17:53")
-✗ test/control/test_async_ports.warp:18 "job = go { sleep(10 ms); 7 }; x = await job within 1000 ms or 5; x * 2" 14: got Error("DimensionError: cannot add 1000/ms and the plain number 1793694232861 at 17:53")
+✗ test/control/test_async_ports.warp:17 "job = go { sleep(2000 ms); 1 }; x = await job within 100 ms or 5; x * 2" 10: got Error("DimensionError: cannot add 100/ms and the plain number 1793716220819 at 17:53")
+✗ test/control/test_async_ports.warp:18 "job = go { sleep(10 ms); 7 }; x = await job within 1000 ms or 5; x * 2" 14: got Error("DimensionError: cannot add 1000/ms and the plain number 1793716223082 at 17:53")
 ✗ test/control/test_atomic_arrays.pairs.warp:4 "atomic xs = int[4]; xs#1 += 2; xs#1 += 3; xs#1" 5: got Error("outside the core: the unknown name atomic at 1:1 (no owner)")
 ✗ test/control/test_atomic_arrays.warp:4 "atomic hits = int[1]; bump(h, n) := { for i in 1 to n { h#1 += 1 }; n }; a = go bump(hits, 1000); b = go bump(hits, 1000); await a + await b; hits#1" 2000: got Error("outside the core: the unknown name atomic at 1:1 (no owner)")
 ✗ test/control/test_bang_words.pairs.warp:9 "is! \"3+3\" 6" yes: got Error("outside the core: the unknown name is! at 1:1 (no owner)")
@@ -39,10 +38,15 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_blocks.pairs.warp:11 "(1, 2; 3, 4)[1,0]" 3: got Error("`]` closes no group")
 ✗ test/control/test_blocks.pairs.warp:12 "(1 2, 3 4)[1,0]" 3: got Error("`]` closes no group")
 ✗ test/control/test_branch_assigned_variables.pairs.warp:6 "samples/lists/sorting_idiomatic.warp" "-3,0,1,2,5,5,6,7,8,9": got Error("no file samples/lists/sorting_idiomatic.warp")
-✗ test/control/test_broadcast.pairs.warp:4 "broadcast {text: \"hi\"} on \"test-nobody\"; 5" 5: got Error("on is defined by keys and timers: say which, `use keys` or `use timers`")
+✗ test/control/test_broadcast.pairs.warp:4 "broadcast {text: \"hi\"} on \"test-nobody\"; 5" 5: got Error("on is defined by keys and timers and tasks: say which, `use keys` or `use timers` or `use tasks`")
 ✗ test/control/test_call_result_reflection.warp:4 "people() := [{name:\"a\", age:1}, {name:\"b\", age:2}]; people().name" ['a', 'b']: got Error("outside the core: the field name of a list at 1:48 (no owner)")
 ✗ test/control/test_call_result_reflection.warp:5 "people() := [{name:\"a\", age:1}, {name:\"b\", age:2}]; name of people()" ['a', 'b']: got Error("outside the core: the field name of a list at 1:48 (no owner)")
 ✗ test/control/test_call_result_reflection.warp:6 "people() := [{name:\"a\", age:1}, {name:\"b\", age:2}]; names of people()" ['a', 'b']: got Error("outside the core: the field names of a list at 1:48 (no owner)")
+✗ test/control/test_change_of_expression.pairs.warp:2 "b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:3 "b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 5; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:4 "b = 1; c = 2; n = 0; on change b * c { n += 1 }; b = 5; c = 3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:6 "b = 1; on change b { print 1 }; test b == 1" ø: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:7 "b = 1; n = 0; on change b { n += 1 }; b = 2; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_channels.pairs.warp:8 "chat = channel \"warp-test-p155\"; chat.send(\"hi\"); chat.receive()" "hi": got Error("the host word channel_send is not in warp yet")
 ✗ test/control/test_channels.warp:10 "chat = channel \"warp-test-p155-to\"; send 5 to chat; chat.receive() + 1" 6: got Error("outside the core: the unknown name emit at 24:23 (no owner)")
 ✗ test/control/test_charged_fields.pairs.warp:4 "o = {a: 1, s := 2+3}; o.s" 5: got Error("no field s at 1:23")
@@ -51,6 +55,8 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_charged_fields.pairs.warp:8 "o = {a: 1, s := clock()}; o.s > 0" 1: got Error("no field s at 1:27")
 ✗ test/control/test_clipboard.pairs.warp:7 "n = 1; on clipboard change { n = 2 }; n" 1: got Error("outside the core: the unknown name on: `use keys` defines it at 1:8 (no owner)")
 ✗ test/control/test_clipboard.pairs.warp:8 "c = clipboard count; c > 0" yes: got Error("outside the core: the unknown name count at 1:15 (no owner)")
+✗ test/control/test_clock_timers.pairs.warp:3 "n = 1; on every day at 9:30 { n = 2 }; n" 1: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
+✗ test/control/test_clock_timers.pairs.warp:4 "n = 1; on every day at 21:15 {}; n + 1" 2: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
 ✗ test/control/test_code_hole_conditions.warp:4 "summand(n) := match n { data($k: int + $x) => x; data($x + $k: int) => x; _ => \"none\" }\nsummand(data(3 + y))" "y": got Error("outside the core: the unknown name x at 1:47 (no owner)")
 ✗ test/control/test_code_hole_conditions.warp:6 "summand(n) := match n { data($k: int + $x) => x; data($x + $k: int) => x; _ => \"none\" }\nsummand(data(y + 3))" "y": got Error("outside the core: the unknown name x at 1:47 (no owner)")
 ✗ test/control/test_code_hole_conditions.warp:8 "summand(n) := match n { data($k: int + $x) => x; data($x + $k: int) => x; _ => \"none\" }\nsummand(data(y + z))" "none": got Error("outside the core: the unknown name x at 1:47 (no owner)")
@@ -61,6 +67,8 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_code_statement_patterns.warp:14 "binary = parse(\"a - b\")\nmatch binary { data($l $op $r) => op; _ => \"no\" }" "-": got "no"
 ✗ test/control/test_code_statement_patterns.warp:16 "binary = parse(\"a - b\")\nmatch binary { data($l $op $r) => r; _ => \"no\" }" "b": got "no"
 ✗ test/control/test_colon_handlers.warp:10 "n = 1\nat 9pm: print n\nn + 1" 2: got Error("outside the core: the unknown name pm at 2:5 (no owner)")
+✗ test/control/test_daily_timer.pairs.warp:4 "n = 1; on every day at 9:00 { n = 2 }; n" 1: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
+✗ test/control/test_daily_timer.pairs.warp:5 "n = 1; on every day at 23:59 { n = 2 }; n + 1" 2: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
 ✗ test/control/test_data_quoting.pairs.warp:12 "string(data point{x:1})" "point{x:1}": got "point: {x: 1}"
 ✗ test/control/test_data_quoting.pairs.warp:15 "p = data point{x:1}; string p" "point{x:1}": got "point: {x: 1}"
 ✗ test/control/test_data_quoting.pairs.warp:16 "m = {a: data point{x:1}}; string m" "{a:point{x:1}}": got "{a: point: {x: 1}}"
@@ -78,7 +86,6 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_database_tables.warp:12 "class Car{make: text}\nstored cars: [Car] in \"cars_shrunk\"\ncars#1.make" "VW": got Error("index out of range: 1 not in an empty list at 3:1")
 ✗ test/control/test_database_tables.warp:17 "class Box{width: float}\nstored boxes: [Box] in \"boxes_widened\"\nboxes#1.width" 3: got Error("index out of range: 1 not in an empty list at 3:1")
 ✗ test/control/test_database_tables.warp:20 "class Tag{code: text}\nstored tags: [Tag] in \"tags_spelled\"\ntags#1.code" "7": got Error("index out of range: 1 not in an empty list at 3:1")
-✗ test/control/test_database_tables.warp:25 "class Dog{@was(nick) name: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs#1.name" "Rex": got Error("sqlite3_prepare_v2 gave no statement, C status 1")
 ✗ test/control/test_database_tables.warp:28 "class Dog{@was(nick) name: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs#1.name" "Rex": got Error("sqlite3_prepare_v2 gave no statement, C status 1")
 ✗ test/control/test_database_tables.warp:33 "class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\n(hikers where age > 18)#1.name" "Bo": got Error("index out of range: 1 not in an empty list at 29:60")
 ✗ test/control/test_database_tables.warp:36 "class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\nhikers#2.age" 5: got Error("index out of range: 2 not in an empty list at 3:1")
@@ -90,6 +97,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_each_colon.pairs.warp:6 "xs = [4 5]; n = 0; each xs: n += 1; n" 2: got Error("outside the core: the unknown name each at 1:20 (no owner)")
 ✗ test/control/test_each_colon.pairs.warp:9 "s = 0; 1..4 do s += it; s" 6: got Error("outside the core: the unknown name it at 1:21 (no owner)")
 ✗ test/control/test_each_colon.pairs.warp:10 "s = 0; 1…3 do s += it; s" 6: got Error("outside the core: the unknown name it at 1:20 (no owner)")
+✗ test/control/test_empty_reset_in_if.pairs.warp:7 "x = 1; f = []; on change x { f = [] }; x = 2; 7" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_error_branch_kind.pairs.warp:17 "x=error(\"bad\"); is_error(x)" 1: got Error("bad at 1:1")
 ✗ test/control/test_error_not_in_data.pairs.warp:12 "e = try 10/0; g = e; if g failed then 1 else 2" 1: got Error("divide by zero at 1:15")
 ✗ test/control/test_error_not_in_data.pairs.warp:18 "e = try 10/0; a, b = e, 2; if a failed then 1 else 2" 1: got Error("divide by zero at 1:15")
@@ -102,21 +110,27 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_error_values.pairs.warp:20 "r = error(\"bad value\"); type(r) == error" yes: got Error("bad value at 1:1")
 ✗ test/control/test_error_words.pairs.warp:9 "\"a\" + warn(\"careful\") + \"b\"" "ab": got "aøb"
 ✗ test/control/test_event_footguns.pairs.warp:4 "n=0; emit ping; on ping {n+=1}; n" 1: got 0
-✗ test/control/test_event_footguns.pairs.warp:13 "x = 0; on change x { x = x + 1 }; x = 1; x" 2: got Error("wasm trap: call stack exhausted at 1:22")
-✗ test/control/test_event_footguns.pairs.warp:19 "n = 0; x = [1]; on change x { n += 1 }; x.add(2); n" 1: got 0
+✗ test/control/test_event_footguns.pairs.warp:13 "x = 0; on change x { x = x + 1 }; x = 1; x" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_event_footguns.pairs.warp:19 "n = 0; x = [1]; on change x { n += 1 }; x.add(2); n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_event_footguns.pairs.warp:23 "ready = false; n = 0; once ready { n += 1 }; ready = true; n" 1: got 0
 ✗ test/control/test_event_footguns.pairs.warp:26 "emit nobody listens; 5" 5: got Error("outside the core: the unknown name listens at 1:13 (no owner)")
 ✗ test/control/test_event_footguns.pairs.warp:29 "try { raise alarm } else { 7 }" 7: got Error("outside the core: the unknown name alarm at 1:13 (no owner)")
-✗ test/control/test_event_footguns.pairs.warp:35 "b = 1; c = 2; n = 0; on set b + c { n += 1 }; b = 5; c = 3; n" 2: got Error("outside the core: the unknown name on: `use keys` defines it at 1:22 (no owner)")
+✗ test/control/test_event_footguns.pairs.warp:35 "b = 1; c = 2; n = 0; on set b + c { n += 1 }; b = 5; c = 3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_event_footguns.warp:4 "n = 0; h = on tick { n += 1; remove h from listeners of tick }; on tick { n += 10 }; emit tick; emit tick; n" 21: got Error("outside the core: the unknown name h: `use units` defines it at 1:15 (no owner)")
 ✗ test/control/test_event_footguns.warp:7 "seen = 0; on e { event.x = 2 }; on e { seen = event.x }; emit e{x:1}; seen" 1: got 2
-✗ test/control/test_event_footguns.warp:10 "n = 0; xs = [1]; f() := { global xs; xs.add(3) }; on set xs { n += 1 }; f(); n" 1: got 0
+✗ test/control/test_event_footguns.warp:10 "n = 0; xs = [1]; f() := { global xs; xs.add(3) }; on set xs { n += 1 }; f(); n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_event_footguns.warp:13 "a = 1; b := a * 2; log = []; on change a { log.add([b, a]) }; a = 2; log#1#1" 4: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_event_footguns.warp:16 "n = 0; watch(s) := on change s { n += 1 }; x = 1; watch(x); x = 2; x = 3; n" 2: got 0
 ✗ test/control/test_event_footguns.warp:17 "n = 0; watch(s) := { global n; on change s { n += 1 } }; x = 1; watch(x); x = 2; n" 1: got 0
 ✗ test/control/test_event_footguns.warp:18 "n = 0; watch(s) := on change s { n += 1 }; x = 1; for i in 1 to 3 { watch(x) }; x = 2; n" 3: got 0
 ✗ test/control/test_event_footguns.warp:22 "n = 0; watch(s) := { whenever s > 5 { n += 1 } }; x = 0; watch(x); x = 6; x = 7; x = 3; x = 8; n" 2: got 0
+✗ test/control/test_event_footguns.warp:32 "b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 7; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_event_footguns.warp:33 "b = 1; c = 2; seen = 0; on change b * c { seen = b * c }; c = 10; seen" 10: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_event_footguns.warp:36 "shared n = 0; count = 0; on set n { count += 1 }; job = go { for i in 1 to 5 { n += 1 } }; await job; sleep(50 ms); count" 5: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_event_footguns.warp:37 "shared n = 0; last = 0; on set n { last = n }; job = go { for i in 1 to 3 { n = i * 10 } }; await job; sleep(50 ms); last" 30: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_event_footguns.warp:40 "n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; watch(x); x = 6; x = 3; x = 8; n" 2: got 0
 ✗ test/control/test_event_footguns.warp:41 "n = 0; watch(s) := once s > 5 { n += 1 }; x = 0; watch(x); x = 6; x = 3; x = 8; n" 1: got 0
+✗ test/control/test_event_footguns.warp:47 "for b in [1, 2] { x = b }; b = 1; c = 2; total := b + c; changes = 0; on change total { changes += 1 }; b = 5; changes" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_event_handler_lists.warp:9 "n = 0; on alarm {n += 1}; on alarm {n += 10}; listeners of alarm -= 2; emit alarm; n" 1: got Error("outside the core: the unknown name alarm at 1:60 (no owner)")
 ✗ test/control/test_event_handler_lists.warp:14 "n = 0; h = on alarm {n += 1}; on alarm {n += 10}; remove h from alarm; emit alarm; n" 10: got Error("outside the core: the unknown name remove at 1:51 (no owner)")
 ✗ test/control/test_event_handler_lists.warp:15 "n = 0; on alarm {n += 1}; h = on alarm {n += 10}; remove h from alarm; count listeners of alarm" 1: got Error("outside the core: the unknown name remove at 1:51 (no owner)")
@@ -191,8 +205,9 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_glued_block_words.pairs.warp:9 "x = do { 5 }; x" 5: got do{5}
 ✗ test/control/test_glued_block_words.pairs.warp:10 "i = 0; do{ i = i + 1 } while i < 3; i" 3: got Error("outside the core: the unknown name do at 1:8 (no owner)")
 ✗ test/control/test_glued_block_words.pairs.warp:11 "i = 0; do { i = i + 1 } while i < 3; i" 3: got Error("outside the core: the unknown name do at 1:8 (no owner)")
-✗ test/control/test_go_blocks.pairs.warp:5 "def hi: { sleep(10ms); \"hi\" }; job = go hi(); await job" "hi": got Error("outside the core: the unknown name hi at 120:28 (no owner)")
-✗ test/control/test_go_blocks.warp:4 "def hi: {sleep(1000ms);print('hi')}; started = clock(); go { hi() }; clock() - started < 500" yes: got Error("outside the core: the unknown name hi at 1:90 (no owner)")
+✗ test/control/test_go_blocks.pairs.warp:5 "def hi: { sleep(10ms); \"hi\" }; job = go hi(); await job" "hi": got Error("outside the core: the unknown name hi at 134:28 (no owner)")
+✗ test/control/test_go_blocks.pairs.warp:19 "f(x) := { [1,2]#x }; job = go f(5); try await job else 3" 3: got Error("not a function: a field holds no error; handle it with try … else, or declare `or error` at 1:56")
+✗ test/control/test_go_blocks.warp:4 "def hi: {sleep(1000ms);print('hi')}; started = clock(); go { hi() }; clock() - started < 500" yes: got Error("outside the core: the unknown name hi at 134:28 (no owner)")
 ✗ test/control/test_handler_globals.pairs.warp:4 "level: int = 0; on alarm {level=7}; emit alarm; level" 7: got Error("outside the core: an assignment to `… : …` at 1:14 (no owner)")
 ✗ test/control/test_handler_globals.pairs.warp:5 "level: int = 0; on alarm {level += 7}; emit alarm; emit alarm; level" 14: got Error("outside the core: an assignment to `… : …` at 1:14 (no owner)")
 ✗ test/control/test_help_word.warp:15 "class A { a: int }\nclass B extends A { b: int }\nhelp(B)" "class B extends A
@@ -229,6 +244,8 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_library_signatures.pairs.warp:37 "f(x) := x > 2; f.return_type" "bool": got "int"
 ✗ test/control/test_library_signatures.pairs.warp:38 "f(x) := x > 2; fs = [function f]; fs#1.return_type" "bool": got Error("no field return_type at 1:35")
 ✗ test/control/test_library_signatures.warp:4 "f(n) := if n == 0 then true else f(n - 1); (function f).signature" "(n) -> bool": got "(n) -> int"
+✗ test/control/test_listener_colon_bodies.pairs.warp:5 "global n = 0; x = 1; on set x: n += 1; x = 1; x = 2; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_listener_colon_bodies.pairs.warp:6 "global n = 0; x = 1; on change x: n += 1; x = 1; x = 2; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_lowercase_key_names.warp:4 "n = 0\non key { if key == space { n += 1 } }\nemit key{key:\" \"}\nemit key{key:\"q\"}\nn" 1: got Error("the system value keys pressed is not in warp yet")
 ✗ test/control/test_lowercase_key_names.warp:9 "n = 0\non key { if key == esc or up == key { n += 1 } }\nemit key{key:\"Escape\"}\nemit key{key:\"ArrowUp\"}\nn" 2: got Error("outside the core: the unknown name esc at 2:20 (no owner)")
 ✗ test/control/test_lowercase_key_names.warp:14 "n = 0\non key { if key != enter { n += 1 } }\nemit key{key:\"Enter\"}\nemit key{key:\"f1\"}\nn" 1: got Error("the system value keys pressed is not in warp yet")
@@ -283,14 +300,15 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_object_functions.pairs.warp:9 "o = {a: 1, f := it*2}; o.f(3) + o.a" 7: got Error("outside the core: the call f(…) at 1:24 (no owner)")
 ✗ test/control/test_object_functions.pairs.warp:12 "o = {a: 10, f := it*a}; o.f(3)" 30: got Error("outside the core: the call f(…) at 1:25 (no owner)")
 ✗ test/control/test_object_functions.pairs.warp:13 "o = {a: 10, f := a => a*2}; o.f(3)" 6: got Error("outside the core: the call f(…) at 1:29 (no owner)")
-✗ test/control/test_on_error_of_function.pairs.warp:4 "f(x) := 10/x; on error of f { 7 }; f(0) + f(5)" 9: got Error("outside the core: a function value in . at 1:27 (no owner)")
-✗ test/control/test_on_error_of_function.pairs.warp:5 "f(x) := { raise oops }; on error of f { 9 }; f(1)" 9: got Error("outside the core: a function value in . at 1:37 (no owner)")
-✗ test/control/test_on_error_of_function.pairs.warp:8 "fun f(x) { 10/x }; on error of f: -1; f(0)" -1: got Error("outside the core: a function value in . at 1:32 (no owner)")
+✗ test/control/test_on_error_of_function.pairs.warp:4 "f(x) := 10/x; on error of f { 7 }; f(0) + f(5)" 9: got Error("outside the core: the unknown name on: `use keys` defines it at 1:15 (no owner)")
+✗ test/control/test_on_error_of_function.pairs.warp:5 "f(x) := { raise oops }; on error of f { 9 }; f(1)" 9: got Error("outside the core: the unknown name on: `use keys` defines it at 1:25 (no owner)")
+✗ test/control/test_on_error_of_function.pairs.warp:8 "fun f(x) { 10/x }; on error of f: -1; f(0)" -1: got Error("outside the core: the unknown name on: `use keys` defines it at 1:20 (no owner)")
 ✗ test/control/test_on_error_of_function.pairs.warp:9 "def f(x): 10/x; on error of f { 0 }; f(0)" 0: got Error("outside the core: the call f(…) at 1:7 (no owner)")
-✗ test/control/test_on_error_of_function.pairs.warp:10 "function f(x) { return 10/x }; on error of f { 4 }; f(0) + f(2)" 9: got Error("outside the core: a function value in . at 1:44 (no owner)")
+✗ test/control/test_on_error_of_function.pairs.warp:10 "function f(x) { return 10/x }; on error of f { 4 }; f(0) + f(2)" 9: got Error("outside the core: the unknown name on: `use keys` defines it at 1:32 (no owner)")
 ✗ test/control/test_on_error_of_function.pairs.warp:11 "f(x) := 10/x; on error of f do 3; f(0)" 3: got Error("outside the core: the unknown name on: `use keys` defines it at 1:15 (no owner)")
-✗ test/control/test_on_error_of_function.pairs.warp:12 "on error of f { 0 }; f(x) := 10/x; f(0)" 0: got Error("outside the core: a function value in . at 1:13 (no owner)")
-✗ test/control/test_on_set_value.pairs.warp:4 "x = 3; on set x { print \"v\" }; y = x--; y" 2: got 3
+✗ test/control/test_on_error_of_function.pairs.warp:12 "on error of f { 0 }; f(x) := 10/x; f(0)" 0: got Error("outside the core: the unknown name on: `use keys` defines it at 1:1 (no owner)")
+✗ test/control/test_on_set_value.pairs.warp:4 "x = 3; on set x { print \"v\" }; y = x--; y" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_on_set_value.pairs.warp:5 "x = 3; on set x { print \"v\" }; y = (x = 7); y" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_one_method_form.pairs.warp:4 "class P{m:int}; class Q{n:int; def f(o:P):=1}; count(methods(P))" 0: got Error("outside the core: the call methods(…) at 1:62 (no owner)")
 ✗ test/control/test_one_method_form.pairs.warp:7 "class P{n:int}; def x(p:P):=n+1; x(P(3))" 4: got Error("outside the core: the unknown name n at 1:29 (no owner)")
 ✗ test/control/test_one_method_form.pairs.warp:8 "class A{n:int}; class B extends A{m:int}; def x(a:A):=n; B(1, 2).x()" 1: got Error("outside the core: the unknown name n at 1:55 (no owner)")
@@ -309,6 +327,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_plural_field_of_elements.pairs.warp:5 "addresses = [\"ab\" \"cd\"]; str(upper each address)" "[\"AB\" \"CD\"]": got Error("outside the core: the unknown name address at 1:41 (no owner)")
 ✗ test/control/test_plural_field_of_elements.warp:4 "class Q{name: text}\nqs = [Q(\"Al\"), Q(\"Bo\")]; str(names of qs)" "[\"Al\" \"Bo\"]": got Error("outside the core: the field names of a list at 2:39 (no owner)")
 ✗ test/control/test_plural_field_of_elements.warp:6 "class Q{name: text}\nqs = [Q(\"Al\"), Q(\"Bo\")]; str(qs.names)" "[\"Al\" \"Bo\"]": got Error("outside the core: the field names of a list at 2:30 (no owner)")
+✗ test/control/test_prefix_keyword_condition.pairs.warp:5 "n = 1; on every day at 9:30 { n = 2 }; n" 1: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
 ✗ test/control/test_print_empty.pairs.warp:4 "print ø" ø: got Error("outside the core: the unknown name print: `use primitive` defines it at 1:1 (no owner)")
 ✗ test/control/test_print_empty.pairs.warp:5 "print nil" ø: got Error("outside the core: the unknown name print: `use primitive` defines it at 1:1 (no owner)")
 ✗ test/control/test_print_empty.pairs.warp:7 "print ø; 3" 3: got ø
@@ -326,14 +345,21 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_quasi_quote.warp:81 "f(a) := a\nx = f([1, 2]) where it > 1\nx" [2]: got Error("outside the core: the unknown name where at 2:15 (no owner)")
 ✗ test/control/test_quasi_quote.warp:84 "x = data(y * 1) replace data($a * 1) with a\nx == data y" yes: got Error("outside the core: the unknown name a at 1:35 (no owner)")
 ✗ test/control/test_quasi_quote.warp:88 "(data(3 times {print 1}) replace data($n times $b) with data(for i in 0..$n $b)) == data(for i in 0..3 {print 1})" yes: got no
-✗ test/control/test_reactive_ports.pairs.warp:7 "p = {age: 1}; seen = 0; on set p.age {seen = value}; p.age = 7; seen" 7: got Error("outside the core: the unknown name on: `use keys` defines it at 1:25 (no owner)")
-✗ test/control/test_reactive_ports.pairs.warp:25 "p = {age: 1}; d = 0; on set p.age {d = value - old}; p.age = 7; d" 6: got Error("outside the core: the unknown name on: `use keys` defines it at 1:22 (no owner)")
-✗ test/control/test_reactive_ports.pairs.warp:26 "x = 1; d = 0; on change x {d = value - was}; x = 5; d" 4: got Error("outside the core: the unknown name was at 1:40 (no owner)")
-✗ test/control/test_reactive_ports.pairs.warp:27 "x = 1; d = 0; on change x {d = value - before}; x = 5; d" 4: got Error("outside the core: the unknown name before at 1:40 (no owner)")
-✗ test/control/test_reactive_ports.warp:9 "p = {age: 1, name: \"a\"}; n = 0; on set p.age {n += 1}; p.name = \"b\"; p.age = 3; p = {age: 4, name: \"c\"}; n" 2: got Error("outside the core: the unknown name on: `use keys` defines it at 1:33 (no owner)")
+✗ test/control/test_reactive_ports.pairs.warp:7 "p = {age: 1}; seen = 0; on set p.age {seen = value}; p.age = 7; seen" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:8 "p = {age: 1}; n = 0; on set p {n += 1}; p.age = 3; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:21 "x = 1; diff = 0; on change x {diff = value - old}; x = 5; diff" 4: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:24 "x = 1; log = 0; on set x {log = log*10 + old}; x = 2; x = 3; log" 12: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:25 "p = {age: 1}; d = 0; on set p.age {d = value - old}; p.age = 7; d" 6: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:26 "x = 1; d = 0; on change x {d = value - was}; x = 5; d" 4: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:27 "x = 1; d = 0; on change x {d = value - before}; x = 5; d" 4: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:28 "old = 9; x = 1; on change x {print old}; x = 2; old" 9: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.warp:6 "a = 2; square := a*a; sum = 0; on change square {sum += value}; a = 3; a = 3; a = 4; sum" 25: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.warp:9 "p = {age: 1, name: \"a\"}; n = 0; on set p.age {n += 1}; p.name = \"b\"; p.age = 3; p = {age: 4, name: \"c\"}; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.warp:15 "seen = 0; def show(v){ global seen; seen = v }; x = 0; on set x : show(value); x = 9; seen" 9: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_reactive_ports.warp:19 "x = 0; n = 0; h = on set x {n += 1}; x = 1; listeners of x -= h; x = 2; n" 1: got Error("no field listeners at 1:29")
 ✗ test/control/test_reactive_ports.warp:23 "level = 0; once alarm {level = event.level}; emit alarm{level: 3}; emit alarm{level: 5}; level" 3: got Error("outside the core: the call live(…) at lib/prelude.warp:988 (in listen) (no owner)")
-✗ test/control/test_reactive_ports.warp:26 "x = 1; log = 0; on change x {log = log*10 + previous}; x = 2; x = 3; log" 12: got Error("outside the core: the unknown name previous at 1:45 (no owner)")
+✗ test/control/test_reactive_ports.warp:26 "x = 1; log = 0; on change x {log = log*10 + previous}; x = 2; x = 3; log" 12: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.warp:35 "price = 3\ncount = 2\ntotal := price * count\nwhenever total > 10 { print \"big order: \" total }\non change total { print \"total is now \" value }\ncount = 5\ntotal" 15: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_reactive_ports.warp:52 "n = 0; h = on alarm {n += 1}; emit alarm; listeners of alarm -= h; emit alarm; n" 1: got Error("outside the core: the unknown name alarm at 1:56 (no owner)")
 ✗ test/control/test_reactive_ports.warp:53 "n = 0; h = on stop the machine {n += 1}; emit stop the machine; remove h from listeners of stop the machine; emit stop the machine; n" 1: got Error("outside the core: the unknown name on: `use keys` defines it at 1:12 (no owner)")
 ✗ test/control/test_reactive_ports.warp:56 "n = 0; on alarm {n += 1}; on alarm {n += 10}; emit alarm; clear listeners of alarm; emit alarm; n" 11: got Error("outside the core: the call clear(…) at 1:59 (no owner)")
@@ -360,7 +386,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_reflection_synonyms.warp:16 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); count(functions of p)" 1: got Error("no field functions at 1:73")
 ✗ test/control/test_reflection_words.pairs.warp:4 "on alarm {1}; on alarm {2}; alarm.listeners" [1, 2]: got Error("outside the core: the unknown name alarm at 1:29 (no owner)")
 ✗ test/control/test_reflection_words.pairs.warp:5 "on tick {1}; count tick.listeners" 1: got Error("outside the core: the unknown name tick at 1:20 (no owner)")
-✗ test/control/test_reflection_words.pairs.warp:6 "x = 0; on set x {print value}; count x.listeners" 1: got Error("outside the core: the field listeners of a int at 1:38 (no owner)")
+✗ test/control/test_reflection_words.pairs.warp:6 "x = 0; on set x {print value}; count x.listeners" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_reflection_words.pairs.warp:12 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); p.class" "P": got Error("no field class at 1:54")
 ✗ test/control/test_reflection_words.pairs.warp:13 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); p.type" "P": got Error("no field type at 1:54")
 ✗ test/control/test_reflection_words.pairs.warp:17 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); P.fields" ['x', 'y']: got Error("no field fields at 1:54")
@@ -420,12 +446,23 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_rust_option.pairs.warp:7 "let mut i = 0; loop { i += 1; if i == 3 { break; } } i" 3: got Error("outside the core: the unknown name mut at 1:5 (no owner)")
 ✗ test/control/test_schemas.pairs.warp:4 "{port: 80, host: \"x\"} is {port: int, host: text}" yes: got no
 ✗ test/control/test_shared_signals.warp:4 "shared done = false; seen = 0; whenever done { seen = 1 }; go { sleep(30 ms); done = true }; sleep(400 ms); seen" 1: got ø
-✗ test/control/test_shared_signals.warp:7 "shared n = 0; seen = 0; on change n { seen = value }; go { n = 5 }; sleep(300 ms); seen" 5: got ø
+✗ test/control/test_shared_signals.warp:7 "shared n = 0; seen = 0; on change n { seen = value }; go { n = 5 }; sleep(300 ms); seen" 5: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_shared_signals.warp:10 "shared n = 0; hits = 0; once n > 2 { hits += 1 }; go { for i in 1 to 6 { n = i; sleep(20 ms) } }; sleep(500 ms); hits" 1: got ø
+✗ test/control/test_shared_signals.warp:13 "shared n = 0; seen = 0; on change n { seen = value }; n = 7; for i in 1 to 2 { i }; seen" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_shared_signals.warp:16 "shared n = 0; n = 3; hits = 0; on change n { hits += 1 }; for i in 1 to 2 { i }; hits" 0: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_shared_values.pairs.warp:8 "atomic n = 1; n -= 3; n" -2: got Error("outside the core: the unknown name atomic at 1:1 (no owner)")
 ✗ test/control/test_shared_values.warp:8 "shared n = 0; bump(c) := { c += 1; 0 }; await go bump(n); await go bump(n); n" 2: got 0
 ✗ test/control/test_signal_fields.warp:4 "watch(p) := on set p.age {print value}\nperson = {age: 1}\nwatch(person)\nperson.age = person.age + 10\nperson.age * 2" 22: got Error("outside the core: the unknown name on: `use keys` defines it at 1:13 (no owner)")
+✗ test/control/test_signal_reflection.warp:4 "x = 0; on set x {print value}; whenever x > 3 {print \"big\"}; count listeners of x" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_signal_reflection.warp:5 "watch(s) := on change s {print value}; x = 0; watch(x); watch(x); count listeners of x" 2: got 0
+✗ test/control/test_signal_writes.pairs.warp:2 "x=3; n=0; on set x {n+=1}; x--; x++; x++; n" 3: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signal_writes.pairs.warp:3 "x=3; seen=0; on change x {seen+=1}; y = x--; [y, x]" [3, 2]: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signal_writes.pairs.warp:4 "xs=[1,2]; n=0; on change xs {n+=1}; xs#1 = 9; xs#1 = 9; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signal_writes.pairs.warp:5 "xs=[1,2]; first=0; on change xs {first+=old#1}; xs#1 = 9; first" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:2 "x=10; total=0; on set x {total+=value}; x=3; x=4; total" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:3 "x=1; n=0; on change x {n+=1}; x=1; x=2; x=2; x=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:6 "a=1; total := a*2; n=0; on set total {n+=1}; a=2; a=2; a=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:7 "a=1; total := a*2; s=0; on set total {s+=value}; a=2; a=3; s" 10: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_slow_handler.warp:4 "n = 0\non every 0.001 seconds { for i in 1 to 20000 { x = i % 7 }; n += 1 }\nfor i in 1 to 100000 { y = i % 7 }\nn > 0" yes: got no
 ✗ test/control/test_soft_tests.warp:4 "square(x) := x * x\ntest square(3) == 9\ntest \"squares\" {\n  check square(4) == 16\n  test square(0) == 0\n}\nsquare(5)" 25: got Error("outside the core: the unknown name test at 3:1 (no owner)")
 ✗ test/control/test_soft_tests.warp:11 "square(x) := x * x\ntest square(3) == 10\ntest \"squares\" {\n  check square(4) == 15\n}\ntest \"fine\" { check square(1) == 1 }\ntest square(2) == 4\nsquare(5)" 25: got Error("outside the core: the unknown name test at 3:1 (no owner)")
@@ -476,18 +513,13 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_system_values.pairs.warp:17 "x = not dark mode; y = dark mode; x != y" yes: got Error("outside the core: the unknown name dark at 1:9 (no owner)")
 ✗ test/control/test_system_values.pairs.warp:26 "mouse_x * 100 + mouse_y" 1207: got 0
 ✗ test/control/test_system_values.pairs.warp:27 "if mouse_down { 1 } else { 0 }" 1: got 0
-✗ test/control/test_task_stop.pairs.warp:3 "f(x) := x; t = go f(2); cancel t; await t" 2: got ø
+✗ test/control/test_task_stop.pairs.warp:3 "f(x) := x; t = go f(2); cancel t; await t" 2: got Error("t was cancelled at 1:41")
+✗ test/control/test_task_values.pairs.warp:10 "f(i) := [1,2,3]#i; job = go f(5); try await job else -1" -1: got Error("not a function: a field holds no error; handle it with try … else, or declare `or error` at 1:54")
 ✗ test/control/test_task_values.warp:7 "f(ms) := { started = clock(); sleep(ms / 1000); started }; a = go f(1000); b = go f(1000); if abs(await a - await b) < 1000 then 2000 else -1" 2000: got -1
-✗ test/control/test_tasks.pairs.warp:11 "job = go 3; once job finishes: x = 7; x" 7: got Error("outside the core: the unknown name x at 1:39 (no owner)")
-✗ test/control/test_tasks.pairs.warp:12 "job = go 3; once job pauses: print \"held\"; await job" 3: got Error("`once job pauses {print \"held\"}` fits no single variant of once(block), once(any) at 1:13")
+✗ test/control/test_tasks.pairs.warp:11 "job = go 3; once job finishes: x = 7; await job; x" 7: got Error("outside the core: the unknown name x at 1:50 (no owner)")
 ✗ test/control/test_tasks.warp:4 "download(u) := u + 1; job = go download(1); once the download finishes: y = 5; y + job" 7: got Error("`once the download finishes {y=5}` fits no single variant of once(block), once(any) at 1:45")
-✗ test/control/test_tasks.warp:5 "download(u) := u; job = go download(2); on download.stop : print \"cancelled\"; job" 2: got Error("outside the core: a function value in . at 1:44 (no owner)")
 ✗ test/control/test_test_pairs.warp:6 "rows = ['a'\t1\n'y'\tø\t3]; rows#2#3" 3: got Error("list of node at 2:11")
-✗ test/control/test_threads.warp:11 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); job.pause(); job.resume(); job" 300000: got Task{due:1793694998981, next:ø->(spin 300000), done:no, value:ø, failed:ø, awaited:no, context:ø, paused:no, finish_handlers:[]}
-✗ test/control/test_threads.warp:14 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stop job; try await job else -1" (-1): got ø
-✗ test/control/test_threads.warp:23 "f(ms) := { sleep(ms / 1000); ms }; job = go f(200); x = 0; once job finishes: x = 7; z = 1; x" 7: got 0
-✗ test/control/test_threads.warp:27 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300ms); stopped" 1: got 0
-✗ test/control/test_time_of_day.pairs.warp:5 "n = 1; on every friday at 17:00 { n = 2 }; n" 1: got Error("outside the core: the unknown name on: `use keys` defines it at 1:8 (no owner)")
+✗ test/control/test_time_of_day.pairs.warp:5 "n = 1; on every friday at 17:00 { n = 2 }; n" 1: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
 ✗ test/control/test_tree_find.warp:4 "page = {top: {logo: {type: \"image\", src: \"logo.png\"}}, body: [{type: \"text\"}, {type: \"image\", src: \"cat.jpg\"}]}\nsources = page find {type: \"image\", src}\nsources#1" "logo.png": got Error("`find {type: \"image\", src}` fits no single variant of find(text, text), find(list, function), find(text, function) at 2:16")
 ✗ test/control/test_tree_find.warp:7 "page = {top: {logo: {type: \"image\", src: \"logo.png\"}}, body: [{type: \"text\"}, {type: \"image\", src: \"cat.jpg\"}]}\nsources = page find {type: \"image\", src}\nsources#2" "cat.jpg": got Error("`find {type: \"image\", src}` fits no single variant of find(text, text), find(list, function), find(text, function) at 2:16")
 ✗ test/control/test_tree_find.warp:16 "page = {top: {logo: {type: \"image\", src: \"logo.png\"}}, body: [{type: \"text\"}, {type: \"image\", src: \"cat.jpg\"}]}\npattern Image = {type: \"image\", src}\ncount(page find Image)" 2: got 11
@@ -542,12 +574,18 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_unwrap_message.pairs.warp:4 "x:int?=5; x!+1" 6: got Error("outside the core: running a node as code (`x!`) at 1:11 (no owner)")
 ✗ test/control/test_value_methods_are_functions.pairs.warp:4 "fs = methods([1 2]); type(fs#1)" "function: (xs: list) -> list": got Error("outside the core: the call methods(…) at 1:15 (no owner)")
 ✗ test/control/test_value_methods_are_functions.pairs.warp:6 "xs = [1 2]; fs = xs.methods; type(fs#1)" "function: (xs: list) -> list": got Error("outside the core: the field methods of a list at 1:18 (no owner)")
+✗ test/control/test_variable_signals.pairs.warp:14 "x=10; total=0; on set x {total+=value}; x=3; x=4; total" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.pairs.warp:15 "x=3; n=0; on set x : n+=1; while x-->0 : x; n" 4: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.pairs.warp:21 "x=1; n=0; on change x : n+=1; x=1; x=2; x=2; x=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.pairs.warp:24 "a=1; total := a*2; n=0; on set total : n+=1; a=2; a=2; a=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_variable_signals.warp:7 "x=10\nonce x==5 {print \"countdown halfway done\"}\nwhile x-->0 : print x\nx" 0: got Error("outside the core: the unknown name print: `use primitive` defines it at 3:15 (no owner)")
 ✗ test/control/test_variable_signals.warp:13 "n=0; def stop(): 1; after stopped {n+=1}; for i in 1 to 3 { stop() }; n" 3: got Error("outside the core: the unknown name stop at 1:18 (no owner)")
 ✗ test/control/test_variable_signals.warp:14 "log=0; def save(x): x; before save: log=log*10+1; after saved: log=log*10+2; save(5); log" 12: got Error("outside the core: the call save(…) at 1:17 (no owner)")
 ✗ test/control/test_variable_signals.warp:18 "a=1; twice := a*2; quad := twice*2; seen=0; once quad > 10 {seen=quad}; a=2; a=3; a=4; seen" 12: got 0
+✗ test/control/test_variable_signals.warp:21 "a=1; b=2; sum := a+b; log=0; on change sum {log = log*10 + value}; a=2; a=2; b=1; log" 43: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.warp:25 "x=0; log=0; on change x {log=log*10+value}; def store(v){ global x; x=v }; store(1); store(1); store(2); log" 12: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_variable_signals.warp:31 "person = {name:\"A\", age:30}; n=0; whenever person.age > 30 {n+=1}; person.age = 31; person.age = 29; n" 1: got Error("no field age at 1:51")
-✗ test/control/test_variable_signals.warp:32 "p = {age:1, size:5}; log=0; on change p.age {log=log*10+value}; p.age = 2; p.age = 2; p.size = 6; p.age=3; log" 23: got Error("no field age at 1:41")
+✗ test/control/test_variable_signals.warp:32 "p = {age:1, size:5}; log=0; on change p.age {log=log*10+value}; p.age = 2; p.age = 2; p.size = 6; p.age=3; log" 23: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_variable_signals.warp:35 "x=0; hits=0; def big(){ global x; x > 3 }; whenever big() {hits+=1}; x=5; x=1; x=7; hits" 2: got 0
 ✗ test/control/test_variable_signals.warp:36 "x=0; hits=0; def size(){ global x; x }; whenever size() > 3 {hits+=1}; x=5; hits" 1: got 0
 ✗ test/control/test_variable_signals.warp:37 "x=0; n=0; def inner(){ global x; x }; def outer(){ inner() * 2 }; whenever outer() > 5 {n+=1}; x=3; n" 1: got 0
@@ -555,11 +593,6 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/control/test_when_signals.pairs.warp:7 "when 3 { 1 -> \"a\"; 3 -> \"c\" }" "c": got Error("outside the core: the unknown name when at 1:1 (no owner)")
 ✗ test/control/test_when_signals.pairs.warp:8 "x = 2; when (x) { 1 -> 10; else -> 20 }" 20: got Error("outside the core: the unknown name when at 1:8 (no owner)")
 ✗ test/control/test_when_signals.warp:4 "x = 0; hits = 0; when x > 1 { hits += 1 }; x = 1; x = 2; x = 3; x = 0; x = 5; hits" 2: got Error("outside the core: the unknown name when at 1:18 (no owner)")
-✗ test/errors/test_dropped_error_raises.pairs.warp:3 "write(\"no such folder/x.txt\", \"hi\"); 1" error: got 1
-✗ test/errors/test_dropped_error_raises.pairs.warp:6 "is_error(write(\"no such folder/x.txt\", \"hi\"))" yes: got no
-✗ test/errors/test_dropped_error_raises.pairs.warp:8 "try write(\"no such folder/x.txt\", \"hi\") catch e { 5 }" 5: got ø
-✗ test/errors/test_errors_one_rule.pairs.warp:2 "r = write(\"no such folder/x.txt\", \"hi\"); 1" error: got 1
-✗ test/errors/test_errors_one_rule.pairs.warp:3 "f(p) := write(p, \"hi\"); r = f(\"no such folder/x.txt\"); 2" error: got 2
 ✗ test/ffi/test_browser_dollar_names.pairs.warp:4 "$Math.floor(2.7)" 2: got Error("outside the core: the call floor(…) at 1:1 (foreign C call; owner c_imports did not claim it)")
 ✗ test/ffi/test_browser_dollar_names.pairs.warp:7 "document.title" "warp tests in the browser": got Error("outside the core: the unknown name document at 1:1 (no owner)")
 ✗ test/ffi/test_cargo_crates.pairs.warp:4 "use cargo strsim; strsim.levenshtein(\"kitten\", \"sitting\")" 3: got Error("outside the core: the call levenshtein(…) at 1:19 (no owner)")
@@ -586,9 +619,8 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/ffi/test_crate_errors.pairs.warp:6 "use cargo regex; try regex.Regex(\"a(\") else \"bad\"" "bad": got Error("outside the core: the call Regex(…) at 1:34 (no owner)")
 ✗ test/ffi/test_ffi.pairs.warp:10 "tests/warp/ffi/test_ffi_fmin.warp" 2.1: got Error("no file tests/warp/ffi/test_ffi_fmin.warp")
 ✗ test/ffi/test_ffi.pairs.warp:20 "tests/warp/ffi/sdl/sdl_init.warp" 0: got Error("no file tests/warp/ffi/sdl/sdl_init.warp")
-✗ test/ffi/test_ffi.pairs.warp:23 "tests/warp/ffi/sdl/sdl_init_quit.warp" 1: got Error("no file tests/warp/ffi/sdl/sdl_init_quit.warp")
-✗ test/ffi/test_ffi.pairs.warp:26 "tests/warp/ffi/sdl/sdl_get_ticks.warp" 100: got Error("no file tests/warp/ffi/sdl/sdl_get_ticks.warp")
 ✗ test/ffi/test_ffi.pairs.warp:29 "tests/warp/ffi/sdl/sdl_init_quit.warp" 1: got Error("no file tests/warp/ffi/sdl/sdl_init_quit.warp")
+✗ test/ffi/test_ffi.pairs.warp:26 "tests/warp/ffi/sdl/sdl_get_ticks.warp" 100: got Error("no file tests/warp/ffi/sdl/sdl_get_ticks.warp")
 ✗ test/ffi/test_ffi.warp:168 "import SDL_Quit from 'SDL2'\nSDL_Quit()\n42" 42: got Error("no C function SDL_Quit in its library, or the library not found")
 ✗ test/ffi/test_ffi_float_results.warp:4 "import GetTime from 'raylib'\nGetTime() >= 0.0" yes: got Error("no C function GetTime in its library, or the library not found")
 ✗ test/ffi/test_ffi_float_results.warp:6 "import GetFrameTime from 'raylib'\nGetFrameTime() + 1.5" 1.5: got Error("no C function GetFrameTime in its library, or the library not found")
@@ -646,7 +678,6 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/ffi/test_foreign_type_tests.pairs.warp:9 "use python math; math.floor(2.5) is a number" yes: got Error("outside the core: the unknown name a at 1:37 (no owner)")
 ✗ test/ffi/test_foreign_type_tests.pairs.warp:12 "use python math; math.isclose(1.0, 1.0)" yes: got Error("outside the core: the call isclose(…) at 1:31 (no owner)")
 ✗ test/ffi/test_host_words.pairs.warp:12 "x = read(\"Cargo.toml\"); print \"read\"; count(x) > 3" yes: got Error("read Cargo.toml failed: No such file or directory at 1:1")
-✗ test/ffi/test_js_callbacks.pairs.warp:4 "use js Promise; Promise.resolve(1)" 1: got Error("outside the core: the call resolve(…) at 1:17 (no owner)")
 ✗ test/ffi/test_js_callbacks.pairs.warp:7 "use js Promise; Promise.resolve(1)" 1: got Error("outside the core: the call resolve(…) at 1:17 (no owner)")
 ✗ test/ffi/test_js_callbacks.warp:4 "use js Array; use js JSON; JSON.stringify(Array.from([1, 2, 3], x => x * 2))" "[2,4,6]": got Error("outside the core: the call stringify(…) at 1:43 (no owner)")
 ✗ test/ffi/test_js_callbacks.warp:5 "use js Array; use js JSON; k = 10; JSON.stringify(Array.from([1, 2], x => x + k))" "[11,12]": got Error("outside the core: the call stringify(…) at 1:51 (no owner)")
@@ -922,10 +953,10 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/functions/test_map_list_fields.pairs.warp:14 "m = [{name:\"a\", age:3}, {name:\"b\", age:5}]; names of m" ['a', 'b']: got Error("outside the core: the field names of a list at 1:54 (no owner)")
 ✗ test/functions/test_map_list_fields.pairs.warp:15 "m = [{name:\"a\", age:3}, {name:\"b\", age:5}]; m.names" ['a', 'b']: got Error("outside the core: the field names of a list at 1:45 (no owner)")
 ✗ test/functions/test_map_list_fields.pairs.warp:18 "m = [{\"name\": \"a\"}, {\"name\": \"b\"}]; m.name" ['a', 'b']: got Error("outside the core: the field name of a list at 1:37 (no owner)")
-✗ test/functions/test_map_phrase.pairs.warp:4 "square:=it*it; map square on [1 2 3]" [1 4 9]: got Error("on is defined by keys and timers: say which, `use keys` or `use timers`")
-✗ test/functions/test_map_phrase.pairs.warp:5 "def square(x){x*x}; map square on [1 2 3]" [1 4 9]: got Error("on is defined by keys and timers: say which, `use keys` or `use timers`")
-✗ test/functions/test_map_phrase.pairs.warp:6 "xs=[1 2 3]; square:=it*it; map square on xs" [1 4 9]: got Error("on is defined by keys and timers: say which, `use keys` or `use timers`")
-✗ test/functions/test_map_phrase.pairs.warp:9 "square:=it*it; map function square on [1 2 3]" [1 4 9]: got Error("on is defined by keys and timers: say which, `use keys` or `use timers`")
+✗ test/functions/test_map_phrase.pairs.warp:4 "square:=it*it; map square on [1 2 3]" [1 4 9]: got Error("on is defined by keys and timers and tasks: say which, `use keys` or `use timers` or `use tasks`")
+✗ test/functions/test_map_phrase.pairs.warp:5 "def square(x){x*x}; map square on [1 2 3]" [1 4 9]: got Error("on is defined by keys and timers and tasks: say which, `use keys` or `use timers` or `use tasks`")
+✗ test/functions/test_map_phrase.pairs.warp:6 "xs=[1 2 3]; square:=it*it; map square on xs" [1 4 9]: got Error("on is defined by keys and timers and tasks: say which, `use keys` or `use timers` or `use tasks`")
+✗ test/functions/test_map_phrase.pairs.warp:9 "square:=it*it; map function square on [1 2 3]" [1 4 9]: got Error("on is defined by keys and timers and tasks: say which, `use keys` or `use timers` or `use tasks`")
 ✗ test/functions/test_map_phrase.pairs.warp:10 "square:=it*it; map &square on [1 2 3]" [1 4 9]: got Error("outside the core: the unknown name on: `use keys` defines it at 1:28 (no owner)")
 ✗ test/functions/test_map_phrase.pairs.warp:14 "square:=it*it; map &square [1 2 3]" [1 4 9]: got Error("int of node at 1:16")
 ✗ test/functions/test_member_phrases.pairs.warp:13 "\"äb\".size in bytes" 3: got no
@@ -1129,9 +1160,9 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/functions/test_variadic.pairs.warp:38 "xs = [2, 3]; [1, ...xs, 4, ...xs]" [1, 2, 3, 4, 2, 3]: got Error("outside the core: the unknown name *xs at 1:18 (no owner)")
 ✗ test/functions/test_variadic.warp:4 "def apply(f, *args){ f(*args) }; def add(a, b){ a + b }; apply(add, 3, 4)" 7: got Error("outside the core: the unknown name *args at 1:24 (no owner)")
 ✗ test/functions/test_words_in_phrases.pairs.warp:27 "xs = [3, 1, 2]; (xs sorted)#1" 1: got Error("outside the core: the call xs(…) at 1:18 (no owner)")
-✗ test/gpu/test_gpu_compute.pairs.warp:2 "gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }\", [1.0], 1)" [2]: got Error(" at 1:13")
+✗ test/gpu/test_gpu_compute.pairs.warp:2 "gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }\", [1.0], 1)" [2]: got Error("a warp value of another layout at 1:13")
 ✗ test/gpu/test_gpu_compute.pairs.warp:3 "try { gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }\", [1.0], 1) } catch e { \"reserved keyword\" in e.message }" yes: got no
-✗ test/gpu/test_gpu_int_lists.pairs.warp:4 "xs: [i32] = [1, 2, 3]; gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<i32>; @compute @workgroup_size(1) fn main(@builtin(global_invocation_id) id: vec3u) { cells[id.x] = cells[id.x] * -2; }\", xs, 3); xs" [-2, -4, -6]: got Error(" at 1:36")
+✗ test/gpu/test_gpu_int_lists.pairs.warp:4 "xs: [i32] = [1, 2, 3]; gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<i32>; @compute @workgroup_size(1) fn main(@builtin(global_invocation_id) id: vec3u) { cells[id.x] = cells[id.x] * -2; }\", xs, 3); xs" [-2, -4, -6]: got Error("a warp value of another layout at 1:36")
 ✗ test/lists/test_aliased_changes.pairs.warp:8 "xs = [5 6 7]; ys = xs; xs.pop(0); ys#1 * 10 + count(ys)" 62: got Error("outside the core: a call of pop with 2 arguments at 1:24 (no owner)")
 ✗ test/lists/test_aliased_changes.pairs.warp:9 "m = {a:1 b:2}; n = m; m.pop(\"a\"); count(n)" 1: got Error("outside the core: a call of pop with 2 arguments at 1:23 (no owner)")
 ✗ test/lists/test_aliased_changes.pairs.warp:12 "xs = [1 2 3]; ys = xs; xs.clear(); count(ys)" 0: got Error("outside the core: the unknown name clear: `use draw` defines it at 1:24 (no owner)")
@@ -1290,10 +1321,9 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/modules/test_include.pairs.warp:9 "use test/fixtures/counter; counter" 10: got Error("outside the core: the unknown name counter at 1:28 (no owner)")
 ✗ test/modules/test_include.pairs.warp:12 "require square; square 7" 49: got Error("no module, library or package named square: no square.warp beside the program or in lib/; a package is used by its path, use \"packages/square/square.warp\"")
 ✗ test/modules/test_include.pairs.warp:13 "import square; square 7" 49: got Error("no module, library or package named square: no square.warp beside the program or in lib/; a package is used by its path, use \"packages/square/square.warp\"")
-✗ test/modules/test_include.pairs.warp:14 "use square; square 7" 49: got Error("no module, library or package named square: no square.warp beside the program or in lib/; a package is used by its path, use \"packages/square/square.warp\"")
+✗ test/modules/test_include.pairs.warp:24 "use square; square 7" 49: got Error("no module, library or package named square: no square.warp beside the program or in lib/; a package is used by its path, use \"packages/square/square.warp\"")
 ✗ test/modules/test_include.pairs.warp:18 "include test/fixtures/nested/outer; outer_value" 2: got Error("outside the core: the unknown name outer_value at 1:37 (no owner)")
 ✗ test/modules/test_include.pairs.warp:21 "include test/fixtures/cycle_a; a_done + b_done" 3: got Error("outside the core: the unknown name a_done at 1:32 (no owner)")
-✗ test/modules/test_include.pairs.warp:24 "use square; square 7" 49: got Error("no module, library or package named square: no square.warp beside the program or in lib/; a package is used by its path, use \"packages/square/square.warp\"")
 ✗ test/modules/test_include.warp:4 "include test/fixtures/counter; include test/fixtures/counter; counter" 11: got Error("outside the core: the unknown name counter at 1:63 (no owner)")
 ✗ test/modules/test_json_parse_form.warp:4 "use json\nm = parse(\"{\\\"a\\\": 1}\")\nm is map" yes: got no
 ✗ test/modules/test_json_parse_form.warp:7 "use json; m = parse(\"{\\\"a\\\": 1}\")\nm is map" yes: got no
@@ -1306,9 +1336,9 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/modules/test_module_function_dir.warp:4 "use math\ncount(dir(is_square))" 4: got 0
 ✗ test/modules/test_module_function_dir.warp:8 "use math\nstr(type(is_square))" "function: (n: int) -> bool": got "class function"
 ✗ test/modules/test_module_signals.pairs.warp:4 "use test/fixtures/stored_settings; module_theme" "light": got Error("outside the core: the unknown name module_theme at 1:36 (no owner)")
-✗ test/modules/test_module_signals.warp:4 "use test/fixtures/settings_store; seen = 0; on change theme { seen += 1 }; toggle(); toggle(); seen" 2: got Error("outside the core: the unknown name toggle at lib/signals.warp:30 (in variable_listen) (no owner)")
-✗ test/modules/test_module_signals.warp:5 "use test/fixtures/settings_store; on change theme { print value }; toggle(); theme" "light": got Error("outside the core: the unknown name toggle at lib/signals.warp:30 (in variable_listen) (no owner)")
-✗ test/modules/test_module_signals.warp:8 "use test/fixtures/stored_settings; seen = 0; on change module_theme { seen += 1 }; toggle_theme(); seen" 1: got Error("outside the core: the unknown name toggle_theme at lib/signals.warp:30 (in variable_listen) (no owner)")
+✗ test/modules/test_module_signals.warp:4 "use test/fixtures/settings_store; seen = 0; on change theme { seen += 1 }; toggle(); toggle(); seen" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/modules/test_module_signals.warp:5 "use test/fixtures/settings_store; on change theme { print value }; toggle(); theme" "light": got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/modules/test_module_signals.warp:8 "use test/fixtures/stored_settings; seen = 0; on change module_theme { seen += 1 }; toggle_theme(); seen" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/modules/test_module_slices.pairs.warp:4 "use compute_toys; compute_toy(\"fn main_image(id: vec3u) {}\") contains \"struct Time\"" yes: got Error("not a text at 1:31")
 ✗ test/modules/test_netbase_package.warp:4 "use \"../../samples/storage/netbase.warp\"; netbase_path(\"all cities with population > 100000\")" "all%20cities%20with%20population%20%3E%20100000": got Error("outside the core: the unknown name query at 5:11 (no owner)")
 ✗ test/modules/test_package_registry.pairs.warp:4 "use \"../../packages/uniscript/uniscript.warp\"; uniscript(\"<:alpha/>\")" "α": got Error("./../../packages/uniscript/uniscript.warp: no such file to use")
@@ -1426,7 +1456,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/node/test_comment_meta.warp:16 "use comments\n/* the answer */\nx = 42\nx.@comment" "the answer": got Error("outside the core: the field @comment of a int at 4:1 (no owner)")
 ✗ test/node/test_comment_meta.warp:20 "use comments\n// Comments attach to the next element as metadata\n// This documents the greeting variable\ngreeting: \"Hello\"\ngreeting" "Hello": got Error("outside the core: the unknown name greeting at 5:1 (no owner)")
 ✗ test/node/test_comment_meta.warp:36 "use comments\nuse strict\n// doc\nx = 1\nx.@comment" "doc": got Error("outside the core: the field @comment of a int at 5:1 (no owner)")
-✗ test/node/test_eval_word.pairs.warp:6 "x = 5; eval(\"x*2\")" 10: got  eval:outside the core:the unknown name x at/tmp/warp-native-2168.wasm.eval.warp:1:1 (no owner) 
+✗ test/node/test_eval_word.pairs.warp:6 "x = 5; eval(\"x*2\")" 10: got  eval:outside the core:the unknown name x at/tmp/warp-native-6207.wasm.eval.warp:1:1 (no owner) 
 ✗ test/node/test_eval_written_atoms.pairs.warp:4 "f(c: text) := eval(c); 3.14 < f(\"π\") < 3.15" yes: got Error("wasm trap: cast failure at 103:25")
 ✗ test/node/test_eval_written_atoms.pairs.warp:5 "f(c: text) := eval(c); 6.28 < f(\"2*π\") < 6.29" yes: got Error("wasm trap: cast failure at 103:25")
 ✗ test/node/test_grouped_parts.pairs.warp:4 "x = data [(a * 2)]; (x#1).op" "*": got Error("no field op at 1:22")
@@ -1839,7 +1869,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/parser/test_rust_paths.pairs.warp:20 "i64::MIN < 0" yes: got Error("outside the core: the unknown name MIN at 1:6 (no owner)")
 ✗ test/parser/test_rust_paths.pairs.warp:23 "3.to_string()" "3": got Error("outside the core: the call to_string(…) at 1:1 (no owner)")
 ✗ test/parser/test_rust_paths.warp:4 "use std::collections::HashMap; let mut m = HashMap::new(); m[\"x\"] = 2; m[\"x\"]" 2: got Error("outside the core: the unknown name mut at 1:36 (no owner)")
-✗ test/parser/test_scheme_relative_url.warp:4 "header = fetch \"://warp.pannous.com/lib/libc.h\"\nheader.contains(\"size_t\")" yes: got Error("a GPU list [f32] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first at 2:1")
+✗ test/parser/test_scheme_relative_url.warp:4 "header = fetch \"://warp.pannous.com/lib/libc.h\"\nheader.contains(\"size_t\")" yes: got Error("extended list unlisted at 2:1")
 ✗ test/parser/test_scheme_relative_url.warp:6 "header = fetch ://warp.pannous.com/lib/libc.h\nheader.contains(\"size_t\")" yes: got no
 ✗ test/parser/test_spaced_children.pairs.warp:4 "x = a{ b:2 c { d:3 } }; x.c.d" 3: got Error("no field c at 1:25")
 ✗ test/parser/test_spaced_required_fields.pairs.warp:4 "class person{name! email?}; p=person{name:\"Jo\"}; p.name" "Jo": got Error("outside the core: a field person does not declare at 1:38 (no owner)")
@@ -1988,7 +2018,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/text/test_print_arguments.pairs.warp:14 "print()" ø: got Error("outside the core: the unknown name print: `use primitive` defines it (no owner)")
 ✗ test/text/test_print_arguments.pairs.warp:15 "x = print(); x" ø: got Error("outside the core: the unknown name print: `use primitive` defines it at 1:1 (no owner)")
 ✗ test/text/test_print_gives_nothing.pairs.warp:8 "print()" ø: got Error("outside the core: the unknown name print: `use primitive` defines it (no owner)")
-✗ test/text/test_print_juxtaposed.pairs.warp:5 "x=10; on set x {print \"x changed to \" value}; x=3" ø: got 3
+✗ test/text/test_print_juxtaposed.pairs.warp:5 "x=10; on set x {print \"x changed to \" value}; x=3" ø: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/text/test_quoted_container_texts.pairs.warp:4 "xs = [\"a\", \"b\"]; string(xs)" "['a', 'b']«
 ✗ test/text/test_quoted_container_texts.warp:4 "class Point{x:int name:text}; p = Point{x:1 name:\"a\"}; string(p)" "Point{x:1 name:'a'}": got "Point{x: 1, name: 'a'}"
 ✗ test/text/test_selector_prepositions.pairs.warp:8 "length of words in \"hello world\"" 2: got Error("outside the core: a function value in . at 1:11 (no owner)")
@@ -2004,7 +2034,6 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/text/test_string.pairs.warp:39 "k='hi';k#1='a';k#1" "a": got Error("outside the core: an assignment to an element of a text at 1:10 (no owner)")
 ✗ test/text/test_string.pairs.warp:40 "k='hi';i=1;k#i=97;k#i" "a": got Error("outside the core: an assignment to an element of a text at 1:14 (no owner)")
 ✗ test/text/test_string.pairs.warp:42 "k='hi';k#1=65;k#2" "i": got Error("outside the core: an assignment to an element of a text at 1:10 (no owner)")
-✗ test/text/test_string.pairs.warp:48 "x='abcde';x#4='x';x#4" "x": got Error("outside the core: an assignment to an element of a text at 1:13 (no owner)")
 ✗ test/text/test_string.pairs.warp:49 "x='abcde';x#4='x';x#4" "x": got Error("outside the core: an assignment to an element of a text at 1:13 (no owner)")
 ✗ test/text/test_string.pairs.warp:50 "x='abcde';x#4='x';x#5" "e": got Error("outside the core: an assignment to an element of a text at 1:13 (no owner)")
 ✗ test/text/test_string.pairs.warp:51 "x='abcde';x#4='x';x[3]" "x": got Error("outside the core: an assignment to an element of a text at 1:13 (no owner)")
@@ -2184,7 +2213,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/types/test_declared_list_marks.warp:4 "names: texts = [\"hi\"]; ys = names; try { ys.add(1) } catch e { \"caught\" }" "caught": got ["hi", 1]
 ✗ test/types/test_dispatch.pairs.warp:4 "class Deck{n:int}; def size(d:Deck):=d.n; size(\"abc\") + size(Deck(2))" 5: got Error("no field n at 1:38")
 ✗ test/types/test_dispatch.pairs.warp:7 "def sort(x):=0; sort([2,1]) == [1 2]" yes: got no
-✗ test/types/test_dispatch.pairs.warp:11 "class Deck{n:int; def sort():=n*2}; d=Deck(4); sort(d)" 8: got Error("a GPU list [f32] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first at 1:53")
+✗ test/types/test_dispatch.pairs.warp:11 "class Deck{n:int; def sort():=n*2}; d=Deck(4); sort(d)" 8: got Error("extended list unlisted at 1:53")
 ✗ test/types/test_dispatch.pairs.warp:15 "class Bag{items}; def sum(b:Bag):=7; sum(Bag([1])) + sum([1,2])" 10: got 14
 ✗ test/types/test_dispatch.pairs.warp:21 "class C{x:int; def doubled():=x*2}; C(3).doubled() + 2.double()" 8: got Error("outside the core: the call double(…) at 1:54 (no owner)")
 ✗ test/types/test_dispatch.warp:11 "class Vec2{x:int}; def add(a:Vec2, b:Vec2):=Vec2(a.x+b.x); Vec2(1).add(Vec2(2)).x * 10 + add(Vec2(3), Vec2(4)).x" 37: got Error("outside the core: the call add(…) at 1:99 (no owner)")
@@ -2200,7 +2229,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/types/test_empty_named_key.warp:4 "class Cell{empty: bool}\nc = Cell(yes)\nc.empty" yes: got Error("no field empty at 3:1")
 ✗ test/types/test_empty_reflection.pairs.warp:4 "class E{}; for f in fields(E) {print f}; 3" 3: got Error("outside the core: the call fields(…) at 1:28 (no owner)")
 ✗ test/types/test_empty_reflection.pairs.warp:7 "class B{n:int}; n = 0; for m in methods(B) {n += 1}; n" 0: got Error("outside the core: the call methods(…) at 1:41 (no owner)")
-✗ test/types/test_empty_reflection.pairs.warp:10 "eval('class B{n:int}; for m in methods(B) {print m}; 3')" 3: got  eval:outside the core:the call (methods ø to ø) at/tmp/warp-native-17627.wasm.eval.warp:1:34 (no owner) 
+✗ test/types/test_empty_reflection.pairs.warp:10 "eval('class B{n:int}; for m in methods(B) {print m}; 3')" 3: got  eval:outside the core:the call (methods ø to ø) at/tmp/warp-native-23447.wasm.eval.warp:1:34 (no owner) 
 ✗ test/types/test_empty_type_aliases.pairs.warp:4 "x = ø; x is unit" yes: got Error("outside the core: a test of the type unit at 1:8 (no owner)")
 ✗ test/types/test_empty_type_aliases.pairs.warp:5 "x = 3; x is unit" no: got Error("outside the core: a test of the type unit at 1:8 (no owner)")
 ✗ test/types/test_empty_type_aliases.pairs.warp:6 "f(x:any) := x is unit; f(ø)" yes: got Error("outside the core: a test of the type unit at 1:13 (no owner)")
@@ -2535,7 +2564,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/types/test_typed_arrays.pairs.warp:11 "x : 10 float; x.length" 10: got Error("outside the core: the unknown name x at 1:15 (no owner)")
 ✗ test/types/test_typed_arrays.pairs.warp:12 "x : 3 text; x.length" 3: got Error("outside the core: the unknown name x at 1:13 (no owner)")
 ✗ test/types/test_typed_arrays.pairs.warp:13 "x:float[4]; x.length" 4: got Error("outside the core: the unknown name x at 1:13 (no owner)")
-✗ test/types/test_typed_arrays.pairs.warp:21 "if 0 { x = int[3] }; x" ø: got Error("a GPU list [f32] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first at 1:22")
+✗ test/types/test_typed_arrays.pairs.warp:21 "if 0 { x = int[3] }; x" ø: got Error("extended list unlisted at 1:22")
 ✗ test/types/test_typed_builtins.pairs.warp:16 "insert.params" ["xs", 'x', "at"]: got ["xs", "at", 'x']
 ✗ test/types/test_types.pairs.warp:4 "func add1(x int) int { return x + 1 };add1(41)" 42: got Error("outside the core: the unknown name func at 1:1 (no owner)")
 ✗ test/types/test_types.pairs.warp:15 "'2.1' as int" 2: got Error("invalid number at 1:1")
@@ -2584,11 +2613,11 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/wasm/test_wasm.pairs.warp:24 "addy x:= y=2 ; x+y ; addy 3" 5: got Error("outside the core: the unknown name addy at 1:1 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:25 "grows x:=x*2;grows(4)" 8: got Error("outside the core: the unknown name grows at 1:1 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:30 "fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)" 13: got Error("outside the core: the unknown name fib at 1:1 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:32 "fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)" 13: got -11
-✗ test/wasm/test_wasm.pairs.warp:33 "fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)" 13: got Error("outside the core: the operator then on int at 1:39 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:137 "√ π ²" π: got 3.141592653589793
-✗ test/wasm/test_wasm.pairs.warp:145 "√3^2" 3: got 2.9999999999999996
-✗ test/wasm/test_wasm.pairs.warp:235 "i*=3" 0: got Error("outside the core: the unknown name i at 1:1 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:313 "fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)" 13: got -11
+✗ test/wasm/test_wasm.pairs.warp:314 "fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)" 13: got Error("outside the core: the operator then on int at 1:39 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:373 "√ π ²" π: got 3.141592653589793
+✗ test/wasm/test_wasm.pairs.warp:506 "√3^2" 3: got 2.9999999999999996
+✗ test/wasm/test_wasm.pairs.warp:361 "i*=3" 0: got Error("outside the core: the unknown name i at 1:1 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:268 "¬ 1" 0: got  no 1 
 ✗ test/wasm/test_wasm.pairs.warp:269 "¬ 0" 1: got  no 0 
 ✗ test/wasm/test_wasm.pairs.warp:283 "¬ (0 ⋁ 0 ∧ 1)" 1: got  no 0 
@@ -2596,22 +2625,16 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/wasm/test_wasm.pairs.warp:309 "if(2,3,4)" 3: got Error("outside the core: the operator if with nothing before it at 1:4 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:310 "if(condition=2,then=3)" 3: got Error("outside the core: the operator if with nothing before it at 1:4 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:311 "if(condition=2,then=3,else=4)" 3: got Error("outside the core: the operator if with nothing before it at 1:4 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:313 "fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)" 13: got -11
-✗ test/wasm/test_wasm.pairs.warp:314 "fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)" 13: got Error("outside the core: the operator then on int at 1:39 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:325 "x=y=0;width=height=400;while y++<height and x++<width: nop;y" 400: got Error("outside the core: the unknown name nop at 1:56 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:369 "x=y=0;width=height=400;while y++<height and x++<width: nop;y" 400: got Error("outside the core: the unknown name nop at 1:56 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:331 "x:41;if x>1 then 2 else 3" 2: got Error("outside the core: the unknown name x at 1:9 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:332 "x:41;if x<1 then 2 else 3" 3: got Error("outside the core: the unknown name x at 1:9 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:333 "x:41;x+1" 42: got Error("outside the core: the unknown name x at 1:6 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:352 "i=3;k='αβγδε';k#i='Γ';k#i" "Γ": got Error("outside the core: an assignment to an element of a text at 1:17 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:356 "test42+1" 43: got Error("outside the core: the unknown name test42 at 1:1 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:361 "i*=3" 0: got Error("outside the core: the unknown name i at 1:1 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:362 "√π²" π: got 3.141592653589793
+✗ test/wasm/test_wasm.pairs.warp:376 "√π²" π: got 3.141592653589793
 ✗ test/wasm/test_wasm.pairs.warp:365 "x=0;while x++<11: nop;x" 11: got Error("outside the core: the unknown name nop at 1:19 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:369 "x=y=0;width=height=400;while y++<height and x++<width: nop;y" 400: got Error("outside the core: the unknown name nop at 1:56 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:373 "√ π ²" π: got 3.141592653589793
 ✗ test/wasm/test_wasm.pairs.warp:374 "√π ²" π: got 3.141592653589793
 ✗ test/wasm/test_wasm.pairs.warp:375 "√ π²" π: got 3.141592653589793
-✗ test/wasm/test_wasm.pairs.warp:376 "√π²" π: got 3.141592653589793
 ✗ test/wasm/test_wasm.pairs.warp:378 "int i=π*1000000" 3141592: got Error("truncated int at 1:5")
 ✗ test/wasm/test_wasm.pairs.warp:379 "π*1000000." 3141592.653589793: got 1000000*π
 ✗ test/wasm/test_wasm.pairs.warp:387 "ceil 3.7" 4: got Error("outside the core: the call ceil(…) at 1:1 (foreign C call; owner c_imports did not claim it)")
@@ -2624,14 +2647,12 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/wasm/test_wasm.pairs.warp:458 "use math; 10⌟100" 0.5: got Error("outside the core: the call operator_⌟(…) at 1:11 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:459 "10⌟100" 0.5: got Error("outside the core: the call operator_⌟(…) at 1:1 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:460 "₁₀⌟100" 2: got Error("outside the core: the call operator_⌟(…) at 1:2 (no owner)")
-✗ test/wasm/test_wasm.pairs.warp:461 "use log;ℯ = 2.7182818284590;ln(ℯ)" 1: got Error("outside the core: an assignment to a codepoint at 1:13 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:462 "use log;ℯ = 2.7182818284590;ln(ℯ)" 1: got Error("outside the core: an assignment to a codepoint at 1:13 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:463 "ℯ = 2.7182818284590;ln(ℯ*ℯ)" 2: got Error("outside the core: an assignment to a codepoint at 1:5 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:464 "ln(1)" 0: got Error("outside the core: the call ln(…) at 1:4 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:468 "ln(ℯ)" 1: got Error("outside the core: the call ln(…) at 1:4 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:478 "sum=0;for i=1..3;sum+=i;sum" 6: got Error("outside the core: the call i(…) at 1:7 (no owner)")
 ✗ test/wasm/test_wasm.pairs.warp:504 "√3**2" 3: got 2.9999999999999996
-✗ test/wasm/test_wasm.pairs.warp:506 "√3^2" 3: got 2.9999999999999996
 ✗ test/wasm/test_wasm.warp:11 "fac:= if it<=0 : 1 else it * fac it-1; fac(5)" (5*4*3*2): got Error("outside the core: a value after an assignment at 1:1 (no owner)")
 ✗ test/wasm/test_wasm.warp:14 "fac:= it<=0 ? 1 : it * fac it-1; fac(5)" (5*4*3*2): got Error("outside the core: a value after an assignment at 1:1 (no owner)")
 ✗ test/wasm/test_wasm.warp:17 "fac:= it<=0 or it * fac it-1; fac(5)" (5*4*3*2): got Error("outside the core: a value after an assignment at 1:1 (no owner)")
@@ -2648,7 +2669,7 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/web/test_script_words.pairs.warp:4 "use script; stdin()" "": got  the host word not os.stdin is  in warp yet  
 ✗ test/web/test_script_words.warp:4 "use script; write(cwd + \"/data/test_script_words/here.txt\", \"x\"); exists(\"data/test_script_words/here.txt\")" yes: got no
 ✗ test/web/test_server_rpc_everywhere.warp:4 "users := fetch \"http://127.0.0.1:9/users\" ?? [\"none\"]\ncount(users)" 1: got Error("no length of error the host word net.get is not in warp yet: only a list, a text or a character has one at 2:7")
-✗ test/web/test_task_voices.warp:11 "use sound\nplay(C4, 5s)\njob = go { play(E4, 5s)\nsound_queued() > 6 }\nawait job" yes: got no
+✗ test/web/test_task_voices.warp:11 "use sound\nplay(C4, 5s)\njob = go { play(E4, 5s)\nsound_queued() > 6 }\nawait job" yes: timed out after 30 s
 ✗ test/web/test_uniscript.pairs.warp:4 "use strict; use uniscript; uniscript(\"<:greek a/>\")" "α": got Error("no module, library or package named uniscript: no uniscript.warp beside the program or in lib/; a package is used by its path, use \"packages/uniscript/uniscript.warp\"")
 ✗ test/web/test_uniscript.warp:4 "use uniscript; t=\"∀x∈ℝ: 𝔄 A󠁲 𓀀𓑀 <: é\"; uniscript(unicode_to_uniscript(t)) == t" yes: got Error("no module, library or package named uniscript: no uniscript.warp beside the program or in lib/; a package is used by its path, use \"packages/uniscript/uniscript.warp\"")
 ✗ test/web/test_webgpu.pairs.warp:4 "try gpu_render(\"@fragment fn main( {\", 2, 2) else 7" 7: got Error("the host word gpu_render is not in warp yet")
@@ -2753,386 +2774,413 @@ note: warp.wasm built by warp-seed seed-2026-11-02-b6009fc3 (v1.6.1 binary); 183
 ✗ test/welcoming/test_welcoming_sugar.pairs.warp:13 "a;b;c" "c": got Error("outside the core: the unknown name a at 1:1 (no owner)")
 ✗ test/welcoming/test_welcoming_sugar.pairs.warp:39 "xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs" ['a', 'z', 'b']: got Error("outside the core: a char where a int is needed at 1:30 (no owner)")
 
-## newly failing vs test/results.txt (75)
-✗ test/control/test_error_branch_kind.pairs.warp:17 "x=error(\"bad\"); is_error(x)" 1
-✗ test/control/test_error_not_in_data.pairs.warp:12 "e = try 10/0; g = e; if g failed then 1 else 2" 1
-✗ test/control/test_error_not_in_data.pairs.warp:18 "e = try 10/0; a, b = e, 2; if a failed then 1 else 2" 1
-✗ test/control/test_error_value_return.warp:4 "f(x) := if x < 0 then error(\"neg\") else x; r = f(-1); if r failed then 1 else 2" 1
-✗ test/control/test_error_values.pairs.warp:10 "e = error(\"bad\"); print e; 2" 2
-✗ test/control/test_error_values.pairs.warp:13 "r = error(\"bad\"); r is error" yes
-✗ test/control/test_error_values.pairs.warp:19 "r = error(\"bad value\"); if 0 then r - 1 else 5" 5
-✗ test/control/test_error_values.pairs.warp:20 "r = error(\"bad value\"); type(r) == error" yes
-✗ test/control/test_error_values.pairs.warp:6 "e = error(\"bad\"); e.message" "bad"
-✗ test/control/test_key_name_case.warp:4 "seen = \"\"\non key { mode = \"up\"\n seen = if mode == \"up\" then \"same\" else \"differs\" }\nemit key{key:\"q\"}\nseen" "same"
-✗ test/control/test_key_name_case.warp:9 "seen = \"\"\non key { left = 3\n seen = if 3 == left then \"same\" else \"differs\" }\nemit key{key:\"q\"}\nseen" "same"
-✗ test/control/test_key_names.warp:35 "seen = \"\"\non key { seen = event.key }\nemit key{key:\"q\"}\nseen" "q"
-✗ test/control/test_lowercase_key_names.warp:30 "seen = \"\"\non key { up = 3; seen = up }\nemit key{key:\"q\"}\nseen" 3
-✗ test/control/test_lowercase_key_names.warp:36 "seen = \"\"\non key { left = 3\n if 3 == left { seen = \"same\" } else { seen = \"differs\" } }\nemit key{key:\"q\"}\nseen" "same"
-✗ test/control/test_or_error_type.pairs.warp:8 "x: int or error = error(\"e\"); if x failed then 1 else 2" 1
-✗ test/control/test_or_error_type.warp:7 "def f(x) as int? := if x < 0 then error(\"neg\") else x; r = f(-1); if r failed then 1 else 2" 1
-✗ test/control/test_page_events.pairs.warp:10 "price = 3; on key { price = 10 }; emit key{key:\"a\"}; price" 10
-✗ test/control/test_print_empty.pairs.warp:4 "print ø" ø
-✗ test/control/test_print_empty.pairs.warp:5 "print nil" ø
-✗ test/control/test_print_empty.pairs.warp:7 "print ø; 3" 3
-✗ test/control/test_reactive_ports.warp:23 "level = 0; once alarm {level = event.level}; emit alarm{level: 3}; emit alarm{level: 5}; level" 3
+## newly failing vs test/results.txt
+98 cases
+✗ test/control/test_change_of_expression.pairs.warp:2 "b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:3 "b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 5; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:4 "b = 1; c = 2; n = 0; on change b * c { n += 1 }; b = 5; c = 3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:6 "b = 1; on change b { print 1 }; test b == 1" ø: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_change_of_expression.pairs.warp:7 "b = 1; n = 0; on change b { n += 1 }; b = 2; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_clock_timers.pairs.warp:3 "n = 1; on every day at 9:30 { n = 2 }; n" 1: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
+✗ test/control/test_clock_timers.pairs.warp:4 "n = 1; on every day at 21:15 {}; n + 1" 2: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
+✗ test/control/test_empty_reset_in_if.pairs.warp:7 "x = 1; f = []; on change x { f = [] }; x = 2; 7" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_error_branch_kind.pairs.warp:17 "x=error(\"bad\"); is_error(x)" 1: got Error("bad at 1:1")
+✗ test/control/test_error_not_in_data.pairs.warp:12 "e = try 10/0; g = e; if g failed then 1 else 2" 1: got Error("divide by zero at 1:15")
+✗ test/control/test_error_not_in_data.pairs.warp:18 "e = try 10/0; a, b = e, 2; if a failed then 1 else 2" 1: got Error("divide by zero at 1:15")
+✗ test/control/test_error_value_return.warp:4 "f(x) := if x < 0 then error(\"neg\") else x; r = f(-1); if r failed then 1 else 2" 1: got Error("neg at 1:12")
+✗ test/control/test_error_values.pairs.warp:6 "e = error(\"bad\"); e.message" "bad": got Error("bad at 1:1")
+✗ test/control/test_error_values.pairs.warp:10 "e = error(\"bad\"); print e; 2" 2: got Error("bad at 1:1")
+✗ test/control/test_error_values.pairs.warp:13 "r = error(\"bad\"); r is error" yes: got Error("bad at 1:1")
+✗ test/control/test_error_values.pairs.warp:19 "r = error(\"bad value\"); if 0 then r - 1 else 5" 5: got Error("bad value at 1:1")
+✗ test/control/test_error_values.pairs.warp:20 "r = error(\"bad value\"); type(r) == error" yes: got Error("bad value at 1:1")
+✗ test/control/test_event_footguns.warp:47 "for b in [1, 2] { x = b }; b = 1; c = 2; total := b + c; changes = 0; on change total { changes += 1 }; b = 5; changes" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_key_name_case.warp:4 "seen = \"\"\non key { mode = \"up\"\n seen = if mode == \"up\" then \"same\" else \"differs\" }\nemit key{key:\"q\"}\nseen" "same": got Error("the system value keys pressed is not in warp yet")
+✗ test/control/test_key_name_case.warp:9 "seen = \"\"\non key { left = 3\n seen = if 3 == left then \"same\" else \"differs\" }\nemit key{key:\"q\"}\nseen" "same": got Error("the system value keys pressed is not in warp yet")
+✗ test/control/test_key_names.warp:35 "seen = \"\"\non key { seen = event.key }\nemit key{key:\"q\"}\nseen" "q": got Error("the system value keys pressed is not in warp yet")
+✗ test/control/test_listener_colon_bodies.pairs.warp:5 "global n = 0; x = 1; on set x: n += 1; x = 1; x = 2; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_listener_colon_bodies.pairs.warp:6 "global n = 0; x = 1; on change x: n += 1; x = 1; x = 2; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_lowercase_key_names.warp:30 "seen = \"\"\non key { up = 3; seen = up }\nemit key{key:\"q\"}\nseen" 3: got Error("the system value keys pressed is not in warp yet")
+✗ test/control/test_lowercase_key_names.warp:36 "seen = \"\"\non key { left = 3\n if 3 == left { seen = \"same\" } else { seen = \"differs\" } }\nemit key{key:\"q\"}\nseen" "same": got Error("the system value keys pressed is not in warp yet")
+✗ test/control/test_on_set_value.pairs.warp:5 "x = 3; on set x { print \"v\" }; y = (x = 7); y" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_or_error_type.pairs.warp:8 "x: int or error = error(\"e\"); if x failed then 1 else 2" 1: got Error("e at 1:25")
+✗ test/control/test_or_error_type.warp:7 "def f(x) as int? := if x < 0 then error(\"neg\") else x; r = f(-1); if r failed then 1 else 2" 1: got Error("neg at 1:13")
+✗ test/control/test_page_events.pairs.warp:10 "price = 3; on key { price = 10 }; emit key{key:\"a\"}; price" 10: got Error("the system value keys pressed is not in warp yet")
+✗ test/control/test_prefix_keyword_condition.pairs.warp:5 "n = 1; on every day at 9:30 { n = 2 }; n" 1: got Error("on is defined by timers and tasks: say which, `use timers` or `use tasks`")
+✗ test/control/test_print_empty.pairs.warp:4 "print ø" ø: got Error("outside the core: the unknown name print: `use primitive` defines it at 1:1 (no owner)")
+✗ test/control/test_print_empty.pairs.warp:5 "print nil" ø: got Error("outside the core: the unknown name print: `use primitive` defines it at 1:1 (no owner)")
+✗ test/control/test_print_empty.pairs.warp:7 "print ø; 3" 3: got ø
+✗ test/control/test_reactive_ports.pairs.warp:8 "p = {age: 1}; n = 0; on set p {n += 1}; p.age = 3; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:21 "x = 1; diff = 0; on change x {diff = value - old}; x = 5; diff" 4: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:24 "x = 1; log = 0; on set x {log = log*10 + old}; x = 2; x = 3; log" 12: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.pairs.warp:28 "old = 9; x = 1; on change x {print old}; x = 2; old" 9: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.warp:6 "a = 2; square := a*a; sum = 0; on change square {sum += value}; a = 3; a = 3; a = 4; sum" 25: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_reactive_ports.warp:23 "level = 0; once alarm {level = event.level}; emit alarm{level: 3}; emit alarm{level: 5}; level" 3: got Error("outside the core: the call live(…) at lib/prelude.warp:988 (in listen) (no owner)")
+✗ test/control/test_reactive_ports.warp:35 "price = 3\ncount = 2\ntotal := price * count\nwhenever total > 10 { print \"big order: \" total }\non change total { print \"total is now \" value }\ncount = 5\ntotal" 15: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signal_writes.pairs.warp:2 "x=3; n=0; on set x {n+=1}; x--; x++; x++; n" 3: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signal_writes.pairs.warp:3 "x=3; seen=0; on change x {seen+=1}; y = x--; [y, x]" [3, 2]: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signal_writes.pairs.warp:4 "xs=[1,2]; n=0; on change xs {n+=1}; xs#1 = 9; xs#1 = 9; n" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signal_writes.pairs.warp:5 "xs=[1,2]; first=0; on change xs {first+=old#1}; xs#1 = 9; first" 1: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:2 "x=10; total=0; on set x {total+=value}; x=3; x=4; total" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:3 "x=1; n=0; on change x {n+=1}; x=1; x=2; x=2; x=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:6 "a=1; total := a*2; n=0; on set total {n+=1}; a=2; a=2; a=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_signals_lib.pairs.warp:7 "a=1; total := a*2; s=0; on set total {s+=value}; a=2; a=3; s" 10: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
 ✗ test/control/test_system_signals.warp:4 "n=0; on every 10 ms { if n < 3 { n += 1 } }; while n < 3 { sleep(5 ms) }; n" 3: timed out after 30 s
-✗ test/control/test_task_stop.pairs.warp:3 "f(x) := x; t = go f(2); cancel t; await t" 2
-✗ test/control/test_try_host_failure.pairs.warp:7 "try write(\"/no/such/folder/x.txt\", \"x\") else 7" 7
-✗ test/errors/test_dropped_error_raises.pairs.warp:3 "write(\"no such folder/x.txt\", \"hi\"); 1" error
-✗ test/errors/test_dropped_error_raises.pairs.warp:6 "is_error(write(\"no such folder/x.txt\", \"hi\"))" yes
-✗ test/errors/test_dropped_error_raises.pairs.warp:8 "try write(\"no such folder/x.txt\", \"hi\") catch e { 5 }" 5
-✗ test/errors/test_errors_one_rule.pairs.warp:2 "r = write(\"no such folder/x.txt\", \"hi\"); 1" error
-✗ test/errors/test_errors_one_rule.pairs.warp:3 "f(p) := write(p, \"hi\"); r = f(\"no such folder/x.txt\"); 2" error
-✗ test/ffi/test_ffi.warp:168 "import SDL_Quit from 'SDL2'\nSDL_Quit()\n42" 42
-✗ test/ffi/test_ffi_float_results.warp:4 "import GetTime from 'raylib'\nGetTime() >= 0.0" yes
-✗ test/ffi/test_ffi_float_results.warp:6 "import GetFrameTime from 'raylib'\nGetFrameTime() + 1.5" 1.5
-✗ test/ffi/test_ffi_float_results.warp:8 "import GetTime from 'raylib'\nt = GetTime()\nt * 2.0" 0
-✗ test/ffi/test_ffi_signatures.warp:29 "import GetMouseX from 'raylib'\nGetMouseX()" 0
-✗ test/ffi/test_ffi_signatures.warp:31 "import GetFrameTime from 'raylib'\nGetFrameTime()" 0
-✗ test/ffi/test_ffi_signatures.warp:33 "import GetTime from 'raylib'\nGetTime()" 0
-✗ test/ffi/test_ffi_signatures.warp:35 "import SetTraceLogLevel from 'raylib'\nSetTraceLogLevel(7)\n1" 1
-✗ test/ffi/test_ffi_signatures.warp:38 "import IsKeyPressed from 'raylib'\nIsKeyPressed(65)" 0
-✗ test/ffi/test_ffi_signatures.warp:40 "import SetMouseOffset from 'raylib'\nSetMouseOffset(1, 2)\n1" 1
-✗ test/ffi/test_ffi_signatures.warp:43 "import GetRandomValue from 'raylib'\nGetRandomValue(4, 4)" 4
-✗ test/ffi/test_ffi_signatures.warp:45 "import TextToInteger from 'raylib'\nTextToInteger('123')" 123
-✗ test/ffi/test_foreign_lines.warp:4 "erf(x: float): float from 'm'\nerf(1.0)" 0.8427007929497148
-✗ test/functions/test_failed_word.pairs.warp:10 "x=error(\"bad\"); y=1; if x failed and y {1} else {2}" 1
-✗ test/functions/test_failed_word.pairs.warp:4 "x=error(\"bad\"); if x failed {1} else {2}" 1
-✗ test/functions/test_failed_word.pairs.warp:7 "x=error(\"bad\"); if x is failed {1} else {2}" 1
-✗ test/functions/test_pattern_clauses.pairs.warp:8 "f(n) := 1; f(0) := 2; f(0)" 1
-✗ test/functions/test_typed_returns.pairs.warp:11 "float twice(x) := {x+x}; twice 2" 4
-✗ test/functions/test_unit_named_functions.pairs.warp:4 "k(p) := p.x * 3; g(x, y) := [k([x, y]), 0.0, 0.0]; paint(g, 4, 4); 1" 1
-✗ test/gpu/test_gpu_compute.pairs.warp:2 "gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }\", [1.0], 1)" [2]
-✗ test/gpu/test_gpu_compute.pairs.warp:3 "try { gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }\", [1.0], 1) } catch e { \"reserved keyword\" in e.message }" yes
-✗ test/gpu/test_gpu_int_lists.pairs.warp:4 "xs: [i32] = [1, 2, 3]; gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<i32>; @compute @workgroup_size(1) fn main(@builtin(global_invocation_id) id: vec3u) { cells[id.x] = cells[id.x] * -2; }\", xs, 3); xs" [-2, -4, -6]
-✗ test/lists/test_for_where.warp:5 "xs = [1, 2, 3]; total = 0; for x in xs where it > 2 { total += x }; total" 3
-✗ test/lists/test_lazy_range.pairs.warp:17 "xs = 1..5000; xs#2 = 9; xs#2" 9
-✗ test/lists/test_lazy_range.pairs.warp:23 "xs = 1..5; xs#2 = 7; xs" [1, 7, 3, 4]
-✗ test/lists/test_library_word_as_method.pairs.warp:3 "x = [1 2 3]; x.max" 3
-✗ test/lists/test_range_arguments.pairs.warp:16 "f(xs) := { xs#1 = 9; xs#1 }; f(1..5000)" 9
-✗ test/modules/test_dir_builtin_members.pairs.warp:7 "\"sum\" in dir(list)" yes
-✗ test/modules/test_module_slices.pairs.warp:4 "use compute_toys; compute_toy(\"fn main_image(id: vec3u) {}\") contains \"struct Time\"" yes
-✗ test/modules/test_netbase_package.warp:4 "use \"../../samples/storage/netbase.warp\"; netbase_path(\"all cities with population > 100000\")" "all%20cities%20with%20population%20%3E%20100000"
-✗ test/modules/test_package_registry.pairs.warp:4 "use \"../../packages/uniscript/uniscript.warp\"; uniscript(\"<:alpha/>\")" "α"
-✗ test/modules/test_package_registry.pairs.warp:7 "use \"../../packages/colors/colors.warp\"; to_hex(from_hex(\"f80\"))" "#ff8800"
-✗ test/modules/test_packages.pairs.warp:4 "use \"../../packages/uniscript/uniscript.warp\"; uniscript(\"<:alpha>\")" "α"
-✗ test/modules/test_rewrite_engine.warp:4 "rewrite $a otherwise $b => ($t = $a; if $t then $t else $b)\nglobal calls = 0\nnext() := { calls += 1; calls * 10 }\n[next() otherwise 5, 0 otherwise 3, calls]" [10, 3, 1]
-✗ test/modules/test_selective_package.pairs.warp:7 "use \"../../packages/svg/svg.warp\"; count(rainbow(3))" 3
-✗ test/modules/test_selective_package.pairs.warp:8 "use \"../../packages/colors/colors.warp\"; use \"../../packages/svg/svg.warp\"; to_hex(255)" "#0000ff"
-✗ test/numbers/test_quantities_as_floats.pairs.warp:5 "use units; size = 2m; glow(x, y) := [x / 200 * size, y / 100, 0.5]; paint(glow, 20, 10); 1" 1
-✗ test/programs/test_draw_label.pairs.warp:4 "text_coverage(\"Hi\", 32)[0] > text_coverage(\"Hi\", 16)[0]" yes
-✗ test/programs/test_draw_label.pairs.warp:5 "text_coverage(\"Hi there\", 16)[0] > text_coverage(\"Hi\", 16)[0]" yes
-✗ test/programs/test_draw_label.warp:14 "c = text_coverage(\"Hi\", 16)\ncount(c) == 2 + c[0] * c[1]" yes
-✗ test/programs/test_draw_label.warp:4 "use draw\ncanvas(60, 24)\nlabel(0, 0, \"Hi\", red, 20)\ncount(canvas_pixels.filter(p => p == red)) > 20" yes
-✗ test/programs/test_draw_label.warp:8 "use draw\ncanvas(60, 24)\nlabel(0, 0, \"Hi\", red, 20)\ncount(canvas_pixels.filter(p => p != 0 and p != red)) > 0" yes
-✗ test/programs/test_paint_shader.pairs.warp:3 "paint(\"@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }\"); 1" 1
-✗ test/scope/test_lambda_changed_main.pairs.warp:4 "price = 3; total := price * 2; on key { price = 10 }; total" 6
-✗ test/types/test_class_method_name_clash.warp:11 "class Votes { names = []\n tally(x) := { names.add(x) }\n}\nv = Votes(); v.tally(\"a\"); v.tally(\"b\"); count(v.names)" 2
-✗ test/welcoming/test_c_style.pairs.warp:4 "real f(real x){ return x * 2 }; f(3)" 6
+✗ test/control/test_task_stop.pairs.warp:3 "f(x) := x; t = go f(2); cancel t; await t" 2: got Error("t was cancelled at 1:41")
+✗ test/control/test_tasks.pairs.warp:11 "job = go 3; once job finishes: x = 7; await job; x" 7: got Error("outside the core: the unknown name x at 1:50 (no owner)")
+✗ test/control/test_try_host_failure.pairs.warp:7 "try write(\"/no/such/folder/x.txt\", \"x\") else 7" 7: got ø
+✗ test/control/test_variable_signals.pairs.warp:14 "x=10; total=0; on set x {total+=value}; x=3; x=4; total" 7: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.pairs.warp:15 "x=3; n=0; on set x : n+=1; while x-->0 : x; n" 4: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.pairs.warp:21 "x=1; n=0; on change x : n+=1; x=1; x=2; x=2; x=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.pairs.warp:24 "a=1; total := a*2; n=0; on set total : n+=1; a=2; a=2; a=3; n" 2: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.warp:21 "a=1; b=2; sum := a+b; log=0; on change sum {log = log*10 + value}; a=2; a=2; b=1; log" 43: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/control/test_variable_signals.warp:25 "x=0; log=0; on change x {log=log*10+value}; def store(v){ global x; x=v }; store(1); store(1); store(2); log" 12: got Error("on is defined by signals and tasks: say which, `use signals` or `use tasks`")
+✗ test/ffi/test_ffi.warp:168 "import SDL_Quit from 'SDL2'\nSDL_Quit()\n42" 42: got Error("no C function SDL_Quit in its library, or the library not found")
+✗ test/ffi/test_ffi_float_results.warp:4 "import GetTime from 'raylib'\nGetTime() >= 0.0" yes: got Error("no C function GetTime in its library, or the library not found")
+✗ test/ffi/test_ffi_float_results.warp:6 "import GetFrameTime from 'raylib'\nGetFrameTime() + 1.5" 1.5: got Error("no C function GetFrameTime in its library, or the library not found")
+✗ test/ffi/test_ffi_float_results.warp:8 "import GetTime from 'raylib'\nt = GetTime()\nt * 2.0" 0: got Error("no C function GetTime in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:29 "import GetMouseX from 'raylib'\nGetMouseX()" 0: got Error("no C function GetMouseX in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:31 "import GetFrameTime from 'raylib'\nGetFrameTime()" 0: got Error("no C function GetFrameTime in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:33 "import GetTime from 'raylib'\nGetTime()" 0: got Error("no C function GetTime in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:35 "import SetTraceLogLevel from 'raylib'\nSetTraceLogLevel(7)\n1" 1: got Error("no C function SetTraceLogLevel in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:38 "import IsKeyPressed from 'raylib'\nIsKeyPressed(65)" 0: got Error("no C function IsKeyPressed in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:40 "import SetMouseOffset from 'raylib'\nSetMouseOffset(1, 2)\n1" 1: got Error("no C function SetMouseOffset in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:43 "import GetRandomValue from 'raylib'\nGetRandomValue(4, 4)" 4: got Error("no C function GetRandomValue in its library, or the library not found")
+✗ test/ffi/test_ffi_signatures.warp:45 "import TextToInteger from 'raylib'\nTextToInteger('123')" 123: got Error("no C function TextToInteger in its library, or the library not found")
+✗ test/ffi/test_foreign_lines.warp:4 "erf(x: float): float from 'm'\nerf(1.0)" 0.8427007929497148: got 0.8427007929497149
+✗ test/functions/test_failed_word.pairs.warp:4 "x=error(\"bad\"); if x failed {1} else {2}" 1: got Error("bad at 1:1")
+✗ test/functions/test_failed_word.pairs.warp:7 "x=error(\"bad\"); if x is failed {1} else {2}" 1: got Error("bad at 1:1")
+✗ test/functions/test_failed_word.pairs.warp:10 "x=error(\"bad\"); y=1; if x failed and y {1} else {2}" 1: got Error("bad at 1:1")
+✗ test/functions/test_pattern_clauses.pairs.warp:8 "f(n) := 1; f(0) := 2; f(0)" 1: got Error("a second definition of f taking as many arguments can never run: f(n) takes every call first; give one another name, or parameter types or patterns that tell them apart at 1:20")
+✗ test/functions/test_typed_returns.pairs.warp:11 "float twice(x) := {x+x}; twice 2" 4: got Error("a second definition of twice taking as many arguments can never run: twice(x) takes every call first; give one another name, or parameter types or patterns that tell them apart at 361:31")
+✗ test/lists/test_for_where.warp:5 "xs = [1, 2, 3]; total = 0; for x in xs where it > 2 { total += x }; total" 3: got Error("outside the core: the unknown name it at 1:46 (no owner)")
+✗ test/lists/test_lazy_range.pairs.warp:17 "xs = 1..5000; xs#2 = 9; xs#2" 9: got 2
+✗ test/lists/test_lazy_range.pairs.warp:23 "xs = 1..5; xs#2 = 7; xs" [1, 7, 3, 4]: got [1, 2, 3, 4]
+✗ test/lists/test_library_word_as_method.pairs.warp:3 "x = [1 2 3]; x.max" 3: got Error("outside the core: the field max of a list at 1:14 (no owner)")
+✗ test/lists/test_range_arguments.pairs.warp:16 "f(xs) := { xs#1 = 9; xs#1 }; f(1..5000)" 9: got 1
+✗ test/modules/test_dir_builtin_members.pairs.warp:7 "\"sum\" in dir(list)" yes: got no
+✗ test/modules/test_module_slices.pairs.warp:4 "use compute_toys; compute_toy(\"fn main_image(id: vec3u) {}\") contains \"struct Time\"" yes: got Error("not a text at 1:31")
+✗ test/modules/test_netbase_package.warp:4 "use \"../../samples/storage/netbase.warp\"; netbase_path(\"all cities with population > 100000\")" "all%20cities%20with%20population%20%3E%20100000": got Error("outside the core: the unknown name query at 5:11 (no owner)")
+✗ test/modules/test_package_registry.pairs.warp:4 "use \"../../packages/uniscript/uniscript.warp\"; uniscript(\"<:alpha/>\")" "α": got Error("./../../packages/uniscript/uniscript.warp: no such file to use")
+✗ test/modules/test_package_registry.pairs.warp:7 "use \"../../packages/colors/colors.warp\"; to_hex(from_hex(\"f80\"))" "#ff8800": got Error("./../../packages/colors/colors.warp: no such file to use")
+✗ test/modules/test_packages.pairs.warp:4 "use \"../../packages/uniscript/uniscript.warp\"; uniscript(\"<:alpha>\")" "α": got Error("./../../packages/uniscript/uniscript.warp: no such file to use")
+✗ test/modules/test_rewrite_engine.warp:4 "rewrite $a otherwise $b => ($t = $a; if $t then $t else $b)\nglobal calls = 0\nnext() := { calls += 1; calls * 10 }\n[next() otherwise 5, 0 otherwise 3, calls]" [10, 3, 1]: got [10, 0, 1]
+✗ test/modules/test_selective_package.pairs.warp:7 "use \"../../packages/svg/svg.warp\"; count(rainbow(3))" 3: got Error("./../../packages/svg/svg.warp: no such file to use")
+✗ test/modules/test_selective_package.pairs.warp:8 "use \"../../packages/colors/colors.warp\"; use \"../../packages/svg/svg.warp\"; to_hex(255)" "#0000ff": got Error("./../../packages/colors/colors.warp: no such file to use")
+✗ test/programs/test_draw_label.pairs.warp:4 "text_coverage(\"Hi\", 32)[0] > text_coverage(\"Hi\", 16)[0]" yes: got Error("the host word text_coverage is not in warp yet")
+✗ test/programs/test_draw_label.pairs.warp:5 "text_coverage(\"Hi there\", 16)[0] > text_coverage(\"Hi\", 16)[0]" yes: got Error("the host word text_coverage is not in warp yet")
+✗ test/programs/test_draw_label.warp:4 "use draw\ncanvas(60, 24)\nlabel(0, 0, \"Hi\", red, 20)\ncount(canvas_pixels.filter(p => p == red)) > 20" yes: got Error("the host word text_coverage is not in warp yet")
+✗ test/programs/test_draw_label.warp:8 "use draw\ncanvas(60, 24)\nlabel(0, 0, \"Hi\", red, 20)\ncount(canvas_pixels.filter(p => p != 0 and p != red)) > 0" yes: got Error("the host word text_coverage is not in warp yet")
+✗ test/programs/test_draw_label.warp:14 "c = text_coverage(\"Hi\", 16)\ncount(c) == 2 + c[0] * c[1]" yes: got Error("the host word text_coverage is not in warp yet")
+✗ test/scope/test_lambda_changed_main.pairs.warp:4 "price = 3; total := price * 2; on key { price = 10 }; total" 6: got Error("the system value keys pressed is not in warp yet")
+✗ test/types/test_class_method_name_clash.warp:11 "class Votes { names = []\n tally(x) := { names.add(x) }\n}\nv = Votes(); v.tally(\"a\"); v.tally(\"b\"); count(v.names)" 2: got Error("outside the core: a call of tally with 2 arguments at lib/list.warp:22 (in tally) (no owner)")
+✗ test/welcoming/test_c_style.pairs.warp:4 "real f(real x){ return x * 2 }; f(3)" 6: got Error("outside the core: the unknown name real: `use reals` defines it at 1:1 (no owner)")
 
-## newly passing (299)
-✗ test/control/test_async_ports.pairs.warp:12 "job = go { sleep(2000 ms); 1 }; try await job within 50 ms else 9" 9
-✗ test/control/test_async_ports.warp:10 "shared n = 0; jobs = []; for i in 1 to 4 { jobs.add(go { n += 1 }) }; await all jobs; n" 4
-✗ test/control/test_async_ports.warp:14 "gate = channel(); slow(g) := { g.receive(); 10 }; quick() := { sleep(10 ms); 20 }; r = await any [go quick(), go slow(gate)]; gate.send(0); r" 20
-✗ test/control/test_await_any_variables.warp:4 "slow() := { sleep(300 ms); 10 }; quick() := { sleep(10 ms); 20 }; a = go slow(); b = go quick(); await any [a, b]" 20
-✗ test/control/test_await_any_variables.warp:6 "slow() := { sleep(300 ms); 10 }; quick() := { sleep(10 ms); 20 }; a = go slow(); b = go quick(); r = await any [a, b]; r * 2" 40
-✗ test/control/test_code_holes.warp:57 "f(c) := { s = c; s#1 }\nf(data (n * 1)) == data n" yes
-✗ test/control/test_colon_handlers.warp:4 "n = 1\non every 5 seconds: print n\nn + 1" 2
-✗ test/control/test_colon_handlers.warp:7 "n = 1\non every 5 seconds: print n + 1\nn" 1
-✗ test/control/test_daily_timer.pairs.warp:4 "n = 1; on every day at 9:00 { n = 2 }; n" 1
-✗ test/control/test_daily_timer.pairs.warp:5 "n = 1; on every day at 23:59 { n = 2 }; n + 1" 2
-✗ test/control/test_do_block.pairs.warp:5 "x=0; do {x=5}; x" 5
+## newly passing
+293 cases
+✗ test/control/test_async_ports.pairs.warp:12 "job = go { sleep(2000 ms); 1 }; try await job within 50 ms else 9" 9: got Error("outside the core: the unknown name await at 1:37 (no owner)")
+✗ test/control/test_async_ports.warp:10 "shared n = 0; jobs = []; for i in 1 to 4 { jobs.add(go { n += 1 }) }; await all jobs; n" 4: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_async_ports.warp:14 "gate = channel(); slow(g) := { g.receive(); 10 }; quick() := { sleep(10 ms); 20 }; r = await any [go quick(), go slow(gate)]; gate.send(0); r" 20: got Error("receive on a channel no task sends to: every task has ended at 19:28")
+✗ test/control/test_await_any_variables.warp:4 "slow() := { sleep(300 ms); 10 }; quick() := { sleep(10 ms); 20 }; a = go slow(); b = go quick(); await any [a, b]" 20: got 10
+✗ test/control/test_await_any_variables.warp:6 "slow() := { sleep(300 ms); 10 }; quick() := { sleep(10 ms); 20 }; a = go slow(); b = go quick(); r = await any [a, b]; r * 2" 40: got 20
+✗ test/control/test_code_holes.warp:57 "f(c) := { s = c; s#1 }\nf(data (n * 1)) == data n" yes: got Error("not a list at 1:18")
+✗ test/control/test_colon_handlers.warp:4 "n = 1\non every 5 seconds: print n\nn + 1" 2: got Error("outside the core: the unknown name on: `use keys` defines it at 2:1 (no owner)")
+✗ test/control/test_colon_handlers.warp:7 "n = 1\non every 5 seconds: print n + 1\nn" 1: got Error("outside the core: the unknown name on: `use keys` defines it at 2:1 (no owner)")
+✗ test/control/test_do_block.pairs.warp:5 "x=0; do {x=5}; x" 5: got Error("outside the core: the unknown name do at 1:6 (no owner)")
 ✗ test/control/test_doc_strings.warp:21 "# doubles a number\ntwice(x) := x*2\nhelp(twice)" "twice(x) -> int
 ✗ test/control/test_doc_strings.warp:27 "# doubles a number\nfun twice(x) { x*2 }\nhelp(twice)" "twice(x) -> int
 ✗ test/control/test_doc_strings.warp:31 "fun twice(x) {\"doubles a number\"; x*2}\nhelp(twice)" "twice(x) -> int
-✗ test/control/test_empty_bodies.pairs.warp:8 "n = 1; on every 1000 ms {}; n" 1
-✗ test/control/test_error_not_in_data.pairs.warp:15 "e = try 10/0; xs:[int?] = [e, 2]; if xs#1 failed then 1 else 2" 1
-✗ test/control/test_error_not_in_data.warp:4 "e = try 10/0; xs:[int or error] = [e, 2]; if xs#1 failed then 1 else 2" 1
-✗ test/control/test_error_not_in_data.warp:5 "e = try 10/0; xs:[int or error] = [1, 2]; xs#1 = e; if xs#1 failed then 1 else 2" 1
-✗ test/control/test_event_footguns.pairs.warp:38 "n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; n" 0
-✗ test/control/test_event_footguns.warp:13 "a = 1; b := a * 2; log = []; on change a { log.add([b, a]) }; a = 2; log#1#1" 4
-✗ test/control/test_event_footguns.warp:23 "t = 20; n = 0; alarm = whenever t > 30 { n += 1 }; t = 35; t = 36; t = 1; t = 40; n" 2
-✗ test/control/test_event_footguns.warp:32 "b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 7; n" 2
-✗ test/control/test_event_footguns.warp:33 "b = 1; c = 2; seen = 0; on change b * c { seen = b * c }; c = 10; seen" 10
-✗ test/control/test_event_footguns.warp:36 "shared n = 0; count = 0; on set n { count += 1 }; job = go { for i in 1 to 5 { n += 1 } }; await job; sleep(50 ms); count" 5
-✗ test/control/test_event_footguns.warp:37 "shared n = 0; last = 0; on set n { last = n }; job = go { for i in 1 to 3 { n = i * 10 } }; await job; sleep(50 ms); last" 30
-✗ test/control/test_field_of_elements.warp:7 "class P{name: text; age: int}\npeople = [P(\"Al\", 30), P(\"Bo\", 10), P(\"Cy\", 40)]\ncount(people where age > 20)" 2
+✗ test/control/test_empty_bodies.pairs.warp:8 "n = 1; on every 1000 ms {}; n" 1: got Error("outside the core: the unknown name on: `use keys` defines it at 1:8 (no owner)")
+✗ test/control/test_error_not_in_data.pairs.warp:15 "e = try 10/0; xs:[int?] = [e, 2]; if xs#1 failed then 1 else 2" 1: got Error("outside the core: an assignment to `… : …` at 1:31 (no owner)")
+✗ test/control/test_error_not_in_data.warp:4 "e = try 10/0; xs:[int or error] = [e, 2]; if xs#1 failed then 1 else 2" 1: got Error("outside the core: an assignment to `… : …` at 1:39 (no owner)")
+✗ test/control/test_error_not_in_data.warp:5 "e = try 10/0; xs:[int or error] = [1, 2]; xs#1 = e; if xs#1 failed then 1 else 2" 1: got Error("outside the core: an assignment to `… : …` at 1:39 (no owner)")
+✗ test/control/test_event_footguns.pairs.warp:38 "n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; n" 0: got Error("outside the core: a value after an assignment at 1:14 (no owner)")
+✗ test/control/test_event_footguns.warp:23 "t = 20; n = 0; alarm = whenever t > 30 { n += 1 }; t = 35; t = 36; t = 1; t = 40; n" 2: got Error("outside the core: the unknown name whenever at 1:24 (no owner)")
+✗ test/control/test_field_of_elements.warp:7 "class P{name: text; age: int}\npeople = [P(\"Al\", 30), P(\"Bo\", 10), P(\"Cy\", 40)]\ncount(people where age > 20)" 2: got Error("outside the core: the unknown name age at 3:20 (no owner)")
 ✗ test/control/test_function_objects.warp:111 "# doubles a number\ntwice(x) := x*2\ntwice.full" "# doubles a number
-✗ test/control/test_go_blocks.pairs.warp:19 "f(x) := { [1,2]#x }; job = go f(5); try await job else 3" 3
-✗ test/control/test_go_blocks.pairs.warp:20 "job = go { sleep(3000ms); 1 }; stop job; 2" 2
-✗ test/control/test_go_blocks.warp:5 "hi() := { sleep(1000ms); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500" yes
-✗ test/control/test_help_word.warp:21 "area(width: int, height: int) := width * height\nhelp(area)" "area(width: int, height: int) -> int"
+✗ test/control/test_go_blocks.pairs.warp:20 "job = go { sleep(3000ms); 1 }; stop job; 2" 2: got Error("outside the core: the unknown name stop at 1:32 (no owner)")
+✗ test/control/test_go_blocks.warp:5 "hi() := { sleep(1000ms); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500" yes: got no
 ✗ test/control/test_help_word.warp:4 "class Point { x: int; y: int; length() := sqrt(x*x + y*y) }\nhelp(Point)" "class Point
 ✗ test/control/test_help_word.warp:8 "class Point { x: int; y: int; length() := sqrt(x*x + y*y) }\np = Point(3, 4)\nhelp(p)" "class Point
-✗ test/control/test_host_word_failures.pairs.warp:4 "try { eval(\"1 +\") } catch e { is_error(e) }" 1
-✗ test/control/test_iteration_words.pairs.warp:13 "[1 2 3].fold(100, (a b)->a-b)" 94
-✗ test/control/test_iteration_words.pairs.warp:4 "reduce [1 2 3] (a b)->a+b" 6
-✗ test/control/test_iteration_words.pairs.warp:5 "reduce([1 2 3 4], (a, b) => a*b)" 24
-✗ test/control/test_iteration_words.pairs.warp:6 "[5 3 8].reduce((a b)->a+b)" 16
-✗ test/control/test_iteration_words.pairs.warp:7 "add(a,b):=a+b; reduce [1 2 3] add" 6
-✗ test/control/test_iteration_words.pairs.warp:8 "xs=[7]; reduce xs (a b)->a+b" 7
-✗ test/control/test_listener_removal.warp:10 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nremove a from listeners of t\nremove b from listeners of t\nremove a from listeners of t\ncount listeners of t" 0
-✗ test/control/test_listener_removal.warp:4 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nc = on set t {print 3}\nremove b from listeners of t\ncount listeners of t" 2
-✗ test/control/test_listener_removal_in_functions.warp:10 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nstop() := { remove a from listeners of t }\nstop()\nstop()\nremove b from listeners of t\ncount listeners of t" 0
-✗ test/control/test_listener_removal_in_functions.warp:20 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nif t < 1 { remove b from listeners of t }\ncount listeners of t" 1
-✗ test/control/test_listener_removal_in_functions.warp:4 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nstop() := { remove b from listeners of t }\nstop()\ncount listeners of t" 1
-✗ test/control/test_match_type_arms.pairs.warp:9 "x = 3; x is (int or text)" yes
-✗ test/control/test_nested_block_calls.warp:11 "twice(n) := n * 2; r(t, body: block) := { k += t; body! }; k = 0; r twice(3) { k += 10 }; k" 16
-✗ test/control/test_nested_block_calls.warp:4 "r(t, body: block) := { k += t; body! }; k = 0; if 1 { r 3 { k += 10 } }; k" 13
-✗ test/control/test_nested_block_calls.warp:8 "r(t, body: block) := { k += t; body! }; k = 0; for i in 1 to 2 { r i { k += 10 } }; k" 23
-✗ test/control/test_page_events.warp:7 "price = 3; total := price * 2; on click { price += 1 }; emit click; total" 8
-✗ test/control/test_parallel_map.pairs.warp:17 "shared total = 0; go for x in [1,2,3,4,5] { total += x }; total" 15
-✗ test/control/test_parallel_map.pairs.warp:21 "square(x) := x * x; ys = @parallel square all [1, 2, 3]; ys" [1, 4, 9]
-✗ test/control/test_parallel_map.warp:11 "shared n = 0; started = clock(); go for x in [1,2,3] { sleep(500 ms); n += 1 }; [n, clock() - started < 1200]" [3, 1]
-✗ test/control/test_parallel_map.warp:8 "slow(x) := { sleep(500 ms); x }; started = clock(); ys = go [1,2,3,4].map(slow); clock() - started < 1200" yes
-✗ test/control/test_reactive_ports.warp:15 "seen = 0; def show(v){ global seen; seen = v }; x = 0; on set x : show(value); x = 9; seen" 9
-✗ test/control/test_reactive_ports.warp:18 "x = 0; n = 0; s = on set x {n += 1}; x = 1; remove s from listeners of x; x = 2; n" 1
-✗ test/control/test_reflection_words.pairs.warp:16 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); p.fields" ['x', 'y']
-✗ test/control/test_reflection_words.pairs.warp:20 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); dir(p)" ['x', 'y', "sq"]
-✗ test/control/test_shared_arrays.pairs.warp:12 "shared xs = int[3]; xs#2 = 5; xs" [0, 5, 0]
-✗ test/control/test_shared_arrays.pairs.warp:13 "shared xs = int[3]; xs#3 = 7; t = 0; for x in xs { t += x }; t" 7
-✗ test/control/test_shared_arrays.pairs.warp:14 "shared xs = int[2]; bump(ys) := { ys#1 += 4 }; bump(xs); xs#1" 4
-✗ test/control/test_shared_arrays.pairs.warp:4 "shared xs = int[4]; xs#1 += 2; xs#1 += 3; xs#1" 5
-✗ test/control/test_shared_arrays.pairs.warp:5 "shared xs = int[4]; xs[0] = 7; xs[0] + #xs" 11
-✗ test/control/test_shared_arrays.pairs.warp:8 "shared xs = float[2]; xs#1 += 1.5; xs#1 += 2.25; xs#1" 3.75
-✗ test/control/test_shared_arrays.pairs.warp:9 "shared xs = float[2]; xs#2 = 0.5; xs#2 * 4" 2
-✗ test/control/test_shared_arrays.warp:4 "shared hits = int[1]; bump(h, n) := { for i in 1 to n { h#1 += 1 }; n }; a = go bump(hits, 1000); b = go bump(hits, 1000); await a + await b; hits#1" 2000
-✗ test/control/test_shared_arrays.warp:7 "shared total = float[1]; add(t, n) := { for i in 1 to n { t#1 += 0.5 }; n }; a = go add(total, 1000); b = go add(total, 1000); await a + await b; total#1" 1000
-✗ test/control/test_shared_signals.warp:13 "shared n = 0; seen = 0; on change n { seen = value }; n = 7; for i in 1 to 2 { i }; seen" 7
-✗ test/control/test_shared_signals.warp:16 "shared n = 0; n = 3; hits = 0; on change n { hits += 1 }; for i in 1 to 2 { i }; hits" 0
-✗ test/control/test_shared_values.pairs.warp:11 "shared n = 10; n = n - 3; n" 7
-✗ test/control/test_shared_values.pairs.warp:4 "shared n = 5; n += 2; n" 7
-✗ test/control/test_shared_values.pairs.warp:5 "shared n = 5; n = n * 3; n" 15
-✗ test/control/test_shared_values.pairs.warp:6 "shared x = 0.5; x += 1.25; x" 1.75
-✗ test/control/test_shared_values.pairs.warp:7 "shared done = false; done = true; done" yes
-✗ test/control/test_shared_values.warp:11 "shared hits = 0; jobs = []; for i in 1..5 { jobs.add(go { for j in 1 to 200 { hits = hits + 1 }; 0 }) }; await all jobs; hits" 800
-✗ test/control/test_shared_values.warp:4 "shared done = false; go { sleep(50ms); done = true }; sleep(500ms); done" yes
-✗ test/control/test_shared_values.warp:5 "shared hits = 0; jobs = []; for i in 1..5 { jobs.add(go { for j in 1 to 100 { hits += 1 }; 0 }) }; await all jobs; hits" 400
-✗ test/control/test_signal_reflection.warp:4 "x = 0; on set x {print value}; whenever x > 3 {print \"big\"}; count listeners of x" 2
-✗ test/control/test_storage.pairs.warp:21 "local[\"theme_local\"] = \"dark\"; storage[\"theme_local\"]" "dark"
-✗ test/control/test_storage.pairs.warp:22 "local.color_local = \"red\"; local[\"color_local\"]" "red"
-✗ test/control/test_storage.warp:7 "stored shared_entry = \"dark\"; shared_entry = \"light\"; storage[\"shared_entry\"]" "light"
-✗ test/control/test_store_values.pairs.warp:14 "stored shown_default default 41; storage[\"shown_default\"] + 1" 42
-✗ test/control/test_store_values.warp:10 "stored listed_default default 1; contains(keys(storage), \"listed_default\")" yes
-✗ test/control/test_stored_default.pairs.warp:4 "stored theme_default default \"dark\"; theme_default" "dark"
-✗ test/control/test_stored_default.pairs.warp:5 "stored list_default default [1 2]; count(list_default)" 2
-✗ test/control/test_stored_signals.pairs.warp:4 "stored theme_first = \"dark\"; theme_first" "dark"
-✗ test/control/test_stored_signals.pairs.warp:5 "stored count_first = 1; count_first + 1" 2
-✗ test/control/test_switch_match.pairs.warp:30 "switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"" yes
-✗ test/control/test_switch_match.warp:4 "xs = []; xs.add(switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"); xs#1" yes
-✗ test/control/test_system_signals.warp:4 "n=0; on every 10 ms { if n < 3 { n += 1 } }; while n < 3 { sleep(5 ms) }; n" 3
-✗ test/control/test_task_values.pairs.warp:10 "f(i) := [1,2,3]#i; job = go f(5); try await job else -1" -1
-✗ test/control/test_task_values.warp:15 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); pause job; resume job; await job" 300000
-✗ test/control/test_tasks.pairs.warp:15 "job = go 3; stop job; job" 3
-✗ test/control/test_tasks.pairs.warp:16 "job = go 3; job.stop(); job" 3
-✗ test/control/test_threads.warp:10 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); pause job; resume job; await job" 300000
-✗ test/control/test_threads.warp:21 "f(ms) := { sleep(ms / 1000); ms }; job = go f(300); x = 0; once job finishes: x = 7; sleep(0.6s); x" 7
-✗ test/control/test_threads.warp:22 "f(ms) := { sleep(ms / 1000); ms }; job = go f(1000); x = 0; once job finishes: x = 7; y = x; y" 0
-✗ test/control/test_threads.warp:24 "f(ms) := { sleep(ms / 1000); ms }; job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 { sleep(0.1s) }; done" 1
-✗ test/control/test_time_of_day.pairs.warp:4 "n = 1; at 9:00 { n = 2 }; n" 1
-✗ test/functions/test_arity_overloads.pairs.warp:19 "f(x) := x * 2; f(x, y) := x + y; 3.f + 3.f(4)" 13
-✗ test/functions/test_arity_overloads.warp:11 "twice(h) := h() + h()\nf() := 5\nf(x) := x\ntwice(f)" 10
-✗ test/functions/test_arity_overloads.warp:18 "f() := 1\nf(a, b) := a + b\n[1, 2, 3].reduce(f)" 6
-✗ test/functions/test_bare_function_name.pairs.warp:10 "f(n) := n * 2; join([str f for f in [1, 2]], \"-\")" "1-2"
-✗ test/functions/test_braceless_call_in_logic.pairs.warp:5 "sq(x):=x*x; sq 2 == 5 or yes" yes
-✗ test/functions/test_broadcasting.pairs.warp:7 "use math; square (1 to 3)" [1, 4, 9]
-✗ test/functions/test_broadcasting.pairs.warp:8 "sq(x) := x*x; xs = 1 to 3; sq xs" [1, 4, 9]
-✗ test/functions/test_closures.pairs.warp:19 "sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])" 6
-✗ test/functions/test_default_parameters.pairs.warp:6 "f(x, y=10) = x + y; f(1)" 11
-✗ test/functions/test_definition_bodies.warp:4 "def f(x)\n\tx * 2\nend\nf(3)" 6
-✗ test/functions/test_field_closure_call.warp:12 "route(path, answer) := {path: path, answer: answer}\nroutes = [route(\"/a\", (q) => q + 1), route(\"/b\", (q) => q * 10)]\nfor r in routes { if r.path == \"/b\" { return r.answer(3) } }\n0" 30
-✗ test/functions/test_field_closure_call.warp:4 "route(path, answer) := {path: path, answer: answer}\nr = route(\"/x\", (q) => q + 1)\nr.answer(2)" 3
-✗ test/functions/test_field_closure_call.warp:7 "mk(a) := {answer: a}\nr = mk((q) => q * 2)\nr.answer(4)" 8
-✗ test/functions/test_float_values_of_tuples.warp:10 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; b = sigmoid(0); def t() { global b; (h, o) = pair(0); b = b + o }; t(); b" 1
-✗ test/functions/test_float_values_of_tuples.warp:4 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; def t() { (h, o) = pair(0); o }; t()" 0.5
-✗ test/functions/test_float_values_of_tuples.warp:5 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; def t() { (h, o) = pair(0); b = 0.25; b = b + o }; t()" 0.75
-✗ test/functions/test_float_values_of_tuples.warp:6 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; def slope(x) := x * (1.0 - x); def t() { (h, o) = pair(0); slope(o) }; t()" 0.25
-✗ test/functions/test_foreign_spellings.pairs.warp:39 "count = 0; onclick { count += 1 }; emit click; count" 1
-✗ test/functions/test_foreign_spellings.pairs.warp:40 "count = 0; onkeydown { count += 1 }; emit key; count" 1
-✗ test/functions/test_functions.pairs.warp:24 "f(a=5, b=10) = a+b; f()" 15
-✗ test/functions/test_functions.pairs.warp:25 "f(a=5, b=10) = a+b; f(1)" 11
-✗ test/functions/test_functions.pairs.warp:26 "f(a=5, b=10) = a+b; f(1, 2)" 3
-✗ test/functions/test_map_library_word_first.pairs.warp:7 "xs = [1.5]; map(floor, xs)" [1]
-✗ test/functions/test_parameter_any.warp:8 "def total(x){ if x is list { s=0; for y in x { s += total(y) }; return s }; x }; total([1 [2 3]])" 6
-✗ test/functions/test_python_ruby_definitions.pairs.warp:9 "f(x; y=2) = x*y; f(3, y=4)" 12
-✗ test/functions/test_python_ruby_definitions.warp:20 "def f(a, b = 2)\n  a * b\nend\nf(3)" 6
-✗ test/functions/test_python_ruby_definitions.warp:24 "def g(x)\n  if x > 1 then x else 0 end\nend\ng(5)" 5
-✗ test/functions/test_python_ruby_definitions.warp:62 "total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal" 3
-✗ test/functions/test_python_ruby_definitions.warp:69 "global total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal" 3
-✗ test/functions/test_python_ruby_definitions.warp:93 "function f(x)\n  x * 2\nend\nf(4)" 8
-✗ test/functions/test_python_ruby_definitions.warp:99 "def f(n)\n  k = 0\n  while k < n\n    k += 1\n  end\n  k\nend\nf(3)" 3
-✗ test/functions/test_round8_call_forms.pairs.warp:5 "[1, 2, 3].count { |x| x > 1 }" 2
-✗ test/functions/test_swift_closures.pairs.warp:8 "f = { $0 + $1 }; f(1, 2)" 3
-✗ test/functions/test_swift_closures.pairs.warp:9 "fold([1,2,3], 0, { $0 + $1 })" 6
-✗ test/functions/test_tuple_returns.warp:5 "pair(n) := { if n > 0 { return n, 1 }; return 0, 0 }; a, b = pair(5); a+b" 6
-✗ test/functions/test_tuple_returns.warp:8 "fibpair(n) := { if n == 0 { return 0, 1 }; a, b = fibpair(n-1); return b, a+b }; x, y = fibpair(10); x" 55
-✗ test/functions/test_words_in_phrases.pairs.warp:24 "xs = [3, 1, 2]; first sorted xs" 1
-✗ test/functions/test_words_in_phrases.pairs.warp:25 "xs = [3, 1, 2]; last sorted xs" 3
-✗ test/functions/test_words_in_phrases.pairs.warp:26 "xs = [3, 1, 2]; first sort xs" 1
-✗ test/lists/test_bare_list_assignment.pairs.warp:13 "sum 1+1 2+2" 6
-✗ test/lists/test_bare_list_assignment.pairs.warp:15 "sum 2 4" 6
-✗ test/lists/test_calls_in_blocks.pairs.warp:5 "if yes {sum 1+1 2+2}" 6
-✗ test/lists/test_counting_word_variables.warp:4 "shared a = 0; shared count = 0; j = go { count += 1; a = 1; 0 }; await j; count + a" 2
-✗ test/lists/test_filter_element_scope.warp:7 "class Member { name: text; years: int }; members: [Member] = [Member{name: \"Al\", years: 30}, Member{name: \"Bo\", years: 10}]; total = 0; for x in [1, 2] { total += x }; for x in members { total += x.years }; total" 43
-✗ test/lists/test_for_where.warp:4 "xs = [1, 2, 3]; total = 0; for x in xs where x > 1 { total += x }; total" 5
+✗ test/control/test_help_word.warp:21 "area(width: int, height: int) := width * height\nhelp(area)" "area(width: int, height: int) -> int": got Error("outside the core: the call help(…) at 2:6 (no owner)")
+✗ test/control/test_host_word_failures.pairs.warp:4 "try { eval(\"1 +\") } catch e { is_error(e) }" 1: got Error("outside the core: the call interpret(…) at 1:12 (no owner)")
+✗ test/control/test_iteration_words.pairs.warp:4 "reduce [1 2 3] (a b)->a+b" 6: got Error("outside the core: the unknown name reduce at 1:1 (no owner)")
+✗ test/control/test_iteration_words.pairs.warp:5 "reduce([1 2 3 4], (a, b) => a*b)" 24: got Error("outside the core: the call reduce(…) at 1:9 (no owner)")
+✗ test/control/test_iteration_words.pairs.warp:6 "[5 3 8].reduce((a b)->a+b)" 16: got Error("outside the core: the call reduce(…) at 1:2 (no owner)")
+✗ test/control/test_iteration_words.pairs.warp:7 "add(a,b):=a+b; reduce [1 2 3] add" 6: got Error("outside the core: the unknown name reduce at 1:16 (no owner)")
+✗ test/control/test_iteration_words.pairs.warp:8 "xs=[7]; reduce xs (a b)->a+b" 7: got Error("outside the core: the unknown name reduce at 1:9 (no owner)")
+✗ test/control/test_iteration_words.pairs.warp:13 "[1 2 3].fold(100, (a b)->a-b)" 94: got Error("outside the core: the unknown name a-b at 1:26 (no owner)")
+✗ test/control/test_listener_removal.warp:4 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nc = on set t {print 3}\nremove b from listeners of t\ncount listeners of t" 2: got Error("int of node at 5:28")
+✗ test/control/test_listener_removal.warp:10 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nremove a from listeners of t\nremove b from listeners of t\nremove a from listeners of t\ncount listeners of t" 0: got Error("int of node at 4:28")
+✗ test/control/test_listener_removal_in_functions.warp:4 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nstop() := { remove b from listeners of t }\nstop()\ncount listeners of t" 1: got Error("int of node at 4:40")
+✗ test/control/test_listener_removal_in_functions.warp:10 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nstop() := { remove a from listeners of t }\nstop()\nstop()\nremove b from listeners of t\ncount listeners of t" 0: got Error("int of node at 4:40")
+✗ test/control/test_listener_removal_in_functions.warp:20 "t = 0\na = on set t {print 1}\nb = on set t {print 2}\nif t < 1 { remove b from listeners of t }\ncount listeners of t" 1: got Error("int of node at 4:39")
+✗ test/control/test_match_type_arms.pairs.warp:9 "x = 3; x is (int or text)" yes: got no
+✗ test/control/test_nested_block_calls.warp:4 "r(t, body: block) := { k += t; body! }; k = 0; if 1 { r 3 { k += 10 } }; k" 13: got Error("outside the core: the unknown name k at 1:24 (no owner)")
+✗ test/control/test_nested_block_calls.warp:8 "r(t, body: block) := { k += t; body! }; k = 0; for i in 1 to 2 { r i { k += 10 } }; k" 23: got Error("outside the core: the unknown name k at 1:24 (no owner)")
+✗ test/control/test_nested_block_calls.warp:11 "twice(n) := n * 2; r(t, body: block) := { k += t; body! }; k = 0; r twice(3) { k += 10 }; k" 16: got Error("outside the core: the unknown name k at 1:43 (no owner)")
+✗ test/control/test_page_events.warp:7 "price = 3; total := price * 2; on click { price += 1 }; emit click; total" 8: got Error("outside the core: the unknown name price at 1:21 (no owner)")
+✗ test/control/test_parallel_map.pairs.warp:17 "shared total = 0; go for x in [1,2,3,4,5] { total += x }; total" 15: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_parallel_map.pairs.warp:21 "square(x) := x * x; ys = @parallel square all [1, 2, 3]; ys" [1, 4, 9]: got Error("outside the core: the unknown name all at 1:43 (no owner)")
+✗ test/control/test_parallel_map.warp:8 "slow(x) := { sleep(500 ms); x }; started = clock(); ys = go [1,2,3,4].map(slow); clock() - started < 1200" yes: got no
+✗ test/control/test_parallel_map.warp:11 "shared n = 0; started = clock(); go for x in [1,2,3] { sleep(500 ms); n += 1 }; [n, clock() - started < 1200]" [3, 1]: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_reactive_ports.warp:18 "x = 0; n = 0; s = on set x {n += 1}; x = 1; remove s from listeners of x; x = 2; n" 1: got Error("int of node at 1:72")
+✗ test/control/test_reflection_words.pairs.warp:16 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); p.fields" ['x', 'y']: got Error("no field fields at 1:54")
+✗ test/control/test_reflection_words.pairs.warp:20 "class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); dir(p)" ['x', 'y', "sq"]: got []
+✗ test/control/test_shared_arrays.pairs.warp:4 "shared xs = int[4]; xs#1 += 2; xs#1 += 3; xs#1" 5: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.pairs.warp:5 "shared xs = int[4]; xs[0] = 7; xs[0] + #xs" 11: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.pairs.warp:8 "shared xs = float[2]; xs#1 += 1.5; xs#1 += 2.25; xs#1" 3.75: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.pairs.warp:9 "shared xs = float[2]; xs#2 = 0.5; xs#2 * 4" 2: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.pairs.warp:12 "shared xs = int[3]; xs#2 = 5; xs" [0, 5, 0]: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.pairs.warp:13 "shared xs = int[3]; xs#3 = 7; t = 0; for x in xs { t += x }; t" 7: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.pairs.warp:14 "shared xs = int[2]; bump(ys) := { ys#1 += 4 }; bump(xs); xs#1" 4: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.warp:4 "shared hits = int[1]; bump(h, n) := { for i in 1 to n { h#1 += 1 }; n }; a = go bump(hits, 1000); b = go bump(hits, 1000); await a + await b; hits#1" 2000: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_arrays.warp:7 "shared total = float[1]; add(t, n) := { for i in 1 to n { t#1 += 0.5 }; n }; a = go add(total, 1000); b = go add(total, 1000); await a + await b; total#1" 1000: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.pairs.warp:4 "shared n = 5; n += 2; n" 7: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.pairs.warp:5 "shared n = 5; n = n * 3; n" 15: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.pairs.warp:6 "shared x = 0.5; x += 1.25; x" 1.75: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.pairs.warp:7 "shared done = false; done = true; done" yes: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.pairs.warp:11 "shared n = 10; n = n - 3; n" 7: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.warp:4 "shared done = false; go { sleep(50ms); done = true }; sleep(500ms); done" yes: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.warp:5 "shared hits = 0; jobs = []; for i in 1..5 { jobs.add(go { for j in 1 to 100 { hits += 1 }; 0 }) }; await all jobs; hits" 400: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_shared_values.warp:11 "shared hits = 0; jobs = []; for i in 1..5 { jobs.add(go { for j in 1 to 200 { hits = hits + 1 }; 0 }) }; await all jobs; hits" 800: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/control/test_storage.pairs.warp:21 "local[\"theme_local\"] = \"dark\"; storage[\"theme_local\"]" "dark": got Error("outside the core: the unknown name local at 1:1 (no owner)")
+✗ test/control/test_storage.pairs.warp:22 "local.color_local = \"red\"; local[\"color_local\"]" "red": got Error("outside the core: the unknown name local at 1:1 (no owner)")
+✗ test/control/test_storage.warp:7 "stored shared_entry = \"dark\"; shared_entry = \"light\"; storage[\"shared_entry\"]" "light": got Error("outside the core: the unknown name stored at 1:1 (no owner)")
+✗ test/control/test_store_values.pairs.warp:14 "stored shown_default default 41; storage[\"shown_default\"] + 1" 42: got Error("outside the core: the unknown name stored at 1:1 (no owner)")
+✗ test/control/test_store_values.warp:10 "stored listed_default default 1; contains(keys(storage), \"listed_default\")" yes: got Error("outside the core: the unknown name stored at 1:1 (no owner)")
+✗ test/control/test_stored_default.pairs.warp:4 "stored theme_default default \"dark\"; theme_default" "dark": got Error("outside the core: the unknown name stored at 1:1 (no owner)")
+✗ test/control/test_stored_default.pairs.warp:5 "stored list_default default [1 2]; count(list_default)" 2: got Error("outside the core: the unknown name stored at 1:1 (no owner)")
+✗ test/control/test_stored_signals.pairs.warp:4 "stored theme_first = \"dark\"; theme_first" "dark": got Error("outside the core: the unknown name stored at 1:1 (no owner)")
+✗ test/control/test_stored_signals.pairs.warp:5 "stored count_first = 1; count_first + 1" 2: got Error("outside the core: the unknown name stored at 1:1 (no owner)")
+✗ test/control/test_switch_match.pairs.warp:30 "switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"" yes: got Error("outside the core: the unknown name switch at 1:1 (no owner)")
+✗ test/control/test_switch_match.warp:4 "xs = []; xs.add(switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"); xs#1" yes: got Error("outside the core: the unknown name switch at 1:17 (no owner)")
+✗ test/control/test_system_signals.warp:4 "n=0; on every 10 ms { if n < 3 { n += 1 } }; while n < 3 { sleep(5 ms) }; n" 3: got Error("outside the core: the unknown name on: `use keys` defines it at 1:6 (no owner)")
+✗ test/control/test_task_values.warp:15 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); pause job; resume job; await job" 300000: got Error("outside the core: the unknown name pause at 1:73 (no owner)")
+✗ test/control/test_tasks.pairs.warp:11 "job = go 3; once job finishes: x = 7; x" 7: got Error("`once job finishes {x=7}` fits no single variant of once(block), once(any) at 1:13")
+✗ test/control/test_tasks.pairs.warp:12 "job = go 3; once job pauses: print \"held\"; await job" 3: got Error("`once job pauses {print \"held\"}` fits no single variant of once(block), once(any) at 1:13")
+✗ test/control/test_tasks.pairs.warp:15 "job = go 3; stop job; job" 3: got Error("outside the core: the unknown name stop at 1:13 (no owner)")
+✗ test/control/test_tasks.pairs.warp:16 "job = go 3; job.stop(); job" 3: got Error("outside the core: the call stop(…) at 1:13 (no owner)")
+✗ test/control/test_tasks.warp:5 "download(u) := u; job = go download(2); on download.stop : print \"cancelled\"; job" 2: got Error("outside the core: a function value in . at 1:44 (no owner)")
+✗ test/control/test_threads.warp:10 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); pause job; resume job; await job" 300000: got Error("outside the core: the unknown name pause at 1:73 (no owner)")
+✗ test/control/test_threads.warp:11 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); job.pause(); job.resume(); job" 300000: got Error("outside the core: the call pause(…) at 1:73 (no owner)")
+✗ test/control/test_threads.warp:14 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stop job; try await job else -1" (-1): got Error("outside the core: the unknown name stop at 1:79 (no owner)")
+✗ test/control/test_threads.warp:21 "f(ms) := { sleep(ms / 1000); ms }; job = go f(300); x = 0; once job finishes: x = 7; sleep(0.6s); x" 7: got Error("`once job finishes {x=7}` fits no single variant of once(block), once(any) at 1:60")
+✗ test/control/test_threads.warp:22 "f(ms) := { sleep(ms / 1000); ms }; job = go f(1000); x = 0; once job finishes: x = 7; y = x; y" 0: got Error("`once job finishes {x=7}` fits no single variant of once(block), once(any) at 1:61")
+✗ test/control/test_threads.warp:23 "f(ms) := { sleep(ms / 1000); ms }; job = go f(200); x = 0; once job finishes: x = 7; z = 1; x" 7: got Error("`once job finishes {x=7}` fits no single variant of once(block), once(any) at 1:60")
+✗ test/control/test_threads.warp:24 "f(ms) := { sleep(ms / 1000); ms }; job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 { sleep(0.1s) }; done" 1: got Error("`once job finishes {done=done+1}` fits no single variant of once(block), once(any) at 1:63")
+✗ test/control/test_threads.warp:27 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300ms); stopped" 1: got Error("outside the core: the unknown name stop at 1:118 (no owner)")
+✗ test/control/test_time_of_day.pairs.warp:4 "n = 1; at 9:00 { n = 2 }; n" 1: got Error("wasm trap: cast failure at 766:2")
+✗ test/functions/test_arity_overloads.pairs.warp:19 "f(x) := x * 2; f(x, y) := x + y; 3.f + 3.f(4)" 13: got Error("outside the core: the field f of a int at 1:34 (no owner)")
+✗ test/functions/test_arity_overloads.warp:11 "twice(h) := h() + h()\nf() := 5\nf(x) := x\ntwice(f)" 10: got Error("not a function at 2:8")
+✗ test/functions/test_arity_overloads.warp:18 "f() := 1\nf(a, b) := a + b\n[1, 2, 3].reduce(f)" 6: got Error("outside the core: the call reduce(…) at 3:2 (no owner)")
+✗ test/functions/test_bare_function_name.pairs.warp:10 "f(n) := n * 2; join([str f for f in [1, 2]], \"-\")" "1-2": got Error("joined at 1:22")
+✗ test/functions/test_braceless_call_in_logic.pairs.warp:5 "sq(x):=x*x; sq 2 == 5 or yes" yes: got Error("outside the core: the operator * on bool and bool at 1:10 (no owner)")
+✗ test/functions/test_broadcasting.pairs.warp:7 "use math; square (1 to 3)" [1, 4, 9]: got Error("wasm trap: cast failure at 175:22")
+✗ test/functions/test_broadcasting.pairs.warp:8 "sq(x) := x*x; xs = 1 to 3; sq xs" [1, 4, 9]: got Error("wasm trap: cast failure at 1:10")
+✗ test/functions/test_closures.pairs.warp:19 "sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])" 6: got Error("outside the core: the unknown name reduce at 1:20 (no owner)")
+✗ test/functions/test_default_parameters.pairs.warp:6 "f(x, y=10) = x + y; f(1)" 11: got Error("outside the core: the unknown name x at 1:14 (no owner)")
+✗ test/functions/test_definition_bodies.warp:4 "def f(x)\n\tx * 2\nend\nf(3)" 6: got Error("outside the core: the call f(…) at 1:7 (no owner)")
+✗ test/functions/test_field_closure_call.warp:4 "route(path, answer) := {path: path, answer: answer}\nr = route(\"/x\", (q) => q + 1)\nr.answer(2)" 3: got Error("outside the core: the call answer(…) at 3:1 (no owner)")
+✗ test/functions/test_field_closure_call.warp:7 "mk(a) := {answer: a}\nr = mk((q) => q * 2)\nr.answer(4)" 8: got Error("outside the core: the call answer(…) at 3:1 (no owner)")
+✗ test/functions/test_field_closure_call.warp:12 "route(path, answer) := {path: path, answer: answer}\nroutes = [route(\"/a\", (q) => q + 1), route(\"/b\", (q) => q * 10)]\nfor r in routes { if r.path == \"/b\" { return r.answer(3) } }\n0" 30: got Error("outside the core: the call answer(…) at 3:46 (no owner)")
+✗ test/functions/test_float_values_of_tuples.warp:4 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; def t() { (h, o) = pair(0); o }; t()" 0.5: got Error("index out of range: 2 not in 1…1 at 1:96")
+✗ test/functions/test_float_values_of_tuples.warp:5 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; def t() { (h, o) = pair(0); b = 0.25; b = b + o }; t()" 0.75: got Error("index out of range: 2 not in 1…1 at 1:96")
+✗ test/functions/test_float_values_of_tuples.warp:6 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; def slope(x) := x * (1.0 - x); def t() { (h, o) = pair(0); slope(o) }; t()" 0.25: got Error("index out of range: 2 not in 1…1 at 1:127")
+✗ test/functions/test_float_values_of_tuples.warp:10 "def sigmoid(x) := 1.0 / (1.0 + exp(-x)); def pair(x) { return [1], sigmoid(x) }; b = sigmoid(0); def t() { global b; (h, o) = pair(0); b = b + o }; t(); b" 1: got Error("index out of range: 2 not in 1…1 at 1:122")
+✗ test/functions/test_foreign_spellings.pairs.warp:39 "count = 0; onclick { count += 1 }; emit click; count" 1: got Error("outside the core: the unknown name onclick at 1:12 (no owner)")
+✗ test/functions/test_foreign_spellings.pairs.warp:40 "count = 0; onkeydown { count += 1 }; emit key; count" 1: got Error("outside the core: the unknown name onkeydown at 1:12 (no owner)")
+✗ test/functions/test_functions.pairs.warp:24 "f(a=5, b=10) = a+b; f()" 15: got Error("outside the core: the unknown name a at 1:16 (no owner)")
+✗ test/functions/test_functions.pairs.warp:25 "f(a=5, b=10) = a+b; f(1)" 11: got Error("outside the core: the unknown name a at 1:16 (no owner)")
+✗ test/functions/test_functions.pairs.warp:26 "f(a=5, b=10) = a+b; f(1, 2)" 3: got Error("outside the core: the unknown name a at 1:16 (no owner)")
+✗ test/functions/test_map_library_word_first.pairs.warp:7 "xs = [1.5]; map(floor, xs)" [1]: got Error("outside the core: the unknown name floor at 1:17 (no owner)")
+✗ test/functions/test_parameter_any.warp:8 "def total(x){ if x is list { s=0; for y in x { s += total(y) }; return s }; x }; total([1 [2 3]])" 6: got Error("    1: Invalid input WebAssembly code at offset 47940: type mismatch: expected anyref, found i64")
+✗ test/functions/test_python_ruby_definitions.pairs.warp:9 "f(x; y=2) = x*y; f(3, y=4)" 12: got Error("outside the core: the unknown name x at 1:13 (no owner)")
+✗ test/functions/test_python_ruby_definitions.warp:20 "def f(a, b = 2)\n  a * b\nend\nf(3)" 6: got Error("outside the core: the call f(…) at 1:7 (no owner)")
+✗ test/functions/test_python_ruby_definitions.warp:24 "def g(x)\n  if x > 1 then x else 0 end\nend\ng(5)" 5: got Error("outside the core: the call g(…) at 1:7 (no owner)")
+✗ test/functions/test_python_ruby_definitions.warp:62 "total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal" 3: got Error("outside the core: a call of g with 1 arguments at 2:7 (no owner)")
+✗ test/functions/test_python_ruby_definitions.warp:69 "global total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal" 3: got Error("outside the core: a call of g with 1 arguments at 2:7 (no owner)")
+✗ test/functions/test_python_ruby_definitions.warp:93 "function f(x)\n  x * 2\nend\nf(4)" 8: got Error("outside the core: the call f(…) at 1:12 (no owner)")
+✗ test/functions/test_python_ruby_definitions.warp:99 "def f(n)\n  k = 0\n  while k < n\n    k += 1\n  end\n  k\nend\nf(3)" 3: got Error("outside the core: the call f(…) at 1:7 (no owner)")
+✗ test/functions/test_round8_call_forms.pairs.warp:5 "[1, 2, 3].count { |x| x > 1 }" 2: got  3 x->x>1 
+✗ test/functions/test_swift_closures.pairs.warp:8 "f = { $0 + $1 }; f(1, 2)" 3: got Error("outside the core: the unknown name $0 at 1:7 (no owner)")
+✗ test/functions/test_swift_closures.pairs.warp:9 "fold([1,2,3], 0, { $0 + $1 })" 6: got Error("outside the core: the call fold(…) at 1:7 (no owner)")
+✗ test/functions/test_tuple_returns.warp:5 "pair(n) := { if n > 0 { return n, 1 }; return 0, 0 }; a, b = pair(5); a+b" 6: got Error("outside the core: the operator # on int at 1:55 (no owner)")
+✗ test/functions/test_tuple_returns.warp:8 "fibpair(n) := { if n == 0 { return 0, 1 }; a, b = fibpair(n-1); return b, a+b }; x, y = fibpair(10); x" 55: got Error("not a list at 1:44")
+✗ test/functions/test_words_in_phrases.pairs.warp:24 "xs = [3, 1, 2]; first sorted xs" 1: got Error("outside the core: the unknown name first: `use prelude` defines it at 1:17 (no owner)")
+✗ test/functions/test_words_in_phrases.pairs.warp:25 "xs = [3, 1, 2]; last sorted xs" 3: got Error("outside the core: the unknown name last: `use prelude` defines it at 1:17 (no owner)")
+✗ test/functions/test_words_in_phrases.pairs.warp:26 "xs = [3, 1, 2]; first sort xs" 1: got Error("outside the core: the unknown name first: `use prelude` defines it at 1:17 (no owner)")
+✗ test/lists/test_bare_list_assignment.pairs.warp:13 "sum 1+1 2+2" 6: got Error("outside the core: the unknown name sum: `use prelude` defines it at 1:1 (no owner)")
+✗ test/lists/test_bare_list_assignment.pairs.warp:15 "sum 2 4" 6: got Error("outside the core: the unknown name sum: `use prelude` defines it at 1:1 (no owner)")
+✗ test/lists/test_calls_in_blocks.pairs.warp:5 "if yes {sum 1+1 2+2}" 6: got Error("outside the core: the unknown name sum: `use prelude` defines it at 1:9 (no owner)")
+✗ test/lists/test_counting_word_variables.warp:4 "shared a = 0; shared count = 0; j = go { count += 1; a = 1; 0 }; await j; count + a" 2: got Error("outside the core: the unknown name shared at 1:1 (no owner)")
+✗ test/lists/test_filter_element_scope.warp:7 "class Member { name: text; years: int }; members: [Member] = [Member{name: \"Al\", years: 30}, Member{name: \"Bo\", years: 10}]; total = 0; for x in [1, 2] { total += x }; for x in members { total += x.years }; total" 43: got Error("outside the core: an assignment to `… : …` at 1:120 (no owner)")
+✗ test/lists/test_for_where.warp:4 "xs = [1, 2, 3]; total = 0; for x in xs where x > 1 { total += x }; total" 5: got Error("outside the core: the unknown name x at 1:46 (no owner)")
 ✗ test/lists/test_lazy_range.pairs.warp:10 "xs = 1..1000000000000; xs.count" 999999999999: timed out after 30 s
 ✗ test/lists/test_lazy_range.pairs.warp:26 "count 1..10^12" 999999999999: timed out after 30 s
 ✗ test/lists/test_lazy_range.pairs.warp:27 "r = 1..10^12; r#7" 7: timed out after 30 s
-✗ test/lists/test_linear_arrays.pairs.warp:20 "linear xs = int[2]; xs#2 = 7; \"\\(#xs): ${xs#2}\"" "2: 7"
-✗ test/lists/test_list_literal_sign.pairs.warp:5 "a=5; [a +1]" [5, 1]
-✗ test/lists/test_object_list_walk.warp:9 "class P{age: int}\nps: [P] = [P(1), P(2), P(3)]\na = ps#3\nps.remove(ps#1)\nps#2.age" 3
-✗ test/lists/test_range_arguments.pairs.warp:12 "f(xs) := xs.count; xs = 1..1000000000000; f(xs)" 999999999999: timed out after 30 s
+✗ test/lists/test_linear_arrays.pairs.warp:20 "linear xs = int[2]; xs#2 = 7; \"\\(#xs): ${xs#2}\"" "2: 7": got Error("outside the core: a list where a int is needed at 1:4 (no owner)")
+✗ test/lists/test_list_literal_sign.pairs.warp:5 "a=5; [a +1]" [5, 1]: got [6]
+✗ test/lists/test_object_list_walk.warp:9 "class P{age: int}\nps: [P] = [P(1), P(2), P(3)]\na = ps#3\nps.remove(ps#1)\nps#2.age" 3: got Error("outside the core: an assignment to `… : …` at 2:26 (no owner)")
 ✗ test/lists/test_range_arguments.pairs.warp:5 "f(xs) := count xs; f(1 to 1000000000000)" 1000000000000: timed out after 30 s
 ✗ test/lists/test_range_arguments.pairs.warp:6 "f(xs) := xs#3; f(5..1000000000)" 7: timed out after 30 s
+✗ test/lists/test_range_arguments.pairs.warp:12 "f(xs) := xs.count; xs = 1..1000000000000; f(xs)" 999999999999: timed out after 30 s
 ✗ test/lists/test_range_arguments.warp:4 "h(zs) := zs.count; g(ys) := h(ys); f(xs) := g(xs); f(1..1000000000000)" 999999999999: timed out after 30 s
 ✗ test/lists/test_range_arguments.warp:5 "g(a, b) := a.count; f(xs) := g([1], xs) + g(xs, [1]); f(1..1000000000000)" 1000000000000: timed out after 30 s
-✗ test/lists/test_signed_operand_list.pairs.warp:7 "[1 +1]" [1, 1]
-✗ test/lists/test_sort_long.warp:4 "xs = [{k:2 v:1} {k:1 v:2} {k:2 v:3} {k:1 v:4}]; xs.sort_by(p => p.k).map(p => p.v)" [2 4 1 3]
-✗ test/lists/test_sort_long.warp:7 "xs = [{k:2 v:1} {k:2 v:2} {k:1 v:3}]; xs.sort_by(p => p.k).map(p => p.v)" [3 1 2]
-✗ test/lists/test_typed_list_insert.pairs.warp:4 "xs: [int] = [1]; xs.insert(3, at: 0); xs" [3, 1]
-✗ test/modules/test_netbase_package.warp:4 "use netbase; netbase_path(\"all cities with population > 100000\")" "all%20cities%20with%20population%20%3E%20100000"
-✗ test/modules/test_package_registry.pairs.warp:4 "use uniscript; uniscript(\"<:alpha/>\")" "α"
-✗ test/modules/test_package_registry.pairs.warp:7 "use colors; to_hex(from_hex(\"f80\"))" "#ff8800"
-✗ test/modules/test_packages.pairs.warp:4 "use uniscript; uniscript(\"<:alpha>\")" "α"
-✗ test/modules/test_selective_package.pairs.warp:7 "use svg; count(rainbow(3))" 3
-✗ test/modules/test_selective_package.pairs.warp:8 "use colors; use svg; to_hex(255)" "#0000ff"
-✗ test/modules/test_std_exec.pairs.warp:4 "exec sh \"echo hello world\"" "hello world"
-✗ test/modules/test_std_exec.pairs.warp:5 "word=\"a; rm -rf ~\";exec sh \"echo $word\"" "a; rm -rf ~"
-✗ test/modules/test_std_exec.pairs.warp:6 "text=\"a\\nb\";split(exec sh \"echo $text\", \"\\n\")#2" "b"
-✗ test/modules/test_std_file.pairs.warp:14 "use file; write(\"test/modules/std_file_written.txt\", \"hi\"); read(\"test/modules/std_file_written.txt\")" "hi"
-✗ test/modules/test_std_file.pairs.warp:15 "write(\"test/modules/std_file_written.txt\", \"hi\"); read(\"test/modules/std_file_written.txt\")" "hi"
-✗ test/node/test_eval_word.pairs.warp:4 "eval(\"1+1\")" 2
-✗ test/node/test_eval_word.pairs.warp:5 "eval \"2*3\"" 6
-✗ test/node/test_eval_word.pairs.warp:7 "t = \"1+2\"; eval(t)" 3
-✗ test/node/test_eval_written_atoms.pairs.warp:10 "f(c: text) := eval(c); f(\"3 times [0]\")" [0, 0, 0]
-✗ test/node/test_eval_written_atoms.pairs.warp:6 "f(c: text) := eval(c); f(\"√2 * √2\")" 2
-✗ test/node/test_eval_written_atoms.pairs.warp:9 "f(c: text) := eval(c); f(\"[1.0, 2.0] ≈ [1.0, 2.0000000001]\")" yes
-✗ test/numbers/test_float_exact_context.pairs.warp:38 "type(√2) == real" yes
-✗ test/numbers/test_library_word_overloads.pairs.warp:10 "class Cm { n: number }; floor(q: Cm) := q.n; floor(9.5)" 9
-✗ test/numbers/test_rational_type.pairs.warp:20 "type(π)" "real"
-✗ test/numbers/test_rational_type.pairs.warp:21 "type(pi)" "real"
-✗ test/numbers/test_rational_type.pairs.warp:22 "type([π π])" "list of real"
-✗ test/operators/test_equality_never_chains.pairs.warp:10 "1<2<3" yes
-✗ test/operators/test_equality_never_chains.pairs.warp:13 "1<=1<2" yes
-✗ test/operators/test_equality_never_chains.pairs.warp:4 "1<2==2" no
-✗ test/operators/test_equality_never_chains.pairs.warp:5 "1<2==1" yes
-✗ test/operators/test_equality_never_chains.pairs.warp:6 "3>2!=1" no
-✗ test/operators/test_equality_never_chains.pairs.warp:7 "2==2<3" no
-✗ test/operators/test_pipeline.pairs.warp:5 "f(a,b):=a-b; 10 |> f(3)" 7
-✗ test/parser/test_end_word.warp:4 "def f(x)\n  if x > 1 then\n    \"big\"\n  else\n    \"small\"\n  end\nend\nf(3)" "big"
-✗ test/parser/test_references.pairs.warp:12 "f = {$0 * 2}; f(3)" 6
-✗ test/parser/test_spaced_children.pairs.warp:6 "x = a{ c { d { e:5 } } }; x.c.d.e" 5
-✗ test/parser/test_surface_syntax.pairs.warp:7 "reduce [7] (a b)->a+b" 7
-✗ test/parser/test_surface_syntax.pairs.warp:8 "reduce [7, 3] (a b)->a+b" 10
-✗ test/programs/test_property_definitions.warp:27 "class Point{x;y}\nPoint.sum := it.x + it.y\nPoint(1,2).sum" 3
-✗ test/programs/test_property_definitions.warp:30 "class Point{x;y}\nPoint.sum := it.x + it.y\np = Point(3,4)\np.sum + sum([1, 2])" 10
-✗ test/programs/test_property_definitions.warp:56 "class Point{x: int; y: int}\nPoint.sum := this.x + this.y\nPoint(3, 4).sum" 7
-✗ test/scope/test_data_scope.pairs.warp:15 "a=5; b=1; a-b" 4
-✗ test/scope/test_data_scope.pairs.warp:16 "a=5; b=1; c=a-b; c" 4
-✗ test/scope/test_data_scope.pairs.warp:17 "a=5; b=2; c=1; a-b-c" 2
-✗ test/scope/test_data_scope.pairs.warp:18 "f(a,b):=a-b; f(5,1)" 4
-✗ test/scope/test_export_declaration.pairs.warp:15 "export square:=it*2;square 3" 6
-✗ test/scope/test_export_declaration.pairs.warp:8 "export int k=7;k+1" 8
-✗ test/scope/test_export_declaration.pairs.warp:9 "export const int k=7" 7
-✗ test/scope/test_global_assignment_in_function.warp:4 "n = 1; def f() {\n global n = n + 2\n}\nf(); f(); n" 5
-✗ test/scope/test_global_constant_words.pairs.warp:6 "global val int x=7; x" 7
-✗ test/scope/test_global_modifiers.pairs.warp:10 "global mut int k=7" 7
-✗ test/scope/test_global_modifiers.pairs.warp:13 "global int k:=7" 7
-✗ test/scope/test_global_modifiers.pairs.warp:4 "global long k=7" 7
-✗ test/scope/test_global_modifiers.pairs.warp:5 "global int k=7" 7
-✗ test/scope/test_global_modifiers.pairs.warp:8 "global const int k=7" 7
-✗ test/scope/test_global_modifiers.pairs.warp:9 "global mutable int k=7" 7
-✗ test/scope/test_global_typed_list.pairs.warp:4 "xs: [int] = [1]; def f() { global xs; xs += [2]; count(xs) }; f()" 2
-✗ test/scope/test_global_typed_list.pairs.warp:5 "xs: [int] = [1]; def f() { global xs; xs.add(2); count(xs) }; f()" 2
-✗ test/scope/test_global_typed_list.warp:4 "class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; count(xs) }; f()" 1
-✗ test/scope/test_global_typed_list.warp:5 "class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; xs.add(U(\"b\")); xs#2.n }; f()" "b"
-✗ test/scope/test_parameter_shadows_function.pairs.warp:9 "apply(f, x) := f x; inc(a) := a + 1; apply(inc, 1)" 2
-✗ test/scope/test_parameter_shadows_function.warp:4 "path := \"data/test_parameter_shadows_function/a.txt\"; write(path, \"hi\"); read(path)" "hi"
-✗ test/scope/test_result_word.pairs.warp:12 "print 7; result + 1" 8
-✗ test/scope/test_result_word.pairs.warp:4 "3+4; result * 2" 14
-✗ test/scope/test_result_word.pairs.warp:5 "x = 5; result + 1" 6
-✗ test/scope/test_result_word.pairs.warp:6 "f := it * 3; f 4; result" 12
-✗ test/scope/test_result_word.warp:10 "if 1<0 : print \"hi\" else : print \"ho\"\nresult" "ho"
-✗ test/scope/test_result_word.warp:12 "if 1>0: { x = 2; print x * 3 } else: 0\nresult" 6
-✗ test/scope/test_result_word.warp:4 "if 1>0 : \"hi\" else : \"ho\"\nresult" "hi"
-✗ test/scope/test_result_word.warp:8 "if 1>0 : print \"hi\" else : print \"ho\"\nresult" "hi"
-✗ test/scope/test_typed_globals.pairs.warp:4 "global float y = 2; def f() { y = 3.5 }; f(); y" 3.5
-✗ test/text/test_str_computed.warp:4 "class Rope{length: m}\nstr(Rope(5 m).length)" "5m"
-✗ test/types/test_array_types.pairs.warp:23 "x:[int]=[1 2]; type(x)" "list of int"
-✗ test/types/test_array_types.pairs.warp:24 "x:[number]=[1 2]; count x" 2
-✗ test/types/test_bool_assign.pairs.warp:17 "f(b: bool) := b + 0; f(1)" 1
-✗ test/types/test_bool_assign.pairs.warp:18 "f(b: bool) := b + 0; f(no)" 0
-✗ test/types/test_bool_type.pairs.warp:10 "x = 3 > 2; x + 1" 2
-✗ test/types/test_bool_type.pairs.warp:11 "0 == false" yes
-✗ test/types/test_bool_type.pairs.warp:12 "1 == true" yes
-✗ test/types/test_bool_type.pairs.warp:22 "true + 1" 2
-✗ test/types/test_bool_type.pairs.warp:23 "true + true" 2
-✗ test/types/test_bool_type.pairs.warp:29 "f(b) := b + 1; f(1 == 1)" 2
-✗ test/types/test_bool_type.pairs.warp:33 "f() := { n = no; n += 1; n }; f()" 1
-✗ test/types/test_class_cases_ported.warp:16 "class animal{name; speak() := name + \" makes a sound\"}; class dog extends animal{speak() := super.speak() + \" (woof)\"}; dog(\"Rex\").speak()" "Rex makes a sound (woof)"
-✗ test/types/test_class_cases_ported.warp:17 "class animal{name; speak() := name + \" makes a sound\"}; class dog extends animal{speak() := super.speak() + \"!\"}; class puppy extends dog{speak() := super.speak() + \"!\"}; puppy(\"Bo\").speak()" "Bo makes a sound!!"
-✗ test/types/test_collection_declarations.pairs.warp:7 "dict d = {a: 1}; d.a" 1
-✗ test/types/test_field_default_variable.warp:19 "class F { result: int }\nf = F(3)\n5\nresult + f.result" 8
-✗ test/types/test_field_named_like_builtin.warp:11 "class C{count: int}\nxs: [C] = [C(7)]\nxs#1.count" 7
-✗ test/types/test_field_named_like_builtin.warp:19 "class G{name: text; members: [text]}\ngs: [G] = [G(\"a\", [\"x\"])]\ngs#1.members = [\"y\", \"z\"]\ncount(gs#1.members)" 2
-✗ test/types/test_field_named_like_builtin.warp:4 "class C{size: float}\nxs: [C] = [C(3.5)]\nxs#1.size" 3.5
-✗ test/types/test_file_declarations.pairs.warp:15 "class Foo { int bar(){ 42 } }; Foo().bar()" 42
-✗ test/types/test_is_declaration.pairs.warp:7 "x=9; x is number 9" 1
-✗ test/types/test_is_declaration.pairs.warp:9 "f(x) := x is number 3; f(3)" 1
-✗ test/types/test_one_dispatch.pairs.warp:29 "f(eval) := eval + 1; eval(\"2*3\")" 6
-✗ test/types/test_sum_types.pairs.warp:8 "type Predicate[T] = T -> bool; 3" 3
-✗ test/types/test_text_defaults.pairs.warp:6 "class P{name:\"hello\"}; P(\"a\").name" "a"
-✗ test/types/test_type_of_real_variable.pairs.warp:13 "x = sin(1); x is real" 1
-✗ test/types/test_type_of_real_variable.pairs.warp:4 "x=π; x is real" 1
-✗ test/types/test_type_of_real_variable.pairs.warp:8 "x = 2 * pi; x is real" 1
-✗ test/types/test_type_tests.pairs.warp:29 "π is real" 1
-✗ test/types/test_type_tests.pairs.warp:68 "type(π) == real" 1
-✗ test/types/test_typed_list_elements.pairs.warp:4 "xs: [int] = [1, 2]; xs#2" 2
-✗ test/types/test_typed_list_elements.pairs.warp:7 "xs: [int16] = [1, 32767]; xs#2" 32767
-✗ test/types/test_types.pairs.warp:50 "xs: [int16] = [1, 2, 3]; xs#2" 2
-✗ test/types/test_union_aliases.pairs.warp:10 "use \"../fixtures/alias_a.warp\"; use \"../fixtures/alias_b.warp\"; f(v: Spot) := 1; f(3)" 1
-✗ test/types/test_widened_list_views.warp:10 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; f(ys: [Circle]) := count ys; f(xs)" 1
-✗ test/types/test_widened_list_views.warp:4 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; ys: [Shape] = xs; count ys" 1
-✗ test/types/test_widened_list_views.warp:5 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; f(ys: [Shape]) := count ys; f(xs)" 1
-✗ test/types/test_widened_list_views.warp:8 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; xs.add(Circle(5, 6)); xs#2.r" 6
-✗ test/types/test_widened_list_views.warp:9 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); ys: [Shape] = [c]; ys.add(Shape(3)); count ys" 2
-✗ test/wasm/test_wasm.pairs.warp:261 "false xor true" yes
-✗ test/wasm/test_wasm.pairs.warp:262 "true xor false" yes
-✗ test/wasm/test_wasm.pairs.warp:263 "false xor false" no
-✗ test/wasm/test_wasm.pairs.warp:264 "true xor true" no
-✗ test/wasm/test_wasm.pairs.warp:295 "not true xor !false" yes
-✗ test/wasm/test_wasm.pairs.warp:296 "not false xor !true" yes
-✗ test/wasm/test_wasm.pairs.warp:297 "not true xor !true" no
-✗ test/wasm/test_wasm.pairs.warp:298 "not false xor !false" no
-✗ test/wasm/test_wasm.pairs.warp:315 "fib:=it<2 or fib(it-1)+fib(it-2);fib(4)" 5
-✗ test/wasm/test_wasm.pairs.warp:34 "fib:=it<2 or fib(it-1)+fib(it-2);fib(4)" 5
-✗ test/wasm/test_wasm.pairs.warp:392 "global const int k=7" 7
-✗ test/wasm/test_wasm.pairs.warp:393 "global mutable int k=7" 7
-✗ test/wasm/test_wasm.pairs.warp:394 "global mut int k=7" 7
-✗ test/wasm/test_wasm.pairs.warp:398 "global k:=7" 7
-✗ test/wasm/test_wasm.pairs.warp:403 "export f:=7" 7
-✗ test/wasm/test_wasm.pairs.warp:405 "global int k=7" 7
-✗ test/wasm/test_wasm.pairs.warp:406 "global int k:=7" 7
-✗ test/wasm/test_wasm.pairs.warp:407 "export int k=7" 7
-✗ test/wasm/test_wasm.pairs.warp:408 "export int f:=7" 7
-✗ test/wasm/test_wasm.warp:32 "3<1 xor 9>8" (9>8)
-✗ test/wasm/test_wasm.warp:33 "9>8 xor 3<1" (9>8)
-✗ test/wasm/test_wasm.warp:34 "3<1 xor 3<1" (3<1)
-✗ test/wasm/test_wasm.warp:35 "9>8 xor 9>8" (3<1)
-✗ test/welcoming/test_discarded_error_warning.pairs.warp:4 "e = error \"?\"; e failed" yes
-✗ test/welcoming/test_end_and_def_blocks.warp:15 "def f(x)\n  x + 1\nend\nf(1)" 2
-✗ test/welcoming/test_footguns.pairs.warp:332 "c=sh \"echo hi\";exec c" "hi"
-✗ test/welcoming/test_footguns.pairs.warp:368 "true + true" 2
-✗ test/welcoming/test_footguns.pairs.warp:369 "false * 3" 0
-✗ test/welcoming/test_footguns.pairs.warp:370 "(1<2) + 1" 2
-✗ test/welcoming/test_footguns.pairs.warp:371 "(not 1) + 2" 2
-✗ test/welcoming/test_footguns.pairs.warp:435 "x = fetch \"http://127.0.0.1:9/\"; if x {x} else {\"offline\"}" "offline"
-✗ test/welcoming/test_footguns.pairs.warp:78 "(3>2)>1" no
-✗ test/welcoming/test_footguns.warp:9 "square(x) := x*x\n law square(x) >= 0\n \n square(3037000500) > 2^63" yes
-✗ test/welcoming/test_welcoming_maps.pairs.warp:41 "v = [1]; v.has(1) + 1" 2
+✗ test/lists/test_signed_operand_list.pairs.warp:7 "[1 +1]" [1, 1]: got [2]
+✗ test/lists/test_sort_long.warp:4 "xs = [{k:2 v:1} {k:1 v:2} {k:2 v:3} {k:1 v:4}]; xs.sort_by(p => p.k).map(p => p.v)" [2 4 1 3]: got Error("outside the core: the call sort_by(…) at 1:49 (no owner)")
+✗ test/lists/test_sort_long.warp:7 "xs = [{k:2 v:1} {k:2 v:2} {k:1 v:3}]; xs.sort_by(p => p.k).map(p => p.v)" [3 1 2]: got Error("outside the core: the call sort_by(…) at 1:39 (no owner)")
+✗ test/lists/test_typed_list_insert.pairs.warp:4 "xs: [int] = [1]; xs.insert(3, at: 0); xs" [3, 1]: got Error("outside the core: an assignment to `… : …` at 1:14 (no owner)")
+✗ test/modules/test_netbase_package.warp:4 "use netbase; netbase_path(\"all cities with population > 100000\")" "all%20cities%20with%20population%20%3E%20100000": got Error("outside the core: the call netbase_path(…) at 1:27 (no owner)")
+✗ test/modules/test_package_registry.pairs.warp:4 "use uniscript; uniscript(\"<:alpha/>\")" "α": got Error("outside the core: the call uniscript(…) at 1:26 (no owner)")
+✗ test/modules/test_package_registry.pairs.warp:7 "use colors; to_hex(from_hex(\"f80\"))" "#ff8800": got Error("outside the core: the call to_hex(…) at 1:29 (no owner)")
+✗ test/modules/test_packages.pairs.warp:4 "use uniscript; uniscript(\"<:alpha>\")" "α": got Error("outside the core: the call uniscript(…) at 1:26 (no owner)")
+✗ test/modules/test_selective_package.pairs.warp:7 "use svg; count(rainbow(3))" 3: got Error("outside the core: the call rainbow(…) at 1:24 (no owner)")
+✗ test/modules/test_selective_package.pairs.warp:8 "use colors; use svg; to_hex(255)" "#0000ff": got Error("outside the core: the call to_hex(…) at 1:29 (no owner)")
+✗ test/modules/test_std_exec.pairs.warp:4 "exec sh \"echo hello world\"" "hello world": got Error("outside the core: an error value (no owner)")
+✗ test/modules/test_std_exec.pairs.warp:5 "word=\"a; rm -rf ~\";exec sh \"echo $word\"" "a; rm -rf ~": got Error("outside the core: an error value (no owner)")
+✗ test/modules/test_std_exec.pairs.warp:6 "text=\"a\\nb\";split(exec sh \"echo $text\", \"\\n\")#2" "b": got Error("outside the core: an error value (no owner)")
+✗ test/modules/test_std_file.pairs.warp:14 "use file; write(\"test/modules/std_file_written.txt\", \"hi\"); read(\"test/modules/std_file_written.txt\")" "hi": got Error("write test/modules/std_file_written.txt failed: No such file or directory at 1:17")
+✗ test/modules/test_std_file.pairs.warp:15 "write(\"test/modules/std_file_written.txt\", \"hi\"); read(\"test/modules/std_file_written.txt\")" "hi": got Error("write test/modules/std_file_written.txt failed: No such file or directory at 1:7")
+✗ test/node/test_eval_word.pairs.warp:4 "eval(\"1+1\")" 2: got Error("outside the core: the call interpret(…) at 1:6 (no owner)")
+✗ test/node/test_eval_word.pairs.warp:5 "eval \"2*3\"" 6: got Error("outside the core: the call interpret(…) at 1:6 (no owner)")
+✗ test/node/test_eval_word.pairs.warp:7 "t = \"1+2\"; eval(t)" 3: got Error("outside the core: the call interpret(…) at 1:17 (no owner)")
+✗ test/node/test_eval_written_atoms.pairs.warp:6 "f(c: text) := eval(c); f(\"√2 * √2\")" 2: got Error("outside the core: the call interpret(…) at 1:20 (no owner)")
+✗ test/node/test_eval_written_atoms.pairs.warp:9 "f(c: text) := eval(c); f(\"[1.0, 2.0] ≈ [1.0, 2.0000000001]\")" yes: got Error("outside the core: the call interpret(…) at 1:20 (no owner)")
+✗ test/node/test_eval_written_atoms.pairs.warp:10 "f(c: text) := eval(c); f(\"3 times [0]\")" [0, 0, 0]: got Error("outside the core: the call interpret(…) at 1:20 (no owner)")
+✗ test/numbers/test_float_exact_context.pairs.warp:38 "type(√2) == real" yes: got no
+✗ test/numbers/test_library_word_overloads.pairs.warp:10 "class Cm { n: number }; floor(q: Cm) := q.n; floor(9.5)" 9: got Error("no field n at 1:41")
+✗ test/numbers/test_rational_type.pairs.warp:20 "type(π)" "real": got "Real"
+✗ test/numbers/test_rational_type.pairs.warp:21 "type(pi)" "real": got "Real"
+✗ test/numbers/test_rational_type.pairs.warp:22 "type([π π])" "list of real": got "list of Real"
+✗ test/operators/test_equality_never_chains.pairs.warp:4 "1<2==2" no: got Error("outside the core: the operator == on bool and int at 1:6 (no owner)")
+✗ test/operators/test_equality_never_chains.pairs.warp:5 "1<2==1" yes: got Error("outside the core: the operator == on bool and int at 1:6 (no owner)")
+✗ test/operators/test_equality_never_chains.pairs.warp:6 "3>2!=1" no: got Error("outside the core: the operator != on bool and int at 1:6 (no owner)")
+✗ test/operators/test_equality_never_chains.pairs.warp:7 "2==2<3" no: got Error("outside the core: the operator == on int and bool at 1:6 (no owner)")
+✗ test/operators/test_equality_never_chains.pairs.warp:10 "1<2<3" yes: got Error("outside the core: the operator < on bool and int at 1:5 (no owner)")
+✗ test/operators/test_equality_never_chains.pairs.warp:13 "1<=1<2" yes: got Error("outside the core: the operator < on bool and int at 1:6 (no owner)")
+✗ test/operators/test_pipeline.pairs.warp:5 "f(a,b):=a-b; 10 |> f(3)" 7: got Error("outside the core: the unknown name a-b at 1:9 (no owner)")
+✗ test/parser/test_end_word.warp:4 "def f(x)\n  if x > 1 then\n    \"big\"\n  else\n    \"small\"\n  end\nend\nf(3)" "big": got Error("outside the core: the call f(…) at 1:7 (no owner)")
+✗ test/parser/test_references.pairs.warp:12 "f = {$0 * 2}; f(3)" 6: got Error("outside the core: the unknown name $0 at 1:6 (no owner)")
+✗ test/parser/test_spaced_children.pairs.warp:6 "x = a{ c { d { e:5 } } }; x.c.d.e" 5: got Error("no field c at 1:27")
+✗ test/parser/test_surface_syntax.pairs.warp:7 "reduce [7] (a b)->a+b" 7: got Error("outside the core: the unknown name reduce at 1:1 (no owner)")
+✗ test/parser/test_surface_syntax.pairs.warp:8 "reduce [7, 3] (a b)->a+b" 10: got Error("outside the core: the unknown name reduce at 1:1 (no owner)")
+✗ test/programs/test_property_definitions.warp:27 "class Point{x;y}\nPoint.sum := it.x + it.y\nPoint(1,2).sum" 3: got Error("list of node at 3:7")
+✗ test/programs/test_property_definitions.warp:30 "class Point{x;y}\nPoint.sum := it.x + it.y\np = Point(3,4)\np.sum + sum([1, 2])" 10: got Error("list of node at 4:1")
+✗ test/programs/test_property_definitions.warp:56 "class Point{x: int; y: int}\nPoint.sum := this.x + this.y\nPoint(3, 4).sum" 7: got Error("list of node at 3:7")
+✗ test/scope/test_data_scope.pairs.warp:15 "a=5; b=1; a-b" 4: got Error("outside the core: the unknown name a-b at 1:11 (no owner)")
+✗ test/scope/test_data_scope.pairs.warp:16 "a=5; b=1; c=a-b; c" 4: got Error("outside the core: the unknown name a-b at 1:13 (no owner)")
+✗ test/scope/test_data_scope.pairs.warp:17 "a=5; b=2; c=1; a-b-c" 2: got Error("outside the core: the unknown name a-b-c at 1:16 (no owner)")
+✗ test/scope/test_data_scope.pairs.warp:18 "f(a,b):=a-b; f(5,1)" 4: got Error("outside the core: the unknown name a-b at 1:9 (no owner)")
+✗ test/scope/test_export_declaration.pairs.warp:8 "export int k=7;k+1" 8: got Error("outside the core: the declaration global `… = …` at 1:12 (no owner)")
+✗ test/scope/test_export_declaration.pairs.warp:9 "export const int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:18 (no owner)")
+✗ test/scope/test_export_declaration.pairs.warp:15 "export square:=it*2;square 3" 6: got Error("outside the core: the declaration global `… := …` at 1:8 (no owner)")
+✗ test/scope/test_global_assignment_in_function.warp:4 "n = 1; def f() {\n global n = n + 2\n}\nf(); f(); n" 5: got Error("outside the core: the unknown name n at 2:13 (no owner)")
+✗ test/scope/test_global_constant_words.pairs.warp:6 "global val int x=7; x" 7: got Error("outside the core: the declaration global `… = …` at 1:16 (no owner)")
+✗ test/scope/test_global_modifiers.pairs.warp:4 "global long k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:13 (no owner)")
+✗ test/scope/test_global_modifiers.pairs.warp:5 "global int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:12 (no owner)")
+✗ test/scope/test_global_modifiers.pairs.warp:8 "global const int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:18 (no owner)")
+✗ test/scope/test_global_modifiers.pairs.warp:9 "global mutable int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:20 (no owner)")
+✗ test/scope/test_global_modifiers.pairs.warp:10 "global mut int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:16 (no owner)")
+✗ test/scope/test_global_modifiers.pairs.warp:13 "global int k:=7" 7: got Error("outside the core: the declaration global `… := …` at 1:12 (no owner)")
+✗ test/scope/test_global_typed_list.pairs.warp:4 "xs: [int] = [1]; def f() { global xs; xs += [2]; count(xs) }; f()" 2: got Error("outside the core: an assignment to `… : …` at 1:14 (no owner)")
+✗ test/scope/test_global_typed_list.pairs.warp:5 "xs: [int] = [1]; def f() { global xs; xs.add(2); count(xs) }; f()" 2: got Error("outside the core: an assignment to `… : …` at 1:14 (no owner)")
+✗ test/scope/test_global_typed_list.warp:4 "class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; count(xs) }; f()" 1: got Error("outside the core: an assignment to `… : …` at 1:31 (no owner)")
+✗ test/scope/test_global_typed_list.warp:5 "class U{n:text}; xs: [U] = [U(\"a\")]; def f() { global xs; xs.add(U(\"b\")); xs#2.n }; f()" "b": got Error("outside the core: an assignment to `… : …` at 1:31 (no owner)")
+✗ test/scope/test_parameter_shadows_function.pairs.warp:9 "apply(f, x) := f x; inc(a) := a + 1; apply(inc, 1)" 2: got [inc, 1]
+✗ test/scope/test_parameter_shadows_function.warp:4 "path := \"data/test_parameter_shadows_function/a.txt\"; write(path, \"hi\"); read(path)" "hi": got Error("write data/test_parameter_shadows_function/a.txt failed: No such file or directory at 1:61")
+✗ test/scope/test_result_word.pairs.warp:4 "3+4; result * 2" 14: got Error("outside the core: the unknown name result at 1:6 (no owner)")
+✗ test/scope/test_result_word.pairs.warp:5 "x = 5; result + 1" 6: got Error("outside the core: the unknown name result at 1:8 (no owner)")
+✗ test/scope/test_result_word.pairs.warp:6 "f := it * 3; f 4; result" 12: got Error("outside the core: the unknown name result at 1:19 (no owner)")
+✗ test/scope/test_result_word.pairs.warp:12 "print 7; result + 1" 8: got Error("outside the core: the unknown name result at 1:10 (no owner)")
+✗ test/scope/test_result_word.warp:4 "if 1>0 : \"hi\" else : \"ho\"\nresult" "hi": got Error("outside the core: the unknown name result at 2:1 (no owner)")
+✗ test/scope/test_result_word.warp:8 "if 1>0 : print \"hi\" else : print \"ho\"\nresult" "hi": got Error("outside the core: the unknown name result at 2:1 (no owner)")
+✗ test/scope/test_result_word.warp:10 "if 1<0 : print \"hi\" else : print \"ho\"\nresult" "ho": got Error("outside the core: the unknown name result at 2:1 (no owner)")
+✗ test/scope/test_result_word.warp:12 "if 1>0: { x = 2; print x * 3 } else: 0\nresult" 6: got Error("outside the core: the unknown name result at 2:1 (no owner)")
+✗ test/scope/test_typed_globals.pairs.warp:4 "global float y = 2; def f() { y = 3.5 }; f(); y" 3.5: got Error("outside the core: the declaration global `… = …` at 1:14 (no owner)")
+✗ test/text/test_str_computed.warp:4 "class Rope{length: m}\nstr(Rope(5 m).length)" "5m": got Error("unknown type m at data/installed-warp/units.warp:83 (in m)")
+✗ test/types/test_array_types.pairs.warp:23 "x:[int]=[1 2]; type(x)" "list of int": got Error("outside the core: an assignment to `… : …` at 1:12 (no owner)")
+✗ test/types/test_array_types.pairs.warp:24 "x:[number]=[1 2]; count x" 2: got Error("outside the core: an assignment to `… : …` at 1:15 (no owner)")
+✗ test/types/test_bool_assign.pairs.warp:17 "f(b: bool) := b + 0; f(1)" 1: got Error("outside the core: the operator + on bool and int at 1:19 (no owner)")
+✗ test/types/test_bool_assign.pairs.warp:18 "f(b: bool) := b + 0; f(no)" 0: got Error("outside the core: the operator + on bool and int at 1:19 (no owner)")
+✗ test/types/test_bool_type.pairs.warp:10 "x = 3 > 2; x + 1" 2: got Error("outside the core: the operator + on bool and int at 1:16 (no owner)")
+✗ test/types/test_bool_type.pairs.warp:11 "0 == false" yes: got Error("outside the core: the operator == on int and bool at 1:6 (no owner)")
+✗ test/types/test_bool_type.pairs.warp:12 "1 == true" yes: got Error("outside the core: the operator == on int and bool at 1:6 (no owner)")
+✗ test/types/test_bool_type.pairs.warp:22 "true + 1" 2: got Error("outside the core: the operator + on bool and int at 1:8 (no owner)")
+✗ test/types/test_bool_type.pairs.warp:23 "true + true" 2: got Error("outside the core: the operator + on bool and bool at 1:8 (no owner)")
+✗ test/types/test_bool_type.pairs.warp:29 "f(b) := b + 1; f(1 == 1)" 2: got Error("outside the core: the operator + on bool and int at 1:13 (no owner)")
+✗ test/types/test_bool_type.pairs.warp:33 "f() := { n = no; n += 1; n }; f()" 1: got Error("outside the core: the operator + on bool and int at 1:23 (no owner)")
+✗ test/types/test_class_cases_ported.warp:16 "class animal{name; speak() := name + \" makes a sound\"}; class dog extends animal{speak() := super.speak() + \" (woof)\"}; dog(\"Rex\").speak()" "Rex makes a sound (woof)": got Error("outside the core: the unknown name super at 1:109 (no owner)")
+✗ test/types/test_class_cases_ported.warp:17 "class animal{name; speak() := name + \" makes a sound\"}; class dog extends animal{speak() := super.speak() + \"!\"}; class puppy extends dog{speak() := super.speak() + \"!\"}; puppy(\"Bo\").speak()" "Bo makes a sound!!": got Error("outside the core: the unknown name super at 1:178 (no owner)")
+✗ test/types/test_collection_declarations.pairs.warp:7 "dict d = {a: 1}; d.a" 1: got Error("not a list at 385:48")
+✗ test/types/test_field_default_variable.warp:19 "class F { result: int }\nf = F(3)\n5\nresult + f.result" 8: got Error("outside the core: the unknown name result at 4:1 (no owner)")
+✗ test/types/test_field_named_like_builtin.warp:4 "class C{size: float}\nxs: [C] = [C(3.5)]\nxs#1.size" 3.5: got Error("outside the core: an assignment to `… : …` at 2:14 (no owner)")
+✗ test/types/test_field_named_like_builtin.warp:11 "class C{count: int}\nxs: [C] = [C(7)]\nxs#1.count" 7: got Error("outside the core: an assignment to `… : …` at 2:14 (no owner)")
+✗ test/types/test_field_named_like_builtin.warp:19 "class G{name: text; members: [text]}\ngs: [G] = [G(\"a\", [\"x\"])]\ngs#1.members = [\"y\", \"z\"]\ncount(gs#1.members)" 2: got Error("outside the core: an assignment to `… : …` at 2:20 (no owner)")
+✗ test/types/test_file_declarations.pairs.warp:15 "class Foo { int bar(){ 42 } }; Foo().bar()" 42: got Error("wasm trap: cast failure at 25:35")
+✗ test/types/test_is_declaration.pairs.warp:7 "x=9; x is number 9" 1: got no
+✗ test/types/test_is_declaration.pairs.warp:9 "f(x) := x is number 3; f(3)" 1: got no
+✗ test/types/test_one_dispatch.pairs.warp:29 "f(eval) := eval + 1; eval(\"2*3\")" 6: got Error("outside the core: the call interpret(…) at 1:27 (no owner)")
+✗ test/types/test_sum_types.pairs.warp:8 "type Predicate[T] = T -> bool; 3" 3: got Error("outside the core: an assignment to a type at 1:32 (no owner)")
+✗ test/types/test_text_defaults.pairs.warp:6 "class P{name:\"hello\"}; P(\"a\").name" "a": got Error("outside the core: a char for a typed field of P at 1:26 (no owner)")
+✗ test/types/test_type_of_real_variable.pairs.warp:4 "x=π; x is real" 1: got no
+✗ test/types/test_type_of_real_variable.pairs.warp:8 "x = 2 * pi; x is real" 1: got no
+✗ test/types/test_type_of_real_variable.pairs.warp:13 "x = sin(1); x is real" 1: got no
+✗ test/types/test_type_tests.pairs.warp:29 "π is real" 1: got no
+✗ test/types/test_type_tests.pairs.warp:68 "type(π) == real" 1: got no
+✗ test/types/test_typed_list_elements.pairs.warp:4 "xs: [int] = [1, 2]; xs#2" 2: got Error("outside the core: an assignment to `… : …` at 1:17 (no owner)")
+✗ test/types/test_typed_list_elements.pairs.warp:7 "xs: [int16] = [1, 32767]; xs#2" 32767: got Error("outside the core: an assignment to `… : …` at 1:19 (no owner)")
+✗ test/types/test_types.pairs.warp:50 "xs: [int16] = [1, 2, 3]; xs#2" 2: got Error("outside the core: an assignment to `… : …` at 1:22 (no owner)")
+✗ test/types/test_union_aliases.pairs.warp:10 "use \"../fixtures/alias_a.warp\"; use \"../fixtures/alias_b.warp\"; f(v: Spot) := 1; f(3)" 1: got Error("fixtures/alias_a.warp: no such file to use")
+✗ test/types/test_widened_list_views.warp:4 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; ys: [Shape] = xs; count ys" 1: got Error("outside the core: an assignment to `… : …` at 1:98 (no owner)")
+✗ test/types/test_widened_list_views.warp:5 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; f(ys: [Shape]) := count ys; f(xs)" 1: got Error("outside the core: an assignment to `… : …` at 1:98 (no owner)")
+✗ test/types/test_widened_list_views.warp:8 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; xs.add(Circle(5, 6)); xs#2.r" 6: got Error("outside the core: an assignment to `… : …` at 1:98 (no owner)")
+✗ test/types/test_widened_list_views.warp:9 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); ys: [Shape] = [c]; ys.add(Shape(3)); count ys" 2: got Error("outside the core: an assignment to `… : …` at 1:97 (no owner)")
+✗ test/types/test_widened_list_views.warp:10 "class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; f(ys: [Circle]) := count ys; f(xs)" 1: got Error("outside the core: an assignment to `… : …` at 1:98 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:315 "fib:=it<2 or fib(it-1)+fib(it-2);fib(4)" 5: got Error("outside the core: the operator + on bool and bool at 1:31 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:261 "false xor true" yes: got Error("outside the core: the operator xor on bool and bool at 1:11 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:262 "true xor false" yes: got Error("outside the core: the operator xor on bool and bool at 1:10 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:263 "false xor false" no: got Error("outside the core: the operator xor on bool and bool at 1:11 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:264 "true xor true" no: got Error("outside the core: the operator xor on bool and bool at 1:10 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:295 "not true xor !false" yes: got Error("outside the core: the operator xor on bool and bool at 1:15 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:296 "not false xor !true" yes: got Error("outside the core: the operator xor on bool and bool at 1:16 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:297 "not true xor !true" no: got Error("outside the core: the operator xor on bool and bool at 1:15 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:298 "not false xor !false" no: got Error("outside the core: the operator xor on bool and bool at 1:16 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:392 "global const int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:18 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:393 "global mutable int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:20 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:394 "global mut int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:16 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:398 "global k:=7" 7: got Error("outside the core: the declaration global `… := …` at 1:8 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:403 "export f:=7" 7: got Error("outside the core: the declaration global `… := …` at 1:8 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:405 "global int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:12 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:406 "global int k:=7" 7: got Error("outside the core: the declaration global `… := …` at 1:12 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:407 "export int k=7" 7: got Error("outside the core: the declaration global `… = …` at 1:12 (no owner)")
+✗ test/wasm/test_wasm.pairs.warp:408 "export int f:=7" 7: got Error("outside the core: the declaration global `… := …` at 1:12 (no owner)")
+✗ test/wasm/test_wasm.warp:32 "3<1 xor 9>8" (9>8): got Error("outside the core: the operator xor on bool and bool at 1:11 (no owner)")
+✗ test/wasm/test_wasm.warp:33 "9>8 xor 3<1" (9>8): got Error("outside the core: the operator xor on bool and bool at 1:11 (no owner)")
+✗ test/wasm/test_wasm.warp:34 "3<1 xor 3<1" (3<1): got Error("outside the core: the operator xor on bool and bool at 1:11 (no owner)")
+✗ test/wasm/test_wasm.warp:35 "9>8 xor 9>8" (3<1): got Error("outside the core: the operator xor on bool and bool at 1:11 (no owner)")
+✗ test/web/test_task_voices.warp:11 "use sound\nplay(C4, 5s)\njob = go { play(E4, 5s)\nsound_queued() > 6 }\nawait job" yes: got no
+✗ test/welcoming/test_discarded_error_warning.pairs.warp:4 "e = error \"?\"; e failed" yes: got no
+✗ test/welcoming/test_end_and_def_blocks.warp:15 "def f(x)\n  x + 1\nend\nf(1)" 2: got Error("outside the core: the call f(…) at 1:7 (no owner)")
+✗ test/welcoming/test_footguns.pairs.warp:78 "(3>2)>1" no: got Error("outside the core: the operator > on bool and int at 1:7 (no owner)")
+✗ test/welcoming/test_footguns.pairs.warp:332 "c=sh \"echo hi\";exec c" "hi": got Error("outside the core: an error value (no owner)")
+✗ test/welcoming/test_footguns.pairs.warp:368 "true + true" 2: got Error("outside the core: the operator + on bool and bool at 1:8 (no owner)")
+✗ test/welcoming/test_footguns.pairs.warp:369 "false * 3" 0: got Error("outside the core: the operator * on bool and int at 1:9 (no owner)")
+✗ test/welcoming/test_footguns.pairs.warp:370 "(1<2) + 1" 2: got Error("outside the core: the operator + on bool and int at 1:9 (no owner)")
+✗ test/welcoming/test_footguns.pairs.warp:371 "(not 1) + 2" 2: got Error("outside the core: the operator + on bool and int at 1:11 (no owner)")
+✗ test/welcoming/test_footguns.pairs.warp:435 "x = fetch \"http://127.0.0.1:9/\"; if x {x} else {\"offline\"}" "offline": got Error("outside the core: the unknown name fetch at 1:5 (no owner)")
+✗ test/welcoming/test_footguns.warp:9 "square(x) := x*x\n law square(x) >= 0\n \n square(3037000500) > 2^63" yes: got Error("outside the core: the unknown name law at 2:2 (no owner)")
+✗ test/welcoming/test_welcoming_maps.pairs.warp:41 "v = [1]; v.has(1) + 1" 2: got Error("outside the core: the operator + on bool and int at 1:21 (no owner)")
 
-## platform (4)
-✗ test/ffi/test_ffi_signatures.warp:27 "import IsWindowReady from 'raylib'\nIsWindowReady()" 0
-✗ test/functions/test_arity_and_type_overloads.warp:20 "use sound\nclass Box{v}\nplay(b: Box) := \"box\"\nplay(C4, 0.01) is int" yes
-✗ test/programs/test_live_redefine.warp:4 "use sound\ndrums() := play(C4, 0.1s)\nvoice = live_loop(drums, 2)\nawait voice\n7" 7
-✗ test/programs/test_window_size.pairs.warp:4 "display.width > 100 and display.height > 100" yes
+## platform
+11 cases
+✗ test/ffi/test_ffi_signatures.warp:27 "import IsWindowReady from 'raylib'\nIsWindowReady()" 0: got Error("no C function IsWindowReady in its library, or the library not found")
+✗ test/functions/test_arity_and_type_overloads.warp:20 "use sound\nclass Box{v}\nplay(b: Box) := \"box\"\nplay(C4, 0.01) is int" yes: got Error("outside the core: a call of play with 2 arguments at 4:6 (no owner)")
+✗ test/functions/test_unit_named_functions.pairs.warp:4 "k(p) := p.x * 3; g(x, y) := [k([x, y]), 0.0, 0.0]; paint(g, 4, 4); 1" 1: got Error("  No suitable graphics adapter found; noop support not compiled in, vulkan drivers/libraries could not be loaded, metal support not compiled in, dx12 support not compiled in, gl drivers/libraries could not be loaded, webgpu support not compiled in")
+✗ test/gpu/test_gpu_compute.pairs.warp:2 "gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<f32>; @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }\", [1.0], 1)" [2]: got Error("a warp value of another layout at 1:13")
+✗ test/gpu/test_gpu_compute.pairs.warp:3 "try { gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<f32>; fn get() {} @compute @workgroup_size(1) fn main() { cells[0] = 2.0; }\", [1.0], 1) } catch e { \"reserved keyword\" in e.message }" yes: got no
+✗ test/gpu/test_gpu_int_lists.pairs.warp:4 "xs: [i32] = [1, 2, 3]; gpu_compute(\"@group(0) @binding(0) var<storage, read_write> cells: array<i32>; @compute @workgroup_size(1) fn main(@builtin(global_invocation_id) id: vec3u) { cells[id.x] = cells[id.x] * -2; }\", xs, 3); xs" [-2, -4, -6]: got Error("a warp value of another layout at 1:36")
+✗ test/numbers/test_quantities_as_floats.pairs.warp:5 "use units; size = 2m; glow(x, y) := [x / 200 * size, y / 100, 0.5]; paint(glow, 20, 10); 1" 1: got Error("  No suitable graphics adapter found; noop support not compiled in, vulkan drivers/libraries could not be loaded, metal support not compiled in, dx12 support not compiled in, gl drivers/libraries could not be loaded, webgpu support not compiled in")
+✗ test/programs/test_live_redefine.warp:4 "use sound\ndrums() := play(C4, 0.1s)\nvoice = live_loop(drums, 2)\nawait voice\n7" 7: got Error("outside the core: the operator while with nothing before it at 998:63 (no owner)")
+✗ test/programs/test_paint_shader.pairs.warp:3 "paint(\"@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }\"); 1" 1: got Error("  No suitable graphics adapter found; noop support not compiled in, vulkan drivers/libraries could not be loaded, metal support not compiled in, dx12 support not compiled in, gl drivers/libraries could not be loaded, webgpu support not compiled in")
+✗ test/programs/test_window_size.pairs.warp:4 "display.width > 100 and display.height > 100" yes: got Error("display.width: this machine shows no display")
+✗ test/web/test_task_voices.warp:11 "use sound\nplay(C4, 5s)\njob = go { play(E4, 5s)\nsound_queued() > 6 }\nawait job" yes: timed out after 30 s

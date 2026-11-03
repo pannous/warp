@@ -20,11 +20,11 @@ numbers = go sum([1, 2, 3, 4])
 print await greeting
 print await numbers
 
-# a task that would spin forever, stopped
+# a task that would spin forever, cancelled: it ends without a result (`stop` would only pause it)
 spin(n) := { i = 0; while i < n { i += 1 }; i }
 endless = go spin(1000000000000)
-stop endless
-print try await endless else "stopped"
+cancel endless
+print try await endless else "cancelled"
 
 # a shared array: every task adds to the same cells, atomically
 shared hits = int[1]

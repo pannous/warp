@@ -114,7 +114,7 @@ task_stepped(task: Task) := {
 	running_task = task
 	starter = task_context()
 	task_context_back(task.context)
-	value = try step() catch e { task.failed = e; failed_tasks = failed_tasks + [task]; ø }
+	value = try step() catch e { task.failed = str(e); failed_tasks = failed_tasks + [task]; ø }
 	task.context = task_context()
 	task_context_back(starter)
 	running_task = ø
