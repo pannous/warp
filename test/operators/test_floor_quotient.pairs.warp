@@ -1,16 +1,13 @@
-# from test_floor_quotient.rs: edit the Rust test, then run the script again
-
-# floor_division_is_euclidean
-'7 /! -2'	-3
-'7.5 /! 2'	3
-'a=-7; b=-2; a /! b * b + a%b == a'	1
-
-# the_dividend_is_evaluated_once
-'global n=0; f() := { n = n + 1; 7 }; f() /! 2; n'	1
-
-# floor_of_an_exact_number_beyond_f64
-'floor(10^30/3) == 333333333333333333333333333333'	1
-'x=7; floor(x/-2)'	-4
-
-# floor_division_warns_nothing_about_percent
-'-7 /! 2'	-4
+'xs = [7, -7]; xs[0] ÷ 2'	3
+'xs = [7, -7]; xs[1] ÷ 2'	-4
+'xs = [7, -7]; xs[0] ÷ -2'	-4
+'xs = [7, -7]; xs[1] ÷ -2'	3
+'xs = [6, 3]; xs[0] ÷ xs[1]'	2
+'xs = [7.5, 2]; xs[0] ÷ xs[1]'	3
+'xs = [-7.5, 2]; xs[0] ÷ xs[1]'	-4
+'xs = [1/3, 2]; xs[0] ÷ xs[1]'	0
+'xs = [7/2, 1/2]; xs[0] ÷ xs[1]'	7
+'try { xs = [7, 0]; xs[0] ÷ xs[1] } catch e { e.message }'	"divide by zero"
+'try { xs = [7.5, 0]; xs[0] ÷ xs[1] } catch e { e.message }'	"divide by zero"
+'xs = [7, 2]; floor(xs[0] / xs[1])'	3
+'xs = [-7.5]; floor(xs[0])'	-8

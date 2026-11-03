@@ -17,6 +17,24 @@ extended_order(a: Node, b: Node): int from runtime
 extended_sum(a: Node, b: Node): Node from runtime
 extended_difference(a: Node, b: Node): Node from runtime
 extended_product(a: Node, b: Node): Node from runtime
+# `a ÷ b` of two Int nodes, one an exact ratio or a big int: the floored quotient (arithmetic.warp node_floor_quotient)
+extended_floor_quotient(a: Node, b: Node): Node from runtime
+# a / b, a % b (Euclidean), a rem b (truncated) of two Int nodes, one an exact ratio or a big int
+extended_quotient(a: Node, b: Node): Node from runtime
+extended_modulo(a: Node, b: Node): Node from runtime
+extended_remainder(a: Node, b: Node): Node from runtime
+# `floor x` of a ratio or a big int (arithmetic.warp node_floor)
+extended_floor(n: Node): Node from runtime
+# the emitter's exact numbers (decision core-int-division): base ^ exponent of ints, a negative exponent an exact
+# ratio; a float as the exact ratio it holds (`x as rational`); an integer literal past 64 bits by its digits; a
+# decimal literal past 18 places, its digits over 10^places
+extended_power(base: Node, exponent: Node): Node from runtime
+extended_exact_float(x: float): Node from runtime
+extended_big_literal(digits: text): Node from runtime
+extended_decimal(digits: text, places: int): Node from runtime
+# floats: x ^ y and the cube root, musl's (extensions/big_numbers/pow.warp)
+extended_float_power(x: float, y: float): float from runtime
+extended_cube_root(x: float): float from runtime
 # conversions: an exact ratio as a float, and truncated toward 0
 extended_float(n: Node): float from runtime
 extended_truncated(n: Node): int from runtime

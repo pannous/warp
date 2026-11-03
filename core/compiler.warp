@@ -41,6 +41,23 @@ runtime_folder(): text := library_folder + "/compiler"
 # the runtime words, lowered by the same passes as a program, only to build runtime.wasm: a compile takes them from it
 lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_source)
 
+# the compiler's own build, this library's compiler.warp (by its text): its runtime carries only the rows of
+# COMPILER_BUILD_EXTENSIONS (decision extension-row-optional). Its file as written: file_text may answer the bundle's
+# text, blanked of comments
+own_build(source: text): bool := source == (try read(runtime_folder() + "/compiler.warp") else "")
+# the runtime words of the extension rows a build leaves out: the definitions of each one's runtime root
+left_out_runtime_words(kept: list): list := {
+	words = []
+	for row in EXTENSIONS {
+		if row.runtime != "" and not kept.any(k => k.name == row.name) {
+			root = file_text(library_folder + "/extensions/" + row.runtime)
+			if root == ø { raise "no runtime root extensions/" + row.runtime + " of the extension " + row.name }
+			words += definition_slices(root).map(slice => slice#1)
+		}
+	}
+	words
+}
+
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
 # runtime.wasm, a library module behind it, its operands relocatable (write_module)
 compile(source: text, folder: text, library_runtime: any = ø): any := {
@@ -48,6 +65,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
+	own = own_build(source)
 	# (the standard modules it names words of without their `use`, as if it said them)
 	timed("implicit uses")
 	source = with_implicit_uses(source, word_index_file(), folder)
@@ -60,6 +78,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	prepend_runtime(library_runtime ?? runtime_bytes())
 	relocate_program(separate_output != "" or linked_output != "")
 	shake_runtime(library_runtime == ø and separate_output == "" and linked_output == "")
+	cut_runtime_words(if own then left_out_runtime_words(COMPILER_BUILD_EXTENSIONS) else [])
 	linking = library_runtime == ø and prepended()
 	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}

@@ -17,7 +17,9 @@
 #   its form is not there (`emit alarm`)
 #   block_words: words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; keyword_readers: map = {}; block_words: list = []; commands: list = []; runs: any = ø }
+#   runtime: its runtime root under extensions/, whose definitions (the bridge hooks' bodies) are trapping stubs in a
+#   build leaving the row out (decision extension-row-optional, compiler.warp left_out_runtime_words)
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; keyword_readers: map = {}; block_words: list = []; commands: list = []; runs: any = ø; runtime: text = "" }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
