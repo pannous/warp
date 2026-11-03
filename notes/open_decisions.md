@@ -5,8 +5,6 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
-- postfix-words (user wants a discussion): `xs sorted`, `x squared`. Options: a typed sugar rule `$x $f => $f($x) where $f takes …` (typed rule conditions exist: core/extensions/sugar/broadcasting.warp), or the original idea, an -ed/-d verb suffix fallback (`sorted` → sort when no `sorted` exists). Default: not a feature.
-- true-threads (user asked): `go` tasks are cooperative today (N29); decision P33 says real threads (wasm threads natively, Web Workers in the page). How to tell threads from cooperative tasks?
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 

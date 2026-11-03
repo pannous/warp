@@ -1,0 +1,5 @@
+# classes sharing a method name with other parameter counts: each class keeps its own (card lifts-refuses)
+'class A { m() := 1 }; class B { m(x) := x }; [A().m(), B().m(5)]'	[1, 5]
+'class A { m() := 1 }; class B { m(x) := x }; f(a) := a.m(); g(b) := b.m(2); [f(A()), g(B())]'	[1, 2]
+'class A { size() := 1 }; class B { size(x) := x }; [A().size(), B().size(5), [1, 2].size]'	[1, 5, 2]
+'x = 3km; c = channel(); c.send(1); c.receive()'	1

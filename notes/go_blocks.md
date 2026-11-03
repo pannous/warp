@@ -1,7 +1,8 @@
 # Tasks: go blocks, await, channels
 
-Decision N29 (2026-11-02, card go-cooperative): `go {…}` is a cooperative task, no thread, natively and in the page
-alike. lib/tasks.warp (a std module: "tasks" in core/passes/rewrites.warp std_module_names, so its `where program` rule
+Decision tasks-parallel (user 2026-11-03, undoes night decision N29): natively `go {…}` runs truly in parallel on its own
+thread, no extra keyword; the cooperative scheduler below is the JavaScript page's lane (and today's native stopgap) until
+the page has real threads. Card go-native-threads. lib/tasks.warp (a std module: "tasks" in core/passes/rewrites.warp std_module_names, so its `where program` rule
 runs) holds the rules and the scheduler.
 
 - `go { a; sleep(t); b }` is `task_go(() => { a; task_sleep(t, () => { b }) })`: the block is split at its own
