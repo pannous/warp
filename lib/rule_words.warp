@@ -179,6 +179,54 @@ table_kept(n: Node, tables: map, fields: list): Node := {
 	n
 }
 
+# --- unit fields (lib/units.warp's program rule, card unit-fields) ---
+
+# the program with each value given to a field or variable a unit word types shown in that unit: `Run(1500m)` of
+# `class Run{distance: km}` as `Run(shown_in(1500m, "km"))`, `r.distance = 1500m` and `x: km = 1500m` so. shown_in
+# changes only the unit a quantity of that dimension shows in, never converts another value; ø when no unit types any.
+# The unit words come with the rule, as lib/units.warp lists them
+units_shown(program: Node, unit_words: Node): any := {
+	statements = level_statements(program)
+	units = items_of(unit_words).map(name_of)
+	classes = {}
+	fields = {}
+	for statement in statements.filter(statement => class_view(statement) != ø) {
+		members = class_view(statement)#3[3..].map(member_read).filter(member => defined_word(member) == ø)
+		typed = members.map(member => member_unit(member, units))
+		if typed.any(unit => unit != "") { classes[declared_class_name(statement)] = typed }
+		for i in 1 to count(typed) { if typed#i != "" { fields[field_name(members#i)] = typed#i } }
+	}
+	if #classes == 0 and not statements.any(statement => unit_typed_variable(statement, units) != "") { return ø }
+	ruled = statements.map(statement => if class_view(statement) != ø then statement else bottom_up(statement, part => unit_shown(part, classes, fields, units)))
+	separated(bracketed(ruled, ""), ";")
+}
+# a construction, a field write or a typed variable given its value shown in its unit; any other node as it is
+unit_shown(n: Node, classes: map, fields: map, units: list): Node := {
+	if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and classes.has(name_of(n#1)) {
+		typed = classes[name_of(n#1)]
+		return bracketed([n#1] + (2 to #n).map(i => if i - 1 <= count(typed) and typed#(i - 1) != "" then shown_in_unit(n#i, typed#(i - 1)) else n#i), "(")
+	}
+	if not is_key(n, Op.Assign) { return n }
+	target = key_of(n)
+	if is_key(target, Op.Dot) and value_of(target) is symbol and fields.has(name_of(value_of(target))) { return Key(target, Op.Assign, shown_in_unit(value_of(n), fields[name_of(value_of(target))])) }
+	unit = unit_typed_variable(n, units)
+	if unit != "" then Key(target, Op.Assign, shown_in_unit(value_of(n), unit)) else n
+}
+# the unit word a field `d: km` (or `d: km = 0km`) is declared in, else ""; an aliased unit reads back as a bodiless type
+member_unit(member: Node, units: list): text := {
+	if not is_key(member, Op.Colon) { return "" }
+	written = if is_key(value_of(member), Op.Assign) then key_of(value_of(member)) else value_of(member)
+	word = annotated_type_name(written) ?? ""
+	if word in units then word else ""
+}
+# the unit a typed variable `x: km = …` names, else ""
+unit_typed_variable(n: Node, units: list): text := {
+	if not is_key(n, Op.Assign) or not is_key(key_of(n), Op.Colon) or not (value_of(key_of(n)) is symbol) { return "" }
+	word = name_of(value_of(key_of(n)))
+	if word in units then word else ""
+}
+shown_in_unit(value: Node, unit: text): Node := call_of("shown_in", [value, plain_node(parsed("\"" + unit + "\""))])
+
 # --- variable signals (lib/signals.warp's rules, card signals-lib) ---
 
 variable_listen_word = "variable_listen"
@@ -658,6 +706,7 @@ rule_words = {
 	tables_kept: tables_kept,
 	task_steps: task_steps,
 	tasked: tasked,
+	units_shown: units_shown,
 	typed_json: typed_json,
 	unit_bound: unit_bound,
 	unit_led: unit_led,
@@ -673,11 +722,13 @@ rule_words = {
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
 	Key(left, Op.Assign, right): typed_json_field_type(left)
-	Key(left, Op.Colon, right): {
-		view = view_of(right)
-		if kind_of(view) == "type" then declared_type_name(view#2) else type_named(right)
-	}
+	Key(left, Op.Colon, right): annotated_type_name(right)
 	_: ø
+}
+# the type an annotation `: T` names, read through its view: a Type node there before the early rewrite, else T written
+annotated_type_name(written: Node): text? := {
+	view = view_of(written)
+	if kind_of(view) == "type" then declared_type_name(view#2) else type_named(written)
 }
 
 # the statement declaring the class of that name in the program, ø for none
