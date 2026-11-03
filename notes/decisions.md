@@ -822,3 +822,10 @@ path (`use "packages/egraph/egraph.warp"`, decision package-use-by-path), not sh
 ## operator-rows-stay (user, 2026-11-03)
 Operator rows in lib/aliases.warp keep `power: [left, right]` as landed (card parser-rows, d118a132ec). Discussed and
 not adopted: one Lean-style precedence number with a `precedence` keyword, or relational precedence ("higher than +").
+
+## parser-cleanup (user, 2026-11-03)
+"We can try making the parser denser, if it doesn't compromise its readability." "Implement all as you suggested":
+remove the core's stale Rust-twin comments, move lib/ file helpers out of the parser to their users, one reader for
+all operator declarations (`(infix|prefix|suffix|postfix|circumfix)? operator $op := body`), the parser's own atoms as
+rows of the atom_readers table. "If you see other patterns on the way that can be improved, don't hesitate to
+implement them as well." Plan and review checklist: notes/parser_cleanup.md.
