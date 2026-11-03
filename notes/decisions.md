@@ -811,3 +811,7 @@ egraph is the first outside library: it lives in the registry github.com/pannous
 path (`use "packages/egraph/egraph.warp"`, decision package-use-by-path), not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
 - markup-keeps final (user, 2026-11-01, via the Interviewer): lib-first; core only fix 1 (tag items are expressions,
   ~15–25 lines) and automatic liveness (~20); keyed instances by hand for now (no core part d). warp-markup builds.
+
+## operator-rows-stay (user, 2026-11-03)
+Operator rows in lib/aliases.warp keep `power: [left, right]` as landed (card parser-rows, d118a132ec). Discussed and
+not adopted: one Lean-style precedence number with a `precedence` keyword, or relational precedence ("higher than +").
