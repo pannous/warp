@@ -1,0 +1,111 @@
+# Shader blocks (card parser-cold-forms, decision core-is-self): `shader { … }`, `wgsl { … }`, WGSL as a sublanguage
+# read by its head word; the lexer's shader_brace still skips the block when it prescans
+shader_readers(): map := {
+	readers = {}
+	for word in SHADER_WORDS { readers[word] = shader_block }
+	readers
+}
+shader_blocks_extension = Extension{name: "shader_blocks", keyword_readers: shader_readers()}
+
+# `shader { … }` (or `wgsl { … }`), the parser at its word: WGSL as a sublanguage, the text between the braces without its
+# common indentation, braces in WGSL comments not counted; else ø
+# Rust twin: literals/shaders.rs parse_shader_block
+SHADER_WORDS = ["shader", "wgsl"]
+def shader_block(p: Parser, word: text): Node := {
+	open = p.at + word.length
+	while open < p.n and (p.code[open] == ' ' or p.code[open] == '\t') { open = open + 1 }
+	if not is_at(p.code, open, '{', p.n) { return ø }
+	end = closing_brace(p.code, open + 1, p.n)
+	if end < 0 { raise "the { of `" + word + " { … }` is never closed" }
+	p.at = end + 1
+	shader_text(dedented(p.code[open + 1 .. end]))
+}
+
+# Where the `}` closing a `{` before `at` is, -1 if none: WGSL comments hold no braces
+# Rust twin: literals/text.rs closing_brace
+def closing_brace(code: text, at: int, n: int): int {
+	depth = 1
+	while at < n {
+		c = code[at]
+		if c == '/' and is_at(code, at + 1, '/', n) {
+			while at + 1 < n and code[at + 1] != '\n' { at = at + 1 }
+		} else if c == '/' and is_at(code, at + 1, '*', n) {
+			at = at + 2
+			while at + 1 < n and not (code[at] == '*' and code[at + 1] == '/') { at = at + 1 }
+			at = at + 1
+		} else if c == '{' {
+			depth = depth + 1
+		} else if c == '}' {
+			if depth == 1 { return at }
+			depth = depth - 1
+		}
+		at = at + 1
+	}
+	-1
+}
+
+# The lines without the indentation all non-blank ones share, without the blank lines around them, the first
+# without any
+# Rust twin: literals/text.rs without_common_indentation
+def dedented(source: text): text {
+	lines = source.split("\n")
+	written = [line for line in lines if line.trim()]
+	if #written == 0 { return "" }
+	common = min(written.map(indent_width))
+	first = 1
+	while count(lines#first.trim()) == 0 { first = first + 1 }
+	last = #lines
+	while count(lines#last.trim()) == 0 { last = last - 1 }
+	kept = []
+	for index in first .. last + 1 {
+		line = lines#index
+		kept += [without_trailing_blanks(if index == first then line.trim() else line[common ..])]
+	}
+	kept.join("\n")
+}
+
+def indent_width(line: text): int {
+	width = 0
+	while width < #line and (line[width] == ' ' or line[width] == '\t') { width = width + 1 }
+	width
+}
+
+def without_trailing_blanks(line: text): text {
+	end = #line
+	while end > 0 and (line[end - 1] == ' ' or line[end - 1] == '\t') { end = end - 1 }
+	line[0 .. end]
+}
+
+# A shader's WGSL with each hole `$name` read from the uniform values (`values.name`), the holes listed in its
+# shader_holes attribute; Book of Shaders names and `$mouse_x` read warp's own holes
+# Rust twin: graphics/shader_holes.rs shader_text, written
+HOLE_ALIASES = {"mouse_x": "mouse.x", "mouse_y": "mouse.y", "u_time": "time", "u_resolution": "size", "u_mouse": "mouse", "wheel": "mouse_wheel"}
+def shader_text(wgsl: text): Node := {
+	names = []
+	# the pieces between holes are copied whole, joined once: one `+` per character copied the text each time
+	parts = []
+	copied = 0
+	at = 0
+	n = #wgsl
+	while at < n {
+		c = wgsl[at]
+		end = at + 1
+		if c == '$' {
+			while end < n and (is_alphanumeric(wgsl[end]) or wgsl[end] == '_') { end = end + 1 }
+		}
+		if end == at + 1 or is_digit(wgsl[at + 1]) {
+			at = at + 1
+		} else {
+			written_name = wgsl[at + 1 .. end]
+			read = if HOLE_ALIASES.contains(written_name) then HOLE_ALIASES[written_name] else written_name
+			parts += [wgsl[copied .. at], "values." + read]
+			hole_name = read.split(".")#1
+			if not names.contains(hole_name) { names += [hole_name] }
+			at = end
+			copied = at
+		}
+	}
+	text = join(parts + [wgsl[copied .. n]], "")
+	if #names == 0 { return text }
+	attributed("shader_hole_names", listed(Bracket.Square, Separator.Space, [symbol(hole_name) for hole_name in names]), text)
+}
