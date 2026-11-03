@@ -15,7 +15,7 @@ it a candidate; core/extensions/sugar counts as an extension already.
 |---|---|---|---|---|
 | time literals and counted units: `5ms`, `2h`, `12:30`, `3 times`-style counts | parser.warp glued_time_at … time_unit_at, duration_text, counted_unit, counts_units | 114 | no | **atom suffix**: after a number, an extension may read a glued suffix into a literal (bare_atom) |
 | number forms: `½`, `x²`, `0.(3)`, overlined digits, `×10^`, `5%`, exact `π` | parser.warp vulgar_fraction, with_glued_factor, superscript_power, reciprocal_if, raised_terms, overlined_digits, repeating_decimal, ten_to_the, percent_ends, exact_constant | 135 | no (`π` only in comments and texts) | atom suffix (above) and **atom glyph**: an atom starting with a registered glyph |
-| radix numbers `0x…`, `0b…` | parser.warp radix_value, digit_value | ~30 | **yes**: hex in core/commands/commands.warp (MACHO_MAGIC …) | stays core |
+| radix numbers `0x…`, `0b…` | parser.warp radix_value, digit_value | ~30 | only 3 constants in core/commands/commands.warp (MACHO_MAGIC, SEGMENT_64, PAGE_BYTES) | atom glyph; minimal source change (decision self-source-minimal): those 3 constants written in decimal with the hex in a comment, then the form leaves the core |
 | shader blocks, inline wasm blocks | parser.warp shader_block, closing_brace, dedented, indent_width, without_trailing_blanks, shader_text, wasm_instruction_after | 119 | no | **raw block**: a registered head word whose block is read as text |
 | URL and path literals `https://…`, `./x` | parser.warp url_text, starts_path(_at), path_literal, is_operand_end, ends_path, starts_path_name | 43 | no | atom glyph (above) |
 | circumfix operators `\|x\|`, `‖x‖` and math aliases | parser.warp circumfix_*, math_circumfix_aliases, math_operator_aliases; core/node.warp keeps Op.Abs … only for the seed (card remove-unused) | 60 | no | **operator table**: lib/aliases.warp already holds the spellings; the parser asks the table |
@@ -37,6 +37,10 @@ Candidates by static reading: about 1,600 lines (parser.warp about 1,050 of its 
 injection, number_words, source_checks and lints). The hooks they share are few: atom suffix, atom glyph, raw block,
 statement head, declaration and definition head, text prefix, text pass, operator table, parse marks with checks,
 and the pass list. These ten table entries would carry them all.
+
+Every spelling stays in the language (decision self-source-minimal): a row leaves the core into an extension, never
+out of warp. Where the compiler's own source is the only reason a form stays core, a minimal change to that source
+(radix constants above; the postfix/phrase row once measured) lets it go.
 
 Open before moving: the measurement must confirm "no" for each row (a form inside a text the compiler builds at run
 time counts too); the declared-operator row moves only with rewrites.warp's typed-operator rules, which the sugar
