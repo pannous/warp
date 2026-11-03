@@ -1,0 +1,6 @@
+# The commands extension (card commands-extension, decision core-is-self): warp's commands beside those the compiler
+# needs to build itself (core/commands/commands.warp). compiler.warp hands every command it does not know to
+# extension_command, and is_command takes extension_command_words beside its own
+use "commands/commands.warp"
+use "commands/build.warp"
+use "commands/tests.warp"

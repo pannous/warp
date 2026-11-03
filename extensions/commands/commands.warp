@@ -1,0 +1,152 @@
+# The commands extension's commands beside compiling (card commands-extension): help, version, the shown stages
+# (parse, data, lower, uses), the REPL, and the refusals of the commands plain WASI cannot run; build.warp builds
+# executables, tests.warp lists and judges `warp test`'s cases. compiler.warp hands each command it does not know
+# itself to extension_command (extensions/commands.warp)
+# warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
+VERSION = "1.6.1"
+REPL_PROMPT = "warp> "
+NATIVE = "the native warp"
+HELP_COLUMN = 38
+
+# each command and what it does, in `warp help`'s order
+command_help = [
+	["help", "Show this help"],
+	["version", "Show version"],
+	["repl", "Start interactive console: definitions stay for the next lines"],
+	["parse <code|file>", "Show the parsed program"],
+	["data <file>", "Read untrusted data without evaluating it"],
+	["parse-code <code> <file>", "The parsed code into the file, encoded for the native warp to rebuild (its parse_code)"],
+	["rebake <file>", "The compiler at the file with its baked library tables made anew by this compiler, written over their segments (warp rebuild)"],
+	["baked-current <file>", "yes into the file when the library baked in is cut and parsed as this compiler does, else no (warp rebuild)"],
+	["lower <code|file>", "Show the program after the lowering passes"],
+	["uses <code|file>", "The standard modules it uses without their `use`, one a line (warp beautify writes them)"],
+	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
+	["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
+	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
+	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
+	["optimize <in.wasm> <out.wasm>", "The module optimized by Binaryen's wasm-opt, as warp rebuild optimizes warp.wasm"],
+	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
+	["modules <folder> [runtime.wasm]", "Every standard module so, into the folder"],
+	["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as the native `warp` calls it"]
+]
+# the commands that run what they compile: plain WASI cannot instantiate the module
+running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
+# the commands that need the native warp's host: a server, a window, the network, the Lean model, the build files
+native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "deploy", "link", "app", "docs", "wiki",
+	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
+
+# the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
+native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home"]
+# set by the native warp for the compiler it hosts: the host's name
+HOST_VARIABLE = "WARP_HOST"
+natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
+# what no host of these commands has yet: under the native warp, the commands it lacks
+NOT_YET = " is not in warp yet"
+
+command_name(entry: list): text := entry#1.split(" ")#1
+# the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
+host_commands = ["repl-step", "test-list", "test-verdicts"]
+# the words core/commands/commands.warp is_command takes for commands beside its own
+extension_command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
+
+# the text of the file `target` names, else `target` itself as code
+source_of(target: text): text := try read(target) else target
+
+show_help() := {
+	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
+	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
+	host_commands = running_commands + native_commands
+	if natively_hosted() {
+		print "  the native warp itself: " + native_warp_commands.join(" ")
+		print "  not in warp yet: " + host_commands.filter(word => word not in native_warp_commands).join(" ")
+	} else { print "  need the native warp: " + host_commands.join(" ") }
+}
+
+# words, then spaces up to width, at least one
+padded(words: text, width: int): text := {
+	line = words + " "
+	while #line < width { line = line + " " }
+	line
+}
+
+# the version, and the lib/ the compiler reads
+version_text(library: text): text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
+
+# the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
+# rust-harness:src/cli/display.rs structure)
+structure(n: Node): text := match n {
+	Key(left, op, right): "(" + (op as text) + " " + structure(left) + " " + structure(right) + ")"
+	List(items, bracket, separator): grouped_structure(items.map(structure), bracket as text, separator as text)
+	_: "${n}"
+}
+# the items' texts in their brackets, between them the separator ("⏎" for a line break)
+grouped_structure(items: list, bracket: text, separator: text): text := {
+	joiner = if separator == "\n" then "⏎ " else if separator == "" or separator == " " then " " else separator + " "
+	if #bracket == 2 { return bracket#1 + items.join(joiner) + bracket#2 }
+	closing = {"{": "}", "[": "]", "(": ")", "<": ">", "": ""}
+	bracket + items.join(joiner) + closing[bracket]
+}
+
+refuse_running(command: text) := {
+	if natively_hosted() { raise "warp " + command + NOT_YET }
+	raise "warp " + command + " runs the module it compiles, which plain WASI cannot (no instantiate in WASI preview 1): use " + NATIVE + " or `warp " + command + "`"
+}
+refuse_native(command: text) := {
+	if natively_hosted() { raise "warp " + command + NOT_YET }
+	raise "warp " + command + " needs " + NATIVE + "'s host: run `warp " + command + "`"
+}
+
+source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
+show_version() := print version_text(library_folder)
+show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
+show_data() := print plain_node(parsed(source_or_code(1)))
+show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
+show_uses() := { for module in implicit_modules(source_or_code(1), word_index_file()) { print module } }
+
+# the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
+REPL_STATE = ".warp-repl-state.warp"
+staying_lines(line: text): text := {
+	statements = statements_in(plain_node(parsed(line)))
+	staying = statements.filter(statement => is_declaration(statement) or is_import(statement))
+	staying.map(statement => "${statement}").join("\n")
+}
+# one line of the REPL: its module written to wasm_file, compiled after the state file's lines; the line's
+# declarations added to the state once it compiled
+repl_step(state_file: text, line: text, wasm_file: text) := {
+	state = try read(state_file) else ""
+	compiled = compile(state + "\n" + line, ".")
+	if compiled is text { raise compiled }
+	write_bytes(wasm_file, compiled)
+	staying = staying_lines(line)
+	if staying { write(state_file, state + "\n" + staying) }
+}
+# `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
+repl() := {
+	write(REPL_STATE, "")
+	line = input(REPL_PROMPT)
+	while line != ø {
+		if line.trim() {
+			try {
+				repl_step(REPL_STATE, line, ".warp-repl-line.wasm")
+				print "compiled; running it needs the native warp (plain WASI has no instantiate): warp repl"
+			} catch failure { print failure }
+		}
+		line = input(REPL_PROMPT)
+	}
+}
+
+# each command compiler.warp hands on, which it does not know itself
+extension_command(command: text) := match command {
+	"help": show_help()
+	"version": show_version()
+	"parse": show_parsed()
+	"data": show_data()
+	"lower": show_lowered()
+	"uses": show_uses()
+	"build": build(args[1 ..< #args])
+	"repl": repl()
+	"repl-step": repl_step(args#2, args#3, args#4)
+	"test-list": test_listed(args#2, args[2 ..< #args])
+	"test-verdicts": test_verdicts(args#2, args[2 ..< #args])
+	_: if command in running_commands then refuse_running(command) else refuse_native(command)
+}

@@ -39,7 +39,10 @@ handled() { cat "$state/handled" 2>/dev/null; }
 
 [ -d "$TREE" ] || cowtree add --detach "$TREE" origin/main >/dev/null || exit 1
 mkdir -p "$state"
-[ -n "$if_moved" ] && [ "$(main_tip)" = "$(handled)" ] && exit 0
+# a run that died (a crash, a kill) left its tip handled but maybe not installed: its dead lock says so, and the run
+# taking that lock over installs the tip again
+interrupted() { local holder; holder=$(cat "$state/lock/pid" 2>/dev/null) && ! kill -0 "$holder" 2>/dev/null; }
+[ -n "$if_moved" ] && [ "$(main_tip)" = "$(handled)" ] && ! interrupted && exit 0
 kill_tree() { # kill_tree <pid>: the process and all it started, the parent first (it would act on a killed child's failure)
 	local children child
 	children=$(pgrep -P "$1")

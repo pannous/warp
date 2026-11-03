@@ -15,7 +15,7 @@
 #   warp rebuild from <step>  the same from that step on (seed, stage-two, optimize, runtime, modules)
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
 #   warp rebuild seed     the seed's machine code made (seed_shipped)
-#   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
+#   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp and extensions/commands/commands.warp), any
 #                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
 # are not the core binary's (decision libraries-not-core) and say so
