@@ -43,6 +43,9 @@ few things differently. Where this file and the role files disagree, Grok agents
 ## For the Supervisor
 Grok Bot's Supervisor runs the Grok coders named in data/grok-cards.md; SendMessage can't reach it. Message it with
 `grok-msg warp-supervisor "<text>"` (~/dev/bin/grok-msg, webhook; secrets in ~/.config/grok-bot/webhook, never in the
-repo). Hand its coders simple library-only cards: `todo take <card> <coder>`, write the task into data/grok-cards.md,
+repo); it prints "sent to Grok Bot Supervisor" and wakes it through its fleet inbox. The webhook key has no expiry and
+changes only when the user regenerates it: a 401 means exactly that, so ask the user to have Grok refresh the file
+and write to data/grok-cards.md meanwhile (a 401 hid every message from 2026-11-02 to 11-03). Grok answers by typing
+into the warp-supervisor tmux pane. Hand its coders simple library-only cards: `todo take <card> <coder>`, write the task into data/grok-cards.md,
 ping with grok-msg; they land their branches themselves. At most 1 active + 1 queued card per Grok coder.
 Unexplained direct pushes to main with the user's identity (g-* cards) may be Grok Bot: ask the user.
