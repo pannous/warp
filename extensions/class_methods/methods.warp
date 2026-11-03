@@ -33,8 +33,6 @@
 #   of no parameters runs at every construction, a literal `C{…}`'s too: each is `C·made(…)` of the instance
 # A class keeping a member that is neither field nor method (an operator), or whose method takes another count of
 # parameters than its namesakes, stays as written: the emitter refuses it as a class with methods.
-use "../../core/passes/classes.warp"
-use "../../core/passes/int_type_shows.warp"
 
 self_node = symbol("self")
 # what a method may call its instance: self, as Swift's and Python's, or this, as Java's and C++'s

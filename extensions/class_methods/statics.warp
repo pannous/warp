@@ -2,7 +2,6 @@
 # Clicker·clicks, not a field of each instance: read and changed bare in the class's members, and outside as
 # `Clicker.clicks` or through an instance, `Clicker(1).clicks` (card class-ticket). A static method needs nothing:
 # `Circle.doubled(4)` calls it already
-use "../../core/passes/classes.warp"
 
 static_word = "static"
 
