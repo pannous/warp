@@ -21,7 +21,7 @@ The specification is not fully implemented yet
 
 warp began as a Rust implementation; Since 2026-10-29 the compiler is COMPLETELY written in warp (core/, notes/self_hosting.md) and compiles itself.
 The old Rust compiler is the snapshot on branch `rust-bootstrap`; nothing of it is on main.
-Most things are implemented as libraries (lib/) or compiler extensions (core/extensions/). Changes to the core
+Most things are implemented as libraries (lib/) or compiler extensions (extensions/). Changes to the core
 (core/) go through the interviewer. Ignore all old tasks about Rust features or 'both lanes'.
 The seed, warp-seed.wasm beside the binary (~/dev/bin; no file of git, published on GitHub pre-releases seed-<date>), is
 the seed compiler; it compiles compiler.warp to warp.wasm, which promotes itself to warp-self.wasm when it compiles
@@ -29,7 +29,7 @@ itself once more (no fixed point needed).
 
 ## Three layers (decision core-is-self: keeps the core from bloating)
 - **core/**: only what the compiler needs to compile itself. Aim: about 30% of the compiler, and shrinking.
-- **extensions/** (today core/extensions/): every other language feature, baked in through one static hook table.
+- **extensions/**: every other language feature, baked in through one static hook table.
 - **lib/**: modules programs import. A new feature goes into an extension or a library, never into the core;
   the language is never simplified to shrink the core (scripts/vitals.py measures the split).
 
@@ -51,7 +51,7 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 ### The warp compiler (`core/`; `lib/compiler` links to it for a transition)
 
 `core/compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
-parsing/ → passes/ (the lowering passes; sugar as rewrite rules in core/extensions/sugar/) → analysis/ → emitter/,
+parsing/ → passes/ (the lowering passes; sugar as rewrite rules in extensions/sugar/) → analysis/ → emitter/,
 whose runtime words are warp too (runtime.warp, runtime/). core/node.warp declares the Node enum, core/commands/ the
 one command table.
 - `warp <file|code>` (and `warp run`): runs warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the
