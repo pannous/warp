@@ -450,6 +450,8 @@ declared_field(field: any): any := {
 	if kind != "key" { return ø }
 	if field#2 == ":" and kind_of(field#3) in field_name_kinds {
 		type_name = type_name_of(field#4)
+		# `name: "?"`, `age: 0`: a value where a type would be is the field's default, as `name = "?"`
+		if type_name == unnamed_type { return [field#3#2, ø, [field#4]] }
 		# `b: text?`, optional: ø by default
 		return [field#3#2, type_name, if type_name == base_type(type_name) then ø else [ø]]
 	}
@@ -467,8 +469,9 @@ type_name_of(type: any): text := {
 	# `int or text`, a union (decision union-or)
 	if kind_of(type) == "key" and type#2 == "or" { return type_name_of(type#3) + " or " + type_name_of(type#4) }
 	if kind_of(type) == "type" and kind_of(type#2) == "symbol" { return type#2#2 }
-	"?"
+	unnamed_type
 }
+unnamed_type = "?"
 field_types(body: any): map := {
 	types = {}
 	for field in declared_fields(body) { types[field#1] = field#2 }
