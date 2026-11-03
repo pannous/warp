@@ -6,9 +6,9 @@ use "analysis/analyzer.warp"
 use "emitter/emitter.warp"
 use "analysis/host_words.warp"
 use "commands/commands.warp"
-use "commands/tests.warp"
 use "emitter/c_imports.warp"
 use "../extensions/primitive.warp"
+use "../extensions/commands.warp"
 use "../extensions/extensions.warp"
 use os
 use file
@@ -159,38 +159,6 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 # wasm, 2026-10-28): those run as the module of wasm_file
 runs_linked(source: text): bool := not is_primitive_file(source) and #module.closures == 0 and not module.counts_fuel and #module.linked_images == 0
 
-# the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
-REPL_STATE = ".warp-repl-state.warp"
-staying_lines(line: text): text := {
-	statements = statements_in(plain_node(parsed(line)))
-	staying = statements.filter(statement => is_declaration(statement) or is_import(statement))
-	staying.map(statement => "${statement}").join("\n")
-}
-# one line of the REPL: its module written to wasm_file, compiled after the state file's lines; the line's
-# declarations added to the state once it compiled
-repl_step(state_file: text, line: text, wasm_file: text) := {
-	state = try read(state_file) else ""
-	compiled = compile(state + "\n" + line, ".")
-	if compiled is text { raise compiled }
-	write_bytes(wasm_file, compiled)
-	staying = staying_lines(line)
-	if staying { write(state_file, state + "\n" + staying) }
-}
-# `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
-repl() := {
-	write(REPL_STATE, "")
-	line = input(REPL_PROMPT)
-	while line != ø {
-		if line.trim() {
-			try {
-				repl_step(REPL_STATE, line, ".warp-repl-line.wasm")
-				print "compiled; running it needs the native warp (plain WASI has no instantiate): warp repl"
-			} catch failure { print failure }
-		}
-		line = input(REPL_PROMPT)
-	}
-}
-
 # runtime.wasm beside this compiler, the harness's fifth argument of a compile: the program is compiled behind it (card
 # runtime-prepended), read once. A compile has no other runtime: without it, it fails
 RUNTIME_ARGUMENT = 5
@@ -240,36 +208,19 @@ write_modules(folder: text, runtime_file: text) := {
 	write(folder + "/" + WORD_INDEX, word_index_text())
 	if #refused > 0 { raise "standard modules that don't prebuild: " + refused.join("; ") }
 }
-source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
-show_version() := print version_text(library_folder)
-show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
-show_data() := print plain_node(parsed(source_or_code(1)))
-show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
-show_uses() := { for module in implicit_modules(source_or_code(1), word_index_file()) { print module } }
 # where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
 # they are code, compiled there for it to run; no other harness sets it
 RUN_TO_VARIABLE = "WARP_RUN_TO"
 run_to = env(RUN_TO_VARIABLE) ?? ""
 match command {
 	"": if run_to then compile_written(args.join(" ") + "\n", run_to, ".") else compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
-	"help": show_help()
-	"version": show_version()
-	"parse": show_parsed()
 	"parse-code": write_parse_code(args#2, args#3)
 	"baked-current": write_baked_current(args#2)
 	"rebake": write_rebaked(args#2)
-	"data": show_data()
-	"lower": show_lowered()
-	"uses": show_uses()
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
-	"build": build(args[1 ..< #args])
-	"repl": repl()
-	"repl-step": repl_step(args#2, args#3, args#4)
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
 	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
 	"optimize": trim(args#2, args#3, "optimize")
-	"test-list": test_listed(args#2, args[2 ..< #args])
-	"test-verdicts": test_verdicts(args#2, args[2 ..< #args])
-	_: if command in running_commands then refuse_running(command) else refuse_native(command)
+	_: extension_command(command)
 }

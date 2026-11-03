@@ -16,7 +16,7 @@ const TYPED_FILE = "playground.warp";
 // the compiler reads the standard modules of this lib/ (core/parsing/parser.warp warp_lib), as the native warp tells it
 const COMPILER_ENVIRONMENT = [...ENVIRONMENT, `WARP_LIB=${COMPILER_LIBRARY}`];
 // a run of `warp test` (worker.js valueAsData): the compiler makes _start print main's value as data after a mark
-// (core/emitter/emitter.warp VALUE_MARK), which the native verdicts read (core/commands/tests.warp run_result), and
+// (core/emitter/emitter.warp VALUE_MARK), which the native verdicts read (extensions/commands/tests.warp run_result), and
 // says no hints, as core/native/tests.warp has its runs
 const TEST_RUN_ENVIRONMENT = ["WARP_VALUE_AS_DATA=1", "WARP_HINTS=0"];
 const compilerEnvironment = () => self.valueAsData ? [...COMPILER_ENVIRONMENT, ...TEST_RUN_ENVIRONMENT] : COMPILER_ENVIRONMENT;
