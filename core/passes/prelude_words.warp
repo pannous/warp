@@ -10,7 +10,7 @@ use "uses.warp"
 use "../analysis/builtin_signatures.warp"
 use "scope.warp"
 use "lambdas.warp"
-use "../emitter/c_imports.warp"
+use "../../extensions/c_imports.warp"
 use "../../extensions/components.warp"
 
 # each function a library file brought, by name: [the file, the line its definition starts on], the place a refusal

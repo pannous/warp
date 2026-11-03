@@ -6,7 +6,7 @@ use "analysis/analyzer.warp"
 use "emitter/emitter.warp"
 use "analysis/host_words.warp"
 use "commands/commands.warp"
-use "emitter/c_imports.warp"
+use "../extensions/c_imports.warp"
 use "../extensions/primitive.warp"
 use "../extensions/extensions.warp"
 use os
