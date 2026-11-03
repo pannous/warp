@@ -38,6 +38,32 @@ starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_bin
 # `km/h`, `m²`, `cm`: code led by a unit word, the unit part of `2 km/h is speed` (lib/units.warp)
 unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else code is symbol and "units" in (word_index(word_index_file()).get("${code}") ?? [])
 unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
+# `km/h`, `kg·m/s^2`, `cm^2`: a unit written whole, each part a unit word, each power a number (`km/2` is no unit)
+unit_written(code: Node): bool := {
+	if code is key and op_of(code) == Op.Pow { return unit_written(key_of(code)) and is_number_literal(value_of(code)) }
+	if code is key and op_of(code) in [Op.Div, Op.Mul] { return unit_written(key_of(code)) and unit_written(value_of(code)) }
+	code is symbol and "units" in (word_index(word_index_file()).get("${code}") ?? [])
+}
+# `km/h`, `m^2`: the text of a unit written whole of several parts, "km/h", as lib/units unit_named reads it; ø for a
+# single unit word or any other code
+compound_unit(code: Node): any := if code is key and unit_written(code) then "${code}".replace(" ", "") else ø
+# `km/h`, `kg·m/s^2`: the unit word leading a unit written of several parts, ø for other code
+leading_unit(code: Node): any := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then leading_unit(key_of(code)) else if code is symbol then code else ø
+# `q as km`, `(q as km) / h`: the unit word converted to at the bottom of the code's left operands, ø without one
+converted_unit(code: Node): any := {
+	if is_key(code, Op.As) { return if value_of(code) is symbol then value_of(code) else ø }
+	if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then converted_unit(key_of(code)) else ø
+}
+# `q as km/h`, which binds as (q as km) / h: the conversion to the compound unit, q as (km/h); ø when the code is no
+# conversion followed by the rest of a unit written whole (`in` binds looser than / and needs none)
+unit_regrouped(code: Node): any := {
+	if not (code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow]) { return ø }
+	left = key_of(code)
+	conversion = if is_key(left, Op.As) then left else unit_regrouped(left)
+	if conversion == ø { return ø }
+	unit = Key(value_of(conversion), op_of(code), value_of(code))
+	if unit_written(unit) then Key(key_of(conversion), Op.As, unit) else ø
+}
 
 # --- server routes (lib/web.warp's rules, card sample-gaps-server; Rust twin lowering/web/serve.rs route_entry) ---
 
@@ -54,6 +80,26 @@ served(program: Node): any := ended_by(program, "route_add", routes_end_word)
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
 exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
+# a program that starts tasks, ending in running them all (lib/tasks.warp tasks_end)
+tasked(program: Node): any := ended_by(program, "task_go", "tasks_end")
+
+# --- cooperative tasks (lib/tasks.warp, decision N29) ---
+
+# a task's block split at its own sleeps: `a; sleep t; b` as `a; task_sleep(t, () => { b })`, the rest of the block
+# the next step, which the scheduler runs once the task slept; a block without one as it is
+task_steps(block: Node): Node := {
+	statements = (if is_curly_group(block) then items_of(block) else [block]).flat_map(flat_statements)
+	at = (1 to #statements).filter(i => sleep_of(statements#i) != ø)
+	if #at == 0 { return block }
+	rest = List(statements[at#1 ..], Bracket.Curly, Separator.Semicolon)
+	pause = call_of("task_sleep", [call_of("sleep_ms_of", [sleep_of(statements#(at#1))]), Key(List([], Bracket.Round, Separator.Comma), Op.Arrow, task_steps(rest))])
+	List(statements[.. at#1 - 1] + [pause], Bracket.Curly, Separator.Semicolon)
+}
+# `await a + await b`: an await takes the operand before an operator, as a prefix does, not the whole expression
+awaited_operand(x: Node): Node := if x is key and op_of(x) in awaited_ops then Key(awaited_operand(key_of(x)), op_of(x), value_of(x)) else call_of("task_awaited", [x])
+awaited_ops = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne, Op.And, Op.Or, Op.Xor, Op.Coalesce]
+# the amount of a statement `sleep(t)` or `sleep t`, else ø
+sleep_of(statement: Node): any := if is_call_of(statement, "sleep") and #statement == 2 then statement#2 else if is_group(statement) and bracket_of(statement) == "" and #statement == 2 and statement#1 == symbol("sleep") then statement#2 else ø
 # `ticks` after `on every 1 second { ticks += 1 }`: a program that listens (a timer, an event, a variable's listener)
 # defines page_value(), its last expression again, which the page shows anew after each firing
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
@@ -203,7 +249,9 @@ became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key
 # before it (the first write declares the name), that of a definition or a listener always, as they run later. ø for a
 # program without listeners
 signaled(program: Node): any := {
-	statements = level_statements(program)
+	given = level_statements(program)
+	takers = signal_list_takers(given)
+	statements = if #takers == 0 then given else given.map(statement => signal_lists_passed(statement, takers))
 	watched = distinct(statements.flat_map(names_listened))
 	if #watched == 0 { return ø }
 	derived = derived_inputs(statements)
@@ -231,7 +279,53 @@ gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
 # each name once, in the order first named: two listeners of total notify its listeners once a write
 distinct(names: list): list := names.fold([], (kept, name) => if name in kept then kept else kept + [name])
 # the names the statement's variable_listen calls listen to
-names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}"))
+names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}")) + nodes_in(statement).filter(n => is_call_of(n, signal_word) and #n > 1).map(n => "${n#2}")
+
+# --- lists of signals (notes/signals.md "Lists of signals") ---
+
+signal_word = "Signal"
+# each function subscribing to the loop variable of `for s in xs {…}` over its parameter xs, by name: the positions of
+# those parameters (from 1), which take a list of signals
+signal_list_takers(statements: list): map := {
+	takers = {}
+	for statement in statements {
+		name = if is_key(statement, Op.Define) then defined_word(statement) else ø
+		if name != ø {
+			parameters = method_parameters(statement).map(parameter_name)
+			looped = signal_loops(value_of(statement)).map(loop => "${loop#4}")
+			positions = (1 to #parameters).filter(at => parameters#at in looped)
+			if #positions > 0 { takers[name] = positions }
+		}
+	}
+	takers
+}
+# the loops `for s in xs {…}` within n whose body listens to s
+signal_loops(n: Node): list := nodes_in(n).filter(is_signal_loop)
+is_signal_loop(n: Node): bool := is_group(n) and #n >= 5 and n#1 == symbol("for") and n#2 is symbol and n#3 == symbol("in") and n#4 is symbol and items_of(n)[4 ..].any(part => "${n#2}" in names_listened(part))
+# a taker's loop listening to its item, the item's variable (`on change s` of the Signal), a bare read of it that
+# variable's value; a call of a taker with a list literal of names there passing those variables' signals; else n
+signal_lists_passed(statement: Node, takers: map): Node := {
+	taking = is_key(statement, Op.Define) and takers.has(defined_word(statement) ?? "")
+	bottom_up(statement, part => signal_list_part(part, takers, taking))
+}
+signal_list_part(n: Node, takers: map, taking: bool): Node := match n {
+	List(items, bracket, separator): {
+		if taking and is_signal_loop(n) { return List(items[.. 4] + items[4 ..].map(part => item_listened(part, "${items#2}")), bracket, separator) }
+		if not (bracket == Bracket.Round and #items > 1 and items#1 is symbol and takers.has("${items#1}")) { return n }
+		positions = takers["${items#1}"]
+		List([items#1] + (2 to #items).map(at => if (at - 1) in positions then signals_of(items#at) else items#at), bracket, separator)
+	}
+	_: n
+}
+# a list literal of names as their signals, `[a, b]` as `[Signal("a", a), Signal("b", b)]`; anything else as it is
+signals_of(n: Node): Node := if is_group(n) and bracket_of(n) == "[" and items_of(n).all(item => item is symbol) then List(items_of(n).map(item => call_of(signal_word, ["${item}", item])), Bracket.Square, Separator.Comma) else n
+# the loop's part with a bare read of the item its variable's value, and a listener of the item's name listening to
+# the item, the Signal
+item_listened(n: Node, item: text): Node := bottom_up(renamed(n, item, call_of("signal_value", [symbol(item)])), part => if is_call_of(part, variable_listen_word) and is_group(part#2) then listening_item(part, item) else part)
+listening_item(call: Node, item: text): Node := match call {
+	List(items, bracket, separator): List([items#1, List(items_of(items#2).map(name => if name is text and "${name}" == item then symbol(item) else name), Bracket.Square, Separator.Comma)] + items[2 ..], bracket, separator)
+	_: call
+}
 # each derived value's name, `total := a * 2`, and the names it reads: a derived signal, set anew when one of them
 # changes
 derived_inputs(statements: list): map := {
@@ -555,11 +649,23 @@ declared_local(declaration: Node): Node := {
 	declaration
 }
 
+# `on change online {…}` (lib/signals.warp): the word when it is one without arguments the prelude or a used module
+# defines, `online() := …`, and the program neither defines nor binds it; ø otherwise (a variable's `on change x`)
+polled_word(name: Node, program: Node, source: text): any := {
+	word = spelled(name)
+	if word in names_bound_in_kept(program) or definition_start(source, word) != ø { return ø }
+	texts = [prelude_text] + used_modules(source).map(used_module_text)
+	if texts.any(text => definition_slices(text).any(cut => cut#1 == word and cut#2.starts_with(word + "()"))) then name else ø
+}
+
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 rule_words = {
+	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
 	class_help: class_help,
+	compound_unit: compound_unit,
+	converted_unit: converted_unit,
 	counted_question: counted_question,
 	declared_local: declared_local,
 	definition_text: definition_text,
@@ -575,6 +681,7 @@ rule_words = {
 	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
 	law_check: law_check,
+	leading_unit: leading_unit,
 	misnamed: misnamed,
 	module_help: module_help,
 	module_named: module_named,
@@ -584,6 +691,7 @@ rule_words = {
 	paint_size: paint_size,
 	parameters_named: parameters_named,
 	path_parameters: path_parameters,
+	polled_word: polled_word,
 	return_kind: return_kind,
 	route_bindings: route_bindings,
 	route_verb: route_verb,
@@ -594,11 +702,15 @@ rule_words = {
 	signaled: signaled,
 	signature_text: signature_text,
 	spelled: spelled,
+	hyphen_difference: hyphen_difference,
 	tables_kept: tables_kept,
+	task_steps: task_steps,
+	tasked: tasked,
 	units_shown: units_shown,
 	typed_json: typed_json,
 	unit_bound: unit_bound,
 	unit_led: unit_led,
+	unit_regrouped: unit_regrouped,
 	value_definitions: value_definitions,
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,
@@ -756,4 +868,25 @@ shorthand_closure(block: Node): any := {
 	body = block
 	for at in 0 to count - 1 { body = renamed(body, "$" + at, symbol("shorthand·" + at)) }
 	Key(List([symbol("shorthand·" + at) for at in 0 to count - 1], Bracket.Round, Separator.Comma), Op.Arrow, body)
+}
+
+# `a=5; b=1; a-b` (decision kebab-or-minus): a hyphenated name the program binds nothing to, whose parts it binds
+# (anywhere: a parameter too), is their difference `a - b - c`, noted with its fix; ø for one the program binds,
+# warned when its parts are bound too, or of a part it doesn't
+hyphen_difference(name: Node, program: Node): any := {
+	written = spelled(name)
+	parts = written.split("-")
+	if #parts < 2 or parts.any(part => part == "") { return ø }
+	bound = names_bound_in_kept(program)
+	if not parts.all(part => bound.has(part)) { return ø }
+	spaced = parts.join(" - ")
+	if bound.has(written) {
+		warn written + " is the name " + written + ", not " + spaced + "; fix: " + spaced
+		return ø
+	}
+	warn written + " reads as " + spaced + ": " + parts.join(" and ") + " are bound, no name " + written + "; fix: " + parts.join("_") + " or " + spaced
+	difference = symbol(parts#1)
+	# each difference in its own round group, as `(a - b)` parses: a bare Key reads as the spaced list `a -b`
+	for part in parts[1..] { difference = List([Key(difference, Op.Sub, symbol(part))], Bracket.Round, Separator.None) }
+	difference
 }

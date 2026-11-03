@@ -1,0 +1,11 @@
+# decision nullish-default (user): x default y is x ?? y, y only when x raises or is ø, a falsy x kept; otherwise,
+# failing and except spell it too; the one-line try x except y means x default y; `else` only after if or try
+'0 default 10'	0
+'"" default "anon"'	""
+'x = ø; x default 5'	5
+'parse_json("{oops") default []'	[]
+'parse_json("{oops") ?? 3'	3
+'0 otherwise 10'	0
+'x = ø; try x except 7'	7
+'match 2 { 1: "one", default: "many" }'	"many"
+'x = 3; x else 5'	error	a bare else names x default 5 and x or 5

@@ -7,12 +7,13 @@ use "show.warp"
 use "text.warp"
 use "types.warp"
 use "error_sentences.warp"
+use "builders.warp"
 divide_by_zero(): int := {
 	fail()
 	0
 }
 # `error("boom")`: the Error of the message, a value, not raised (Rust's text_builtins.rs error)
-error_node(message: Node): Node := error_of(node_text(message))
+error_node(message: Node): Node := failure_of(node_text(message))
 # `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
 # emit_data_item); `q.k = e`, `{k: e}`: a field holds none
 held_list_item(item: Node): Node := {
@@ -123,6 +124,12 @@ raised(value: Node): int := {
 # a statement's dropped value (decision dropped-error-raises): an Error raises, `write(…)` into a missing folder stops
 # the run with why
 dropped_value(n: Node) := if node_is_error(n) { raised(n) }
+# a value put in a plain variable (decision errors-one-rule): a failure raises, as a dropped one does; an Error held as
+# data stays (N19)
+raised_if_error(n: Node): Node := {
+	if is_failure(n) { raised(n) }
+	n
+}
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
 # it, the words of the word it failed in (trap_name): a raise's is the raised value, a missing field's names it
 caught_error(finished: bool, value: Node): Node := {
@@ -130,7 +137,7 @@ caught_error(finished: bool, value: Node): Node := {
 	global trap_name
 	global trap_detail
 	name = unboxed_text(trap_name)
-	if name == "returned_error" or name == "missing_field" then error_of(error_sentence(name)) else error_of(error_words(name))
+	if name == "returned_error" or name == "missing_field" then failure_of(error_sentence(name)) else failure_of(error_words(name))
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: Node): int := {

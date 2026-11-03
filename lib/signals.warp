@@ -2,6 +2,13 @@
 // later write of x, the block reading the written value as `value` and the one before as `old`; `on change x {…}`
 // only when the write changed it; `whenever x > 1 {…}` each time the condition comes to hold after a write of a name it
 // reads, `once x == 5 {…}` the first time only. The program rule (lib/rule_words.warp signaled) makes each watched write notify the listeners
+use timers
+// how often a listened system value is read
+SYSTEM_VALUE_POLL = 250ms
+// `on change online {…}`, `on change dark mode {…}`: a system value is a word without arguments the program does not
+// define, read every SYSTEM_VALUE_POLL by a timer (lib/timers.warp: the page runs it, natively none starts)
+rewrite on change dark mode $body: block => on change dark_mode $body
+rewrite on change $f $body: block => value_listened(() => $f, (value, old) => $body) where $f is symbol and $w = polled_word($f, $program, $source)
 rewrite on set $x $body: block => variable_listen([$n], no, (value, old) => $body) where $x is symbol and $n = spelled($x)
 rewrite on change $x $body: block => variable_listen([$n], yes, (value, old) => $body) where $x is symbol and $n = spelled($x)
 rewrite whenever $c $body: block => $listens where $listens = whenever_listens($c, $body)
@@ -19,11 +26,34 @@ rewrite $p => $q where program and $q = page_valued($p)
 // last name it listens to
 variable_listen(names: list, changes_only: bool, listener: function): int := {
 	number = 0
-	for name in names { number = listen(name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }
+	for name in names { number = listen(if name is Signal then name.name else name, written => if not changes_only or written#1 != written#2 { listener(written#1, written#2) }, no) }
 	number
 }
 // the listeners of the name told of its write, from old to value, as its event with [value, old]; the value
 signal_notify(name: text, value: any, old: any): any := {
+	signal_values[name] = value
 	emitted(name, [value, old])
 	value
+}
+
+// a variable passed in a list literal to a function listening to its loop variable (notes/signals.md "Lists of
+// signals"): the variable itself, its name and its value as last written, which a bare read of the loop variable gives
+class Signal { name: text; value: any }
+global signal_values = {}
+signal_value(item) := if item is Signal then signal_values.get(item.name) ?? item.value else item
+
+// each polled word's last value, a listener's at its position
+global polled_values = []
+value_listened(read: function, listener: function): int := {
+	polled_values.add(read())
+	at = count(polled_values)
+	timer_every(SYSTEM_VALUE_POLL, () => value_polled(at, read, listener))
+}
+value_polled(at: int, read: function, listener: function) := {
+	value = read()
+	old = polled_values#at
+	if value != old {
+		polled_values#at = value
+		listener(value, old)
+	}
 }

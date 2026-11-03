@@ -867,12 +867,11 @@ addHostPart({
 		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
 		// channels between programs (src/host/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 		// workers of this page's origin; the listener's timer (lowering/signals/system_signals.rs) takes what arrived
-		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
+		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainValue(program(), channel)),
 		channel_pending: id => BigInt(holder.channels?.get(Number(id))?.messages.length ?? 0),
-		channel_next: id => buildValue(program(), treeOfPlain(holder.channels?.get(Number(id))?.messages.shift() ?? null)),
+		channel_next: id => builtValue(program(), holder.channels?.get(Number(id))?.messages.shift() ?? null),
 		channel_send: (channel, message) => {
-			const program_ = program();
-			const [name, value] = [channel, message].map(node => plainOfTree(readNode(program_, node)));
+			const [name, value] = [channel, message].map(node => plainValue(program(), node));
 			if (SOCKET_ADDRESS.test(name)) return sendOnSocket(holder, hooks, name, value);
 			new BroadcastChannel(name).postMessage(value);
 		},

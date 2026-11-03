@@ -12,16 +12,16 @@
 # tree of their own (started by each install, which stops the one still running on an older tip), and installs the
 # warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
-MAIN_WARP=/Users/me/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
+MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
 # the native warp's folder by a name that outlives installs: what executables it builds find libwarp_wasmtime by
 # (their rpath, card native-rpath-builds-folder)
-MAIN_LIB=/Users/me/dev/bin/lib
-MAIN_CHECKOUT=/Users/me/dev/angles/warp
+MAIN_LIB=$HOME/dev/bin/lib
+MAIN_CHECKOUT=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 TREE=/Volumes/Worktrees/integrate2
 SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
-BUILDS=/Users/me/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
+BUILDS=$HOME/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
 
 if_moved= slow=
 arguments=("$@")
@@ -106,12 +106,15 @@ copy_compilers() {
 	done
 }
 
-# the tree's compilers into the installed native warp's folder (the slow lane's promoted warp-self.wasm)
+# the tree's compilers into the installed native warp's folder (the slow lane's promoted warp-self.wasm), and with them
+# the tree's lib/ sources they were built with (stage one left the previous ones beside the previous compilers)
 install_compilers() {
 	[ -n "$slow" ] && [ "$(cat "$installed_state/watched")" != "$tip" ] && return  # a newer tip is installed meanwhile
 	local folder lane got
 	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
-	copy_compilers "$TREE/lib" "$folder"
+	copy_compilers "$TREE/lib" "$folder" &&
+		rsync -aL --exclude /data --exclude /warp --exclude '/*.wasm*' --exclude /modules --exclude '/*.kept' \
+			"$TREE/lib/" "$folder/" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
 		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
@@ -168,7 +171,15 @@ install_native() {
 	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got made failed=(red) early=${1-}
 	[ -n "$early" ] && failed=(early_failed)
 	rm -rf "$folder.new" && mkdir -p "$folder.new" || return 1
-	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; return 1; }
+	# early, the lib/ beside the installed compilers is the one they were built with, and only the native warp's own
+	# sources are the tip's: a tip's lib/*.warp arrives with its compilers (stage two), never beside older ones (card
+	# after-push-stage: 677282ce44's reals.warp on b5eb834c40's compilers made π / 2 'no field coefficient' for 30 min)
+	if [ -n "$early" ]; then
+		rsync -aL --exclude /warp "$(dirname "$(readlink -f "$MAIN_WARP")")/" "$folder.new/" &&
+			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
+	else
+		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
+	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1

@@ -1,0 +1,5 @@
+'x = 3; x is (int or text)'	true
+'x = "hi"; x is (int or text)'	true
+'x = 3.5; x is (int or text)'	false
+'x = [3]; x is (int or text)'	false
+'x = 3.5; x is (text or number)'	true

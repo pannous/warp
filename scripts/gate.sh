@@ -27,7 +27,8 @@ while (($#)); do
 	esac
 done
 tree=$(cd "${args[0]:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
-binary=${args[1]:-${WARP_GATE_BINARY:-$HOME/dev/bin/warp}}
+source "$(dirname "$0")/lib/platform.sh"
+binary=${args[1]:-${WARP_GATE_BINARY:-$warp_binary}}
 wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 	local t
 	for t in ${tiers//,/ }; do
@@ -39,7 +40,8 @@ logs=$tree/data/gate; mkdir -p "$logs"
 # a copy of the binary taken once: a refresh of the shared link mid-run never mixes two builds
 warp=$logs/warp; cp -L "$binary" "$warp" || exit 1
 # the native warp's wasmtime beside the copy too: its rpath looks beside itself
-for library in "$(dirname "$(readlink -f "$binary")")"/libwarp_wasmtime.*; do [ -f "$library" ] && cp -c "$library" "$logs/"; done
+for library in "$(dirname "$(readlink -f "$binary")")"/libwarp_wasmtime.*; do [ -f "$library" ] && clone "$library" "$logs/"; done
+libraries_beside "$logs"
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$tree/lib WARP_MODULE_CACHE=${WARP_MODULE_CACHE:-$logs/module-cache}
 export WARP_GATE_PROBE=gate-ok
 cd "$tree" || exit 1
@@ -47,7 +49,7 @@ started=$(date +%s)
 since() { echo "$(($(date +%s) - $1))s"; }
 red() { echo "gate: RED at tier $1 ($(git rev-parse --short HEAD), $(since $started) in all)"; exit 1; }
 # the first line worth showing of a run: its stdout, else its first error line without the source gutter
-said() { local text; text=$(grep -v '^ *[0-9]* |\|^ *|' "$1" | head -1); echo "${text:0:160}"; }
+said() { local text; text=$(without_runtime_noise < "$1" | grep -v '^ *[0-9]* |\|^ *|' | head -1); echo "${text:0:160}"; }
 
 # the compilers of the tree's lib in that lib/ (scripts/rebuild.sh: built only when no build of these inputs exists),
 # then beside the binary copy, which takes the compiler beside it first: a stale one there never runs the probes
@@ -56,7 +58,7 @@ if ((rebuild)) && wants 0; then
 fi
 for compiler in warp warp-self; do
 	rm -f "$logs/$compiler.wasm"
-	[ -f "$tree/lib/$compiler.wasm" ] && cp -c "$tree/lib/$compiler.wasm" "$logs/$compiler.wasm"
+	[ -f "$tree/lib/$compiler.wasm" ] && clone "$tree/lib/$compiler.wasm" "$logs/$compiler.wasm"
 done
 
 # the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one, on stderr)
@@ -67,7 +69,7 @@ else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh p
 if wants 0; then
 	t0=$(date +%s) ok=1
 	for lane in $lanes; do
-		got=$(timeout 300 "$warp" $lane samples/hello/hello.warp 2>&1 | tail -1)
+		got=$(timeout 300 "$warp" $lane samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 		[[ $got == *Hello* ]] || { echo "FAIL $lane hello: got ${got:0:160}"; red 0; }
 	done
 	echo "tier 0 (rebuild + hello, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t0)"

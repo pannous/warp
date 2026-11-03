@@ -10,7 +10,8 @@ DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test r
 LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
 FIRST_IN_LINE_RETRY=2  # seconds between the oldest waiter's tries of the slots
 IN_LINE_RETRY=5  # seconds between the others' looks at the line
-if [ "$(uname)" = Darwin ]; then store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}; else store=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers}; fi
+source "$(dirname "$0")/lib/platform.sh"
+store=$warp_store
 # <store>/build-slots/count, when present, sets the slots for every session at once (user 2026-11-02: at night as many
 # as the load allows; the Supervisor raises and lowers it watching the load, notes/agents/night.md)
 build_slots() { echo "${WARP_BUILD_SLOTS:-$(cat "$store/build-slots/count" 2>/dev/null || echo "$DAY_BUILD_SLOTS")}"; }

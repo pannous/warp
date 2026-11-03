@@ -22,8 +22,6 @@
 use "driver.warp"
 use "tests.warp"
 
-setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
-unsetenv(name: pointer): i32 from "c"
 fork(): i32 from "c"
 waitpid(child: i32, status: pointer, options: i32): i32 from "c"
 fdopen(descriptor: i32, mode: pointer): handle from "c"
@@ -443,6 +441,7 @@ is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).le
 # the words that only say how to run what follows: `run`, `pure` and `eval` what the bare words do, `self` by
 # warp-self.wasm, `fast` (lib/fast_math.warp) at full precision yet
 is_prefix(word: text): bool := same_text(word, "run") or same_text(word, "pure") or same_text(word, "eval") or same_text(word, "self") or same_text(word, "fast")
+self_named(compiler: text): bool := ends_with(compiler, "/warp-self.wasm")
 # what the words from `first` on ask for, by the compiler: a command the native warp runs itself, a module, a file,
 # else warp.wasm's command or code
 dispatched(compiler: text, prefixed: bool, first: int): nothing := {
@@ -458,10 +457,11 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if ends_with(word, ".wasm") { return module_ran(first) }
 	if not prefixed {
 		if same_text(word, "rebuild") { return rebuild_command(first) }
-		if same_text(word, "test") { return tests_run(compiler, flagged("--self")) }
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
 	}
+	# `warp test`, and `warp self test` as `warp test --self`: the native warp runs the cases, each by the compiler named
+	if same_text(word, "test") and (not prefixed or self_named(compiler)) { return tests_run(compiler, flagged("--self") or self_named(compiler), first) }
 	if same_text(word, "repl") or same_text(word, "console") or same_text(word, "start") { return console(compiler) }
 	if same_text(word, "repl-line") { return line_ran(compiler, arg(first + 1), arg(first + 2)) }
 	if same_text(word, "version") or same_text(word, "--version") { return versioned(compiler) }

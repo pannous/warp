@@ -29,6 +29,10 @@ let panicMessage; // the compiler's last panic message
 
 let warming = false; // the warm-up's run says nothing to the page
 const post = (message, transfer) => warming || self.postMessage(message, transfer);
+// the compiler's first compile pays for its tiering and the prelude: ~0.8 s in Chrome, seconds in Safari. It warms up on
+// a tiny program while the page loads, before it is ready, so the first run shown is as quick as the next (card
+// compiler-download-warmup)
+const LOADING_WARM_UP_CODE = '"warp"';
 // the first markup program compiles the markup renderer (lib/markup.warp's to_html) once: ~0.5 s in Chrome, seconds in
 // Safari. The page asks for it while idle after its first run (card guide-warmup), so a guide's first ▶ is quick too
 const WARM_UP_CODE = 'p{ "" }';
@@ -101,17 +105,17 @@ async function evaluate(code) {
 }
 
 // not over a live run (its listeners and timers stay), nor without a compiler (after a crash: the next run loads it)
-async function warmUp() {
+async function warmUp(code = WARM_UP_CODE) {
 	if (live || !compiler) return;
 	warming = true;
 	try {
-		await evaluate(WARM_UP_CODE, {});
+		await evaluate(code);
 	} finally {
 		warming = false;
 	}
 }
 
-const ready = loadCompiler().then(() => new Promise(done => setTimeout(done, SLOW_START_MS)))
+const ready = loadCompiler().then(() => stage("warming up the compiler") || warmUp(LOADING_WARM_UP_CODE)).then(() => new Promise(done => setTimeout(done, SLOW_START_MS)))
 	.then(() => post({ type: "ready" }), failure => post({ type: "failed", message: failure.message }));
 
 // `use python` runs in Pyodide (host.js registers its call): loaded on first use, since a host call cannot wait for it
@@ -152,8 +156,18 @@ const NOT_SELF_HOSTED = "not in the self-hosted playground yet";
 // composes its Worker of, `{query, module}` or `{error}`
 const workerBundle = () => ({ error: `deploy: ${NOT_SELF_HOSTED}` });
 
-// the members to offer after the code and a dot (completion.js): a list of names
-const memberNames = () => [];
+// the members to offer after the code and a dot (completion.js): the words `dir` gives for its last statement,
+// `xs = [1 2]; dir(xs)` (lib/rule_words.warp), none when that fails
+function memberNames(code) {
+	const last = Math.max(code.lastIndexOf(";"), code.lastIndexOf("\n")) + 1;
+	const { data } = ranAsData(`${code.slice(0, last)}dir(${code.slice(last)})`);
+	try {
+		const names = JSON.parse(data ?? "[]");
+		return Array.isArray(names) ? names : [];
+	} catch {
+		return [];
+	}
+}
 
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {

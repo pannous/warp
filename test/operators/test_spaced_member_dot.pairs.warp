@@ -1,0 +1,4 @@
+# a member dot reads like any infix operator, blanks around it or not (card stays-if)
+'p = {b: 3}; p. b'	3
+'p = {b: 3}; p . b'	3
+'p = {b: 3}; p .b'	3

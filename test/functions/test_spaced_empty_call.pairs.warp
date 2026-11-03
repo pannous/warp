@@ -1,0 +1,4 @@
+# `f ()` calls f with no arguments, as f() does (user decision calls-arguments)
+'f() := 7; f ()'	7
+'f() := 7; f() + f ()'	14
+'g() := 2; [g (), 5]'	[2, 5]

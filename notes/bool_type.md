@@ -28,6 +28,12 @@ unknown static type (`value:any`) is told apart by boolness only. `1.0` is lower
 ## Arithmetic
 P195: `true + 1` is 2, literal or variable.
 
+Bools as ints (user 2026-11-02, card surprised-simple-implement): a yes/no operand falls through to the int
+implementation of any operator but equality (core/emitter/operators.warp bools_as_ints): `yes + yes` is 2, `no < yes`
+is yes. Of two yes/no values, an operator whose result of 0/1 operands is 0 or 1 again (emitter.warp
+zero_one_operators: xor, &, |, min, max) gives yes/no: `yes xor no` is yes. `&` and `|` of bools are the logical
+and/or already (bitwise → logical_code). Test: test/operators/test_bools_as_ints.pairs.warp.
+
 ## Rust side
 `Node::True == 1` and `Node::False == 0` (PartialEq<i64>), so `is!(…, 1)` tests pass.
 
