@@ -1,0 +1,108 @@
+# Match arms past the core's cases, values, types and `_` (core/passes/node_matches.warp):
+# - a guard `n if n > 5 => e` tests its pattern and then its condition, the pattern's names bound
+# - a bare name `n => "hi " + n` binds the subject
+# - a structural pattern, a list `[a, ...rest]`, a map `{name}`, a text cut `"/u/" + id: int`, quoted code
+#   `data($f($x))`, is fitted at run time by the prelude's matcher: `(match·bound = pattern_bindings(n, data(pattern)))
+#   != ø`, each name bound `x = match·bound#"x"`
+# Each such arm becomes the arm `_` whose result chooses by its test, else what the arms after it give.
+# A named pattern `pattern Definition = Key(head, Op.Define, body)` (decision node-refinements: a named refinement of a
+# node case) leaves the program, and its name stands for the pattern in an arm `Definition: …`, which binds head and
+# body, in a test `n is Definition`, and as the type `d: Definition`, any node.
+
+# whether the core lowers the arm itself
+is_core_arm(arm: Node, variants: map): bool := guard_of(arm_pattern(arm)) == ø and not is_name_arm(arm_pattern(arm), arm_result(arm), variants) and is_case_arm(arm, variants)
+
+# the arms, the first the core does not lower and all after it as one arm `_`
+guarded_arms(arms: list, subject: Node, variants: map): list := {
+	for at in 0 ..< #arms {
+		if not is_core_arm(arms[at], variants) {
+			rest = chained_arms(arms[at + 1 ..], subject, variants)
+			return arms[0 ..< at] + [Key(symbol(other_arm), Op.Colon, guarded_arm(arms[at], subject, variants, rest))]
+		}
+	}
+	arms
+}
+
+# a guarded, binding or structural arm: the pattern's test and its bindings, then the guard with them in sight, and the
+# result with them; `otherwise` what the arms after it give
+guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
+	guard = guard_of(arm_pattern(arm))
+	pattern = guarded_pattern(arm_pattern(arm))
+	result = arm_result(arm)
+	# ø: the pattern takes any subject
+	test: Node = ø
+	bound: list = []
+	if is_name(pattern) and not is_other_arm(pattern) and (guard != ø or is_name_arm(pattern, result, variants)) { bound = [Key(pattern, Op.Assign, subject)] }
+	else if is_value_pattern(pattern, variants) { test = value_test(subject, pattern) }
+	else if is_type_pattern(pattern) { test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None) }
+	else if case_pattern(pattern) != ø { test = arm_test(case_pattern(pattern), subject); bound = part_bindings(case_pattern(pattern), subject) }
+	else { test = structural_test(subject, pattern); bound = structural_bindings(pattern, List([guard, result], Bracket.Square, Separator.Comma)) }
+	if guard != ø {
+		guarded = List(bound + [guard], Bracket.Round, Separator.Semicolon)
+		test = if test == ø then guarded else Key(test, Op.And, guarded)
+	}
+	value = if #bound == 0 then result else List(bound + [result], Bracket.Round, Separator.Semicolon)
+	if test == ø then value else chosen(test, value, otherwise)
+}
+
+# the structural pattern fits: what it binds is held in match·bound
+structural_test(subject: Node, pattern: Node): Node := {
+	fitted = List([symbol(matcher_word), subject, List([quote_symbol, pattern], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
+	Key(Key(symbol(match_bound), Op.Assign, fitted), Op.Ne, ø)
+}
+
+# the names the result uses of those the pattern binds, each read off match·bound
+structural_bindings(pattern: Node, result: Node): list := structural_names(pattern, no).filter(name => mentions(result, name)).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
+
+# `{port: "80"} as Config`: the prelude's converter of a value field by field to a named pattern's types
+pattern_converter_word = "converted_to_pattern"
+
+# [name, pattern] of `pattern Definition = …`, else ø
+named_pattern(statement: Node): list? := if is_pattern_definition(statement) then named_definition(statement#2) else ø
+
+named_definition(definition: Node): list? := match definition {
+	Key(Symbol(name), Op.Assign, pattern): [name, pattern]
+	_: ø
+}
+
+named_patterns_of(program: Node): map := {
+	patterns = {}
+	for statement in statements_in(program) {
+		named = named_pattern(statement)
+		if named { patterns[named#1] = named#2 }
+	}
+	patterns
+}
+
+without_named_patterns(program: Node): Node := {
+	if not is_statement_sequence(program) { return program }
+	group_like(program, statements_in(program).filter(statement => not named_pattern(statement)))
+}
+
+# a pattern's name where a pattern, a test or a type goes
+with_named_patterns(n: Node, patterns: map): Node := match n {
+	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
+	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
+	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
+	Key(subject, Op.As, Symbol(name)): if name in patterns then List([symbol(pattern_converter_word), subject, List([quote_symbol, patterns[name]], Bracket.Round, Separator.None)], Bracket.Round, Separator.None) else n
+	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))
+	_: n
+}
+
+# `match subject { pattern: yes, _: no }`
+pattern_test(subject: Node, pattern: Node): Node :=
+	node_match(List([symbol("match"), subject, List([Key(pattern, Op.Colon, yes), Key(symbol(other_arm), Op.Colon, no)], Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space), {})
+
+named_arm(arm: Node, patterns: map): Node := match arm {
+	Key(Symbol(name), Op.Colon, result): if name in patterns then Key(patterns[name], Op.Colon, result) else arm
+	Key(Symbol(name), Op.Arrow, result): if name in patterns then Key(patterns[name], Op.Arrow, result) else arm
+	_: arm
+}
+
+# the program with its named patterns put where their names stand, right before node_matches lowers the matches
+named_patterns(program: Node): Node := {
+	patterns = named_patterns_of(program)
+	if patterns then bottom_up(without_named_patterns(program), n => with_named_patterns(n, patterns)) else program
+}
+
+match_patterns_extension = Extension{name: "match_patterns", arm_lowerings: [guarded_arms], passes: {"code_templates": named_patterns}}

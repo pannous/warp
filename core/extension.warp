@@ -56,6 +56,9 @@ class Extension {
 	# a core pass's name → the extension's pass running right after it (`{"arity_overloads": clauses}`, decision
 	# extension-passes); a name of no core pass is refused
 	passes: map = {}
+	# functions lowering a match's arms past the core's (cases, values, types, `_`), given the arms, the subject and the
+	# enum variants, each giving arms the core lowers (`n if n > 5 => e` as an arm `_`)
+	arm_lowerings: list = []
 	# the command words it answers (`warp help`), and runs: the function running one, given its word
 	commands: list = []
 	runs: any = ø
@@ -127,6 +130,12 @@ with_text_passes(program: Node): Node := {
 	passed = program
 	for pass in concatenated(EXTENSIONS.map(extension => extension.text_passes)) { passed = pass(passed) }
 	passed
+}
+# a match's arms through every extension's arm lowerings, in row order
+with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
+	lowered = arms
+	for lowering in concatenated(EXTENSIONS.map(extension => extension.arm_lowerings)) { lowered = lowering(lowered, subject, variants) }
+	lowered
 }
 # every starter word → the word settling its value, read once
 global value_settler_table = ø

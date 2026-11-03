@@ -55,7 +55,7 @@ sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_ta
 # the pass that owns each form the emitter may refuse: a refusal of that form names it, so a form that reaches the
 # emitter unlowered says which pass did not claim it
 pass_owners = {"foreign C call": "c_imports", "runtime declaration": "definitions", "try": "tries", "multiple assignment": "multiple_assignments",
-	"for loop": "loop_heads and iteration_sugar", "match": "node_matches", "match arm": "first_sugar (extensions/sugar/arms.warp)", "enum": "enums_declared",
+	"for loop": "loop_heads and iteration_sugar", "match": "node_matches", "match arm": "first_sugar (extensions/sugar/arms.warp)", "pattern arm": "match_patterns (extensions/match_patterns.warp)", "enum": "enums_declared",
 	"comprehension": "comprehensions", "lambda": "lambdas", "number word": "number_words_pass", "fallback": "sugar (extensions/sugar/fallbacks.warp)"}
 
 # the emitter's refusal naming its form and owner pass: `form` one of pass_owners, ø for a form no pass owns
