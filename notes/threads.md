@@ -19,7 +19,11 @@ Port to the native driver (core/native/driver.warp, wasmtime C API + libc), each
 1. Thread pool (pthreads) and one Store/instance per task: `go f(x)` starts f in a fresh instance, `await` joins.
    The probe: does wasmtime's C API run stores on several threads cleanly (one Engine, one Module, Store per thread).
 2. Values cross by copy (numbers, texts, lists, keys, closures, exact numbers), rebuilt through the target instance's
-   exported constructors (Rust: TaskValue, new_int … new_list).
+   exported constructors (Rust: TaskValue, new_int … new_list). A tree is deep-copied: the task changes its own copy,
+   the result comes back as a copy, the cost grows with its size. The port copies with a visited table, so an object
+   referenced twice stays one object in the copy and cycles work; what cannot cross (an open file, a window) is an
+   error naming it. `shared` takes only flat int/float arrays and cells: `shared tree = …` is a compile error with the
+   fix (pass it, it is copied, or send results through a channel). No shared trees with locks.
 3. pause/resume/stop/cancel through epoch interruption (no change to emitted code), with the new rules above.
 4. `shared` values as host-held atomic arrays.
 5. The cooperative scheduler stays only as the page lane; the page later moves to the Worker design below.
