@@ -66,7 +66,8 @@ def written_tree(written: text, uses: text = ""): Node := {
 	source = passed#1
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
-	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), scans: extension_scans(source + uses), aliases: by_first_character(operator_aliases(source) + math_operator_aliases()), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
+	statements = source_operator_statements(source)
+	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), scans: extension_scans(source + uses), aliases: by_first_character(aliases_among(statements) + aliases_among(math_operator_statements())), circumfixes: circumfixes_among(statements) + circumfixes_among(math_operator_statements()), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
 	items_until(p, Bracket.None, ItemsEnd.Source)
 }
 
@@ -117,55 +118,77 @@ def statement_end(p: Parser): int {
 	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end += 1 }
 	end
 }
-// `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
-// function, `√x` is sqrt(x): a statement declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
-// [spelling, target] of an alias statement's words (`operator ∧ := and`, `prefix operator √ := sqrt`), else []
-// (infix|prefix)? operator $op := body
-def operator_alias(words: list): list {
-	prefix = words.length > 0 and words#1 == "prefix"
-	if prefix { words = words[1 .. words.length] }
-	if not (words.length == 4 and words#1 == "operator" and words#3 == ":=") { return [] }
-	// a prefix alias names a function, the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
-	if is_operator_spelling(words#4) or (prefix and is_name_start(words#4#1) and name_end(words#4, 0, words#4.length) == words#4.length) then [words#2, words#4] else []
+// (infix|prefix|suffix|postfix|circumfix)? operator $op := body
+// One operator statement as written (decision one-operator-reader): `operator × := *`, `prefix operator √ := sqrt`,
+// `infix operator ⊕(a, b) := a + 2*b`, `circumfix operator ⌊ ⌋ := floor` and the pattern `a ⊕ b := a * b`. `written` is
+// what stands before its operator ("prefix operator", "operator", "" for the pattern), `head` the words up to `:=`,
+// `body` those after it; `spelling` the operator the statement defines ("" when none: a built-in word, an overload)
+class OperatorStatement { fixity: Fixity; written: text; spelling: text; head: list; body: list }
+def operator_statement(words: list): OperatorStatement? {
+	position = words.index_of(":=")
+	if position < 2 { return ø }
+	// the offset of `:=`, where the head ends
+	define = position - 1
+	if not (words#1 in FIXITY_WORDS) { return operator_pattern(words, define) }
+	fixity = FIXITY_WORDS[words#1]
+	start = if words#1 != "operator" and define > 1 and words#2 == "operator" then 2 else 1
+	head = words[start .. define]
+	statement = OperatorStatement{fixity: fixity, written: words[0 .. start].join(" "), spelling: "", head: head, body: words[define + 1 .. words.length]}
+	statement.spelling = defined_spelling(statement)
+	statement
 }
+// `a ⊕ b := …`: an infix operator declared by a pattern of two plain names around its glyph
+def operator_pattern(words: list, define: int): OperatorStatement? {
+	if define != 3 or not is_operator_glyph(words#2) or not is_plain_name(words#1) or not is_plain_name(words#3) { return ø }
+	OperatorStatement{fixity: Fixity.Infix, written: "", spelling: words#2, head: words[0 .. 3], body: words[4 .. words.length]}
+}
+// the operator a statement defines: its one glyph (`operator ⊕ := …`), or for infix a word or glyph with its parameters,
+// `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`; a built-in word, `infix operator
+// as(n: any, e: enum) := …`, is no new operator but an overload of it (operator_method_definition)
+def defined_spelling(statement: OperatorStatement): text {
+	if #statement.head == 0 or statement.fixity == Fixity.Circumfix { return "" }
+	first = statement.head#1
+	if #statement.head == 1 and is_operator_glyph(first) { return first }
+	if statement.fixity != Fixity.Infix { return "" }
+	end = if is_name_start(first#1) then name_end(first, 0, first.length) else 0
+	if not is_name_start(first#1) { while end < first.length and first[end] != '(' { end = end + 1 } }
+	word = first[0 .. end]
+	operator = (is_name_start(first#1) and word != "operator") or is_operator_glyph(word)
+	if operator and (end == first.length or first[end] == '(') and word_operator(word) == ø then word else ""
+}
+// `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
+// function, `√x` is sqrt(x): [spelling, target], else [] (the pre-scan made the spelling an operator: aliases_among).
+// A prefix alias names a function by the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
+def alias_of(statement: OperatorStatement?): list {
+	if statement == ø or #statement.head != 1 or #statement.body != 1 { return [] }
+	target = statement.body#1
+	prefix = statement.written == "prefix operator"
+	if (statement.written == "operator" or prefix) and (is_operator_spelling(target) or (prefix and is_plain_name(target))) then [statement.head#1, target] else []
+}
+// `circumfix operator ⌊ ⌋ := floor`: [opening, closing, function], else []
+def circumfix_of(statement: OperatorStatement?): list {
+	if statement == ø or statement.written != "circumfix operator" or #statement.head != 2 or #statement.body != 1 { return [] }
+	[statement.head#1, statement.head#2, statement.body#1]
+}
+// a statement that only spells: an alias or a circumfix, applied by the pre-scan
+def only_spells(statement: OperatorStatement?): bool := alias_of(statement).length > 0 or circumfix_of(statement).length > 0
+// The operator a statement declares, as a list of it, else []: its spelling, unless the statement only spells
+def operator_declared(statement: OperatorStatement?): list := if statement == ø or statement.spelling == "" or only_spells(statement) then [] else [declared_of(statement.spelling, statement.fixity)]
 // An alias spelling a function, `√` of sqrt, no operator
 def spells_function(alias: list): bool := is_name_start(alias#2#1) and not is_operator_spelling(alias#2)
-// [spelling, target] of each operator alias a source declares
-def operator_aliases(source: text): list := if source.contains(":=") then operator_aliases_in(code_statements(source)) else []
-def operator_aliases_in(statements: list): list {
-	found = []
-	for statement in statements {
-		alias = operator_alias(blank_words(statement))
-		if alias.length > 0 { found += [alias] }
-	}
-	found
+// the operator statements among statements, read once
+def operator_statements(statements: list): list := statements.filter(statement => statement.contains(":=")).map(statement => operator_statement(blank_words(statement))).filter(statement => statement != ø)
+def source_operator_statements(source: text): list := if source.contains(":=") then operator_statements(code_statements(source)) else []
+// lib/math.warp's operator statements, which every program reads (decision operator-alias), read the first time a
+// parse needs them
+global math_statements = ø
+def math_operator_statements(): list {
+	if math_statements == ø { math_statements = operator_statements(code_statements_of("math")) }
+	math_statements
 }
-// lib/math.warp's aliases, which every program reads (decision operator-alias), scanned the first time a parse needs them
-global math_aliases = ø
-def math_operator_aliases(): list {
-	if math_aliases == ø { math_aliases = operator_aliases_in(code_statements_of("math")) }
-	math_aliases
-}
-// `circumfix operator ⌊ ⌋ := floor`: [opening, closing, function] of a circumfix statement's words, else []
-def circumfix_alias(words: list): list {
-	if words.length == 6 and words#1 == "circumfix" and words#2 == "operator" and words#5 == ":=" then [words#3, words#4, words#6] else []
-}
-// [opening, closing, function] of each circumfix operator a source declares
-def circumfix_aliases(source: text): list := if source.contains("circumfix") then circumfix_aliases_in(code_statements(source)) else []
-def circumfix_aliases_in(statements: list): list {
-	found = []
-	for statement in statements {
-		pair = circumfix_alias(blank_words(statement))
-		if pair.length > 0 { found += [pair] }
-	}
-	found
-}
-// lib/math.warp's circumfix operators (‖x‖, ⌊x⌋, ⌈x⌉), scanned the first time a parse needs them
-global math_circumfixes = ø
-def math_circumfix_aliases(): list {
-	if math_circumfixes == ø { math_circumfixes = circumfix_aliases_in(code_statements_of("math")) }
-	math_circumfixes
-}
+// [spelling, target] of each alias, [opening, closing, function] of each circumfix among statements
+def aliases_among(statements: list): list := statements.map(alias_of).filter(alias => alias.length > 0)
+def circumfixes_among(statements: list): list := statements.map(circumfix_of).filter(pair => pair.length > 0)
 // A library's code statements by its name ("math"), split once a compile for every scanner of them: splitting math's
 // text for its operators, its aliases and its circumfixes each was a tenth of a small program's compile
 global library_code_statements = {}
@@ -1662,9 +1685,9 @@ def down_to_at(p: Parser): int {
 // The name of the function an operator declaration defines: `infix operator ⊕` defines operator_⊕
 OPERATOR_FUNCTION_PREFIX = "operator_"
 // Where a declared operator stands to its operands: `prefix operator ∆`, `suffix operator ³`, `infix operator ⊕`
-enum Fixity { Prefix, Suffix, Infix }
-// The words declaring an operator of a fixity; `operator ⊕` alone is infix
-FIXITY_WORDS = {"prefix": Fixity.Prefix, "suffix": Fixity.Suffix, "infix": Fixity.Infix, "operator": Fixity.Infix}
+enum Fixity { Prefix, Suffix, Infix, Circumfix }
+// The words declaring an operator of a fixity; `operator ⊕` alone is infix, `postfix` is `suffix`
+FIXITY_WORDS = {"prefix": Fixity.Prefix, "suffix": Fixity.Suffix, "postfix": Fixity.Suffix, "infix": Fixity.Infix, "circumfix": Fixity.Circumfix, "operator": Fixity.Infix}
 // An operator a program or module declares, `infix operator ⊕ := …`, binding as tight as its level
 class DeclaredOperator { glyph: text; fixity: Fixity; level: int }
 
@@ -1679,8 +1702,6 @@ def fixity_level(fixity: Fixity): int := match fixity {
 // The call of a declared operator's function: `2 ⊕ 3` is operator_⊕(2, 3)
 def operator_call(glyph: text, arguments: list): Node := call_of([symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
 
-// A declaration's first word declares an infix operator: `infix operator ⊕`, `operator ⊕`
-def declares_infix(word: text): bool := word in FIXITY_WORDS and FIXITY_WORDS[word] == Fixity.Infix
 
 // A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), no letter or digit;
 // raised digits too (`suffix operator ³`)
@@ -1692,24 +1713,6 @@ def is_operator_glyph(glyph: text): bool {
 	}
 	beyond_ascii
 }
-
-// The operator the words after a declaration's first word declare, else "": a glyph (`operator ⊕ := …`), or for infix
-// a word or glyph with its parameters, `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`
-def declared_operator(infix: bool, words: list): text {
-	glyph = if words.length > 2 and words#1 == "operator" and words#3 == ":=" then words#2 else if words.length > 1 and words#2 == ":=" then words#1 else ""
-	if glyph != "" and is_operator_glyph(glyph) { return glyph }
-	if not infix or not words.contains(":=") or words.length == 0 { return "" }
-	head = if words#1 == "operator" and words.length > 1 then words#2 else words#1
-	end = if is_name_start(head#1) then name_end(head, 0, head.length) else 0
-	if not is_name_start(head#1) { while end < head.length and head[end] != '(' { end = end + 1 } }
-	word = head[0 .. end]
-	operator = (is_name_start(head#1) and word != "operator") or is_operator_glyph(word)
-	// a built-in word, `infix operator as(n: any, e: enum) := …`, is no new operator: an overload of it
-	// (operator_method_definition)
-	if operator and (end == head.length or head[end] == '(') and word_operator(word) == ø then word else ""
-}
-
-// `operator × := *`: another spelling of a built-in operator, no function
 
 // The blank-separated words of a statement
 def blank_words(statement: text): list := statement.replace("\t", " ").split(" ").filter(word => word)
@@ -1838,14 +1841,6 @@ def code_statements(source: text): list {
 	statements
 }
 
-// The operator a statement's words declare, as a list of it, else []
-def operator_declared(words: list): list {
-	if words.length == 0 { return [] }
-	glyph = if words#1 in FIXITY_WORDS then declared_operator(declares_infix(words#1), words[1 .. words.length]) else ""
-	if glyph != "" and operator_alias(words).length == 0 { return [declared_of(glyph, FIXITY_WORDS[words#1])] }
-	if words.length > 3 and words#4 == ":=" and is_operator_glyph(words#2) and is_plain_name(words#1) and is_plain_name(words#3) { return [declared_of(words#2, Fixity.Infix)] }
-	[]
-}
 def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: fixity_level(fixity)}
 def is_plain_name(word: text): bool := word.length > 0 and name_end(word, 0, word.length) == word.length
 
@@ -2074,10 +2069,9 @@ def prefixed(p: Parser): Node := {
 	phrase = if keyword_reader == ø then ø else keyword_reader(p, word)
 	// a reader that moved on read its statement, if only to nothing (a declaration a prescan applied)
 	if phrase != ø or p.at != word_start { return phrase }
-	if word == "circumfix" or word in FIXITY_WORDS {
-		words = statement_words_at(p)
-		// aliases the pre-scans applied: operator_aliases, circumfix_aliases
-		if operator_alias(words).length > 0 or circumfix_alias(words).length > 0 { return skip_statement(p) }
+	if word in FIXITY_WORDS {
+		// an alias or circumfix the pre-scan applied
+		if only_spells(operator_statement(statement_words_at(p))) { return skip_statement(p) }
 		method = operator_method_definition(p, word)
 		if method != ø { return method }
 	}
