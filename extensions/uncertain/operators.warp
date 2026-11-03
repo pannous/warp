@@ -1,0 +1,2 @@
+# uncertain's operators, rows as lib/aliases.warp writes them: `6 ± 1` is lib/uncertain.warp's interval
+"±" { aliases: ["+-"], declared: yes, power: [140, 141] }
