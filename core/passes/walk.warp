@@ -524,3 +524,5 @@ joined(conditions: list): Node := {
 	for more in conditions[1..] { condition = Key(condition, Op.And, more) }
 	condition
 }
+# the statements as one round group, `(a; b; c)`
+statements(list: list): Node := List(list, Bracket.Round, Separator.Semicolon)
