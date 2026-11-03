@@ -55,7 +55,7 @@ lines) are not part of compiler.warp: no compile cost.
    `assigned_names` (a nodes_in) of *all later* statements, even in scopes without a lambda — the main level of the
    compiler has thousands of statements. Fix: return [] when the scope has no lambda; build the later-assigned sets
    once, from the end. Expected: medium–large.
-4. **The library baked in every compiler build** (uses.warp module_text, parser.warp LIBRARY_FILES/LIBRARY_PARSES,
+4. **The library baked in every compiler build** (uses.warp module_text, library.warp LIBRARY_FILES/LIBRARY_PARSES,
    prelude_words.warp LIBRARY_SLICES/SLICE_PARSES, rewrites.warp LIBRARY_RULES/STD_RULE_NEEDS, parser.warp
    BLOCK_HEADS; d9d4131f70, 3b50f73753, ce88d05a97, 853a27c0a6, 568899f9f5). Each compiler compile parses all 528 KB of
    lib/ ~3 times (each file, each slice again, the rules), and `baked-current` in `warp rebuild` computes all tables a
