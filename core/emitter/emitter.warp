@@ -594,7 +594,7 @@ def relocatable(kind: int, index: int): list {
 # a mark is a negative "byte" of the code, so no byte is taken for one
 def relocation_mark(kind: int, space: int): int := -1 - kind - #relocated.keys * space
 def kind_marked(mark: int): int := (-1 - mark) % #relocated.keys
-def space_marked(mark: int): int := (-1 - mark) /! #relocated.keys
+def space_marked(mark: int): int := (-1 - mark) ÷ #relocated.keys
 # the imports of these host words, each once, behind WASI's fd_write for a module that prints
 def imported_words(names: list, prints: bool): list {
 	imports = if prints then [fd_write_import] else []

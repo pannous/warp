@@ -62,7 +62,7 @@ one_name_list(parts: list): any := match parts#1 {
 }
 # `left right = f(x) g(y)`, Bend's parallel let (decision M5): as many names before the `=` as values after it, each
 # value evaluated before any name is assigned
-is_parallel_let(parts: list): bool := #parts > 2 and #parts % 2 == 1 and is_key(parts#((#parts + 1) /! 2), Op.Assign)
+is_parallel_let(parts: list): bool := #parts > 2 and #parts % 2 == 1 and is_key(parts#((#parts + 1) ÷ 2), Op.Assign)
 starts_with_name(n: Node): bool := is_group(n) and bracket_of(n) == "" and #n > 1 and n#1 is symbol
 
 multiple_assignment(n: Node): Node := match n {

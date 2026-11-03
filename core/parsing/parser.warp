@@ -1383,7 +1383,7 @@ def closing_end_follows(p: Parser, openers: list): bool {
 	first = 0
 	last = ends.word_starts.length
 	while first < last {
-		middle = (first + last) /! 2
+		middle = (first + last) ÷ 2
 		if ends.word_starts[middle] < p.at { first = middle + 1 } else { last = middle }
 	}
 	before = if first == 0 then 0 else ends.balances[first - 1]
@@ -3456,7 +3456,7 @@ def line_at(p: Parser, at: int): int {
 	first = 0
 	last = p.line_starts.length
 	while last - first > 1 {
-		middle = (first + last) /! 2
+		middle = (first + last) ÷ 2
 		if p.line_starts[middle] <= at { first = middle } else { last = middle }
 	}
 	first + 1
@@ -3976,7 +3976,7 @@ def time_unit_at(p: Parser, at: int): list? := {
 // Rust twin: time/calendar.rs Display for Duration
 def duration_text(length: list): text {
 	seconds = length#3
-	amounts = [[length#1, "month"], [length#2, "day"], [seconds /! 3600, "hour"], [seconds % 3600 /! 60, "minute"], [seconds % 60, "second"]]
+	amounts = [[length#1, "month"], [length#2, "day"], [seconds ÷ 3600, "hour"], [seconds % 3600 ÷ 60, "minute"], [seconds % 60, "second"]]
 	parts = amounts.filter(amount => amount#1 != 0).map(amount => counted_unit(amount#1, amount#2))
 	if parts.length == 0 { return "0 seconds" }
 	parts.join(" ")
