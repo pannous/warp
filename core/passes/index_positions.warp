@@ -131,7 +131,7 @@ counted_node(n: Node, counted: map, type_words: list): Node := {
 			Key(head, op, body): {
 				inner = unbound(counted, parts#1)
 				for parameter in counted_parameters(head, type_words) { inner[parameter#1] = parameter#2 }
-				Key(plain_counted(head, type_words), op, counted_node(body, scope_counts(body, inner, type_words), type_words))
+				Key(offsets_dropped(plain_counted(head, type_words)), op, counted_node(body, scope_counts(body, inner, type_words), type_words))
 			}
 			_: n
 		}
@@ -141,7 +141,50 @@ counted_node(n: Node, counted: map, type_words: list): Node := {
 		value = found_in_unit(counted_node(declared#3, counted, type_words), declared#2#2)
 		return Key(Key(symbol(declared#1), Op.Colon, symbol(count_type)), Op.Assign, recounted(value, counting(value, counted), declared#2))
 	}
-	children(n, x => counted_node(x, counted, type_words))
+	counts_met(children(n, x => counted_node(x, counted, type_words)), counted)
+}
+
+# a count meeting the other kind's brackets, read as meant (notes/index_position.md): `xs[p]` of a position p is
+# `xs#p`, `xs#i` of an index i `xs#(i+1)`, `insert(xs, at: p)` takes `p - 1`; adding two counts is an error
+counts_met(n: Node, counted: map): Node := match n {
+	Key(target, Op.Hash, place): Key(target, Op.Hash, hash_place(place, counted))
+	Key(left, Op.Add, right): {
+		# the `+ 1` of `xs[i]` is read where it meets `#`
+		if is_subscript_offset(right) { return n }
+		if counting(left, counted) != ø and counting(right, counted) != ø { return diagnose(call_of("added_counts", [Key(left, Op.Add, right)]), n) }
+		n
+	}
+	List(items, Bracket.Round, separator): { if #items > 1 and items#1 == symbol(insert_word) then List(items.map(item => at_index(item, counted)), Bracket.Round, separator) else n }
+	_: n
+}
+insert_word = "insert"
+at_word = "at"
+# `at: p` of a position p: `at: p - 1`
+at_index(argument: Node, counted: map): Node := match argument {
+	Key(label, Op.Colon, place): { if label == symbol(at_word) and position_counted(counting(place, counted)) then Key(label, Op.Colon, Key(place, Op.Sub, 1)) else argument }
+	_: argument
+}
+position_counted(count: list?): bool := count != ø and count#1 == position_word
+# the place of `xs#place`: the `i + 1` of `xs[i]` with a position i is i itself, an index place the one after it
+hash_place(place: Node, counted: map): Node := match place {
+	Key(index, Op.Add, offset): {
+		if not is_subscript_offset(offset) { return indexed_place(place, counted) }
+		if position_counted(counting(index, counted)) then index else Key(index, Op.Add, 1)
+	}
+	_: indexed_place(place, counted)
+}
+indexed_place(place: Node, counted: map): Node := {
+	count = counting(place, counted)
+	if count != ø and count#1 == index_word then Key(place, Op.Add, 1) else place
+}
+is_subscript_offset(n: Node): bool := match n {
+	Key(left, op, right): left == symbol(attribute_word) and right#1 == subscript_offset_mark
+	_: no
+}
+# the program without subscript offset marks, when it counts nothing
+offsets_dropped(n: Node): Node := match n {
+	Key(left, op, right): { if is_subscript_offset(right) then Key(offsets_dropped(left), op, 1) else children(n, offsets_dropped) }
+	_: children(n, offsets_dropped)
 }
 
 # [name, count] of each parameter declared a position or an index: `f(p: position)`
@@ -173,7 +216,7 @@ bound_name(n: Node): text := match n {
 }
 
 index_positions(program: Node): Node := {
-	if not counted_types.keys().any(word => mentions(program, word)) { return program }
+	if not counted_types.keys().any(word => mentions(program, word)) and not counting_calls.keys().any(word => mentions(program, word)) { return offsets_dropped(program) }
 	type_words = free_type_words(program)
 	counted_node(program, scope_counts(program, {}, type_words), type_words)
 }

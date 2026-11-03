@@ -60,6 +60,9 @@ attribute_word = HiddenWord.ViewAttribute as text
 unwrap_word = "unwrap"
 # the number a subscript was written with, `1` of `d[1]` on its shifted index `d#2` (Rust: warp_parser WrittenIndex)
 written_index_mark = "written_index"
+# the `1` `xs[i]` adds to i for `xs#(i+1)` (Rust: warp_parser SubscriptOffset): a position i meets the brackets as it
+# is, `xs#i` (index_positions.warp); plain_node keeps it for a program's own code, index_positions drops it
+subscript_offset_mark = "subscript_offset"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: View): bool := kind_of(view) == "list" and #view == 3
@@ -105,8 +108,9 @@ placed(made: Node, at: Node): Node := {
 
 # n without its attributes, opaque empty groups and characters, keeping the place it was written at: the parser places a
 # call on its group, which a rebuilt group would lose, so a refusal of the call would name the node before it
-plain_node(n: Node): Node := {
-	plain = plain_parts(n)
+# kept: the attributes left in the tree for a later pass to read, the subscript offset of a program's own `xs[i]`
+plain_node(n: Node, kept: list = []): Node := {
+	plain = plain_parts(n, kept)
 	if plain === ø or is_positioned(plain) then plain else placed(plain, n)
 }
 # the attributes an extension reads past plain_node, each the names it marks: `@primitive add(…) := …` marks add,
@@ -127,13 +131,16 @@ is_referenced_alone(n: Node): bool := {
 	marking = value_of(n#1)
 	marking#1 == function_reference_mark and marking#3 is symbol and not name_of(marking#3).starts_with("$")
 }
-plain_parts(n: Node): Node := match n {
+plain_parts(n: Node, kept: list): Node := match n {
 	Key(left, op, right): {
-		if left == symbol(attribute_word) { return marked(right#1, plain_node(right#3)) }
+		if left == symbol(attribute_word) {
+			if right#1 in kept { return n }
+			return marked(right#1, plain_node(right#3, kept))
+		}
 		if left == opaque_symbol { return if is_empty_group(right) and right#2 not in ["{", "["] then ø else n }
-		Key(plain_node(left), op, plain_node(right))
+		Key(plain_node(left, kept), op, plain_node(right, kept))
 	}
-	List(items, bracket, separator): if is_referenced_alone(n) then plain_node(items#1) else List(items.map(plain_node), bracket, separator)
+	List(items, bracket, separator): if is_referenced_alone(n) then plain_node(items#1, kept) else List(items.map(item => plain_node(item, kept)), bracket, separator)
 	// lowering reads a one-character literal as a text, as node_of does
 	Char(c): "" + c
 	_: n

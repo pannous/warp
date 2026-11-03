@@ -92,7 +92,7 @@ def timed(label: text) := { if TIMES != "" { print "§T " + "${clock()}" + " " +
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
-	lowered_reached(plain_node(parsed(rules_ended(source))), source, folder, prelude)
+	lowered_reached(plain_node(parsed(rules_ended(source)), [subscript_offset_mark]), source, folder, prelude)
 }
 # the program with the definitions it reaches, after every pure pass, those it doesn't call after all dropped
 lowered_reached(program: Node, source: text, folder: text, prelude: text): Node := called_only(lowered_node(with_used(program, source, folder, prelude)))
@@ -166,7 +166,7 @@ lowered(source: text, folder: text, prelude: text): any := view_of(lowered_progr
 # those of the lowered program, as Rust runs them; what they find goes to `diagnosed` (diagnostics.warp)
 checked_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
-	program = plain_node(source_checks(parsed(rules_ended(source)), prelude))
+	program = plain_node(source_checks(parsed(rules_ended(source)), prelude), [subscript_offset_mark])
 	own_names = statements_in(program).map(declared_name)
 	main_globals(kind_changes(lowered_reached(program, source, folder, prelude)), own_names)
 }

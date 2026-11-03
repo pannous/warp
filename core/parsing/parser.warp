@@ -1120,7 +1120,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			p.indexing = outer_indexing
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
-			left = subscript(left, index)
+			left = subscript(left, index, written_offset())
 		} else if c == '(' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power and is_callee(left) {
 			p.at = p.at + 1
 			left = call_of([left] + spread(items_until(p, Bracket.Round, ItemsEnd.Closer)))
