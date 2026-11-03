@@ -126,8 +126,23 @@ def build_history(record, landed):
     return sorted(fastest.values())
 
 
+def hourly_pace():
+    """Landings (first-parent commits of main) and all commits reaching main, per hour, every hour since SINCE."""
+    import datetime
+    hour = lambda date: date[:13].replace("T", " ")
+    commits_per_hour = collections.Counter(hour(d) for d in git("log", "--format=%ad", "--date=iso-strict",
+                                                                 "--since=" + SINCE, "origin/main").split())
+    landings_per_hour = collections.Counter(hour(row[0]) for row in rows)
+    first = datetime.datetime.strptime(min(commits_per_hour), "%Y-%m-%d %H")
+    hours = []
+    while (label := first.strftime("%Y-%m-%d %H")) <= max(commits_per_hour):
+        hours.append([label, landings_per_hour[label], commits_per_hour[label]])
+        first += datetime.timedelta(hours=1)
+    return hours
+
+
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in commits}
-data = {"builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+data = {"pace": hourly_pace(), "builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))
