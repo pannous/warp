@@ -785,10 +785,22 @@ word_index_text(): text := {
 rule_heads(source: text): list := rule_patterns(source).map(leading_word).filter(word => #word > 0)
 rule_patterns(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => line[#"rewrite " ..])
 # whether one of the module's rules the word leads goes on as a statement it leads does: the word after it a hole or
-# the statement's own, `on every 1 second {…}` timers' rule, `on change x {…}` signals'
+# the statement's own, `on every 1 second {…}` timers' rule, `on change x {…}` signals'; a hole with a member after it
+# goes on only as a member of that name, `on job.stop {…}` tasks' `on $x.stop`, never as `on alarm {…}`
 rule_fits(module: text, word: text, program: Node): bool := {
-	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word) and n#2 is symbol).map(n => name_of(n#2))
-	rule_patterns(used_module_text(module)).filter(pattern => leading_word(pattern) == word).any(pattern => second_word(pattern).starts_with("$") or second_word(pattern) in seconds)
+	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word)).map(n => said_second(n#2))
+	rule_patterns(used_module_text(module)).filter(pattern => leading_word(pattern) == word).any(pattern => {
+		said = hole_dropped(second_word(pattern))
+		said == "" or said in seconds
+	})
+}
+# what a statement says after its leading word, as a pattern says it without its holes: `change` of `on change x`,
+# `.stop` of `on job.stop`
+said_second(n: Node): text := if n is symbol then name_of(n) else if is_key(n, Op.Dot) and value_of(n) is symbol then "." + name_of(value_of(n)) else ""
+# a pattern's word without its hole and a colon after it: "" of `$e:`, `.stop` of `$x.stop:`, `change` of `change`
+hole_dropped(pattern_word: text): text := {
+	word = if pattern_word.ends_with(":") then pattern_word[0 ..< #pattern_word - 1] else pattern_word
+	if word.starts_with("$") then word[name_end(word, 1, #word) ..] else word
 }
 # the pattern's word after its leading one, "" for none
 second_word(pattern: text): text := {
