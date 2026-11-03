@@ -41,7 +41,6 @@ def group_parts(node: Node): list? := match node {
 
 // `value |> f(args)` is `f(value, args)`, `value |> f` is `f(value)`; a braceless call is grouped, one argument:
 // `square xs |> filter(p)` is `filter((square xs), p)`
-// Rust twin: pipes.rs piped
 def piped(operand: Node, receiver: Node): Node := {
 	parts = group_parts(operand)
 	if parts != ø and parts#1 == "" and parts#2 == " " { operand = call_of([operand]) }

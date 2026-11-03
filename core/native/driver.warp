@@ -498,7 +498,7 @@ out_of_fuel(trap: pointer, fuel: i64): nothing := {
 		exit(1)
 	}
 }
-# what warp's modules use beside the MVP: GC, typed function references, exceptions (rust-harness:crates/warp-runtime engine.rs),
+# what warp's modules use beside the MVP: GC, typed function references, exceptions,
 # fuel metering when the run counts steps,
 # warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
 # warp.wasm's beside it (compiled_module); compiled on one thread with WARP_ONE_THREAD (a `warp test` case: its slot
@@ -538,7 +538,7 @@ host_words_defined(linker: handle, engine: handle, compiled: handle, module: tex
 	}
 }
 # a C function that opens a native window (raylib's InitWindow, SDL's, GLFW's) ends the run before it starts under
-# WARP_NO_WINDOW or CI, so no test or agent run pops one up (rust-harness:src/ffi/link.rs WINDOW_OPENERS)
+# WARP_NO_WINDOW or CI, so no test or agent run pops one up
 headless_checked(name: text, library: text): nothing := {
 	if opens_window(name) and (getenv("WARP_NO_WINDOW").length > 0 or getenv("CI").length > 0) {
 		complain(joined(joined(joined(name, " from "), library), " opens a window: refused under WARP_NO_WINDOW or CI"))
@@ -674,8 +674,7 @@ raised_message(context: handle, instance: pointer, failed: pointer): text := {
 	}
 }
 
-# `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile (rust-harness:src/compiler/standalone.rs
-# run_compiler: the file, the module, its folder, lib/, runtime.wasm), then the module runs with the arguments
+# `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile, then the module runs with the arguments
 compiled_and_run(compiler: text, given: text, first: int): nothing := {
 	file = reachable_path(given)
 	library = library_folder()
@@ -746,7 +745,7 @@ written_run(output: text, name: text, first: int): nothing := {
 
 ## machine code
 # warp.wasm's machine code for this driver's wasmtime, kept beside it with the fingerprint of the warp.wasm it is of:
-# the harness's warp.wasm.cwasm is another wasmtime's (rust-harness:crates/warp-runtime 49, other flags), never loadable here.
+# the harness's warp.wasm.cwasm is another wasmtime's, never loadable here.
 # Machine code that won't load (another wasmtime) is said in one line, then compiled anew
 FNV_OFFSET = -3750763034362895579
 FNV_PRIME = 1099511628211
@@ -950,7 +949,7 @@ line_run(caller: handle, context: handle, line: text, result: pointer): nothing 
 	free(printed.at)
 }
 
-## the core host words, warp over libc (rust-harness:crates/warp-runtime host_words.rs, std_adapters.rs their Rust twins)
+## the core host words, warp over libc
 CLOCK_REALTIME = 0
 TIME_BYTES = 16
 CALENDAR_BYTES = 64
@@ -1191,7 +1190,7 @@ guest_int(caller: handle, context: handle, name: text, n: i64, result: pointer):
 guest_text_of(caller: handle, context: handle, t: text, result: pointer): nothing := guest_text(caller, context, native_pointer(t.address), t.length as i64, result)
 
 ## paint (card paint-native): the pixels as a PNG in the temporary folder, warp-paint/paint.png, then paint-2.png …
-## within one run, named on stderr, as the Rust harness wrote them headless (rust-harness:src/graphics/paint.rs): 0 paper, a value with
+## within one run, named on stderr, as the Rust harness wrote them headless: 0 paper, a value with
 ## an alpha byte its color, any other ink. A shader paints on the GPU, which the native warp has not yet
 PAPER = 250
 INK = 29
@@ -1678,7 +1677,7 @@ guest_error(caller: handle, context: handle, message: text, result: pointer): no
 
 ## C calls
 # a module calling C describes each C function in its warp.c_functions section, a line of tab-separated fields each
-# (rust-harness:crates/warp-runtime c_signatures.rs): import module, library, name, parameters, C result register, what the result
+# : import module, library, name, parameters, C result register, what the result
 # crosses as, the first out-pointer's pointee, struct layouts, how a failure shows. One the driver can't make (bytes,
 # structs) stops the run saying so
 WASM_HEADER = 8
@@ -1921,7 +1920,7 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 }
 register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 else if register == REGISTER_F64 then KIND_F64 else if register == REGISTER_F32 then KIND_F32 else KIND_I32
 # the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says (a module
-# calling C exports it), else at the end of its memory, grown for them (rust-harness:crates/warp-runtime gc_values.rs write_to_heap)
+# calling C exports it), else at the end of its memory, grown for them
 guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := guest_bytes_built(caller, context, bytes, length, "new_text", result)
 # the bytes in the module's memory, built into a node by its builder of an (address, length): new_text, new_symbol
 guest_bytes_built(caller: handle, context: handle, bytes: handle, length: i64, builder: text, result: pointer): nothing := {

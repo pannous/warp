@@ -1,4 +1,4 @@
-# A match over a node's cases (card pure-runs; Rust twin: rust-harness:src/lowering/types/node_cases.rs and destructuring.rs):
+# A match over a node's cases (card pure-runs):
 # each arm tests the subject's kind and spelled parts, binds its named parts, then gives its result; an arm of a value,
 # `1: e`, `Color.Red: e`, `Red: e` of a declared variant, tests the subject equals it:
 #   match n { Key(left, Op.Colon, right): e; _: d }
@@ -40,7 +40,7 @@ case_pattern(pattern: Node): list? := match pattern {
 	_: ø
 }
 
-# the arm taking any other subject: `_`, `other`, `default`, `else` (Rust twin: switch.rs DEFAULT_KEYS)
+# the arm taking any other subject: `_`, `other`, `default`, `else`
 default_arms = [other_arm, "other", "default", "else"]
 is_other_arm(pattern: Node): bool := is_name(pattern) and default_arms contains name_of(pattern)
 
@@ -74,7 +74,7 @@ is_value_pattern(pattern: Node, variants: map): bool := pattern is bool or match
 	Char(value): yes
 	Key(type_name, Op.Dot, case_name): is_name(type_name) and is_name(case_name)
 	Key(type_name, Op.Scope, case_name): is_name(type_name) and is_name(case_name)
-	# alternatives `"number" | "bool"`, each a value (Rust twin: switch.rs alternatives)
+	# alternatives `"number" | "bool"`, each a value
 	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
 	# a value kept as written, the empty list `[]`
 	Key(left, op, right): left == opaque_symbol
@@ -95,7 +95,7 @@ is_type_pattern(pattern: Node): bool := match pattern {
 	_: no
 }
 
-# `n if n > 5 => e` (parsed as `if n > 5 then n`): the pattern and its guard, else ø (Rust twin: switch.rs split_guard)
+# `n if n > 5 => e` (parsed as `if n > 5 then n`): the pattern and its guard, else ø
 guard_of(pattern: Node): Node := match pattern {
 	Key(Key(ø, Op.If, guard), Op.Then, arm_body): guard
 	_: ø
@@ -343,7 +343,6 @@ spaced_match(parts: list, n: Node, bracket: Node, variants: map): Node := {
 # `pattern Definition = Key(head, Op.Define, body)` names a pattern (card patterns-values; decision node-refinements:
 # a named refinement of a node case): the definition leaves the program and its name stands for the pattern in an arm
 # `Definition: …`, which binds head and body, in a test `n is Definition`, and as the type `d: Definition`, any node
-# (Rust twin: named_patterns.rs)
 named_pattern(statement: Node): list? := if is_pattern_definition(statement) then named_definition(statement#2) else ø
 
 named_definition(definition: Node): list? := match definition {

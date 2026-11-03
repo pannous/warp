@@ -1,4 +1,4 @@
-# Lambdas and functions as values (card pure-lambdas; Rust twins: rust-harness:src/lowering/definitions/lambdas.rs, closures.rs):
+# Lambdas and functions as values (card pure-lambdas):
 # - an iteration word over a list and a function, `map(xs, x => x + 1)`, `xs.filter(even)`, `xs.map(f)` of a variable or
 #   parameter f, is a loop, the lambda's body inlined with its parameters renamed, a function name or value
 #   called on each item:
@@ -324,7 +324,7 @@ nested_phrase(words: list, lowering: Lowering): list? := {
 }
 
 # `x.f(a)`: of a field the program gives a function value (callable_fields), the function it holds called,
-# `closure_call_1(x.f, a)` (Rust twin: closures.rs, card lambda-held); else a method call, its name kept
+# `closure_call_1(x.f, a)`; else a method call, its name kept
 dotted_lowered(left: Node, right: Node, locals: list, lowering: Lowering): Node := {
 	receiver = lowered_lambdas(left, locals, lowering)
 	if not is_round(right) { return Key(receiver, Op.Dot, lowered_method(right, locals, lowering)) }

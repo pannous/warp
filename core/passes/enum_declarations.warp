@@ -1,4 +1,4 @@
-# The enums a program declares (card pure-enums; Rust twin: rust-harness:src/lowering/types/plain_enums.rs): `enum Color { Red,
+# The enums a program declares (card pure-enums): `enum Color { Red,
 # Green }`, Swift's `{ case north, south }`, read as [name, case names], for the passes that lower them
 # (plain_enums.warp), match over their cases (node_matches.warp, node_cases.warp) and bring them from a used file
 # (uses.warp)
@@ -9,7 +9,6 @@ use "../parsing/phrase_blocks.warp"
 case_word = "case"
 
 # the cases of an enum body, a line of several cases `Penny, Nickel` among lines of cases each a case
-# Rust twin: sum_variants.rs case_rows
 enum_rows(cases: list): list := {
 	rows = []
 	for case in cases {

@@ -1,4 +1,4 @@
-# `try x else y` and `try x catch e { y }` (card pure-runs; Rust twin: rust-harness:src/lowering/words/library_words/guards.rs):
+# `try x else y` and `try x catch e { y }` (card pure-runs):
 # x runs inside ran·without·error, which says whether it finished (a runtime error deep inside throws the wasm tag
 # try_guard.rs catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch are checked
 # before they happen: a division by 0 directly under `try`, an index out of a list written in place.
@@ -90,7 +90,7 @@ handled_form(n: Node): Node := match n {
 	_: n
 }
 
-# `assert c else m`, `check c`: 1 when c holds, else it raises m (Rust twin: guards.rs lower_assert); not `asserted`,
+# `assert c else m`, `check c`: 1 when c holds, else it raises m; not `asserted`,
 # emitter.warp's, as the compiler's files share one namespace
 assertion(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
 

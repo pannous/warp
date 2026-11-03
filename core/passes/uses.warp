@@ -18,7 +18,7 @@ declaration_keywords = ["let", "var", "global", "stored", "const", "constant", "
 global_declaration_keywords = ["global", "stored"]
 local_declaration_keywords = declaration_keywords.filter(word => word not in global_declaration_keywords)
 module_extension = ".warp"
-# the word a module reads as the folder of its own file (Rust twin: rust-harness:src/modules/loader.rs MODULE_DIRECTORY)
+# the word a module reads as the folder of its own file
 module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
@@ -53,7 +53,7 @@ with_own_aliases(program: Node): Node := {
 	kept = statements.filter(s => word_alias(s) == ø)
 	bottom_up(separated(bracketed(kept, ""), ";"), n => aliased(n, renamed))
 }
-# [alias, word] of an alias line, ø for another statement (Rust twin: rust-harness:src/modules/declarations.rs word_alias)
+# [alias, word] of an alias line, ø for another statement
 word_alias(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 == symbol(alias_keyword)) { return ø }
 	match statement#2 {
@@ -285,7 +285,6 @@ checked_parse(file: text, source: text): Node := {
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
 # both is one
-# Rust twin: rust-harness:src/modules/loader.rs claim_signatures
 claim_signatures(declarations: list, file: text, claimed: map) := {
 	for declaration in declarations {
 		signature = declared_signature(declaration)
@@ -304,7 +303,6 @@ claim_signatures(declarations: list, file: text, claimed: map) := {
 
 # `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
 # another statement
-# Rust twin: rust-harness:src/modules/declarations.rs declared_signature, parameter_type
 declared_signature(statement: Node): any := {
 	conversion = declared_conversion(statement)
 	if conversion != ø { return name_of(key_of(conversion)) + " as " + name_of(value_of(conversion)) }

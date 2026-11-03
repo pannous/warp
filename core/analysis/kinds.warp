@@ -1,4 +1,4 @@
-# The kind field of a $Node (rust-harness:src/type_kinds.rs), one table for the emitter and the runtime words, which read
+# The kind field of a $Node, one table for the emitter and the runtime words, which read
 # `Kind.List` as its number (emitter.warp constant_tables): the Kind in the low byte (KIND_BITS, KIND_MASK), Rust's
 # enum Kind
 kind_bits = 8
@@ -28,10 +28,10 @@ ListKind = {Listed: 0, Range: 1}
 # the first mark in an Int's or Float's info byte a number type takes (extensions/int_types/marks.warp): 1 is a yes/no's (a map,
 # as the runtime reads this file's maps only)
 TypeMark = {First: 2}
-# a list's bracket in its info byte (rust-harness:src/wasm_emitter/mod.rs bracket_info)
+# a list's bracket in its info byte
 BracketCode = {Curly: 0, Square: 1, Round: 2, Less: 3, Other: 4, None: 5}
-# a time's form in its info bits (rust-harness:src/time/mod.rs TimeForm), Clock the time of day
+# a time's form in its info bits, Clock the time of day
 TimeFormCode = {Instant: 0, Date: 1, Local: 2, Duration: 3, Zoned: 4, Clock: 5}
-# the units of a time's info bits above its form (rust-harness:src/time/mod.rs TIME_FORM_BITS 3, MONTHS_SHIFT 35): a duration's days
+# the units of a time's info bits above its form: a duration's days
 # at 1 << 3 as 32 unsigned bits (DayRange), its months at 1 << 35 above them
 TimeInfoUnit = {Days: 8, Months: 34359738368, DayRange: 4294967296}

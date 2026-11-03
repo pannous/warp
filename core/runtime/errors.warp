@@ -165,7 +165,7 @@ not_a_finite_number() := {
 	fail()
 	0
 }
-# an int result beyond 64 bits where the runtime has no big ints: "int64 overflow" (rust-harness:src/numbers/fixed_width.rs)
+# an int result beyond 64 bits where the runtime has no big ints: "int64 overflow"
 overflow_of_int64() := {
 	fail()
 	0
@@ -179,7 +179,7 @@ wrong_number_of_arguments() := {
 	fail()
 	0
 }
-# the runtime errors Rust's run names by the function trapping (rust-harness:src/wasm_emitter/lists/list_ops/runtime_errors.rs)
+# the runtime errors Rust's run names by the function trapping
 not_a_map(): int := {
 	fail()
 	0

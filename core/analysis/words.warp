@@ -1,8 +1,7 @@
 # The word tables the pass twins share, each a plain list checked against its Rust twin by tests/parser/test_self_words.rs
 # until the Rust table is gone (card library-word-tables).
 
-# the words naming a type a value is held as, lowercase (Rust twin: analyzer type_word_kind, from BUILTIN_TYPES in
-# rust-harness:src/lowering/types/type_tests.rs and FIXED_WIDTHS in rust-harness:src/numbers/fixed_width.rs)
+# the words naming a type a value is held as, lowercase
 type_words = ["int", "nat", "integer", "long", "i64", "i32", "rational", "exact", "float", "double", "f64", "f32",
 	"float32", "float64", "fast", "number", "text", "str", "string", "codepoint", "char", "character", "bool", "boolean", "symbol",
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
@@ -20,12 +19,12 @@ enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·ste
 	GlueHidden = "glue·hidden", MatchSubject = "match·subject", MatchBound = "match·bound", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",
 	UncaughtError = "uncaught·error", CaughtError = "caught·error", StoredValue = "store·value", InstanceOf = "instance·of" }
-# the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
+# the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }`
 implicit_parameter = "it"
-# the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
+# the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic
 raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
 raise_word = "raise"
-# a collection type's head words, before `of` (`list of int`; Rust twin: type_tests.rs COLLECTION_WORDS) and the
+# a collection type's head words, before `of` (`list of int`) and the
 # foreign spellings of list (warp_parser/mod.rs FOREIGN_LIST_HEADS)
 collection_words = ["list", "map"]
 foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
@@ -50,18 +49,17 @@ is_list_type(word: text): bool := word == "list" or word.starts_with("list of ")
 is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
 
 # the words separating a phrase's slots, each naming the slot after it, `to add a to b`, and the articles starting a
-# noun slot, `to square a number` (Rust twin: type_name_matching.rs PREPOSITIONS, ARTICLES)
+# noun slot, `to square a number`
 phrase_prepositions = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"]
 phrase_articles = ["a", "an", "the"]
 
-# the words opening a definition, `def f(x) {…}` (Rust twin: operators/mod.rs FUNCTION_KEYWORDS)
+# the words opening a definition, `def f(x) {…}`
 function_keywords = ["fun", "fn", "def", "define", "function", "func"]
 # the functions √, ∛ and ‖ ‖ spell (lib/math.warp), whose result kind the compile knows: the emitter's
 magnitude_words = ["abs", "sqrt", "cbrt"]
 # the word declaring an enum, `enum Coin {Penny, Dime}`
 enum_word = "enum"
-# the words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t` (Rust twin:
-# of_lookups.rs SELECTOR_WORDS)
+# the words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t`
 selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "bytes", "letters", "words", "lines",
 	"keys", "values"]
 # the operators that change their target, `n = …`, `n += …` (a branch's value assigns through them: parser.warp
@@ -70,7 +68,7 @@ assigning_operators = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^
 # the operators after which `return` names a variable: those and the definitions
 binding_operators = assigning_operators + [":=", ":"]
 
-# the built-in type words (Rust twin: analyzer type_word_kind) and the kind a value declared so is held as
+# the built-in type words and the kind a value declared so is held as
 type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
 	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
@@ -79,10 +77,9 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
 # the words naming the parameter after them, a preposition or `as`: `play(tone, for duration)` called `play C4 for: 2s`
-# (Rust twin: type_name_matching.rs PREPOSITIONS, AS_LABEL)
 label_words = phrase_prepositions + ["as"]
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64), by
-# their opcodes (Rust twin: wasm_emitter/functions/wasm_bodies.rs instruction)
+# their opcodes
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
 	"i64.div_s": 127, "i64.div_u": 128, "i64.rem_s": 129, "i64.rem_u": 130, "i64.and": 131, "i64.or": 132, "i64.xor": 133,
 	"i64.shl": 134, "i64.shr_s": 135, "i64.shr_u": 136, "i64.rotl": 137, "i64.rotr": 138, "f64.abs": 153, "f64.neg": 154,

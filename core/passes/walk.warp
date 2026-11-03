@@ -73,16 +73,15 @@ is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø but
 # the empty map `{}` (decision empty-group-node: the bridge keeps Rust's bracket where a pass reads it, number_keys
-# keys a variable that starts as `{}`) and the empty list `[]`, an opaque type or error whole; Rust twin:
-# compiler/node_views.rs plain
+# keys a variable that starts as `{}`) and the empty list `[]`, an opaque type or error whole
 plain(view: View): View := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
-# (mutation.rs reads the mark of `x!`); Rust twin: rust-harness:src/compiler/node_views.rs handled_plain_view
+# (mutation.rs reads the mark of `x!`)
 bridged(view: View): View := without_layers(view, yes)
 
 # the view without literal layers, without attribute layers unless `attributes`, an empty group but `{}` and `[]` as
-# ø (`[]` as grouped builds it; Rust twin: node_views.rs without_layers)
+# ø (`[]` as grouped builds it)
 without_layers(view: View, attributes: bool): View := {
 	kind = kind_of(view)
 	if kind == "literal" and view#2 == "[]" { return ["list", "[", ""] }
@@ -165,7 +164,6 @@ global showing_positions = no
 
 # the view a stage hands back to Rust, each positioned node as ["at", line, column, view], so the Rust passes after it
 # and the program's warnings and errors name where a node stands (card front-end-warnings)
-# Rust twin: node_views.rs positioned_view
 stage_view(n: Node): View := {
 	showing_positions = yes
 	view = view_of(n)
@@ -173,7 +171,7 @@ stage_view(n: Node): View := {
 	view
 }
 
-# a view as JSON, ø as null and 1.0 as 1.0 (Rust twin: compiler/node_views.rs view_json), what the host reads back
+# a view as JSON, ø as null and 1.0 as 1.0, what the host reads back
 # into a node (compiler.warp's view mode, card rust-bootstrap)
 view_json(view: View): text := {
 	if view === ø { return "null" }
@@ -272,8 +270,7 @@ group_like(n: Node, items: list): Node := match n {
 # the call `name(arguments…)`
 # the symbol `word`
 is_word(n: Node, word: text): bool := n == symbol(word)
-# `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp; Rust twin: named_patterns.rs
-# pattern_definition)
+# `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp)
 is_pattern_definition(n: Node): bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
 call_of(name: text, arguments: list): Node := bracketed([symbol(name)] + arguments, "(")
 # the statements as a block, `{ a; b }`
@@ -375,7 +372,7 @@ report(n: T, message: text, preferred: any): T := {
 	n
 }
 # where n was written, [line, column]: its own position, else its first positioned part's (only atoms carry one), ø
-# for a node a pass made of none (Rust twin: diagnostic positions.rs line_info)
+# for a node a pass made of none
 written_at(n: Node): list? := {
 	if is_positioned(n) { return [line_of(n), column_of(n)] }
 	for part in parts_of(n) {
@@ -433,7 +430,6 @@ hole_close(template: text, at: int): int := {
 template_pieces(template: text): list := holed_pieces(template, no)
 
 # the end of the hole whose `$` is at `at`, `at` when none starts there; with bare_names a `$name` is one too
-# Rust twin: injection.rs parts_with
 piece_hole_end(template: text, at: int, bare_names: bool): int := {
 	if template[at] != '$' or at + 1 >= #template { return at }
 	next = template[at + 1]

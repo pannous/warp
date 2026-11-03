@@ -639,8 +639,7 @@ result_values(name: Name): list := {
 	values
 }
 
-# a function giving ø in one place and a list in another gives a node, unlike a variable (Rust twin:
-# infer_function_return_kind, a returned Node of another kind)
+# a function giving ø in one place and a list in another gives a node, unlike a variable
 result_kind(name: Name): ValueKind := {
 	scope = scopes[name]
 	kinds = result_values(name).map(value => flowing_kind(value, scope))
@@ -830,7 +829,7 @@ settle(flows: list) := {
 }
 
 # parameter name → the kind of the declared or given parameter it is passed on to, not an int: `g(t) := f(t)` with f's
-# `s: text` (Rust twin: flow.rs forwarded)
+# `s: text`
 forwarded_kinds(name: Name): map := {
 	own = taken_names(defined_signatures[name])
 	forwarded = {}

@@ -11,7 +11,7 @@ name_joiner = "·"
 # `closure_text(f)`: the text of a closure, its lambda as written (`x => x*2`) or its target's name, a function made
 # once, its code written last (closure_text_code), as Rust's function_text table
 closure_text_name = "closure_text"
-# the targets Rust's lowering lifts from a lambda (rust-harness:src/lowering/definitions/closures.rs is_lambda_function)
+# the targets Rust's lowering lifts from a lambda
 lambda_prefixes = ["closure_lambda_", "lambda_value_"]
 is_lifted_lambda(name: text): bool := lambda_prefixes.any(prefix => name.starts_with(prefix))
 # the operators a closure takes part in (node_equal compares closures)

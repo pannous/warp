@@ -77,7 +77,7 @@ list_admitted(n: Node): Node := {
 	n
 }
 # … given to a typed field: kept when the type admits it, else "not a text", as Rust's
-# (rust-harness:src/wasm_emitter/declared_values.rs): a text or character for text, yes/no (or 0 and 1) for bool, a number for float
+# : a text or character for text, yes/no (or 0 and 1) for bool, a number for float
 text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n

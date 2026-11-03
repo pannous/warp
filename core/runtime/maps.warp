@@ -186,10 +186,10 @@ collection_position(c: Node, x: Node): int := {
 	0
 }
 # `c.remove(key)` gives this: of a map the key's value (ø when absent), of a list the list itself, which map_without
-# then changes (Rust twin: fields_and_keys.rs removed_value)
+# then changes
 removed_value(c: Node, key: Node): Node := if marked_kind(c) == Marked.Map then map_get_or(c, key) else c
 # `c.remove(key)` stores this in c: a map without the key's entry, a list without its first item equal to key, in place
-# so every holder sees it (Rust twin: fields_and_keys.rs map_without)
+# so every holder sees it
 map_without(c: Node, key: Node): Node := {
 	at = if marked_kind(c) == Marked.Map then map_index(c, name_text(key)) else collection_position(c, key)
 	if at == 0 { return c }

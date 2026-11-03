@@ -15,7 +15,6 @@ def spans_in(source: text): list {
 }
 
 // The source with its comments and texts blanked out, a space each
-// Rust twin: declaration_scan.rs code_only
 def code_only(source: text): text {
 	parts = []
 	at = 0
@@ -40,7 +39,6 @@ def span_end(source: text or list, at: int, n: int): int {
 }
 
 // After the quote closing a text from `from` on: an escaped quote `\"` leaves it open
-// Rust twin: warp_parser quoted_end
 def quoted_end(source: text or list, from: int, quote: text, n: int): int {
 	at = from
 	while at < n and source[at] != quote {
@@ -77,7 +75,6 @@ def starts_at(source: text or list, part: text, at: int, n: int): bool {
 def is_name_char(c: text): bool := is_alphanumeric(c) or is_letter_beyond_ascii(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
 
 // The superscript digits in digit order, the raised letters in the order of the letters they raise (no raised q)
-// Rust twin: warp_parser/mod.rs SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS
 SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
 SUPERSCRIPT_LETTERS = "ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ"
 RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
@@ -85,7 +82,6 @@ RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
 def is_blank(c: text): bool := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 
 // Only blanks stand before `at` on its line
-// Rust twin: declaration_scan.rs at_line_start
 def at_line_start(source: text or list, at: int): bool {
 	before = at - 1
 	while before >= 0 and (source[before] == ' ' or source[before] == '\t') { before = before - 1 }
@@ -93,7 +89,6 @@ def at_line_start(source: text or list, at: int): bool {
 }
 
 // The end of what the parser skips at `at`, a comment as it reads one or a text, else `at`
-// Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_line_comment, at_hash_comment
 def skipped_end(source: text, at: int, n: int): int {
 	c = source[at]
 	comment = comment_end(source, at, n)
@@ -106,7 +101,6 @@ def skipped_end(source: text, at: int, n: int): int {
 }
 
 // The end of the comment starting at `at` (`// …`, `# …`, `/* … */`, `/# … #/`), else `at`
-// Rust twin: warp_parser/scanning.rs at_line_comment, at_hash_comment
 def comment_end(source: text, at: int, n: int): int {
 	c = source[at]
 	next = peek(source, at + 1, n)
@@ -120,7 +114,6 @@ def comment_end(source: text, at: int, n: int): int {
 
 // After the block comment `/* … */` (`/# … #/` with the mark #) opening at `at`; comments nest:
 // `/* outer /* inner */ still outer */`
-// Rust twin: comments.rs consume_block_comment
 def block_comment_end(source: text, at: int, mark: text, n: int): int {
 	depth = 1
 	i = at + 2
@@ -181,7 +174,6 @@ def quote_of(c: text): text {
 QUOTES = ['"', '\'', '`', '«']
 
 // `shader {` or `wgsl {` at `at`: the index of its brace, else `at`
-// Rust twin: warp_parser/literals.rs parse_shader_block (SHADER_WORDS)
 def shader_brace(source: text, at: int, n: int): int {
 	if at > 0 and is_name_char(source[at - 1]) { return at }
 	for word in ["shader", "wgsl"] {
@@ -196,7 +188,6 @@ def shader_brace(source: text, at: int, n: int): int {
 }
 
 // After the `}` closing the block from `from` on, WGSL comments not counting
-// Rust twin: warp_parser/literals.rs closing_brace
 def block_end(source: text, from: int, n: int): int {
 	at = from
 	depth = 1
@@ -218,7 +209,6 @@ def block_end(source: text, from: int, n: int): int {
 def is_hex_digit(c: text): bool := is_digit(c) or "abcdefABCDEF".contains(c)
 
 // After the text from `from` on that `closing` ends, a backslash escaping the character after it
-// Rust twin: warp_parser/literals.rs parse_string
 def text_end(source: text, from: int, closing: text, n: int): int {
 	interpolates = closing == '"' or closing == '`'
 	at = from
@@ -236,7 +226,6 @@ def text_end(source: text, from: int, closing: text, n: int): int {
 }
 
 // After the `close` of an interpolation hole from `from` on, nested brackets and quoted text inside
-// Rust twin: warp_parser/literals.rs text_until_closing
 def hole_end(source: text, from: int, open: text, close: text, n: int): int {
 	depth = 1
 	quote = ' '
@@ -295,7 +284,6 @@ def name_end(source: text or list, from: int, n: int): int {
 }
 
 // `full-name`: a hyphen in a name joins the word after it; `x-1` and `i--` end the name at the hyphen
-// Rust twin: warp_parser/atoms.rs parse_symbol, hyphen_joins_word
 def symbol_end(source: text, from: int, n: int): int {
 	at = name_end(source, from, n)
 	while at + 1 < n and source[at] == '-' and is_name_start(source[at + 1]) { at = name_end(source, at + 1, n) }
