@@ -811,3 +811,9 @@ egraph is the first outside library: it lives in the registry github.com/pannous
 path (`use "packages/egraph/egraph.warp"`, decision package-use-by-path), not shipped in lib/. The suggested "warp-extensions" repo is that registry; no new repo. Builder: warp-egraphs.
 - markup-keeps final (user, 2026-11-01, via the Interviewer): lib-first; core only fix 1 (tag items are expressions,
   ~15–25 lines) and automatic liveness (~20); keyed instances by hand for now (no core part d). warp-markup builds.
+
+## precedence-number (user, 2026-11-03)
+An operator's precedence is written as one explicit number, as in Lean (`infixl:65`), not as a Pratt pair: rows in
+lib/aliases.warp say `precedence: 65` (plus `associates: right` where not left), declarations say
+`infix operator ∪(a, b) precedence 65 := …`; levels with gaps so new operators fit between; the parser derives the
+binding powers itself (card parser-rows).
