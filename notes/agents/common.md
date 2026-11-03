@@ -25,6 +25,9 @@ before asking a question). After a context swap, this file and your role file be
   A form that falls out of the general rules, however esoteric (`"x" * yes` is "x" by bool-as-int), is welcome and
   never suppressed; a form that needs its own rule or core code for one phrase (`x is a 100 element array`) is bloat:
   ask the Interviewer before building it. Old commented-out Rust tests (`gap-*` cards) are not spec.
+- Smaller, faster compiler (user 2026-11-03: "that's the kind of change I want to see"): look out for little changes
+  that make the compiler faster and much smaller, like core-int-division (core writes `÷`, so big numbers leave
+  the compiler build). Card each one you spot; they rank above new forms.
 - No special cases: a fix is the general rule, holding for the siblings of the example. A test that seems to force a
   special case goes to warp-interviewer.
 - Never degrade the input to suit a tool (compiler stage, parser, harness): fix or card the tool. Warp source, the
