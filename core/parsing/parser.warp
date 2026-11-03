@@ -70,6 +70,48 @@ UNBUNDLED_FOLDERS = ["compiler", "data"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
+// A bundled module's text as the bundle carries it: each line that is only a comment ("# …", "## …", "// …") left
+// empty, so the compiler carries no comment text and every line and position stays where it was (a shebang `#!` and
+// a line inside a text literal spanning lines are kept). Only the bundle: a module read from disk keeps its comments
+def blanked_comments(source: text): text {
+	lines = source.split("\n")
+	quote = ""
+	for at in 0 ..< #lines {
+		line = lines[at]
+		if quote == "" and is_comment_line(line.trim()) { lines[at] = "" } else if quote != "" or line.contains("\"") or line.contains("'") or line.contains("`") { quote = quote_open_after(line, quote) }
+	}
+	lines.join("\n")
+}
+def is_comment_line(line: text): bool := line == "#" or line.starts_with("# ") or line.starts_with("##") or line.starts_with("//")
+// the quote a text literal still open after the line opened with (open: "" outside one), as far as a quote, its
+// backslash escapes and a trailing comment (`# `, `//` outside a text) tell
+def quote_open_after(line: text, open: text): text {
+	quote = open
+	at = 0
+	while at < #line {
+		c = line[at ..< at + 1]
+		if quote != "" {
+			if c == "\\" { at += 1 } else if c == quote { quote = "" }
+		} else if c == "\"" or c == "'" or c == "`" {
+			quote = c
+		} else if (c == "#" or c == "/") and (line[at ..< at + 2] == "# " or line[at ..< at + 2] == "//") {
+			return ""
+		}
+		at += 1
+	}
+	quote
+}
+// a bundled module's text, the bundle's one copy (module_source would bake a second one, with its comments)
+def bundled_module(within: text): text := LIBRARY_FILES.get(within) ?? ""
+// whether source is a bundled module's text but for its comments: each line the same, or blank in the bundle where
+// source has a comment (a walk, no copy: asked of every bundled module a compile reads from disk)
+def same_but_comments(bundled: text, source: text): bool {
+	ours = bundled.split("\n")
+	theirs = source.split("\n")
+	if #ours != #theirs { return no }
+	for at in 0 ..< #ours { if ours[at] != theirs[at] and not (ours[at] == "" and is_comment_line(theirs[at].trim())) { return no } }
+	yes
+}
 // the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): map {
 	found = {}
@@ -79,7 +121,7 @@ def library_texts(library: text, within: text): map {
 	for name in entry_names.sort() {
 		path = within + name
 		if name.ends_with(".warp") {
-			found[path] = try read(library + "/" + path) else ""
+			found[path] = blanked_comments(try read(library + "/" + path) else "")
 		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
@@ -87,14 +129,24 @@ def library_texts(library: text, within: text): map {
 	}
 	found
 }
-// A source file's text: a bundled module of lib/ from the bundle, unless WARP_LIB is set and has the file (a module
-// changed after the build, per module); any other file (the program's own, core reached as lib/compiler) from the disk;
+// A source file's text: a bundled module of lib/ from the bundle, unless WARP_LIB is set and has the file changed
+// after the build (beyond its comments; per module); any other file (the program's own, core reached as lib/compiler) from the disk;
 // ø for none
 def file_source(path: text): text? {
 	bundled = LIBRARY_FILES.get(library_path(path))
 	if bundled != ø and warp_lib() == ø { return bundled }
-	(try read(path) else ø) ?? bundled
+	read_text = try read(path) else ø
+	if read_text == ø or bundled == ø { return read_text ?? bundled }
+	// the bundle's very text when the file differs from it only in its comments, so its baked parse, rules and slices
+	// apply (the bundle carries no comment, blanked_comments); walked once per file and text a run
+	kept = bundled_reads.get(path)
+	if kept == ø or kept#1 != read_text {
+		kept = [read_text, if same_but_comments(bundled, read_text) then bundled else read_text]
+		bundled_reads[path] = kept
+	}
+	kept#2
 }
+global bundled_reads = {}
 // a path's place within lib/ ("native/z.warp"), "" outside it
 def library_path(path: text): text {
 	library = run_library() + "/"
@@ -251,7 +303,7 @@ def bang_words(source: text): list {
 // front stage 5× slower (card front-stage-5x-slower)
 global prelude_bangs = ø
 def prelude_bang_words(): list {
-	if prelude_bangs == ø { prelude_bangs = bang_words(module_source("prelude")) }
+	if prelude_bangs == ø { prelude_bangs = bang_words(bundled_module("prelude.warp")) }
 	prelude_bangs
 }
 
@@ -352,7 +404,7 @@ ALIAS_TARGET_NAMES = {"approximately": "≈", "<-": STORE_OPERATOR}
 // notes/aliases.md: one entry per canonical word, `add { operator: "+", aliases: [plus] }`), made the first time a
 // parse asks; reading the table sees the parser's own spellings only. The table is built into the compiler when it is
 // compiled (module_source), never read from a lib/ when it runs 
-ALIAS_TABLE = module_source("aliases")
+ALIAS_TABLE = bundled_module("aliases.warp")
 // operator symbols and words: [spelling, operator] pairs, the symbols longest first; forms: keyword_form's; canonical:
 // each alias with its entry's word (`plus` → add); infix words: the table's (`mod`, `upto`)
 // powers: each operator's [left, right] binding power, its row's `power` (binding_powers); declared: the operators a

@@ -85,7 +85,7 @@ c_primitive_types = {i32: "i32", bool: BOOL_TYPE, i64: "i64", f64: "f64", f32: "
 # `allocate(bytes)`: an address of that many bytes taken from the arena
 ALLOCATE_WORD = "allocate"
 # the code of primitive files: lib/primitive.warp, their prelude, its words reached as the GC prelude's are
-PRIMITIVE_PRELUDE = module_source("primitive")
+PRIMITIVE_PRELUDE = bundled_module("primitive.warp")
 
 class PrimitiveCode { type: text; code: list }
 # a primitive function: its parameters' names and types, its result type ("" none, ø not yet known), its locals by

@@ -6,7 +6,7 @@ use "degrees.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 EXTENSIONS = [
-	Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}
+	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
 	radix_numbers_extension
