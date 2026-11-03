@@ -193,7 +193,7 @@ Row pitfalls (card tasks-signals-extensions, 2026-11-03; each cost a failed seed
   extensions/extensions.warp loads lib/tasks.warp, so the tasks row lives in extensions/go_tasks.warp.
 - A row's map keys are texts, `value_settlers: {"task_go": "task_awaited"}`: a bare key `{task_go: …}` is a free word
   to prelude_words, which brings the module defining it (lib/tasks.warp, and uncertain behind it) into the compiler.
-  That is a compiler bug (a key read as a word, card key-brings-module), not a style rule; the quotes hold until it is fixed.
+  That is a compiler bug (a key read as a word, card key-map), not a style rule; the quotes hold until it is fixed.
 - A function gathering a field is named apart from it: `extension_block_words()` for `block_words`.
 
 ## Rules (user 2026-11-03)
