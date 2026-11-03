@@ -1,5 +1,5 @@
 # The pure lane follows `use` (card pure-follows-use): a program's `use "../parsing/lexer.warp"` brings in the declarations of
-# that file, read from the program's folder, as rust-harness:src/modules/loader.rs brings them; each used file once, the files it
+# that file, read from the program's folder; each used file once, the files it
 # uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written, a used file's too,
 # so prelude_words.warp brings the words reached of that module.
 use os
@@ -11,14 +11,12 @@ use "../analysis/signatures.warp"
 
 import_keywords = ["use", "require", "import", "include"]
 # (function_keywords: words.warp's)
-# rust-harness:src/modules/declarations.rs DECLARATION_KEYWORDS and CONSTANT_KEYWORDS
 declaration_keywords = ["let", "var", "global", "stored", "const", "constant", "final", "val"]
-# the declarations that keep a name main's: `global n = 0`; the others make it the function's own, `let n = 5` (Rust
-# is_declaration_word)
+# the declarations that keep a name main's: `global n = 0`; the others make it the function's own, `let n = 5`
 global_declaration_keywords = ["global", "stored"]
 local_declaration_keywords = declaration_keywords.filter(word => word not in global_declaration_keywords)
 module_extension = ".warp"
-# the word a module reads as the folder of its own file (Rust twin: rust-harness:src/modules/loader.rs MODULE_DIRECTORY)
+# the word a module reads as the folder of its own file
 module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
@@ -30,8 +28,7 @@ with_uses(program: Node, folder: text): Node := {
 	timed("uses: module texts")
 	bottom_up(brought, module_text)
 }
-# `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
-# loader.rs with_module_directory)
+# `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: Node, folder: text): any := {
 	statements = flat_statements(program)
@@ -42,7 +39,7 @@ used_in(program: Node, folder: text): any := {
 }
 
 # `alias deque = Deque` (wiki/alias.md): the program's alias lines taken out, each alias naming its word wherever the
-# program declares nothing of that name, as Rust's modules.rs with_own_aliases
+# program declares nothing of that name
 alias_keyword = "alias"
 with_own_aliases(program: Node): Node := {
 	statements = statements_in(program)
@@ -53,7 +50,7 @@ with_own_aliases(program: Node): Node := {
 	kept = statements.filter(s => word_alias(s) == ø)
 	bottom_up(separated(bracketed(kept, ""), ";"), n => aliased(n, renamed))
 }
-# [alias, word] of an alias line, ø for another statement (Rust twin: rust-harness:src/modules/declarations.rs word_alias)
+# [alias, word] of an alias line, ø for another statement
 word_alias(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 == symbol(alias_keyword)) { return ø }
 	match statement#2 {
@@ -73,8 +70,7 @@ def is_baking(n: Node, word: text, name: text): bool := {
 	timed("computing " + name)
 	yes
 }
-# `module_source("prelude")`: lib/prelude.warp's text, read at compile time as rust-harness:src/lowering/words/library_words.rs
-# writes it out (the std modules are lib/<name>.warp); `module_source("compiler/analysis/errors.data")`, a name with an
+# `module_source("prelude")`: lib/prelude.warp's text, read at compile time (the std modules are lib/<name>.warp); `module_source("compiler/analysis/errors.data")`, a name with an
 # extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES), `library_parses()`
 # their parses (LIBRARY_PARSES); a definition's parse is cut from its file's where it's reached (slices_cut). A compiled
 # compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
@@ -285,7 +281,6 @@ checked_parse(file: text, source: text): Node := {
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
 # both is one
-# Rust twin: rust-harness:src/modules/loader.rs claim_signatures
 claim_signatures(declarations: list, file: text, claimed: map) := {
 	for declaration in declarations {
 		signature = declared_signature(declaration)
@@ -304,7 +299,6 @@ claim_signatures(declarations: list, file: text, claimed: map) := {
 
 # `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
 # another statement
-# Rust twin: rust-harness:src/modules/declarations.rs declared_signature, parameter_type
 declared_signature(statement: Node): any := {
 	conversion = declared_conversion(statement)
 	if conversion != ø { return name_of(key_of(conversion)) + " as " + name_of(value_of(conversion)) }
@@ -353,7 +347,7 @@ file_used(statement: Node, folder: text): any := {
 	path = path_in(folder, name_of(module) + module_extension)
 	if file_text(path) == ø then ø else path
 }
-# a file as Rust's messages name it (loader.rs relative_path): below the working folder relative to it, else as found
+# a file as messages name it: below the working folder relative to it, else as found
 working_relative(file: text): text := {
 	below = cwd + "/"
 	if file.starts_with(below) then file.replace(below, "") else file
@@ -390,7 +384,7 @@ without_steps_up(path: text): text := {
 # texts are lib/ as it was when the compiler was built (a module changed since must be read)
 file_text(path: text): any := file_source(path)
 
-# what a used file brings, as rust-harness:src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
+# what a used file brings: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named
 # pattern; not its main-level statements
 is_declaration(statement: Node): bool := match statement {
@@ -407,7 +401,7 @@ is_declaration_keyword(n: Node): bool := n is symbol and name_of(n) in declarati
 # `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
 is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
 
-# the name a declaration defines, as rust-harness:src/modules/declarations.rs name_declared_by: `f(x) := …`, `x = …`,
+# the name a declaration defines: `f(x) := …`, `x = …`,
 # `def f(x) …`, `def f(x): T {…}`, `global x = 0`, a foreign line `f(x): T from "c"`; ø for another statement
 declared_name(statement: Node): any := match statement {
 	Key(left, op, right): {

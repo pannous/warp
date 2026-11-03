@@ -5,10 +5,10 @@ use "../instructions.warp"
 # An extended part: only runtime/extended.warp loads it (and times.warp)
 use "../arithmetic.warp"
 use "../floats.warp"
-## durations (card duration-warp; rust-harness:src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
+## durations (card duration-warp): a
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
-## bits (rust-harness:src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three
-## amounts, so they read as calendar.rs Duration does (tests/numbers/test_duration_words.rs)
+## bits, its nanoseconds in its box. The words below the unpacking ones take the three
+## amounts
 # a constant of the durations: an untyped word, as `f(): int :=` has no use yet
 second_nanos() := 1000000000
 day_nanos() := 86400 * second_nanos()
@@ -46,7 +46,7 @@ seconds_text(nanos: int): text := {
 	if nanos < 0 { return "-" + shown }
 	shown
 }
-# a duration as calendar.rs `Display for Duration` shows it: `1 month 2 days 3 hours`, `1.5 seconds`, `0 seconds`
+# a duration as shown: `1 month 2 days 3 hours`, `1.5 seconds`, `0 seconds`
 duration_parts_text(months: int, days: int, nanos: int): text := {
 	shown = with_amount(with_amount("", months, "month"), days, "day")
 	# whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
@@ -61,8 +61,8 @@ duration_parts_text(months: int, days: int, nanos: int): text := {
 }
 sign_of(n: int): int := if n > 0 then 1 else if n < 0 then -1 else 0
 duration_text(n: Node): text := duration_parts_text(duration_months(n), duration_days(n), duration_nanos(n))
-# the fewest or (`most`) the most nanoseconds a difference of months, days and nanoseconds lasts on any date
-# (calendar.rs Duration::compares): a month is 28 to 31 days, negative months take more days off the longer they are;
+# the fewest or (`most`) the most nanoseconds a difference of months, days and nanoseconds lasts on any date:
+# a month is 28 to 31 days, negative months take more days off the longer they are;
 # daylight saving moves an exact part against the calendar part by at most an hour, calendar parts alone keep the hour
 duration_bound(months: int, days: int, nanos: int, most: bool): int := {
 	if months == 0 and days == 0 { return nanos }

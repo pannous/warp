@@ -98,7 +98,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"keyed": TypedCode(ValueKind.Node, values#1.code + values#2.code + as_node(values#3.code) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]))
 		"entry_key": TypedCode(ValueKind.Node, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]))
 		"symbol_of": TypedCode(ValueKind.Node, node(Kind.Symbol, values#1.code))
-		# error_of(t): the Error of the message t, of no class (Rust's text_builtins.rs error_of)
+		# error_of(t): the Error of the message t, of no class
 		"error_of": TypedCode(ValueKind.Node, node(Kind.Error, values#1.code))
 		# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
 		"list_node": TypedCode(ValueKind.Node, node_code(converted(values#1, ValueKind.Int), values#2.code))
@@ -179,7 +179,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		_: TypedCode(no_kind, values#1.code + index_code(values#2) + values#3.code + index_code(values#4) + index_code(values#5) + gc_code(gc_ops.array_copy, [gc_type(gc.text), gc_type(gc.text)]))
 	}
 }
-# the intrinsics a program calls too, as Rust's text builtins byte_at(text, offset), memory_byte(address) and
+# the intrinsics a program calls too, byte_at(text, offset), memory_byte(address) and
 # memory_set_byte(address, value)
 program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same_node", "baked_segment"]
 intrinsics = {baked_segment: 1, with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
@@ -197,14 +197,14 @@ library_words = extended_library_words({numerator: "numerator", denominator: "de
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
 	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment"})
-# `x is spec`: the type words of Rust's BUILTIN_TYPES (rust-harness:src/lowering/types/type_tests.rs) the core holds, by their
+# `x is spec`: the built-in type words the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
 	function: "function", block: "function"}
-# the kinds of a value known only at run time each type passes, as Rust's BUILTIN_TYPES masks take them: an int is a
+# the kinds of a value known only at run time each type passes: an int is a
 # rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
 # types.warp node_is_type, held_kind_bit)
 passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
@@ -233,8 +233,8 @@ def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 }
 # (typed, so a kind from a table and one a cast spelled, `2 as float`, compare as kinds)
 same_kind(a: ValueKind, b: ValueKind): bool := a == b
-# `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline, as
-# Rust's kind masks; a type value (`int is number`) and `is code` ask runtime node_is_type
+# `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline;
+# a type value (`int is number`) and `is code` ask runtime node_is_type
 def node_type_test(body: Body, value: TypedCode, type: text): TypedCode {
 	kinds = 0
 	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }

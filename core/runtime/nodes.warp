@@ -29,7 +29,7 @@ global runtime_spelling_lists = []
 spellings_of(table: int): list := {
 	if not runtime_spelling_lists {
 		runtime_spelling_lists = [
-			# a key's operator is its code above the kind bits, the position of its spelling here (rust-harness:src/operators/codes.rs OP_CODES)
+			# a key's operator is its code above the kind bits, the position of its spelling here
 			["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 				"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
 				"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
@@ -50,14 +50,14 @@ operator_code(spelled: text): int := {
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
 	0
 }
-# `key(1, "@@", 2)`: an operator no spelling names fails, as Rust's key builder does
+# `key(1, "@@", 2)`: an operator no spelling names fails
 key_node(left: Node, operator: Node, right: Node): Node := {
 	spelled = node_text(operator)
 	code = operator_code(spelled)
 	if code == 0 and spelled != "" { raised("unknown operator: " + spelled) }
 	keyed(code * KindUnit.Info + Kind.Key, left, right)
 }
-# `as_code(data e)`: e marked as code, of the type code (Rust's emit_as_code); the kind field without the code mark:
+# `as_code(data e)`: e marked as code, of the type code; the kind field without the code mark:
 # `parse("a+1") == data (a+1)`
 code_bit(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Code), 2)
 code_free_kind(n: Node): int := marked_kind(n) - code_bit(n) * KindUnit.Code
@@ -72,7 +72,7 @@ info_byte(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.I
 key_operator(n: Node): text := node_text(operator_spellings()#(info_byte(n) + 1))
 symbol_node(name: Node): Node := symbol_of(node_text(name))
 # a list's bracket and separator in its kind field: the bracket's info in the byte above the kind, the separator's
-# code at bit 48 (rust-harness:src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
+# code at bit 48; each written as `n.bracket` and `n.separator` give it
 bracket_spellings(): list := spellings_of(2)
 separator_spellings(): list := spellings_of(3)
 bracket_info(n: Node): int := info_byte(n)
@@ -105,7 +105,7 @@ spelling_code(spellings: list, spelled: text): int := {
 	0
 }
 # `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; no items is ø, as `()`
-# and `{}` parse, but `[]` in square brackets, the empty list (Rust's new_bracketed)
+# and `{}` parse, but `[]` in square brackets, the empty list
 bracketed_node(items: Node, bracket: Node): Node := {
 	if is_nothing(items) { return if text_order(node_text(bracket), "[") == 0 then list_node(Marked.SquareList, []) else ø }
 	if kind_code(items) != Kind.List { not_a_list() }

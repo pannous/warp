@@ -4,10 +4,9 @@
 # Core's generic words (show, ordering, equality, arithmetic, conversions, text_numbers, floats) call these hooks and
 # never an extended word, nor use an extended file. Each hook is declared here by its typed head only; its body is
 # runtime/extended.warp's or an extension root's, which fills it with its words when the extended runtime is compiled in. The
-# emitter compiles a word on its first call, so a program with no ratio, time or float carries none of them. In the
-# Rust lane a core part runs alone with a hook trapping when called (decision bodiless-imports).
+# emitter compiles a word on its first call, so a program with no ratio, time or float carries none of them.
 # scripts/self-check.sh checks that no core file uses an extended file or names an extended word.
-# show: an exact ratio as Rust shows it (3.5, 1/3) and a big int (extensions/big_numbers.warp), a time or duration
+# show: an exact ratio (3.5, 1/3) and a big int (extensions/big_numbers.warp), a time or duration
 # as it is written (runtime/extended.warp)
 extended_number_text(n: Node): text from runtime
 extended_text(n: Node): text from runtime

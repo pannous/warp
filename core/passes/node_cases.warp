@@ -1,4 +1,4 @@
-# A value of kind Node (card pure-node-values; Rust twin rust-harness:src/lowering/types/node_cases.rs): `Node` is the type of any
+# A value of kind Node (card pure-node-values): `Node` is the type of any
 # node, so `n: Node`, `f(…): Node` and `x: Node = v` hold any value; `Node.Key` is the case Key; after the matches took
 # their patterns apart (node_matches.warp), `Key(a, op, b)` builds the key, `List(items, bracket, separator)` the list,
 # unless the program gives Key or List a meaning of its own. Op, Bracket and Separator are node.warp's enums whose cases
@@ -17,15 +17,14 @@ node_type = "Node"
 node_spelled_enums = ["Op", "Bracket", "Separator"]
 global spelled_enums = node_spelled_enums
 # a node of that case where its name is written as a type, `left: Key`, `items: List?` (decision node-refinements),
-# held as any node, the case not checked yet; Symbol, Text, Number, Char and Error are type words already (Rust twin:
-# node_cases.rs NODE_CASE_TYPES)
+# held as any node, the case not checked yet; Symbol, Text, Number, Char and Error are type words already
 node_case_types = ["Key", "List", "Meta"]
 # `Node.True` and the cases without values
 valued_cases = {"True": yes, "False": no, "Empty": ø}
 # the parameter of the spelling functions
 spelled_value = "spelled"
 
-# node.warp's cases in its order, each with the text a node carries for it (node_cases.rs spelling)
+# node.warp's cases in its order, each with the text a node carries for it
 node_spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
 	"Assign": "=", "Arrow": "->", "ArrowUp": "↑", "ArrowDown": "↓", "Add": "+", "Sub": "-", "Mul": "*", "Div": "/",
 	"FloorDiv": "/!", "Mod": "%", "Rem": "rem", "Pow": "^", "LogBase": "⌞", "LogOf": "⌟", "Shl": "<<", "Shr": ">>",
@@ -100,7 +99,7 @@ spelled_case(value: Node, enum_name: text, n: Node): Node := {
 }
 
 # `Op.Add == x` → "+" == Op·text(x): a case equals its spelling; of a name, `op == Op.Define` → Op·is(op, Op.Define, ":="),
-# which compares a case as it is, not through Op·text's match over every case (Rust twin: plain_enums.rs spelled_equality)
+# which compares a case as it is, not through Op·text's match over every case
 spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: map): Node := {
 	enum_name = spelled_enum_of(left, declared) ?? spelled_enum_of(right, declared)
 	if enum_name == ø { return n }
@@ -114,7 +113,7 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: map): Nod
 }
 
 # the annotations that hold any value, unless the program declares that type itself: Node and its cases (also
-# optional, `Key?`); a type variable `T` of a generic signature (Rust twin: type_parameters.rs lower_type_variables),
+# optional, `Key?`); a type variable `T` of a generic signature,
 # unless the program declares T, `type T = int` (user decision, card declared-alias-generic).
 # A spelled enum's annotation, `op: Op`, whose cases a text stands for, stays for plain_enums.warp, which reads the
 # names it types before it lets them hold any value (card enum-parameter-conversion)
@@ -189,7 +188,7 @@ spelling_functions(enum_name: text): list := {
 }
 
 # `Op·is(spelled, case_written, case_spelled)`, `Op·same(spelled, other_spelled)`: two cases compare as they are, a case
-# and a text as spellings (Rust twin: node_cases.rs spelling_functions)
+# and a text as spellings
 comparing_functions(enum_name: text): list := {
 	value = symbol(spelled_value)
 	case_written = symbol("case_written")

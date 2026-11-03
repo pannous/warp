@@ -1,6 +1,6 @@
-# The definitions of a module's text a program reaches (Rust twin: rust-harness:src/modules/prelude_slices.rs), for the prelude and
+# The definitions of a module's text a program reaches, for the prelude and
 # each standard module the program uses (`use case_tables`): a call of a word the program defines nowhere brings that
-# word's definition, and those it calls in turn, as Rust's resolve loads them. The text is cut into slices, one per
+# word's definition, and those it calls in turn. The text is cut into slices, one per
 # top-level `name(…) := …` or `name = …`; the reached ones are parsed after the program's own statements, so its
 # positions stay as written. It runs on the parsed program after uses.warp: the source is parsed
 # once (twice put parser.warp's lowering past the stage's 60 s).
@@ -317,8 +317,8 @@ called_only(program: Node): Node := {
 	separated(bracketed(kept, ""), ";")
 }
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
-# once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
-# loader places them: a used module's in front of the program, the prelude's after it. The words the program (a used
+# once and on its own (the program's positions stay as written); the program itself when it reaches none. A used
+# module's in front of the program, the prelude's after it. The words the program (a used
 # module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of), and
 # those the program doesn't call after all dropped once the passes ran (called_only)
 with_reached(program: Node, module: text, in_front: bool, files: list = []): Node := {
@@ -419,7 +419,7 @@ is_value_definition(statement: Node): bool := {
 	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 }
 
-# `alias keys = map_keys` of a module: the word by each alias (Rust: rust-harness:src/modules/declarations.rs, an alias declares
+# `alias keys = map_keys` of a module: the word by each alias (an alias declares
 # nothing, its calls call the word)
 module_aliases(source: text): any := {
 	aliases = {}
@@ -478,7 +478,7 @@ hint_foreign_types(program: Node, foreign: map, own_names: list) := {
 	}
 }
 # aliases with the call form of each word operator the names define: `divides(3, 12)` calls operator_divides unless
-# a function divides is defined (Rust twin: word_operators.rs lower_call_forms)
+# a function divides is defined
 with_call_forms(aliases: map, names: list): any := {
 	for name in names {
 		word = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else ""
@@ -487,7 +487,7 @@ with_call_forms(aliases: map, names: list): any := {
 	aliases
 }
 # `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
-# or a function taking as many arguments (shadowing is per arity, Rust's library_words.rs word_for_unless: a program's
+# or a function taking as many arguments (shadowing is per arity: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
 # `x.f(a)` counts its receiver
 aliased(n: Node, aliases: map, own: map): any := if class_view(n) != ø then with_members(n, member => aliased_member(member, aliases, own)) else match n {
@@ -534,7 +534,7 @@ with_own_locals(definition: Node, program_globals: list): Node := {
 library_word(word: text): text := word + name_joiner + "library"
 
 # words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
-# `xs.first(3)` first_items (Rust twin: library_words.rs ARITY_VARIANTS)
+# `xs.first(3)` first_items
 arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["count", 2, "count_in"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
 # the variants of the words a program names, which of_lookups may call (`last 2 of xs` is last_items)
 variant_words(words: list): list := arity_variants.filter(variant => variant#1 in words).map(variant => variant#3)
@@ -591,13 +591,11 @@ definition_head_of(statement: Node): any := {
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 then n else ø
 }
 
-# the standard modules named after a builtin type word (Rust's type_modules: lib/<word>.warp for a word of
-# BUILTIN_TYPES in rust-harness:src/lowering/types/type_tests.rs), and the reals, whose `π` a program names bare
+# the standard modules named after a builtin type word (lib/<word>.warp for a built-in type word), and the reals, whose `π` a program names bare
 type_modules = ["list", "map", "text", "time", "reals"]
 
 # `xs.flatten()`, `unique(xs)`: a program calling a word of exactly one type module, a word it defines nowhere and no
-# library word, uses that module, a `use` in front of it (Rust twin: rust-harness:src/modules/implicit_modules.rs
-# with_type_module_uses; a word of two such modules needs its `use`)
+# library word, uses that module, a `use` in front of it
 with_type_module_uses(program: Node): Node := {
 	own = own_heads(program)
 	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
@@ -607,7 +605,7 @@ with_type_module_uses(program: Node): Node := {
 	for word in called_words(program) + bare_calls(program, providers) + named_types(program) + root_words(program) {
 		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
-	# in the order of type_modules, Rust's sorted one
+	# in the order of type_modules, sorted
 	modules = type_modules.filter(module => module in wanted and module not in used)
 	with_module_uses(program, modules + global_word_modules(program, own, used) + emitted_modules(program).filter(module => module not in used) + tag_modules(program, used))
 }

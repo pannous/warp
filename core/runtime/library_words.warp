@@ -11,9 +11,9 @@ use "text.warp"
 use "text_words.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
-# the library words of core on values known only at run time, as Rust's text and list words give them
+# the library words of core on values known only at run time
 # `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
-# or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
+# or beyond the end stops at the end, a negative from or to fails, "index out of range"
 node_slice(x: Node, start: Node, to: Node = ø): Node := {
 	from = if is_null(start) then 0 else index_of_node(start)
 	stop = if is_null(to) then node_length(x) else index_of_node(to)
@@ -39,7 +39,7 @@ items_slice(items: list, from: int, to: int): list := {
 	copy_items(out, 0, items, from, count)
 	out
 }
-# `starts_with(t, part)`, `ends_with(t, part)`: 1 when part's bytes begin or end t, else 0, as Rust's give an int
+# `starts_with(t, part)`, `ends_with(t, part)`: 1 when part's bytes begin or end t, else 0, an int
 node_starts_with(t: Node, part: Node): bool := text_starts_with(text_of_textual(t), text_of_textual(part))
 node_ends_with(t: Node, part: Node): bool := text_ends_with(text_of_textual(t), text_of_textual(part))
 node_trim(t: Node): text := text_trim(text_of_textual(t))
@@ -56,7 +56,7 @@ bytes_between(t: text, start: int, stop: int): text := {
 	copy_text(out, 0, t, start, stop - start)
 	out
 }
-# `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only, as Rust joins
+# `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only
 joined(xs: list, separator: Node): text := {
 	between = node_text(separator)
 	parts = []

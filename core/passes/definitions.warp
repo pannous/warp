@@ -49,8 +49,7 @@ typed_definition_held(n: Node): Node := {
 	result_held(key_of(typed), value_of(typed), n)
 }
 
-# The ways to declare a function's result type, as the one form `f(x): T := e` (Rust twin: type_name_matching.rs
-# typed_parts, function_heads.rs result_typed_head): `f(x): T = e`, `f(x) as T := e` or `= e`, and C's result type
+# The ways to declare a function's result type, as the one form `f(x): T := e`: `f(x): T = e`, `f(x) as T := e` or `= e`, and C's result type
 # before the name, `T f(x) = e` or `T f(x) := e`; ø for any other statement. `f(x): T := e` itself may name any T, the
 # other forms a type word, collection, class or any (`f(x): y = e` assigns y)
 # `void`, which the parser reads as ø
@@ -77,13 +76,12 @@ typed_by_word(target: Node, body: Node): Node := match target {
 	_: ø
 }
 
-# a word naming a result type: a built-in type, a collection, a class, or any, each also optional, `int?` (Rust twin:
-# function_heads.rs is_result_type)
+# a word naming a result type: a built-in type, a collection, a class, or any, each also optional, `int?`
 is_result_type(n: Node): bool := n is symbol and names_result_type(required_type(name_of(n)))
 names_result_type(word: text): bool := is_type_word_or_any(word) or word in collection_words or is_capitalized(word)
 
 # `is_null(x: any): bool from runtime` (decision bodiless-imports): an intrinsic the emitter supplies, declared only;
-# the line goes (Rust twin: lowering/foreign/foreign_lines.rs runtime_line, whose Rust lane traps when it is called).
+# the line goes.
 # So do `floor(x: number): int from warp` and `count(xs: list): int from emitter` (decision foreign-signature): words
 # the compiler supplies itself, whose signatures it reads from the prelude (builtin_signatures.warp)
 compiler_libraries = ["runtime", "warp", "emitter"]
@@ -92,7 +90,7 @@ is_runtime_declaration(n: Node): bool := {
 	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 is symbol and name_of(words#3) in compiler_libraries
 }
 
-# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
+# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T
 result_word = "the result"
 result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
@@ -113,8 +111,7 @@ held_result(n: Node): Node? := {
 }
 
 # A function that can answer ø declares `T?` (decision optional-result): `def f(x): int { … return ø … }` warns with
-# the `?` as its fix and holds its result as an `int?`, so the ø reaches the caller unchanged (Rust twin:
-# type_name_matching.rs optional_when_answering_empty). A list result gives [] for ø instead, with no warning (user
+# the `?` as its fix and holds its result as an `int?`, so the ø reaches the caller unchanged. A list result gives [] for ø instead, with no warning (user
 # 2026-10-22, card list-result-autocast: "ø can autocast to []")
 optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
 	written = name_of(result_type)
@@ -124,7 +121,6 @@ optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node :
 }
 
 # an optional result of `if c then x` without `else`, or of a loop, is ø when nothing gave a value, not the kind's zero
-# (Rust twin: type_name_matching.rs as_type)
 with_empty_otherwise(value: Node): Node := match value {
 	Key(then, Op.Else, otherwise): Key(then, Op.Else, with_empty_otherwise(otherwise))
 	Key(_, Op.Then, _): Key(value, Op.Else, ø)
@@ -155,7 +151,7 @@ returns_empty(n: Node, body: Node, optional: list): bool := {
 }
 
 # the functions of a program whose result can be ø: those declared `T?`, and those declared `T` whose body can answer
-# ø, a call of another such function included (Rust twin: type_name_matching.rs optional_functions)
+# ø, a call of another such function included
 global optional_functions = []
 optional_functions_of(program: Node): list := {
 	typed = typed_definitions(program)
@@ -213,7 +209,7 @@ value_can_be_empty(value: Node, body: Node, optional: list, looked_up: list): bo
 }
 
 # `f = { it * 2 }` defines a function as `f := { it * 2 }` does: a name assigned a block that reads `it`; other blocks
-# are data (Rust twin: warp_parser/definitions/functions.rs is_function_block)
+# are data
 is_function_block(name: Node, body: Node): bool := name is symbol and bracket_of(body) == "{" and mentions(body, implicit_parameter)
 
 # `f(x: int, y)`: a name applied to parameters
@@ -236,7 +232,7 @@ classes_rewritten(program: Node): Node := {
 	rewritten
 }
 
-# A program's conversions (decision general-conversions; Rust twin: rust-harness:src/lowering/types/conversions.rs): `Person as
+# A program's conversions (decision general-conversions): `Person as
 # text := it.name` says how a Person turns into text, and every `p as text` of the program then uses it. Each target
 # gets one function trying the program's conversions to it in the order written, the built-in one last:
 #   as·text(it) := if it is Person then it.name else it as text

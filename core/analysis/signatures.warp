@@ -13,7 +13,7 @@ class Parameter { name: text; type_name: text = ""; defaulted_to: any = ø; rest
 class Signature { parameters: list = []; result: text = "" }
 # class Signature { Parameters = []; result: text = "" } as shortform for : list[Parameter] (card capitalized-field-list)
 
-# `x`, `x: T`, `x = 1`, `x: T = 1`, `with new x` (label words before the name, Rust parameter_head); `*xs` the rest
+# `x`, `x: T`, `x = 1`, `x: T = 1`, `with new x` (label words before the name); `*xs` the rest
 parameter_of(written: Node): Parameter := {
 	if rest_name(written) != ø { return Parameter(name: rest_name(written), rest: yes) }
 	declared = if is_key(written, Op.Assign) then key_of(written) else written
@@ -42,7 +42,7 @@ parameter_name(named: Node): text := {
 	# `with new x`: the label words before the name; a pattern clause's literal, `f(0) := 1`, names nothing
 	if is_group(named) and #named > 0 then parameter_name(named.last) else ""
 }
-# `int` of `x: int`; a type form Rust checks at each call (`xs: [int]`) as written
+# `int` of `x: int`; a type form checked at each call (`xs: [int]`) as written
 type_text(type: any): text := if type is symbol then name_of(type) else "${type}"
 
 # the head `f(a, b: int)` of a definition (its name first)

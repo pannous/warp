@@ -1,6 +1,4 @@
-## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
-## rust-harness:src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in rust-harness:src/wasm_emitter/numbers/casts.rs): a text
-## that spells no number fails with invalid_number
+## texts as numbers at run time (card card-4): a text that spells no number fails with invalid_number
 use "intrinsics.warp"
 use "conversions.warp"
 use "errors.warp"
@@ -22,7 +20,7 @@ digit_run(t: text, start: int): int := {
 	while at < byte_count(t) and digit_of(byte_at(t, at)) >= 0 { at += 1 }
 	at - start
 }
-# `t as int`: an optional sign and decimal digits, nothing else; 64 bits, where Rust's grows a big int
+# `t as int`: an optional sign and decimal digits, nothing else; 64 bits
 text_as_int(t: text): int := {
 	start = sign_length(t)
 	count = digit_run(t, start)
@@ -32,7 +30,7 @@ text_as_int(t: text): int := {
 	if is_negative_text(t) then -value else value
 }
 # `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
-# nearest float, correctly rounded also beyond 10^±22, where Rust's multiplies ten by ten
+# nearest float, correctly rounded also beyond 10^±22
 text_as_float(t: text): float := {
 	start = sign_length(t)
 	whole = digit_run(t, start)
