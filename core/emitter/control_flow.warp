@@ -169,11 +169,21 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 # file's, which the place would give the program's name, so an error in it names the program's calling line (card
 # wasm-trap: arrangement.warp:34:56 was a line of lib/timers.warp)
 def position_code(body: Body, n: Node): list {
+	if stores_constant_data(n) { return [] }
 	at = if body.intrinsics or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
 	line: int = at#1
 	column: int = min(at#2, columns_per_line - 1)
 	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1)
+}
+# `x = data`, a statement that cannot fail, so no runtime error names it: what it stores is written without a call that
+# can, a number, a text and lists, maps and pairs of them (card main-constant-tables). A number past 64 bits or 18
+# places is no number node here, its exact value made through a bridge hook that a build may leave out
+stores_constant_data(n: Node): bool := is_key(n, Op.Assign) and key_of(n) is symbol and constant_data(value_of(n))
+constant_data(n: Node): bool := {
+	if n is number or n is text { return yes }
+	if is_key(n, Op.Colon) { return (key_of(n) is symbol or key_of(n) is text) and constant_data(value_of(n)) }
+	is_group(n) and (bracket_of(n) == "[" or bracket_of(n) == "{") and all_of(items_of(n), constant_data)
 }
 def dropped(value: TypedCode): list { if value.kind == no_kind then value.code else value.code + [op.drop] }
 
