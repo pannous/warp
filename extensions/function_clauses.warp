@@ -6,10 +6,6 @@
 # (n = clause·1; fib(n - 1) + fib(n - 2))`. A parameter is a literal the argument must equal, or a name it binds.
 # A list pattern takes a list apart, `total([first, rest...])`, a quoted one code, `simplify(data($a * 1))`; a pattern
 # none of these becomes a call of `pattern·clause·<name>`, which emitter.warp refuses.
-use "walk.warp"
-use "../parsing/phrase_blocks.warp"
-use "../analysis/words.warp"
-use "../analysis/diagnostics.warp"
 
 # the word quoting a code pattern, `data($a * 1)`
 code_word = "data"
@@ -37,15 +33,7 @@ definition_name(n: Node): text := {
 	if clause is ø then "" else clause.name
 }
 
-is_literal(n: Node): bool := n is number or n is text or n is bool
-
 parameter(name: text, i: int): Node := symbol("clause·" + i)
-
-joined(conditions: list): Node := {
-	condition = conditions#1
-	for more in conditions[1..] { condition = Key(condition, Op.And, more) }
-	condition
-}
 
 # what a pattern asks of the value at `at` and the names it binds there: [tests, bindings], ø for a pattern no clause
 # can take apart. A literal equals the value, a name binds it, `[h, t...]` takes a list apart (`t...` the rest),
@@ -144,3 +132,6 @@ clauses(program: Node): Node := match program {
 	List(parts, Bracket.None, separator): List(merged(parts), Bracket.None, separator)
 	_: program
 }
+# the row (card clauses-structural-match, decisions core-is-self, extension-passes): the clauses merge right after the
+# definitions of one name by arity (arity_overloads); its parts name core words without a use of core paths
+function_clauses_extension = Extension{name: "function_clauses", passes: {"arity_overloads": clauses}}
