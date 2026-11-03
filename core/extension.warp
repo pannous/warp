@@ -9,11 +9,13 @@
 #   atom_readers: the first character of an atom it reads → its reader, given the parser there, which reads the atom
 #   and moves past it (`°C`); glued after a number or a name such an atom multiplies it, `30°`, `x°`
 #   number_readers: functions reading a number form at a digit (`0xff`, `2024-01-31`), each ø where its form is not
+#   number_suffix_readers: functions reading what follows a decimal number, given the parser after it, the number as
+#   decimal_number wrote it and as the source did (`0.1f`, `1 month`), each ø where its form is not
 #   keyword_readers: a word → the reader of the phrase it starts, given the parser at the word and the word, ø where
 #   its form is not there (`emit alarm`)
 #   block_words: words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; keyword_readers: map = {}; block_words: list = []; commands: list = []; runs: any = ø }
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; keyword_readers: map = {}; block_words: list = []; commands: list = []; runs: any = ø }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
@@ -45,6 +47,12 @@ keyword_reader_of(word: text): any := {
 }
 # every word an extension takes a glued block for
 extension_block_words(): list := concatenated(EXTENSIONS.map(extension => extension.block_words))
+# every extension's number suffix readers
+global number_suffix_reader_list = ø
+number_suffix_readers(): list := {
+	if number_suffix_reader_list == ø { number_suffix_reader_list = concatenated(EXTENSIONS.map(extension => extension.number_suffix_readers)) }
+	number_suffix_reader_list
+}
 # every extension's number readers
 global number_reader_list = ø
 number_readers(): list := {

@@ -3492,7 +3492,6 @@ def line_at(p: Parser, at: int): int {
 	first + 1
 }
 
-FLOAT_SUFFIXES = "fFdD"
 // the type words naming a kind of number, `number` itself not (Rust twin: type_tests.rs is_number_type_word)
 NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32", "float32", "float64", "fast"]
 // the number a literal was written as: a float with a point or an exponent, else an int
@@ -3529,11 +3528,11 @@ def bare_atom(p: Parser): Node := {
 		}
 		number_start = p.at
 		written = decimal_number(p)
-		// `0.1f`, `3d`: the float suffix of C, Java and C#, a tight conversion (C's `0.1l` is the litre instead)
-		// Rust twin: numbers.rs literal_type_suffix
-		if FLOAT_SUFFIXES.contains(peek(p.code, p.at, p.n)) and not is_name_char(peek(p.code, p.at + 1, p.n)) {
-			p.at = p.at + 1
-			return Key(written_number(written), Op.As, symbol("float"))
+		// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
+		literal = p.code[number_start .. p.at]
+		for reader in number_suffix_readers() {
+			form = reader(p, written, literal)
+			if form != ø { return form }
 		}
 		// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
 		glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
@@ -3549,11 +3548,6 @@ def bare_atom(p: Parser): Node := {
 		period = overlined_digits(p)
 		if period != "" and written.contains(".") { return repeating_decimal(written, period) }
 		if written.contains(".") { return with_glued_factor(p, decimal_value(written)) }
-		literal = p.code[number_start .. p.at]
-		if not (literal.contains("e") or literal.contains("E")) {
-			duration = with_time_unit(p, int(written))
-			if duration != ø { return duration }
-		}
 		return with_glued_factor(p, whole_number(written))
 	}
 	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
@@ -3889,60 +3883,6 @@ def trailing_attribute(p: Parser, marked: Node): Node := {
 	}
 	attributed(name, value, marked)
 }
-
-// The calendar length of each calendar unit word: [months, days, seconds]. A day can be 23 or 25 hours across a
-// daylight saving change and a month varies; an hour, a minute and a second are fixed, quantities of lib/units.warp
-// (`sleep 1 minute`)
-// Rust twin: time/calendar.rs unit_named
-TIME_UNITS = {"year": [12, 0, 0], "month": [1, 0, 0], "week": [0, 7, 0], "day": [0, 1, 0]}
-
-// The length of a time unit word, singular or plural (`day`, `days`), else ø
-def time_unit_named(word: text) := TIME_UNITS.get(if word.ends_with("s") then word[0 ..< #word - 1] else word)
-
-// `1 month`, `24 hours`, `1day`, `1 month 2 days`: an integer followed by a time unit word is a calendar duration, the
-// data view Rust's parser gives it, ["data", "1 month 2 days"] as the duration prints; else ø, nothing read
-// Rust twin: literals/units.rs with_time_unit, following_duration
-def with_time_unit(p: Parser, count: int): Node := {
-	unit = time_unit_at(p, p.at)
-	if unit == ø { return ø }
-	length = unit#1.map(part => part * count)
-	p.at = unit#2
-	while true {
-		spaces = run_end(p.code, p.at, ' ', p.n)
-		digits = digits_end(p.code, spaces, p.n)
-		following = if spaces > p.at and digits > spaces then time_unit_at(p, digits) else ø
-		if following == ø { break }
-		amount = int(p.code[spaces .. digits])
-		length = (1 to 3).map(i => length#i + following#1#i * amount)
-		p.at = following#2
-	}
-	opaque(["data", duration_text(length)])
-}
-
-// The time unit word at `at` after any spaces: [its length, where it ends], else ø; `{year:1970 month:1}`: a word that
-// starts the next entry or assignment is no unit
-// Rust twin: literals/units.rs time_unit_at, time/calendar.rs unit_after
-def time_unit_at(p: Parser, at: int): list? := {
-	at = run_end(p.code, at, ' ', p.n)
-	end = name_end(p.code, at, p.n)
-	unit = time_unit_named(p.code[at .. end])
-	if unit == ø { return ø }
-	after = run_end(p.code, end, ' ', p.n)
-	starts_entry = is_at(p.code, after, ':', p.n) or (is_at(p.code, after, '=', p.n) and not is_at(p.code, after + 1, '=', p.n))
-	if starts_entry then ø else [unit, end]
-}
-
-// `1 month 2 days`, `3 hours`: a duration's months, days and seconds as Rust's Duration prints them
-// Rust twin: time/calendar.rs Display for Duration
-def duration_text(length: list): text {
-	seconds = length#3
-	amounts = [[length#1, "month"], [length#2, "day"], [seconds ÷ 3600, "hour"], [seconds % 3600 ÷ 60, "minute"], [seconds % 60, "second"]]
-	parts = amounts.filter(amount => amount#1 != 0).map(amount => counted_unit(amount#1, amount#2))
-	if parts.length == 0 { return "0 seconds" }
-	parts.join(" ")
-}
-
-def counted_unit(amount: int, unit: text): text := if amount == 1 then "1 " + unit else "$(amount) $(unit)s"
 
 // The Unicode vulgar fractions, each the numerator and denominator its NFKD decomposition writes (½ is 1⁄2)
 // Rust twin: numbers.rs vulgar_fraction
