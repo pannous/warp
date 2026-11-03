@@ -24,8 +24,21 @@ class Extension {
 	# functions reading what follows an operand, given the parser after it, the operand and the binding power the
 	# context needs (`x²`), each ø where its form is not or binds looser
 	suffix_readers: list = []
+	# functions reading an operator after an operand inside an expression, given the parser there, the operand and the
+	# binding power the context needs, each ø where its form is not, OPERAND_ENDS where it binds looser and so ends the
+	# operand (`a ⊕ b` of a declared ⊕)
+	infix_readers: list = []
+	# functions reading an operator and its operand where an expression starts, each ø where its form is not (`√16` of a
+	# declared √)
+	prefix_readers: list = []
+	# functions telling whether the parse reads the glyph as the extension's, never a free symbol
+	glyph_owners: list = []
+	# a name → the function scanning a source before it is parsed, whose value the parser keeps under the name
+	# (Parser.scans: the operators a program declares)
+	prescans: map = {}
 	# a word → the reader of the phrase it starts, given the parser at the word and the word, ø where its form is not
-	# there (`emit alarm`)
+	# there, nothing read; one that read its statement to nothing (applied by a prescan) answers ø past it (`emit
+	# alarm`)
 	keyword_readers: map = {}
 	# words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
 	block_words: list = []
@@ -130,6 +143,41 @@ read_suffix(p: Parser, operand: Node, min_power: int): Node := {
 		if suffixed != ø { return suffixed }
 	}
 	ø
+}
+# what an infix reader answers for an operator binding looser than the context: the operand ends before it
+OPERAND_ENDS = symbol("operand ends")
+# what an extension reads after the operand inside an expression, OPERAND_ENDS, else ø
+global infix_reader_list = ø
+read_infix(p: Parser, operand: Node, min_power: int): Node := {
+	if infix_reader_list == ø { infix_reader_list = concatenated(EXTENSIONS.map(extension => extension.infix_readers)) }
+	for reader in infix_reader_list {
+		continued = reader(p, operand, min_power)
+		if continued != ø { return continued }
+	}
+	ø
+}
+# the operator and operand an extension reads where an expression starts, else ø
+global prefix_reader_list = ø
+read_prefix(p: Parser): Node := {
+	if prefix_reader_list == ø { prefix_reader_list = concatenated(EXTENSIONS.map(extension => extension.prefix_readers)) }
+	for reader in prefix_reader_list {
+		prefixed = reader(p)
+		if prefixed != ø { return prefixed }
+	}
+	ø
+}
+# whether an extension reads the glyph as its own in this parse
+owned_glyph(p: Parser, glyph: text): bool := EXTENSIONS.any(extension => extension.glyph_owners.any(owns => owns(p, glyph)))
+# each extension's prescan of the source, by its name
+extension_scans(source: text): map := {
+	scans = {}
+	for extension in EXTENSIONS {
+		for name in extension.prescans.keys {
+			scan = extension.prescans[name]
+			scans[name] = scan(source)
+		}
+	}
+	scans
 }
 # every extension's number suffix readers
 global number_suffix_reader_list = ø

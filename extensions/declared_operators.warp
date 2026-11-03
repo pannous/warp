@@ -1,0 +1,185 @@
+# Declared operators (card parser-cold-forms, decision core-is-self): `infix operator ⊕(a, b) := a + 2*b`, `prefix
+# operator √ := …`, `suffix operator ‼ := …`, the pattern `a ⊕ b := …` and `operator ⊕ has precedence above *`. Each
+# parse scans what its source and the modules it uses declare (Parser.scans), then reads the operators as calls of
+# operator_⊕. The parser keeps what its passes read too: the declaration scan operator_declared, aliases, methods.
+OPERATORS_SCAN = "declared_operators"
+declared_operators_extension = Extension{name: "declared_operators", prescans: {"declared_operators": scanned_operators}, infix_readers: [read_declared_infix], prefix_readers: [read_declared_prefix], glyph_owners: [declares_glyph], keyword_readers: {"operator": read_declaration, "infix": read_declaration, "prefix": read_declaration, "suffix": read_declaration}}
+
+# the operators this parse knows
+declared_in(p: Parser): list := p.scans.get(OPERATORS_SCAN) ?? []
+# The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø
+# Rust twin: operators.rs user_operator_at
+def declared_operator_at(p: Parser): DeclaredOperator? := longest_spelled_at(p, declared_in(p), operator => operator.glyph)
+
+# `√16`: a declared prefix operator and its operand; its glyph is beyond ASCII (is_operator_glyph), the cheap test first
+def read_declared_prefix(p: Parser): Node := {
+	if peek(p.code, p.at, p.n) <= '~' { return ø }
+	operator = declared_operator_at(p)
+	if operator == ø or operator.fixity != Fixity.Prefix { return ø }
+	p.at = p.at + operator.glyph.length
+	skip_spaces(p)
+	operator_call(operator.glyph, [expression(p, operator.level)])
+}
+
+# `a ⊕ b`, `n‼`: a declared infix or suffix operator after the operand; one binding looser than the context ends the
+# operand, unless a built-in operator of the glyph binds; a glyph beyond ASCII or a word, the cheap test first
+def read_declared_infix(p: Parser, left: Node, min_power: int): Node := {
+	c = peek(p.code, p.at, p.n)
+	if c <= '~' and not is_name_start(c) { return ø }
+	operator = declared_operator_at(p)
+	if operator == ø or operator.fixity == Fixity.Prefix { return ø }
+	if operator.level < min_power or is_glued_call(p, operator.glyph) { return if operator_at(p).length == 0 then OPERAND_ENDS else ø }
+	p.at = p.at + operator.glyph.length
+	if operator.fixity == Fixity.Suffix { return operator_call(operator.glyph, [left]) }
+	skip_blanks(p)
+	operator_call(operator.glyph, [left, expression(p, operator.level + 1)])
+}
+
+# a declared operator's glyph is no free symbol: `prefix operator ∆` makes `print ∆ 5` print ∆(5)
+declares_glyph(p: Parser, glyph: text): bool := declared_level(declared_in(p), glyph) >= 0
+
+# a statement opening with a fixity word: a declaration, a precedence the scan applied (skipped), else ø: an alias
+# `operator × := *` or a method `operator #(n) := …` is the parser's
+def read_declaration(p: Parser, word: text): Node := {
+	words = statement_words_at(p)
+	if operator_alias(words).length > 0 { return ø }
+	if count(precedence_declaration(words, declared_in(p))) > 0 { return skip_statement(p) }
+	operator_declaration(p, word)
+}
+
+# Each operator a source declares: `[prefix|suffix|infix]
+# operator ⊕ := …` and the pattern `a ⊕ b := …` (infix), at the level a precedence declaration gives it
+# Rust twin: operators.rs declared_operators
+def declared_operators(source: text): list := if source.contains(":=") then operators_declared_in(code_statements(source)) else []
+def operators_declared_in(statements: list): list {
+	found = []
+	for statement in statements {
+		if not statement.contains(":=") { continue }
+		found += operator_declared(blank_words(statement))
+	}
+	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
+	for statement in statements {
+		if not statement.contains("precedence") { continue }
+		ranked = precedence_declaration(blank_words(statement), found)
+		if count(ranked) == 0 { continue }
+		for operator in found { if operator.glyph == ranked#1 { operator.level = ranked#2 } }
+	}
+	found
+}
+
+# The operators a parse of a source knows: its own declared ones, those of the standard modules it uses (`use regex`
+# makes `matches` infix), then the standard modules' glyph operators it writes
+# Rust twin: operators.rs scan_user_operators
+def scanned_operators(source: text): list {
+	found = declared_operators(source)
+	for module in used_module_sources(source) { found += declared_operators(module) }
+	// (a glyph is beyond ASCII: a source without such a character needs no module read)
+	if not has_beyond_ascii(source) { return found }
+	for library in library_glyph_operators() {
+		if source.contains(library.glyph) and declared_level(found, library.glyph) < 0 { found += [library] }
+	}
+	found
+}
+# The glyph operators the standard modules declare, with their precedence: `[1] ∪ [2] ∩ [3]` reads ∩ first as
+# lib/list.warp says, without `use list`, `6 ± 1` is uncertain's operator_±(6, 1), which brings uncertain as any word
+# of it does (implicit_modules); scanned the first time a parse needs them
+# Rust twin: operators.rs library_glyph_operators
+global library_operators = ø
+def library_glyph_operators(): list {
+	if library_operators == ø {
+		statements = std_module_names.filter(name => join(module_sources([name]), "").contains("operator")).flat_map(name => code_statements_of(name))
+		library_operators = operators_declared_in(statements).filter(operator => not is_name_start(operator.glyph#1))
+	}
+	library_operators
+}
+
+def has_beyond_ascii(source: text): bool {
+	for c in source { if c > '~' { return true } }
+	false
+}
+
+# `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
+# Rust twin: declaration_scan.rs PRECEDENCE_STEP
+PRECEDENCE_STEP = 2
+# What the words `operator ⊕ has precedence above|below [operator] Y` declare: [glyph, level]; [] for any other
+# statement; one that cannot be followed (a built-in ⊕, an unknown Y) raises its error
+# Rust twin: operators.rs precedence_declaration
+def precedence_declaration(words: list, declared: list): list {
+	if words.length < 6 or words#1 != "operator" or words#3 != "has" or words#4 != "precedence" { return [] }
+	direction = words#5
+	if direction != "above" and direction != "below" { return [] }
+	other = if words.length == 7 and words#6 == "operator" then words#7 else if words.length == 6 then words#6 else ""
+	if count(other) == 0 { return [] }
+	glyph = words#2
+	if declared_level(declared, glyph) < 0 { raise "operator $(glyph) is built in: only a declared operator gets a precedence (`infix operator $(glyph) := …` first)" }
+	reference = declared_level(declared, other)
+	if reference < 0 {
+		canonical = canonical_operator(other)
+		if count(canonical) == 0 { raise "unknown operator $(other) in `operator $(glyph) has precedence $(direction) $(other)`" }
+		reference = binding_powers(canonical)#1
+	}
+	[glyph, if direction == "above" then reference + PRECEDENCE_STEP else reference - PRECEDENCE_STEP]
+}
+# The level of the declared operator spelled `glyph`, else -1
+def declared_level(declared: list, glyph: text): int {
+	operator = declared.find(operator => operator.glyph == glyph)
+	if operator == ø then -1 else operator.level
+}
+
+# `infix operator ⊕(a: int, b: int) := a * 10 + b`, `prefix operator ∆ := …`: the definition of the function
+# operator_⊕, whose parameters are the declared ones, else `it` (prefix, suffix) or `a b` (`left right` when the body
+# names them); ø for any other statement starting with the word
+# Rust twin: operators.rs try_parse_operator_declaration
+def operator_declaration(p: Parser, word: text): Node := {
+	words = blank_words(p.code[p.at + word.length .. statement_end(p)])
+	infix = declares_infix(word)
+	glyph = declared_operator(infix, words)
+	if glyph == "" { return ø }
+	p.at = p.at + word.length
+	skip_spaces(p)
+	if words#1 == "operator" {
+		p.at += "operator".length
+		skip_spaces(p)
+	}
+	p.at = p.at + glyph.length
+	declared = if is_at(p.code, p.at, '(', p.n) then expression(p, binding_powers(":=")#1 + 1) else ø
+	skip_spaces(p)
+	p.at = p.at + 2
+	skip_spaces(p)
+	body = expression(p, 0)
+	parameters = if not infix then [symbol("it")] else if declared == ø then ø else group_items(declared)
+	if parameters == ø { parameters = if mentions(body, "left") or mentions(body, "right") then [symbol("left"), symbol("right")] else [symbol("a"), symbol("b")] }
+	Key(operator_call(glyph, parameters), Op.Define, body)
+}
+
+# `print matches("abd", "a.c$")`: a word operator glued to `(both, operands)` is its call, as `f(x, y)` is; a right
+# operand never holds a comma, so `"abc" matches("a.c")` stays infix
+# Rust twin: operators.rs parse_user_infix is_glued_call, holds_top_level_comma
+def is_glued_call(p: Parser, glyph: text): bool := is_name_start(glyph#1) and holds_top_level_comma(p.code, p.at + glyph.length, p.n)
+# whether the balanced `(…)` at `at` separates items by a comma of its own; brackets and commas inside a text or a
+# nested group are none of its own
+def holds_top_level_comma(code: text, at: int, n: int): bool {
+	if not is_at(code, at, '(', n) { return false }
+	depth = 0
+	quote = ""
+	escaped = false
+	while at < n {
+		c = code[at]
+		if escaped {
+			escaped = false
+		} else if quote {
+			if c == '\\' { escaped = true } else if "" + c == quote { quote = "" }
+		} else if c == '"' or c == '\'' {
+			quote = "" + c
+		} else if c == '(' or c == '[' or c == '{' {
+			depth = depth + 1
+		} else if c == ')' or c == ']' or c == '}' {
+			if depth == 1 { return false }
+			depth = depth - 1
+		} else if c == ',' and depth == 1 {
+			return true
+		}
+		at = at + 1
+	}
+	false
+}
