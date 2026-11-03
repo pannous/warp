@@ -33,10 +33,11 @@ mkdir "$LOCK" 2>/dev/null || { kill -0 "$(cat "$LOCK/pid" 2>/dev/null)" 2>/dev/n
 echo $$ >"$LOCK/pid"
 trap 'rm -rf "$LOCK"' EXIT
 
-git -C "$main" fetch -q origin || exit 1
-tip=$(git -C "$main" rev-parse --short=10 origin/main)
-git -C "$main" worktree remove --force "$SNAPSHOT" 2>/dev/null
-cowtree add "$SNAPSHOT" --detach "$tip" >/dev/null 2>&1 || { say "no snapshot of $tip at $SNAPSHOT"; exit 1; }
+cd "$main" || exit 1  # cron starts in ~, and cowtree, like git worktree, works on the repo it is run in
+git fetch -q origin || exit 1
+tip=$(git rev-parse --short=10 origin/main)
+git worktree remove --force "$SNAPSHOT" 2>/dev/null
+cowtree add "$SNAPSHOT" --detach "$tip" >/dev/null || { say "no snapshot of $tip at $SNAPSHOT (cowtree's error above)"; exit 1; }
 trap 'git -C "$main" worktree remove --force "$SNAPSHOT"; rm -rf "$LOCK"' EXIT
 say "sweeps of $tip in $SNAPSHOT"
 
