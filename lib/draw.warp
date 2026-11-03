@@ -4,8 +4,8 @@ use math
 use color
 // the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480 
-global canvas_width = view_width
-global canvas_height = view_height
+global canvas_width: int = view_width
+global canvas_height: int = view_height
 // natively in a window the shapes are drawn on the GPU (rust-harness:src/graphics/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels
 // here then, show() sends the shapes drawn since the last one
 global drawing_on_gpu = gpu_drawing
@@ -88,7 +88,9 @@ def dot(x: float, y: float, color: int) {
 	row = cell(y)
 	if drawing_on_gpu { draw_shape(rect_shape, col, row, 1, 1, color) }
 	else if col >= 0 and row >= 0 and col < canvas_width and row < canvas_height {
-		at = row * canvas_width + col
+		// an int, not a number: int * int may grow past 64 bits, and an index of a number runs every write dynamically
+		// (1.8 µs a dot against 0.27, card circle-dot-allocation)
+		at: int = row * canvas_width + col
 		canvas_pixels[at] = mixed(canvas_pixels[at], color)
 	}
 }
@@ -104,10 +106,14 @@ def circle(x, y, radius, color) {
 	else { circle_pixels(x, y, radius, color) }
 }
 
+// the distances squared by multiplying: ^ 2 is the general power, its logarithm and exponential (3× slower)
 def circle_pixels(x: float, y: float, radius: float, color: int) {
+	reach = radius * radius
 	for row in cell(y - radius)..cell(y + radius) + 1 {
+		down = row + 0.5 - y
 		for col in cell(x - radius)..cell(x + radius) + 1 {
-			if (col + 0.5 - x) ^ 2 + (row + 0.5 - y) ^ 2 <= radius ^ 2 { dot(col, row, color) }
+			across = col + 0.5 - x
+			if across * across + down * down <= reach { dot(col, row, color) }
 		}
 	}
 }
