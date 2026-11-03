@@ -2,10 +2,10 @@
 """Warp vitals: the compiler's weight per landing and the test pass rates over time, one page.
 
 scripts/vitals.py [since] [out.html]  (defaults: 2026-10-29, the start of self-hosting; data/vitals/vitals.html)
-Weight: lines of code for every first-parent commit of origin/main, the core without extensions and the extensions
-apart. Tests: every committed version of each results file (TIERS), its pass count read from its summary or its
-status lines. Build time: the CPU seconds and peak memory of each landing's compiler builds, read from the build
-records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
+Weight: lines of code after every commit of origin/main, each by what it changed itself (a merge: its resolution),
+the core without extensions and the extensions apart. Tests: every committed version of each results file (TIERS),
+its pass count read from its summary or its status lines. Build time: the CPU seconds and peak memory of each
+landing's compiler builds, read from the build records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
 (scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
 (notes/core_hygiene.md "Warp vitals").
 """
@@ -59,7 +59,9 @@ def lines_at(commit):
     for f in wanted:
         header_end = blob.index(b"\n", position)
         size = int(blob[position:header_end].split()[-1])
-        totals[component(f)] += blob[header_end + 1:header_end + 1 + size].count(b"\n")
+        content = blob[header_end + 1:header_end + 1 + size]
+        # as git's numstat counts them: a last line without its newline is a line
+        totals[component(f)] += content.count(b"\n") + (not content.endswith(b"\n") and bool(content))
         position = header_end + 2 + size
     return totals
 
@@ -68,37 +70,84 @@ def group_sums(counter):
     return [sum(counter.get(c, 0) for c in names) for _, names in CORE_GROUPS]
 
 
-def change_of(sha):
-    """What one commit changed against its own parent, per component."""
-    change = collections.Counter()
-    for stat in git("diff", "--numstat", "--no-renames", sha + "^1", sha).splitlines():
-        added, removed, path = stat.split("\t", 2)
-        if added != "-" and component(path):
-            change[component(path)] += int(added) - int(removed)
-    return change
+def first_parent_changes(*revisions):
+    """Each commit's change against its first parent, per component, from one git log."""
+    changes, sha = {}, None
+    for line in git("log", "--numstat", "--no-renames", "--diff-merges=first-parent", "--format=@%H", *revisions).splitlines():
+        if line.startswith("@"):
+            sha = line[1:]
+            changes[sha] = collections.Counter()
+        elif line.count("\t") >= 2:
+            added, removed, path = line.split("\t", 2)
+            if added != "-" and component(path):
+                changes[sha][component(path)] += int(added) - int(removed)
+    return changes
 
 
-# One row per atomic commit on main (merges left out): a merge measured against its first parent is charged with
-# everything main gained since its branch forked when a worker pushes "Merge origin/main into <branch>" (the branch
-# is its first parent), so each commit is measured against its own parent instead; the totals are their running sum
-# from main's state before SINCE, checked against main's tip below.
-commits = git("log", "--no-merges", "--reverse", "--format=%H %ad %s", "--date=iso-strict",
-              "--since=" + SINCE, "origin/main").splitlines()
-base = git("rev-list", "-1", "--before=" + SINCE, "origin/main").strip()
+def history_graph():
+    """main's whole history, parents before children: each commit's parents and its ancestors as a bitset of indices."""
+    order, parents, ancestors = [], {}, {}
+    for line in git("rev-list", "--topo-order", "--reverse", "--parents", "origin/main").splitlines():
+        sha, *its_parents = line.split()
+        parents[sha] = its_parents
+        ancestors[sha] = 1 << len(order)
+        for parent in its_parents:
+            ancestors[sha] |= ancestors[parent]
+        order.append(sha)
+    return order, parents, ancestors
+
+
+def members(bits):
+    while bits:
+        lowest = bits & -bits
+        yield ORDER[lowest.bit_length() - 1]
+        bits ^= lowest
+
+
+own_changes = {}
+def own_change(sha):
+    """What one commit changed itself, per component: a commit against its parent; a merge its whole change against its
+    first parent less what the commits it brought in changed (their own changes), so only its resolution."""
+    if sha not in own_changes:
+        if sha not in whole_changes:  # a commit from before the base that a later merge brought in
+            whole_changes.update(first_parent_changes("-1", sha))
+        change = whole_changes[sha].copy()
+        first_parent, *others = PARENTS[sha]
+        if others:
+            for brought in members(ANCESTORS[sha] & ~ANCESTORS[first_parent] & ~(1 << ORDER_INDEX[sha])):
+                change.subtract(own_change(brought))
+        own_changes[sha] = change
+    return own_changes[sha]
+
+
+ORDER, PARENTS, ANCESTORS = history_graph()
+ORDER_INDEX = {sha: index for index, sha in enumerate(ORDER)}
+
+
+# One row per commit by what it changed itself: measured against its first parent, a merge is charged with everything
+# main gained since its branch forked when a worker pushes "Merge origin/main into <branch>" (the branch is its first
+# parent), so the atomic commits carry their own lines and a merge only its resolution (merges resolving nothing are
+# left out). Every commit since main's first-parent state before SINCE counts once, so the running totals end at the
+# tip's (checked below).
+base = git("rev-list", "-1", "--first-parent", "--before=" + SINCE, "origin/main").strip()
+whole_changes = first_parent_changes(f"{base}..origin/main")
+commits = git("log", "--topo-order", "--reverse", "--format=%H\t%P\t%ad\t%s", "--date=iso-strict",
+              f"{base}..origin/main").splitlines()
 totals = lines_at(base)
 rows = []
 for line in commits:
-    sha, date, subject = line.split(" ", 2)
-    change = change_of(sha)
+    sha, parents, date, subject = line.split("\t", 3)
+    change = own_change(sha)
     totals.update(change)
+    if len(parents.split()) > 1 and not any(change.values()):
+        continue
     rows.append([date[:16].replace("T", " "), sha[:10], subject[:140], group_sums(totals) + [totals[EXTENSIONS]],
                  sum(group_sums(change)), change[EXTENSIONS], totals["lib"], totals["test"]])
-# what the merges changed themselves (conflict resolutions) is in no atomic commit: said loudly, never hidden
-drift = {name: count for name, count in (lines_at("origin/main") - totals + (totals - lines_at("origin/main"))).items() if count}
+tip = lines_at("origin/main")
+drift = sorted(name for name in set(tip) | set(totals) if tip[name] != totals[name])
 if drift:
-    tip = lines_at("origin/main")
     print("vitals: atomic commits sum to other totals than main's tip (merge resolutions): " +
-          ", ".join(f"{name} {totals[name]} summed, {tip[name]} at the tip" for name in sorted(drift)), file=sys.stderr)
+          ", ".join(f"{name} {totals[name]} summed, {tip[name]} at the tip" for name in drift), file=sys.stderr)
 
 def pass_count(text):
     for line in text.splitlines()[:3] + text.splitlines()[-3:]:
@@ -193,7 +242,8 @@ def card_counts():
     return snapshots
 
 
-landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in commits}
+landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
+          git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, "origin/main").splitlines()}
 data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
@@ -203,4 +253,4 @@ core = lambda row: sum(row[3][:-1])
 latest = "; ".join(f"{name} {points[-1][2]}/{points[-1][3]}" for name, _, points in data["tiers"] if points)
 builds = "; ".join(f"{record} {points[-1][2]} s" for _, record, points in data["builds"] if points)
 print(f"{latest}; {builds}; core {core(first)} -> {core(last)}, extensions {first[3][-1]} -> {last[3][-1]}, "
-      f"lib {first[6]} -> {last[6]}, test {first[7]} -> {last[7]} over {len(rows)} landings: {OUT}")
+      f"lib {first[6]} -> {last[6]}, test {first[7]} -> {last[7]} over {len(rows)} commits: {OUT}")

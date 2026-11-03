@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one reading column; summary figures, then the core's stacked growth, then each landing's net change, then the biggest landings. */
+/* Layout: one reading column; summary figures, then the core's stacked growth, then each commit's net change, then the biggest commits. */
 :root {
   --paper: #fbfbf9;
   --panel: #f3f3ef;
@@ -113,14 +113,14 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section>
     <h2>Core lines by component</h2>
-    <p class="section-note">Every landing on main since 29 October, stacked, with the extensions on top. The extensions are extensions/, and lib/sugar/ before it moved there on 3 November.</p>
+    <p class="section-note">Every commit on main since 29 October, stacked, with the extensions on top. The extensions are extensions/, and lib/sugar/ before it moved there on 3 November.</p>
     <div class="legend" id="legend"></div>
     <div class="chart" id="stack"></div>
   </section>
 
   <section>
-    <h2>Bloat index per landing</h2>
-    <p class="section-note">Net lines of the core without extensions that each landing added (up) or removed (down). Hover a bar for the commit and its extension change; click it to open the commit.</p>
+    <h2>Bloat index per commit</h2>
+    <p class="section-note">Net lines of the core without extensions that each commit added (up) or removed (down): an atomic commit against its parent, a merge only for its own conflict resolution (merges resolving nothing have no bar). Hover a bar for the commit and its extension change; click it to open the commit.</p>
     <div class="chart" id="bars"></div>
   </section>
 
@@ -148,7 +148,7 @@ const niceStep = range => { const raw = range / 5, magnitude = 10 ** Math.floor(
 const dayOf = row => row.date.slice(0, 10);
 const shortDay = day => new Date(day + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-document.getElementById("lede").textContent = `${rows.length} landings from ${shortDay(dayOf(first))} to ${shortDay(dayOf(last))}: the core without extensions grew from ${format(first.core)} to ${format(last.core)} lines (${percent(first.core, last.core)}), the extensions from ${format(first.extensions)} to ${format(last.extensions)} (${percent(first.extensions, last.extensions)}).`;
+document.getElementById("lede").textContent = `${rows.length} commits from ${shortDay(dayOf(first))} to ${shortDay(dayOf(last))}: the core without extensions grew from ${format(first.core)} to ${format(last.core)} lines (${percent(first.core, last.core)}), the extensions from ${format(first.extensions)} to ${format(last.extensions)} (${percent(first.extensions, last.extensions)}).`;
 
 const figures = [
   ["core without extensions", first.core, last.core],
@@ -353,5 +353,5 @@ function table(id, list) {
 table("grew", [...rows].sort((a, b) => b.delta - a.delta).slice(0, 8));
 table("cut", [...rows].sort((a, b) => a.delta - b.delta).slice(0, 8));
 
-document.getElementById("footer").textContent = `Counted from git history: every first-parent commit on main since ${shortDay(dayOf(first))}, lines of .warp, .c, .h, .js, .sh and .py files, base ${DATA.base}, last ${last.sha}.`;
+document.getElementById("footer").textContent = `Counted from git history: every commit on main since ${shortDay(dayOf(first))}, lines of .warp, .c, .h, .js, .sh and .py files, base ${DATA.base}, last ${last.sha}.`;
 </script>
