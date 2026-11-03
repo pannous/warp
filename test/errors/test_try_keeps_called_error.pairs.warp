@@ -1,0 +1,6 @@
+# a bare try is a handler: the Error a called function raises or gives back is kept as the value (card try-stops)
+'f(x) := raise "neg"; r = try f(0); if r failed then 1 else 2'	1
+'f(x) := if x < 0 then error "neg" else x; r = try f(-1); if r failed then 1 else 2'	1
+'f(x) := 10 / x; r = try f(0); if r failed then 1 else 2'	1
+'f(x) := 10 / x; r = try f(5); r'	2
+'r = try 10/0; if r failed then 1 else 2'	1

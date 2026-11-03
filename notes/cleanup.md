@@ -14,7 +14,10 @@ Roadmap card: cleanup (board topic; sub-cards are the areas and their leftovers,
 - src/extensions.rs is hard-linked with ~/dev/script/rust/extensions.rs (src/extensions.rs.hardlink is the
   hardlink-guard's marker): editing it changes that file too. extensions/lists.rs is the user's style; leave it.
 
-## Tools (probes/cleanup/)
+## Tools (gone: the old probes/cleanup/)
+probes/ was removed in 584de16dc (every kept test lives in test/); its sources stay in history at bef24cf76
+(`git show bef24cf76:probes/OLD/cleanup/same_wasm.sh`). The Python tools below served the Rust compiler and are not
+in that tree either; there are no current cleanup tools, the list is kept for what each one checked.
 - `dead_scan.py`: never-used pub functions across the default, all-features and wasm32 builds (keeps glob re-exports
   and those naming items used outside). Kept on purpose: function.rs builders, set_hint_file, create_host_linker
   (unit tests call them), Node last_item and extensions.rs public_function (the user's comments), get_meta,
@@ -29,7 +32,7 @@ Roadmap card: cleanup (board topic; sub-cards are the areas and their leftovers,
   over 1500 lines.
 - `duplicate_windows.py`: repeated windows of normalised lines. Exact copies: `npx jscpd --min-lines 4 --min-tokens 40
   --format rust` (run inside a copy: it skips ignored folders).
-- `same_wasm.sh <before> <after> $(find probes samples -name '*.warp')`: emitter changes must emit the same bytes
+- `same_wasm.sh <before> <after> $(find samples -name '*.warp')`: emitter changes must emit the same bytes
   (`same`, `unstable`, `DIFFERENT`, `no module`). Build before and after in the same worktree and copy the binary out
   in the same command; check `warp --version` (another session's build can replace it). `rm -f` the destination
   before copying: macOS kills a binary `cp` overwrote in place (exit 137). Builds are reproducible

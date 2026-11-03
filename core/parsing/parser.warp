@@ -20,7 +20,7 @@ enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: map; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
-def tree(source: text): list := view_of(parsed(source))
+def tree(source: text): View := view_of(parsed(source))
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
@@ -60,7 +60,7 @@ def warp_lib(): text? {
 def library_of_core(core: text): text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
 // The lib/ the run was given, which run_library answers from now on
 def use_library(folder: text) { given_library = folder }
-// Every module of lib/ by its path within lib/ ("prelude.warp", "sugar/lists.warp", "native/z.warp"), bundled into the
+// Every module of lib/ by its path within lib/ ("prelude.warp", "native/z.warp", "compiler/extensions/sugar/lists.warp"), bundled into the
 // built compiler: uses.warp's module_text writes them in where library_sources() stands when it compiles the compiler,
 // so a compiler needs no lib/ on any disk (decision built-in-lib). A compiler built by one that bundles none yet (an
 // older seed) calls library_sources below and reads them where it runs
@@ -103,7 +103,7 @@ def file_source(path: text): text? {
 	if bundled != ø and warp_lib() == ø { return bundled }
 	(try read(path) else ø) ?? bundled
 }
-// a path's place within lib/ ("sugar/lists.warp"), "" outside it
+// a path's place within lib/ ("native/z.warp"), "" outside it
 def library_path(path: text): text {
 	library = run_library() + "/"
 	if path.starts_with(library) then path[library.length .. path.length] else ""
@@ -1230,7 +1230,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			}
 			if op#1 == "." and peek(p.code, p.at, p.n) == "(" { raise dot_call_refused(left) }
 			// `80%`, `[10%, 20%]`, `10% == 1/10`: a % with no operand after it is a percent, `50 % of 200` that much of 200
-			// (decision Trailing percent, lib/sugar/arithmetic.warp)
+			// (decision Trailing percent, core/extensions/sugar/arithmetic.warp)
 			if op#2 == "%" and percent_ends(p) {
 				left = keyed(op#2, left, ø)
 				if not line_ends_after(p, p.at) and keyword_at_position(p, "of", p.resumes[p.at]) {
@@ -1626,7 +1626,7 @@ def test_word_at(p: Parser, min_power: int): list {
 	if ends then [end, word, after_is] else []
 }
 // `x is empty`, `x failed` as their phrase, the test word kept as written (`empty` alone reads as ø): its meaning is
-// lib/sugar/test_words.warp's rules
+// core/extensions/sugar/test_words.warp's rules
 def tested(left: Node, word: text, after_is: bool): Node := spaced([left] + (if after_is then [symbol("is")] else []) + [symbol(word)])
 
 // The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
@@ -1710,7 +1710,7 @@ def bang_suffix_at(p: Parser): bool {
 }
 
 // `left!` (or `left!!`): `upper(x)!` assigns the result back to x, `{…}!` runs the block anyway, anything else
-// is `unwrap(left)`, which lib/sugar/methods.warp turns into an assignment back where a function's call is marked
+// is `unwrap(left)`, which core/extensions/sugar/methods.warp turns into an assignment back where a function's call is marked
 // (`x.upper!`, `upper x!`), and which runs a lone `x!` as it is
 // Rust twin: suffixes.rs try_parse_evaluate_bang
 def forced(left: Node): Node := {
@@ -1777,7 +1777,7 @@ INDEX_POWER = 170
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
 SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `a ?: b` is a or its fallback
-// (lib/sugar/fallbacks.warp); so are each operator's element-wise form `.op` and compound assignment `op=`
+// (core/extensions/sugar/fallbacks.warp); so are each operator's element-wise form `.op` and compound assignment `op=`
 PHRASE_OPERATORS = ["?:"]
 // the canonical name of a compound assignment `x op= y`, which binds as `=`
 COMPOUND_ASSIGNMENT = "op="
@@ -1790,7 +1790,7 @@ def dot_call_refused(f: Node): text {
 	name = if f is symbol then name_of(f) else "f"
 	"no dot call " + name + ".(…): did you mean `" + name + " xs`, or `" + name + " each xs` for a function taking a list?"
 }
-// `left op right` as its phrase, for the sugar to read (lib/sugar/arithmetic.warp, fallbacks.warp)
+// `left op right` as its phrase, for the sugar to read (core/extensions/sugar/arithmetic.warp, fallbacks.warp)
 def phrase_operation(left: Node, op: text, right: Node): Node := spaced([left, symbol(op), right])
 // The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
 WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "rem": "rem"}

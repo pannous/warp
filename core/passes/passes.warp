@@ -33,12 +33,12 @@ use "library_calls.warp"
 use "property_accessors.warp"
 
 # the keyword rewrites among the sugar passes, one walk (Rust twin: rust-harness:src/pipeline.rs SUGAR_PHRASES, which also lowers
-# `xs .* 2` and `(p).a`: lib/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
+# `xs .* 2` and `(p).a`: core/extensions/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
 sugar_phrases_table = [[is_lookup_word, lookup_phrase]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
 
 # the twins Rust's WARP_SELF_HOSTED=1 lane drives by index (self_hosted.rs TWINNED_PASSES); match arms and arrow result
-# types are lib/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
+# types are core/extensions/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
 passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
@@ -50,18 +50,18 @@ passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 #   type_tests spaced_prefix_calls         `x is T`, `f x` calls
 #   passes (twinned with Rust by index)    interpolation, two kept slots (arms and result arrows are rules now),
 #                                          sugar_phrases (`a of b`), number_words_pass
-#   first_sugar node_matches node_cases    lib/sugar's first rules (arms, heads), `match`, node cases
+#   first_sugar node_matches node_cases    core/extensions/sugar's first rules (arms, heads), `match`, node cases
 #   enums_declared plain_enums             enums
 #   phrase_blocks comprehensions           phrase blocks, `[x for x in xs]`
-#   data_items library_calls sugar         data items, library calls, lib/sugar's main rules (fallbacks, places)
+#   data_items library_calls sugar         data items, library calls, core/extensions/sugar's main rules (fallbacks, places)
 #   lambdas loop_heads iteration_sugar     lambdas, `for` heads, the `for` loops lowered onto `while`
 #   late_sugar list_methods number_keys    late rules, `xs.add(x)`-style methods, number keys
 
 # the pass that owns each form the emitter may refuse: a refusal of that form names it, so a form that reaches the
 # emitter unlowered says which pass did not claim it
 pass_owners = {"foreign C call": "c_imports", "runtime declaration": "definitions", "try": "tries", "multiple assignment": "multiple_assignments",
-	"for loop": "loop_heads and iteration_sugar", "match": "node_matches", "match arm": "first_sugar (lib/sugar/arms.warp)", "enum": "enums_declared",
-	"comprehension": "comprehensions", "lambda": "lambdas", "number word": "number_words_pass", "fallback": "sugar (lib/sugar/fallbacks.warp)"}
+	"for loop": "loop_heads and iteration_sugar", "match": "node_matches", "match arm": "first_sugar (core/extensions/sugar/arms.warp)", "enum": "enums_declared",
+	"comprehension": "comprehensions", "lambda": "lambdas", "number word": "number_words_pass", "fallback": "sugar (core/extensions/sugar/fallbacks.warp)"}
 
 # the emitter's refusal naming its form and owner pass: `form` one of pass_owners, ø for a form no pass owns
 owned_refusal(refusal: text, form: text?): text := {
@@ -145,7 +145,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 # `a .+ b` element_wise_any
 sugar_words_of(code: Node): list := reaching_template_words(code, kept_first_sugar + kept_sugar + kept_iteration_sugar + kept_late_sugar + kept_comprehension_sugar)
 
-# the sugar rules (lib/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
+# the sugar rules (core/extensions/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
 # that would read its forms as something else (rewrites.warp first_sugar_module_names), the others where the passes
 # before them have made their forms (definitions' `?? []` of a list result) and read the written ones (data_items
 # `xs.add(x)`, of_lookups `keys in m`)

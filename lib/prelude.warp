@@ -68,7 +68,7 @@ find(xs: list, f: function): element of xs from emitter
 find(t: text, f: function): element of t from emitter
 each(xs: list, f: function) from emitter
 each(t: text, f: function) from emitter
-// the call form of xs.add(x), which lib/sugar/methods.warp appends in place (the emitter has no call add)
+// the call form of xs.add(x), which core/extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
 insert(xs: list, at: int, x) := list_insert(xs, at, x)
 remove(xs: list, x) from emitter
@@ -193,12 +193,13 @@ as_list(x) := x as list
 count_item(xs, x) := #filter(xs, item => item == x)
 count_of(t, part) := #split(t, part) - 1
 // the count of x in y, written `count(y, x)` or `y.count(x)` (arity_variants; `count x in y` counts a yes/no, refused): of a text its parts,
-// else its items; its own name, so `count xs` stays the emitter's count
-count_in(y, x) := if y is text then count_of(y, "" + x) else count_item(y, x)
+// else its items, and of a function the items it holds for, `xs.count { |x| x > 1 }`; its own name, so `count xs`
+// stays the emitter's count
+count_in(y, x) := if y is text then count_of(y, "" + x) else if x is function then #filter(y, x) else count_item(y, x)
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
 first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
-// `sort(words, {it.length})`: the items ordered by the key the function gives each (lib/sugar/calls.warp)
+// `sort(words, {it.length})`: the items ordered by the key the function gives each (core/extensions/sugar/calls.warp)
 sorted_by_key(xs: list, key: function): list := list_sorted_by(xs, xs.map(key))
 // `people.sort_by(p => -p.age)`
 sort_by(xs: list, key: function): list := sorted_by_key(xs, key)
@@ -229,9 +230,9 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else fold(xs, 0, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
-// dir(v) of a value only the run knows (lib/sugar/reflection.warp gives the words of a list, a text and a map): a map's
+// dir(v) of a value only the run knows (core/extensions/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
-// help(x), function(x).definition of a value only the run knows (lib/sugar/reflection.warp gives the program's and its
+// help(x), function(x).definition of a value only the run knows (core/extensions/sugar/reflection.warp gives the program's and its
 // modules' words and their texts): the text of the word a text names, or of an instance's class; a name that is no
 // word is an error naming it
 looked_up_word(x, asked, names, texts) := {
@@ -384,7 +385,7 @@ decimal_text(numerator: int, denominator: int) := {
 	}
 	text
 }
-// `x as decimal` (lib/sugar/arithmetic.warp): the decimal digits of x, its period overlined
+// `x as decimal` (core/extensions/sugar/arithmetic.warp): the decimal digits of x, its period overlined
 as_decimal(x: number) := decimal_text(numerator(x), denominator(x))
 // x as a fraction, by its continued fraction (rust-harness:src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
@@ -446,7 +447,7 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 // a list with the other side, two lists paired by index, two numbers plainly; `combined` is `(l, r) => l op r`. Both
 // sides are `any`: inferred from the body, one call with a number made it a list
 element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
-// f of a value that may be a list (lib/sugar/broadcasting.warp): of each item of a list, else of the value itself
+// f of a value that may be a list (core/extensions/sugar/broadcasting.warp): of each item of a list, else of the value itself
 each_any(value: any, f) := if value is list then [f(item) for item in value] else f(value)
 // a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
@@ -488,7 +489,7 @@ sleep(amount) := slept(amount * 1000)
 
 // the wait of a sleep, ms: the tasks module's runs the tasks due meanwhile, which replaces this
 slept(ms) := sleep_ms(ms)
-// what a module holds per task, kept around a task and given back after it (lib/sugar/tasks.warp): nothing here, a
+// what a module holds per task, kept around a task and given back after it (core/extensions/sugar/tasks.warp): nothing here, a
 // module holding some (sound's voice) defines both, which replace these
 task_context() := ø
 task_context_back(context) := ø
@@ -978,7 +979,7 @@ text_part(t: text): any := t
 unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
 
 
-// Named events (lib/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
+// Named events (core/extensions/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
 // from 1) and whether they listen once, as three lists of the same length
 global event_listeners = {}
 global listener_numbers = {}
