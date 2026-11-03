@@ -24,30 +24,42 @@ rewrite finish $x => $awaited where $awaited = awaited_operand($x)
 // `shared n = 0` (wiki/async.md): one value every task sees; cooperative tasks run in one instance, so it is the
 // a global of the main level as a `linear` array is, its `+=` atomic as any step is
 rewrite (shared $d) => global: $d
-// a stopped task yields no result (decision stopped-no-result): its name reads ø from then on, an await of it ø
-rewrite stop $x => ($x = task_stopped($x)) where statement and $x is symbol
-rewrite cancel $x => ($x = task_stopped($x)) where statement and $x is symbol
-rewrite $x.stop() => ($x = task_stopped($x)) where statement and $x is symbol
-// (a rule's result ø reads as no match: the task is stopped, and then nothing)
-rewrite stop $x => (task_stopped($x); ø) where statement
-rewrite cancel $x => (task_stopped($x); ø) where statement
+// a cancelled task yields no result (decision stopped-no-result): reading or awaiting it raises "job was cancelled"
+rewrite cancel $x => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
+rewrite $x.cancel() => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
+// `end job` is refused, naming both: finish job or cancel job (decision end-refused)
+rewrite end $x => $refused where statement and $x is symbol and $refused = end_refused($x)
+// `stop job` pauses it, as a stopped job of a shell (decision stopped-no-result), and says so
+rewrite stop $x => task_stopped($x, $n) where statement and $x is symbol and $n = spelled($x)
+rewrite $x.stop() => task_stopped($x, $n) where statement and $x is symbol and $n = spelled($x)
 // `pause job` holds a task where it stands until `resume job` (or an await of it)
 rewrite pause $x => (task_paused($x); ø) where statement
 rewrite resume $x => (task_resumed($x); ø) where statement
-// `once job finishes: …` runs when the task's last step ran, at once if it is done
+// `once job finishes: …` runs when the task's last step ran, at once if it is done; `once job pauses: …` at each
+// pause (`on job.stop: …` alike), `on job.cancel: …` once it is cancelled
 rewrite once $x finishes $body: block => task_finished_then($x, () => $body)
 rewrite once $x finishes: $body => task_finished_then($x, () => $body)
+rewrite once $x pauses $body: block => task_paused_then($x, () => $body)
+rewrite once $x pauses: $body => task_paused_then($x, () => $body)
+rewrite on $x.stop $body: block => task_paused_then($x, () => $body)
+rewrite on $x.stop: $body => task_paused_then($x, () => $body)
+rewrite on $x.cancel $body: block => task_cancelled_then($x, () => $body)
+rewrite on $x.cancel: $body => task_cancelled_then($x, () => $body)
 // a program that starts tasks runs them all before it ends, its value kept
 rewrite $p => $q where program and $q = tasked($p)
 
 // the scheduler: each step of a task runs to the task's next sleep, which queues the rest
 class Task {
 	due: int; next: any; done: bool = no; value: any = ø; failed: any = ø; awaited: bool = no; context: any = ø
-	paused: bool = no; finish_handlers: list = []
-	stop() := task_stopped(self)
+	paused: bool = no; finish_handlers: list = []; pause_handlers: list = []; cancel_handlers: list = []
+	cancel() := task_cancelled(self, "the task")
+	stop() := task_stopped(self, "the task")
 	pause() := task_paused(self)
 	resume() := task_resumed(self)
 }
+// a place typed task (or thread, its alias while tasks share one scheduler) keeps the job
+type task = Task
+type thread = Task
 global task_queue = []
 global running_task = ø
 global failed_tasks = []
@@ -110,10 +122,12 @@ task_stepped(task: Task) := {
 		task.done = yes
 		task.value = value
 		task_queue = task_queue.filter(t => not t.done)
-		for handler in task.finish_handlers { handler() }
+		handlers_run(task.finish_handlers)
 	}
 }
-// `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is
+handlers_run(handlers: list) := for handler in handlers { handler() }
+// `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is. The
+// emitter calls it too where a place typed as a value takes a task, `n: int = go f(3)` (decision task-to-value-awaits)
 task_awaited(x) := if x is Task then task_value(x) else x
 task_value(x: Task) := {
 	x.paused = no
@@ -136,17 +150,35 @@ task_value_within(x: Task, ms, fallback: function) := {
 // a value is done, a task once its last step ran
 is_done(x) := if x is Task then task_finished(x) else yes
 task_finished(x: Task) := x.done
-task_stopped(x) := {
-	if x is Task { task_ended(x) }
+// a task named name ends without a result: an await or read of it raises; one done already keeps its value
+task_cancelled(x, name: text) := {
+	if x is Task and not x.done { task_ended(x, name) }
 	ø
 }
-task_ended(x: Task) := {
+task_ended(x: Task, name: text) := {
 	x.done = yes
-	x.value = ø
+	x.failed = name + " was cancelled"
 	task_queue = task_queue.filter(t => not t.done)
+	handlers_run(x.cancel_handlers)
+}
+task_stopped(x, name: text) := {
+	warning("stop pauses " + name + "; to end it: cancel " + name)
+	task_paused(x)
 }
 task_paused(x) := {
-	if x is Task { x.paused = yes }
+	if x is Task and not x.paused { task_held(x) }
+	ø
+}
+task_held(x: Task) := {
+	x.paused = yes
+	handlers_run(x.pause_handlers)
+}
+task_paused_then(x, handler: function) := {
+	if x is Task { x.pause_handlers += [handler] }
+	ø
+}
+task_cancelled_then(x, handler: function) := {
+	if x is Task { x.cancel_handlers += [handler] }
 	ø
 }
 task_resumed(x) := {
@@ -159,10 +191,11 @@ task_handled(x: Task, handler: function) := {
 	x.finish_handlers += [handler]
 	ø
 }
-// main's end: every task runs to its end, the program's value kept; a task's error that nobody awaited ends it loudly
+// main's end: every task runs to its end; a task's error that nobody awaited ends it loudly. The program's value is a
+// value place: a task there is awaited (decision task-tests-answers)
 tasks_end(value: any = ø) := {
 	tasks_run_while(ø, ø)
 	unawaited = failed_tasks.filter(task => not task.awaited)
 	if #unawaited > 0 { raise "a task failed and nobody awaited it: " + str(unawaited#1.failed) }
-	value
+	task_awaited(value)
 }

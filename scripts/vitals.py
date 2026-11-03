@@ -1,22 +1,31 @@
 #!/usr/bin/env python3
-"""Core weight: lines of code of the compiler per landing on main, core without extensions and extensions apart.
+"""Warp vitals: the compiler's weight per landing and the test pass rates over time, one page.
 
-scripts/core-weight.py [since] [out.html]  (defaults: 2026-10-29, the start of self-hosting; data/core-weight/core-weight.html)
-Reconstructs every first-parent commit of origin/main from git history (about 6 s), fills scripts/core-weight.html
-and prints the summary. The nightly run (scripts/integrate/nightly.sh) calls it; a Claude session republishes the
-page to its artifact URL (notes/core_hygiene.md "Core weight").
+scripts/vitals.py [since] [out.html]  (defaults: 2026-10-29, the start of self-hosting; data/vitals/vitals.html)
+Weight: lines of code for every first-parent commit of origin/main, the core without extensions and the extensions
+apart. Tests: every committed version of each results file (TIERS), its pass count read from its summary or its
+status lines. Both are reconstructed from git history (seconds) into scripts/vitals.html. The nightly run
+(scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
+(notes/core_hygiene.md "Warp vitals").
 """
-import collections, json, os, subprocess, sys
+import collections, json, os, re, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SINCE = sys.argv[1] if len(sys.argv) > 1 else "2026-10-29"
-OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(REPO, "data/core-weight/core-weight.html")
-TEMPLATE = os.path.join(REPO, "scripts/core-weight.html")
+OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(REPO, "data/vitals/vitals.html")
+TEMPLATE = os.path.join(REPO, "scripts/vitals.html")
 CODE_SUFFIXES = (".warp", ".c", ".h", ".js", ".sh", ".py")
 CORE_GROUPS = [("parsing", ["core/parsing"]), ("passes", ["core/passes"]),
                ("analysis", ["core/analysis", "core/commands", "core/(top)"]), ("emitter", ["core/emitter"]),
                ("runtime", ["core/runtime"]), ("native", ["core/native"])]
 EXTENSIONS = "extensions"  # core/extensions/, and lib/sugar/ before it moved there (2026-11-03)
+TIERS = [("native pairs and is! lines", "test/results.txt"), ("cloud full suite", "test/results-cloud.txt"),
+         ("samples, native", "test/samples.txt"), ("samples, playground", "test/samples-web.txt"),
+         ("tests, playground", "test/tests-web.txt")]
+SUMMARY = re.compile(r"(\d+) of (\d+) failed")
+HEADER = re.compile(r"^# \S+ \S+ \S+ (\d+)/(\d+)")
+STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME|ERR)\s")
+PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
 
 
 def component(path):
@@ -70,11 +79,33 @@ for line in commits:
     rows.append([date[:16].replace("T", " "), sha[:10], subject[:140], group_sums(totals) + [totals[EXTENSIONS]],
                  sum(group_sums(change)), change[EXTENSIONS], totals["lib"], totals["test"]])
 
-data = {"groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+def pass_count(text):
+    for line in text.splitlines()[:3] + text.splitlines()[-3:]:
+        if match := SUMMARY.search(line):
+            failed, total = map(int, match.groups())
+            return total - failed, total
+        if match := HEADER.match(line):
+            return tuple(map(int, match.groups()))
+    statuses = [m.group(1) for m in map(STATUS.match, text.splitlines()) if m]
+    return (sum(s in PASSING for s in statuses), len(statuses)) if statuses else None
+
+
+def tier_history(path):
+    points = []
+    for line in git("log", "--reverse", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, "origin/main", "--", path).splitlines():
+        sha, date = line.split(" ")
+        counts = pass_count(git("show", f"{sha}:{path}"))
+        if counts and counts[1]:
+            points.append([date[:16].replace("T", " "), sha[:10], *counts])
+    return points
+
+
+data = {"tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))
 first, last = rows[0], rows[-1]
 core = lambda row: sum(row[3][:-1])
-print(f"core {core(first)} -> {core(last)}, extensions {first[3][-1]} -> {last[3][-1]}, "
+latest = "; ".join(f"{name} {points[-1][2]}/{points[-1][3]}" for name, _, points in data["tiers"] if points)
+print(f"{latest}; core {core(first)} -> {core(last)}, extensions {first[3][-1]} -> {last[3][-1]}, "
       f"lib {first[6]} -> {last[6]}, test {first[7]} -> {last[7]} over {len(rows)} landings: {OUT}")

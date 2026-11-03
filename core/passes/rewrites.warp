@@ -1571,7 +1571,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 	outer_defining = rule_defining
 	rule_defining = head_word(key_of(n))
 	# `square(x) := …` names its parameters, no call: only they are tried, so broadcasting leaves the head as it is
-	walked = if is_called_head(key_of(n)) then placed(Key(head_with_parameters(key_of(n), x => placed_map_scoped(x, f, inner)), Op.Define, placed_map_scoped(value_of(n), f, inner)), n) else children(n, x => placed_map_scoped(x, f, inner))
+	walked = if is_called_head(key_of(n)) then placed(Key(head_with_parameters(key_of(n), x => walked_parameter(x, f, inner)), Op.Define, placed_map_scoped(value_of(n), f, inner)), n) else children(n, x => placed_map_scoped(x, f, inner))
 	rule_binding = outer
 	rule_defining = outer_defining
 	rule_maps = maps
@@ -1751,6 +1751,16 @@ head_with_parameters(head: Node, changed: function): Node := {
 	if rewritten == parameters then head else placed(group_like(head, [head#1] + rewritten), head)
 }
 
+# a parameter walked as placed_map_scoped walks code, its type kept as written: an annotation names types wherever the
+# program binds their words as values, `sum(xs: list or number)` beside a variable list (decision program-binding)
+walked_parameter(parameter: Node, f: function, maps: map): Node := match parameter {
+	Key(name, Op.Colon, type): { if is_type_written(type) then f(placed(Key(walked_parameter(name, f, maps), Op.Colon, type), parameter)) else placed_map_scoped(parameter, f, maps) }
+	Key(typed, Op.Assign, default): f(placed(Key(walked_parameter(typed, f, maps), Op.Assign, placed_map_scoped(default, f, maps)), parameter))
+	_: placed_map_scoped(parameter, f, maps)
+}
+# a type word, a union of them `list or number`, or a function type `int -> bool`
+is_type_written(type: Node): bool := type is symbol or union_spelling(type) != ø or is_key(type, Op.Arrow)
+
 # a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
 with_changed_members(n: Node, changed: function): Node := {
 	if not (n is key and key_of(n) == opaque_symbol) { return n }
@@ -1868,7 +1878,11 @@ rule_applied(rule: Rule, origin: map, n: Node): Node := {
 	fired(rule, List(statements_in(rule_spliced(rule.template, bound, n)), Bracket.Curly, Separator.Semicolon))
 }
 
+# WARP_RULES_FIRED set: `§R <module> <pattern>` printed for each rule that fires, so a compile's log counts which
+# rules (sugar, a library's) its program relies on (card core-extensions-roadmap). Silent unset
+RULES_FIRED = env("WARP_RULES_FIRED") ?? ""
 fired(rule: Rule, result: Node): Node := {
+	if RULES_FIRED != "" { print "§R " + rule.module + " " + "${rule.pattern}" }
 	# (the prelude is in every program already: a use of it once more is none, card prelude-rule)
 	if rule.module != "" and rule.module != "prelude" { fired_modules += [rule.module] }
 	if rule.alias { diagnose(call_of("alias_word", [symbol(first_word_of(rule.pattern)), symbol(first_word_of(rule.template))]), result) }

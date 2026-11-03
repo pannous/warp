@@ -1,0 +1,5 @@
+# a global declared int is a fast int as a declared local is: arithmetic of it wraps as an i64, an index of it stays one
+# (card untyped-local)
+'global w: int = 10; def at(r: int, c: int) { place = r * w + c; place }; at(2, 3)'	23
+'global w: int = 2^62; def f(a: int) { a * w }; f(4)'	0
+'global w: int = 2^63 - 1; def g() { w + 1 }; g()'	-9223372036854775808

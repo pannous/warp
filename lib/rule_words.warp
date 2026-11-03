@@ -80,8 +80,9 @@ served(program: Node): any := ended_by(program, "route_add", routes_end_word)
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
 exited(program: Node): any := ended_by(program, "exit_listened", "exits_end")
-# a program that starts tasks, ending in running them all (lib/tasks.warp tasks_end)
-tasked(program: Node): any := ended_by(program, "task_go", "tasks_end")
+# a program that starts tasks anywhere (`job = go f(x)` too), ending in running them all and awaiting a task it ends
+# with (lib/tasks.warp tasks_end)
+tasked(program: Node): any := ending_appended(program, mentions(program, "task_go"), "tasks_end")
 
 # --- cooperative tasks (lib/tasks.warp, decision N29) ---
 
@@ -123,9 +124,10 @@ page_valued(program: Node): any := {
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
 # that declares or is a test line, which runs where it stands
-ended_by(program: Node, starting: text, ending_word: text): any := {
+ended_by(program: Node, starting: text, ending_word: text): any := ending_appended(program, level_statements(program).any(statement => is_call_named(statement, starting)), ending_word)
+ending_appended(program: Node, started: bool, ending_word: text): any := {
 	statements = level_statements(program)
-	if not statements.any(statement => is_call_named(statement, starting)) or statements.any(statement => is_call_named(statement, ending_word)) { return ø }
+	if not started or statements.any(statement => is_call_named(statement, ending_word)) { return ø }
 	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
 	ending = statements[last]
 	ended = if is_declaration(ending) or is_test_line(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
@@ -381,6 +383,10 @@ writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign
 # `count(2 in xs)`: a yes/no question is no count, the compile refused with the count it means
 counted_question(items: Node, item: Node): Node := {
 	throw "count(${as_code(item)} in ${as_code(items)}) counts a yes/no question: did you mean ${as_code(items)}.count(${as_code(item)})?"
+}
+# `end job` (decision end-refused): no default between letting a task run to its end and ending it now
+end_refused(task: Node): Node := {
+	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
 }
 # a value as code to paste: a text in its quotes
 as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
@@ -680,6 +686,7 @@ rule_words = {
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,
 	counted_question: counted_question,
+	end_refused: end_refused,
 	declared_local: declared_local,
 	definition_text: definition_text,
 	dir_words: dir_words,

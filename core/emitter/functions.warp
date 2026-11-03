@@ -80,7 +80,7 @@ def passed(f: Function, i: int, value: TypedCode): list {
 		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
 		# parameter widens, as widen_parameter does for a call still compiling
 		if value.kind == ValueKind.Node and f.kinds[i] != ValueKind.Node and slot in module.unannotated { refuse("a node where a " + f.kinds[i] + " is needed") }
-		converted(value, f.kinds[i])
+		converted(if declared == "" then value else settled(value, f.kinds[i]), f.kinds[i])
 	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value.kind)
 		if slot not in module.unannotated or not widens_later(slot, joint) { throw refusal }
@@ -357,7 +357,7 @@ body_code(f: Function) := {
 		scope = new_body(f)
 		value = expression_code(scope, statements_block(f.body))
 		value = TypedCode(value.kind, position_code(scope, f.body) + value.code, value.mark)
-		f.code = if f.gives_nothing then value.code + [ref_null, gc_type(gc.node)] else converted(value, f.result)
+		f.code = if f.gives_nothing then value.code + [ref_null, gc_type(gc.node)] else converted(if f.signature.result == "" then value else settled(value, f.result), f.result)
 		f.locals = scope.kinds[(#f.signature.parameters)..]
 		f.local_names = scope.order
 	}
