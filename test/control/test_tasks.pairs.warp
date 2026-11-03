@@ -8,14 +8,17 @@
 'go(x) := x + 1; go(2)'	3
 
 # a_finished_tasks_handler_runs_and_a_stop_handler_never
-'job = go 3; once job finishes: x = 7; x'	7
+'job = go 3; once job finishes: x = 7; await job; x'	7
 'job = go 3; once job pauses: print "held"; await job'	3
 
 # stopping_a_finished_task_warns_and_changes_nothing
-'job = go 3; stop job; job'	ø
-'job = go 3; job.stop(); job'	ø
+'job = go 3; stop job; job'	3
+'job = go 3; job.stop(); job'	3
 
 # a_program_may_define_its_own_go_with_def
 'def go(n: int): int { n + 1 }; go(2)'	3
 'fun go(n) { n + 1 }; go(2)'	3
 'def await(n: int): int { n * 2 }; await(4)'	8
+
+# ending_a_task_names_finish_or_cancel (decision end-refused)
+'job = go 3; end job; 1'	error	end job: did you mean finish job or cancel job?
