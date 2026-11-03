@@ -1,8 +1,21 @@
 # What an extension registers (decision core-is-self, notes/core_extensions_roadmap.md "Hook table design"): one
 # Extension row each in extensions/extensions.warp, every field but its name optional. The core names no extension: it
-# knows this shape and walks the rows. Later fields join here: keyword handlers, list kinds, passes, runtime sources.
+# knows this shape and walks the rows. Later fields join here: list kinds, passes, runtime sources.
 #   operator_rows: the extension's operators, rows in lib/aliases.warp's format, its file's text (module_source)
-class Extension { name: text; operator_rows: text = "" }
+#   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
+class Extension { name: text; operator_rows: text = ""; commands: list = []; runs: any = ø }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
+# every command word an extension answers
+def extension_command_words(): list := EXTENSIONS.flat_map(extension => extension.commands)
+# the command run by the extension answering its word
+def run_extension_command(command: text) := {
+	for extension in EXTENSIONS {
+		if command in extension.commands {
+			run = extension.runs
+			return run(command)
+		}
+	}
+	raise "no extension answers the command " + command
+}
