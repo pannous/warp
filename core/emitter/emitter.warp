@@ -1156,6 +1156,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	}
 	# a type alias names its type for the annotations, which collect_types read
 	if is_type_alias(n) { return TypedCode(no_kind, []) }
+	# `r = try f(0)`: a try is a handler, so the variable it gives keeps a caught Error (decision errors-one-rule)
+	if operator == Op.Assign and left is symbol and is_lowered_try(right) { body.kept[name_of(left)] = yes }
 	if operator in assignment_operators { return assignment(body, left, expression_code(body, right)) }
 	if operator == Op.Colon and left == symbol("global") { return global_declaration_code(body, right) }
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
