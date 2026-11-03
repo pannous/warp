@@ -25,8 +25,8 @@ extended_constant_tables(base: map): map := with_entries(base, EXTENSIONS.map(ex
 global atom_reader_table = ø
 atom_reader(c: any): any := {
 	if atom_reader_table == ø {
-		none: map = {}
-		atom_reader_table = with_entries(none, EXTENSIONS.map(extension => extension.atom_readers))
+		atom_reader_table = {}
+		for extension in EXTENSIONS { for glyph in extension.atom_readers.keys { atom_reader_table[glyph] = extension.atom_readers[glyph] } }
 	}
 	atom_reader_table.get("$(c)")
 }
