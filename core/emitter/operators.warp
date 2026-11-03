@@ -82,7 +82,7 @@ def bools_as_ints(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCo
 	result
 }
 
-# base ^ exponent of floats: the runtime word float_pow (runtime/extended/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
+# base ^ exponent of floats: the runtime word float_pow (extensions/big_numbers/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
 def float_power(body: Body, base: list, exponent: list): TypedCode {
 	held = uleb(fresh_local(body, ValueKind.Float))
 	code = runtime_call("float_pow", [TypedCode(ValueKind.Float, base), TypedCode(ValueKind.Float, exponent)]).code + [op.local_tee] + held + [op.local_get] + held

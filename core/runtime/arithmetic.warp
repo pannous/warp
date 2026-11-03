@@ -1,5 +1,6 @@
 # `a + b`, `a += b` of values known only at run time, and nat arithmetic that grows past 64 bits
 use "intrinsics.warp"
+use "instructions.warp"
 use "../analysis/kinds.warp"
 use "conversions.warp"
 use "bridge.warp"
@@ -69,3 +70,16 @@ node_append(a: Node, b: Node) := {
 max_int(a: int, b: int): int := if a > b then a else b
 least_int(): int := -9223372036854775807 - 1
 min_int(a: int, b: int): int := if a < b then a else b
+power(base: int, exponent: int): int := {
+	out = 1
+	for i in 0..exponent { out = out * base }
+	out
+}
+# `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
+floor_quotient(a: int, b: int): int := {
+	q = int_quotient(a, b)
+	if a - q * b < 0 {
+		if b > 0 { q -= 1 } else { q += 1 }
+	}
+	q
+}
