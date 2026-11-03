@@ -195,6 +195,9 @@ Row pitfalls (card tasks-signals-extensions, 2026-11-03; each cost a failed seed
   to prelude_words, which brings the module defining it (lib/tasks.warp, and uncertain behind it) into the compiler.
   That is a compiler bug (a key read as a word, card key-map), not a style rule; the quotes hold until it is fixed.
 - A function gathering a field is named apart from it: `extension_block_words()` for `block_words`.
+- An extension part names no core path, so a top-level value it reads at load (`MARKED_NUMBER_KINDS = {int: Kind.Int}`)
+  needs the core file defining that name used before the extension (definitions.warp uses kinds.warp first; card
+  int-types-extraction: the seed failed "unknown name Kind").
 
 ## Rules (user 2026-11-03)
 - The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).

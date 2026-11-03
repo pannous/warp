@@ -249,7 +249,7 @@ operated_within(name: text): list := {
 }
 
 # the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),
-# the matcher of a structural match arm (node_matches.warp), an int type's show (int_types.warp)
+# the matcher of a structural match arm (node_matches.warp), an int type's show (extensions/int_types.warp)
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)

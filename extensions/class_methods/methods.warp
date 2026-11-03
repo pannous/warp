@@ -113,7 +113,7 @@ methods_lifted(program: Node): Node := {
 		name = if view == ø then "" else declared_type_name(view#2)
 		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
 	}
-	# an int type's show(c: Color) is a hook int_types.warp renames show·Color, no function show to route to
+	# an int type's show(c: Color) is a hook extensions/int_types/marks.warp renames show·Color, no function show to route to
 	hooks = int_type_showers(top_statements)
 	functions = functions_defined(top_statements.filter(statement => statement not in hooks))
 	constructed = {}
