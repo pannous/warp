@@ -1233,10 +1233,27 @@ painted_pixels(caller: handle, context: handle, given: pointer, width: i64, heig
 		if in_window > 0 then 0 else pixels
 	}
 }
-# the first n pixels of the picture, as ints
+# the first n pixels of the picture, as ints, a chunk of PIXEL_CHUNK at a time by the module's pixels_at (4 bytes each
+# in its memory): one call a chunk, not one a pixel (card native-show-paint: 1280×800 took 360 ms)
+PIXEL_CHUNK = 16372 # runtime/show.warp pixel_chunk(): the output area past its C string's start, 4 bytes a pixel
 pixels_of(caller: handle, context: handle, picture: pointer, n: i64): pointer := {
 	pixels = allocate((n * 8) as i32)
-	for i in 0..n { long_at(pixels + i * 8).value = long_at(indexed(caller, context, "int_item_at", picture, i + 1) + VALUE_OFFSET).value }
+	words = allocate((PIXEL_CHUNK * 4) as i32)
+	values = allocate(3 * VALUE_BYTES)
+	memcpy(values, native_pointer(picture), VALUE_BYTES)
+	byte_at(values + VALUE_BYTES).value = KIND_I64
+	byte_at(values + 2 * VALUE_BYTES).value = KIND_I64
+	result = allocate(VALUE_BYTES)
+	done = 0
+	while done < n {
+		count = if n - done < PIXEL_CHUNK then n - done else PIXEL_CHUNK
+		long_at(values + VALUE_BYTES + VALUE_OFFSET).value = done + 1
+		long_at(values + 2 * VALUE_BYTES + VALUE_OFFSET).value = count
+		guest_call(caller, context, "pixels_at", values, 3, result)
+		memcpy(words, guest_memory(caller, context) + long_at(result + VALUE_OFFSET).value, count * 4)
+		for i in 0..count { long_at(pixels + (done + i) * 8).value = word_at(words + i * 4).value as i64 }
+		done = done + count
+	}
 	pixels
 }
 png_written(pixels: pointer, width: i64, height: i64): nothing := {
