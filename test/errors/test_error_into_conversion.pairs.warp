@@ -1,0 +1,4 @@
+# an Error given straight to a word that needs a text or a list raises itself, its own words, not the
+# word's failure (card error-text-trap; the page's `exec sh "crontab -l"` in samples/system/crontab.warp)
+'try { split(error("boom"), ",") } catch e { e.message }'	"boom"
+'try { for x in error("boom") { x } } catch e { e.message }'	"boom"
