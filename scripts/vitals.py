@@ -4,8 +4,8 @@
 scripts/vitals.py [since] [out.html]  (defaults: 2026-10-29, the start of self-hosting; data/vitals/vitals.html)
 Weight: lines of code after every commit of origin/main, each by what it changed itself (a merge: its resolution),
 the core without extensions and the extensions apart. Tests: every committed version of each results file (TIERS),
-its pass count read from its summary or its status lines. Build time: the CPU seconds and peak memory of each landing's compiler builds, read from the build
-records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
+its pass count read from its summary or its status lines. Build time: the CPU seconds and peak memory of each
+landing's compiler builds, read from the build records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
 (scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
 (notes/core_hygiene.md "Warp vitals").
 """
