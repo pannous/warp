@@ -1,0 +1,5 @@
+# a library word overloaded by arity is a method of its receiver too, `xs.sum` as sum(xs) (card list-sum-bug)
+'x = [1 2 3]; x.sum'	6
+'x = [1 2 3]; x.max'	3
+'n = 5000; xs = 3..n; xs.sum'	12497497
+'m = {sum: 4}; m.sum'	4
