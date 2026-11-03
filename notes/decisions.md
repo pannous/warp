@@ -507,6 +507,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - page-ids: an id in the program's own markup is a name in scope (`who.focus()`); a clash with a variable or function is a compile error naming both; kebab ids resolve; `$who` is the element's value and `$who = "Ann"` writes it; dynamic ids via `element("user-name")`; `$` means something only in warp code.
 
 ## Signals, events and tasks
+- finish-await (user, 2026-11-03): `finish job` is a soft alias of `await job` (a library word, not a reserved keyword; a program may define its own `finish`); `once job finishes` reads the same way.
+- stopped-no-result (user, 2026-11-03): a stopped or cancelled task yields no result: after `stop job` / `job.stop()` / `cancel job`, reading or awaiting `job` gives no value (ø), never the value it would have computed; test_tasks:15-16 change accordingly (user's OK).
 - go-unified (revises the immediate `go f(x)`): `go f(x)` means `go { f(x) }`, a cooperative task that starts when main yields; tests relying on the immediate run are updated under this decision (card go-go).
 - eval-explicit-with (refines N31): eval runs its text as a separate program; values go in explicitly, `eval("x*2", with: {x: 5})` → 10; bare `eval("x*2")` keeps refusing x as unknown; no caller scope (card eval-explicit-names).
 - P109 every variable can be watched; checks only where a listener watches. P111 writes through `global x` in called functions run the listeners. P112 no batching block; a multi-assignment notifies once.
