@@ -38,6 +38,23 @@ injection, number_words, source_checks and lints). The hooks they share are few:
 statement head, declaration and definition head, text prefix, text pass, operator table, parse marks with checks,
 and the pass list. These ten table entries would carry them all.
 
+Against the target shape (Lessons from wasp: operators as rows, keywords through a name → handler table):
+- The rows exist half already: lib/aliases.warp is one entry per operator (operator, prefix-operator, symbol Op,
+  aliases, infix). What is still code: binding_powers (parser.warp, a 40-line if-chain of precedence and
+  associativity), DECLARED_ONLY_OPERATORS, fixity_level and the declared-operator scan (195 lines). Adding
+  `power: [left, right]` and `fixity: prefix | infix | suffix | circumfix` to the rows turns all of it into a table
+  read, and the user's `infix operator ⊕` becomes a row added at parse time.
+- Suffix and circumfix rows then cover `x²`, `x⁻¹`, `5‰`, `5%`, `|x|`, `‖x‖`, `√x`, `∛x`: superscript_power,
+  percent_ends and the circumfix functions above become rows (an extension adds a row, not code).
+- Number-form glyphs are no operators: `½`, `π`, `0x…`, `0.(3)`, glued units `5ms` want an atom table instead,
+  glyph or suffix → the function that reads the literal (the atom glyph and atom suffix hooks above).
+- Keyword handlers in this area: c_style_for, `times`, named loops, `down to`, foreign_forms' modifiers and `new`,
+  injection's `sql`/`sh` text prefix, shader and wasm raw blocks, the guard words (GUARD_MARKERS: try, assert,
+  check). Each is a name → handler entry; the statement head, declaration, raw block and text prefix hooks above
+  are that table's kinds.
+- Not now (card apply-lessons, Later): moving binding_powers and the keywords out of parser.warp, fusing the
+  passes' walks.
+
 Every spelling stays in the language (decision self-source-minimal): a row leaves the core into an extension, never
 out of warp. Where the compiler's own source is the only reason a form stays core, a minimal change to that source
 (radix constants above; the postfix/phrase row once measured) lets it go.
