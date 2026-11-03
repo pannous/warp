@@ -30,7 +30,7 @@ use "../analysis/source_checks.warp"
 use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
-use "property_accessors.warp"
+use "../../extensions/property_accessors.warp"
 
 # the keyword rewrites among the sugar passes, one walk (Rust twin: rust-harness:src/pipeline.rs SUGAR_PHRASES, which also lowers
 # `xs .* 2` and `(p).a`: extensions/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`

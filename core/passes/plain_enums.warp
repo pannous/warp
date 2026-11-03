@@ -200,7 +200,7 @@ plain_enums(program: Node): Node := {
 # Names from the expected type (card expected-type-names, wiki/inventions.md): an argument for a parameter typed T
 # reads a free name x as T.x where T has the value x, so `paint(Red)` of `paint(c: Color)` is paint(Color.Red) though
 # another enum has a Red too; a name the program binds stays its own, with a warning that it shadows T.x. A type's
-# values are its cases here, its properties (`Key.escape := …`) in property_accessors.warp
+# values are its cases here, its properties (`Key.escape := …`) in extensions/property_accessors.warp
 
 # the declared parameter types of the program's functions, by name: the type of each parameter, "" of an untyped one
 parameter_types_of(program: Node): map := {

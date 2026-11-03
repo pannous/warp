@@ -1,4 +1,4 @@
-# Properties of objects (decision property-accessors; Rust twin: rust-harness:src/lowering/definitions/property_accessors.rs):
+# Properties of objects (extension, card properties-extension; decision property-accessors; Rust twin: rust-harness:src/lowering/definitions/property_accessors.rs):
 # `canvas.width` read like a field and, where it has a setter, written like one. A property is defined in warp: its
 # getter `canvas.width := canvas_width`, its setter the one-parameter overload `canvas.width(w) := canvas(w,
 # canvas_height)` or a getter-shaped body reading `it`. A use is the definition's body in place: `canvas.width = 300`,
@@ -8,12 +8,6 @@
 # Runs on the program and the files it uses, before the standard modules and the prelude are reached, so the words a
 # body calls (canvas_width, set_system_value) bring their definitions.
 # Not yet: a bare `width`, `width(canvas)`, other names (display.dpi), the properties of a class's instances.
-use "walk.warp"
-use "scope.warp"
-use "uses.warp"
-use "../parsing/parser.warp"
-use "prelude_words.warp"
-use "plain_enums.warp"
 
 # the parameter of a setter written getter-shaped: `canvas.width := canvas(it, canvas_height)`
 setter_word = "it"
