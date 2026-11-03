@@ -22,6 +22,7 @@ source_checks(program: Node, prelude: text): Node := {
 		spelled_number_join(n)
 		bare_sleep(n)
 		spaced_sign(n)
+		uneven_spacing(n)
 		text_index_of(n, program)
 		assigned_mutation(n, aliases)
 		lints_of(without_mark(n))
@@ -58,6 +59,12 @@ spaced_sign(n: Node) := {
 	written = items_of(value_of(n)#2)
 	item = written#2
 	diagnose(call_of("spaced_sign", [written#1, item, written#1 + " " + item[0 ..< 1] + " " + item[1 ..]]), n)
+}
+# `a *b`: an operator spaced on one side only computes; the fix spaces it evenly, `a * b`
+uneven_spacing(n: Node) := {
+	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == UNEVEN_SPACING_MARK) { return ø }
+	written = items_of(value_of(n)#2)
+	diagnose(call_of("uneven_spacing", [written.join(""), written#2, written.join(" ")]), n)
 }
 # `x!` as parser.warp writes it, `unwrap(x)`, and the node it marks
 has_mutation_mark(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
