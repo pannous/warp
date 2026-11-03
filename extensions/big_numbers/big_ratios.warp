@@ -3,11 +3,11 @@
 ## its parts as Int nodes' payloads, plain or big (intrinsics ratio_of_parts, numerator_part, denominator_part).
 ## exact.warp hands an exact number holding a big int here by made_case(Made.BigInt, …), compiled only into a program
 ## that makes big ints; each word takes plain ints and plain ratios too
-use "../intrinsics.warp"
-use "../arithmetic.warp"
-use "../conversions.warp"
-use "../errors.warp"
-use "../instructions.warp"
+use "../../compiler/runtime/intrinsics.warp"
+use "../../compiler/runtime/arithmetic.warp"
+use "../../compiler/runtime/conversions.warp"
+use "../../compiler/runtime/errors.warp"
+use "../../compiler/runtime/instructions.warp"
 use "big_ints.warp"
 use "exact.warp"
 # the numerator and denominator of an exact number as Int nodes, an int its own numerator over 1
