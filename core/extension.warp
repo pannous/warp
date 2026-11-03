@@ -1,0 +1,8 @@
+# What an extension registers (decision core-is-self, notes/core_extensions_roadmap.md "Hook table design"): one
+# Extension row each in extensions/extensions.warp, every field but its name optional. The core names no extension: it
+# knows this shape and walks the rows. Later fields join here: keyword handlers, list kinds, passes, runtime sources.
+#   operator_rows: the extension's operators, rows in lib/aliases.warp's format, its file's text (module_source)
+class Extension { name: text; operator_rows: text = "" }
+
+# every extension's operator rows, as one text per extension
+def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")

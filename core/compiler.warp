@@ -9,6 +9,7 @@ use "commands/commands.warp"
 use "emitter/c_imports.warp"
 use "../extensions/primitive.warp"
 use "../extensions/commands.warp"
+use "../extensions/extensions.warp"
 use os
 use file
 
