@@ -714,7 +714,7 @@ def plain_place(body: Body, name: text): bool := not body.function.is_runtime an
 # (core/extension.warp value_settlers): a task awaited, `n: int = go f(3)`; a place declared task keeps it
 def settled(value: TypedCode, kind: ValueKind): TypedCode {
 	if value.kind != ValueKind.Node or kind == ValueKind.Node or kind == pending { return value }
-	settler = value_settlers().values.find(word => word in module.functions)
+	settler = extension_value_settlers().values.find(word => word in module.functions)
 	if settler == ø then value else call_values(module.functions[settler], [value])
 }
 def place_checked(body: Body, name: text, value: TypedCode): TypedCode := if (value.kind == ValueKind.Node or value.kind == ValueKind.Error) and plain_place(body, name) then runtime_call("raised_if_error", [TypedCode(ValueKind.Node, boxed(value))]) else value

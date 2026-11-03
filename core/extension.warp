@@ -44,7 +44,7 @@ keyword_reader_of(word: text): any := {
 extension_block_words(): list := concatenated(EXTENSIONS.map(extension => extension.block_words))
 # every starter word → the word settling its value, read once
 global value_settler_table = ø
-value_settlers(): map := {
+extension_value_settlers(): map := {
 	if value_settler_table == ø { value_settler_table = joined_maps(EXTENSIONS.map(extension => extension.value_settlers)) }
 	value_settler_table
 }
