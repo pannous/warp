@@ -1,0 +1,5 @@
+# a style sheet's lengths as CSS writes them: 6px, 2em, 1.5rem (card style-css-length)
+'use markup; to_html(style{ td { padding: 6px } })'	'<style>td { padding: 6px }</style>'
+'use markup; to_html(style{ td { padding: 6px 14px } })'	'<style>td { padding: 6px 14px }</style>'
+'use markup; to_html(style{ p { margin: 2em } })'	'<style>p { margin: 2em }</style>'
+'use markup; to_html(style{ td { border-bottom: 1px solid silver } })'	'<style>td { border-bottom: 1px solid silver }</style>'
