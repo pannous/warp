@@ -1,0 +1,4 @@
+'rewrite upto $n => (1 to $n); upto 3'	[1, 2, 3]
+'rewrite mod $n => ($n * 10); mod 4'	40
+'7 mod 3'	1
+'1 upto 4'	[1, 2, 3]
