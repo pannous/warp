@@ -8,6 +8,7 @@ use "time_literals.warp"
 use "event_phrases.warp"
 use "float_suffixes.warp"
 use "durations.warp"
+use "superscripts.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
@@ -17,5 +18,6 @@ EXTENSIONS = [
 	event_phrases_extension
 	float_suffixes_extension
 	durations_extension
+	superscripts_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 ]
