@@ -1,0 +1,51 @@
+# Time literals (card parser-rows, decision core-is-self): `2024-01-31`, `2024-01-31T10:00Z` read at a digit as the
+# data view Rust's parser gives them; the core's parser asks this extension's number reader first
+read_time_literal(p: Parser): Node := {
+	length = time_literal_length(p, p.at)
+	if length == 0 { return ø }
+	p.at = p.at + length
+	opaque(["data", p.code[p.at - length .. p.at]])
+}
+time_literals_extension = Extension{name: "time_literals", number_readers: [read_time_literal]}
+
+# The length of the RFC 3339 / RFC 9557 time literal at `at`: `2024-01-31`, `2024-01-31T10:00:30.5+01:00`,
+# `2024-01-31T10:00[Europe/Berlin]`; 0 if none starts there
+# Rust twin: time/calendar.rs literal_len
+def time_literal_length(p: Parser, at: int): int {
+	if not (digits(p.code, at, 4, p.n) and is_at(p.code, at + 4, '-', p.n) and digits(p.code, at + 5, 2, p.n) and is_at(p.code, at + 7, '-', p.n) and digits(p.code, at + 8, 2, p.n)) { return 0 }
+	end = at + 10
+	if (is_at(p.code, end, 'T', p.n) or is_at(p.code, end, 't', p.n)) and clock_at(p.code, end + 1, p.n) {
+		end = end + 6
+		if is_at(p.code, end, ':', p.n) and digits(p.code, end + 1, 2, p.n) {
+			end = end + 3
+			if is_at(p.code, end, '.', p.n) and digits(p.code, end + 1, 1, p.n) {
+				end = end + 1
+				while end < p.n and is_digit(p.code[end]) { end = end + 1 }
+			}
+		}
+		if is_at(p.code, end, 'Z', p.n) or is_at(p.code, end, 'z', p.n) {
+			end = end + 1
+		} else if (is_at(p.code, end, '+', p.n) or is_at(p.code, end, '-', p.n)) and clock_at(p.code, end + 1, p.n) {
+			end = end + 6
+		}
+		# RFC 9557 suffixes: `[Europe/Berlin]`, then `[key=value]` like `[_tzdata=warp-2026a]`
+		while is_at(p.code, end, '[', p.n) {
+			close = suffix_close(p, end + 1)
+			if close == 0 { break }
+			end = close + 1
+		}
+	}
+	if end < p.n and (is_alphanumeric(p.code[end]) or p.code[end] == '_') { return 0 }
+	end - at
+}
+
+# The `]` closing a time literal's suffix whose name starts at `at`, a name of letters, digits and `/_+-=.!`; 0 if none
+def suffix_close(p: Parser, at: int): int {
+	close = at
+	while close < p.n and p.code[close] != ']' {
+		c = p.code[close]
+		if not (is_alphanumeric(c) or "/_+-=.!".contains(c)) { return 0 }
+		close = close + 1
+	}
+	if close >= p.n or close == at then 0 else close
+}

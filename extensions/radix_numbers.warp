@@ -1,0 +1,37 @@
+# Radix numbers (card parser-rows, decision core-is-self): `0xff` is 255, `0b101` is 5, `_` between digits; the
+# compiler's own source writes none (decision self-source-minimal)
+read_radix_number(p: Parser): Node := {
+	if not is_at(p.code, p.at, '0', p.n) { return ø }
+	hex = is_at(p.code, p.at + 1, 'x', p.n) or is_at(p.code, p.at + 1, 'X', p.n)
+	binary = (is_at(p.code, p.at + 1, 'b', p.n) or is_at(p.code, p.at + 1, 'B', p.n)) and p.at + 2 < p.n and digit_value(p.code[p.at + 2]) < 2
+	if not hex and not binary { return ø }
+	p.at = p.at + 2
+	radix_value(p, if hex then 16 else 2)
+}
+radix_numbers_extension = Extension{name: "radix_numbers", number_readers: [read_radix_number]}
+
+# The digits of a number in `base` (`_` between digits), read
+# Rust twin: literals.rs read_number_value, its 0x and 0b branches
+def radix_value(p: Parser, base: int): int {
+	value = 0
+	while p.at < p.n {
+		c = p.code[p.at]
+		separates = c == '_' and (base == 2 or digit_value(peek(p.code, p.at + 1, p.n)) < base)
+		if not separates {
+			digit = digit_value(c)
+			if digit >= base { return value }
+			value = value * base + digit
+		}
+		p.at = p.at + 1
+	}
+	value
+}
+
+# The value of a hex digit, 16 for any other character
+def digit_value(c: text): int {
+	small = "0123456789abcdef"
+	capital = "0123456789ABCDEF"
+	i = 0
+	while i < 16 and small[i] != c and capital[i] != c { i = i + 1 }
+	i
+}
