@@ -722,7 +722,7 @@ definition_arities(module: text, word: text): list := {
 	heads.filter(found => #found > 0).map(found => arity(signature_of(items_of(found#1))))
 }
 # the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
-runtime_words_of_math = module_source("math").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
+runtime_words_of_math = bundled_module("math.warp").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
 # a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
 # read once a module: a rule word asks it at each call site it tries (lib/rule_words.warp module_named)
@@ -740,7 +740,7 @@ names_no_module(name: text): bool := name in use_modes or is_c_library(name)
 # the names the prelude defines, read once
 global prelude_definition_names = ø
 prelude_definitions(): list := {
-	if prelude_definition_names == ø { prelude_definition_names = definition_slices(module_source("prelude")).map(slice => slice#1) }
+	if prelude_definition_names == ø { prelude_definition_names = definition_slices(bundled_module("prelude.warp")).map(slice => slice#1) }
 	prelude_definition_names
 }
 # (an implicit use is always the standard module, never a same-named file beside the program: only an explicit

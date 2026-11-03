@@ -3,7 +3,7 @@
 use "gpu_lists/gpu_lists.warp"
 use "commands.warp"
 EXTENSIONS = [
-	Extension{name: "uncertain", operator_rows: module_source("extensions/uncertain/operators.warp")}
+	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 ]

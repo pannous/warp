@@ -21,7 +21,7 @@ library_folder = if not command and #args > 3 then args#4 else run_library()
 use_library(library_folder)
 
 # the prelude's text, whose definitions a program reaches (prelude_words.warp), built in as the compiler's other data
-prelude_source = module_source("prelude")
+prelude_source = bundled_module("prelude.warp")
 
 # the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
 # extended runtime (decision runtime-split)
