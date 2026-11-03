@@ -11,6 +11,7 @@ use "durations.warp"
 use "superscripts.warp"
 use "percent.warp"
 use "shader_blocks.warp"
+use "phrase_definitions.warp"
 use "go_tasks.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
@@ -24,6 +25,7 @@ EXTENSIONS = [
 	superscripts_extension
 	percent_extension
 	shader_blocks_extension
+	phrase_definitions_extension
 	tasks_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
