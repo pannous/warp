@@ -12,8 +12,8 @@
 'job = go 3; once job pauses: print "held"; await job'	3
 
 # stopping_a_finished_task_warns_and_changes_nothing
-'job = go 3; stop job; job'	3
-'job = go 3; job.stop(); job'	3
+'job = go 3; await job; stop job; await job'	3
+'job = go 3; await job; job.stop(); await job'	3
 
 # a_program_may_define_its_own_go_with_def
 'def go(n: int): int { n + 1 }; go(2)'	3
