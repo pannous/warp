@@ -14,7 +14,7 @@ EXPECTED=Hello
 
 tree=$(cd "${1:?usage: smoke.sh <worktree>}" && pwd) || exit 2
 scripts=$(cd "$(dirname "$0")" && pwd)
-BAKED="^(core/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --baked-files | sed 's/\./\\./g')))"
+BAKED="^(core/|extensions/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --baked-files | sed 's/\./\\./g')))"
 installed=$(dirname "$(readlink -f "$INSTALLED")")
 base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
 baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)

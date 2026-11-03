@@ -38,7 +38,7 @@ rewrite speed_unit => km·per·hour                # km_per_hour
 - `··` glues with the mark itself: `loop··step` is the hidden compiler name `loop·step` (notes/compiler_temporaries.md)
   no program can write, the way for_loops.warp marks a loop's step; `$i··end` of k is `k·end`, `$i·end··x` is
   `k_end·x`. The parser reads `a··b` as the declared-only operator call `operator_··(a, b)`, so outside a template it is
-  an operator nothing declares, an error (core/extensions/sugar/loops.warp: the C-style for's `loop··step: $step`).
+  an operator nothing declares, an error (extensions/sugar/loops.warp: the C-style for's `loop··step: $step`).
 - A template's definition with a hole or a built name as its head (`$f(x) := …`, `twice·$f(x) := …`, which the parser
   reads as a phrase) defines that function, and a template of one parenthesized definition is that definition.
 - Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
@@ -104,7 +104,7 @@ A place word among the `where` conditions lets a rule rewrite code only standing
 | `condition` | the condition of an `if` or `while` |
 | `member` | an item of a class body |
 | `key`, `value` | the key or the value of `k: v` |
-| `element` | an item of a list literal `[…]` (the tuple `(1, 0)` of `[(1, 0), (2, 1)]`, core/extensions/tuples.warp) |
+| `element` | an item of a list literal `[…]` (the tuple `(1, 0)` of `[(1, 0), (2, 1)]`, extensions/tuples.warp) |
 
 ```warp
 rewrite $s except_if $c => if not $c then $s where statement
@@ -153,7 +153,7 @@ rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
 
 A run a rule made shorter is tried again where it stands, together with the statements after it, so a pairwise rule
 folds a whole run: `rewrite (add_up($a); add_up($b)) => add_up($a + $b)` turns `add_up(1); add_up(2); add_up(3)` into
-`add_up(1 + (2 + 3))` (right to left, F13); a run as long or longer moves on, so this can't loop (F12). The sugar step (core/extensions/sugar) matches
+`add_up(1 + (2 + 3))` (right to left, F13); a run as long or longer moves on, so this can't loop (F12). The sugar step (extensions/sugar) matches
 runs of statements the same way. Tests: tests/modules/test_rewrite_zip_runs.warp, probes/rewrites/zip_runs.
 
 Runs are rewritten right to left (F13, card engine-right-to-left-runs): the run starting at the last statement is
@@ -210,13 +210,13 @@ rewrite $e.$c => $c where $c is case of $e
 rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is enum
 ```
 
-The rules of core/extensions/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
+The rules of extensions/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
 
 ## Parameters (F10)
 The place word `parameter` lets a rule rewrite only a parameter of a definition's head, `f(a, with b) := …` (also
 `f(a): T := …`), in the program's own rules and in the sugar step alike; `$w is label` asks for a word that labels a
-parameter. core/extensions/sugar/parameters.warp drops the label, as Swift passes argument labels:
+parameter. extensions/sugar/parameters.warp drops the label, as Swift passes argument labels:
 
 ```warp
 rewrite $word $p => $p where $word is label and parameter   # replace(t, old, with new) := … takes new
@@ -256,7 +256,7 @@ rewrite build $t($a...) => $t($a...) where $t is type   # p = build P(4) → p =
 Tests: tests/modules/test_rewrite_engine.warp; probes: probes/rewrites/guarded_call.
 
 ## Function keywords: early sugar, applied holes, parenthesized templates (card sugar-definitions)
-core/extensions/sugar/functions.warp takes the function keywords (`def`, `fun`, `fn`, `define`, `function`, `func`) away before
+extensions/sugar/functions.warp takes the function keywords (`def`, `fun`, `fn`, `define`, `function`, `func`) away before
 any pass runs: it is an early sugar module (`early_sugar_module_names`), whose rules rewrite the program right after
 interpolation, before definitions.warp and the passes that read definitions. Three notations make its rules readable:
 
@@ -275,7 +275,7 @@ rewrite (def $d) => $d
 ## Operator holes: `$op=` and `.$op` (cards elementwise-operator-forms, compound-assignment-desugaring)
 
 `rewrite ($a $op= $b) => $a = ($a $op $b)` and `rewrite ($a .$op $b) => element_wise_any($a, $b, ($l, $r) -> ($l $op $r))`
-(core/extensions/sugar/arithmetic.warp) bind the operator a compound assignment or an element-wise form is written with; a
+(extensions/sugar/arithmetic.warp) bind the operator a compound assignment or an element-wise form is written with; a
 template's `$l $op $r` (bare or in parentheses) becomes the operation, a function word's call (`x max= 5`). Pitfalls met:
 - the seed reads new rule syntax with its old parser (`$op=` as `$op =`) and applies the rules to the compiler's own
   code: guard such rules with a condition the old reading fails (`where $op is symbol`)
@@ -287,7 +287,7 @@ template's `$l $op $r` (bare or in parentheses) becomes the operation, a functio
 
 ## Typed overloads of built-in operators (decision rules-to-typed-operators, card rewrite-rules)
 
-`infix operator |(x: any, g: function) := g(x)` (in a core/extensions/sugar file, a rule module or a program) is not a function:
+`infix operator |(x: any, g: function) := g(x)` (in a extensions/sugar file, a rule module or a program) is not a function:
 rewrites.warp operator_rules makes it rules of the operator, `$x | $g => $g($x)`, its parameter types the conditions
 (overload_conditions: function → `is function` or `takes one`, one rule each; type/text/list/map/int/number/symbol →
 `is <kind>`; any → none). Overloads of one glyph are ordered most specific first (fewer `any`), an arm whose body is the
@@ -304,7 +304,7 @@ operands whose kind only the run time knows get the built-in, as the hand rules 
 - a std module holding only overloads (no `rewrite` line) is neither packed nor in rule_needs: add a rewrite line or
   extend those scans when one appears
 - a new overload in lib/ is read by the seed while it builds: a seed older than the parser form fails ("text of node"
-  of `infix operator as(…)` in core/extensions/sugar/enums.warp), so such a lib change waits for a seed refresh
+  of `infix operator as(…)` in extensions/sugar/enums.warp), so such a lib change waits for a seed refresh
 - what stays a rule (card rewrite-rules' conclusion): forms that are not two operands around an operator (broadcasting's
   `$f($x) where $x is vector`, phrases `$f each $xs`), and rules led by syntax rather than kinds (`??`/`?:` of a name,
   ranges' `is not missing`, `$v as int where $v is case of $e`, the lambda composition `($it => $body) | $g`)

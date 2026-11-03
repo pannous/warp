@@ -19,7 +19,7 @@ shift 2
 tree=$(cd "$tree" && pwd) || exit 1
 batch=$tree/data/integrate/batch
 say() { echo "land: $*"; }
-COMPILER_PATHS=(core $("$(dirname "$0")/../compiler-inputs.sh" --baked-files | sed 's|^|lib/|'))
+COMPILER_PATHS=(core extensions $("$(dirname "$0")/../compiler-inputs.sh" --baked-files | sed 's|^|lib/|'))
 field() { sed -n "s/^$1 //p" "$batch"; }
 set_field() { sed -i '' "s/^$1 .*/$1 $2/" "$batch"; }
 

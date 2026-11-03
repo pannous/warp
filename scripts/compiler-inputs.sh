@@ -32,7 +32,7 @@ modules() {
 	{ (cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||'); printf '%s\n' "${BAKED[@]}" | grep -v '\.warp$'; } | LC_ALL=C sort
 }
 files() {
-	(cd "$lib" && find -H compiler -path compiler/native -prune -o -type f ! -name '.*' -print | LC_ALL=C sort)
+	(cd "$lib" && find -H compiler extensions -path compiler/native -prune -o -type f ! -name '.*' -print | LC_ALL=C sort)
 	modules
 }
 [ -n "$listed" ] && files >&2

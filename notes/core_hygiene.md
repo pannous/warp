@@ -25,8 +25,8 @@ or *domain vocabulary*. The runtime words are different: the runtime is carried 
 ## Table
 
 def = definitions in the file, wasm = of them in warp.wasm, run = of them sampled during self-compilation.
-Homes: **C** stays compiler core · **X** core/extensions/ (an optional capability with compiler code) · **L** lib/ or
-core/extensions/sugar (plain warp / rewrite rules / data) · **V** domain vocabulary in core (a missing mechanism) · **T** toolchain,
+Homes: **C** stays compiler core · **X** extensions/ (an optional capability with compiler code) · **L** lib/ or
+extensions/sugar (plain warp / rewrite rules / data) · **V** domain vocabulary in core (a missing mechanism) · **T** toolchain,
 not compiler.
 
 | file / section | lines | def/wasm/run | used by compiler? | home | risk / what blocks the move |
@@ -59,7 +59,7 @@ not compiler.
 | emitter/serializer.warp | 138 | 22/20/**0** | no | L or delete | its own todo: "Is this still needed?" (card serializer-needed) |
 | emitter/host.warp (host imports; paint/shader bits) | 146 | 6/5/2 | partly | C + V | the paint/shader part goes with host_words |
 | extensions/primitive.warp (`@primitive`, plain MVP wasm) | 838 | 89/89/5 | **no** (only `warp build native`) | X, but load on demand | `use`d unconditionally by compiler.warp; also read by uses.warp, walk.warp read_attributes |
-| extensions/tuples.warp, safe_navigation.warp | 18 | rewrite lines only | tuples no, `?.` 5 uses | **L (core/extensions/sugar)** | they are pure rewrite rules = sugar by notes/layers.md; "extension" here only means a separate file, they apply to every program |
+| extensions/tuples.warp, safe_navigation.warp | 18 | rewrite lines only | tuples no, `?.` 5 uses | **L (extensions/sugar)** | they are pure rewrite rules = sugar by notes/layers.md; "extension" here only means a separate file, they apply to every program |
 | commands/commands.warp, commands/tests.warp (CLI table, `warp test` listing) | 512 | 55/55/**0** | no | T | tool code inside warp.wasm; fine but not compiler (could be lib/tools or core/tools) |
 | native/ (warp.warp, driver.warp, tests.warp) | 2554 | separate program | no | T | the host binary, not the compiler; folder is honest about it |
 | runtime/ core words (text, show, maps, lists, nodes, fields, equality, arithmetic, conversions, case, characters, errors …) | ~2860 | 393/205/167 | yes, half of them | C | the other half are words only user programs call: harmless, compiled on first call |
@@ -75,16 +75,16 @@ Breaches the other way (lib/ that is really compiler):
   in one place: a missing mechanism (a library declaring its own compile-time words, loaded when a rule needs them).
 - lib/prelude.warp, aliases.warp, math.warp baked: right (they are the language's vocabulary the analyzer reads).
 - lib/compiler → ../core link: transition only, as AGENTS.md says.
-- core/extensions/ is not what README says: two of three are sugar (always on), the third is a build mode loaded always.
+- extensions/ is not what README says: two of three are sugar (always on), the third is a build mode loaded always.
 
 ## Verdict
 
 Partly. The folders inside the compiler are clean — parsing/passes/analysis/emitter hold compiler code, none of it
-dead, sugar mostly moved to core/extensions/sugar, the runtime split put rationals/times/pow in runtime/extended. But "core" still
+dead, sugar mostly moved to extensions/sugar, the runtime split put rationals/times/pow in runtime/extended. But "core" still
 mixes three things: the compiler proper (~85 % of the lines), language capabilities the compiler's own source never
 writes (times, GPU lists, @primitive, C FFI, int types, properties, statics, code templates, sql/sh templates, shader
 blocks: ~2400 lines + 7129 lines of entities), and domain vocabulary tables (host words, the 42 std module names,
-draw/canvas words, number words, rule words) — the pattern common.md calls a missing mechanism. core/extensions/ is
+draw/canvas words, number words, rule words) — the pattern common.md calls a missing mechanism. extensions/ is
 not yet the home it is meant to be: it holds sugar and an always-loaded mode.
 
 ## The most valuable moves, ranked
@@ -99,7 +99,7 @@ not yet the home it is meant to be: it holds sugar and an always-loaded mode.
 3. **One raw-block notation for foreign languages**: `shader{…}`, `wgsl{…}`, `sql "…"`, `sh "…"` become one
    parser rule (a named language's literal with holes), the meaning in the library (wgsl.warp, shell.warp, a sql
    module). Deletes ~110 parser lines and most of injection.warp's 217.
-4. **Cheap, low-risk moves**: tuples.warp + safe_navigation.warp → core/extensions/sugar (they are rewrite lines);
+4. **Cheap, low-risk moves**: tuples.warp + safe_navigation.warp → extensions/sugar (they are rewrite lines);
    number_words.warp → lib/english.warp rules; entities.tsv → lib/ data; durations.warp → runtime/extended/;
    serializer.warp → decide on card serializer-needed (0 runs).
 5. **Make extensions truly optional**: primitive.warp loaded only for a `@primitive` file; times (emitter/times.warp +
@@ -107,7 +107,7 @@ not yet the home it is meant to be: it holds sugar and an always-loaded mode.
 
 ## Done: move D (user decision core-hygiene, 2026-11-01)
 
-Plain relocation, no behaviour change: core/extensions/tuples.warp and safe_navigation.warp → core/extensions/sugar/ (first sugar,
+Plain relocation, no behaviour change: extensions/tuples.warp and safe_navigation.warp → extensions/sugar/ (first sugar,
 the same place as before); core/entities.tsv → lib/entities.tsv (read by module_source("entities.tsv"), hashed through
 BAKED in scripts/compiler-inputs.sh); core/runtime/durations.warp → core/runtime/extended/. serializer.warp stays
 (card serializer-needed).
@@ -133,38 +133,38 @@ E honestly: a compiled compiler carries all its code; "loaded only when used" ne
 separate wasm module the driver links when a program needs it), a big mechanism (~300+ core lines, driver work).
 The cheap version: one extension table in compiler.warp (name → trigger test → its passes), primitive.warp, times
 (emitter/times.warp 147 + the 107 time references in emitter/passes) and C FFI (c_imports 323 + c_functions 27, 42
-call sites) move under core/extensions/ and are reached only through that table: ~+30 core lines, ~-0 removed, many
+call sites) move under extensions/ and are reached only through that table: ~+30 core lines, ~-0 removed, many
 call sites touched (34 primitive, 42 C, 107 time). Benefit: honest folders and a scan skipped per source; size and
 risk high for times (spread through the emitter). Recommend: primitive and FFI via the table, times later or never.
 
-### lib/sugar/ moved to core/extensions/sugar/ (user 2026-11-03: "sugar is not a library, it is a compiler extension")
+### lib/sugar/ moved to extensions/sugar/ (user 2026-11-03: "sugar is not a library, it is a compiler extension")
 
-Done on card sugar-under-extensions: the folder is bundled with core/extensions/ (parser.warp BUNDLED_CORE_FOLDERS),
+Done on card sugar-under-extensions: the folder is bundled with extensions/ (parser.warp BUNDLED_CORE_FOLDERS),
 rewrites.warp names its files by `sugar(["…"])`. The accepted cost: a sugar edit is a compiler build, not a rebake.
 The analysis before the decision:
 
-By that wording the 23 files of core/extensions/sugar/ (480 lines, tuples and safe_navigation from move D among them) are
+By that wording the 23 files of extensions/sugar/ (480 lines, tuples and safe_navigation from move D among them) are
 extensions. Moving the folder is mechanical; what it changes is the cost of every later sugar edit:
 - **References:** core/passes/rewrites.warp (sugar_folder and the 7 placed name lists, `"sugar/x"` →
   `"compiler/sugar/x"`), core/parsing/parser.warp BUNDLED_CORE_FOLDERS (add `compiler/sugar`, else the rules are
-  parsed at each run, ~25 ms a program), ~46 files naming `core/extensions/sugar/` in comments (core, lib, test, notes, wiki: one
+  parsed at each run, ~25 ms a program), ~46 files naming `extensions/sugar/` in comments (core, lib, test, notes, wiki: one
   fastmod), web/playground keywords.py if it lists sugar words. No test reads the path.
 - **Cost:** core/** is compiler code (scripts/compiler-inputs.sh hashes it as code, `--baked` too). A sugar edit today
   is a lib rebake (~1 min, no compiler build, smoke test only); under core/ it is a full compiler build (~6 min CPU,
   97c39a1f this branch: cpu=365 s) plus self-check, and by common.md's core rule it needs the user's OK first. Rewrite
   rules are the cheap way to add syntax (notes/layers.md); moving them into core makes them as dear as a parser branch.
 - **Risk:** low technically (paths only); high for the workflow above.
-- **Options:** (a) `core/sugar/` with that cost; (b) rename to `lib/extensions/` (or keep core/extensions/sugar/ and call its files
+- **Options:** (a) `core/sugar/` with that cost; (b) rename to `lib/extensions/` (or keep extensions/sugar/ and call its files
   "extensions written as rules" in common.md): the wording matches, the cheap rebake stays, risk low; (c) core/sugar/
   hashed as data like BAKED lib files (a special case in compiler-inputs.sh: not recommended).
-  Recommended: (b) `lib/extensions/` — "extension" by name, rebaked like data; core/extensions/ keeps the
+  Recommended: (b) `lib/extensions/` — "extension" by name, rebaked like data; extensions/ keeps the
   extensions that need compiler code (primitive). Same for D: tuples and safe_navigation would sit in lib/extensions/.
 
 ## Warp vitals (user 2026-11-03)
 scripts/vitals.py draws the test pass rate of every lane over time (each committed version of test/results.txt,
 results-cloud.txt, samples.txt, samples-web.txt, tests-web.txt) and counts the lines of code for every landing on main since self-hosting began (2026-10-29),
 reconstructed from git history in ~6 s: the core without extensions (parsing, passes, analysis, emitter, runtime,
-native) and the extensions (core/extensions/, and lib/sugar/ before it moved there) always separately, plus lib/ and
+native) and the extensions (extensions/, and lib/sugar/ before it moved there) always separately, plus lib/ and
 test/. It fills scripts/vitals.html into data/vitals/vitals.html; the nightly run (nightly.sh) refreshes
 it. The page is the artifact https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c: a Claude session
 republishes the file there (Artifact publish with that url). 2026-11-03: core 28,186 → 32,641 lines (+16%),
