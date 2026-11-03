@@ -125,7 +125,8 @@ def class_value_calls(f: Function, arity: int): list {
 		code += named.code + [op.if, no_value] + boxed(positional_instance(scope, class_name, parameters[1 ..].map(name => symbol(name)))) + [op.return, op.end]
 	}
 	f.locals = scope.kinds[#parameters ..]
-	code
+	# behind one test that the closure is a type value at all: a closure call of any other value skips the chain
+	if count(code) == 0 then code else runtime_call("names_a_type", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code + [op.if, no_value] + code + [op.end]
 }
 # an instance called, `room(signal)`, `A(1)(2)`: the program's call taking it first (trait Callable), its method or
 # function `call(self, …)`
