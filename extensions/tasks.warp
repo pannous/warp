@@ -1,0 +1,4 @@
+# Tasks (card tasks-signals-extensions, decision core-is-self): `go{…}` takes its glued block as a task's, and a
+# place declared as a value awaits a task given it, `n: int = go f(3)` (decision task-to-value-awaits); the scheduler
+# and every task phrase are lib/tasks.warp's, task_go starting a task, task_awaited awaiting it
+tasks_extension = Extension{name: "tasks", block_words: ["go"], value_settlers: {task_go: "task_awaited"}}

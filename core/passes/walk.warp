@@ -56,10 +56,6 @@ assigned_variable(target: Node): Node := match target {
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
 attribute_word = HiddenWord.ViewAttribute as text
-# lib/tasks.warp's await, which the emitter calls where a place typed as a value takes a task (emitter.warp settled),
-# brought by prelude_words with lib/tasks.warp, kept where the program starts a task (its task_go)
-settling_word = "task_awaited"
-task_starting_word = "task_go"
 # `x!` of a name no mutation takes: run as Rust runs what blocks.rs inlines no block for, `unwrap(x)` (parser.warp forced)
 unwrap_word = "unwrap"
 # the number a subscript was written with, `1` of `d[1]` on its shifted index `d#2` (Rust: warp_parser WrittenIndex)

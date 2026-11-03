@@ -12,8 +12,10 @@
 #   keyword_readers: a word → the reader of the phrase it starts, given the parser at the word and the word, ø where
 #   its form is not there (`emit alarm`)
 #   block_words: words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
+#   value_settlers: a word starting a value that comes later → the word a place declared as a value calls on it,
+#   brought wherever the program calls the first (`task_go` → `task_awaited`: `n: int = go f(3)` awaits)
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; keyword_readers: map = {}; block_words: list = []; commands: list = []; runs: any = ø }
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; keyword_readers: map = {}; block_words: list = []; value_settlers: map = {}; commands: list = []; runs: any = ø }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
@@ -45,6 +47,12 @@ keyword_reader_of(word: text): any := {
 }
 # every word an extension takes a glued block for
 extension_block_words(): list := concatenated(EXTENSIONS.map(extension => extension.block_words))
+# every starter word → the word settling its value, read once
+global value_settler_table = ø
+value_settlers(): map := {
+	if value_settler_table == ø { value_settler_table = joined_maps(EXTENSIONS.map(extension => extension.value_settlers)) }
+	value_settler_table
+}
 # every extension's number readers
 global number_reader_list = ø
 number_readers(): list := {

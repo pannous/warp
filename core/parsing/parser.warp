@@ -4041,9 +4041,9 @@ def character_index(table: text): map {
 
 ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 
-// The words of a block of code, also glued to it: `go{…}` starts a task, `loop{…}` loops, `do{…}` runs its block;
-// no tags `go:{…}` (Rust twin: atoms.rs GLUED_BLOCK_KEYWORDS)
-GLUED_BLOCK_WORDS = ["go", "loop", "do"]
+// The words of a block of code, also glued to it: `loop{…}` loops, `do{…}` runs its block, an extension's beside
+// them (`go{…}`, extensions/tasks.warp); no tags `loop:{…}` (Rust twin: atoms.rs GLUED_BLOCK_KEYWORDS)
+GLUED_BLOCK_WORDS = ["loop", "do"]
 
 // A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
 // Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call
