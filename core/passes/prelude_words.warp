@@ -301,6 +301,7 @@ called_only(program: Node): Node := {
 		if brought_names.has(names[i]) { brought[names[i]] = (brought.get(names[i]) ?? []) + [statements[i]] } else { pending += words_within(statements[i]) }
 	}
 	if pending.any(word => word.starts_with(closure_call_word)) { pending += [callable_word] }
+	if task_starting_word in pending { pending += [settling_word] }
 	called = {}
 	at = 0
 	while at < #pending {
