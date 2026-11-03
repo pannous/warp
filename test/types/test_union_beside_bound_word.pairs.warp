@@ -1,0 +1,4 @@
+# an annotation names types wherever the program binds their words as values (decision program-binding)
+'g(x: list or number) := 1; list = 3; g([1])'	1
+'g(x: text or number) := 2; fun f(text) := text; g(4)'	2
+'fun search(list, target) := list[0] == target; search([2 3], 2) and sum([2 3]) == 5'	yes
