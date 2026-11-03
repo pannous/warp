@@ -563,7 +563,7 @@ kind_tested(n: Node): Name := if is_group(n) and #n == 3 and head_name(n) == "is
 # `closure_call_2(f, a, b)`: the function value called
 called_closure(n: Node): Name := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then name_of(n#2) else ""
 
-cell_words = {cell_new: 1, cell_get: 1, cell_set: 1, signal_new: 1, signal_listeners: 1, signal_listeners_set: 1}
+cell_words = {cell_new: 1, cell_get: 1, cell_set: 1}
 map_words = {map_keys: 1, map_values: 1, map_entries: 1, collection_contains: 1, collection_position: 1, map_get_or: 1, map_without: 1, map_of_entry: 1, field_with: 1}
 
 # `(word map …)`: a map word reads map as a map (a sequence), a cell word as a cell
