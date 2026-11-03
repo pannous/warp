@@ -1,0 +1,209 @@
+<title>Core Weight</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; summary figures, then the core's stacked growth, then each landing's net change, then the biggest landings. */
+:root {
+  --paper: #fbfbf9;
+  --panel: #f3f3ef;
+  --ink: #16171a;
+  --ink-2: #4c4e52;
+  --ink-3: #85878b;
+  --rule: #dcdcd6;
+  --grow: #eb6834;
+  --shrink: #2a78d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6;
+  --font-text: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-data: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #18191b; --panel: #212225; --ink: #eeeee9; --ink-2: #c1c1bb; --ink-3: #8b8c88; --rule: #34363a;
+    --grow: #d95926; --shrink: #3987e5;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #18191b; --panel: #212225; --ink: #eeeee9; --ink-2: #c1c1bb; --ink-3: #8b8c88; --rule: #34363a;
+  --grow: #d95926; --shrink: #3987e5;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9;
+}
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--font-text); }
+.page { max-width: 980px; margin: 0 auto; padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 36px; }
+h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.lede { color: var(--ink-2); margin: 6px 0 0; max-width: 65ch; }
+.label { font: 500 11px/1.3 var(--font-data); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.figure { background: var(--panel); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; }
+.figure .value { font: 500 26px/1.1 var(--font-data); font-variant-numeric: tabular-nums; }
+.figure .change { font: 13px var(--font-data); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+section { display: grid; gap: 10px; }
+.section-note { color: var(--ink-2); margin: 0; max-width: 70ch; font-size: 14px; }
+.chart { position: relative; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.chart text { font: 11px var(--font-data); fill: var(--ink-3); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 12px var(--font-data); color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.tip { position: absolute; pointer-events: none; background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font: 12px/1.45 var(--font-data); color: var(--ink); box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); max-width: 300px; font-variant-numeric: tabular-nums; }
+.tip .subject { font-family: var(--font-text); color: var(--ink-2); margin-top: 4px; }
+.tip-row { display: flex; justify-content: space-between; gap: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font: 500 11px var(--font-data); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--rule); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+td.sha { font-family: var(--font-data); color: var(--ink-3); white-space: nowrap; }
+.grow { color: var(--grow); } .shrink { color: var(--shrink); }
+.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.table-wrap { overflow-x: auto; }
+footer { color: var(--ink-3); font-size: 12px; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="label">warp compiler · core/ lines of code</div>
+    <h1>Core weight since self-hosting</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <div class="figures" id="figures"></div>
+
+  <section>
+    <h2>Core lines by component</h2>
+    <p class="section-note">Every landing on main since 29 October, stacked, with the extensions on top. The extensions are core/extensions/, and lib/sugar/ before it moved there on 3 November.</p>
+    <div class="legend" id="legend"></div>
+    <div class="chart" id="stack"></div>
+  </section>
+
+  <section>
+    <h2>Bloat index per landing</h2>
+    <p class="section-note">Net lines of the core without extensions that each landing added (up) or removed (down). Hover a bar for the commit and its extension change.</p>
+    <div class="chart" id="bars"></div>
+  </section>
+
+  <div class="tables">
+    <section><h2>Largest growth</h2><div class="table-wrap"><table id="grew"></table></div></section>
+    <section><h2>Largest cuts</h2><div class="table-wrap"><table id="cut"></table></div></section>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const DATA = __DATA__;
+const GROUP_COLORS = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7"];
+const WIDTH = 940, PAD = { left: 52, right: 12, top: 12, bottom: 26 };
+const rows = DATA.rows.map(([date, sha, subject, groups, delta, extensionsDelta, lib, test]) => ({ date, sha, subject, groups, delta, extensionsDelta, lib, test, core: groups.slice(0, -1).reduce((a, b) => a + b, 0), extensions: groups[groups.length - 1] }));
+const first = rows[0], last = rows[rows.length - 1];
+const format = n => n.toLocaleString("en-US");
+const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + format(Math.abs(n));
+const percent = (a, b) => signed(Math.round((b - a) / a * 100)) + "%";
+const svgNS = "http://www.w3.org/2000/svg";
+const element = (name, attrs, parent) => { const node = document.createElementNS(svgNS, name); for (const k in attrs) node.setAttribute(k, attrs[k]); parent && parent.appendChild(node); return node; };
+const niceStep = range => { const raw = range / 5, magnitude = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 2.5, 5, 10].map(m => m * magnitude).find(s => s >= raw); };
+const dayOf = row => row.date.slice(0, 10);
+const shortDay = day => new Date(day + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+document.getElementById("lede").textContent = `${rows.length} landings from ${shortDay(dayOf(first))} to ${shortDay(dayOf(last))}: the core without extensions grew from ${format(first.core)} to ${format(last.core)} lines (${percent(first.core, last.core)}), the extensions from ${format(first.extensions)} to ${format(last.extensions)} (${percent(first.extensions, last.extensions)}).`;
+
+const figures = [
+  ["core without extensions", first.core, last.core],
+  ["extensions", first.extensions, last.extensions],
+  ["lib/", first.lib, last.lib],
+  ["test/", first.test, last.test],
+];
+document.getElementById("figures").innerHTML = figures.map(([name, from, to]) =>
+  `<div class="figure"><div class="label">${name}</div><div class="value">${format(to)}</div><div class="change">${signed(to - from)} · ${percent(from, to)} since ${shortDay(dayOf(first))}</div></div>`).join("");
+
+document.getElementById("legend").innerHTML = DATA.groups.map((g, i) => `<span><i style="background:var(${GROUP_COLORS[i]})"></i>${g}</span>`).join("");
+
+function frame(container, height, yMin, yMax) {
+  const svg = element("svg", { viewBox: `0 0 ${WIDTH} ${height}`, role: "img" }, container);
+  const plotWidth = WIDTH - PAD.left - PAD.right, plotHeight = height - PAD.top - PAD.bottom;
+  const x = i => PAD.left + (rows.length === 1 ? 0 : i / (rows.length - 1)) * plotWidth;
+  const y = v => PAD.top + (1 - (v - yMin) / (yMax - yMin)) * plotHeight;
+  const step = niceStep(yMax - yMin);
+  for (let v = Math.ceil(yMin / step) * step; v <= yMax; v += step) {
+    element("line", { x1: PAD.left, x2: WIDTH - PAD.right, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": v === 0 ? 1.2 : 0.6 }, svg);
+    element("text", { x: PAD.left - 8, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = Math.abs(v) >= 1000 ? (v / 1000) + "k" : v;
+  }
+  let previousDay = "";
+  rows.forEach((row, i) => {
+    const day = dayOf(row);
+    if (day !== previousDay) {
+      element("line", { x1: x(i), x2: x(i), y1: PAD.top, y2: height - PAD.bottom, stroke: "var(--rule)", "stroke-width": 0.6, "stroke-dasharray": "2 3" }, svg);
+      element("text", { x: x(i) + 4, y: height - 8 }, svg).textContent = shortDay(day);
+      previousDay = day;
+    }
+  });
+  return { svg, x, y, plotWidth };
+}
+
+function tooltip(container, svg, x, describe) {
+  const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; container.appendChild(tip);
+  const cross = element("line", { y1: PAD.top, stroke: "var(--ink-3)", "stroke-width": 1, visibility: "hidden" }, svg);
+  cross.setAttribute("y2", svg.viewBox.baseVal.height - PAD.bottom);
+  const hit = element("rect", { x: PAD.left, y: 0, width: WIDTH - PAD.left - PAD.right, height: svg.viewBox.baseVal.height, fill: "transparent" }, svg);
+  hit.addEventListener("pointermove", event => {
+    const box = svg.getBoundingClientRect(), scale = WIDTH / box.width;
+    const local = (event.clientX - box.left) * scale;
+    const index = Math.max(0, Math.min(rows.length - 1, Math.round((local - PAD.left) / (WIDTH - PAD.left - PAD.right) * (rows.length - 1))));
+    cross.setAttribute("x1", x(index)); cross.setAttribute("x2", x(index)); cross.setAttribute("visibility", "visible");
+    tip.innerHTML = describe(rows[index]); tip.hidden = false;
+    const containerBox = container.getBoundingClientRect();
+    const left = event.clientX - containerBox.left + container.scrollLeft;
+    tip.style.left = Math.min(left + 14, container.scrollWidth - tip.offsetWidth - 4) + "px";
+    tip.style.top = Math.max(0, event.clientY - containerBox.top - tip.offsetHeight - 12) + "px";
+  });
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+}
+
+const escape = text => text.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.date.slice(5)}</span></div>`;
+
+(function stacked() {
+  const container = document.getElementById("stack");
+  const height = 320, top = Math.ceil(Math.max(...rows.map(r => r.core + r.extensions)) / 5000) * 5000;
+  const { svg, x, y } = frame(container, height, 0, top);
+  const cumulative = rows.map(r => { let sum = 0; return r.groups.map(v => (sum += v)); });
+  DATA.groups.forEach((_, g) => {
+    const upper = rows.map((_, i) => `${x(i)},${y(cumulative[i][g])}`);
+    const lower = rows.map((_, i) => `${x(i)},${y(g ? cumulative[i][g - 1] : 0)}`).reverse();
+    element("polygon", { points: upper.concat(lower).join(" "), fill: `var(${GROUP_COLORS[g]})`, stroke: "var(--paper)", "stroke-width": 1.5, "stroke-linejoin": "round" }, svg);
+  });
+  tooltip(container, svg, x, row => head(row) +
+    `<div class="tip-row"><b>core</b><b>${format(row.core)}</b></div>` +
+    `<div class="tip-row"><b>+ extensions</b><b>${format(row.core + row.extensions)}</b></div>` +
+    DATA.groups.map((g, i) => `<div class="tip-row"><span>${g}</span><span>${format(row.groups[i])}</span></div>`).reverse().join(""));
+})();
+
+(function bars() {
+  const container = document.getElementById("bars");
+  const height = 220, extreme = Math.max(...rows.map(r => Math.abs(r.delta)));
+  const limit = Math.ceil(extreme / 100) * 100;
+  const { svg, x, y, plotWidth } = frame(container, height, -limit / 2, limit);
+  const barWidth = Math.max(1, plotWidth / rows.length - 0.6);
+  rows.forEach((row, i) => {
+    if (!row.delta) return;
+    const top = y(Math.max(0, row.delta)), bottom = y(Math.min(0, row.delta));
+    element("rect", { x: x(i) - barWidth / 2, y: top, width: barWidth, height: Math.max(1, bottom - top), fill: row.delta > 0 ? "var(--grow)" : "var(--shrink)" }, svg);
+  });
+  tooltip(container, svg, x, row => head(row) +
+    `<div class="tip-row"><b>core</b><b class="${row.delta > 0 ? "grow" : row.delta < 0 ? "shrink" : ""}">${signed(row.delta)}</b></div>` +
+    `<div class="tip-row"><span>extensions</span><span>${signed(row.extensionsDelta)}</span></div>` +
+    `<div class="subject">${escape(row.subject)}</div>`);
+})();
+
+function table(id, list) {
+  document.getElementById(id).innerHTML = `<thead><tr><th>Commit</th><th>Landing</th><th style="text-align:right">Core</th></tr></thead><tbody>` +
+    list.map(row => `<tr><td class="sha">${row.sha}<br>${row.date.slice(5, 10)}</td><td>${escape(row.subject)}</td><td class="num ${row.delta > 0 ? "grow" : "shrink"}">${signed(row.delta)}</td></tr>`).join("") + "</tbody>";
+}
+table("grew", [...rows].sort((a, b) => b.delta - a.delta).slice(0, 8));
+table("cut", [...rows].sort((a, b) => a.delta - b.delta).slice(0, 8));
+
+document.getElementById("footer").textContent = `Counted from git history: every first-parent commit on main since ${shortDay(dayOf(first))}, lines of .warp, .c, .h, .js, .sh and .py files, base ${DATA.base}, last ${last.sha}.`;
+</script>

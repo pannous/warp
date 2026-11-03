@@ -159,3 +159,12 @@ extensions. Moving the folder is mechanical; what it changes is the cost of ever
   hashed as data like BAKED lib files (a special case in compiler-inputs.sh: not recommended).
   Recommended: (b) `lib/extensions/` — "extension" by name, rebaked like data; core/extensions/ keeps the
   extensions that need compiler code (primitive). Same for D: tuples and safe_navigation would sit in lib/extensions/.
+
+## Core weight (user 2026-11-03)
+scripts/core-weight.py counts the lines of code for every landing on main since self-hosting began (2026-10-29),
+reconstructed from git history in ~6 s: the core without extensions (parsing, passes, analysis, emitter, runtime,
+native) and the extensions (core/extensions/, and lib/sugar/ before it moved there) always separately, plus lib/ and
+test/. It fills scripts/core-weight.html into data/core-weight/core-weight.html; the nightly run (nightly.sh) refreshes
+it. The page is the artifact https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c: a Claude session
+republishes the file there (Artifact publish with that url). 2026-11-03: core 28,186 → 32,641 lines (+16%),
+extensions 1,211 → 1,477 (+22%) over 381 landings; the core almost only grows, the largest cut was −71.
