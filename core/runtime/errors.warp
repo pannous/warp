@@ -105,6 +105,7 @@ too_big_for_int_of(value: Node): int := {
 	too_big_for_int()
 }
 no_length_of(value: Node): int := {
+	if is_failure(value) { raised(value) }
 	global trap_detail = value
 	no_length()
 }

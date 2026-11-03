@@ -102,10 +102,12 @@ object_checked(value: Node, message: text): Node := {
 	value
 }
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
-# empty one) where a list is needed, a boxed character where one is needed; any other value traps, as Rust fails on it
+# empty one) where a list is needed, a boxed character where one is needed; a failed Error there raises itself (its
+# own words, `split(exec sh "…", "\n")` on a page without processes), any other value traps, as Rust fails on it
 text_of_node(n: Node): text := {
 	if not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Symbol) { return unboxed_text(n) }
 	if not is_null(n) and kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
+	if is_failure(n) { raised(n) }
 	fail()
 	""
 }
@@ -119,6 +121,7 @@ char_of_node(n: Node): char := {
 }
 list_of_node(n: Node): list := {
 	if is_null(n) { return new_list(0) }
+	if is_failure(n) { raised(n) }
 	if kind_code(n) != Kind.List { fail() }
 	unboxed_list(n)
 }
