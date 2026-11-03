@@ -24,7 +24,10 @@ extended_constant_tables(base: map): map := with_entries(base, EXTENSIONS.map(ex
 # the reader of an atom starting with the character, else ø
 global atom_reader_table = ø
 atom_reader(c: any): any := {
-	if atom_reader_table == ø { atom_reader_table = with_entries({}, EXTENSIONS.map(extension => extension.atom_readers)) }
+	if atom_reader_table == ø {
+		none: map = {}
+		atom_reader_table = with_entries(none, EXTENSIONS.map(extension => extension.atom_readers))
+	}
 	atom_reader_table.get("$(c)")
 }
 extension_host_exports(): list := concatenated(EXTENSIONS.map(extension => extension.host_exports))
