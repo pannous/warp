@@ -1,8 +1,9 @@
 # warp scripts/node_layout.warp > lib/native/warp_layout.h: the value layout as C defines, for lib/native/warp_node.h,
-# read from where the compiler keeps it: the kinds (core/analysis/kinds.warp), the GC types' fields
+# read from where the compiler keeps it: the kinds (core/analysis/kinds.warp, a GPU list's extensions/gpu_lists), the GC types' fields
 # (core/emitter/emitter.warp gc_names) and an instance's (core/emitter/instances.warp instance_fields).
 # scripts/wasmtime-c-api.sh checks the committed header against it
 kinds_file = "core/analysis/kinds.warp"
+gpu_lists_file = "extensions/gpu_lists/gpu_lists.warp"
 
 # a top-level assignment's value, its continuation lines (indented) joined
 def assigned(file: text, name: text) {
@@ -29,9 +30,10 @@ table_defined("kind", assigned(kinds_file, "Kind"))
 table_defined("marked", assigned(kinds_file, "Marked"))
 table_defined("bracket", assigned(kinds_file, "BracketCode"))
 defined("info_unit", assigned(kinds_file, "KindUnit").Info)
-defined("gpu_list_mark", assigned(kinds_file, "KindUnit").GpuList)
-defined("gpu_cell_unit", assigned(kinds_file, "KindUnit").GpuCell)
-table_defined("gpu_cell", assigned(kinds_file, "GpuCell"))
+defined("list_kind_unit", assigned(kinds_file, "KindUnit").ListKind)
+defined("gpu_list_kind", assigned(gpu_lists_file, "GpuListKind").Row)
+defined("gpu_cell_unit", assigned(kinds_file, "KindUnit").ListCell)
+table_defined("gpu_cell", assigned(gpu_lists_file, "GpuCell"))
 for type in assigned("core/emitter/emitter.warp", "gc_names") { fields_defined(type#1, type#2) }
 instance = assigned("core/emitter/instances.warp", "instance_fields")
 fields_defined("instance", instance)

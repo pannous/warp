@@ -74,12 +74,8 @@ def exported_builders(): any {
 	# a float item, an int's too (gpu_compute's results), without a text of it a host parses
 	f = exported_function("float_item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Float)
 	f.code = runtime_call("float_of_node", [runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])])]).code
-	# a GPU list's cells, so a host reads and writes them in place as natively (runtime/gpu_lists.warp)
-	f = exported_function("gpu_list_place", [ValueKind.Node], ValueKind.Int)
-	f.code = runtime_call("gpu_list_place", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
-	# and their type, a GpuCell (f32 0, i32 1, u32 2)
-	f = exported_function("gpu_list_cell", [ValueKind.Node], ValueKind.Int)
-	f.code = runtime_call("gpu_list_cell", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
+	# the runtime words the extensions export for a host, as they are (a GPU list's cells: extensions/gpu_lists)
+	for name in extension_host_exports() { exported_runtime_word(name) }
 	f = exported_function("is_textual", [ValueKind.Node], ValueKind.Bool)
 	f.code = runtime_call("textual_node", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 }
@@ -123,6 +119,12 @@ exported_function(name: text, kinds: list, result: ValueKind): any := {
 	f.is_runtime = yes
 	module.builders += [f]
 	f
+}
+# a runtime word the host calls under its own name, of its own parameters and result
+def exported_runtime_word(name: text) {
+	word = module.runtime[name]
+	f = exported_function(name, word.kinds, word.result)
+	f.code = runtime_call(name, range_list(#word.kinds).map(i => TypedCode(word.kinds[i], [op.local_get] + uleb(i)))).code
 }
 def host_argument(value: TypedCode, kind: ValueKind): list {
 	if kind == ValueKind.I32 { return host_int(value) + [op.i32_wrap_i64] }

@@ -178,6 +178,16 @@ One static table in the core, filled at build time from the extensions' own file
 4. **one registration per extension**: its rules file, operator rows, atom readers (glyph or suffix → reader of
    the literal), passes in the pass list, runtime sources and host exports for runtime.wasm.
 
+Built (card gpu-lists-extraction, 2026-11-03): GPU lists are the first extension through the table. core/extension.warp
+`class Extension { name; library_words; host_exports; constant_tables }`, the rows in extensions/extensions.warp;
+the emitter merges each row's library words and constant tables into its own and exports its host words. List kinds:
+KindUnit.ListKind is a two-bit field (ListKind.Range 1, GPU lists 2); the core list words test only "an extension's
+kind" and call runtime/bridge.warp's extended_list_* hooks, whose bodies extensions/runtime.warp writes (the list-kinds
+table). Runtime sources: extensions/runtime.warp, used by core/runtime/extended.warp, joins each extension's runtime
+file. Two seed limits: the seed builds runtime.wasm first with its own RUNTIME_ROOTS (so no per-row runtime field),
+and runtime code may read only constant-table keys the seed knows (a new key silently drops the words after it: a
+runtime of ~115 KB instead of ~259 KB; numbers until the seed refresh, card once-refreshed).
+
 ## Rules (user 2026-11-03)
 - The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).
 - The language is never simplified to shrink the core: every spelling programs may write stays (decision self-source-minimal).

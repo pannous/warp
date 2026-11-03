@@ -772,7 +772,7 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 	scope.wgsl_lines += [wgsl_indent(depth) + "}"]
 }
 
-# --- GPU lists (decision gpu-bound-floats; core/runtime/gpu_lists.warp): a list the program makes for the GPU is
+# --- GPU lists (decision gpu-bound-floats; extensions/gpu_lists/runtime.warp): a list the program makes for the GPU is
 # packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
 # rule packs the creating forms of the program's (lib/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
 GPU_LIST_WORDS = ["gpu_compute"]
@@ -843,7 +843,7 @@ gpu_comprehension(v: Node): bool := is_group(v) and bracket_of(v) == "[" and #v 
 gpu_literal(v: Node): bool := is_group(v) and bracket_of(v) == "[" and not gpu_comprehension(v)
 # the creating form written to make the GPU list itself (any other value copied into one, gpu_list_of): `float[n]` its zeros, a literal its items written into them
 # one by one, a comprehension each item as it is computed, counted by a first loop (`#(0..n)` makes the range a list)
-# the cells a GPU list holds, `xs: [i32] = …` (core/analysis/kinds.warp GpuCell): f32 unless the program says so
+# the cells a GPU list holds, `xs: [i32] = …` (extensions/gpu_lists/gpu_lists.warp GpuCell): f32 unless the program says so
 GPU_CELLS = {f32: 0, i32: 1, u32: 2}
 gpu_packed(v: Node): Node := plain_node(parsed(gpu_packed_code(v, "f32")))
 # `xs: [i32] = …`, `xs: [u32] = …`: the value made as a GPU list of those cells; ø for a list type of no GPU cell
