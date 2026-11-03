@@ -51,7 +51,7 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
 - `use math` brings lib's own `cosine` etc. into the program: WGSL's words are looked up before program functions
 
 ## Where paint's rule lives, and what the seed keeps (cards gpu-functions, paint-frame-failure, program-frame)
-- the `paint($f, $w, $h)` rule is the prelude's: core/extensions/sugar rules run after arity_overloads, which has bound the call
+- the `paint($f, $w, $h)` rule is the prelude's: extensions/sugar rules run after arity_overloads, which has bound the call
   to the prelude's overloaded paint by then; std-module rules run first, beside the program's own
 - the seed parses the library's rules with its own rule words: a rule binding two holes to words it doesn't know is
   dropped ("the rule … was dropped", whatever the hint says about apostrophes), a rest hole `$x... = word()` too; one

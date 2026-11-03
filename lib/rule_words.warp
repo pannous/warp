@@ -107,7 +107,7 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 page_value_word = "page_value"
 listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
-# `test C` (core/extensions/sugar/test_words.warp) runs where it stands, a statement: no value to read again
+# `test C` (extensions/sugar/test_words.warp) runs where it stands, a statement: no value to read again
 test_word = "test"
 is_test_line(statement: Node): bool := is_group(statement) and #statement > 1 and statement#1 == symbol(test_word)
 page_valued(program: Node): any := {
@@ -391,7 +391,7 @@ end_refused(task: Node): Node := {
 # a value as code to paste: a text in its quotes
 as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
-# `people where age > 18` (decision P223, core/extensions/sugar/lists.warp): a name the program binds nothing to that a class of it
+# `people where age > 18` (decision P223, extensions/sugar/lists.warp): a name the program binds nothing to that a class of it
 # declares as a field reads the item's field, `it.age`; a name the program binds keeps its value
 bare_fields_read(condition: Node, program: Node): Node := {
 	fields = statements_in(program).flat_map(s => declared_field_names(s))
@@ -412,7 +412,7 @@ item_field_read(n: Node, fields: list): Node := {
 	n
 }
 
-# --- a function's own words (core/extensions/sugar/reflection.warp's rules, card name-params) ---
+# --- a function's own words (extensions/sugar/reflection.warp's rules, card name-params) ---
 
 # the program's definition of the function named, `f(a, b) := …` or `f = x => …`; ø for none
 function_definition(name: Node, program: Node): any := {

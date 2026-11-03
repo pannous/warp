@@ -20,7 +20,7 @@
 4. ∞ and ℯ can't be defined as functions, big floats give 0 (card float-overflow-inf); Real where a float is wanted
    (real-for-float DONE bee9079dc5), `π is real` (pi-real-number)
 5. 2026-10-28 night: bare-word 70b2333892 (Chord/Scale enums), block-parameter-refusal 9df63cdf18 (`body!`, `at
-   bars(0) {…}`), module-global-retune → charged values as the core/extensions/sugar/heads.warp rule `where $h is varying`
+   bars(0) {…}`), module-global-retune → charged values as the extensions/sugar/heads.warp rule `where $h is varying`
    9201044224, sound-effect-error 551c7d17fd (harness: host lists in one go, gc_values::vector_list), play-mozart
    516ec2eeaa (play/beep/stop_sound/wait_sound bare). Open:
    - global-words-declared (pushed branch be9ffab461): the core table becomes the marker `global play(tone) := …` in

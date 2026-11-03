@@ -172,7 +172,7 @@ bit_or(a: int, b: int) := (a xor b) + bit_and(a, b)
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here: the alias lines (wiki/alias.md)
 // Each broadcasts, decided at run time (prelude each_any): binary_log([1, 8]) is [0 3], as a list may reach a word of
-// a module, where the program's broadcasting rules (core/extensions/sugar/broadcasting.warp) don't look
+// a module, where the program's broadcasting rules (extensions/sugar/broadcasting.warp) don't look
 
 square(x: number) := x * x
 square_root(x) := each_any(x, e -> sqrt(e))

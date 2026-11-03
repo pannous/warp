@@ -66,6 +66,7 @@ class RuntimeImage { wasm: list; types: int; imports: int; functions: int; data:
 def prepend_runtime(wasm: any) {
 	module.runtime_image = if wasm == ø then ø else runtime_image_of(wasm)
 	raisers_read = ø
+	fingerprint_read = ø
 }
 def prepended(): bool { module.runtime_image != ø and not module.prebuilding }
 # whether the code's index operands are emitted relocatable (padded, marked): in a prebuilt module (relocating), and
@@ -351,6 +352,18 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 def own_items_from(): list := [runtime_counts()#1 + #c_imports()] + runtime_counts()[1 ..]
 # (the runtime makes no closures: a module's are numbered from 0)
 def runtime_counts(): list := [module.runtime_image.imports + module.runtime_image.functions, module.runtime_image.types, #module.runtime_image.globals, module.runtime_image.data, 0]
+# what a module was built behind: where its items start, and runtime.wasm itself by its fingerprint; a runtime of the
+# same counts in another order (the seed's own beside lib/'s) moves its words, so a module of another one is refused
+def runtime_behind(): list := runtime_counts() + [runtime_fingerprint()]
+# runtime.wasm's bytes folded to one number, once per runtime (prepend_runtime forgets it)
+global fingerprint_read = ø
+def runtime_fingerprint(): int {
+	if fingerprint_read != ø { return fingerprint_read }
+	folded = 0
+	for byte in module.runtime_image.wasm { folded = (folded * 257 + byte) % 1000000007 }
+	fingerprint_read = folded
+	folded
+}
 
 ## a program linked to prebuilt library modules (card modules-prebuilt, notes/runtime_linking.md "Library modules"):
 ## each module's own functions, types, globals and texts appended behind the runtime's in the order given, its operands
@@ -435,10 +448,10 @@ def library_image_of(name: text, wasm: list): any {
 	for i in 0..<read_number(layout) { builders += [read_number(layout)] }
 	# the C functions it imports behind the runtime's imports, which its runtime functions follow
 	c_functions = read_names(layout)
-	runtime_behind = [behind#1 - #c_functions] + behind[1 ..]
+	built_behind = [behind#1 - #c_functions] + behind[1 ..]
 	if types != #gc_names + #classes { return "other canonical or class types than this runtime's" }
 	if imports != module.runtime_image.imports + #c_functions { return "other host imports than this runtime's" }
-	if runtime_behind != runtime_counts() { return "built behind another runtime.wasm (warp rebuild writes it anew)" }
+	if built_behind != runtime_behind() { return "built behind another runtime.wasm (warp rebuild writes it anew)" }
 	LibraryImage(name, wasm, functions, globals, texts, behind, closures, classes, builders, c_functions, [])
 }
 # each linked module's place: its functions behind those placed so far, its types (one per function) and texts too,

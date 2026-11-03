@@ -1,7 +1,7 @@
 // The WASI preview 1 calls of a primitive program answered by libc in a native build (core/commands/commands.warp build_native,
 // notes/primitive.md "Native build"), and the executable's main. Included behind the header wasm2c wrote for the module
 // "program" and the definitions of instantiate, which hands wasm2c the instance of each module the program imports, and
-// run_main, which calls the program's main and prints what it gives (core/extensions/primitive.warp native_main).
+// run_main, which calls the program's main and prints what it gives (extensions/primitive.warp native_main).
 #include <fcntl.h>
 #include <signal.h>
 #include <stdlib.h>

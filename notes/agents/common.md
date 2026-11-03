@@ -46,13 +46,13 @@ before asking a question). After a context swap, this file and your role file be
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
 - Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
-  file sits in core/extensions/sugar/); "library" means only modules programs import.
+  file sits in extensions/sugar/); "library" means only modules programs import.
 - Extension OKs (user): a core extension the compiler does not need to rebuild itself (a rule or file under
-  core/extensions/, its sugar/ rules included) needs no strong confirmation when it is generic and/or small: build it,
+  extensions/, its sugar/ rules included) needs no strong confirmation when it is generic and/or small: build it,
   send the Interviewer an FYI. A spelling the user has not decided, a new pass or a change to the compiler proper
   still asks first.
-- No new passes. Sugar (new spellings) → rules in core/extensions/sugar/*.warp; new capabilities → one file each in
-  core/extensions/<name>.warp. A new pass, pass-list
+- No new passes. Sugar (new spellings) → rules in extensions/sugar/*.warp; new capabilities → one file each in
+  extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
   lowering case, special case or refusal path, needs an OK first (files, functions, 3-line reason to the Supervisor,
   who takes core changes to the user via the Interviewer). So does any new syntax, whatever its size: a rewrite-engine

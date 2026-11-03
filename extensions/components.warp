@@ -5,9 +5,6 @@
 # reads `this.count`. A call of it among a tag's items is a live part
 # (`live(() => Counter(0))`), so each render calls it again, and component gives back the same instance: by its `key:`,
 # else the n-th call of that render. `Counter.instances` are the page's instances in order, `counters` too (plural_instances).
-use "../passes/walk.warp"
-use "../passes/lambdas.warp"
-use "../analysis/words.warp"
 
 this_word = symbol("this·component")
 key_parameter = "key"

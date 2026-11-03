@@ -60,15 +60,12 @@ def warp_lib(): text? {
 def library_of_core(core: text): text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
 // The lib/ the run was given, which run_library answers from now on
 def use_library(folder: text) { given_library = folder }
-// Every module of lib/ by its path within lib/ ("prelude.warp", "native/z.warp", "compiler/extensions/sugar/lists.warp"), bundled into the
+// Every module of lib/ by its path within lib/ ("prelude.warp", "native/z.warp", "extensions/sugar/lists.warp"), bundled into the
 // built compiler: uses.warp's module_text writes them in where library_sources() stands when it compiles the compiler,
 // so a compiler needs no lib/ on any disk (decision built-in-lib). A compiler built by one that bundles none yet (an
 // older seed) calls library_sources below and reads them where it runs
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
-// core's folders bundled all the same: an extension's rules, read by the compiles using it, baked with the rest
-// instead of parsed at each run (~25 ms of a small program's 0.15 s)
-BUNDLED_CORE_FOLDERS = ["compiler/extensions"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
@@ -84,12 +81,6 @@ def library_texts(library: text, within: text): map {
 			found[path] = try read(library + "/" + path) else ""
 		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
-			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
-		}
-	}
-	if within == "" {
-		for folder in BUNDLED_CORE_FOLDERS {
-			inner = library_texts(library, folder + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
 		}
 	}
@@ -363,7 +354,8 @@ ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": STORE_OPERATOR}
 ALIAS_TABLE = module_source("aliases")
 // operator symbols and words: [spelling, operator] pairs, the symbols longest first; forms: keyword_form's; canonical:
 // each alias with its entry's word (`plus` → add); infix words: the table's (`mod`, `upto`)
-class Spellings { operator_symbols: list; operator_words: list; forms: map; canonical: map; infix_words: list }
+// powers: each operator's [left, right] binding power, its row's `power` (binding_powers)
+class Spellings { operator_symbols: list; operator_words: list; forms: map; canonical: map; infix_words: list; powers: map }
 global spelling_tables = ø
 def alias_spellings(): Spellings := {
 	if spelling_tables == ø {
@@ -377,7 +369,7 @@ def alias_spellings(): Spellings := {
 def alias_table_tree(): Node := source_parse(run_library() + "/aliases.warp", ALIAS_TABLE)
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
-	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
+	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: [], powers: copied(STRUCTURE_POWERS)}
 }
 def aliased_spellings(): Spellings := {
 	tables = own_spellings()
@@ -391,6 +383,8 @@ def add_alias_entry(tables: Spellings, word: text, fields: Node) {
 	target = alias_field(fields, "operator") ?? word
 	written_infix = alias_field(fields, "infix") == "yes"
 	if written_infix { add_infix_word(tables, word, target) }
+	power = alias_power(fields)
+	if power != ø { tables.powers[target] = power }
 	for spelling in alias_field(fields, "aliases") ?? [] {
 		tables.canonical[spelling] = word
 		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
@@ -405,6 +399,11 @@ def add_infix_word(tables: Spellings, word: text, target: text) {
 // An entry's field as written, `operator: "+"` gives "+", `aliases: [plus]` ["plus"], else ø
 def alias_field(fields: Node, name: text): any {
 	for field in items_of(fields) { if name_of(key_of(field)) == name { return spelling_text(value_of(field)) } }
+	ø
+}
+// An entry's binding powers, `power: [140, 141]`, else ø
+def alias_power(fields: Node): list? {
+	for field in items_of(fields) { if name_of(key_of(field)) == "power" { return items_of(value_of(field)).map(level => int(level)) } }
 	ø
 }
 // A spelling as text, each of a list's
@@ -1231,7 +1230,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			}
 			if op#1 == "." and peek(p.code, p.at, p.n) == "(" { raise dot_call_refused(left) }
 			// `80%`, `[10%, 20%]`, `10% == 1/10`: a % with no operand after it is a percent, `50 % of 200` that much of 200
-			// (decision Trailing percent, core/extensions/sugar/arithmetic.warp)
+			// (decision Trailing percent, extensions/sugar/arithmetic.warp)
 			if op#2 == "%" and percent_ends(p) {
 				left = keyed(op#2, left, ø)
 				if not line_ends_after(p, p.at) and keyword_at_position(p, "of", p.resumes[p.at]) {
@@ -1629,7 +1628,7 @@ def test_word_at(p: Parser, min_power: int): list {
 	if ends then [end, word, after_is] else []
 }
 // `x is empty`, `x failed` as their phrase, the test word kept as written (`empty` alone reads as ø): its meaning is
-// core/extensions/sugar/test_words.warp's rules
+// extensions/sugar/test_words.warp's rules
 def tested(left: Node, word: text, after_is: bool): Node := spaced([left] + (if after_is then [symbol("is")] else []) + [symbol(word)])
 
 // The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
@@ -1713,7 +1712,7 @@ def bang_suffix_at(p: Parser): bool {
 }
 
 // `left!` (or `left!!`): `upper(x)!` assigns the result back to x, `{…}!` runs the block anyway, anything else
-// is `unwrap(left)`, which core/extensions/sugar/methods.warp turns into an assignment back where a function's call is marked
+// is `unwrap(left)`, which extensions/sugar/methods.warp turns into an assignment back where a function's call is marked
 // (`x.upper!`, `upper x!`), and which runs a lone `x!` as it is
 // Rust twin: suffixes.rs try_parse_evaluate_bang
 def forced(left: Node): Node := {
@@ -1780,7 +1779,7 @@ INDEX_POWER = 170
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
 SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", "←": "←", "<-": "←", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `a ?: b` is a or its fallback
-// (core/extensions/sugar/fallbacks.warp); so are each operator's element-wise form `.op` and compound assignment `op=`
+// (extensions/sugar/fallbacks.warp); so are each operator's element-wise form `.op` and compound assignment `op=`
 PHRASE_OPERATORS = ["?:"]
 // the canonical name of a compound assignment `x op= y`, which binds as `=`
 COMPOUND_ASSIGNMENT = "op="
@@ -1793,7 +1792,7 @@ def dot_call_refused(f: Node): text {
 	name = if f is symbol then name_of(f) else "f"
 	"no dot call " + name + ".(…): did you mean `" + name + " xs`, or `" + name + " each xs` for a function taking a list?"
 }
-// `left op right` as its phrase, for the sugar to read (core/extensions/sugar/arithmetic.warp, fallbacks.warp)
+// `left op right` as its phrase, for the sugar to read (extensions/sugar/arithmetic.warp, fallbacks.warp)
 def phrase_operation(left: Node, op: text, right: Node): Node := spaced([left, symbol(op), right])
 // The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
 WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "rem": "rem"}
@@ -1885,9 +1884,16 @@ def spelled_operator_at(p: Parser): list {
 def word_operator_at(p: Parser, c: text): list {
 	for pair in word_operators() {
 		written = pair#1
-		if written#1 == c and keyword_at(p, written) and not (p.group.in_branch and written == "else") and not names_block(p, written) { return pair }
+		if written#1 == c and keyword_at(p, written) and not (p.group.in_branch and written == "else") and not names_block(p, written) and not heads_rule(p) { return pair }
 	}
 	[]
+}
+// The parser's position is the first word after a line-leading `rewrite`: an infix word there is the rule's own first
+// word, `rewrite upto $n => …` (card hCz9o0)
+def heads_rule(p: Parser): bool {
+	start = p.at
+	while start > 0 and p.code[start - 1] != '\n' { start = start - 1 }
+	p.code[start .. p.at].trim() == "rewrite"
 }
 // The operator symbol at the parser's position as [written, canonical], the longest, else []
 // (`c ?.5 : 1` keeps its ternary: `?.` before a digit is `?` and the number .5)
@@ -2316,37 +2322,15 @@ def operator_method_definition(p: Parser, word: text): Node {
 	Key(head, Op.Define, expression(p, 0))
 }
 
-// Left and right binding power of an operator
+// Left and right binding power of an operator: its row's `power` in lib/aliases.warp (card parser-rows), the data
+// format's own operators STRUCTURE_POWERS, any other DEFAULT_POWERS
 // Rust twin: operators.rs Op::binding_power
-def binding_powers(op: text): list {
-	// the effect constraint `f(x) := x*x ! Pure`: a free `!` takes the whole statement before it
-	if op == "not" { return [0, 105] }
-	if op == "." or op == "?." { return [180, 181] }
-	if op == "::" { return [175, 176] }
-	if op == "#" { return [170, 182] }
-	if op == "^" or DECLARED_ONLY_OPERATORS.contains(op) { return [160, 159] }
-	if op == "*" or op == "/" or op == "/!" or op == "%" or op == "rem" { return [150, 151] }
-	if op == "+" or op == "-" or op == "±" { return [140, 141] }
-	if op == "<<" or op == ">>" { return [135, 136] }
-	if op == ".." or op == "to" { return [130, 131] }
-	if op == "|>" { return [127, 128] }
-	if op == "as" { return [125, 250] }
-	if op == "<" or op == ">" or op == "<=" or op == ">=" { return [120, 121] }
-	if op in ["==", "is", "!=", "===", "!==", "≈", "~"] { return [115, 116] }
-	if op == "and" { return [100, 101] }
-	if op == "xor" { return [95, 96] }
-	if op == "or" { return [90, 91] }
-	if op == "??" { return [93, 92] }
-	if op == "?" { return [85, 79] }
-	if op == "?:" { return [85, 86] }
-	if op == "then" { return [77, 76] }
-	if op == "else" { return [75, 74] }
-	if op == "do" { return [77, 10] }
-	if op == ":" { return [80, 81] }
-	if op == "->" { return [70, 69] }
-	if op == "=>" { return [70, 58] }
-	[60, 59]
-}
+def binding_powers(op: text): list := alias_spellings().powers.get(op) ?? DEFAULT_POWERS
+// The binding powers of the data format's member `.`, `?.`, `::` and key `:`, which reading the rows of
+// lib/aliases.warp needs before any row is read
+STRUCTURE_POWERS = {".": [180, 181], "?.": [180, 181], "::": [175, 176], ":": [80, 81]}
+// how tightly an operator no row names binds: `=`, `:=`, as `=` does
+DEFAULT_POWERS = [60, 59]
 
 // The words that guard a statement and the marker call each becomes: `check C` is `assert C` (card check-assert)
 // Rust twin: control/guards.rs GUARD_MARKERS, warp_parser TRY_MARKER, ASSERT_MARKER

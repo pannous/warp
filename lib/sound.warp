@@ -753,7 +753,7 @@ played(file) := {
 
 // The voice's clock (card sound-native-clock): where its queued sounds end in real time (clock() milliseconds) and its
 // place, the seconds of sound since its first, which save sound mixes by; `at` moves both for its block
-// a task's voice (core/extensions/sugar/tasks.warp): it starts where its starter's stands, which goes on after it as before
+// a task's voice (extensions/sugar/tasks.warp): it starts where its starter's stands, which goes on after it as before
 task_context() := [voice_end, voice_place]
 task_context_back(context) := {
 	voice_end = context#1
@@ -965,7 +965,7 @@ signal_sound(amplitudes, channels) := sounded(clamped_samples([a * loudest_sampl
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
-// A linear array (core/extensions/sugar/declarations.warp) is a list of floats, its address the list itself (card linear-parameters)
+// A linear array (extensions/sugar/declarations.warp) is a list of floats, its address the list itself (card linear-parameters)
 linear_address(block) := block
 play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blocks is list and count(blocks) > 0 and blocks[0] is list then blocks else [blocks], seconds)
 

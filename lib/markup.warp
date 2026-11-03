@@ -87,7 +87,7 @@ page_act(event: text, label: text, detail: any) := {
 	raise "no element showing " + label + " handles " + event + "; the page: " + page_render(page_shown)
 }
 
-// A component's instances (core/extensions/components.warp): `component("Counter", key)` is the instance a call of
+// A component's instances (extensions/components.warp): `component("Counter", key)` is the instance a call of
 // Counter renders with, kept across renders by its key, else by its place among this render's Counter calls; its
 // state its entries, each made once (component_state). `Counter.instances` lists this render's in page order
 global component_states = {}
@@ -130,7 +130,7 @@ class Handler {
 }
 handler(name: any, action: function): Handler := Handler(name_of(name), action)
 // a live value: code kept to run each time its value is wanted, shown as its value now; an item reading a variable a
-// handler writes is one (core/extensions/sugar/events.warp), `p{ "count: " + count }`. A general library type, here beside
+// handler writes is one (extensions/sugar/events.warp), `p{ "count: " + count }`. A general library type, here beside
 // Handler until a module built on its own sees the prelude's classes (card prelude-class-visibility)
 class Live {
 	compute: function
