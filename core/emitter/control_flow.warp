@@ -165,9 +165,11 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 	TypedCode(ValueKind.Node, value.code + [op.local_set] + held + has_it + [op.if] + value_type(ValueKind.Node) + read + [op.else] + boxed(word(receiver)) + [op.end])
 }
 # the program's statement n about to run, its position in trap_position: a runtime error names it, as Rust's
-# (emit_trap_position); a runtime word's statements leave it
+# (emit_trap_position); a runtime word's statements leave it, and so do a library function's: its lines are its
+# file's, which the place would give the program's name, so an error in it names the program's calling line (card
+# wasm-trap: arrangement.warp:34:56 was a line of lib/timers.warp)
 def position_code(body: Body, n: Node): list {
-	at = if body.intrinsics then ø else written_at(n)
+	at = if body.intrinsics or defined_origins.has(body.function.name) then ø else written_at(n)
 	if not at { return [] }
 	line: int = at#1
 	column: int = min(at#2, columns_per_line - 1)
