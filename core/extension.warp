@@ -21,6 +21,9 @@ class Extension {
 	# functions reading what follows a decimal number, given the parser after it, the number as decimal_number wrote it
 	# and as the source did (`0.1f`, `1 month`), each ø where its form is not
 	number_suffix_readers: list = []
+	# functions reading what follows an operand, given the parser after it, the operand and the binding power the context
+	# needs (`x²`), each ø where its form is not or binds looser
+	suffix_readers: list = []
 	# a word → the reader of the phrase it starts, given the parser at the word and the word, ø where its form is not
 	# there (`emit alarm`)
 	keyword_readers: map = {}
