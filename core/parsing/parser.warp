@@ -2805,124 +2805,144 @@ def decimal_value(written: text): Node := {
 	if #shown.split(".")#2 > DECIMAL_PLACES_IN_INT then opaque(["number", shown]) else float(written)
 }
 
-// A number, text, name or bracketed group
+// A number, text, name or bracketed group: a name reads at once, any other atom by the row of its first character
+// (decision atoms-as-rows), else as the character it is
 def bare_atom(p: Parser): Node := {
 	if p.at >= p.n { return ø }
 	c = p.code[p.at]
-	if is_digit(c) {
-		// a number form an extension reads, `0xff`, `2024-01-31` (core/extension.warp number_readers)
-		for reader in number_readers() {
-			form = reader(p)
-			if form != ø { return form }
-		}
-		number_start = p.at
-		written = decimal_number(p)
-		// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
-		literal = p.code[number_start .. p.at]
-		for reader in number_suffix_readers() {
-			form = reader(p, written, literal)
-			if form != ø { return form }
-		}
-		// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
-		glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
-		if NUMBER_TYPE_WORDS.contains(glued_type) {
-			p.at = p.at + 1 + glued_type.length
-			return Key(written_number(written), Op.As, symbol(glued_type))
-		}
-		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
-		// i64 a float (card int-beyond)
-		// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
-		if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
-		period = overlined_digits(p)
-		if period != "" and written.contains(".") { return repeating_decimal(written, period) }
-		if written.contains(".") { return with_glued_factor(p, decimal_value(written)) }
-		return with_glued_factor(p, whole_number(written))
+	if is_name_start(c) { return named_atom(p) }
+	reader = atom_reader_of(c)
+	start = p.at
+	read = if reader == ø then ø else reader(p)
+	// a reader that moved read its atom, ø too; one answering ø unmoved leaves the character to character_atom
+	if read != ø or p.at != start then read else character_atom(p, c)
+}
+// The atoms by their first character: each reader reads its atom at the parser's position, or answers ø unmoved when
+// the character starts none of its forms; extensions add theirs (core/extension.warp atom_readers), a character two
+// rows claim is refused loudly
+def core_atom_rows(): list := [reading_rows("0123456789".chars(), number_atom), reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), reading_rows(["\"", "'", "«"], p => quoted(p)), {".": dot_atom, "\\": unknown_entity, "*": starred_name, "$": pattern_hole, "@": at_atom, "(": group_atom, "[": group_atom, "{": group_atom}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom)]
+def reading_rows(characters: list, reader: function): map {
+	rows = {}
+	for c in characters { rows["$(c)"] = reader }
+	rows
+}
+global atom_rows = ø
+// the reader of the atom a character starts, else ø
+def atom_reader_of(c: text): any {
+	if atom_rows == ø { atom_rows = claimed_once(core_atom_rows() + EXTENSIONS.map(extension => extension.atom_readers)) }
+	atom_rows.get("$(c)")
+}
+// a name, or a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
+def named_atom(p: Parser): Node := {
+	loop = if keyword_at(p, "for") then looped(p) else if keyword_at(p, "each") then each_loop(p) else ø
+	if loop != ø then loop else named(p)
+}
+def number_atom(p: Parser): Node := {
+	// a number form an extension reads, `0xff`, `2024-01-31` (core/extension.warp number_readers)
+	for reader in number_readers() {
+		form = reader(p)
+		if form != ø { return form }
 	}
-	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
-	if opens_text(c) { return quoted(p) }
-	// `.5` is 0.5
-	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return decimal_value("0" + decimal_number(p)) }
-	// a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
-	if keyword_at(p, "for") {
-		loop = looped(p)
-		if loop != ø { return loop }
+	number_start = p.at
+	written = decimal_number(p)
+	// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
+	literal = p.code[number_start .. p.at]
+	for reader in number_suffix_readers() {
+		form = reader(p, written, literal)
+		if form != ø { return form }
 	}
-	if keyword_at(p, "each") {
-		loop = each_loop(p)
-		if loop != ø { return loop }
+	// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
+	glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
+	if NUMBER_TYPE_WORDS.contains(glued_type) {
+		p.at += 1 + glued_type.length
+		return Key(written_number(written), Op.As, symbol(glued_type))
 	}
-	// `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
-	if c == '\\' and is_at(p.code, p.at + 1, ':', p.n) and is_alpha(peek(p.code, p.at + 2, p.n)) {
-		end = name_end(p.code, p.at + 2, p.n)
-		unknown = "" + p.code[p.at .. end]
-		p.at = end
-		return unknown
-	}
+	// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
+	// i64 a float (card int-beyond)
+	// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
+	if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
+	period = overlined_digits(p)
+	if period != "" and written.contains(".") { return repeating_decimal(written, period) }
+	with_glued_factor(p, if written.contains(".") then decimal_value(written) else whole_number(written))
+}
+// `.5` is 0.5, `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case),
+// also a rule's `.$k`
+def dot_atom(p: Parser): Node := {
+	next = peek(p.code, p.at + 1, p.n)
+	if is_digit(next) { return decimal_value("0" + decimal_number(p)) }
+	if next == '.' { return starred_name(p) }
+	if not (is_name_start(next) or next == '$') { return ø }
+	p.at += 1
+	Key(ø, Op.Dot, atom(p))
+}
+// `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
+def unknown_entity(p: Parser): Node := {
+	if not is_at(p.code, p.at + 1, ':', p.n) or not is_alpha(peek(p.code, p.at + 2, p.n)) { return ø }
+	end = name_end(p.code, p.at + 2, p.n)
+	unknown = "" + p.code[p.at .. end]
+	p.at = end
+	unknown
+}
+// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter. `$f(x)`, `$f(x) {…}`: a hole
+// applied reads as the name it stands for applied, its arguments read as a call's (typed_parameters): `$f($x)`
+def pattern_hole(p: Parser): Node := {
+	next = peek(p.code, p.at + 1, p.n)
+	if not (is_name_start(next) or is_digit(next)) { return ø }
+	end = symbol_end(p.code, p.at + 1, p.n)
+	hole = symbol(p.code[p.at .. end])
+	p.at = end
+	name_or_call(p, hole)
+}
+// `@name` marks the atom after it (attribute); `@1` is the node whose @id is 1
+def at_atom(p: Parser): Node := {
+	next = peek(p.code, p.at + 1, p.n)
+	if is_name_start(next) { return attribute(p) }
+	if not is_digit(next) { return ø }
+	end = p.at + 1
+	while end < p.n and is_digit(p.code[end]) { end += 1 }
+	reference = symbol(p.code[p.at .. end])
+	p.at = end
+	reference
+}
+def group_atom(p: Parser): Node := {
+	c = p.code[p.at]
+	p.at += 1
+	outer = p.header
+	outer_iterable = p.iterable
+	p.header = outer and c == '('
+	p.iterable = outer_iterable and c == '('
+	group = if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)
+	p.header = outer
+	p.iterable = outer_iterable
+	// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
+	union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
+	if union == ø { return group }
+	p.at += 1
+	symbol(union + "?")
+}
+def truth_atom(p: Parser): Node := {
 	truth = truth_glyph_at(p)
-	if truth != "" {
-		p.at = p.at + truth.length
-		return not FALSE_GLYPHS.contains(truth)
-	}
-	if is_name_start(c) { return named(p) }
-	starred = starred_name(p)
-	if starred != ø { return starred }
-	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
-	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
-		end = symbol_end(p.code, p.at + 1, p.n)
-		hole = symbol(p.code[p.at .. end])
-		p.at = end
-		// `$f(x)`, `$f(x) {…}`: a hole applied reads as the name it stands for applied, its arguments read as a call's
-		// (typed_parameters): `$f($x)`
-		return name_or_call(p, hole)
-	}
-	if EXACT_CONSTANTS.contains("$(c)") {
-		p.at = p.at + 1
-		return exact_constant("$(c)")
-	}
-	if c == '@' and is_name_start(peek(p.code, p.at + 1, p.n)) { return attribute(p) }
-	// Swift's `.north`, a member of the type the context expects (a match arm's case), also a rule's `.$k`
-	if c == '.' and (is_name_start(peek(p.code, p.at + 1, p.n)) or peek(p.code, p.at + 1, p.n) == '$') {
-		p.at = p.at + 1
-		return Key(ø, Op.Dot, atom(p))
-	}
-	// `@1`: the node whose @id is 1
-	if c == '@' and is_digit(peek(p.code, p.at + 1, p.n)) {
-		end = p.at + 1
-		while end < p.n and is_digit(p.code[end]) { end = end + 1 }
-		reference = symbol(p.code[p.at .. end])
-		p.at = end
-		return reference
-	}
-	if c == '(' or c == '[' or c == '{' {
-		p.at = p.at + 1
-		outer = p.header
-		outer_iterable = p.iterable
-		p.header = outer and c == '('
-		p.iterable = outer_iterable and c == '('
-		group = if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)
-		p.header = outer
-		p.iterable = outer_iterable
-		// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
-		union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
-		if union != ø {
-			p.at = p.at + 1
-			return symbol(union + "?")
-		}
-		return group
-	}
-	// an atom an extension reads, `°C` (core/extension.warp atom_readers)
-	reader = atom_reader(c)
-	if reader != ø { return reader(p) }
-	// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing)
-	if c == 'ø' or c == '∅' or c == ')' or c == ']' or c == '}' or c == ';' {
-		if c == 'ø' or c == '∅' { p.at = p.at + 1 }
+	if truth == "" { return ø }
+	p.at += truth.length
+	not FALSE_GLYPHS.contains(truth)
+}
+def exact_atom(p: Parser): Node := {
+	constant = "$(p.code[p.at])"
+	p.at += 1
+	exact_constant(constant)
+}
+// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing); a closer ends the atoms. Every
+// other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
+// (card unicode-glyphs)
+def character_atom(p: Parser, c: text): Node := {
+	if c == ')' or c == ']' or c == '}' or c == ';' { return ø }
+	if c == 'ø' or c == '∅' {
+		p.at += 1
 		return ø
 	}
 	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)
 	if opens_text(code_points("$(c)")#1) { return quoted(p) }
-	// every other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
-	// (card unicode-glyphs)
-	p.at = p.at + 1
+	p.at += 1
 	if is_free_symbol(p, c) then symbol("$(c)") else c
 }
 
@@ -3051,9 +3071,9 @@ def trailing_attribute(p: Parser, marked: Node): Node := {
 VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
 
 // `⅓` is the exact 1/3; digits glued after it multiply it
-def vulgar_fraction(p: Parser, glyph: text): Node := {
-	p.at = p.at + 1
-	parts = VULGAR_FRACTIONS[glyph]
+def vulgar_fraction(p: Parser): Node := {
+	parts = VULGAR_FRACTIONS[p.code[p.at]]
+	p.at += 1
 	fraction = keyed("/", int(parts#1), int(parts#2))
 	if is_digit(peek(p.code, p.at, p.n)) then Key(fraction, Op.Mul, atom(p)) else fraction
 }
