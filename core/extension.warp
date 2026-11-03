@@ -1,16 +1,29 @@
 # What an extension registers (decision core-is-self, notes/core_extensions_roadmap.md "Hook table design"): one
 # Extension row each in extensions/extensions.warp, every field but its name optional. The core names no extension: it
-# knows this shape and walks the rows. Later fields join here: list kinds, passes, runtime sources.
+# knows this shape and walks the rows. Later fields join here: keyword handlers, passes. Its runtime words are
+# extensions/runtime.warp's, which joins them to the extended runtime, its list kinds too.
 #   operator_rows: the extension's operators, rows in lib/aliases.warp's format, its file's text (module_source)
+#   library_words: a program's word → the runtime word it calls (emitter runtime_words.warp library_words)
+#   host_exports: runtime words every program exports under their own names, for a host (emitter host.warp)
+#   constant_tables: tables whose numbers its runtime words read by name, `GpuCell.I32` (emitter.warp constant_tables)
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
-class Extension { name: text; operator_rows: text = ""; commands: list = []; runs: any = ø }
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; commands: list = []; runs: any = ø }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
+# base's entries and each of tables' (a later table's entry wins)
+with_entries(base: map, tables: list): map := {
+	merged = {}
+	for table in [base] + tables { for name in table.keys { merged[name] = table[name] } }
+	merged
+}
+extended_library_words(base: map): map := with_entries(base, EXTENSIONS.map(extension => extension.library_words))
+extended_constant_tables(base: map): map := with_entries(base, EXTENSIONS.map(extension => extension.constant_tables))
+extension_host_exports(): list := concatenated(EXTENSIONS.map(extension => extension.host_exports))
 # every command word an extension answers
-def extension_command_words(): list := EXTENSIONS.flat_map(extension => extension.commands)
+extension_command_words(): list := concatenated(EXTENSIONS.map(extension => extension.commands))
 # the command run by the extension answering its word
-def run_extension_command(command: text) := {
+run_extension_command(command: text) := {
 	for extension in EXTENSIONS {
 		if command in extension.commands {
 			run = extension.runs

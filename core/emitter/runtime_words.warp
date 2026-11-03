@@ -163,7 +163,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 			written = uleb(fresh_local(body, ValueKind.Int))
 			TypedCode(ValueKind.Int, index_code(values#1) + converted(values#2, ValueKind.Int) + [op.local_tee] + written + [op.i32_wrap_i64, op.i32_store8, 0, 0, op.local_get] + written)
 		}
-		# a GPU list's f32 cells (runtime/gpu_lists.warp): one read as a float, one written, pages added to the memory (the
+		# f32 cells in linear memory (GPU lists, extensions/gpu_lists): one read as a float, one written, pages added to the memory (the
 		# page count before, -1 when it can't grow)
 		"memory_f32": TypedCode(ValueKind.Float, index_code(values#1) + [op.f32_load, 2, 0, f64_promote])
 		"memory_set_f32": TypedCode(no_kind, index_code(values#1) + converted(values#2, ValueKind.Float) + [f32_demote, op.f32_store, 2, 0])
@@ -188,15 +188,15 @@ intrinsics = {baked_segment: 1, with_kind: 2, new_text: 1, copy_text: 5, byte_co
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, meta_with_attributes: 2, meta_attributes: 1, same_text: 2, same_list: 2, same_node: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1, instance_float: 1}
-# the words a program calls that runtime.warp gives, by the runtime word's name
-library_words = {numerator: "numerator", denominator: "denominator", gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of", join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
+# the words a program calls that runtime.warp gives, by the runtime word's name, and those the extensions' runtimes give
+library_words = extended_library_words({numerator: "numerator", denominator: "denominator", join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", range_value: "range_value", is_range: "is_range", range_sum: "range_sum", list_pop: "list_pop", list_insert: "list_insert",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values", keys: "map_keys", values: "map_values", has: "collection_contains", get: "map_get_or",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", attributes_of: "attributes_of", with_attribute: "with_attribute", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment"}
+	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", byte_slice: "bytes_between", float_bits: "bits_of_float", wasi_environment: "wasi_environment"})
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (rust-harness:src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational",

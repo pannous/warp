@@ -26,3 +26,10 @@ extended_wrapped(n: Node): int from runtime
 extended_ratio(n: int, d: int): Node from runtime
 # maps: a warning on stderr (a class instance read wrongly, card instance-field-order)
 extended_warned(message: text): Node from runtime
+# lists of an extension's kind (kinds.warp ListKind): the index-th item, the count, the
+# index-th set, the items show reads, the items a list word reads; their bodies are extensions/runtime.warp's
+extended_list_at(n: Node, index: int): Node from runtime
+extended_list_count(n: Node): int from runtime
+extended_list_set(n: Node, index: int, value: Node): Node from runtime
+extended_list_items(n: Node): list from runtime
+extended_list_unlisted(n: Node): list from runtime

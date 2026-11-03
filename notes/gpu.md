@@ -11,7 +11,7 @@ gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.
 ## In warp now (the Rust paths below are the snapshot on branch rust-bootstrap)
 - gpu_compute(shader, arrays, workgroups) is a host word libwarp_gpu answers directly (crates/warp-gpu/warp_gpu.c
   warp_word_gpu_compute, decision library-direct-refs), reading and building warp values through lib/native/warp_node.h.
-- GPU lists `[f32]` (decision gpu-bound-floats, core/runtime/gpu_lists.warp): f32 cells in linear memory from their
+- GPU lists `[f32]` (decision gpu-bound-floats, extensions/gpu_lists/runtime.warp): f32 cells in linear memory from their
   creation, a square List $Node marked KindUnit.GpuList whose Int is (address << 32) + count. `xs: [f32] = …` asks for
   one; a list the program makes once (literal, comprehension, `float[n]`) at its main level and uses only by #, xs#i,
   xs#i = v, for, print and gpu_compute is one by itself (lib/rule_words.warp gpu_lists_packed, lib/wgsl.warp

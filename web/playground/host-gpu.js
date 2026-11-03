@@ -417,7 +417,7 @@ function joinedWords(arrays) {
 	return words;
 }
 
-// a GPU list's cells by gpu_list_cell (core/runtime/gpu_lists.warp): f32, i32, u32
+// a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp): f32, i32, u32
 const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array];
 const plainArrays = arrays => Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, Array.from(array)]));
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
@@ -607,7 +607,7 @@ addHostPart({
 			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
-		// a GPU list [f32] of the program's (core/runtime/gpu_lists.warp): its cells where they are in the module's memory,
+		// a GPU list [f32] of the program's (extensions/gpu_lists/runtime.warp): its cells where they are in the module's memory,
 		// undefined for any other value
 		const gpuCells = value => {
 			const place = selfHosted(program()) && program().gpu_list_place ? program().gpu_list_place(value) : -1n;

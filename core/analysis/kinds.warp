@@ -19,11 +19,12 @@ NodeShape = {Empty: 0, Meta: 1, Int: 2, Ratio: 3, BigInt: 4, Float: 5, Codepoint
 # data (the parser's, quoted code) has none
 Marked = {Bool: 257, Map: 8, SquareList: 264, UnbracketedList: 1288, Instance: 6, Entry: 262, TypeValue: 18014398509481989, FailedError: 267}
 # the units of the parts above the Kind: the info byte (a key's operator, a list's bracket, a time's form, KIND_BITS
-# 8), a list's separator (SEPARATOR_SHIFT 48), a GPU list's mark (1 << 52, runtime/gpu_lists.warp), the code mark
-# (CODE_MARK, 1 << 56), a GPU list's cell type (1 << 57, GpuCell), a range's mark (1 << 53, runtime/lists.warp)
-KindUnit = {Info: 256, Separator: 281474976710656, GpuList: 4503599627370496, Range: 9007199254740992, Code: 72057594037927936, GpuCell: 144115188075855872}
-# the cells of a GPU list `[f32]`, `[i32]`, `[u32]`: four bytes each, as WGSL's storage arrays hold them
-GpuCell = {F32: 0, I32: 1, U32: 2}
+# 8), a list's separator (SEPARATOR_SHIFT 48), a list's kind (two bits from 1 << 52, ListKind), the code mark
+# (CODE_MARK, 1 << 56), two bits of a list kind's own (from 1 << 57, a GPU list's cell type)
+KindUnit = {Info: 256, Separator: 281474976710656, ListKind: 4503599627370496, Code: 72057594037927936, ListCell: 144115188075855872}
+# the kinds of a list node whose data is no $list (notes/core_extensions_roadmap.md "Hook table design"): a range's
+# two ends (runtime/lists.warp), the core's; the next rows an extension's (core/extension.warp list_kind: GPU lists 2)
+ListKind = {Listed: 0, Range: 1}
 # the first mark in an Int's or Float's info byte a number type takes (passes/int_types.warp): 1 is a yes/no's (a map,
 # as the runtime reads this file's maps only)
 TypeMark = {First: 2}
