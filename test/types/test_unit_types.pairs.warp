@@ -1,8 +1,12 @@
 # a unit word in a type position is its dimension's class (card unit-fields): fields, variables, parameters
-'class R{d: km}; R(1500m).d'	1500m
+'class R{d: km}; R(1500m).d'	1.5km
 'class R{t: min; w: kg}; r = R(50min, 3kg); r.w + 500g'	3.5kg
 'f(d: km) := d * 2; f(3km)'	6km
 'min(3, 4)'	3
 't = 1km; t += 500m; t'	1.5km
 'class Run{distance: km; note: text}; stored runs: [Run]; runs.add(Run(5km, "park")); stored_table("runs", Run)#1.distance'	5km
 'sum([2km, 500m])'	2.5km
+# a unit field or variable shows its value in its unit, only a quantity of that dimension (decision: no conversion at a write)
+'class R{d: km}; r = R(1km); r.d = 500m; r.d'	0.5km
+'x: km = 1500m; x'	1.5km
+'x: int = 3.7; x'	error
