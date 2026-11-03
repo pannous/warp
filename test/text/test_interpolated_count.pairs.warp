@@ -1,0 +1,4 @@
+# a count in a text's hole, "${#xs}", counts: the hole parses as the program does (card interpolated-count-fail)
+'xs = [1, 2]; "n ${#xs}"'	'n 2'
+'xs = [1, 2, 3]; "${#xs} of ${#xs}"'	'3 of 3'
+'t = "abc"; "${#t}"'	'3'

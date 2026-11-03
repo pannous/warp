@@ -147,7 +147,7 @@ methods_lifted(program: Node): Node := {
 	for name in liftable.filter(name => constructor_of(classes[name]) != ø) { constructed[name] = #method_parameters(method_in(classes[name], constructor_of(classes[name]))) > 0 }
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
-	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and taken_count(classes, liftable, method) == 1)
+	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and 1 in taken_counts(classes, liftable, method))
 	routes = methods.filter(method => is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words)
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
 	entry_words = []
@@ -164,18 +164,22 @@ methods_lifted(program: Node): Node := {
 	floaters = float_converters(classes, liftable, routes)
 	dispatchers = []
 	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
-		owners = owners_of(classes, liftable, name)
-		# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
-		# call (list.warp's tally(xs) beside a class's tally(x))
-		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, taken_count(classes, liftable, name) + 1)
-		dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
+		# a dispatcher for each parameter count the classes take the method with (Channel.more(), Interval.more(o)):
+		# the arity overloads tell the calls apart
+		for count in taken_counts(classes, liftable, name) {
+			owners = owners_taking(classes, liftable, name, count)
+			# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
+			# call (list.warp's tally(xs) beside a class's tally(x))
+			falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
+			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
+		}
 	}
 	for word in entry_words {
 		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
 		owners = []
 		owned_spellings = []
 		for spelling in spellings {
-			for owning_class in owners_of(classes, liftable, spelling) {
+			for owning_class in owners_taking(classes, liftable, spelling, 1) {
 				owners += [owning_class]
 				owned_spellings += [spelling]
 			}
@@ -414,8 +418,8 @@ methods_of(classes: map, names: list): list := {
 }
 method_in(declared: Declared, method: text): Node := declared.methods.filter(m => defined_word(m) == method)#1
 
-# whether a class's methods may be lifted: each member a field or a method, no method kept or named like a class, the
-# classes it shares a method name with taking as many parameters, and so its ancestors
+# whether a class's methods may be lifted: each member a field or a method, no method kept or named like a class, and
+# so its ancestors (classes sharing a method name with other parameter counts get a dispatcher for each count)
 lifts(classes: map, name: text, top_statements: list): bool := {
 	declared = classes[name]
 	if #declared.methods == 0 or declared.fields.any(field => field == ø) { return no }
@@ -423,8 +427,6 @@ lifts(classes: map, name: text, top_statements: list): bool := {
 		word = defined_word(method)
 		if word in classes { return no }
 		if word == constructor_method { continue }
-		counts = owners_of(classes, classes.keys, word).map(owning_class => #method_parameters(method_in(classes[owning_class], word)))
-		if counts.any(parameter_count => parameter_count != #method_parameters(method)) { return no }
 	}
 	declared.parent not in classes or #classes[declared.parent].methods == 0 or lifts(classes, declared.parent, top_statements)
 }
@@ -620,8 +622,8 @@ method_routed(n: Node, routing: Routing): Node := match n {
 routed_member(member: Node, routing: Routing): text? := {
 	method = if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else ø
 	if method == ø or method not in routing.methods { return ø }
-	taken = taken_count(routing.classes, routing.names, method)
-	fits = if member is symbol then taken == 0 and not is_field_of_any(routing.classes, routing.names, method) else #member - 1 == taken
+	taken = taken_counts(routing.classes, routing.names, method)
+	fits = if member is symbol then 0 in taken and not is_field_of_any(routing.classes, routing.names, method) else (#member - 1) in taken
 	if fits then method else ø
 }
 # whether a value of that static type (ø: known only at run time) may be an instance of a class declaring the method
@@ -724,8 +726,17 @@ operator_spellings(): map := {
 # the operator a method's name spells (not named operator_word: a plural reads as the function's, and lambdas.warp's
 # global operator_words would be its call), [its word, its glyph] (`plus` and `+` give [add, "+"]), else ø
 spelled_operator(operator_table: map, spelled: text): list? := if spelled in operator_table then operator_table[spelled] else ø
-# how many parameters the method of that name takes (besides its instance)
-taken_count(classes: map, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
+# how many parameters the methods of that name take (besides their instance), each count once
+taken_counts(classes: map, names: list, method: text): list := {
+	counts = []
+	for owning_class in owners_of(classes, names, method) {
+		count = #method_parameters(method_in(classes[owning_class], method))
+		if count not in counts { counts += [count] }
+	}
+	counts
+}
+# the classes declaring a method of that name taking that many parameters
+owners_taking(classes: map, names: list, method: text, count: int): list := owners_of(classes, names, method).filter(owning_class => #method_parameters(method_in(classes[owning_class], method)) == count)
 is_field_of_any(classes: map, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
 
 # the classes, each before the classes it extends

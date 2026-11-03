@@ -100,6 +100,7 @@ clause_parts(name: text, clause: Clause): any := {
 	parts
 }
 
+written_clause(name: text, clause: Clause): text := name + "(" + clause.patterns.map(pattern => "${pattern}").join(", ") + ")"
 untaken(name: text): Node := List([symbol((HiddenWord.PatternClause as text) + name)], Bracket.Round, Separator.None)
 # arguments no clause takes, `len(7)` of `len([]) := 0; len([h, t...]) := …`: an error when it runs
 unmatched_clauses(name: text): Node := List([symbol(raise_word), "no clause of " + name + " takes these arguments"], Bracket.None, Separator.Space)
@@ -108,12 +109,14 @@ unmatched_clauses(name: text): Node := List([symbol(raise_word), "no clause of "
 tried(name: text, clauses: list, at: int): Node := {
 	clause = clauses#at
 	parts = clause_parts(name, clause)
-	if parts is ø { return untaken(name) }
+	# `f(x: Node) := …` beside `f(x: text) := …`: a pattern no clause can take apart tells no call where to go (loud,
+	# never a silent pick: card enum-type-dispatch)
+	if parts is ø { diagnose(call_of("untellable_clause", [name, written_clause(name, clause)]), clause.body); return untaken(name) }
 	tests = parts#1
 	bindings = parts#2
 	branch = if #bindings == 0 then clause.body else List(bindings + [clause.body], Bracket.Round, Separator.Semicolon)
 	# a clause asking nothing takes every call: one after it never runs, `h(x) := 1; h(y) := 2` (loud, never a silent pick)
-	if #tests == 0 and at < #clauses { diagnose(call_of("unreachable_clause", [name, name + "(" + clause.patterns.map(pattern => "${pattern}").join(", ") + ")"]), clauses#(at + 1).body) }
+	if #tests == 0 and at < #clauses { diagnose(call_of("unreachable_clause", [name, written_clause(name, clause)]), clauses#(at + 1).body) }
 	if #tests == 0 { return branch }
 	test = joined(tests)
 	rest = if at == #clauses then unmatched_clauses(name) else tried(name, clauses, at + 1)
