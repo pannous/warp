@@ -68,26 +68,6 @@ empty_group_bracket(n: Node): text := match n {
 is_empty_map(n: Node): bool := empty_group_bracket(n) == "{"
 is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 
-# the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø but
-# the empty map `{}` (decision empty-group-node: the bridge keeps its bracket where a pass reads it, number_keys
-# keys a variable that starts as `{}`) and the empty list `[]`, an opaque type or error whole
-plain(view: View): View := without_layers(view, no)
-
-# the view as the compile hands it on: plain, but the attribute layers kept for the passes after (the mark of `x!`)
-bridged(view: View): View := without_layers(view, yes)
-
-# the view without literal layers, without attribute layers unless `attributes`, an empty group but `{}` and `[]` as
-# ø (`[]` as grouped builds it)
-without_layers(view: View, attributes: bool): View := {
-	kind = kind_of(view)
-	if kind == "literal" and view#2 == "[]" { return ["list", "[", ""] }
-	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
-	if kind == "type" or kind == "error" { return view }
-	if is_empty_group(view) { return if view#2 == "{" or view#2 == "[" then view else ø }
-	if view is list { return view.map(part => without_layers(part, attributes)) }
-	view
-}
-
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
 # the empty map `{}` (number_keys.warp keys a variable that starts as one by texts) and the empty list `[]`,
 # a character as a text, an opaque type or error whole
@@ -155,43 +135,11 @@ node_from(view: View, keeps_maps: bool): Node := {
 	Key(symbol(opaque_word), Op.Colon, view)
 }
 
-# whether view_of wraps each positioned node as ["at", line, column, view]: only in the view a stage hands on
-global showing_positions = no
-
-# the view a stage hands on, each positioned node as ["at", line, column, view], so the passes after it
-# and the program's warnings and errors name where a node stands (card front-end-warnings)
-stage_view(n: Node): View := {
-	showing_positions = yes
-	view = view_of(n)
-	showing_positions = no
-	view
-}
-
-# a view as JSON, ø as null and 1.0 as 1.0, what the host reads back
-# into a node (compiler.warp's view mode)
-view_json(view: View): text := {
-	if view === ø { return "null" }
-	if view is list { return "[" + view.map(view_json).join(", ") + "]" }
-	if view is text or view is char { return json_text("${view}") }
-	if view is bool { return if view then "true" else "false" }
-	shown = "${view}"
-	if view is float and not shown.contains(".") and not shown.contains("e") { return shown + ".0" }
-	shown
-}
-
-# a text as a JSON string
-json_text(t: text): text := "\"" + t.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
-
 # the head of a type declaration, `type P` of `type P = int -> bool`, as the parser views it
 is_type_view(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
-# the view of a node
-view_of(n: Node): View := {
-	view = unpositioned_view_of(n)
-	if showing_positions and is_positioned(n) then ["at", line_of(n), column_of(n), view] else view
-}
-
-# (`[]` equals ø but is not ø itself: the empty list, square bracketed as parser.warp's grouped builds it)
-unpositioned_view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else match n {
+# the view of a node (`[]` equals ø but is not ø itself: the empty list, square bracketed as parser.warp's grouped
+# builds it)
+view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else match n {
 	Key(left, op, right): key_view(left, op as text, right)
 	Symbol(name): ["symbol", name]
 	Char(c): ["char", c]
@@ -229,14 +177,14 @@ key_view(left: Node, op: text, right: Node): View := {
 
 # whether a and b have the same view, compared as they are walked, no view built (the sugar passes ask it of every
 # rule that fired, card sugar-rule-passes); the forms whose view is not their shape, `[]`, an opaque or attribute key,
-# and shown positions, by their views
+# by their views
 same_view(a: Node, b: Node): bool := {
-	if showing_positions or viewed_as_other(a) or viewed_as_other(b) { return view_of(a) == view_of(b) }
+	if viewed_as_other(a) or viewed_as_other(b) { return view_of(a) == view_of(b) }
 	match a {
 		Key(left, op, right): same_key_view(left, op, right, b)
 		Symbol(name): b is symbol and name_of(b) == name
 		List(items, bracket, separator): same_list_view(items, bracket, separator, b)
-		_: not (b is key or b is symbol or is_group(b)) and unpositioned_view_of(a) == unpositioned_view_of(b)
+		_: not (b is key or b is symbol or is_group(b)) and view_of(a) == view_of(b)
 	}
 }
 same_key_view(left: Node, op: Op, right: Node, b: Node): bool := match b {
@@ -345,9 +293,6 @@ def items_walked(items: list, quoting_allowed: bool, f: function): list {
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
 bottom_up(n: Node, f: function): Node := f(children(n, x => bottom_up(x, f)))
-
-# the node itself: a kept pass slot (passes.warp passes)
-unchanged(n: T): T := n
 
 # a group's items as a list
 items_of(n: Node): list := {
