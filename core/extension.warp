@@ -13,12 +13,21 @@
 #   decimal_number wrote it and as the source did (`0.1f`, `1 month`), each ø where its form is not
 #   suffix_readers: functions reading what follows an operand, given the parser after it, the operand and the binding
 #   power the context needs (`x²`), each ø where its form is not or binds looser
+#   infix_readers: functions reading an operator after an operand inside an expression, given the parser there, the
+#   operand and the binding power the context needs, each ø where its form is not, OPERAND_ENDS where it binds looser
+#   and so ends the operand (`a ⊕ b` of a declared ⊕)
+#   prefix_readers: functions reading an operator and its operand where an expression starts, each ø where its form is
+#   not (`√16` of a declared √)
+#   glyph_owners: functions telling whether the parse reads the glyph as the extension's, never a free symbol
+#   prescans: a name → the function scanning a source before it is parsed, whose value the parser keeps under the
+#   name (Parser.scans: the operators a program declares)
 #   source_passes: functions run on the source before it is parsed, each giving [the new source, its shifts]: where the
 #   new source got shorter, [offset after the change, columns taken out], so nodes keep their written columns
 #   text_escape_readers: the character after a `\` in a text → the reader of the escape, given the text, the offset of
 #   the `\` and its length, giving [the characters, the length read], ø where its form is not (`\:alpha`)
 #   keyword_readers: a word → the reader of the phrase it starts, given the parser at the word and the word, ø where
-#   its form is not there (`emit alarm`)
+#   its form is not there, nothing read; one that read its statement to nothing (applied by a prescan) answers ø past it
+#   (`emit alarm`)
 #   block_words: words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
 #   text_passes: functions a program goes through before its texts interpolate (`sql "… $name"` built as a query)
 #   passes: a core pass's name → the extension's pass running right after it (`{"arity_overloads": clauses}`,
@@ -28,7 +37,7 @@
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
 #   runtime: its runtime root under extensions/, whose definitions (the bridge hooks' bodies) are trapping stubs in a
 #   build leaving the row out (decision extension-row-optional, compiler.warp left_out_runtime_words)
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; keyword_readers: map = {}; block_words: list = []; source_passes: list = []; text_escape_readers: map = {}; value_settlers: map = {}; text_passes: list = []; passes: map = {}; commands: list = []; runs: any = ø; runtime: text = "" }
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; infix_readers: list = []; prefix_readers: list = []; glyph_owners: list = []; prescans: map = {}; keyword_readers: map = {}; block_words: list = []; source_passes: list = []; text_escape_readers: map = {}; value_settlers: map = {}; text_passes: list = []; passes: map = {}; commands: list = []; runs: any = ø; runtime: text = "" }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
@@ -109,6 +118,41 @@ read_suffix(p: Parser, operand: Node, min_power: int): Node := {
 		if suffixed != ø { return suffixed }
 	}
 	ø
+}
+# what an infix reader answers for an operator binding looser than the context: the operand ends before it
+OPERAND_ENDS = symbol("operand ends")
+# what an extension reads after the operand inside an expression, OPERAND_ENDS, else ø
+global infix_reader_list = ø
+read_infix(p: Parser, operand: Node, min_power: int): Node := {
+	if infix_reader_list == ø { infix_reader_list = concatenated(EXTENSIONS.map(extension => extension.infix_readers)) }
+	for reader in infix_reader_list {
+		continued = reader(p, operand, min_power)
+		if continued != ø { return continued }
+	}
+	ø
+}
+# the operator and operand an extension reads where an expression starts, else ø
+global prefix_reader_list = ø
+read_prefix(p: Parser): Node := {
+	if prefix_reader_list == ø { prefix_reader_list = concatenated(EXTENSIONS.map(extension => extension.prefix_readers)) }
+	for reader in prefix_reader_list {
+		prefixed = reader(p)
+		if prefixed != ø { return prefixed }
+	}
+	ø
+}
+# whether an extension reads the glyph as its own in this parse
+owned_glyph(p: Parser, glyph: text): bool := EXTENSIONS.any(extension => extension.glyph_owners.any(owns => owns(p, glyph)))
+# each extension's prescan of the source, by its name
+extension_scans(source: text): map := {
+	scans = {}
+	for extension in EXTENSIONS {
+		for name in extension.prescans.keys {
+			scan = extension.prescans[name]
+			scans[name] = scan(source)
+		}
+	}
+	scans
 }
 # every extension's number suffix readers
 global number_suffix_reader_list = ø
