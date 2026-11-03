@@ -1,5 +1,6 @@
 # Shader blocks (card parser-cold-forms, decision core-is-self): `shader { … }`, `wgsl { … }`, WGSL as a sublanguage
 # read by its head word; the lexer's shader_brace still skips the block when it prescans
+SHADER_WORDS = ["shader", "wgsl"]
 shader_readers(): map := {
 	readers = {}
 	for word in SHADER_WORDS { readers[word] = shader_block }
@@ -10,7 +11,6 @@ shader_blocks_extension = Extension{name: "shader_blocks", keyword_readers: shad
 # `shader { … }` (or `wgsl { … }`), the parser at its word: WGSL as a sublanguage, the text between the braces without its
 # common indentation, braces in WGSL comments not counted; else ø
 # Rust twin: literals/shaders.rs parse_shader_block
-SHADER_WORDS = ["shader", "wgsl"]
 def shader_block(p: Parser, word: text): Node := {
 	open = p.at + word.length
 	while open < p.n and (p.code[open] == ' ' or p.code[open] == '\t') { open = open + 1 }
