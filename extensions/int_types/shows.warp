@@ -1,8 +1,6 @@
 # The int types' declarations and show hooks, as int_types.warp marks and renames them: class_methods.warp reads them
 # too, so a class's routed show() never falls back to a hook that int_types.warp renames away (card
 # module-arity-overloads)
-use "walk.warp"
-use "../analysis/kinds.warp"
 
 showing_word = "show"
 
