@@ -1,7 +1,8 @@
-cloud full suite 2026-11-02T20:12:34Z at 0c669da on x86_64: BOOTSTRAP FAILED, no tests run
+cloud full suite 2026-11-03T02:10Z at b008e77 on x86_64: BOOTSTRAP FAILED, no tests run
 
-Binary: warp-v1.6.0-x86_64-unknown-linux-gnu.tar.gz (latest release, published 2026-10-31); seed: seed-2026-11-02-8cd33789 (sha256 matches seed.lock), placed beside warp.
-Commands: WARP_LIB=$PWD/lib warp rebuild  (1m05s, deterministic on 3 runs); then WARP_LIB=$PWD/lib warp samples/hello/hello.warp -> 'no module at lib/warp.wasm'
-Last lines of the failed 'warp rebuild':
+Commands: warp v1.6.0 (x86_64-unknown-linux-gnu release) + seed-2026-11-02-b6009fc3 warp-seed.wasm (sha256 matches seed.lock) beside it;
+  cd /home/user/warp && WARP_LIB=$PWD/lib warp rebuild
+Last lines of output:
 rebuild step seed
 index out of range: 96 not in 1…10
+Likely the v1.6.0 native binary is older than main's lib/ (latest non-prerelease).

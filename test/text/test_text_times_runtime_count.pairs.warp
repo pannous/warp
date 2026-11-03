@@ -3,3 +3,4 @@
 'w=2; "ab" * (w + 1)'	"ababab"
 'def row(w) := "-" * w + "|"; row(3)'	"---|"
 'n = 2; (n + 1) * "xy"'	"xyxyxy"
+'"ab" * 3.0'	"ababab"
