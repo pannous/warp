@@ -43,6 +43,11 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
 - Compilers beside ~/dev/bin/warp come only with main's tip, never because a lib/ changed, and are never built in the
   main checkout (a pull mid-build paired mismatched compilers).
 
+- Warp Vitals after every landing (user 2026-11-03): when an install of a new tip is done (or a landing reaches you),
+  run `python3 scripts/vitals.py` in the main checkout (about 6 s) and republish data/vitals/vitals.html to
+  https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c (Artifact publish, that url). Several landings
+  in a row: one republish for the newest. The Supervisor's hourly watch round republishes too, as the safety net.
+
 ## The user's checkout
 - It must be up to date with origin/main; the user's own uncommitted edits are integrated in the main checkout itself
   (common.md "Where to work"), a stale one of theirs main has superseded is backed up to
