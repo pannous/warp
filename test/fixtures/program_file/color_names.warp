@@ -1,0 +1,2 @@
+use color
+"${red} ${with_alpha(red, 0.5)}"

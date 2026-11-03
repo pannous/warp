@@ -26,7 +26,7 @@ value_takers(program: Node): list := {
 value_taking_functions(program: Node): list := nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
 
 # the value takers that take a count, `print #xs`: a type word converts a negative, `int -3`, but takes no count, as
-# `float[2]` is the subscript `float#3` of a typed array (lib/sugar/lists.warp), unless the program defines it as a function
+# `float[2]` is the subscript `float#3` of a typed array (core/extensions/sugar/lists.warp), unless the program defines it as a function
 count_takers(program: Node, takers: list): list := {
 	defined = value_taking_functions(program)
 	takers.filter(name => not is_type_word(name) or defined contains name)
@@ -92,7 +92,7 @@ fitted(word: Node, left: Node, op: Op, right: Node, written: Node, own_types: ma
 	written
 }
 comparing_ops = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
-# `all xs > 0`: the words that compare each element of their list (lib/sugar/broadcasting.warp, decision
+# `all xs > 0`: the words that compare each element of their list (core/extensions/sugar/broadcasting.warp, decision
 # each-all-broadcast), their rules matching `all (xs > 0)`
 element_comparing_words = ["all", "any"]
 is_word_phrase(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 is symbol

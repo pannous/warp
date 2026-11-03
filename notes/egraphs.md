@@ -153,7 +153,7 @@ Measure:
   growing input sizes (2/4/8/16 terms of a commutative sum) to see where the node limit binds;
 - the compiler is untouched, so stage-two instructions (3.39·10¹² in record 79a8a80d282e6c60) must not move.
 Follow-up only if that shows value: the **sugar overlap report** of (a) built on its e-matcher (lists pairs of
-lib/sugar rules fitting the same code, offline, no compile-time cost), and a head-symbol rule index for the 18 s of
+core/extensions/sugar rules fitting the same code, offline, no compile-time cost), and a head-symbol rule index for the 18 s of
 rule tries, measured as stage-two instructions retired before/after (scripts/self-check.sh record `time`).
 
 ## Sources
@@ -173,6 +173,6 @@ rule tries, measured as stage-two instructions retired before/after (scripts/sel
 - Wang et al., *SPORES: Sum-Product Optimization via Relational Equality Saturation*, VLDB 2020: https://arxiv.org/abs/2002.07951
 - VanHattum et al., *Vectorization for Digital Signal Processors via Equality Saturation* (Diospyros), ASPLOS 2021: https://dl.acm.org/doi/10.1145/3445814.3446707
 - *Equality Saturation for Optimizing High-Level Julia IR* (notes Cranelift's incompleteness): https://arxiv.org/abs/2502.17075
-- warp: notes/compile_speed.md, core/passes/rewrites.warp (at_place, rewritten_again), lib/sugar/method_calls.warp,
+- warp: notes/compile_speed.md, core/passes/rewrites.warp (at_place, rewritten_again), core/extensions/sugar/method_calls.warp,
   lib/reals.warp, notes/crate_adapter.md, notes/decisions.md (rewrite-rules, rules-to-typed-operators), stage-two
   record /Volumes/Build/compilers/79a8a80d282e6c60/stage-two.record

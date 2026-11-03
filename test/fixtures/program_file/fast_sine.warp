@@ -1,0 +1,4 @@
+use fast_math
+use math
+x = 1.0
+sine(x)

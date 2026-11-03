@@ -95,3 +95,35 @@ Cover documented list construction and statistics outcomes, then declare non-nar
 # library-typed list scans
 
 Cover the documented scan and predicate-based take/drop outcomes, then type their generic inputs and list results and verify the module and smoke.
+
+## library-typed callback helpers
+
+Check callback outcomes before annotating generic parameters and results; preserve existing accepted values, verify the module and smoke on current main, and continue the library audit.
+
+## library-typed map selection
+
+Cover map selection and lookup outcomes before adding non-narrowing signatures; verify focused tests and merged-main smoke.
+
+## library-typed map transformations
+
+Cover map construction, mapping and fallback outcomes before adding generic signatures; verify focused results and merged-main smoke.
+
+## library-typed map entries
+
+Cover entry lists and mutating helpers before typing their generic signatures; verify direct outcomes and merged-main smoke.
+
+# library-typed markup slice
+
+Check markup rendering outcomes before and after annotating the public renderer; preserve its generic input domain and existing tests.
+
+# library-typed markup handler predicates
+
+Cover rendering and dispatch of a click handler, then annotate handler predicates while preserving generic inputs. Verify the focused outcome, module build and smoke.
+
+# library-typed markup text helpers
+
+Cover escaping and numeric rendering before declaring text results for the shared rendering helpers. Preserve generic inputs and verify outcomes and smoke.
+
+## library-typed markup CSS helpers
+
+Cover rendered CSS declarations and attributes before declaring text results; keep generic inputs and verify focused outcomes and merged-main smoke.

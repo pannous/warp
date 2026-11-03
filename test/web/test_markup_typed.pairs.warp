@@ -1,0 +1,4 @@
+# Outcome forms: notes/stdlib.md, markup
+'use markup; to_html("hello")'	'hello'
+'use markup; to_html("<hi>")'	'&lt;hi&gt;'
+'use markup; to_html(div{p{"Hi"}})'	'<div><p>Hi</p></div>'

@@ -9,7 +9,20 @@ runtime_wasm_module(runtime: Node, host: map): any := {
 	while made == ø { made = typed_wasm_module(Node.Empty, runtime, host, {}) }
 	module.prebuilding = no
 	module.relocating = no
-	made
+	dropped = module.left_out.keys.filter(name => not is_programs_method(name))
+	if #dropped > 0 then dropped_words_refusal(dropped) else made
+}
+# only a method of a type the program declares (Separator·text, its enum unknown to the runtime) may stay outside
+# runtime.wasm: any other word left out would vanish from every program built on it, as an older seed's runtime of
+# newer sources lost read_file (a word reaching a new enum case it does not know; card seed-compiles), the build
+# failing much later as "no field read_file". Refused, saying why
+is_programs_method(name: text): bool := {
+	owner = name.split("·")#1
+	name.contains("·") and not module.enum_cases.has(owner) and not module.classes.has(owner)
+}
+dropped_words_refusal(dropped: list): text := {
+	why = dropped.map(name => name + " (" + module.left_out[name] + ")").join(", ")
+	"runtime.wasm would leave out " + why + ": this compiler cannot compile the runtime it builds; an older seed than its sources? scripts/refresh-seed.sh makes a newer one"
 }
 # every word compiled in name order, but those outside the core on their own (an enum's method naming the program's
 # enum): left out, and named in warp.runtime, for a program to compile as today; then the hooks: the closure calls of
@@ -73,7 +86,7 @@ def runtime_image_of(wasm: list): any {
 	hooks = read_names(layout)
 	left = read_names(layout)
 	globals = []
-	for i in 0..<read_number(layout) { globals += [[read_name(layout), read_kind(layout)]] }
+	for i in 0..<read_number(layout) { globals += [read_global(layout)] }
 	words = {}
 	for i in 0..<read_number(layout) {
 		name = read_name(layout)
@@ -105,6 +118,13 @@ def read_names(reader: ByteReader): list {
 	names
 }
 def read_kind(reader: ByteReader): ValueKind { held_kinds[read_number(reader)] }
+# a global of warp.runtime or warp.module: [name, kind, mark]
+def read_global(reader: ByteReader): list := [read_name(reader), read_kind(reader), read_number(reader)]
+# a prebuilt global declared, its int type's mark kept, as the module that built it held it
+def declared_linked_global(entry: list) {
+	declared_global(entry#1, entry#2)
+	if entry#3 != 0 { module.global_marks[entry#1] = entry#3 }
+}
 def read_signature(reader: ByteReader): any {
 	parameters = []
 	for i in 0..<read_number(reader) {
@@ -142,7 +162,7 @@ def behind_runtime() {
 	module.catches_errors = yes
 	module.globals = {}
 	module.global_order = []
-	for entry in module.runtime_image.globals { declared_global(entry#1, entry#2) }
+	for entry in module.runtime_image.globals { declared_linked_global(entry) }
 	module.placed = module.runtime_image.functions
 	# the program's texts in segments behind the runtime's, numbered so in the linked module too (empty ones there)
 	module.first_text_segment = module.runtime_image.data
@@ -393,7 +413,7 @@ def library_image_of(name: text, wasm: list): any {
 	read_names(layout)
 	read_names(layout)
 	globals = []
-	for i in 0..<read_number(layout) { globals += [[read_name(layout), read_kind(layout)]] }
+	for i in 0..<read_number(layout) { globals += [read_global(layout)] }
 	functions = []
 	for i in 0..<read_number(layout) {
 		word = Function(read_name(layout), ø, ø)
@@ -430,7 +450,7 @@ def behind_libraries() {
 			module.closures += [[linked_closure_name(image, made#1), made#2]]
 			module.linked_closures_shown[linked_closure_name(image, made#1)] = made#3
 		}
-		for entry in image.globals { declared_global(entry#1, entry#2) }
+		for entry in image.globals { declared_linked_global(entry) }
 		module.placed += #image.functions
 		module.runtime_types += #image.functions
 		module.first_text_segment += image.texts

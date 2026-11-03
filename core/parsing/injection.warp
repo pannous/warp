@@ -16,6 +16,9 @@ template_quotes = "'\""
 global template_misuse = ""
 # [variable, tag] of each variable holding a template, as the walk met their assignments
 global template_variables = []
+# the values templates were lowered to, each with its tag: interpolation runs again over the program and the library
+# definitions it reached (passes.warp pure_passes), where `exec sh "…"` reads `exec ("…" …)` (card crontab-sample-error)
+global lowered_templates = []
 
 # the code of a hole as a node
 code_node(code: text): Node := node_of(plain(tree(code)))
@@ -35,9 +38,15 @@ runner_word(tag: text): text := if tag == "sql" then "execute" else "exec"
 tag_run_by(n: Node): text := if n == symbol("execute") then "sql" else if n == symbol("exec") then "sh" else ""
 
 # the tag of a template before lowering: `sql "…"`, or the bare tag of a flat `execute sql "…"`; else ""
-template_tag_of(n: Node): text := match n {
+template_tag_of(n: Node): text := if lowered_tag(n) != "" then lowered_tag(n) else match n {
 	List(items, _, _): { if #items == 2 then tag_named(items#1) else "" }
 	_: tag_named(n)
+}
+
+# the tag of a value a template was lowered to, else ""
+lowered_tag(n: Node): text := {
+	for pair in lowered_templates { if pair#1 == n { return pair#2 } }
+	""
 }
 
 # the literal of a template, "…" or ("…"); ø for anything computed
@@ -130,7 +139,10 @@ lowered_template(tag: text, argument: any): any := {
 	}
 	holed = holed_pieces(literal, yes)
 	parts = if tag == "sql" then sql_template(holed) else shell_template(holed)
-	if parts is ø then ø else listed(Bracket.Round, Separator.Space, parts)
+	if parts is ø { return ø }
+	value = listed(Bracket.Round, Separator.Space, parts)
+	lowered_templates += [[value, tag]]
+	value
 }
 
 # the tag of the template a variable holds, else ""
@@ -213,5 +225,6 @@ injected(program: Node): Node := {
 	template_misuse = ""
 	template_variables = []
 	value = templates_lowered(program)
-	if template_misuse then error_node(template_misuse) else value
+	if template_misuse { raise template_misuse }
+	value
 }

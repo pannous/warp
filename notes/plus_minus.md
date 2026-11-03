@@ -19,6 +19,11 @@ uncertainty; every generic function computes with it, the uncertainty propagates
   `x: float`) is a loud error naming the ± value, never a dropped bound.
 
 ## Where it runs
+Now (2026-11-02, card numbers-outside): `a ± b` of numbers is lib/uncertain.warp's Interval through its
+`infix operator ±(value: number, radius: number)`, printed by uncertain_text there; it needs `use uncertain` until a
+module's declared operator implies its use (core OK asked). Units' ± (a Quantity's amount an Interval), `σ` and
+`certainly`/`possibly` are not back yet. The Rust description below is history.
+
 No static kind and no specialising: `a ± b` is a run-time value, Kind::Uncertain = 17, analyzed as Kind::Data, so every
 `+ - * /` that meets one goes through node_add/sub/mul/div (list_ops.rs), and untyped functions pass it through
 unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).

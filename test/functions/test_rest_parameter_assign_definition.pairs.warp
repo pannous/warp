@@ -1,0 +1,7 @@
+# a definition written with = takes a rest parameter as := does (card undefined-name-varargs)
+'def total(xs...) = sum xs; total(1, 2, 3)'	6
+'def count(xs...) = #xs; count(1, 2, 3, 4)'	4
+'def first(a, rest...) = a; first(7, 8, 9)'	7
+'def rest(a, more...) = more; rest(7, 8, 9)'	[8, 9]
+'def total(*xs) = sum xs; total(1, 2, 3)'	6
+'def total(...xs) = sum xs; total(1, 2, 3)'	6

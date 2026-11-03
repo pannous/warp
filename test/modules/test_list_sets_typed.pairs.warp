@@ -1,0 +1,5 @@
+# Outcomes based on test/parser/test_operator_aliases.pairs.warp
+'use list; union([1, 2], [2, 3])'	[1 2 3]
+'use list; intersection([1, 2], [2, 3])'	[2]
+'use list; subset([1, 2], [1, 2, 3])'	true
+'use list; superset([1, 2, 3], [2, 3])'	true

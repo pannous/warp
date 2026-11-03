@@ -12,7 +12,7 @@ CODEX_APP_SOCKET=/Users/me/.codex/app-server-control/app-server-control.sock
 DEFAULT_TURN_TIMEOUT_SECONDS=16200
 EXEC_EXIT_GRACE_SECONDS=30
 RELAY_TIMEOUT_SECONDS=60
-MAX_ROUNDS=4 # runs of Codex per timer firing while a card stays parked
+MAX_ROUNDS=10 # runs of Codex per timer firing while a card stays parked (user 2026-11-02: 4 → 10)
 CAPACITY_PAUSE_SECONDS=600
 POLL_SECONDS=1
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -182,7 +182,7 @@ in lib/ (and samples/, test/, wiki/); never change core/ or the Rust harness. Cl
 
 Reproduce before you judge: run the card's example with WARP_NO_WINDOW=1 /Users/me/dev/bin/warp '<code>'; an old
 investigation on the card is a hint, not a verdict. A card that truly needs core is not a dead end: look for the
-library way first (common.md Principles: a function, enum, overload or lib/sugar rule); only when there is none, write
+library way first (common.md Principles: a function, enum, overload or core/extensions/sugar rule); only when there is none, write
 the smallest core shape into \`todo note <card> \"needs core: <files, functions, why in 3 lines>\"\`, release it and
 take the next card.
 

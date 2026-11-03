@@ -45,7 +45,7 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 ### The warp compiler (`core/`; `lib/compiler` links to it for a transition)
 
 `core/compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
-parsing/ → passes/ (the lowering passes; sugar as rewrite rules in lib/sugar/) → analysis/ → emitter/,
+parsing/ → passes/ (the lowering passes; sugar as rewrite rules in core/extensions/sugar/) → analysis/ → emitter/,
 whose runtime words are warp too (runtime.warp, runtime/). core/node.warp declares the Node enum, core/commands/ the
 one command table.
 - `warp <file|code>` (and `warp run`): runs warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the

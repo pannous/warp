@@ -27,7 +27,9 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	result = try_name("value", number)
 	ran = try_assigned(finished, applied_to(HiddenWord.RanWithoutError as text, [braced(try_assigned(result, value))]))
 	succeeded = Key(finished, Op.And, Key(ø, Op.Not, applied_to("is_error", [result])))
-	otherwise = if binding == ø then braced(fallback) else List([try_assigned(binding, applied_to("caught_error", [finished, result])), fallback], Bracket.Curly, Separator.Semicolon)
+	# the caught Error's name is a handler's place, `e: error`, where it raises no more (decision errors-one-rule)
+	caught = try_assigned(Key(binding, Op.Colon, symbol("error")), applied_to("caught_error", [finished, result]))
+	otherwise = if binding == ø then braced(fallback) else List([caught, fallback], Bracket.Curly, Separator.Semicolon)
 	try_statements([ran, chosen_branch(succeeded, braced(result), otherwise)])
 }
 
@@ -74,6 +76,20 @@ lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 	}
 }
 
+# a raise in v kept as the Error it raised (decision errors-one-rule): `try v catch e { e }`
+kept_raise(v: Node): Node := {
+	number = fresh_number()
+	guarded_try(v, try_name("error", number), try_name("error", number), number)
+}
+# where an Error stops the run no more (decision errors-one-rule): an optional place `r: T? = v` keeps it (a value's
+# `a or b`, emitter.warp logical, too)
+handled_form(n: Node): Node := match n {
+	Key(Key(target, Op.Colon, declared), Op.Assign, v): if admits_errors_type(declared) and is_name(target) and is_call(v) then Key(key_of(n), Op.Assign, kept_raise(v)) else n
+	# `x ?? y`, `x default y` (decision nullish-default): y when x raises or is ø, a falsy x kept
+	Key(x, Op.Coalesce, y): if is_call(x) then Key(lowered_try(x, ø, ø), Op.Coalesce, y) else n
+	_: n
+}
+
 # `assert c else m`, `check c`: 1 when c holds, else it raises m (Rust twin: guards.rs lower_assert); not `asserted`,
 # emitter.warp's, as the compiler's files share one namespace
 assertion(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
@@ -88,7 +104,7 @@ try_form(n: Node): Node := match n {
 		if #parts == 4 and is_name(parts#4) { return lowered_try(parts#2, parts#3, parts#4) }
 		n
 	}
-	_: n
+	_: handled_form(n)
 }
 
 tries(program: Node): Node := bottom_up(program, try_form)

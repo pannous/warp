@@ -1,0 +1,5 @@
+# a value where a field's type would be is its default, `name: "?"` as `name = "?"` (decision valued-field-default)
+'class A { name: "?" }; A().name'	"?"
+'class A { name: "?" }; A{name: "Rex"}.name'	"Rex"
+'class Animal { name: "?" }; class Dog extends Animal { speak := name + " barks" }; Dog{name: "Rex"}.speak'	"Rex barks"
+'class P { age: 0 }; P{age: 3}.age + P().age'	3

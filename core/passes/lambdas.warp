@@ -194,6 +194,12 @@ class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable
 
 ## the walk
 
+# a ternary's `yes : no`: both branches are code, unlike a pair's key (`c ? xs.map(f) : n`)
+lowered_branches(branches: Node, locals: list, lowering: Lowering): Node := {
+	if not is_key(branches, Op.Colon) { return lowered_lambdas(branches, locals, lowering) }
+	Key(lowered_lambdas(key_of(branches), locals, lowering), Op.Colon, lowered_lambdas(value_of(branches), locals, lowering))
+}
+
 # n with its lambdas lifted, its iterations looped, its function names as values and its calls of variables as
 # closures; `locals` the variables and parameters in scope; quoted code stays as written
 lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
@@ -209,6 +215,7 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 	match n {
 		Symbol(name): function_value(name, n, locals, lowering)
 		Key(left, Op.Dot, right): dotted_lowered(left, right, locals, lowering)
+		Key(condition, Op.Question, branches): Key(lowered_lambdas(condition, locals, lowering), Op.Question, lowered_branches(branches, locals, lowering))
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
 		# `p as text` names a type, also where the program defines a function text()
 		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
@@ -269,7 +276,7 @@ side_by_side_words(n: Node): list := {
 # a number, a text, or a variable holding no function
 is_plain_value(word: Node, locals: list, lowering: Lowering): bool := word is number or word is text or (word is symbol and is_variable(name_of(word), locals, lowering) and not lowering.function_values.has(name_of(word)))
 # `f 3 4`, words side by side: the first calls the others, its name kept; a lambda first is called with them,
-# `(x => x*2) 4` as `(x => x*2)(4)` (and `{it*2} 4`, lib/sugar/calls.warp)
+# `(x => x*2) 4` as `(x => x*2)(4)` (and `{it*2} 4`, core/extensions/sugar/calls.warp)
 lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
 	# `(a -1)`, `(a b)` of variables: a bound value heads no call, the values side by side are their list
 	if #words > 1 and words.all(word => is_plain_value(word, locals, lowering)) { return List(words, Bracket.Square, Separator.Comma) }
@@ -348,6 +355,20 @@ function_parameters_of(written: list): map := {
 		parts = definition_of(statement)
 		if parts != ø {
 			for parameter in parts.parameters { if is_key(parameter, Op.Colon) and key_of(parameter) is symbol and value_of(parameter) == symbol("function") { found[name_of(key_of(parameter))] = yes } }
+		}
+	}
+	found
+}
+
+# the parameters declared functions (found) and those a call of their function is given one for: `f` of
+# `apply(f, x) := f x` in `apply(inc, 1)`
+parameters_given_functions(written: list, arities: map, found: map): map := {
+	definitions = written.map(statement => definition_of(statement)).filter(parts => parts != ø)
+	for n in nodes_in(block_of(written)) {
+		if not (is_round(n) and #n > 1 and n#1 is symbol) { continue }
+		for parts in definitions.filter(parts => parts.name == name_of(n#1)) {
+			given = arguments_of(items_of(n))
+			for i in 1 to min(#given, #parts.parameters) { if gives_function(given#i, arities, {}) { found[parameter_name(parts.parameters#i)] = yes } }
 		}
 	}
 	found
@@ -652,9 +673,11 @@ lambdas(program: Node): Node := {
 		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
 	lowering = Lowering{arities: arities, lambdas_lifted: [], function_positions: positions}
-	function_parameters = function_parameters_of(written)
+	function_parameters = parameters_given_functions(written, arities, function_parameters_of(written))
 	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
 	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)
+	# a parameter holding a function, declared so or given one, is called spaced too: `f x` as `f(x)`
+	for name in function_parameters.keys { lowering.function_values[name] = yes }
 	for statement in written {
 		parts = definition_of(statement)
 		function = if parts == ø then ø else iteration_function(parts)

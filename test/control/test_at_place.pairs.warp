@@ -1,0 +1,4 @@
+# `at <place> {…}` of sound places its block at a time on the beat clock; only a clock time (`at 9:30 {…}`) is a
+# timer (card wasm-trap: timers took `at bars(0) {…}` as a clock time and trapped)
+'use sound; at bars(0) { 1 }; 2'	2
+'use sound; at bar(1) { 1 }; 3'	3

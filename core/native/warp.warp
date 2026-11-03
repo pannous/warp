@@ -14,7 +14,7 @@
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
 #   warp rebuild from <step>  the same from that step on (seed, stage-two, optimize, runtime, modules)
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
-#   warp rebuild seed     the seed's runtime and machine code made (seed_shipped)
+#   warp rebuild seed     the seed's machine code made (seed_shipped)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
 #                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
@@ -80,7 +80,10 @@ rebuilt(first: text): nothing := {
 	start = step_number(first)
 	if step_runs("seed", start) {
 		seed = seed_path()
-		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_prepared(seed)))
+		seed_runtime = joined(built, ".seed-runtime.wasm")
+		file_ran(seed, words(seed, "runtime", seed_runtime, "", "", ""))
+		builder_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
+		unlink(seed_runtime)
 	}
 	if step_runs("stage-two", start) { rebaked(built, compiler, library) }
 	if step_runs("optimize", start) {
@@ -192,18 +195,13 @@ promoted(): nothing := {
 	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
 	print(joined(joined(compiler, said), promoted_file))
 }
-# `warp rebuild seed`: the seed's runtime and machine code beside it, made when missing, so no build compiles them
+# `warp rebuild seed`: the seed's machine code beside it, made when missing, so no build compiles it. Its runtime is
+# no file kept beside it: each rebuild's seed step compiles it from the sources being built, as CI's fresh checkout
+# does (card seed-compiles: a kept one made of older sources hid a seed that no longer compiled them, 16 s a rebuild)
 seed_shipped(): nothing := {
 	seed = seed_path()
-	seed_prepared(seed)
 	machine_code_kept(seed)
 	print(joined("precompiled ", seed))
-}
-# the seed's own runtime.wasm (warp-seed.runtime.wasm), written by the seed's runtime command once per seed; its path
-seed_prepared(seed: text): text := {
-	seed_runtime = joined(text_from(seed.address, seed.length - 5), ".runtime.wasm")
-	if read_file(seed_runtime).length == 0 { file_ran(seed, words(seed, "runtime", seed_runtime, "", "", "")) }
-	seed_runtime
 }
 # a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
 machine_code_moved(from: text, to: text): nothing := {
@@ -441,6 +439,7 @@ is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).le
 # the words that only say how to run what follows: `run`, `pure` and `eval` what the bare words do, `self` by
 # warp-self.wasm, `fast` (lib/fast_math.warp) at full precision yet
 is_prefix(word: text): bool := same_text(word, "run") or same_text(word, "pure") or same_text(word, "eval") or same_text(word, "self") or same_text(word, "fast")
+self_named(compiler: text): bool := ends_with(compiler, "/warp-self.wasm")
 # what the words from `first` on ask for, by the compiler: a command the native warp runs itself, a module, a file,
 # else warp.wasm's command or code
 dispatched(compiler: text, prefixed: bool, first: int): nothing := {
@@ -456,10 +455,11 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if ends_with(word, ".wasm") { return module_ran(first) }
 	if not prefixed {
 		if same_text(word, "rebuild") { return rebuild_command(first) }
-		if same_text(word, "test") { return tests_run(compiler, flagged("--self")) }
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
 	}
+	# `warp test`, and `warp self test` as `warp test --self`: the native warp runs the cases, each by the compiler named
+	if same_text(word, "test") and (not prefixed or self_named(compiler)) { return tests_run(compiler, flagged("--self") or self_named(compiler), first) }
 	if same_text(word, "repl") or same_text(word, "console") or same_text(word, "start") { return console(compiler) }
 	if same_text(word, "repl-line") { return line_ran(compiler, arg(first + 1), arg(first + 2)) }
 	if same_text(word, "version") or same_text(word, "--version") { return versioned(compiler) }

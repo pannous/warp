@@ -18,6 +18,13 @@ before asking a question). After a context swap, this file and your role file be
   most beautiful, most general code would look (a library function over a general feature beats a rewrite plus core
   patches), and build that; if it needs a missing language feature, build or card the feature instead of a workaround.
   Recommended options in questions and plans are the elegant ones.
+- Clean compiler first (user 2026-11-02): the specification unfolds from a clean compiler built on first principles, not
+  the other way round. A spec form that would need special-case code in core is cut or parked, unless leaving it out
+  is nonsensical; what the general rules give is the spec (the wiki follows the compiler then). Every question to the
+  user names the core cost of each option.
+  A form that falls out of the general rules, however esoteric (`"x" * yes` is "x" by bool-as-int), is welcome and
+  never suppressed; a form that needs its own rule or core code for one phrase (`x is a 100 element array`) is bloat:
+  ask the Interviewer before building it. Old commented-out Rust tests (`gap-*` cards) are not spec.
 - No special cases: a fix is the general rule, holding for the siblings of the example. A test that seems to force a
   special case goes to warp-interviewer.
 - Never degrade the input to suit a tool (compiler stage, parser, harness): fix or card the tool. Warp source, the
@@ -38,13 +45,13 @@ before asking a question). After a context swap, this file and your role file be
 - Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
-- Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (even
-  while its file sits in lib/sugar/); "library" means only modules programs import.
+- Wording (user): a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
+  file sits in core/extensions/sugar/); "library" means only modules programs import.
 - Extension OKs (user): a core extension the compiler does not need to rebuild itself (a rule or file under
-  core/extensions/, lib/sugar/ until it moves) needs no strong confirmation when it is generic and/or small: build it,
+  core/extensions/, its sugar/ rules included) needs no strong confirmation when it is generic and/or small: build it,
   send the Interviewer an FYI. A spelling the user has not decided, a new pass or a change to the compiler proper
   still asks first.
-- No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
+- No new passes. Sugar (new spellings) → rules in core/extensions/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
   lowering case, special case or refusal path, needs an OK first (files, functions, 3-line reason to the Supervisor,
@@ -103,7 +110,7 @@ before asking a question). After a context swap, this file and your role file be
 - Build only a branch merged with origin/main: the installed native warp's rebuild steps (rebake) call main's
   compiler words, so an unmerged branch can fail to build for reasons that aren't its own (warp-shaders, 2026-10-30).
 - Only the pure pipeline counts. Smoke test, every branch: `scripts/smoke.sh <worktree>`. It rebuilds only for what
-  the compiler bakes in (user 2026-10-30: a library change needs no rebuild): lib/ only (modules, lib/sugar/ rules)
+  the compiler bakes in (user 2026-10-30: a library change needs no rebuild): lib/ only (modules; the sugar rules are core since 2026-11-03)
   runs hello on the installed compilers in seconds; core/ or prelude.warp, aliases.warp, math.warp, rule_words.warp
   make it say REBUILDING and run `scripts/rebuild.sh pure <worktree>` first (published to the shared store, so the
   install after your push reuses it). Then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test

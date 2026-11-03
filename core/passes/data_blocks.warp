@@ -7,6 +7,7 @@
 use "walk.warp"
 use "scope.warp"
 use "lambdas.warp"
+use "../analysis/builtin_signatures.warp"
 
 data_type = symbol("data")
 for_word = symbol("for")
@@ -45,9 +46,15 @@ is_free_tag(n: Node, scope: map): bool := {
 	name = name_of(key_of(n))
 	not (binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type))
 }
-with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), items_of(value_of(n)).map(item => data_argued(as_call(loop_as_items(item), scope), positions)))) else n
+with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), tag_items(value_of(n), scope).map(item => data_argued(as_call(loop_as_items(item), scope), positions)))) else n
+# a tag's items; a block that is one phrase headed by a function, `p{ greet "Ann" }`, is that one item (decision
+# tag-items-calls), not the items greet and "Ann"
+tag_items(block: Node, scope: map): list := if is_call_phrase(block, scope) then [List(items_of(block), Bracket.None, Separator.Space)] else items_of(block)
 # `greet "Ann" {…}` among a tag's items: a phrase headed by a function the program binds is its call, as anywhere else
-as_call(item: Node, scope: map): Node := if is_group(item) and bracket_of(item) == "" and separator_of(item) == " " and #item > 1 and item#1 is symbol and binds_as(scope, name_of(item#1), Meaning.Function) then call_node(item#1, items_of(item)[1..]) else item
+as_call(item: Node, scope: map): Node := if is_group(item) and bracket_of(item) == "" and is_call_phrase(item, scope) then call_node(item#1, items_of(item)[1..]) else item
+is_call_phrase(group: Node, scope: map): bool := separator_of(group) == " " and #group > 1 and group#1 is symbol and (binds_as(scope, name_of(group#1), Meaning.Function) or is_library_call(group, scope))
+# `reverse xs`: a library word of one typed parameter and its argument (the `takes one` of core/extensions/sugar/calls.warp)
+is_library_call(group: Node, scope: map): bool := #group == 2 and not scope.has(name_of(group#1)) and takes_one_typed_value(name_of(group#1))
 # `for g in guests { li{g} }` → `[li{g} for g in guests]`, any other item as it is
 loop_as_items(item: Node): Node := {
 	if not (is_group(item) and bracket_of(item) == "" and #item >= 5 and item#1 == for_word and item#3 == in_word and is_curly_group(item#(#item))) { return item }

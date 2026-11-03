@@ -6,7 +6,15 @@
 # page, BOTH fails natively too, NONE fails with no native verdict stored) when all of test/ ran, and
 # data/tests-web/report.txt. The page runs one case at a time, beside scripts/samples-web.sh (notes/playground_plan.md).
 set -uo pipefail
+source "$(dirname "$0")/lib/platform.sh"
+source "$(dirname "$0")/lib/results-header.sh"
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 shift $(( $# > 0 ))
 [ -f "$tree/web/playground/warp-lib/warp.wasm" ] || { echo "error: $tree/web/playground/warp-lib/warp.wasm is missing: web/playground/build.sh" >&2; exit 2; }
-exec python3 "$tree/web/playground/test_in_browser.py" --tests "$@"
+results=$tree/test/tests-web.txt
+before=$(mtime_of "$results" 2>/dev/null)
+python3 "$tree/web/playground/test_in_browser.py" --tests "$@"
+status=$?
+# the page script writes the results only when all ran: a header only for a file it wrote anew
+[ "$(mtime_of "$results" 2>/dev/null)" != "$before" ] && results_header "$results" "$(git -C "$tree" rev-parse --short=10 HEAD)" ok
+exit $status
