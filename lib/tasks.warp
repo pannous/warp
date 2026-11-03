@@ -27,20 +27,20 @@ rewrite (shared $d) => global: $d
 // a cancelled task yields no result (decision stopped-no-result): reading or awaiting it raises "job was cancelled"
 rewrite cancel $x => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
 rewrite $x.cancel() => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
-// `stop job` is ambiguous (wait or cancel?): it cancels and says so
+// `stop job` pauses it, as a stopped job of a shell (decision stopped-no-result), and says so
 rewrite stop $x => task_stopped($x, $n) where statement and $x is symbol and $n = spelled($x)
 rewrite $x.stop() => task_stopped($x, $n) where statement and $x is symbol and $n = spelled($x)
 // `pause job` holds a task where it stands until `resume job` (or an await of it)
 rewrite pause $x => (task_paused($x); ø) where statement
 rewrite resume $x => (task_resumed($x); ø) where statement
 // `once job finishes: …` runs when the task's last step ran, at once if it is done; `once job pauses: …` at each
-// pause, `on job.stop: …` once it is cancelled
+// pause (`on job.stop: …` alike), `on job.cancel: …` once it is cancelled
 rewrite once $x finishes $body: block => task_finished_then($x, () => $body)
 rewrite once $x finishes: $body => task_finished_then($x, () => $body)
 rewrite once $x pauses $body: block => task_paused_then($x, () => $body)
 rewrite once $x pauses: $body => task_paused_then($x, () => $body)
-rewrite on $x.stop $body: block => task_cancelled_then($x, () => $body)
-rewrite on $x.stop: $body => task_cancelled_then($x, () => $body)
+rewrite on $x.stop $body: block => task_paused_then($x, () => $body)
+rewrite on $x.stop: $body => task_paused_then($x, () => $body)
 rewrite on $x.cancel $body: block => task_cancelled_then($x, () => $body)
 rewrite on $x.cancel: $body => task_cancelled_then($x, () => $body)
 // a program that starts tasks runs them all before it ends, its value kept
@@ -160,8 +160,8 @@ task_ended(x: Task, name: text) := {
 	handlers_run(x.cancel_handlers)
 }
 task_stopped(x, name: text) := {
-	warning("stop is ambiguous; fix: cancel " + name + ", or finish " + name + " to let it end")
-	task_cancelled(x, name)
+	warning("stop pauses " + name + "; to end it: cancel " + name)
+	task_paused(x)
 }
 task_paused(x) := {
 	if x is Task and not x.paused { task_held(x) }
