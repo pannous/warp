@@ -105,6 +105,7 @@ def same_but_comments(bundled: text, source: text): bool {
 	for at in 0 ..< #ours { if ours[at] != theirs[at] and not (ours[at] == "" and is_comment_line(theirs[at].trim())) { return no } }
 	yes
 }
+
 // the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): map {
 	found = {}
@@ -264,6 +265,7 @@ def statement_end(p: Parser): int {
 // function, `√x` is sqrt(x): a statement declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
 // [spelling, target] of an alias statement's words (`operator ∧ := and`, `prefix operator √ := sqrt`), else []
 // Rust twin: aliases.rs alias_line
+// (infix|prefix)? operator $op := body
 def operator_alias(words: list): list {
 	prefix = words.length > 0 and words#1 == "prefix"
 	if prefix { words = words[1 .. words.length] }
