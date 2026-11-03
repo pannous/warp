@@ -41,6 +41,9 @@ few things differently. Where this file and the role files disagree, Grok agents
 - Handovers of parked agents: /workspace/handover/<agent>.md.
 
 ## For the Supervisor
+Boundary while the core extraction runs (user 2026-11-03): Grok coders work only in lib/, samples/, test/, the
+playground (web/) and wiki/; never in core/ or extensions/ (merge conflicts with the extraction). Grok's machine
+is its own, so load is no reason to limit them; conflicts are.
 Grok Bot's Supervisor runs the Grok coders named in data/grok-cards.md; SendMessage can't reach it. Message it with
 `grok-msg warp-supervisor "<text>"` (~/dev/bin/grok-msg, webhook; secrets in ~/.config/grok-bot/webhook, never in the
 repo); it prints "sent to Grok Bot Supervisor" and wakes it through its fleet inbox. The webhook key has no expiry and
