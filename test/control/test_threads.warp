@@ -1,7 +1,7 @@
 # from test_threads.rs: edit the Rust test, then run the script again
 
 # tasks_run_at_the_same_time
-is! 'f(ms) := { sleep(ms / 1000); ms }; a = go f(1000); b = go f(1000); c = go f(1000); a + b + c' 3000
+is! 'f(ms) := { sleep(ms / 1000); ms }; a = go f(1000); b = go f(1000); c = go f(1000); await a + await b + await c' 3000
 
 # await_binds_its_task_inside_an_expression
 is! 'f(ms) := { sleep(ms / 1000); ms }; a = go f(1); b = go f(2); await a + await b' 3

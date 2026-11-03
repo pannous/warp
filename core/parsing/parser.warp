@@ -1583,7 +1583,9 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	if min_power == 0 or min_power > 151 { return false }
 	// `do r += i end`: the `end` closing the block is no argument
 	if p.group.stops_at_end and keyword_at(p, "end") { return false }
-	callable = left is symbol or is_list_of(left, "")
+	// `ys = @parallel square all xs`: a word an attribute marks applies as the word itself
+	marked = attribute_marked(left)
+	callable = marked is symbol or is_list_of(marked, "")
 	if not callable { return false }
 	c = peek(p.code, p.at, p.n)
 	if c == '{' and p.header { return false }

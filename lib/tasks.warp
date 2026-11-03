@@ -8,16 +8,20 @@ use units
 // (`await go …` is one rule: `await $x` taking the go would leave it unrewritten)
 rewrite await go $body: block => task_awaited(task_go(() => $steps)) where $steps = task_steps($body)
 rewrite await go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
+// `go for x in xs {…}`: each iteration a task, the loop done when all of them are (a parallel for)
+rewrite go for $x in $xs {$body...} => ($jobs = $xs.map($x => task_go(() => $steps)); $jobs.map(task_awaited); ø) where $steps = task_steps({$body...})
 rewrite go $body: block => task_go(() => $steps) where $steps = task_steps($body)
-// a task of an expression, `go f(x)`, is its value at once, run where it is started (`job + 1`, `[a, b]` read it
-// as a value: an implicit await), in a context of its own as a block's
-rewrite go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
+// a task of an expression is a block's (decision go-unified): `go f(x)` is `go { f(x) }`
+rewrite go $x => task_go(() => $x)
 rewrite await all $xs => $xs.map(task_awaited)
 rewrite await any $xs => task_awaited_any($xs)
 rewrite await first $xs => task_awaited_any($xs)
 rewrite await $x within $t or $d => task_awaited_within($x, $t / 1ms, () => $d)
 rewrite await $x within $t => task_awaited_within($x, $t / 1ms, () => raise "the task took longer than " + str($t))
 rewrite await $x => $awaited where $awaited = awaited_operand($x)
+// `shared n = 0` (wiki/async.md): one value every task sees; cooperative tasks run in one instance, so it is the
+// a global of the main level as a `linear` array is, its `+=` atomic as any step is
+rewrite (shared $d) => global: $d
 // (a rule's result ø reads as no match: the task is stopped, and then nothing)
 rewrite stop $x => (task_stopped($x); ø) where statement
 rewrite cancel $x => (task_stopped($x); ø) where statement

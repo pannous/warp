@@ -13,8 +13,8 @@ runs) holds the rules and the scheduler.
 - The scheduler (tasks_run_while) runs the earliest due step first and really sleeps until it is due.
 - A sleep inside a function a task calls is not split: it holds every task until it wakes, said once as a warning.
   Not yet split either: a sleep inside an `if` or a loop of the block.
-- `go f(x)` of an expression is its value at once, run where it is started, because `job + 1` and `[a, b]` read a
-  task as its value (an implicit await; ~25 tests of test/control rely on it).
+- `go f(x)` is `go { f(x) }` (decision go-unified): a task like a block's, started when main yields. A task is read as
+  its value only by `await` (`await job + 1`, `await all [a, b]`), never implicitly.
 - `await job` runs the tasks until it is done and gives its value, raising its error again; `await` takes the operand
   before an operator (`await a + await b`, rule word awaited_operand). `await all xs` gives the values, `await any`
   and `await first` the first done's, and `await job within t or d` gives the value, or d after t. `stop job` and
