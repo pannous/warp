@@ -1,0 +1,4 @@
+# a float field holds an exact root as a declared float does (`float x = π` keeps π): samples/advanced/raytracer.warp
+'type V { x: float }; V { x: sqrt(3) }.x'	√3
+'type V { x: float }; def v(x) := V { x: x }; v(1.0 / sqrt(3)).x * 3'	√3
+'x: float = sqrt(3); x * x'	3
