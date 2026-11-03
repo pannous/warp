@@ -12,7 +12,6 @@
 use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "scope.warp"
-use "multiple_assignments.warp"
 use "../analysis/signatures.warp"
 use "kind_changes.warp"
 

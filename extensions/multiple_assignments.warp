@@ -2,16 +2,11 @@
 # the statement arrives as the list `a, (b = b), a + b`. Every value is evaluated before any name is assigned:
 # `a·value = b; b·value = a + b; a = a·value; b = b·value`. One value for several names, `x, y = [1, 2]`, gives its
 # elements in order: `x·values = [1, 2]; x = x·values#1; y = x·values#2`. Tuple returns (`return 1, 2`) are not here yet.
-use "walk.warp"
-use "../parsing/phrase_blocks.warp"
-use "enum_declarations.warp"
 
 held(name: Node, suffix: text): Node := match name {
 	Symbol(text): symbol(text + "·" + suffix)
 	_: name
 }
-
-statements(list: list): Node := List(list, Bracket.Round, Separator.Semicolon)
 
 assigned(names: list, values: list): Node := {
 	places = 1 to #names
@@ -78,3 +73,6 @@ multiple_assignment(n: Node): Node := match n {
 
 # an enum's cases are no assignments: `enum Level { Low, Mid = 5 }` numbers Mid (card enum-case)
 multiple_assignments(program: Node): Node := if declared_enum(program) != ø then program else multiple_assignment(children(program, multiple_assignments))
+# the row (card core-extensions-move, decisions core-is-self, extension-passes): after the core's arity_overloads, behind
+# the function clauses' row, as the pass list ran it; its parts name core words without a use of core paths
+multiple_assignments_extension = Extension{name: "multiple_assignments", passes: {"arity_overloads": multiple_assignments}}
