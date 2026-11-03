@@ -8,12 +8,12 @@
 'go(x) := x + 1; go(2)'	3
 
 # a_finished_tasks_handler_runs_and_a_stop_handler_never
-'job = go 3; once job finishes: x = 7; x'	7
+'job = go 3; once job finishes: x = 7; await job; x'	7
 'job = go 3; once job pauses: print "held"; await job'	3
 
 # stopping_a_finished_task_warns_and_changes_nothing
-'job = go 3; stop job; job'	ø
-'job = go 3; job.stop(); job'	ø
+'job = go 3; stop job; job'	error	stop cancels (and warns it is ambiguous): reading a cancelled job raises
+'job = go 3; job.stop(); job'	error	as stop job
 
 # a_program_may_define_its_own_go_with_def
 'def go(n: int): int { n + 1 }; go(2)'	3

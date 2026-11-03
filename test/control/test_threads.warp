@@ -20,7 +20,7 @@ is! 'total(xs) := { s=0; for x in xs { s+=x }; s }; big=(0..20000).map(x=>x); a 
 # a_finish_handler_runs_after_the_statement_that_saw_the_task_finish
 is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(300); x = 0; once job finishes: x = 7; sleep(0.6s); x' 7
 is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(1000); x = 0; once job finishes: x = 7; y = x; y' 0
-is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(200); x = 0; once job finishes: x = 7; z = 1; x' 7
+is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(200); x = 0; once job finishes: x = 7; z = 1; await job; x' 7
 is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 { sleep(0.1s) }; done' 1
 
 # a_stop_handler_runs_once_the_task_stopped
