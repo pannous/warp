@@ -46,6 +46,31 @@ Open before moving: the measurement must confirm "no" for each row (a form insid
 time counts too); the declared-operator row moves only with rewrites.warp's typed-operator rules, which the sugar
 needs.
 
+## units and ± (warp-units, static reading 2026-11-03)
+
+Units and ± are libraries already: lib/units.warp (273 lines; `5km` is the number times the unit `km`, implicit
+multiplication, a core form every number glued to a name uses), lib/unit_names.warp (99), lib/uncertain.warp (134;
+`6 ± 1` is its operator_±, a glyph operator as any declared one). What core/ holds for them is small and scattered:
+
+| piece | where | lines | compiler uses | hook it needs |
+|---|---|---|---|---|
+| the degree sign: `30°`, `°C`, `°F` read as a unit name, `x°` as `x * °` | parser.warp atom's DEGREE branch, the name° case after a word, DEGREE | ~14 | no (`°` only in the constant) | **atom glyph** (parsing row above): `°` a registered glyph whose atom units reads |
+| ± as an operator: the node, its spelling, its binding power, the `+-` alias | node.warp Op.PlusMinus; node_cases.warp "PlusMinus"; parser.warp ALIAS_TARGET_NAMES `+-`, binding power 140/141 beside + and -; runtime/types.warp and runtime/nodes.warp operator name lists | ~6 entries | no | **operator table** (parsing row above): ± a declared glyph operator of uncertain, its precedence that of + and -; Op.PlusMinus stays for the seed until remove-unused |
+| ± as a value kind | analyzer.warp:192 `op == "±"` gives ValueKind.Data | 1 | no | goes with the operator table entry: the declared operator's result type, not a core special case |
+| which module's ± wins: units' overloads uncertain's (`5m ± 1cm` brings units) | prelude_words.warp:705 definer order | ~5 | no | stays: the general rule of module definers, units only its example |
+| `use units` linked prebuilt; a unit's expected type names its module (`sleep(duration: Time)` → units) | compiler.warp:157, prelude_words.warp 838-879 | — | — | stays: general module machinery, units the example in its comments |
+| `c` kept from units' speed-of-light rule | rewrites.warp:57 | 1 | — | stays: a general guard of a name the program binds |
+| calendar time units in literals (`2 weeks`, `1 month`) and Time values | parser.warp TIME_UNITS, time_unit_named, with_time_unit (in the time-literals row above); emitter/times.warp (147, Time kind, unit_nanos) | 147 + row above | check: the compiler's `timed` reads the clock, never a time literal | moves with the time-literals row: **atom suffix** plus the Time kind's emitter part as one extension |
+
+Not units, though named so: index_positions.warp (179, index vs position, decision index-units) and UNIT_WORDS /
+counts_units (bytes, chars …: what a count counts) are the core's ints; operators.warp marks (`marked`, `marks_kind`)
+carry bool and int-type info for every program, so they stay.
+
+Plan once the hooks exist: the degree glyph and the ± operator entry move behind the atom-glyph and operator-table
+hooks (about 20 lines leave the core, no spelling lost); lib/units and lib/uncertain stay libraries; the module-order
+and expected-type rules stay core as general rules. Time literals with their emitter part are the one larger unit-like
+piece (~250 lines), owned by the parsing row's time entry. Nothing here needs the compiler's own source changed.
+
 ## Rules (user 2026-11-03)
 - The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).
 - The language is never simplified to shrink the core: every spelling programs may write stays (decision self-source-minimal).
