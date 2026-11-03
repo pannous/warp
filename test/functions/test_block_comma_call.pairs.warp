@@ -1,0 +1,5 @@
+'if yes { print "n:", 3 }; 7'	7
+'f() := { print "n:", 3 }; f(); 7'	7
+'for x in [1] { print "n:", x }; 7'	7
+'f(a, b) := a * b; if yes { f 2, 3 }'	6
+'pair() := { return 1, 2 }; a, b = pair(); a + b'	3

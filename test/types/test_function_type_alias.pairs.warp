@@ -1,0 +1,3 @@
+# a type alias may name a function type, `type P = int -> bool`, as an annotation may (samples/types/types.warp)
+'type P = int -> bool; 1'	1
+'type Predicate[T] = T -> bool; type BinaryOp[T] = (T, T) -> T; 2'	2

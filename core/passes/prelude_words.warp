@@ -301,6 +301,7 @@ called_only(program: Node): Node := {
 		if brought_names.has(names[i]) { brought[names[i]] = (brought.get(names[i]) ?? []) + [statements[i]] } else { pending += words_within(statements[i]) }
 	}
 	if pending.any(word => word.starts_with(closure_call_word)) { pending += [callable_word] }
+	if task_starting_word in pending { pending += [settling_word] }
 	called = {}
 	at = 0
 	while at < #pending {
@@ -353,7 +354,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	if program_words.any(word => word in foreign) { hint_foreign_types(program, foreign, own_names) }
 	exported = slices.filter(is_exported_slice).map(slice => slice#1)
 	for name in exported { exported_names[name] = yes }
-	wanted = exported + program_words + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + (if settling_word in module_names and mentions(program, task_starting_word) then [settling_word] else [])
+	wanted = exported + program_words + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + (if settling_word in module_names then [settling_word] else [])
 	uses = ø
 	origins = {}
 	keys = slice_keys(files)
@@ -974,7 +975,6 @@ iteration_variables(items: list): list := {
 }
 # `x` of a parameter `x`, `x: int`, `x = 1`
 # `A | E(x) | F`: A, E(x) and F
-is_type_view(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 alternatives(n: Node): list := if is_key(n, Op.Or) or is_key(n, Op.BitOr) then alternatives(key_of(n)) + alternatives(value_of(n)) else [n]
 leftmost_symbol(n: Node): Node := {
 	while n is key { n = key_of(n) }

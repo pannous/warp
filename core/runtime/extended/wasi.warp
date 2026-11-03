@@ -115,9 +115,10 @@ real_file_path(path: text): text := {
 	length = real_path(output_address() + scratch_bytes(), byte_count(path), output_address() + result_at, wasi_chunk() - byte_count(path))
 	if length < 0 then path else scratch_text(result_at, length)
 }
+# the system's words for a WASI error a file word meets (`/dev/null/x.txt`: a folder that is a file), else its number
+wasi_reason(error: int): text := if error == wasi_no_entry() then "No such file or directory" else if error == wasi_not_a_folder() then "Not a directory" else "WASI error " + error
 file_failure(word: text, path: text, error: int): Node := {
-	reason = if error == wasi_no_entry() then "No such file or directory" else "WASI error " + error
-	failure_of(word + " " + path + " failed: " + reason)
+	failure_of(word + " " + path + " failed: " + wasi_reason(error))
 }
 
 # `read(path)`: the file's text, or the Error of why not
