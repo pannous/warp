@@ -1259,7 +1259,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				if op#2 == ":=" or op#2 == "=" { left = result_typed(left) }
 				operand = left
 				left = keyed(bit_operator(op#1, left, right, op#2), left, if op#2 == ":" then with_switch_cases(p, right) else right)
-				if unevenly_spaced(p, operator_start, op#1) { left = attributed(UNEVEN_SPACING_MARK, listed(Bracket.Square, Separator.Space, [written_before(p, operand, operator_start), op#1, p.code[operator_start + op#1.length ..< p.at].trim()]), left) }
+				if unevenly_spaced(p, operator_start, op#1) { left = attributed(UNEVEN_SPACING_MARK, listed(Bracket.Square, Separator.Space, [written_before(p, operand, p.at), op#1, written_before(p, operand, operator_start), p.code[operator_start + op#1.length ..< p.at].trim()]), left) }
 				// `{f: x => x * 2}`: the field f holds the lambda; `f: (float) -> float` stays a typed name
 				if op#1 == "=>" { left = field_holding_lambda(left) }
 			}

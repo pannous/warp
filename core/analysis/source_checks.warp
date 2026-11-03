@@ -64,7 +64,7 @@ spaced_sign(n: Node) := {
 uneven_spacing(n: Node) := {
 	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == UNEVEN_SPACING_MARK) { return ø }
 	written = items_of(value_of(n)#2)
-	diagnose(call_of("uneven_spacing", [written.join(""), written#2, written.join(" ")]), n)
+	diagnose(call_of("uneven_spacing", [written#1, written#2, written#3 + " " + written#2 + " " + written#4]), n)
 }
 # `x!` as parser.warp writes it, `unwrap(x)`, and the node it marks
 has_mutation_mark(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)
