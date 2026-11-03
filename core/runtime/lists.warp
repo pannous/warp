@@ -5,7 +5,7 @@ use "arithmetic.warp"
 use "characters.warp"
 use "errors.warp"
 use "text.warp"
-use "gpu_lists.warp"
+use "bridge.warp"
 use "instructions.warp"
 list_join(a: list, b: list): list := {
 	out = new_list(#a + #b)
@@ -31,7 +31,7 @@ list_append(a: list, b: list): list := {
 # an empty list"), any other value fails as Rust's "not a list"
 node_at(n: Node, index: int): Node := {
 	if is_null(n) { index_out_of_range_of(index, 0) }
-	if is_gpu_list(n) { return gpu_list_at(n, index) }
+	if is_extended_list(n) { return extended_list_at(n, index) }
 	if is_range(n) { return range_at(n, index) }
 	if kind_code(n) == Kind.List { return unboxed_list(n)#index }
 	if kind_code(n) == Kind.Text { return text_char(unboxed_text(n), index) }
@@ -51,7 +51,7 @@ instance_position(instance: Node, index: int): Node := instance_field_at(instanc
 node_length(n: Node): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) { return 0 }
-	if is_gpu_list(n) { return gpu_list_count(n) }
+	if is_extended_list(n) { return extended_list_count(n) }
 	if is_range(n) { return range_count(n) }
 	if kind_code(n) == Kind.List { return #unboxed_list(n) }
 	if kind_code(n) == Kind.Text { return text_count(unboxed_text(n)) }
@@ -82,7 +82,7 @@ list_insert(xs: list, at: int, value: Node): list := {
 # `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
 node_set_at(n: Node, index: int, value: Node): Node := {
 	if kind_code(n) != Kind.List { fail() }
-	if is_gpu_list(n) { return gpu_list_set(n, index, value) }
+	if is_extended_list(n) { return extended_list_set(n, index, value) }
 	items = unboxed_list(n)
 	forget_map_index(items)
 	items#index = value
@@ -155,10 +155,19 @@ forget_map_index(entries: list): int := {
 	if slot > 0 { index_covered#slot = -1 }
 	0
 }
-# A range `1 to n`, `1..n` (decision lazy-range-value): a list node marked KindUnit.Range holding its two ends and no
+# a list node's kind (kinds.warp ListKind): 0 of a list holding its $list, else the row of a range or an extension's list
+list_kind(n: Node): int := if is_null(n) or kind_code(n) != Kind.List then 0 else int_remainder(int_quotient(marked_kind(n), list_kind_unit()), 4)
+# kinds.warp's KindUnit.ListKind, KindUnit.ListCell and ListKind.Range as numbers: the seed that builds the runtime
+# first knows only its own tables' keys (card once-refreshed)
+list_kind_unit(): int := 4503599627370496
+list_cell_unit(): int := 144115188075855872
+range_kind(): int := 1
+# a list of an extension's kind, whose words runtime/bridge.warp's list hooks reach (a GPU list: extensions/gpu_lists)
+is_extended_list(n: Node): bool := list_kind(n) > range_kind()
+# A range `1 to n`, `1..n` (decision lazy-range-value): a list node of ListKind.Range holding its two ends and no
 # items; #, xs#i and sum answer from the ends, any other list word makes its items (unlisted_items)
-range_value(first: int, last: int): Node := keyed(Kind.List + BracketCode.Square * KindUnit.Info + KindUnit.Range, fresh_int_node(first), fresh_int_node(last))
-is_range(n: Node): bool := not is_null(n) and kind_code(n) == Kind.List and bits_and(marked_kind(n), KindUnit.Range) != 0
+range_value(first: int, last: int): Node := keyed(Kind.List + BracketCode.Square * KindUnit.Info + range_kind() * list_kind_unit(), fresh_int_node(first), fresh_int_node(last))
+is_range(n: Node): bool := list_kind(n) == range_kind()
 range_first(n: Node): int := unboxed_int(entry_key(n))
 range_count(n: Node): int := max_int(unboxed_int(key_value(n)) - range_first(n) + 1, 0)
 range_at(n: Node, index: int): Node := {
@@ -176,9 +185,6 @@ range_sum(n: Node): Node := {
 	ends = range_first(n) + unboxed_int(key_value(n))
 	if int_remainder(count, 2) == 0 then grown_product(int_quotient(count, 2), ends) else grown_product(count, int_quotient(ends, 2))
 }
-# the items of a list node whose data is no $list (emitter unboxed_list_code): a range's made, a GPU list's refused
-unlisted_items(n: Node): list := {
-	if is_range(n) { return range_items(n) }
-	gpu_list_refused_as(n)
-	new_list(0)
-}
+# the items of a list node whose data is no $list (emitter unboxed_list_code): a range's made, an extension's as its
+# kind gives them (a GPU list refuses)
+unlisted_items(n: Node): list := if is_range(n) then range_items(n) else extended_list_unlisted(n)

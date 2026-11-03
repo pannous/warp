@@ -123,12 +123,12 @@ static inline bool warp_text_is(warp_values* values, const wasmtime_anyref_t* no
 	free(text);
 	return same;
 }
-// a GPU list [f32], [i32] or [u32] (core/runtime/gpu_lists.warp): its four-byte cells where they are in the module's
+// a GPU list [f32], [i32] or [u32] (extensions/gpu_lists/runtime.warp): its four-byte cells where they are in the module's
 // memory, their count and type ('f', 'i' or 'u', as WGSL's f32, i32, u32), NULL for any other value
 static inline void* warp_cells(warp_values* values, const wasmtime_anyref_t* node, size_t* count, char* cell) {
 	if (wasmtime_anyref_is_null(node)) return NULL;
 	int64_t kind = warp_kind_field(values, node);
-	if (!(kind & WARP_GPU_LIST_MARK)) return NULL;
+	if (kind / WARP_LIST_KIND_UNIT % 4 != WARP_GPU_LIST_KIND) return NULL;
 	int64_t type = kind / WARP_GPU_CELL_UNIT % 4;
 	*cell = type == WARP_GPU_CELL_I32 ? 'i' : type == WARP_GPU_CELL_U32 ? 'u' : 'f';
 	wasmtime_anyref_t box = warp_field_ref(values, node, WARP_NODE_DATA);

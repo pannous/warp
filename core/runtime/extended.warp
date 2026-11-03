@@ -15,6 +15,7 @@ use "extended/pow_tables.warp"
 use "extended/pow.warp"
 use "extended/exact_rounding.warp"
 use "extended/wasi.warp"
+use "../../extensions/runtime.warp"
 # The bodies of the hooks core/runtime/bridge.warp declares: the core hands a value of an extended type here,
 # and each hook calls the extended word for it. They are this root's own words, not a used file's, so that the root
 # runs alone in the Rust lane, which refuses a word declared in one used file (bridge.warp) and defined in another

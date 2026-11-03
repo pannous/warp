@@ -1,0 +1,24 @@
+# The extensions' runtime words, joined to the extended runtime (core/runtime/extended.warp uses this file, decision
+# runtime-split): each extension's runtime file, and the list kinds table, the bodies of runtime/bridge.warp's list
+# hooks: a list of an extension's kind (core/analysis/kinds.warp ListKind) to that kind's words
+use "gpu_lists/runtime.warp"
+extended_list_at(n: Node, index: int): Node := {
+	if is_gpu_list(n) { return gpu_list_at(n, index) }
+	fail()
+}
+extended_list_count(n: Node): int := {
+	if is_gpu_list(n) { return gpu_list_count(n) }
+	fail()
+}
+extended_list_set(n: Node, index: int, value: Node): Node := {
+	if is_gpu_list(n) { return gpu_list_set(n, index, value) }
+	fail()
+}
+extended_list_items(n: Node): list := {
+	if is_gpu_list(n) { return gpu_list_items(n) }
+	fail()
+}
+extended_list_unlisted(n: Node): list := {
+	if is_gpu_list(n) { return gpu_list_unlisted(n) }
+	fail()
+}

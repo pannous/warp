@@ -1,24 +1,30 @@
-# GPU lists `[f32]`, `[i32]`, `[u32]` (decision gpu-bound-floats): the numbers a program hands the GPU, packed as
-# four-byte cells in linear memory from their creation (lib/wgsl.warp gpu_packed chooses them), so the GPU's library
-# reads and writes them where they are (lib/native/warp_node.h warp_cells). A List $Node of the square bracket marked
-# KindUnit.GpuList and its cell type (GpuCell), its data an Int of (address << 32) + count. It reads, shows and
-# compares as a list; a list word that would change one refuses (gpu_list_refused), as a boxed copy would lose the change
-use "intrinsics.warp"
-use "../analysis/kinds.warp"
-use "errors.warp"
-use "conversions.warp"
-use "instructions.warp"
+# GPU lists `[f32]`, `[i32]`, `[u32]` (decision gpu-bound-floats), the runtime of the gpu_lists extension
+# (gpu_lists.warp registers it): the numbers a program hands the GPU, packed as four-byte cells in linear memory from
+# their creation (lib/wgsl.warp gpu_packed chooses them), so the GPU's library reads and writes them where they are
+# (lib/native/warp_node.h warp_cells). A List $Node of the square bracket of list kind gpu_list_row() and its cell
+# type (GpuCell) in KindUnit.ListCell, its data an Int of (address << 32) + count. It reads, shows and compares as a
+# list (the core's list words reach it through runtime/bridge.warp's list hooks); a list word that would change one
+# refuses (gpu_list_refused), as a boxed copy would lose the change
+use "../../compiler/runtime/intrinsics.warp"
+use "../../compiler/analysis/kinds.warp"
+use "../../compiler/runtime/errors.warp"
+use "../../compiler/runtime/conversions.warp"
+use "../../compiler/runtime/instructions.warp"
+use "../../compiler/runtime/lists.warp"
 page_bytes(): int := 65536
 cell_bytes(): int := 4
 address_unit(): int := 4294967296
-gpu_list_kind(cell: int): int := Kind.List + BracketCode.Square * KindUnit.Info + KindUnit.GpuList + cell * KindUnit.GpuCell
-is_gpu_list(n: Node): bool := not is_null(n) and kind_code(n) == Kind.List and bits_and(marked_kind(n), KindUnit.GpuList) != 0
+# its row in a list's kind field, gpu_lists.warp GpuListKind.Row (a number, as list_kind_unit says why)
+gpu_list_row(): int := 2
+gpu_list_kind(cell: int): int := Kind.List + BracketCode.Square * KindUnit.Info + gpu_list_row() * list_kind_unit() + cell * list_cell_unit()
+is_gpu_list(n: Node): bool := list_kind(n) == gpu_list_row()
 gpu_list_address(n: Node): int := shifted_right(unboxed_int(n), 32)
 gpu_list_count(n: Node): int := bits_and(unboxed_int(n), address_unit() - 1)
 # its cell type, a GpuCell
-gpu_list_cell(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.GpuCell), 4)
+gpu_list_cell(n: Node): int := int_remainder(int_quotient(marked_kind(n), list_cell_unit()), 4)
 gpu_cell_name(cell: int): text := if cell == GpuCell.I32 then "i32" else if cell == GpuCell.U32 then "u32" else "f32"
-# where a host finds a GPU list's cells: (address << 32) + count, -1 for any other value (core/emitter/host.warp)
+# where a host finds a GPU list's cells: (address << 32) + count, -1 for any other value (exported for a host,
+# gpu_lists.warp host_exports)
 gpu_list_place(n: Node): int := if is_gpu_list(n) then unboxed_int(n) else -1
 # count zeros of the cell type in pages grown for them (a grown page is zero)
 gpu_zeros(count: int, cell: int): Node := {
@@ -74,3 +80,8 @@ gpu_list_items(n: Node): list := {
 gpu_list_refused(message: text): int := returned_error(message)
 # a list word given a GPU list, which would read or change a copy of it
 gpu_list_refused_as(n: Node): int := gpu_list_refused("a GPU list [" + gpu_cell_name(gpu_list_cell(n)) + "] takes only #, xs#i, xs#i = number, for, print and the GPU's words: copy it to a list with [x for x in xs] first")
+# the items a list word reads: none, it refuses
+gpu_list_unlisted(n: Node): list := {
+	gpu_list_refused_as(n)
+	new_list(0)
+}
