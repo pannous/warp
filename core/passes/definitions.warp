@@ -23,6 +23,8 @@ is_parameter(n: Node): bool := match n {
 	Key(name, Op.Colon, _): is_name(name)
 	# a default, `def f(n, i = 2) = …` (decision default-parameter-def)
 	Key(name, Op.Assign, _): is_name(name)
+	# a rest parameter, `def total(xs...) = sum xs`, read `xs to ø`
+	Key(name, Op.To, rest): is_name(name) and rest == ø
 	_: is_name(n)
 }
 

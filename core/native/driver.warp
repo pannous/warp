@@ -864,6 +864,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	member = shown(caller, context, given + VALUE_BYTES)
 	listed = given + 2 * VALUE_BYTES
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
+	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -908,8 +909,32 @@ guest_result(caller: handle, context: handle, name: text, value: pointer): point
 COMMAND_OUTPUT_BYTES = 4096
 # os.command(line): the line run by sh, what it printed, its trailing newlines left off; else the Error naming its exit
 # status and what it said on stderr (as rust-harness:crates/warp-runtime std_adapters.rs executed)
-os_command(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
-	line = shown(caller, context, item_of(caller, context, listed, 1))
+os_command(caller: handle, context: handle, listed: pointer, result: pointer): nothing := line_run(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), result)
+# os.exec(words): the argument vector (`exec sh "crontab -l"`, lib/os.warp) run as that command, each word a word of
+# its own however it reads (quoted for sh, no expansion), what it printed; else the Error naming the command (card
+# crontab-sample-error)
+os_exec(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	words = item_of(caller, context, listed, 1)
+	# (a command of one word, `sh "date"`, is that word)
+	if guest_flag(caller, context, "is_textual", words) { return line_run(caller, context, sh_quoted(shown(caller, context, words)), result) }
+	count = guest_number(caller, context, "item_count", words)
+	line = ""
+	for i in 1..(count + 1) { line = joined(joined(line, " "), sh_quoted(shown(caller, context, item_of(caller, context, words, i)))) }
+	line_run(caller, context, line, result)
+}
+# a text as one sh word: in single quotes, each ' in it as '\''
+sh_quoted(t: text): text := {
+	quoted = "'"
+	start = 0
+	for i in 0..t.length {
+		if byte_at(t.address + i).value == 39 {
+			quoted = joined(joined(quoted, text_from(t.address + start, (i - start) as u32)), "'\\''")
+			start = i + 1
+		}
+	}
+	joined(joined(quoted, text_from(t.address + start, (t.length - start) as u32)), "'")
+}
+line_run(caller: handle, context: handle, line: text, result: pointer): nothing := {
 	said = joined(compiled_path(), ".stderr")
 	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
 	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
@@ -1208,10 +1233,27 @@ painted_pixels(caller: handle, context: handle, given: pointer, width: i64, heig
 		if in_window > 0 then 0 else pixels
 	}
 }
-# the first n pixels of the picture, as ints
+# the first n pixels of the picture, as ints, a chunk of PIXEL_CHUNK at a time by the module's pixels_at (4 bytes each
+# in its memory): one call a chunk, not one a pixel (card native-show-paint: 1280×800 took 360 ms)
+PIXEL_CHUNK = 16372 # runtime/show.warp pixel_chunk(): the output area past its C string's start, 4 bytes a pixel
 pixels_of(caller: handle, context: handle, picture: pointer, n: i64): pointer := {
 	pixels = allocate((n * 8) as i32)
-	for i in 0..n { long_at(pixels + i * 8).value = long_at(indexed(caller, context, "int_item_at", picture, i + 1) + VALUE_OFFSET).value }
+	words = allocate((PIXEL_CHUNK * 4) as i32)
+	values = allocate(3 * VALUE_BYTES)
+	memcpy(values, native_pointer(picture), VALUE_BYTES)
+	byte_at(values + VALUE_BYTES).value = KIND_I64
+	byte_at(values + 2 * VALUE_BYTES).value = KIND_I64
+	result = allocate(VALUE_BYTES)
+	done = 0
+	while done < n {
+		count = if n - done < PIXEL_CHUNK then n - done else PIXEL_CHUNK
+		long_at(values + VALUE_BYTES + VALUE_OFFSET).value = done + 1
+		long_at(values + 2 * VALUE_BYTES + VALUE_OFFSET).value = count
+		guest_call(caller, context, "pixels_at", values, 3, result)
+		memcpy(words, guest_memory(caller, context) + long_at(result + VALUE_OFFSET).value, count * 4)
+		for i in 0..count { long_at(pixels + (done + i) * 8).value = word_at(words + i * 4).value as i64 }
+		done = done + count
+	}
 	pixels
 }
 png_written(pixels: pointer, width: i64, height: i64): nothing := {
