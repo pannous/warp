@@ -2546,11 +2546,6 @@ def prefixed(p: Parser): Node := {
 		method = operator_method_definition(p, word)
 		if method != ø { return method }
 	}
-	// `To square a number: …` starts an English sentence with a capital
-	if word.lower() == "to" and starts_statement(p) {
-		definition = to_definition(p)
-		if definition != ø { return definition }
-	}
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
 	if form == "condition" {
@@ -2936,182 +2931,13 @@ def bare_control(n: Node, control: text): bool := match n {
 // the command's words with its last one replaced by `tail`
 def command_with(nodes: list, tail: Node): Node := spaced(nodes[0 .. nodes.length - 1] + [tail])
 
-// `to name params: body` (also `{ body }`, `do body`, the lines indented below), after `to` opening a statement: the
-// function `name(params) := body`, its parameters the head's slots (phrase_slots); ø, nothing read, before anything
-// else
-// Rust twin: functions.rs try_parse_to_definition, phrase_result_type, phrase_redefinition
-def to_definition(p: Parser): Node := {
-	before = p.at
-	p.at = p.at + 2
-	skip_spaces(p)
-	if not is_name_start(peek(p.code, p.at, p.n)) {
-		p.at = before
-		return ø
-	}
-	name = header_word(p)
-	words = []
-	// `to call person{name?, phone number} do …` (wiki/argument.md): the parameter's fields, glued to it
-	shapes = []
-	result_type = ""
-	while true {
-		skip_spaces(p)
-		if at_to_header_end(p) { break }
-		if not is_name_start(peek(p.code, p.at, p.n)) {
-			p.at = before
-			return ø
-		}
-		word = header_word(p)
-		if word == "do" and #words > 0 { break }
-		if word == "as" and #words > 0 {
-			result_type = phrase_result_type(p)
-			if result_type != "" { break }
-		}
-		if is_at(p.code, p.at, '{', p.n) { shapes += [[word, atom(p)]] }
-		words += [word]
-	}
-	if is_at(p.code, p.at, ':', p.n) { p.at = p.at + 1 }
-	skip_spaces(p)
-	body = definition_body(p)
-	parameters = phrase_slots(words, body, p.types).map(parameter => shaped(parameter, shapes))
-	clash = phrase_redefinition(p, name, parameters)
-	if clash != "" { raise clash }
-	head = symbol(name)
-	if #parameters > 0 {
-		p.phrases += [[name, parameters]]
-		head = call_of([head] + parameters)
-	}
-	if result_type != "" { head = Key(head, Op.As, symbol(result_type)) }
-	Key(head, Op.Define, body)
-}
-
-// The word at the parser's position, read
-def header_word(p: Parser): text {
-	start = p.at
-	p.at = symbol_end(p.code, p.at, p.n)
-	p.code[start .. p.at]
-}
-
 // `:` (no `:=`) or `{`: where a `to` header ends and its body starts
 def at_to_header_end(p: Parser): bool := (is_at(p.code, p.at, ':', p.n) and peek(p.code, p.at + 1, p.n) != '=') or is_at(p.code, p.at, '{', p.n)
-
-// The type after `as` when it ends the header, read: `to render text as pdf: …`; else "", nothing read
-def phrase_result_type(p: Parser): text {
-	after_as = p.at
-	skip_spaces(p)
-	if is_name_start(peek(p.code, p.at, p.n)) {
-		result_type = header_word(p)
-		skip_spaces(p)
-		if at_to_header_end(p) or keyword_at(p, "do") { return result_type }
-	}
-	p.at = after_as
-	""
-}
-
-// A definition's body: a `{…}` block, the rest of the statement, or the lines indented below
-// Rust twin: blocks.rs parse_definition_body
-def definition_body(p: Parser): Node := {
-	if is_at(p.code, p.at, '{', p.n) { return atom(p) }
-	if not only_blanks_before_newline(p) { return statement_words(p) }
-	block = indented_block(p)
-	if block == ø { raise "a definition needs a body: `to name params: body`" }
-	block
-}
-
-// The parameter with the fields its head glued to it: `person{name?}` is `person: {name?}`
-def shaped(parameter: Node, shapes: list): Node := {
-	for shape in shapes {
-		if shape#1 == slot_name(parameter) { return Key(parameter, Op.Colon, shape#2) }
-	}
-	parameter
-}
-
-// The parameters of a phrase head's words after its name (notes/matching.md):
-// - a preposition (`to of from …`) separates the slots and labels the one after it: `to add a to b` → `a`, `to b`
-// - an article starts a noun slot when a known type follows it or the body never names the article: `a number` →
-//   `number: number`, `a photo` → `photo` (typed once `class photo` is declared); `to add a b: a+b` keeps `a`
-// - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`;
-//   when together they name a declared type, by all of them: `a full name` → `full-name: full-name`
-// - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
-// Rust twin: type_name_matching.rs parameter_slots (labelled)
-def phrase_slots(words: list, body: Node, types: list): list {
-	parameters = []
-	preposition = ""
-	at = 1
-	while at <= #words {
-		word = words#at
-		if phrase_prepositions.contains(word) {
-			preposition = word
-			at = at + 1
-			continue
-		}
-		noun = [word]
-		if phrase_articles.contains(word) and in_slot(words, at + 1) and (known_type(words#(at + 1), types) or not mentions(body, word)) {
-			noun = []
-			while in_slot(words, at + 1) and not phrase_articles.contains(words#(at + 1)) {
-				at = at + 1
-				noun += [words#at]
-			}
-		}
-		at = at + 1
-		// `a full name` of `class full name`: the nouns together are the type, and the slot's name
-		head = if #noun > 1 and known_type(noun.join("-"), types) then noun.join("-") else noun#(#noun)
-		slot = if known_type(head, types) then Key(symbol(head), Op.Colon, symbol(head)) else symbol(head)
-		parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
-		preposition = ""
-	}
-	names = []
-	for parameter in parameters {
-		name = slot_name(parameter)
-		if names.contains(name) { raise "two parameters are named " + name + ": use one-word parameter names here (`first name`, `last name` need multi-word identifiers)" }
-		names += [name]
-	}
-	if #parameters == 1 and is_key(parameters#1, Op.Colon) {
-		typed = parameters#1
-		type_name = name_of(value_of(typed))
-		if slot_name(typed) == type_name and mentions(body, implicit_parameter) and not mentions(body, type_name) {
-			return [Key(symbol(implicit_parameter), Op.Colon, value_of(typed))]
-		}
-	}
-	parameters
-}
-
-// Whether the head word at `at` belongs to the slot before it: no preposition, not past the end
-def in_slot(words: list, at: int): bool := at <= #words and not phrase_prepositions.contains(words#at)
 
 // A type word, its plural (`numbers`) or a type the source declares
 // Rust twin: analyzer type_word_kind, plural_element_type
 def known_type(word: text, types: list): bool := is_type_word(word) or plural_type_word(word) or types.contains(word)
 
-// The name a slot gives its parameter: `a`, `number` of `number: number`, `b` of `to b`
-def slot_name(parameter: Node): text := match parameter {
-	Symbol(name): name
-	Key(name, _, _): slot_name(name)
-	List(parts, _, _): slot_name(parts#(parts.length))
-	_: ""
-}
-
-// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns, which only types tell apart;
-// else ""
-def phrase_redefinition(p: Parser, name: text, parameters: list): text {
-	earlier = []
-	for phrase in p.phrases {
-		if phrase#1 == name { earlier = phrase#2 }
-	}
-	if #earlier == 0 or #earlier != #parameters { return "" }
-	classes = []
-	at = 1
-	while at <= #parameters {
-		before = earlier#at
-		current = parameters#at
-		if before != current {
-			if not (before is symbol and current is symbol) { return "" }
-			classes += ["class " + name_of(before), "class " + name_of(current)]
-		}
-		at = at + 1
-	}
-	if #classes == 0 { return "" }
-	name + " is defined twice; declare " + classes.join(" and ") + " to dispatch on them"
-}
 // Whether a statement starts at the parser's position, no end of one, `then`, `else` or `do`
 // Rust twin: blocks.rs at_body_start
 def at_body_start(p: Parser): bool {
@@ -3717,109 +3543,6 @@ EXACT_CONSTANTS = ["ⅈ", "ε", "ω"]
 // no node of its own in warp yet (card node-more-cases): the number view, which the Rust side reads as written
 def exact_constant(word: text): Node := opaque(["number", word])
 
-// `shader { … }` (or `wgsl { … }`) after its word: WGSL as a sublanguage, the text between the braces without its
-// common indentation, braces in WGSL comments not counted; else ø
-// Rust twin: literals/shaders.rs parse_shader_block
-SHADER_WORDS = ["shader", "wgsl"]
-def shader_block(p: Parser, word: text): Node := {
-	open = p.at
-	while open < p.n and (p.code[open] == ' ' or p.code[open] == '\t') { open = open + 1 }
-	if not is_at(p.code, open, '{', p.n) { return ø }
-	end = closing_brace(p.code, open + 1, p.n)
-	if end < 0 { raise "the { of `" + word + " { … }` is never closed" }
-	p.at = end + 1
-	shader_text(dedented(p.code[open + 1 .. end]))
-}
-
-// Where the `}` closing a `{` before `at` is, -1 if none: WGSL comments hold no braces
-// Rust twin: literals/text.rs closing_brace
-def closing_brace(code: text, at: int, n: int): int {
-	depth = 1
-	while at < n {
-		c = code[at]
-		if c == '/' and is_at(code, at + 1, '/', n) {
-			while at + 1 < n and code[at + 1] != '\n' { at = at + 1 }
-		} else if c == '/' and is_at(code, at + 1, '*', n) {
-			at = at + 2
-			while at + 1 < n and not (code[at] == '*' and code[at + 1] == '/') { at = at + 1 }
-			at = at + 1
-		} else if c == '{' {
-			depth = depth + 1
-		} else if c == '}' {
-			if depth == 1 { return at }
-			depth = depth - 1
-		}
-		at = at + 1
-	}
-	-1
-}
-
-// The lines without the indentation all non-blank ones share, without the blank lines around them, the first
-// without any
-// Rust twin: literals/text.rs without_common_indentation
-def dedented(source: text): text {
-	lines = source.split("\n")
-	written = [line for line in lines if line.trim()]
-	if #written == 0 { return "" }
-	common = min(written.map(indent_width))
-	first = 1
-	while count(lines#first.trim()) == 0 { first = first + 1 }
-	last = #lines
-	while count(lines#last.trim()) == 0 { last = last - 1 }
-	kept = []
-	for index in first .. last + 1 {
-		line = lines#index
-		kept += [without_trailing_blanks(if index == first then line.trim() else line[common ..])]
-	}
-	kept.join("\n")
-}
-
-def indent_width(line: text): int {
-	width = 0
-	while width < #line and (line[width] == ' ' or line[width] == '\t') { width = width + 1 }
-	width
-}
-
-def without_trailing_blanks(line: text): text {
-	end = #line
-	while end > 0 and (line[end - 1] == ' ' or line[end - 1] == '\t') { end = end - 1 }
-	line[0 .. end]
-}
-
-// A shader's WGSL with each hole `$name` read from the uniform values (`values.name`), the holes listed in its
-// shader_holes attribute; Book of Shaders names and `$mouse_x` read warp's own holes
-// Rust twin: graphics/shader_holes.rs shader_text, written
-HOLE_ALIASES = {"mouse_x": "mouse.x", "mouse_y": "mouse.y", "u_time": "time", "u_resolution": "size", "u_mouse": "mouse", "wheel": "mouse_wheel"}
-def shader_text(wgsl: text): Node := {
-	names = []
-	// the pieces between holes are copied whole, joined once: one `+` per character copied the text each time
-	parts = []
-	copied = 0
-	at = 0
-	n = #wgsl
-	while at < n {
-		c = wgsl[at]
-		end = at + 1
-		if c == '$' {
-			while end < n and (is_alphanumeric(wgsl[end]) or wgsl[end] == '_') { end = end + 1 }
-		}
-		if end == at + 1 or is_digit(wgsl[at + 1]) {
-			at = at + 1
-		} else {
-			written_name = wgsl[at + 1 .. end]
-			read = if HOLE_ALIASES.contains(written_name) then HOLE_ALIASES[written_name] else written_name
-			parts += [wgsl[copied .. at], "values." + read]
-			hole_name = read.split(".")#1
-			if not names.contains(hole_name) { names += [hole_name] }
-			at = end
-			copied = at
-		}
-	}
-	text = join(parts + [wgsl[copied .. n]], "")
-	if #names == 0 { return text }
-	attributed("shader_hole_names", listed(Bracket.Square, Separator.Space, [symbol(hole_name) for hole_name in names]), text)
-}
-
 // `@name` or `@name(value)` marks the atom after it: `@version(2) @draft tee{a:1}`; `@name: value` is the meta entry
 // `@name`, never a field; after a dot, `p.@name` names the meta key itself
 // Rust twin: annotations.rs parse_attribute
@@ -3933,10 +3656,6 @@ def named(p: Parser): Node := {
 	if not names_case(p, word.length) and EXACT_CONSTANTS.contains(word.lower()) { return exact_constant(word) }
 	// `https://pannous.com`, `ssh://host`: a URL, the rest of which reads as one text
 	if p.code[p.at .. min(p.at + 3, p.n)] == "://" { return url_text(p, word) }
-	if SHADER_WORDS.contains(word) {
-		shader = shader_block(p, word)
-		if shader != ø { return shader }
-	}
 	// the Java/C array type `int[]` is the list type `[int]` (Rust twin: types/expressions.rs try_parse_array_type_suffix)
 	if starts_at(p.code, "[]", p.at, p.n) and is_type_argument(word) {
 		p.at = p.at + 2

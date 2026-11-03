@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
+- extension-passes: Extension rows may insert a pass after a named core pass, so multi-clause functions leave the core (core 29249 → 29121 lines); same pass order. Landed 29ecbbb3c6 + 89f9a64b9f; undo: revert both.
 
 ## Parked
 - class-text (sound notes), unit plurals, def-first (b), note tests: discuss later (user).

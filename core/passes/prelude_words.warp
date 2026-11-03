@@ -10,7 +10,7 @@ use "uses.warp"
 use "../analysis/builtin_signatures.warp"
 use "scope.warp"
 use "lambdas.warp"
-use "../emitter/c_imports.warp"
+use "../../extensions/c_imports.warp"
 use "../../extensions/components.warp"
 
 # each function a library file brought, by name: [the file, the line its definition starts on], the place a refusal
@@ -259,7 +259,7 @@ lowering_words(program: Node): list := {
 # match is written only once the sugar fires
 is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 # the words the emitter calls itself, kept though no statement does: of a program writing a time literal (the parser's
-# data view) a time's fields (emitter/times.warp time_field), its + - * where the program writes one
+# data view) a time's fields (extensions/time_values.warp time_field), its + - * where the program writes one
 # (time_operation_call); the exact root of a program taking one (root_words); the library words the extension passes
 # write calls of (extension_writes)
 emitted_words(program: Node): list := time_literal_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))

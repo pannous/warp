@@ -1,0 +1,6 @@
+# C imports (card c-imports-extension, decision core-is-self): a program's foreign lines and `import f from "c"` read
+# into host words of the library they name (imports.warp), and the module's warp.c_functions section describing them
+# for the native warp's dlopen (section.warp). The compiler's own build calls no C; the core uses this root where it
+# compiles a program. Its parts name core words without a use of core paths (lib/extensions has no ../core).
+use "c_imports/imports.warp"
+use "c_imports/section.warp"

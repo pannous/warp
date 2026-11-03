@@ -32,6 +32,11 @@ class Extension {
 	# a word starting a value that comes later → the word a place declared as a value calls on it, brought wherever the
 	# program calls the first (`task_go` → `task_awaited`: `n: int = go f(3)` awaits)
 	value_settlers: map = {}
+	# functions a program goes through before its texts interpolate (`sql "… $name"` built as a query)
+	text_passes: list = []
+	# a core pass's name → the extension's pass running right after it (`{"arity_overloads": clauses}`, decision
+	# extension-passes); a name of no core pass is refused
+	passes: map = {}
 	# the command words it answers (`warp help`), and runs: the function running one, given its word
 	commands: list = []
 	runs: any = ø
@@ -65,6 +70,18 @@ keyword_reader_of(word: text): any := {
 }
 # every word an extension takes a glued block for
 extension_block_words(): list := concatenated(EXTENSIONS.map(extension => extension.block_words))
+# the core passes with each extension's pass after the one it names, rows in order
+with_extension_passes(core: list): list := {
+	follows = concatenated(EXTENSIONS.map(extension => extension.passes.keys.map(name => [name, extension.passes[name]])))
+	for pair in follows { if not core.any(pass => "${pass}" == pair#1) { raise "an extension's pass follows " + pair#1 + ", which is no core pass" } }
+	concatenated(core.map(pass => [pass] + follows.filter(pair => pair#1 == "${pass}").map(pair => pair#2)))
+}
+# the program through every extension's text passes, in row order
+with_text_passes(program: Node): Node := {
+	passed = program
+	for pass in concatenated(EXTENSIONS.map(extension => extension.text_passes)) { passed = pass(passed) }
+	passed
+}
 # every starter word → the word settling its value, read once
 global value_settler_table = ø
 extension_value_settlers(): map := {
