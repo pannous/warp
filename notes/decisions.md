@@ -509,6 +509,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Signals, events and tasks
 - finish-await (user, 2026-11-03): `finish job` is a soft alias of `await job` (a library word, not a reserved keyword; a program may define its own `finish`); `once job finishes` reads the same way.
 - stopped-no-result (user, 2026-11-03): a stopped or cancelled task yields no result: after `stop job` / `job.stop()` / `cancel job`, reading or awaiting `job` gives no value (ø), never the value it would have computed; test_tasks:15-16 change accordingly (user's OK).
+- task-to-value-awaits (user, 2026-11-03): putting a task into a place typed as a value awaits it in between: `n: int = go f(3)` is `n: int = await go f(3)`, as is passing a task to a value-typed parameter or returning it from a value-typed function; an untyped place (`job = go f(3)`) or one typed task keeps the task.
 - go-unified (revises the immediate `go f(x)`): `go f(x)` means `go { f(x) }`, a cooperative task that starts when main yields; tests relying on the immediate run are updated under this decision (card go-go).
 - eval-explicit-with (refines N31): eval runs its text as a separate program; values go in explicitly, `eval("x*2", with: {x: 5})` → 10; bare `eval("x*2")` keeps refusing x as unknown; no caller scope (card eval-explicit-names).
 - P109 every variable can be watched; checks only where a listener watches. P111 writes through `global x` in called functions run the listeners. P112 no batching block; a multi-assignment notifies once.
