@@ -1,50 +1,43 @@
 # Core extensions roadmap (decision core-is-self, card core-extensions-roadmap)
 
-The core is what the compiler needs to compile itself; the rest moves to extensions/ feature by feature, registered in
-one static table of hooks the core knows ahead of time.
+The core is what the compiler needs to compile itself; every other feature becomes an extension, baked in and
+registered in one static hook table. Each section lists one area's candidates. A section is a static reading of the
+sources (what the compiler's own code never writes), until the measurement of what compiling compiler.warp reaches
+confirms it.
 
-## GPU lists (card gpu-lists-extraction; mapped 2026-11-03 on main, no code changed yet)
+## parsing and operators (warp-operators, static reading 2026-11-03)
 
-GPU lists `[f32]`, `[i32]`, `[u32]` (decision gpu-bound-floats, landed in 31ab8ce82e): four-byte cells in linear
-memory from their creation, a square List $Node marked KindUnit.GpuList whose Int is (address << 32) + count. The
-compiler never makes one for itself, so all of it can leave the core.
+Method: for each feature group, its functions' lines in core/ (span from one definition to the next), and whether any
+code line of core/ outside core/parsing/ writes the form (comments and texts not counted). "Compiler uses: no" makes
+it a candidate; core/extensions/sugar counts as an extension already.
 
-### Where it is (core/ about 100 lines, the rest already outside)
+| feature | where | lines | compiler uses | hook it needs |
+|---|---|---|---|---|
+| time literals and counted units: `5ms`, `2h`, `12:30`, `3 times`-style counts | parser.warp glued_time_at … time_unit_at, duration_text, counted_unit, counts_units | 114 | no | **atom suffix**: after a number, an extension may read a glued suffix into a literal (bare_atom) |
+| number forms: `½`, `x²`, `0.(3)`, overlined digits, `×10^`, `5%`, exact `π` | parser.warp vulgar_fraction, with_glued_factor, superscript_power, reciprocal_if, raised_terms, overlined_digits, repeating_decimal, ten_to_the, percent_ends, exact_constant | 135 | no (`π` only in comments and texts) | atom suffix (above) and **atom glyph**: an atom starting with a registered glyph |
+| radix numbers `0x…`, `0b…` | parser.warp radix_value, digit_value | ~30 | **yes**: hex in core/commands/commands.warp (MACHO_MAGIC …) | stays core |
+| shader blocks, inline wasm blocks | parser.warp shader_block, closing_brace, dedented, indent_width, without_trailing_blanks, shader_text, wasm_instruction_after | 119 | no | **raw block**: a registered head word whose block is read as text |
+| URL and path literals `https://…`, `./x` | parser.warp url_text, starts_path(_at), path_literal, is_operand_end, ends_path, starts_path_name | 43 | no | atom glyph (above) |
+| circumfix operators `\|x\|`, `‖x‖` and math aliases | parser.warp circumfix_*, math_circumfix_aliases, math_operator_aliases; core/node.warp keeps Op.Abs … only for the seed (card remove-unused) | 60 | no | **operator table**: lib/aliases.warp already holds the spellings; the parser asks the table |
+| HTML entities `&amp;` | parser.warp entities, expanded_entities, entity_name_at, text_between, entity_read (table entities.tsv) | 67 | no | **text pass**: a registered rewrite of source text before parsing |
+| declared operators: `infix operator ⊕`, fixity, precedence, glyph operators beyond ASCII, operator methods | parser.warp fixity_level … operator_method_definition, binding_powers' declared part | 195 | only core/extensions/sugar (calls.warp, enums.warp: `infix operator \|`, `as`) | operator table, plus **declaration**: a statement head the parser hands to the extension. Moves together with the typed-operator rules of rewrites.warp (operator_overload, operator_rules) |
+| spacing diagnostics: `1 +1`, `a *b` | parser.warp signed_item_at, spaced_sign_marked, unevenly_spaced, written_before; source_checks.warp spaced_sign, uneven_spacing; warnings.data 2 lines | ~50 | no (a lint) | **parse marks**: the parser already marks with attributed(…); a lint extension registers its mark and its check |
+| other lints: `"3" + 3`, bare `sleep(1)`, charged assignments, discarded copies | source_checks.warp (192 in all), lints.warp (88), warnings.data | ~250 | no | **checks**: source_checks' list of checks becomes the registered checks |
+| loop forms: C-style `for (;;)`, `n times {…}`, named loops, `down to` | parser.warp c_style_for, at_c_style_for_head, named_loop, times_binds, repeated, down_to_at; sugar loops.warp:4 | 104 | no | **statement head**: a registered head word starts a statement form |
+| natural-language definitions (phrase slots, phrase redefinition) | parser.warp phrase_slots, in_slot, known_type, slot_name, phrase_redefinition, phrase_result_type, shaped | 110 | no | **definition head**: a definition whose head is a phrase |
+| Ruby bars `{ \|x\| … }` | parser.warp bar_lambda, pipe_parameters | 22 | no | atom glyph inside a block start |
+| other languages' declarations: `new Point(1, 2)`, `attr_accessor :x`, `enum class`, modifier runs | core/parsing/foreign_forms.warp (whole file) | 118 | no | declaration (above) |
+| typed templates `sql "…"`, `sh "…"` | core/parsing/injection.warp (whole file) | 231 | no | **text prefix**: a registered word before a text literal |
+| English number words `one plus two` | core/parsing/number_words.warp (a pass) | 65 | no | **pass list**: registered passes in pure_passes |
+| text times a count, `"ab" * 3`, and yes/no as int in operators | core/emitter/operators.warp repeated, is_count, bools_as_ints | ~15 | check: the compiler may repeat texts | stays core until measured |
+| marks surviving arithmetic, `30° * 2` | core/emitter/operators.warp operation_code, marked, marks_kind | ~15 | no (units' marks) | moves with units: **operation hook** after the core's arithmetic |
+| postfix / phrase calls: `print #xs`, `f a > b` read by f's parameter (juxtaposition) | core/passes/prefix_calls.warp (135), data_blocks.warp (65), library_calls.warp (50) | 250 | likely yes (`print #xs`-style calls in core/) | measure first |
 
-| place | lines | what | kind of coupling |
-|---|---|---|---|
-| core/runtime/gpu_lists.warp | 76 | the words: gpu_zeros, gpu_list_of, gpu_put, gpu_list_at/set/count/items/place/cell, refusals | whole file: moves |
-| core/runtime.warp:20, core/runtime/lists.warp:8, nodes.warp:8 | 3 | `use "gpu_lists.warp"` | goes with the file |
-| core/runtime/lists.warp:34, 54, 85 | 3 | item_at, count, set_item: `if is_gpu_list(n) { return gpu_list_… }` | hook: list access dispatch |
-| core/runtime/lists.warp:177-182 | 6 | unlisted_items: a GPU list refuses (a range's items are made) | hook: list access dispatch |
-| core/runtime/nodes.warp:89 | 1 | list_shown: a GPU list's items | hook: list access dispatch |
-| core/analysis/kinds.warp:22-26 | 5 | KindUnit.GpuList (1 << 52), KindUnit.GpuCell (1 << 57), GpuCell {F32 I32 U32} | mark bits: reserved by the core, named by the extension |
-| core/emitter/emitter.warp:1130 | 1 | GpuCell in constant_tables | goes with the table |
-| core/emitter/host.warp:76-82 | 7 | exports gpu_list_place, gpu_list_cell (the C side reads the cells in place) | hook: an extension's exported runtime words |
-| core/emitter/runtime_words.warp:166-172 | 7 | memory_f32, memory_set_f32, memory_i32, memory_u32, memory_set_i32 intrinsics | stays: generic linear-memory loads/stores (host cells use the i64/f64 siblings) |
-| core/emitter/runtime_words.warp:192 | 1 | library_words gpu_zeros, gpu_put, gpu_list_of | hook: an extension's library words |
-| core/emitter/runtime_words.warp:267 | 1 | comment: a GPU list's cells are no $list | goes with the dispatch hook |
+Candidates by static reading: about 1,600 lines (parser.warp about 1,050 of its 5,060; the rest foreign_forms,
+injection, number_words, source_checks and lints). The hooks they share are few: atom suffix, atom glyph, raw block,
+statement head, declaration and definition head, text prefix, text pass, operator table, parse marks with checks,
+and the pass list. These ten table entries would carry them all.
 
-Not GPU lists, though they read so: the `f32` type words (parser NUMBER_TYPE_WORDS, analysis/words, runtime/types,
-arity_overloads, rewrites numeric_parameter_types) and c_imports' f32 are C floats and type names, they stay. The
-driver's gpu_paints/gpu_painted (core/native/driver.warp:144-145, 983, 1194-1222) is GPU painting, a separate
-extraction (paint), not GPU lists. Already outside the core: lib/wgsl.warp's GPU lists part (775-864, 90 lines:
-gpu_bound, gpu_packed, gpu_creating, GPU_CELLS), lib/rule_words.warp gpu_lists_packed/gpu_list_made (280-292 and the
-table entries 691-694), lib/prelude.warp's rules (268-276: the program rule, gpu_compute's argument, `xs: [f32|i32|u32]
-= …`), lib/native/warp_node.h warp_cells (126-140, the C side).
-
-### Hooks an extension needs from the core
-
-1. **List access dispatch**: item_at, count, set_item, unlisted_items and list_shown ask a registered list kind first,
-   chosen by a mark bit on the List node. Ranges (KindUnit.Range, runtime/lists.warp) are the second kind with the
-   same need, so this is one hook for both: a table from mark bit to {at, count, set, items}.
-2. **Reserved mark bits**: the core reserves a few KindUnit bits for extensions' list kinds; the extension names its
-   own (GpuList, GpuCell) and its cell table.
-3. **Runtime words an extension adds**: its runtime file prebuilt with the runtime (runtime.wasm) or as its own module,
-   its exported words (gpu_list_place, gpu_list_cell) declared by the extension, not in core/emitter/host.warp.
-4. **Library words**: the extension's entries of library_words (gpu_zeros, gpu_put, gpu_list_of) from its table.
-5. **Rules**: lib/prelude.warp's GPU list rules move with lib/wgsl.warp's part and rule_words' words into the extension;
-   the core keeps the rule mechanism only.
-
-Size: core/ drops by about 100 lines (gpu_lists.warp 76 plus about 25 lines of dispatch and declarations); hook 1
-also takes the range dispatch out of the list words.
+Open before moving: the measurement must confirm "no" for each row (a form inside a text the compiler builds at run
+time counts too); the declared-operator row moves only with rewrites.warp's typed-operator rules, which the sugar
+needs.
