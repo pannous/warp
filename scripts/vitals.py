@@ -9,7 +9,7 @@ records in the store (STORE). All of it is reconstructed (seconds) into scripts/
 (scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
 (notes/core_hygiene.md "Warp vitals").
 """
-import collections, glob, json, os, re, subprocess, sys
+import collections, datetime, glob, json, os, re, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SINCE = sys.argv[1] if len(sys.argv) > 1 else "2026-10-29"
@@ -27,6 +27,8 @@ SUMMARY = re.compile(r"(\d+) of (\d+) failed")
 HEADER = re.compile(r"^# \S+ \S+ \S+ (\d+)/(\d+)")
 STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME|ERR)\s")
 PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
+GITHUB_REPO = "pannous/warp"
+CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/cards.jsonl")  # one line per snapshot of the board's columns
 STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build records (notes/compiler_rebuilds.md)
 BUILDS = [("warp.wasm, built by the seed", "warp.record"), ("self-compile: warp.wasm compiles itself", "warp-self.record")]
 
@@ -66,21 +68,37 @@ def group_sums(counter):
     return [sum(counter.get(c, 0) for c in names) for _, names in CORE_GROUPS]
 
 
-commits = git("log", "--first-parent", "--reverse", "--format=%H %ad %s", "--date=iso-strict",
-              "--since=" + SINCE, "origin/main").splitlines()
-base = git("rev-parse", commits[0].split()[0] + "^1").strip()
-totals = lines_at(base)
-rows = []
-for line in commits:
-    sha, date, subject = line.split(" ", 2)
+def change_of(sha):
+    """What one commit changed against its own parent, per component."""
     change = collections.Counter()
     for stat in git("diff", "--numstat", "--no-renames", sha + "^1", sha).splitlines():
         added, removed, path = stat.split("\t", 2)
         if added != "-" and component(path):
             change[component(path)] += int(added) - int(removed)
+    return change
+
+
+# One row per atomic commit on main (merges left out): a merge measured against its first parent is charged with
+# everything main gained since its branch forked when a worker pushes "Merge origin/main into <branch>" (the branch
+# is its first parent), so each commit is measured against its own parent instead; the totals are their running sum
+# from main's state before SINCE, checked against main's tip below.
+commits = git("log", "--no-merges", "--reverse", "--format=%H %ad %s", "--date=iso-strict",
+              "--since=" + SINCE, "origin/main").splitlines()
+base = git("rev-list", "-1", "--before=" + SINCE, "origin/main").strip()
+totals = lines_at(base)
+rows = []
+for line in commits:
+    sha, date, subject = line.split(" ", 2)
+    change = change_of(sha)
     totals.update(change)
     rows.append([date[:16].replace("T", " "), sha[:10], subject[:140], group_sums(totals) + [totals[EXTENSIONS]],
                  sum(group_sums(change)), change[EXTENSIONS], totals["lib"], totals["test"]])
+# what the merges changed themselves (conflict resolutions) is in no atomic commit: said loudly, never hidden
+drift = {name: count for name, count in (lines_at("origin/main") - totals + (totals - lines_at("origin/main"))).items() if count}
+if drift:
+    tip = lines_at("origin/main")
+    print("vitals: atomic commits sum to other totals than main's tip (merge resolutions): " +
+          ", ".join(f"{name} {totals[name]} summed, {tip[name]} at the tip" for name in sorted(drift)), file=sys.stderr)
 
 def pass_count(text):
     for line in text.splitlines()[:3] + text.splitlines()[-3:]:
@@ -126,13 +144,27 @@ def build_history(record, landed):
     return sorted(fastest.values())
 
 
+def pushes_since():
+    """Local times of the pushes to main since SINCE, from GitHub's activity record of the branch, newest first.
+    git can't tell: a branch merged with main and pushed fast-forward puts main's own history on its second parent."""
+    times, url = [], f"repos/{GITHUB_REPO}/activity?ref=refs/heads/main&activity_type=push&per_page=100"
+    while url:
+        response = subprocess.run(["gh", "api", "-i", url], capture_output=True, text=True, check=True).stdout
+        head, body = response.split("\r\n\r\n" if "\r\n\r\n" in response else "\n\n", 1)
+        local = [datetime.datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).astimezone()
+                 .strftime("%Y-%m-%d %H") for event in json.loads(body)]
+        times += [t for t in local if t >= SINCE]
+        following = re.search(r'<https://api\.github\.com/([^>]+)>; rel="next"', head)
+        url = following.group(1) if following and local and min(local) >= SINCE else None
+    return times
+
+
 def hourly_pace():
-    """Landings (first-parent commits of main) and all commits reaching main, per hour, every hour since SINCE."""
-    import datetime
+    """Pushes to main and the commits reaching it (by commit date), per hour, every hour since SINCE."""
     hour = lambda date: date[:13].replace("T", " ")
-    commits_per_hour = collections.Counter(hour(d) for d in git("log", "--format=%ad", "--date=iso-strict",
+    commits_per_hour = collections.Counter(hour(d) for d in git("log", "--format=%cd", "--date=iso-strict",
                                                                  "--since=" + SINCE, "origin/main").split())
-    landings_per_hour = collections.Counter(hour(row[0]) for row in rows)
+    landings_per_hour = collections.Counter(pushes_since())
     first = datetime.datetime.strptime(min(commits_per_hour), "%Y-%m-%d %H")
     hours = []
     while (label := first.strftime("%Y-%m-%d %H")) <= max(commits_per_hour):
@@ -141,8 +173,28 @@ def hourly_pace():
     return hours
 
 
+def card_counts():
+    """The board's cards per column, one snapshot an hour kept in CARD_SNAPSHOTS (todo list costs GraphQL quota)."""
+    snapshots = []
+    if os.path.exists(CARD_SNAPSHOTS):
+        with open(CARD_SNAPSHOTS) as kept:
+            snapshots = [json.loads(line) for line in kept if line.strip()]
+    now = datetime.datetime.now()
+    if not snapshots or now - datetime.datetime.fromisoformat(snapshots[-1]["time"]) > datetime.timedelta(hours=1):
+        listing = subprocess.run(["todo", "list", "--json"], capture_output=True, text=True, cwd=REPO)
+        if listing.returncode == 0:
+            counts = collections.Counter(card["column"] for card in json.loads(listing.stdout))
+            snapshots.append({"time": now.isoformat(timespec="minutes"), "columns": dict(counts)})
+            os.makedirs(os.path.dirname(CARD_SNAPSHOTS), exist_ok=True)
+            with open(CARD_SNAPSHOTS, "a") as kept:
+                kept.write(json.dumps(snapshots[-1]) + "\n")
+        else:
+            print("vitals: todo list failed, cards from the last snapshot: " + listing.stderr.strip()[-200:], file=sys.stderr)
+    return snapshots
+
+
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in commits}
-data = {"pace": hourly_pace(), "builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))

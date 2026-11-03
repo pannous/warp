@@ -86,9 +86,15 @@ footer { color: var(--ink-3); font-size: 12px; }
   </section>
 
   <section>
+    <h2>Cards on the board</h2>
+    <p class="section-note" id="cards-note"></p>
+    <div class="figures" id="cards"></div>
+  </section>
+
+  <section>
     <h2>Pace</h2>
     <p class="section-note" id="pace-note"></p>
-    <div class="legend"><span><i style="background:var(--s7)"></i>landings (pushes to main)</span><span><i style="background:var(--rule)"></i>commits</span></div>
+    <div class="legend"><span><i style="background:var(--s7)"></i>pushes to main</span><span><i style="background:var(--rule)"></i>commits</span></div>
     <div class="chart" id="pace"></div>
   </section>
 
@@ -238,11 +244,22 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
   });
 })();
 
+(function cards() {
+  const snapshots = DATA.cards, holder = document.getElementById("cards");
+  if (!snapshots.length) { document.getElementById("cards-note").textContent = "No snapshot of the board yet."; return; }
+  const latest = snapshots[snapshots.length - 1], oldest = snapshots[0];
+  const columns = ["Now", "Next", "Soon", "Later", "Done", "Roadmaps"].filter(c => c in latest.columns || c in oldest.columns);
+  const since = new Date(oldest.time).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  document.getElementById("cards-note").textContent = `Cards per column of the project board, counted ${latest.time.replace("T", " ")}. Done holds only the last day's cards: older ones are archived.` + (snapshots.length > 1 ? ` Changes since the first count, ${since}.` : "");
+  holder.innerHTML = columns.map(c => { const now = latest.columns[c] || 0, then = oldest.columns[c] || 0;
+    return `<div class="figure"><div class="label">${c}</div><div class="value">${format(now)}</div><div class="change">${snapshots.length > 1 ? signed(now - then) + " since " + since : "first count"}</div></div>`; }).join("");
+})();
+
 (function pace() {
   const hours = DATA.pace, container = document.getElementById("pace");
   const sum = (list, i) => list.reduce((a, h) => a + h[i], 0);
   const lastDay = hours.slice(-24);
-  document.getElementById("pace-note").textContent = `Pushes to main and the commits they bring, per hour. Last 24 hours: ${sum(lastDay, 1)} landings, ${sum(lastDay, 2)} commits; since ${shortDay(hours[0][0].slice(0, 10))}: ${format(sum(hours, 1))} landings, ${format(sum(hours, 2))} commits. Hover a bar for its hour.`;
+  document.getElementById("pace-note").textContent = `Pushes to main, from GitHub's record of the branch, and the commits reaching main, per hour. Last 24 hours: ${sum(lastDay, 1)} pushes, ${sum(lastDay, 2)} commits; since ${shortDay(hours[0][0].slice(0, 10))}: ${format(sum(hours, 1))} pushes, ${format(sum(hours, 2))} commits. Hover a bar for its hour.`;
   const height = 200, top = Math.max(5, Math.ceil(Math.max(...hours.map(h => h[2])) / 5) * 5);
   const svg = element("svg", { viewBox: `0 0 ${WIDTH} ${height}`, role: "img", "aria-label": "landings and commits per hour" }, container);
   const plotWidth = WIDTH - PAD.left - PAD.right, plotHeight = height - PAD.top - PAD.bottom;
@@ -261,7 +278,7 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
     if (commits) element("rect", { x: x(i), y: y(commits), width, height: y(0) - y(commits), fill: "var(--rule)" }, svg);
     if (landings) element("rect", { x: x(i), y: y(landings), width, height: y(0) - y(landings), fill: "var(--s7)" }, svg);
     const hit = element("rect", { x: x(i), y: PAD.top, width: slot, height: plotHeight, fill: "transparent" }, svg);
-    element("title", {}, hit).textContent = `${hour}:00 · ${landings} landings · ${commits} commits`;
+    element("title", {}, hit).textContent = `${hour}:00 · ${landings} pushes · ${commits} commits`;
   });
 })();
 
