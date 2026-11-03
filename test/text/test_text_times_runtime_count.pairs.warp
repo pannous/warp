@@ -1,0 +1,5 @@
+# a text times a count known only at run time repeats it, as of a literal count (card runtime-count-text)
+'w=3; " " * (9 - w)'	"      "
+'w=2; "ab" * (w + 1)'	"ababab"
+'def row(w) := "-" * w + "|"; row(3)'	"---|"
+'n = 2; (n + 1) * "xy"'	"xyxyxy"
