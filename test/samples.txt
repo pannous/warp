@@ -1,4 +1,4 @@
-# a824d89f53 2026-11-03 08:28 197/238 82.8%
+# b5383dcbd5 2026-11-03 16:12 188/238 79.0%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
@@ -90,12 +90,12 @@ ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
-ok   samples/laws/kitchensink.warp
 ok   samples/laws/laws.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
+ok   samples/lists/sieve_idiomatic.warp
 ok   samples/lists/sorting.warp
 ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/typed_lists.warp
@@ -141,15 +141,6 @@ ok   samples/objects/dijkstra.warp
 ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/json_parser.warp
 ok   samples/signals/signal_fields.warp
-ok   samples/sound/arrangement.warp
-ok   samples/sound/filters.warp
-ok   samples/sound/gpu_visualizer_warp.warp
-ok   samples/sound/harmony.warp
-ok   samples/sound/hum_blocks.warp
-ok   samples/sound/music.warp
-ok   samples/sound/play_mp3.warp
-ok   samples/sound/rhythm.warp
-ok   samples/sound/signal_graph.warp
 ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp
@@ -165,7 +156,6 @@ ok   samples/storage/store.warp
 ok   samples/system/crontab.warp
 ok   samples/system/unix_commands.warp
 ok   samples/tasks/parallel_let.warp
-ok   samples/tasks/threads.warp
 ok   samples/text/calculator.warp
 ok   samples/text/find_text.warp
 ok   samples/text/levenshtein.warp
@@ -203,6 +193,7 @@ WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp
+SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
@@ -213,8 +204,8 @@ FAIL samples/events/effects.warp
 FAIL samples/functions/code_as_data.warp
 FAIL samples/functions/functions.warp
 FAIL samples/hello/natural.warp
+FAIL samples/laws/kitchensink.warp
 FAIL samples/lists/dot.warp
-FAIL samples/lists/sieve_idiomatic.warp
 FAIL samples/modules/javascript.warp
 FAIL samples/modules/packages.warp
 FAIL samples/modules/rust_crates.warp
@@ -223,10 +214,19 @@ FAIL samples/numbers/measurements.warp
 FAIL samples/objects/references.warp
 FAIL samples/python/numpy_matrix.warp
 FAIL samples/python/python_modules.warp
-FAIL samples/servers/hosting.warp
+FAIL samples/sound/arrangement.warp
+FAIL samples/sound/filters.warp
+FAIL samples/sound/gpu_visualizer_warp.warp
+FAIL samples/sound/harmony.warp
+FAIL samples/sound/hum_blocks.warp
 FAIL samples/sound/midi.warp
+FAIL samples/sound/music.warp
+FAIL samples/sound/play_mp3.warp
+FAIL samples/sound/rhythm.warp
+FAIL samples/sound/signal_graph.warp
 FAIL samples/sound/sound_pipes.warp
 FAIL samples/tasks/async.warp
+FAIL samples/tasks/threads.warp
 FAIL samples/text/uniscript_text.warp
 FAIL samples/wasm/component_reflection.warp
 FAIL samples/wasm/import_compiled.warp
