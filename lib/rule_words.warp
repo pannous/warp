@@ -216,7 +216,7 @@ unit_shown(n: Node, classes: map, fields: map, units: list): Node := {
 member_unit(member: Node, units: list): text := {
 	if not is_key(member, Op.Colon) { return "" }
 	written = if is_key(value_of(member), Op.Assign) then key_of(value_of(member)) else value_of(member)
-	word = match written { Type(name, body): name_of(name); _: if written is symbol then name_of(written) else "" }
+	word = annotated_type_name(written) ?? ""
 	if word in units then word else ""
 }
 # the unit a typed variable `x: km = …` names, else ""
@@ -722,11 +722,13 @@ rule_words = {
 # A field annotation can still be a Type node when the early rewrite runs.
 typed_json_field_type(member: Node): text? := match member {
 	Key(left, Op.Assign, right): typed_json_field_type(left)
-	Key(left, Op.Colon, right): {
-		view = view_of(right)
-		if kind_of(view) == "type" then declared_type_name(view#2) else type_named(right)
-	}
+	Key(left, Op.Colon, right): annotated_type_name(right)
 	_: ø
+}
+# the type an annotation `: T` names, read through its view: a Type node there before the early rewrite, else T written
+annotated_type_name(written: Node): text? := {
+	view = view_of(written)
+	if kind_of(view) == "type" then declared_type_name(view#2) else type_named(written)
 }
 
 # the statement declaring the class of that name in the program, ø for none
