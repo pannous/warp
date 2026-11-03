@@ -5,6 +5,8 @@
 # `map square xs`, `map (x -> x * 2) [1, 2, 3]`: a function before a list maps it, as `xs.map(square)` does; ahead
 # of the composition below, which would read `map floor xs` as map(floor(xs))
 rewrite (map $f $xs) => map($xs, $f) where $f is function
+# so round, the function first: `map(floor, xs)` is map(xs, floor)
+rewrite map($f, $xs) => map($xs, $f) where $f is function and not $xs is function
 # a function before an empty `()`, spaced or not, is called with nothing: `f ()` is f() (user decision calls-arguments)
 rewrite ($f ()) => $f() where $f is function
 rewrite ($f $x) => $f($x) where $f takes one
