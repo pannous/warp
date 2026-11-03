@@ -120,7 +120,7 @@ def module_bytes(functions: list): list {
 	tables = []
 	if module.prebuilding {
 		exports = runtime_exports(functions)
-		tables = section(table_section_id, vector([[funcref_byte, 0] + uleb(#module.dispatchers)]))
+		tables = section(section_ids.table, vector([[funcref_byte, 0] + uleb(#module.dispatchers)]))
 	}
 	exported = section(section_ids.export, vector(exports))
 	# the texts' bytes: a passive segment each, which array.new_data reads

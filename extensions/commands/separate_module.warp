@@ -1,10 +1,9 @@
-# `warp build`'s x.mod.wasm (decision build-three-outputs; card mod-wasm-extension): a program linked to runtime.wasm
+# `warp build`'s x.mod.wasm: a program linked to runtime.wasm
 # (notes/runtime_linking.md "Separate modules"), numbered as behind it, but every runtime function, global, the memory,
 # the error tag and the hooks table imported from its instance (`warp_runtime`); the hooks' code the program's own, set
 # into the table at instantiation. The compile emitted its code relocatable (separate_module_wanted, compiler.warp
 # relocate_program); linked_bytes moves every operand to the module's own numbering
 runtime_module_name = "warp_runtime"
-element_section_id = 9
 # an import of runtime.wasm's: its export of this name, of this kind and description
 def runtime_import(name: text, kind: int, description: list): list { name_bytes(runtime_module_name) + name_bytes(name) + [kind] + description }
 # the runtime's names by function index, as warp.runtime gives them
@@ -27,7 +26,7 @@ def linked_imports(c_first_type: int, called: list, types: Move): list {
 	function_types = runtime_function_types()
 	functions = called.map(index => if index < #module.imports then words[index] else runtime_import(names[index - runtime_shift()], export_function_byte, uleb(moved(types, function_types[index - #module.imports]))))
 	memory = runtime_import("memory", export_memory_byte, [0] + uleb(memory_pages))
-	table = runtime_import(hooks_table, export_table_byte, runtime_entries(table_section_id))
+	table = runtime_import(hooks_table, export_table_byte, runtime_entries(section_ids.table))
 	tag = runtime_import(error_tag_name, export_tag_byte, [0] + uleb(moved(types, runtime_tag_type())))
 	globals = module.runtime_image.globals.map(entry => runtime_import(entry#1, export_global_byte, value_type(entry#2) + [mutable]))
 	vector(functions + [memory, table, tag] + globals)
@@ -125,7 +124,7 @@ def linked_bytes(functions: list): list {
 	declared = section(section_ids.function, vector(range_list(#functions).map(k => uleb(first_own_type + k)) + hook_types.map(type => uleb(retyped[type]))))
 	own_globals = module.global_order[#module.runtime_image.globals ..]
 	globals = section(section_ids.globals, vector(own_globals.map(global_entry)))
-	elements = section(element_section_id, hook_elements(hooks, first_hook))
+	elements = section(section_ids.element, hook_elements(hooks, first_hook))
 	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data)]
 	codes = section(section_ids.code, vector(code.map(f => moved_body(f, moves))))
 	texts = section(section_ids.data, vector(text_segments()))

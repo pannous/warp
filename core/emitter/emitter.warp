@@ -39,7 +39,7 @@ use "prebuilt.warp"
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
 type_bytes = {int: 126, float: 124, bool: 127, char: 127, i32: 127}
-section_ids = {custom: 0, type: 1, import: 2, function: 3, memory: 5, globals: 6, export: 7, code: 10, data: 11, data_count: 12, tag: 13}
+section_ids = {custom: 0, type: 1, import: 2, function: 3, table: 4, memory: 5, globals: 6, export: 7, element: 9, code: 10, data: 11, data_count: 12, tag: 13}
 function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
@@ -80,7 +80,6 @@ output_address = 16
 names_subsections = {functions: 1, locals: 2, types: 4, globals: 7, fields: 10, tags: 11}
 # runtime.wasm (notes/runtime_linking.md "runtime.wasm format"): its table of hooks, the funcrefs a separately linked
 # program fills, its custom sections
-table_section_id = 4
 funcref_byte = 112
 export_table_byte = 1
 export_tag_byte = 4

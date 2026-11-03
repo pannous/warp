@@ -312,7 +312,7 @@ def prepended_bytes(functions: list): list {
 	for f in functions { f.index -= dropped() }
 	texts = section(section_ids.data, with_entries(runtime_part(section_ids.data), library_segments() + text_segments()))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
-	parts = [types, section(section_ids.import, host_imports(c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
+	parts = [types, section(section_ids.import, host_imports(c_entries)), declared, section(section_ids.table, runtime_part(section_ids.table)), memory,
 		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(module.runtime_image.data + linked_text_count() + #module.texts)), codes, texts]
 	made = wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks() + runtime_sections(functions)
 	# the separate module (separate_module) is numbered behind the whole runtime, every host word kept
