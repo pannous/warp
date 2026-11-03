@@ -46,7 +46,7 @@ in_slot() {
   return $status
 }
 stage() {
-  WARP_SEED=$1 in_slot "$scratch/warm.log" 2 "$warp" rebuild seed  # its machine code and runtime, outside the time
+  WARP_SEED=$1 in_slot "$scratch/warm.log" 2 "$warp" rebuild seed  # its machine code, outside the time
   rm -f "$built"
   local start=$SECONDS record=$scratch/$(basename "$2" .wasm).record
   # the speed guard's measure is the instructions the rebuild retired (build-slot.sh's record, /usr/bin/time -l): the
@@ -98,8 +98,9 @@ if [ -n "$check" ]; then
   exit 0
 fi
 cp "$chosen" "$seed" && echo "refresh-seed: replaced $seed"
-# the old seed's runtime.wasm and machine code go with it: the native warp writes warp-seed.runtime.wasm only when it is
-# missing, so a stale one kept the old runtime words (the new seed's build failed: no field built_spelled_list, 2026-10-29)
+# the old seed's machine code goes with it, and a warp-seed.runtime.wasm an older native warp kept (it wrote one only
+# when missing, so a stale one kept the old runtime words: no field built_spelled_list, 2026-10-29; now each rebuild
+# compiles the seed's runtime anew, card seed-compiles)
 rm -f "${seed%.wasm}.runtime.wasm" "${seed%.wasm}.runtime.wasm.cwasm" "$seed.cwasm" "$seed.driver.cwasm" "$seed.driver.cwasm.key" "$seed.driver.build.cwasm" "$seed.driver.build.cwasm.key"
 release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
 # the release's tag on the very commit the seed was built from, and seed.lock committed beside it, so every later commit
