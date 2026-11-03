@@ -25,6 +25,13 @@ Port to the native driver (core/native/driver.warp, wasmtime C API + libc), each
 5. The cooperative scheduler stays only as the page lane; the page later moves to the Worker design below.
 Steps 1-2 are the bulk, ported rather than invented: days, not weeks.
 
+Many tasks: `go` never starts a thread. A run has a fixed pool (2× the cores, as tasks often block), every `go` is a
+job in its queue, and a worker awaiting a task runs queued jobs itself, so 1000 `go`s are 1000 jobs on ~20 threads.
+The cost is the instance per task (instantiate, copy in and out), so tiny iterations must not each be a task:
+`go for x in xs {…}` and `go xs.map(f)` split into one chunk per core (Rust's split_map: one slice per core in fresh
+instances), and a pure numeric map over a float list prefers the GPU (card xs-map-gpu). Green tasks inside isolates
+(stack switching, below) later make many light, mostly waiting tasks cheap too.
+
 ### Green threads: what WebAssembly offers (as of 2026-11)
 Green threads are many light tasks on few OS threads: concurrency (many sleeping/waiting tasks), not parallelism. Go
 combines both (goroutines over several OS threads); warp's equivalent is green tasks inside each isolate.
