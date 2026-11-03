@@ -1,10 +1,5 @@
 // Positions in a source text, as the lexer counts them (card self-differential)
 // todo code_points(line) These are probably calculated elsewhere too and can be optimized? (card code-points-once)
-line_widths(source: text): list := [count(code_points(line)) for line in split(source, "\n")]
 
 // The code points of a text as a list
 def code_points(text: text): list := [point for point in text.codepoints]
-
-// Whether each character of the text is one code point: then the lexer indexes the text itself, which is fast (a list
-// of 70000 code points ran it out of fuel), else its code points
-def one_point_each(text: text): bool := count(code_points(text)) == count(text)
