@@ -1,6 +1,7 @@
 # The extensions' runtime words, joined to the extended runtime (core/runtime/extended.warp uses this file, decision
-# runtime-split): each extension's runtime file, and the list kinds table, the bodies of runtime/bridge.warp's list
+# runtime-split): each extension's runtime root or file, and the list kinds table, the bodies of runtime/bridge.warp's list
 # hooks: a list of an extension's kind (core/analysis/kinds.warp ListKind) to that kind's words
+use "big_numbers.warp"
 use "gpu_lists/runtime.warp"
 extended_list_at(n: Node, index: int): Node := {
 	if is_gpu_list(n) { return gpu_list_at(n, index) }

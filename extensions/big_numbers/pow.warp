@@ -2,10 +2,10 @@
 # without fma (wasm has none), its tables in pow_tables.warp: the same algorithm and every special case, so it gives
 # bit for bit the result of musl and glibc built without fma; worst-case error 0.54 ULP. Ints stand for C's uint64_t:
 # an unsigned comparison is unsigned_below, a right shift shifted_right. Names follow musl's.
-use "../intrinsics.warp"
-use "../instructions.warp"
+use "../../compiler/runtime/intrinsics.warp"
+use "../../compiler/runtime/instructions.warp"
 use "pow_tables.warp"
-use "../../emitter/byte_codes.warp"
+use "../../compiler/emitter/byte_codes.warp"
 # the table's int at index, the tables read from their texts at the first use only, as case.warp's: a text written in
 # the code is made anew each time it is reached, so reading in place made a table of kilobytes at every power, and
 # the garbage of x ^ 2 in a loop drew finger_paint's circles at a few frames a second (card finger-paint-slow)

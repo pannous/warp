@@ -136,14 +136,14 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"ratio_numerator": TypedCode(ValueKind.Int, ratio_part(values#1.code, 0))
 		"ratio_denominator": TypedCode(ValueKind.Int, ratio_part(values#1.code, 1))
 		# ratio_of_parts(n, d): the $Ratio of two Int nodes, plain or big (a decimal past 10^18); numerator_part(r),
-		# denominator_part(r) one of them as an Int node (runtime/extended/big_ratios.warp)
+		# denominator_part(r) one of them as an Int node (extensions/big_numbers/big_ratios.warp)
 		"ratio_of_parts": made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, node_payload(values#1) + node_payload(values#2) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))))
 		"numerator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(values#1.code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 0])))
 		"denominator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(values#1.code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 1])))
 		# has_plain_parts(r) of a local r: both parts in an $i64box (its code read twice)
 		"has_plain_parts": TypedCode(ValueKind.Bool, plain_part_test(values#1.code, 0) + plain_part_test(values#1.code, 1) + [op.i32_and])
 		# big_int_of(negative, count): an Int $Node of a $BigInt of count zero limbs; limb(n, i), set_limb(n, i, v) one
-		# limb as an int from 0 to 2^32 - 1 (runtime/extended/big_ints.warp)
+		# limb as an int from 0 to 2^32 - 1 (extensions/big_numbers/big_ints.warp)
 		"big_int_of": made_by("BigInt", TypedCode(ValueKind.Node, node(Kind.Int, converted(values#1, ValueKind.Bool) + index_code(values#2) + gc_code(gc_ops.array_new_default, [gc_type(gc.limbs)]) + gc_code(gc_ops.struct_new, [gc_type(gc.big_int)]))))
 		"is_big_int": TypedCode(ValueKind.Bool, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.big_int)]))
 		"big_int_negative": TypedCode(ValueKind.Bool, payload(values#1.code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 0]))

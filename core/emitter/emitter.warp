@@ -31,7 +31,7 @@ use "operators.warp"
 use "functions.warp"
 use "closures.warp"
 use "control_flow.warp"
-use "quotes.warp"
+use "../../extensions/quotes.warp"
 use "host.warp"
 use "times.warp"
 use "c_functions.warp"
@@ -118,7 +118,7 @@ mutable = 1
 # column and comment (rust-harness:src/wasm_emitter/type_manager.rs emit_meta_node_type) and the attributes a pass marks it
 # with (runtime fields.warp attributes_of); an integer beyond 64 bits an Int $Node
 # holding a $BigInt(negative, limbs), its magnitude little-endian base 2^32 limbs in a $Limbs array of i32, no leading
-# zero one (Rust's $BigInt, read back by read_payload; runtime/extended/big_ints.warp).
+# zero one (Rust's $BigInt, read back by read_payload; extensions/big_numbers/big_ints.warp).
 # A module declares a type only once its code uses it, as it compiles a runtime word on its first call (decision
 # runtime-split): gc names each type by its name, and gc_type gives the index the module takes it under. A type
 # another type refers to is written as that type's name in gc_types (gc_bytes), and comes first

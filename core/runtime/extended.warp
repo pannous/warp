@@ -1,46 +1,22 @@
 # The extended runtime words (decision runtime-split): the parts in core/runtime/extended/, for what only some
-# programs do (exact rationals, durations and times, float pow, exact rounding, files over WASI). The core, runtime.warp
-# and core/runtime/*.warp, never uses them nor names their words (scripts/self-check.sh checks it): its generic
-# words hand an extended value to the hooks core/runtime/bridge.warp declares, whose bodies are this
-# file's, at its end. The emitter calls these words where a program needs them, compiling each on its first
-# call like any runtime word.
-# Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS) and rust-harness:src/compiler/self_hosted.rs, the words of each file its
-# `use` lines name in their order.
-use "extended/big_ints.warp"
-use "extended/exact.warp"
-use "extended/big_ratios.warp"
+# programs do (durations and times, files over WASI). The core, runtime.warp and core/runtime/*.warp, never uses them
+# nor names their words (scripts/self-check.sh checks it): its generic words hand an extended value to the hooks
+# core/runtime/bridge.warp declares, whose bodies are this file's, at its end, or extensions/runtime.warp's (big ints and
+# ratios, GPU lists). The emitter calls these words where a program needs them, compiling each on
+# its first call like any runtime word.
+# Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS), the words of each file its `use` lines name in their order.
 use "extended/durations.warp"
 use "extended/times.warp"
-use "extended/pow_tables.warp"
-use "extended/pow.warp"
-use "extended/exact_rounding.warp"
 use "extended/wasi.warp"
+# the extensions' runtime words (extensions/runtime.warp: big numbers, GPU lists), until the seed joins the extensions'
+# runtime roots itself: a seed lowers the runtime by its own compiler.warp's RUNTIME_ROOTS
 use "../../extensions/runtime.warp"
-# The bodies of the hooks core/runtime/bridge.warp declares: the core hands a value of an extended type here,
-# and each hook calls the extended word for it. They are this root's own words, not a used file's, so that the root
-# runs alone in the Rust lane, which refuses a word declared in one used file (bridge.warp) and defined in another
+# The bodies of the hooks core/runtime/bridge.warp declares for times and warnings
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "instructions.warp"
 extended_text(n: Node): text := {
 	made_case(Made.Time, time_text(n))
-	made_case(Made.Ratio, exact_text(n))
-	made_case(Made.BigInt, exact_text(n))
 	fail()
 }
-extended_order(a: Node, b: Node): int := exact_order(a, b)
-extended_sum(a: Node, b: Node): Node := exact_add(a, b)
-extended_difference(a: Node, b: Node): Node := exact_sub(a, b)
-extended_product(a: Node, b: Node): Node := exact_mul(a, b)
-extended_float(n: Node): float := {
-	made_case(Made.BigInt, big_exact_float(n))
-	float(exact_numerator(n)) / float(exact_denominator(n))
-}
-extended_truncated(n: Node): int := {
-	made_case(Made.BigInt, big_exact_truncated(n))
-	int_quotient(exact_numerator(n), exact_denominator(n))
-}
-extended_wrapped(n: Node): int := int_of_magnitude(n, big_int_negative(n))
-extended_ratio(n: int, d: int): Node := exact_ratio(n, d)
-extended_zeros(count: int): text := zeros(count)
 extended_warned(message: text): Node := warned(message)

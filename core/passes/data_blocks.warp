@@ -1,5 +1,5 @@
 # Data blocks and data parameters (decisions data-parameter, data-names, data-parameters): data is written in a
-# program as it is meant, a tree, its bound names their values (the emitter's spliced quote, emitter/quotes.warp)
+# program as it is meant, a tree, its bound names their values (the emitter's spliced quote, extensions/quotes.warp)
 # - a parameter typed `data` takes its argument so: `style{ ul > li { color: red } }` is `style(data·spliced {…})`,
 #   which no pass rewrites
 # - a word nothing binds glued to its block, `div{ class: "box" … }`, is the data pair `div: […]`; a `for` among its

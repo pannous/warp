@@ -24,7 +24,7 @@ CASE_SECONDS = 30
 # test/slow/<topic>/, run only when named
 SLOW_MILLISECONDS = 1000
 SLOW_MARK = "⏱ "
-use "../emitter/serializer.warp"
+use "../../extensions/serializer.warp"
 
 class TestCase { file: text, line: int, code: text, expected: any }
 
