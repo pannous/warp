@@ -4,7 +4,7 @@
 # (GC vectors), arithmetic, comparisons, locals, functions, if and while, print (layout: notes/self_hosting.md "Value
 # layout"). A value of a kind known only at run time, and a value main gives that is no number, is a boxed `$Node`.
 # Runtime words are warp (core/runtime.warp, lowered like a program), compiled on their first call. Any other
-# form refuses the program: `wasm_module` then gives a text naming the form, and the twin harness
+# form refuses the program: `typed_wasm_module` then gives a text naming the form, and the twin harness
 # (tests/common/twins.rs emitter_differential) counts the source as outside the core. A function's parameters take
 # their kinds from their annotations, else from the first call; its result kind from its body, read twice so that a
 # recursive call knows it.
@@ -1479,13 +1479,7 @@ def std_word(n: Node): any {
 # the items of a written list, a std word's arguments: `[]` is held behind the opaque word (is_empty_list)
 listed_items(n: Node): list := if is_empty_list(n) then [] else items_of(n)
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
-# core/runtime.warp lowered by the same pipeline
-wasm_module(program: Node, runtime: Node): any := hosted_wasm_module(program, runtime, {})
-
-# as wasm_module, the host words `host` names importable (rust-harness:src/compiler/self_hosted.rs passes rust-harness:src/host.rs's)
-hosted_wasm_module(program: Node, runtime: Node, host: map): any := typed_wasm_module(program, runtime, host, {})
-
-# as hosted_wasm_module, an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS); again
+# core/runtime.warp lowered by the same pipeline, `host` the host words importable; an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS); again
 # while a call widens a parameter (passed)
 typed_wasm_module(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.later_kinds = {}
