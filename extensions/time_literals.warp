@@ -28,7 +28,7 @@ def time_literal_length(p: Parser, at: int): int {
 		} else if (is_at(p.code, end, '+', p.n) or is_at(p.code, end, '-', p.n)) and clock_at(p.code, end + 1, p.n) {
 			end = end + 6
 		}
-		// RFC 9557 suffixes: `[Europe/Berlin]`, then `[key=value]` like `[_tzdata=warp-2026a]`
+		# RFC 9557 suffixes: `[Europe/Berlin]`, then `[key=value]` like `[_tzdata=warp-2026a]`
 		while is_at(p.code, end, '[', p.n) {
 			close = suffix_close(p, end + 1)
 			if close == 0 { break }
