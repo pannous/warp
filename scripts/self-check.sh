@@ -24,10 +24,12 @@ if [[ $worktree == $main_checkout/* ]]; then
 fi
 # the core runtime (runtime.warp, core/runtime/*.warp) never uses the extended one (core/runtime/extended/,
 # runtime/extended.warp; decision runtime-split) nor names a word it defines: it calls the hooks runtime/bridge.warp
-# declares, whose bodies are runtime/extended.warp's. Checked first. Plain files only (.); the extended root counts as extended
+# declares, whose bodies are runtime/extended.warp's or an extension's runtime root's (extensions/big_numbers.warp).
+# Checked first. Plain files only (.); the extended root counts as extended, and so does each extension's runtime part
+# (the roots, which give the hooks' bodies, aside)
 core=($worktree/core/runtime.warp $worktree/core/runtime/*.warp(.))
 core=(${core:#*/runtime/extended.warp})
-extended=($worktree/core/runtime/extended/*.warp)
+extended=($worktree/core/runtime/extended/*.warp $worktree/extensions/big_numbers/*.warp)
 extended=(${extended:#*/hooks.warp})
 extended_words=$(grep -hv ' from runtime$' $extended | sed -n 's/^\([a-z_][a-z_0-9]*\)(.*:=.*/\1/p' | sort -u | paste -sd'|' -)
 core_uses_extended=$(grep -HnE "^use .*extended|(^|[^a-z_0-9.])($extended_words)\(" $core)

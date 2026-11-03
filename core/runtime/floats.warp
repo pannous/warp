@@ -25,9 +25,9 @@ positive_float_text(x: float): text := {
 		rest = if count > 1 then "." + bytes_between(digits, 1, count) else ""
 		return bytes_between(digits, 0, 1) + rest + "e" + int_text(exponent)
 	}
-	if exponent >= count - 1 { return digits + extended_zeros(exponent - count + 1) }
+	if exponent >= count - 1 { return digits + zeros(exponent - count + 1) }
 	if exponent >= 0 { return bytes_between(digits, 0, exponent + 1) + "." + bytes_between(digits, exponent + 1, count) }
-	"0." + extended_zeros(-1 - exponent) + digits
+	"0." + zeros(-1 - exponent) + digits
 }
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
 # digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
@@ -144,4 +144,10 @@ product_error(a: float, b: float, product: float): float := {
 upper_half(v: float): float := {
 	t = v * 134217729
 	t - (t - v)
+}
+# a text of count zero digits
+zeros(count: int): text := {
+	out = new_text(if count > 0 then count else 0)
+	for i in 0..count { set_byte(out, i, Ascii.Zero) }
+	out
 }
