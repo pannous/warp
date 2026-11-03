@@ -15,3 +15,5 @@ tied_variants($written, $variants)	"`{written}` fits no single variant of {varia
 mixed_count_units($given, $declared)	"{a given} given to {a declared}: bytes and characters count differently; find counts characters, byte_index_of bytes"
 # `Person as Person := it`: a conversion of a type to itself (conversions.warp)
 own_type_conversion($type)	"{type} as {type}: a value is already of its own type, no conversion to define"
+unreachable_clause($name, $first)	"a second definition of {name} taking as many arguments can never run: {first} takes every call first; give one another name, or parameter types or patterns that tell them apart"
+untellable_clause($name, $clause)	"the definitions of {name} taking as many arguments cannot be told apart at {clause}: give the parameters types the dispatch tells apart (int, float, text, a class, …), literals or list patterns, or give one another name"

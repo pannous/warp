@@ -1,0 +1,7 @@
+# `on change b + c {…}`: the block runs when a write changed the expression's value
+'b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; n'	1
+'b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 5; n'	1
+'b = 1; c = 2; n = 0; on change b * c { n += 1 }; b = 5; c = 3; n'	2
+# a test line after a listener, the program's last, is tested where it stands
+'b = 1; on change b { print 1 }; test b == 1'	ø
+'b = 1; n = 0; on change b { n += 1 }; b = 2; n'	1

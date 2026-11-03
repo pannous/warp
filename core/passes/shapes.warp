@@ -25,8 +25,12 @@ def error_node(message: text): Node := opaque(["error", ["text", message]])
 def parse_error_message(n: Node): text? := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" then value_of(n)#2#2 else ø
 def template_node(holed: text): Node := opaque(["template", holed])
 def attributed(name: text, value: Node, node: Node): Node := Key(symbol(attribute_word), Op.Colon, [name, value, node])
+// the node under its attributes, `square` of `@parallel square`
+def attribute_marked(n: Node): Node := if n is key and key_of(n) == symbol(attribute_word) then attribute_marked(value_of(n)#3) else n
 # the mark of a signed item after a space, `+1` of `1 +1`: [what was written before it, it as written] (parser.warp spaced_sign_marked)
 SPACED_SIGN_MARK = "spaced_sign"
+# the mark of an operation whose operator is spaced on one side only, `a *b`: [it as written, the operator, its left and its right as written] (parser.warp unevenly_spaced)
+UNEVEN_SPACING_MARK = "uneven_spacing"
 
 // [bracket, separator, items] of a group, an empty one too; ø for any other node
 def group_parts(node: Node): list? := match node {

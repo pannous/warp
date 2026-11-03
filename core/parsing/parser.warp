@@ -1220,6 +1220,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(peek(p.code, p.at + 1, p.n))
 			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
+			operator_start = p.at
 			p.at = p.at + op#1.length
 			// `f(n):` ending its line: the block indented below is its value
 			block = if op#1 == ":" and ends_line(p, p.at) then indented_block(p) else ø
@@ -1256,7 +1257,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else if (op#2 == "=" or op#2 == ":=") and block_head_at(p) then headed_phrase(p) else expression(p, powers#2)
 				// `x(p: P) -> int := …`, Swift's and Rust's result arrow, is the typed head `x(p: P): int := …`
 				if op#2 == ":=" or op#2 == "=" { left = result_typed(left) }
+				operand = left
 				left = keyed(bit_operator(op#1, left, right, op#2), left, if op#2 == ":" then with_switch_cases(p, right) else right)
+				if unevenly_spaced(p, operator_start, op#1) { left = attributed(UNEVEN_SPACING_MARK, listed(Bracket.Square, Separator.Space, [written_before(p, operand, p.at), op#1, written_before(p, operand, operator_start), p.code[operator_start + op#1.length ..< p.at].trim()]), left) }
 				// `{f: x => x * 2}`: the field f holds the lambda; `f: (float) -> float` stays a typed name
 				if op#1 == "=>" { left = field_holding_lambda(left) }
 			}
@@ -1580,7 +1583,9 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	if min_power == 0 or min_power > 151 { return false }
 	// `do r += i end`: the `end` closing the block is no argument
 	if p.group.stops_at_end and keyword_at(p, "end") { return false }
-	callable = left is symbol or is_list_of(left, "")
+	// `ys = @parallel square all xs`: a word an attribute marks applies as the word itself
+	marked = attribute_marked(left)
+	callable = marked is symbol or is_list_of(marked, "")
 	if not callable { return false }
 	c = peek(p.code, p.at, p.n)
 	if c == '{' and p.header { return false }
@@ -1754,6 +1759,10 @@ def signed_item_at(p: Parser): bool {
 // the signed item, written from the source's offset `sign_at` to the parser's position, marked with what was written
 // before it, `1` of `1 +1`: the analyzer warns that these are two items (source_checks.warp spaced_sign)
 def spaced_sign_marked(p: Parser, before: text, sign_at: int, item: Node): Node := attributed(SPACED_SIGN_MARK, listed(Bracket.Square, Separator.Space, [before, p.code[sign_at ..< p.at].trim()]), item)
+// `a *b`, `a* b`: an arithmetic or comparing operator spaced on one side only, which computes but reads as a sign or a
+// suffix; the analyzer warns (decision binary-operator-spacing, source_checks.warp uneven_spacing)
+def unevenly_spaced(p: Parser, at: int, glyph: text): bool := EVENLY_SPACED_OPERATORS contains glyph and at > 0 and is_blank(p.code[at - 1]) != is_blank(peek(p.code, at + glyph.length, p.n))
+EVENLY_SPACED_OPERATORS = ["*", "/", "%", "^", "==", "!=", "<", ">", "<=", ">="]
 // the source written from the node's place to the offset `end`, "" for a node of no place
 def written_before(p: Parser, n: Node, end: int): text := {
 	line = line_of(n)

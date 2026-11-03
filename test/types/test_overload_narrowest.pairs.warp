@@ -1,0 +1,9 @@
+# of two overloads a call fits, the narrower parameter type takes it, whichever was defined first (card duplicate-definition-resolution)
+'f(x: text or int) := "union"; f(x: text) := "text"; [f("a"), f(1)]'	["text", "union"]
+'f(x: text) := "text"; f(x: text or int) := "union"; [f("a"), f(1)]'	["text", "union"]
+'w = ["a", 1]; f(x: text or int) := "union"; f(x: text) := "text"; [f(w#1), f(w#2)]'	["text", "union"]
+'w = ["a", 1]; f(x: text) := "text"; f(x: text or int) := "union"; [f(w#1), f(w#2)]'	["text", "union"]
+'w = ["a", 1]; f(n, x: any) := "any"; f(n, x: text) := "text"; [f(0, w#1), f(0, w#2)]'	["text", "any"]
+# two definitions of one name and arity that nothing tells apart are refused, never one picked silently
+'h(x) := 1; h(y) := 2; h(0)'	error
+'fib(0) := 0; fib(1) := 1; fib(n) := fib(n - 1) + fib(n - 2); fib(10)'	55

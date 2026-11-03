@@ -6,6 +6,7 @@
 use "walk.warp"
 use "scope.warp"
 use "../analysis/builtin_signatures.warp"
+use "../parsing/parser.warp"
 
 spaced_prefix_calls(program: Node): Node := {
 	takers = value_takers(program)
@@ -75,9 +76,22 @@ counted_parts(counted: Node?): list? := if counted == ø then ø else [key_of(co
 # and the second after `=` or `if`. A function of the program whose parameter is untyped reads both ways: refused,
 # naming both (decision untyped-fit-ambiguous); a word of no typed line stays as written
 fitted_comparison(n: Node, own_types: map): Node := {
+	arms = compared_arms(n)
+	if arms != ø { return arms }
 	if n is key and op_of(n) in comparing_ops and is_word_phrase(key_of(n)) { return fitted(key_of(n)#1, key_of(n)#2, op_of(n), value_of(n), n, own_types) }
 	if (is_word_phrase(n) or is_round_word_phrase(n)) and n#2 is key and op_of(n#2) in comparing_ops { return fitted(n#1, key_of(n#2), op_of(n#2), value_of(n#2), n, own_types) }
 	n
+}
+# `switch 3 {1: "one" 3: "three"} == "three"`: the spaced phrase reads the comparison as its last item's, `{…} == "three"`;
+# a clause word's arms are a block, never a comparison, so the match is compared (decision comparison-after-arms);
+# ø for any other node
+compared_arms(n: Node): Node? := {
+	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n >= 3) { return ø }
+	last = n#(#n)
+	clause = n#(#n - 2)
+	if not (last is key and op_of(last) in comparing_ops and is_curly_group(key_of(last)) and clause is symbol and keyword_form(name_of(clause)) == "clause") { return ø }
+	compared = Key(spaced(items_of(n)[#n - 3 ..< #n - 1] + [key_of(last)]), op_of(last), value_of(last))
+	if #n == 3 then compared else spaced(items_of(n)[0 ..< #n - 3] + [compared])
 }
 # `(sq 2 == 4)`: the phrase in parentheses, read so too; a call `sq(2 == 4)` is no phrase
 is_round_word_phrase(n: Node): bool := is_round(n) and separator_of(n) == " " and #n == 2 and n#1 is symbol
