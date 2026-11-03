@@ -111,3 +111,18 @@ shown_at(n: Node): int := {
 	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
 	(output_address() + c_text_at()) * 4294967296 + byte_count(t)
 }
+# a picture's pixels (paint's int list) from item `from` (1-based) on, `count` of them, each 4 bytes (a color keeps its
+# alpha byte) where shown_at puts its text, for a host to copy a chunk at once instead of one call a pixel (the native
+# driver's paint, card native-show-paint): their address; count is at most pixel_chunk()
+pixels_at(picture: Node, from: int, count: int): int := {
+	at = output_address() + c_text_at()
+	if kind_code(picture) == Kind.List {
+		# a plain list's items read straight, not each through node_at's checks of every other kind
+		items = unboxed_list(picture)
+		for i in 0..<count { memory_set_i32(at + 4 * i, int_admitted(items#(from + i))) }
+	} else {
+		for i in 0..<count { memory_set_i32(at + 4 * i, int_admitted(node_at(picture, from + i))) }
+	}
+	at
+}
+pixel_chunk(): int := (output_room() - c_text_at()) / 4

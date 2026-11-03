@@ -1,4 +1,4 @@
-# a function whose body is the lines indented below its head, Python's colon after it or none (lib/sugar/functions.warp)
+# a function whose body is the lines indented below its head, Python's colon after it or none (core/extensions/sugar/functions.warp)
 is! 'def f(n):
 	m = n + 1
 	m * 2

@@ -14,7 +14,7 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
      juxtaposition), no keywords; extended only by table rows and `operator`/alias declarations.
    - *kernel* (user's list): definition `:=`, assignment, call/member/element, `=>` function, `if`, `while` with
      break/continue/return, `class` with variants, `use`, `try`, `global`, `data` (quote), `rewrite`/`operator`, `match`.
-   - *sugar*: everything else as `rewrite` rules into the kernel, one module per topic in lib/sugar/*.warp.
+   - *sugar*: everything else as `rewrite` rules into the kernel, one module per topic in core/extensions/sugar/*.warp.
 3. **Measured at the start:** parser.warp ~50 % notation, ~16 % kernel, ~34 % sugar (1417 lines); 26 of 62 other
    compiler files (2448 lines) are sugar passes; ~3900 sugar lines in all, expected to shrink to a few hundred rule
    lines.
@@ -33,9 +33,9 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
 - **Kernel decided** by the user (with `match`); `n times` decided as the library function
   `infix times(n: number, b: block)`, no rewrite.
 - **First pass gone:** coalesce (`a ?? b`) is a rule now, its pass file deleted (sugar-coalesce, Grok Warp Code).
-- **First parser sugar modules on main** (warp-layers, 98a92c975c): lib/sugar/arithmetic.warp (floor division `/!`,
-  `/!=`, `div` alias) and lib/sugar/methods.warp (list mutation methods, membership); one `sugared` step loads every
-  lib/sugar module. **alias-mechanism** on main (915192565d): word alternatives are aliases in a table, not parser
+- **First parser sugar modules on main** (warp-layers, 98a92c975c): core/extensions/sugar/arithmetic.warp (floor division `/!`,
+  `/!=`, `div` alias) and core/extensions/sugar/methods.warp (list mutation methods, membership); one `sugared` step loads every
+  core/extensions/sugar module. **alias-mechanism** on main (915192565d): word alternatives are aliases in a table, not parser
   branches (migration step 1).
 - **The parser's sugar was overcounted** (warp-layers' accounting, notes/layers.md "What became of the 1417 sugar
   lines"): read closely, almost all of the 1417 is notation (finding a form's words and extent); only the meaning moves.
@@ -54,7 +54,7 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
 
 1. **F5 name building, high priority** :
    `square·$a` → square_a_number, `$i·end`; unblocks for_loops, English `To …:` definitions, accessors per field.
-2. **Sugar passes into lib/sugar/** (Grok coders, one pass per branch, express): coalesce, comprehensions, ranges
+2. **Sugar passes into core/extensions/sugar/** (Grok coders, one pass per branch, express): coalesce, comprehensions, ranges
    (F3); type_tests, filled_lists, grouped_receivers, prefix_comparisons, plain_enums (F2); foreign_forms,
    welcome_forms (F1/F4); definitions' `def`/`fun`. Each deletes its pass file.
 3. **parser.warp** (warp-layers): alias-mechanism (word alternatives into the alias table, migration step 1), then the
@@ -67,4 +67,4 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
    playground resumes when the warp compiler can replace it (paused 2026-10-22).
 
 Measure progress by the sugar lines left: `wc -l core/parsing/parser.warp` plus the pass files in the notes/layers.md
-table, against lib/sugar/*.warp.
+table, against core/extensions/sugar/*.warp.

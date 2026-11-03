@@ -4,12 +4,12 @@
 # (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
 # entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$h is varying` (a value definition reading a variable, lib/sugar/heads.warp), `$d is definition` (a
+# `$f is function`, `$h is varying` (a value definition reading a variable, core/extensions/sugar/heads.warp), `$d is definition` (a
 # function's, `f(x) := …`), `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
 # also an operand not written: `rest...`), `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word), `$f takes int` (typed int), `$f takes number` (typed a number: int, float…), `$x is
-# vector` (code that may give a list: lib/sugar/broadcasting.warp) and `$f takes one` (a library word the program leaves
+# vector` (code that may give a list: core/extensions/sugar/broadcasting.warp) and `$f takes one` (a library word the program leaves
 # free, of exactly one typed value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
 # case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound, the condition binds it
 # to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
@@ -94,34 +94,37 @@ number_word = "number"
 numeric_parameter_types = ["number", "int", "float", "i32", "i64", "f32", "f64", "u8", "u32", "Real", "real"]
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
-# the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
+# the sugar of the language (notes/layers.md), core/extensions/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
 # Four steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
-# their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
+# their heads, and the late sugar after it took the loops a range counts: a range left is a value (the ranges sugar)
+# the sugar's files sit beside the other compiler extensions, bundled by their path within lib/ (parser.warp
+# BUNDLED_CORE_FOLDERS): `sugar_files(["ranges"])` names core/extensions/sugar/ranges.warp
+sugar_folder = "compiler/extensions/sugar/"
+sugar_files(names: list): list := names.map(name => sugar_folder + name)
 # tuples and safe navigation first: data_items reads the names in `[a, b]` before the later sugar steps could see them
-first_sugar_module_names = ["sugar/tuples", "sugar/safe_navigation", "sugar/lists", "sugar/arms", "sugar/heads", "sugar/test_words"]
-# every other file of lib/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
-sugar_folder = "sugar/"
+first_sugar_module_names = sugar_files(["tuples", "safe_navigation", "lists", "arms", "heads", "test_words"])
+# every other file of core/extensions/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
 placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
 sugar_module_names(): list := {
 	placed = placed_sugar_modules()
 	LIBRARY_FILES.keys.filter(path => path.starts_with(sugar_folder) and path.ends_with(module_extension)).map(path => path[0 ..< #path - #module_extension]).filter(name => name not in placed)
 }
-iteration_sugar_module_names = ["sugar/iteration"]
-late_sugar_module_names = ["sugar/ranges", "sugar/method_calls"]
+iteration_sugar_module_names = sugar_files(["iteration"])
+late_sugar_module_names = sugar_files(["ranges", "method_calls"])
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
 # a list literal (card sugar-comprehensions)
-comprehension_sugar_module_names = ["sugar/comprehensions"]
-# the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
-declaration_sugar_module_names = ["sugar/declarations"]
+comprehension_sugar_module_names = sugar_files(["comprehensions"])
+# the sugar of declarations (core/extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
+declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers", "tasks"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
-# sugar/declarations strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = ["sugar/functions", "sugar/declarations", "sugar/events", "sugar/defaults"]
+# the declarations sugar strips it, and the function keyword's rule rewrites the rest)
+early_sugar_module_names = sugar_files(["functions", "declarations", "events", "defaults"])
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
@@ -229,7 +232,7 @@ own_rules_applied(program: Node, source: text): Node := {
 }
 
 # each plain store `x ← v` (the parser's store·value(x, v)) the assignment `x = v`, once the rules of a step ran: a
-# rule's template stores without its own pattern taking the store for an assignment again (notify in lib/sugar/signals)
+# rule's template stores without its own pattern taking the store for an assignment again (notify in core/extensions/sugar/signals)
 store_word = HiddenWord.StoredValue as text
 stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if is_store(part) then Key(part#2, Op.Assign, part#3) else part) else n
 is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
@@ -250,7 +253,7 @@ with_program_rules(program: Node, rules: list, origins: list): Node := {
 }
 
 # `class Bag { max() := 7 }`: a type declaration; its method named like a library word binds that name in the class
-# only (class_methods.warp routes the calls), so a sugar rule of it (lib/sugar/extremes.warp's max) still reaches the
+# only (class_methods.warp routes the calls), so a sugar rule of it (core/extensions/sugar/extremes.warp's max) still reaches the
 # other values
 is_type_declaration(statement: Node): bool := match statement {
 	Key(left, op, right): left == opaque_symbol and kind_of(right) == "type"
@@ -1223,7 +1226,7 @@ may_be_list(code: Node, scope: text, vectors: list): bool := {
 	if not (is_round(code) and #code > 0 and code#1 is symbol) { return no }
 	name_of(code#1) in list_giving_words or vectors#2.has(name_of(code#1))
 }
-# `v .* 2` as the parser leaves it, before lib/sugar/arithmetic.warp spells it element_wise_any
+# `v .* 2` as the parser leaves it, before core/extensions/sugar/arithmetic.warp spells it element_wise_any
 is_element_wise_phrase(code: Node): bool := is_spaced(code) and #code == 3 and code#2 is symbol and #name_of(code#2) > 1 and name_of(code#2).starts_with(".") and name_of(code#2)#2 != '.'
 is_swizzle_word(name: text): bool := #name >= 2 and #name <= 4 and name.all(c => c in "xyzw")
 
@@ -1262,7 +1265,7 @@ varying_values(): map := {
 }
 # the main-level variables a handler or a block running later writes (`count = 0 … on click { count += 1 }`; a
 # function's local, `listed` of markup's `option{ value: …; html_content(listed) }`, is none): code reading one where it runs
-# is varying, but a word itself stays as varying_of says (a `h := …` reading it is no function, lib/sugar/heads.warp)
+# is varying, but a word itself stays as varying_of says (a `h := …` reading it is no function, core/extensions/sugar/heads.warp)
 later_written(): map := {
 	varying_values()
 	rule_written_later
@@ -1359,6 +1362,11 @@ context_holds(code: Node, context: text): bool := {
 	locally_bound(starting_word(code))
 }
 
+# the names a function binds inside it, else ø: a definition's (bound_by_definition), a lambda's parameters and the
+# names its body declares (`xs.map(x => x.f(1))`: x is the lambda's)
+bound_inside(n: Node): list? := if is_key(n, Op.Define) then bound_by_definition(n) else if is_key(n, Op.Arrow) then declared_within(value_of(n), lambda_bound_names(key_of(n))) else ø
+# the names a lambda's parameters bind, typed ones too: `x`, `(a: int, b)`
+lambda_bound_names(taken: Node): list := (if is_group(taken) then items_of(taken) else [taken]).map(leftmost_name).filter(name => name != ø)
 # the names a definition binds inside it: its parameters, the names its body's statements declare
 bound_by_definition(definition: Node): list := {
 	names = []
@@ -1518,7 +1526,7 @@ raw_at(n: Node, place: Place): Node := {
 	n
 }
 # bottom-up for the rules, keeping where the node they try stands: the method part of a `.` tried as such, a
-# definition's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
+# definition's or lambda's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
 # hold a map where f meets each node, a function's own inside it (merge of engine-rule-conditions with main's
 # map scoping)
 placed_map_scoped(n: Node, f: function, maps: map): Node := {
@@ -1535,6 +1543,8 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		rule_maps = maps
 		return f(Key(left, Op.Dot, right))
 	}
+	outer = rule_binding
+	rule_binding = rule_binding + (bound_inside(n) ?? [])
 	if not is_key(n, Op.Define) {
 		at_item = rule_next_item != ø and n == rule_next_item
 		rule_next_item = ø
@@ -1548,6 +1558,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 			rule_in_attribute = no
 		} else if rule_tag_depth > 0 and is_key(n, Op.Colon) { rule_in_attribute = yes }
 		walked = children(n, x => walked_item(x, holds_items, f, inner))
+		rule_binding = outer
 		if tag { rule_tag_depth -= 1 }
 		rule_in_attribute = outer_attribute
 		rule_maps = maps
@@ -1557,9 +1568,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		rule_item = outer_item
 		return result
 	}
-	outer = rule_binding
 	outer_defining = rule_defining
-	rule_binding = rule_binding + bound_by_definition(n)
 	rule_defining = head_word(key_of(n))
 	# `square(x) := …` names its parameters, no call: only they are tried, so broadcasting leaves the head as it is
 	walked = if is_called_head(key_of(n)) then placed(Key(head_with_parameters(key_of(n), x => placed_map_scoped(x, f, inner)), Op.Define, placed_map_scoped(value_of(n), f, inner)), n) else children(n, x => placed_map_scoped(x, f, inner))

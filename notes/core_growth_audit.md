@@ -42,7 +42,7 @@ lines) are not part of compiler.warp: no compile cost.
 ## Top 5: move out / undo
 
 1. **Broadcasting's `$x is vector` — a whole-program fixpoint** (rewrites.warp `vectors_of`, 132efe4f79 + 59e832c38e).
-   `$f($x)` has no literal word, so lib/sugar/broadcasting.warp's rule is tried at every one-argument call; its first
+   `$f($x)` has no literal word, so core/extensions/sugar/broadcasting.warp's rule is tried at every one-argument call; its first
    condition `$x is vector` makes vectors_of materialise `nodes_in` of every statement and iterate *all* nodes until no
    name grows (rounds × all nodes × may_be_list). Fix: test the cheap `$f takes number` first (rule condition order, or
    the engine ordering conditions by cost); make `is vector` demand-driven per name with a memo instead of a fixpoint
@@ -110,7 +110,7 @@ Cost: ●●● whole-program super-linear, ●● extra whole-program walks per
    (LIBRARY_RULES), rule needs (STD_RULE_NEEDS), block heads (BLOCK_HEADS). Any new lib file (wgsl, storage,
    signals, frames, json …) costs every compiler build three parses, plus once more for `baked-current`.
 3. **Run on the compiler's own source as a program**: the prelude's rules (gpu_lists_packed's program rule, paint
-   and shader rules), lib/sugar/broadcasting.warp (`is vector`), the prelude words the compiler reaches and their
+   and shader rules), core/extensions/sugar/broadcasting.warp (`is vector`), the prelude words the compiler reaches and their
    slices (with_reached, per slice now 3–4 walks instead of 1).
 
 ## Not measured, to measure
