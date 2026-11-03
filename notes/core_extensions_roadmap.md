@@ -41,3 +41,7 @@ and the pass list. These ten table entries would carry them all.
 Open before moving: the measurement must confirm "no" for each row (a form inside a text the compiler builds at run
 time counts too); the declared-operator row moves only with rewrites.warp's typed-operator rules, which the sugar
 needs.
+
+## Rules (user 2026-11-03)
+- The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).
+- The language is never simplified to shrink the core: every spelling programs may write stays (decision self-source-minimal).
