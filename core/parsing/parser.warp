@@ -673,7 +673,11 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if tabbed and after == Separator.Space { after = Separator.Tab }
 		// `ys = xs.map { |x| x+1 }`, `n = t.split " "`: what follows an assigned method belongs to its call, not to the
 		// statement
-		if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) {
+		// `xs.map { |x| x + 1 }`: a block of a lambda between bars after a method is its last argument, xs.map(x => x + 1)
+		if found and found#(found.length)#2 == Separator.Space and names_method(found#(found.length)#1) and bar_lambda(item) != ø {
+			item = method_given(found#(found.length)#1, bar_lambda(item))
+			found = found[0 .. found.length - 1]
+		} else if found and found#(found.length)#2 == Separator.Space and assigned_method_call(found#(found.length)#1) {
 			item = with_trailing_item(found#(found.length)#1, item)
 			found = found[0 .. found.length - 1]
 		}
@@ -706,8 +710,22 @@ def names_method(n: Node): bool := match n {
 // The assignment with `item` given to the method call it assigns: `ys = (xs.map {…})`, `n = (t.split " ")`
 // Rust twin: blocks.rs with_trailing_block
 def with_trailing_item(assignment: Node, item: Node): Node := match assignment {
-	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_item(value, item) else spaced((if names_method(value) then [value] else group_parts(value)#3) + [item]))
+	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_item(value, item) else if names_method(value) and bar_lambda(item) != ø then method_given(value, bar_lambda(item)) else spaced((if names_method(value) then [value] else group_parts(value)#3) + [item]))
 	_: assignment
+}
+// `{ |x| x + 1 }`, `{ |a, b| a + b }`: the one lambda a block holds, its parameters between bars (pipe_parameters); else ø
+def bar_lambda(block: Node): any {
+	parts = group_parts(block)
+	if parts == ø or not is_block(block) or #parts#3 != 1 { return ø }
+	match parts#3#1 {
+		Key(parameters, Op.Arrow, body): parts#3#1
+		_: ø
+	}
+}
+// `xs.map` given the function f: the call xs.map(f)
+def method_given(method: Node, f: Node): Node := match method {
+	Key(receiver, Op.Dot, name): Key(receiver, Op.Dot, call_of([name, f]))
+	_: method
 }
 
 // `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
