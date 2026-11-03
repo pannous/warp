@@ -1,0 +1,4 @@
+# an extension's operators come from its rows (core/extensions/extensions.warp, card parser-rows): uncertain's ± with its alias +-
+'use uncertain; str(6 ± 1)'	'6.0 ± 1.0'
+'use uncertain; str(6 +- 1)'	'6.0 ± 1.0'
+'use uncertain; str(2 * 3 ± 1)'	'6.0 ± 1.0'
