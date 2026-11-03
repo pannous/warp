@@ -1,0 +1,7 @@
+# `exec sh "…"` runs the command natively: interpolation runs twice (with_used, then pure_passes), and the second
+# run reads the lowered template; a misuse names itself (card crontab-sample-error)
+'exec sh "echo hi"'	'hi'
+'c = sh "echo hi"; exec c'	'hi'
+'exec(sh "echo a b")'	'a b'
+'exec "ls"'	error
+'exec sh "echo"'	''

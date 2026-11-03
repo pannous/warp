@@ -9,7 +9,20 @@ runtime_wasm_module(runtime: Node, host: map): any := {
 	while made == ø { made = typed_wasm_module(Node.Empty, runtime, host, {}) }
 	module.prebuilding = no
 	module.relocating = no
-	made
+	dropped = module.left_out.keys.filter(name => not is_programs_method(name))
+	if #dropped > 0 then dropped_words_refusal(dropped) else made
+}
+# only a method of a type the program declares (Separator·text, its enum unknown to the runtime) may stay outside
+# runtime.wasm: any other word left out would vanish from every program built on it, as an older seed's runtime of
+# newer sources lost read_file (a word reaching a new enum case it does not know; card seed-compiles), the build
+# failing much later as "no field read_file". Refused, saying why
+is_programs_method(name: text): bool := {
+	owner = name.split("·")#1
+	name.contains("·") and not module.enum_cases.has(owner) and not module.classes.has(owner)
+}
+dropped_words_refusal(dropped: list): text := {
+	why = dropped.map(name => name + " (" + module.left_out[name] + ")").join(", ")
+	"runtime.wasm would leave out " + why + ": this compiler cannot compile the runtime it builds; an older seed than its sources? scripts/refresh-seed.sh makes a newer one"
 }
 # every word compiled in name order, but those outside the core on their own (an enum's method naming the program's
 # enum): left out, and named in warp.runtime, for a program to compile as today; then the hooks: the closure calls of

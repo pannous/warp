@@ -1,0 +1,5 @@
+# a call taking a function is code in either branch of a ternary (card function-call)
+'n=7; n>4 ? [n].map(d=>d*d) : n'	[49]
+'n=7; n<4 ? n : [n].map(d=>d*d)'	[49]
+'n=7; n>4 ? [n, 1].filter(d=>d>1) : []'	[7]
+'use math; h(n):=n>4?h(digits(n).map(d=>d*d).sum()):n<2; h(7)'	yes

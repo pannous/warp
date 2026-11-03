@@ -55,9 +55,9 @@ cp $main_warp $warp || exit 1
 # its wasmtime beside the copy, where its rpath looks
 cp ${main_warp:A:h}/libwarp_wasmtime.* $scratch/ || exit 1
 libraries_beside $scratch
-# the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>)
-# with its runtime (warp-seed.runtime.wasm), the one it compiles compiler.warp behind
-for seed_file in warp-seed.wasm warp-seed.runtime.wasm; do
+# the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>). Its
+# runtime is no file: each rebuild compiles it from the sources being built (card seed-compiles)
+for seed_file in warp-seed.wasm; do
   cp ${main_warp:h}/$seed_file $scratch/ 2>/dev/null || cp ${main_warp:A:h}/$seed_file $scratch/ || exit 1
 done
 # the pair for these inputs: lib/'s, else the store's; built by the copy only with --rebuild
