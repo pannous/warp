@@ -1281,6 +1281,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return refuse("the operator " + operator + " with nothing " + (if left === ø then "before" else "after") + " it")
 	}
 	if operator == Op.Hash and left is symbol { return analyzed_element(body, left, right) }
+	# `else` only after `if` or `try` (decision nullish-default)
+	if operator == Op.Else { return refuse("a bare else: write " + form_of(left) + " default " + form_of(right) + " (keeps 0) or " + form_of(left) + " or " + form_of(right)) }
 	# `a:1`, a pair: a word key stays the word, as `{a:1}`'s do (hashed+symbolic), any other its value (`1:4`)
 	if operator == Op.Colon {
 		key = if left is symbol then name_node(left) else boxed(expression_code(body, left))

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# scripts/integrate/merge.sh [--tree <worktree>] [--tip <commit>] [<card>…]: landing the branches of retired sessions,
+# scripts/integrate/merge.sh [--tree <worktree>] [--tip <commit>] [--smoke-only] [<card>…]: landing the branches of retired sessions,
 # step 1 of 2 (step 2: land.sh). --tip: a merged tip handed over (a carrier branch), checked out in the tree for tier 0 alone.
 # Else it merges the cards noted "land: <branch> <tip>" (default: all of `todo landing`) onto origin/main in the tree,
 # one merge commit each,
 # then runs tier 0 on the result: the compiler of the merged lib (scripts/rebuild.sh pure: taken from data/ or the
 # store when its inputs were built before, so a tip already built is never built twice), hello through it, and
-# scripts/self-check.sh when the batch touches core/. A card whose merge conflicts is left out and named.
+# scripts/self-check.sh when the batch touches core/ (--smoke-only: never; land.sh's retry of a batch already
+# self-checked, the new main commits being tested by their pushers, night decision 00:50 2026-11-03). A card whose merge
+# conflicts is left out and named.
 # The batch (tested hash, base, cards) goes to <tree>/data/integrate/batch for land.sh.
 # Exit: 0 tier 0 green, 1 red or nothing merged.
 set -uo pipefail
@@ -16,6 +18,8 @@ EXPECTED=Hello
 tree=$DEFAULT_TREE tip=
 [ "${1-}" = --tree ] && { tree=$2; shift 2; }
 [ "${1-}" = --tip ] && { tip=$2; shift 2; }
+smoke_only=
+[ "${1-}" = --smoke-only ] && { smoke_only=1; shift; }
 tree=$(cd "$tree" && pwd) || exit 1
 scripts=$(cd "$(dirname "$0")/.." && pwd)
 batch=$tree/data/integrate/batch
@@ -56,7 +60,7 @@ tested=$(git -C "$tree" rev-parse HEAD)
 "$scripts/rebuild.sh" pure "$tree" || { say "RED: rebuild pure failed"; exit 1; }
 got=$(cd "$tree" && WARP_NO_WINDOW=1 WARP_LIB=$tree/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 [[ $got == *$EXPECTED* ]] || { say "RED: pure hello got ${got:0:160}"; exit 1; }
-if ! git -C "$tree" diff --quiet "$base" HEAD -- core; then
+if [ -z "$smoke_only" ] && ! git -C "$tree" diff --quiet "$base" HEAD -- core; then
 	"$scripts/self-check.sh" "$tree" || { say "RED: self-check"; exit 1; }
 fi
 say "tier 0 green: ${#merged[@]} cards, tested ${tested:0:10}; land with scripts/integrate/land.sh --tree $tree"

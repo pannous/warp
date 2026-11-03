@@ -121,7 +121,7 @@ std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", 
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = ["sugar/functions", "sugar/declarations", "sugar/events"]
+early_sugar_module_names = ["sugar/functions", "sugar/declarations", "sugar/events", "sugar/defaults"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
@@ -623,10 +623,13 @@ operator_overload(statement: Node): OperatorOverload? := {
 	template = holes_for(plain_node(value_of(statement)), names + introduced_names(value_of(statement)))
 	OperatorOverload(glyph, names, types, pattern, template, same_view(template, pattern))
 }
-# the built-in operator a definition's name spells: `operator_|` |, `operator_as` as, the method form's `+`; else ø
+# the built-in operator a definition's name spells: `operator_|` |, `operator_as` as, the method form's `+`; else ø.
+# A glyph beyond ASCII (`±`, `×`) is a declared operator wherever it is declared: the parse makes each use its
+# function's call, `6 ± 1` operator_±(6, 1), so its definitions stay functions, typed ones overloads by their operands'
+# types, which a call picks when it runs (card operator-overloads-by-type)
 overloaded_spelling(name: text): text? := {
 	spelling = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else if first_alphabetic_word(name) == "" then name else ""
-	if symbol_operator(spelling) != ø or word_operator(spelling) != ø then spelling else ø
+	if (symbol_operator(spelling) != ø or word_operator(spelling) != ø) and not is_operator_glyph(spelling) then spelling else ø
 }
 hole_word(name: text): text := rule_hole_mark + name
 # the body with each of the names a hole: the parameters, also the names its lambdas and assignments introduce, fresh

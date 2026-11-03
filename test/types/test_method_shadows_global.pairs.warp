@@ -1,0 +1,3 @@
+'class Foo { int bar(){ 42 } }; Foo().bar()'	42
+'class Foo { beep(){ 7 } }; Foo().beep()'	7
+'class Foo { def note(){ 3 } }; Foo().note()'	3
