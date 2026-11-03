@@ -15,5 +15,5 @@ Main task: core → core + extensions (card core-extensions-roadmap, 30% core / 
 | warp-error-text-trap | 3942cd53-cc5b-4ef3-995c-4b0209a60c2a | paused: gpu-lists-extraction (worktree clean, 2 commits) |
 | warp-markup-handler-spacing | b1badc07-d437-4863-b20c-a6c38874ed95 | paused: parser-rows (step 3 landed c7f627615e; next step) |
 
-Paused workers resume one per landing (two-feature-worker limit), in the order above.
+Queue per landing (two-feature-worker limit): integer-division-operator to the first worker that lands, then parser-rows resumes.
 Landed today: big-numbers-extension (29ae30d9c5), parser-rows step 3 (c7f627615e), quotes-templates-serializer.
