@@ -3618,8 +3618,8 @@ def bare_atom(p: Parser): Node := {
 		return group
 	}
 	// an atom an extension reads, `°C` (core/extension.warp atom_readers)
-	read = atom_reader(c)
-	if read != ø { return read(p) }
+	reader = atom_reader(c)
+	if reader != ø { return reader(p) }
 	// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing)
 	// Rust twin: atoms.rs EMPTY_SET_SIGN
 	if c == 'ø' or c == '∅' or c == ')' or c == ']' or c == '}' or c == ';' {
