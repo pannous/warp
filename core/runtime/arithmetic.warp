@@ -75,6 +75,29 @@ power(base: int, exponent: int): int := {
 	for i in 0..exponent { out = out * base }
 	out
 }
+# `a ÷ b` of values known only at run time, floored: two plain ints in i64, numbers with a float the float quotient's
+# floor, a ratio or a big int (and the one quotient past 64 bits) by the extended runtime (card node-floor-quotient)
+node_floor_quotient(a: Node, b: Node): Node := {
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and is_plain_int(a) and is_plain_int(b) and not (unboxed_int(a) == least_int() and unboxed_int(b) == -1) { return floored_quotient(unboxed_int(a), unboxed_int(b)) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_floor_quotient(a, b) }
+	divisor = float_of_node(b)
+	# a float divided by zero fails as an int's does
+	if divisor == 0.0 { return int_quotient(1, 0) }
+	truncated(float_floor(float_of_node(a) / divisor))
+}
+# `floor x` of a value known only at run time: an int itself, a float's floor, a ratio's or a big int's by the extended
+# runtime
+node_floor(n: Node): Node := {
+	if kind_code(n) != Kind.Int { return truncated(float_floor(unboxed_float(n))) }
+	if is_plain_int(n) { return n }
+	extended_floor(n)
+}
+# a ÷ b of ints rounded toward minus infinity: -7 ÷ 2 is -4, 7 ÷ -2 is -4
+floored_quotient(a: int, b: int): int := {
+	q = int_quotient(a, b)
+	if q * b != a and (a < 0) != (b < 0) { q -= 1 }
+	q
+}
 # `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
 floor_quotient(a: int, b: int): int := {
 	q = int_quotient(a, b)

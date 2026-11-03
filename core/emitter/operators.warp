@@ -62,9 +62,9 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol == "%" and kind == ValueKind.Int { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [TypedCode(ValueKind.Float, converted(a, kind)), TypedCode(ValueKind.Float, converted(b, kind))]) }
 	if symbol == "rem" and kind == ValueKind.Float { return float_remainder(body, converted(a, kind), converted(b, kind)) }
-	if symbol == "/" and kind == ValueKind.Int { return runtime_call("exact_ratio", [a, b]) }
+	if symbol == "/" and kind == ValueKind.Int { return runtime_call("extended_ratio", [a, b]) }
 	# a negative exponent gives an exact rational, so the power is a boxed value
-	if symbol == "^" and kind == ValueKind.Int { return runtime_call("exact_pow", [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))]) }
+	if symbol == "^" and kind == ValueKind.Int { return runtime_call("extended_power", [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))]) }
 	if symbol == "^" { return float_power(body, converted(a, kind), converted(b, kind)) }
 	ops = if kind == ValueKind.Float then float_ops else int_ops
 	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind_spelling(kind)) }
@@ -85,7 +85,7 @@ def bools_as_ints(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCo
 # base ^ exponent of floats: the runtime word float_pow (extensions/big_numbers/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
 def float_power(body: Body, base: list, exponent: list): TypedCode {
 	held = uleb(fresh_local(body, ValueKind.Float))
-	code = runtime_call("float_pow", [TypedCode(ValueKind.Float, base), TypedCode(ValueKind.Float, exponent)]).code + [op.local_tee] + held + [op.local_get] + held
+	code = runtime_call("extended_float_power", [TypedCode(ValueKind.Float, base), TypedCode(ValueKind.Float, exponent)]).code + [op.local_tee] + held + [op.local_get] + held
 	checked = [op.f64_ne, op.if, no_value] + dropped(runtime_call("invalid_number", [])) + [op.end]
 	TypedCode(ValueKind.Float, code + checked + [op.local_get] + held)
 }
@@ -131,7 +131,7 @@ def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 }
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
 def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
-# an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
+# an operator on two Int $Nodes, one an exact rational: the bridge hook of the extended runtime (bridge.warp), a comparison by extended_order; the
 # operators without one take the floats
 grown_words = {"+": "grown_sum", "-": "grown_difference", "*": "grown_product"}
 # `a + b`, `a - b`, `a * b` of two ints (decision nat-and-int): a whole number may grow past 64 bits, so the grown
@@ -168,13 +168,13 @@ fast_int(body: Body, n: Node): bool := {
 # a call of a function declared to give an int, `f(): int := 3` (decision declared-int-result)
 gives_declared_int(f: Function): bool := declared_kinds.get(aliased_type(declared_result_word(f) ?? "")) == ValueKind.Int
 declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or (is_global(body, name) and global_key(body, name) in module.int_globals) or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int)
-exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod", "rem": "exact_rem"}
+exact_words = {"-": "extended_difference", "*": "extended_product", "/": "extended_quotient", "%": "extended_modulo", "rem": "extended_remainder"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
-	if symbol in comparisons { return operation_code(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
+	if symbol in comparisons { return operation_code(body, symbol, runtime_call("extended_order", [left, right]), number_value(0)) }
 	floats
 }
-# `floor x`: an int itself, a float's floor as an int, a boxed number by the runtime word floored_node (exact for a
+# `floor x`: an int itself, a float's floor as an int, a boxed number by the runtime word node_floor (exact for a
 # ratio, as Rust's exact_floor)
 # `type(x)`: the type value of x's kind, of a value known only at run time the one its kind names there (a list's
 # items unknown here, Rust's `list of int`, outside the core)
@@ -225,7 +225,7 @@ def bit_cast(value: TypedCode, cast: list): TypedCode { TypedCode(cast#2, conver
 def floored(value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Int { return value }
 	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Int, value.code + [op.f64_floor, op.i64_trunc_f64_s]) }
-	if value.kind == ValueKind.Node or value.kind == pending { return runtime_call("floored_node", [TypedCode(ValueKind.Node, value.code)]) }
+	if value.kind == ValueKind.Node or value.kind == pending { return runtime_call("node_floor", [TypedCode(ValueKind.Node, value.code)]) }
 	refuse("floor of a " + kind_spelling(value.kind))
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
