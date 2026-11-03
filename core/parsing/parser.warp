@@ -364,8 +364,9 @@ ALIAS_TARGET_NAMES = {"approximately": "≈", "<-": STORE_OPERATOR}
 ALIAS_TABLE = module_source("aliases")
 // operator symbols and words: [spelling, operator] pairs, the symbols longest first; forms: keyword_form's; canonical:
 // each alias with its entry's word (`plus` → add); infix words: the table's (`mod`, `upto`)
-// powers: each operator's [left, right] binding power, its row's `power` (binding_powers)
-class Spellings { operator_symbols: list; operator_words: list; forms: map; canonical: map; infix_words: list; powers: map }
+// powers: each operator's [left, right] binding power, its row's `power` (binding_powers); declared: the operators a
+// declaration gives their meaning, `declared: yes` (`2 ↑ 3` is operator_↑(2, 3))
+class Spellings { operator_symbols: list; operator_words: list; forms: map; canonical: map; infix_words: list; powers: map; declared: list }
 global spelling_tables = ø
 def alias_spellings(): Spellings := {
 	if spelling_tables == ø {
@@ -379,12 +380,12 @@ def alias_spellings(): Spellings := {
 def alias_table_tree(): Node := source_parse(run_library() + "/aliases.warp", ALIAS_TABLE)
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
-	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: [], powers: copied(STRUCTURE_POWERS)}
+	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: [], powers: copied(STRUCTURE_POWERS), declared: []}
 }
 def aliased_spellings(): Spellings := {
 	tables = own_spellings()
 	for table in [alias_table_tree()] + extension_operator_rows().map(rows => source_parse("extension rows", rows)) {
-		for row in items_of(table) { add_alias_entry(tables, spelling_text(row#1), row#2) }
+		for row in statements_in(table) { add_alias_entry(tables, spelling_text(row#1), row#2) }
 	}
 	tables.operator_symbols = longest_first(tables.operator_symbols)
 	tables
@@ -395,9 +396,13 @@ def add_alias_entry(tables: Spellings, word: text, fields: Node) {
 	target = alias_field(fields, "operator") ?? word
 	written_infix = alias_field(fields, "infix") == "yes"
 	if written_infix { add_infix_word(tables, word, target) }
-	if target == word and not is_name_start(word#1) and spelled_by(tables.operator_symbols, word) == ø { tables.operator_symbols += [[word, word]] }
+	if alias_field(fields, "declared") == "yes" { tables.declared += [target] }
 	power = alias_power(fields)
-	if power != ø { tables.powers[target] = power }
+	if power != ø {
+		tables.powers[target] = power
+		# an operator row named by its symbol spells it (an extension's `"±" { power: … }`)
+		if not is_name_start(word#1) and spelled_by(tables.operator_symbols, word) == ø { tables.operator_symbols += [[word, target]] }
+	}
 	for spelling in alias_field(fields, "aliases") ?? [] {
 		tables.canonical[spelling] = word
 		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
@@ -1256,7 +1261,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			skip_blanks(p)
 			if is_phrase_operator(op) {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
-			} else if DECLARED_ONLY_OPERATORS contains op#2 {
+			} else if alias_spellings().declared contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else if op#2 == STORE_OPERATOR {
 				left = call_of([symbol(HiddenWord.StoredValue as text), left, expression(p, powers#2)])
@@ -1944,7 +1949,6 @@ def down_to_at(p: Parser): int {
 // The operators only a declaration gives meaning (lib/prelude.warp `infix operator ↑`): `2↑3` calls operator_↑(2, 3);
 // `loop··step` in a rule's template glues the hidden name loop·step (rewrites.warp), elsewhere the call of no operator
 // Rust twin: Op::is_declared_only, word_operators.rs log_calls
-DECLARED_ONLY_OPERATORS = ["↑", "↓", "··"]
 // The name of the function an operator declaration defines: `infix operator ⊕` defines operator_⊕
 // Rust twin: operators/mod.rs OPERATOR_FUNCTION_PREFIX
 OPERATOR_FUNCTION_PREFIX = "operator_"

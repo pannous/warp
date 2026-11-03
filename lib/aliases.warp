@@ -6,6 +6,7 @@
 #   aliases: the other spellings, a symbol one spells the operator, a word one the word
 #   infix: yes when the word and its word aliases are written between operands too (`7 mod 2`), but
 #   name a block written right after them (`div {…}` is the html tag)
+#   declared: yes when only a declaration gives the operator its meaning, `infix operator ↑(a, b) := …`
 #   power: [left, right], how tightly the operator binds its operands (card parser-rows): the higher binds first,
 #   right below left groups to the right (`2^3^2` is 2^(3^2)); an operator without one binds as `=` does, [60, 59]
 # Keywords, operator words and constants are quoted: written bare, the parser reads them already.
@@ -22,9 +23,9 @@ modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes, power: [150,
 "rem" { power: [150, 151] }
 power { operator: "^", symbol: Op.Pow, aliases: ["**"], power: [160, 159] }
 # the operators only a declaration gives meaning (lib/prelude.warp `infix operator ↑`), bound as tight as ^
-"↑" { power: [160, 159] }
-"↓" { power: [160, 159] }
-"··" { power: [160, 159] }
+"↑" { declared: yes, power: [160, 159] }
+"↓" { declared: yes, power: [160, 159] }
+"··" { declared: yes, power: [160, 159] }
 count { prefix-operator: "#", symbol: Op.Hash, aliases: [size, len, length] }
 # a class's position(p) is `b#p` and its index(i), `b[i]`, the parser's b#(i+1) (core/passes/class_methods.warp)
 position { operator: "#", symbol: Op.Hash, power: [170, 182] }
