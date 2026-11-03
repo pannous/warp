@@ -3,9 +3,6 @@
 # holes are its parameters, so a value never changes the query's shape. `sh "ls -l $dir"` is an argument vector run
 # without a shell, a hole one whole argument. `execute` runs only a sql template, `exec` only a sh one. interpolation
 # runs this first, as interpolation.rs lower_program runs lower_templates; the first misuse is the program's error.
-use "../passes/walk.warp"
-use "../passes/shapes.warp"
-use "parser.warp"
 
 template_tags = ["sql", "sh"]
 sql_placeholder = "?"
@@ -19,10 +16,6 @@ global template_variables = []
 # the values templates were lowered to, each with its tag: interpolation runs again over the program and the library
 # definitions it reached (passes.warp pure_passes), where `exec sh "…"` reads `exec ("…" …)` (card crontab-sample-error)
 global lowered_templates = []
-
-# the code of a hole as a node
-# (its parse as a node, as the program's own: through the view an empty part, the count's left of `#xs`, came back as [])
-code_node(code: text): Node := plain_node(parsed(code))
 
 # the tag `sql` or `sh` n is, else ""
 tag_named(n: Node): text := {
@@ -229,3 +222,6 @@ injected(program: Node): Node := {
 	if template_misuse { raise template_misuse }
 	value
 }
+# the row (card injection-foreign-forms, decision core-is-self): its templates are built before the program's texts
+# interpolate; its parts name core words without a use of core paths (lib/extensions has no ../core)
+typed_templates_extension = Extension{name: "typed_templates", text_passes: [injected]}

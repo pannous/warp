@@ -11,6 +11,7 @@ use "durations.warp"
 use "superscripts.warp"
 use "percent.warp"
 use "go_tasks.warp"
+use "typed_templates.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
@@ -23,6 +24,7 @@ EXTENSIONS = [
 	superscripts_extension
 	percent_extension
 	tasks_extension
+	typed_templates_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
 ]
