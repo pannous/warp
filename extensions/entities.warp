@@ -1,0 +1,104 @@
+# Uniscript entities (card parser-cold-forms, decision core-is-self): `\:alpha` is α, `\:world` 🌍, outside texts by a
+# source pass that keeps the columns as written, inside texts by a text escape; an unknown one stays as written
+ENTITY_MARK = "\\:"
+# `name TAB characters` lines, the table Rust include_str!s, built into the compiler as its other data
+# (module_source: user 2026-10-25, "These should all be built in")
+ENTITY_TABLE = module_source("entities.tsv")
+# the escape `\:name` in a text at `at`, ø where no letter follows the `:`
+entity_escape(source: any, at: int, n: int): list? := if source[at + 1] == ':' and at + 2 < n and is_alpha(source[at + 2]) then entity_read(source, at, n) else ø
+entities_extension = Extension{name: "entities", source_passes: [expanded_entities], text_escape_readers: {":": entity_escape}}
+
+global entity_table = ø
+def entities(): map {
+	if entity_table == ø {
+		entity_table = {}
+		lines = ENTITY_TABLE.split("\n")
+		for line in lines {
+			columns = line.split("\t")
+			if columns.length == 2 { entity_table[columns#1] = columns#2 }
+		}
+	}
+	entity_table
+}
+# The source with each known entity outside texts and comments as its characters, and where it got shorter
+# (core/extension.warp source_passes); `\alpha` written for `\:alpha` is refused. Only a source where a `\` stands
+# before a known name is walked
+def expanded_entities(source: text): list {
+	if not names_an_entity(source) { return [source, []] }
+	points = code_points(source)
+	n = points.length
+	# the pieces between entities are copied whole: one append per character made the run quadratic (card
+	# pure-compile-speed: 69% of a pure-lane compile of uses.warp)
+	parts = []
+	shifts = []
+	taken = 0
+	copied = 0
+	at = 0
+	# each point read before the ones after it: a list of points is walked on from the point read last, so reading
+	# one back (span_end's lookahead, then entity_name_at at the same point) walked it from its head at every point,
+	# quadratic: most of the passes' list reads in `warp rebuild self` (card speed-symbol-calls). An entity starts at a
+	# backslash, a text or comment never does, so the entity is looked for first
+	while at < n {
+		name = entity_name_at(points, at, n)
+		if name != "" {
+			characters = entities()[name]
+			parts += [text_between(points, copied, at), characters]
+			at = at + 2 + name.length
+			copied = at
+			columns = 2 + name.length - code_points(characters).length
+			taken = taken + columns
+			shifts += [[at - taken, columns]]
+		} else {
+			refuse_bare_entity(points, at, n)
+			skipped = span_end(points, at, n)
+			at = if skipped > at then skipped else at + 1
+		}
+	}
+	[join(parts + [text_between(points, copied, n)], ""), shifts]
+}
+# whether a `\` stands before a known entity's name, `\:alpha` or `\alpha`, anywhere in the source
+def names_an_entity(source: text): bool {
+	if not source.contains("\\") { return false }
+	for piece in source.split("\\") {
+		start = if piece.starts_with(":") then 1 else 0
+		end = start
+		while end < piece.length and is_alpha(piece[end]) { end = end + 1 }
+		if end > start and piece[start .. end] in entities() { return true }
+	}
+	false
+}
+# `\alpha` written for `\:alpha` (Rust twin: atoms.rs parse_atom, uniscript_entities.rs bare_entity_name_at)
+def refuse_bare_entity(points: list, at: int, n: int) {
+	if not (points[at] == '\\' and is_alpha(peek(points, at + 1, n))) { return }
+	end = at + 1
+	while end < n and is_alpha(points[end]) { end = end + 1 }
+	name = text_between(points, at + 1, end)
+	if name in entities() { raise "a uniscript entity is written \\:" + name + ", not \\" + name }
+}
+# The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
+# hyphenated parts (`\:fracture-A`)
+def entity_name_at(source: text or list, at: int, n: int): text {
+	if not (source[at] == '\\' and peek(source, at + 1, n) == ':') { return "" }
+	letters = at + 2
+	while letters < n and is_alpha(source[letters]) { letters = letters + 1 }
+	if letters == at + 2 { return "" }
+	run = letters
+	while run < n and (is_alphanumeric(source[run]) or source[run] == '-') { run = run + 1 }
+	end = run
+	while end > letters {
+		if end == run or source[end] == '-' {
+			name = text_between(source, at + 2, end)
+			if name in entities() { return name }
+		}
+		end = end - 1
+	}
+	name = text_between(source, at + 2, letters)
+	if name in entities() then name else ""
+}
+# The characters from `from` to `to` of a text or of its code points
+def text_between(source: text or list, from: int, to: int): text := if source is text then source[from .. to] else join(source[from .. to], "")
+# `\:name` inside a text at `at`: [its characters, the length read]; an unknown one stays as written
+def entity_read(source: text or list, at: int, n: int): list {
+	name = entity_name_at(source, at, n)
+	if name == "" then [ENTITY_MARK, 2] else [entities()[name], 2 + name.length]
+}
