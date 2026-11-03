@@ -301,7 +301,8 @@ called_only(program: Node): Node := {
 		if brought_names.has(names[i]) { brought[names[i]] = (brought.get(names[i]) ?? []) + [statements[i]] } else { pending += words_within(statements[i]) }
 	}
 	if pending.any(word => word.starts_with(closure_call_word)) { pending += [callable_word] }
-	if task_starting_word in pending { pending += [settling_word] }
+	settlers = extension_value_settlers()
+	pending += pending.filter(word => settlers.has(word)).map(word => settlers[word])
 	called = {}
 	at = 0
 	while at < #pending {
@@ -354,7 +355,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	if program_words.any(word => word in foreign) { hint_foreign_types(program, foreign, own_names) }
 	exported = slices.filter(is_exported_slice).map(slice => slice#1)
 	for name in exported { exported_names[name] = yes }
-	wanted = exported + program_words + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + (if settling_word in module_names then [settling_word] else [])
+	wanted = exported + program_words + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
 	uses = ø
 	origins = {}
 	keys = slice_keys(files)

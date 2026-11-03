@@ -188,6 +188,14 @@ file. Two seed limits: the seed builds runtime.wasm first with its own RUNTIME_R
 and runtime code may read only constant-table keys the seed knows (a new key silently drops the words after it: a
 runtime of ~115 KB instead of ~259 KB; numbers until the seed refresh, card once-refreshed).
 
+Row pitfalls (card tasks-signals-extensions, 2026-11-03; each cost a failed seed build):
+- An extension's file never takes a std module's name (rewrites.warp std_module_names): `use "tasks.warp"` in
+  extensions/extensions.warp loads lib/tasks.warp, so the tasks row lives in extensions/go_tasks.warp.
+- A row's map keys are texts, `value_settlers: {"task_go": "task_awaited"}`: a bare key `{task_go: …}` is a free word
+  to prelude_words, which brings the module defining it (lib/tasks.warp, and uncertain behind it) into the compiler.
+  That is a compiler bug (a key read as a word, card key-map), not a style rule; the quotes hold until it is fixed.
+- A function gathering a field is named apart from it: `extension_block_words()` for `block_words`.
+
 ## Rules (user 2026-11-03)
 - The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).
 - The language is never simplified to shrink the core: every spelling programs may write stays (decision self-source-minimal).
