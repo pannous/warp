@@ -70,7 +70,7 @@ before asking a question). After a context swap, this file and your role file be
   declared in lib/ as an enum or as values of a class, found through `use` or names from the expected type; never a
   table in core/, never one rewrite rule per name. core/ holds mechanisms only. A core diff that adds names of a domain
   is the sign that a mechanism is missing: card it.
-- Rare edge cases (∞/NaN literals, wording nits, odd feature pairs) go to `todo add Later`.
+- Rare edge cases (∞/NaN literals, wording nits, odd feature pairs) go to `todo add Later`. A footgun constructed at the desk, never seen in the wild, gets no rule, refusal path or test list (wiki/Footguns.md "Beware of constructed footguns", user 2026-11-03).
 - Emptiness is tested loosely: `is empty`, `if no x`, `if x`; `x is ø` only tests missing.
 - JSON5 or warp notation for anything people or agents write; strict JSON only where a tool requires it.
 
