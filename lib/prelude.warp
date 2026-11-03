@@ -899,7 +899,7 @@ rewritten_everywhere(code: any, rule: function): any := {
 	rewritten = rule(inner)
 	if rewritten == ø then inner else rewritten_everywhere(rewritten, rule)
 }
-// a code template's holes filled (core/passes/code_templates.warp): `$a` by the value of a, `$xs...` by xs's items
+// a code template's holes filled (extensions/code_templates.warp): `$a` by the value of a, `$xs...` by xs's items
 filled_template(code: any, values: map): any := {
 	if is_type(code, "symbol") { return if name_of(code).starts_with("$") and name_of(code)[1 ..] in values then values[name_of(code)[1 ..]] else code }
 	if is_type(code, "key") { return key(filled_template(key_of(code), values), op_of(code), filled_template(value_of(code), values)) }
