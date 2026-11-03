@@ -52,6 +52,13 @@ Against the target shape (Lessons from wasp: operators as rows, keywords through
   injection's `sql`/`sh` text prefix, shader and wasm raw blocks, the guard words (GUARD_MARKERS: try, assert,
   check). Each is a name → handler entry; the statement head, declaration, raw block and text prefix hooks above
   are that table's kinds.
+- Agreed with warp-sugar (2026-11-03): a row is `operator, symbol, aliases, power: [left, right], fixity: infix |
+  prefix | suffix | circumfix` (with `closing` for circumfix). The core's operators stay rows in lib/aliases.warp;
+  an extension's operators are the same rows in its own file (± in uncertain's, ² ‰ √ in number forms), listed by
+  its registration in the hook table, and the parser reads aliases.warp plus the registered rows as one table. The
+  hook table itself holds no rows: name → handler, list kinds, and per extension its rules file, operator rows,
+  atom readers (glyph or suffix → reader), runtime sources and host exports. A user's `infix operator ⊕` adds a
+  row at parse time.
 - Not now (card apply-lessons, Later): moving binding_powers and the keywords out of parser.warp, fusing the
   passes' walks.
 
