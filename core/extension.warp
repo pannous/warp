@@ -6,8 +6,10 @@
 #   library_words: a program's word → the runtime word it calls (emitter runtime_words.warp library_words)
 #   host_exports: runtime words every program exports under their own names, for a host (emitter host.warp)
 #   constant_tables: tables whose numbers its runtime words read by name, `GpuCell.I32` (emitter.warp constant_tables)
+#   atom_readers: the first character of an atom it reads → its reader, given the parser there, which reads the atom
+#   and moves past it (`°C`); glued after a number or a name such an atom multiplies it, `30°`, `x°`
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; commands: list = []; runs: any = ø }
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; commands: list = []; runs: any = ø }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
@@ -19,6 +21,12 @@ with_entries(base: map, tables: list): map := {
 }
 extended_library_words(base: map): map := with_entries(base, EXTENSIONS.map(extension => extension.library_words))
 extended_constant_tables(base: map): map := with_entries(base, EXTENSIONS.map(extension => extension.constant_tables))
+# the reader of an atom starting with the character, else ø
+global atom_reader_table = ø
+atom_reader(c: any): any := {
+	if atom_reader_table == ø { atom_reader_table = with_entries({}, EXTENSIONS.map(extension => extension.atom_readers)) }
+	atom_reader_table.get("$(c)")
+}
 extension_host_exports(): list := concatenated(EXTENSIONS.map(extension => extension.host_exports))
 # every command word an extension answers
 extension_command_words(): list := concatenated(EXTENSIONS.map(extension => extension.commands))

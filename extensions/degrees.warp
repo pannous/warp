@@ -1,0 +1,9 @@
+# The degree sign (card parser-rows, Rust twin numbers/units.rs DEGREE): `°C`, `°F` a temperature unit, `°` alone the
+# angle unit (lib/units.warp); glued after a number or a name it multiplies, `30°`, `x°` (card angles-degrees)
+read_degree(p: Parser): Node := {
+	end = if is_alpha(peek(p.code, p.at + 1, p.n)) then name_end(p.code, p.at + 1, p.n) else p.at + 1
+	unit = symbol(p.code[p.at .. end])
+	p.at = end
+	unit
+}
+degrees_extension = Extension{name: "degrees", atom_readers: {"°": read_degree}}
