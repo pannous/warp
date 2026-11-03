@@ -275,7 +275,7 @@ subscript_kind(indexed: Node, index: Node, scope: Scope): ValueKind := {
 # for no typed builtin
 typed_call_kind(n: Node, scope: Scope): ValueKind? := {
 	name = head_name(n)
-	if name is empty or binding(scope, name) != ø or name in scope.parameters or not (#n >= 2 or bracket_of(n) == "(") { return ø }
+	if count(name) == 0 or binding(scope, name) != ø or name in scope.parameters or not (#n >= 2 or bracket_of(n) == "(") { return ø }
 	emitted = kind_named(emitted_call_kind(name, #n - 1))
 	if emitted != ø { return emitted }
 	if #lines_of(typed_lines, unaliased(name)) == 0 or bracket_of(n) != "(" or #n < 2 or separator_of(n) == "," { return ø }
@@ -301,7 +301,7 @@ typed_element_kind(type_name: TypeWord?): ValueKind? := {
 	if type_name == ø { return ø }
 	if type_name == "map" or type_name == "list of node" { return ValueKind.Empty }
 	element = if type_name.starts_with("list of ") then type_name[8..] else if type_name.starts_with("map of ") then type_name[7..] else ""
-	if element is empty { return ø }
+	if count(element) == 0 { return ø }
 	if element.starts_with("list") { return ValueKind.List }
 	if element == ValueKind.Rational { return ValueKind.Int }
 	if element == "number" { return ValueKind.Empty }
@@ -431,7 +431,7 @@ element_list_type(map: Node, scope: Scope): TypeWord := {
 class Scope { kinds: map = {}; types: map = {}; parameters: map = {}; globals: map = {}; pinned: map = {}; declared_globals: map = {} }
 
 # `(f a b) := body`, `(f a b) = body`, and `f := body` of a body reading `it` or `$0` or of a block of statements
-is_definition(n: Node): bool := not (defined_name(n) is empty)
+is_definition(n: Node): bool := count(defined_name(n)) > 0
 
 defined_name(n: Node): Name := {
 	if not (is_key(n, Op.Define) or is_key(n, Op.Assign)) { return "" }
@@ -479,8 +479,8 @@ is_kind_pair(a: ValueKind, b: ValueKind, one: ValueKind, other: ValueKind): bool
 
 # the type word of a list's elements given both a and b (common_type), a node when they have none
 joined_word(a: TypeWord, b: TypeWord): TypeWord := {
-	if a is empty or a == b { return b }
-	if b is empty { return a }
+	if count(a) == 0 or a == b { return b }
+	if count(b) == 0 { return a }
 	common = common_type([a, b])
 	if common == ø { "node" } else { common }
 }
@@ -753,7 +753,7 @@ declare(name: Name, type_node: Node, context: Name) := {
 # the scope a variable of `context` lives in: its own, the main scope for a global or a main variable a body reads
 owner(context: Name, name: Name): Scope := {
 	scope = scopes[context]
-	if name in scope.kinds or context is empty or name not in scopes[""].kinds { scope } else { scopes[""] }
+	if name in scope.kinds or count(context) == 0 or name not in scopes[""].kinds { scope } else { scopes[""] }
 }
 
 # one flow joined into its slot; yes when the slot changed
@@ -954,7 +954,7 @@ analyze(program: Node): Node := {
 		for parameter in function_parameters(name) {
 			own = parameter.name
 			# `if x is list then … else x`: a plain parameter whose kind the body tests takes any value, as `x: any`
-			plain = parameter.type_name is empty and parameter.defaulted_to == ø
+			plain = count(parameter.type_name) == 0 and parameter.defaulted_to == ø
 			kind = if plain and own in tested then ValueKind.Empty else pinned_kind(parameter)
 			scope.kinds[own] = kind
 			if kind != ValueKind.Unknown { scope.pinned[own] = yes }
