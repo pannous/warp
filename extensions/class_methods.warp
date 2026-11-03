@@ -2,7 +2,7 @@
 # their dispatch on the instance's class, inheritance (`extends`, `super`), the operators, orderings, conversions and
 # positions a class gives its instances, and its static fields. The core reads class declarations (passes/classes.warp);
 # the compiler itself declares classes without methods, so none of this runs when it compiles itself. Its parts name
-# the core words they read without a use: the core's definitions pass brings classes.warp and int_type_shows.warp first
+# the core words they read without a use: the core's definitions pass brings classes.warp and extensions/int_types/shows.warp first
 use "class_methods/statics.warp"
 use "class_methods/methods.warp"
 
