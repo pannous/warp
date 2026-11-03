@@ -2,13 +2,12 @@
 # overloads.rs lower_arity_overloads): `twice(n) := …` and `twice(a, b) := …` are the functions twice·1 and twice·2,
 # and every call names the one its argument count fits, `x.twice(y)` counting its receiver; passed as a value,
 # `bottom_up(n, twice)`, it is the one the called function calls that parameter with. Definitions of one count stay
-# one function, whose clauses clauses.warp merges, unless their parameter types tell them apart (typed_overloads).
+# one function, whose clauses extensions/function_clauses.warp merges, unless their parameter types tell them apart (typed_overloads).
 use "walk.warp"
 use "../analysis/diagnostics.warp"
 use "../parsing/phrase_blocks.warp"
 use "scope.warp"
 use "../analysis/signatures.warp"
-use "clauses.warp"
 use "../analysis/builtin_signatures.warp"
 use "../analysis/words.warp"
 use "classes.warp"
@@ -240,7 +239,7 @@ class_distance(kind: text, type: text): int? := {
 }
 
 # `x: int` → "int", an untyped parameter "any"; a definition taking a pattern apart, `len([h, t...])`, is a clause of
-# clauses.warp, no overload (card pattern-clause-refusal)
+# extensions/function_clauses.warp, no overload (card pattern-clause-refusal)
 parameter_types(call: Node): list := {
 	if items_of(call)[1..].any(is_list_pattern) { return [pattern_type] }
 	signature_of(items_of(call)).parameters.map(p => if p.type_name == "" then any_word else p.type_name)

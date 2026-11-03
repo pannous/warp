@@ -6,7 +6,6 @@ use "../parsing/number_words.warp"
 use "of_lookups.warp"
 use "definitions.warp"
 use "multiple_assignments.warp"
-use "clauses.warp"
 use "../parsing/phrase_blocks.warp"
 use "loop_heads.warp"
 use "node_matches.warp"
@@ -46,7 +45,8 @@ passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 # property_accessors, the used files and modules, the prelude's definitions it reaches. Then pure_passes in order:
 #   parse_words tries definitions          `parse`/`eval` words, try/catch, definitions and their heads (`… from runtime`)
 #   preposition_heads arity_overloads      `f of x` heads, several definitions of one name by arity
-#   clauses multiple_assignments           `where`/`unless` clauses, `a, b = …`
+#   multiple_assignments                   `a, b = …` (an extension's passes go between: function clauses after
+#                                          arity_overloads, extensions/function_clauses.warp)
 #   type_tests spaced_prefix_calls         `x is T`, `f x` calls
 #   passes (twinned with Rust by index)    interpolation, two kept slots (arms and result arrows are rules now),
 #                                          sugar_phrases (`a of b`), number_words_pass
@@ -71,7 +71,7 @@ owned_refusal(refusal: text, form: text?): text := {
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside rust-harness:src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, components, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
+pure_passes = [parse_words, tries, components, definitions, arity_overloads, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
 global lowering_passes = ø

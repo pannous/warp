@@ -516,3 +516,11 @@ lists_in(top: any): list := {
 	}
 	views
 }
+# a literal a pattern or a declaration may hold: a number, a text, a bool
+is_literal(n: Node): bool := n is number or n is text or n is bool
+# the conditions joined by `and`, `a and b and c`
+joined(conditions: list): Node := {
+	condition = conditions#1
+	for more in conditions[1..] { condition = Key(condition, Op.And, more) }
+	condition
+}
