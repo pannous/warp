@@ -1,5 +1,4 @@
-## times (card time-primitives; Rust twin: rust-harness:src/wasm_emitter/time): a time node of a form (rust-harness:src/time/mod.rs TimeForm:
-## kinds.warp TimeFormCode) and a position, read by the intrinsics
+## times (card time-primitives): a time node of a form and a position, read by the intrinsics
 ## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
 use "../intrinsics.warp"
 use "../../analysis/kinds.warp"
@@ -52,14 +51,14 @@ operand_position(n: Node): int := unboxed_int(n)
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
 local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 
-## times (card time-text-warp; rust-harness:src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
-## of kind Time, its form in the info bits (rust-harness:src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
+## times (card time-text-warp): a $Node
+## of kind Time, its form in the info bits, its position in an $i64box: days since 1970 for a
 ## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
 time_form(n: Node): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
 # whether n is a time, what made_case(Made.Time, …) tests
 holds_time(n: Node): bool := kind_code(n) == Kind.Time
-# RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
-# local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
+# RFC 3339, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
+# local time no Z. A duration (card duration-warp) and a zoned time (its zone names) trap
 time_text(n: Node): text := {
 	form = time_form(n)
 	if form == TimeFormCode.Duration { return duration_text(n) }
@@ -106,7 +105,7 @@ fraction_text(fraction: int): text := {
 }
 # n with leading zeros to count digits
 padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
-# a zoned time in time_text: "time form not in warp" (its zone names are Rust's alone)
+# a zoned time in time_text: "time form not in warp" (warp knows no zone names yet)
 time_form_not_in_warp() := {
 	fail()
 	0

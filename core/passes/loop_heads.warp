@@ -1,17 +1,17 @@
 # The `for` heads a rule cannot take yet, made plain for extensions/sugar/iteration.warp's rules, which lower every `for` onto
-# `while` (Rust twin: rust-harness:src/lowering/control/for_loop.rs); a bare body becomes a `{…}` block:
+# `while`; a bare body becomes a `{…}` block:
 # `for k, v in m` binds the value beside the key: `for k in m { v = m#(k + 1); body }`, whose map the rule `where $m is
-#   map` walks by its keys (Rust twin: library_words.rs for_over_map); a rule's pattern cannot bind two names yet
+#   map` walks by its keys; a rule's pattern cannot bind two names yet
 # `for int in xs body` (a type word as the variable) visits only the items of that type, tested as read, before the
 #   variable holds one (a character held by a text variable is a text): `for int·typed in xs { if is_type(int·typed,
-#   "int") { int = int·typed; body } }` (Rust twin: for_loop/headers.rs type_test)
+#   "int") { int = int·typed; body } }`
 use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "../analysis/words.warp"
 
 loop_word = "for"
 loop_in_word = "in"
-# the type words whose loop over a text walks a unit instead of filtering (Rust: for_loop/headers.rs bytes_of)
+# the type words whose loop over a text walks a unit instead of filtering
 unit_type_words = ["byte", "codepoint", "char", "character"]
 
 # `k, v` or `(k, v)`: the two names a loop over a map binds

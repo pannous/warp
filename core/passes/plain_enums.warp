@@ -1,4 +1,4 @@
-# Plain enums (card pure-enums; Rust twin: rust-harness:src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` (Swift's
+# Plain enums (card pure-enums): `enum Color { Red, Green }` (Swift's
 # `{ case north, south }`) declares the type Color whose variants are its bare cases, `type @variants(Red Green) Color
 # {}`; a case of node.warp's spelled enums converts to its spelling (`op as text`) and equals it. `Color.Red` as the case
 # Red, `c is Coin`, a case's number `Coin.Dime as int` and the case at an index `2 as Coin` are rewrite rules
@@ -13,13 +13,12 @@ use "../analysis/diagnostics.warp"
 use "arity_overloads.warp"
 
 variants_word = "variants"
-# the types a spelled case converts to its spelling, `op as text` (Rust twin: node_cases.rs TEXT_TYPES)
+# the types a spelled case converts to its spelling, `op as text`
 text_types = ["text", "string"]
 # spelled_enums, node.warp's enums whose cases convert by their spelling (`op as text`), not by their index
 use "node_cases.warp"
 
 # the names declared of an enum type, `c: Coin`, with that enum; "" for a name declared of several types
-# Rust twin: match_exhaustive.rs typed_subjects
 subjects_in(n: Node, enums: map, subjects: map): map := {
 	declared = match n {
 		Key(name, Op.Colon, type_name): if is_name(name) and type_name is symbol and required_type(name_of(type_name)) in enums then [name_of(name), required_type(name_of(type_name))] else ø
@@ -47,7 +46,6 @@ assigned_enum(value: Node, enums: map): text := match value {
 }
 
 # the names assigned cases of one enum, `c = Coin.Dime`, with that enum; "" for a name also assigned anything else
-# Rust twin: plain_enums.rs assigned_cases
 assigned_in(n: Node, enums: map, subjects: map): map := {
 	if is_key(n, Op.Assign) and is_name(key_of(n)) { held_as(subjects, name_of(key_of(n)), assigned_enum(value_of(n), enums)) }
 	for part in scope_parts(n) { assigned_in(part, enums, subjects) }
@@ -136,7 +134,7 @@ type_of(value: Node, enums: map, subjects: map): text? := {
 	if name in subjects and subjects[name] then subjects[name] else ø
 }
 
-# the declaration as the sum type of its cases, the view Rust's sum_type gives; a case spelled otherwise than its name
+# the declaration as the sum type of its cases; a case spelled otherwise than its name
 # `A = "a"`, so the case made carries its spelling (emitter.warp case_value)
 enum_type(name: text, cases: list): Node := {
 	spelled = spellings.get(name) ?? {}

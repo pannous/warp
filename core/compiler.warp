@@ -102,7 +102,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	}
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
 	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
-	# the warnings once the module is made, as Rust's pure lane says them
+	# the warnings once the module is made
 	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
 	# and its hints: `A4 is sound's; fix: use sound`, the use warp beautify writes
 	# unless the run asked for none (`warp --no-hints`, WARP_HINTS=0: wiki/warning.md)
@@ -110,7 +110,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	made
 }
 
-# what the checks diagnosed past the first `known` facts; an error among them fails the compile with Rust's text (card
+# what the checks diagnosed past the first `known` facts; an error among them fails the compile with its text (card
 # pure-self-ignores-errors), the program compiled from source after a linked module didn't bind too
 checked_facts(known: int): list := {
 	found = diagnosed_since(known)
@@ -148,19 +148,10 @@ linked_libraries(source: text): list := {
 	images
 }
 
-# an output ending so gets parser.warp's view of the source as JSON, no module: how the host reads warp text into a
-# node without a Rust parser (a channel's message, a console line, a test file; card rust-bootstrap)
-VIEW_SUFFIX = ".view.json"
-
-# the module of the source file written to the wasm file, the source's uses found in folder; parser.warp's view of it
-# when the output ends in VIEW_SUFFIX
+# the module of the source file written to the wasm file, the source's uses found in folder
 compile_file(source_file: text, wasm_file: text, folder: text) := {
-	if wasm_file.ends_with(VIEW_SUFFIX) {
-		write(wasm_file, view_json(bridged(stage_view(parsed(read(source_file))))))
-	} else {
-		emitting_file(working_relative(source_file))
-		compile_written(read(source_file), wasm_file, folder)
-	}
+	emitting_file(working_relative(source_file))
+	compile_written(read(source_file), wasm_file, folder)
 }
 # the module of the source written to the wasm file
 compile_written(source: text, wasm_file: text, folder: text) := {

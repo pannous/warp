@@ -1,16 +1,16 @@
 # Maps and class instances (emitter.warp's part): literals, the declared classes and fields, field reads and writes
-## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
+## maps and class instances (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
 def entry_code(name_code: list, value_code: list): list { keyed_code(node(Kind.Symbol, name_code), value_code) }
 def keyed_code(name_node: list, value_code: list): list { key_code(Marked.Entry, name_node, value_code) }
 def key_code(kind: int, name_node: list, value_code: list): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]) }
-# an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
+# an entry's name as a map holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 def name_node(name: any): list {
 	if name is symbol { return node(Kind.Symbol, text_bytes(name_of(name))) }
 	if one_code_point(name) { return node(Kind.Codepoint, [op.i32_const] + sleb(ord(name)) + gc_code(gc_ops.ref_i31, [])) }
 	node(Kind.Text, text_bytes(name))
 }
-# (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry; nor is an
+# (`global: n = 5`, `{ global n = 5 }` once parsed, declares n, no map entry; nor is an
 # opaque view, `f() := {}` the body `{ {} }`, an empty map, card module-hygiene)
 is_map_entry(n: Node): bool := is_key(n, Op.Colon) and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global") and key_of(n) != opaque_symbol
 # `{a: 1, b: "x"}`: a map
@@ -22,8 +22,8 @@ def entries_code(body: Body, entry_names: list, entry_values: list): list {
 	node(Marked.Map, vector_code(codes))
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
-# an instance's key has no operator (Op::None), as Rust's has
-# Rust checks each typed field's value (rust-harness:src/declared_values.rs): an instance is built here only when every value has
+# an instance's key has no operator (Op::None)
+# each typed field's value is checked: an instance is built here only when every value has
 # its field's kind already or is checked at run time; a class not declared in the program (a markup tag, a module's)
 # is refused
 def instance_value(body: Body, class_name: text, fields: list): TypedCode {
@@ -41,7 +41,7 @@ def positional_instance(body: Body, class_name: text, arguments: list): TypedCod
 def instance_of_fields(body: Body, class_name: text, field_names: list, field_values: list): TypedCode {
 	if class_name not in module.classes { return refuse("an instance of " + class_name + ", a class not declared here") }
 	declared = module.classes[class_name]
-	# the fields left out take their defaults, else their type's zero, as Rust's type_constructor.rs with_defaults
+	# the fields left out take their defaults, else their type's zero
 	defaults = module.class_defaults[class_name]
 	for name in declared.keys {
 		if name not in field_names {
@@ -145,7 +145,7 @@ subscript_name(index: Node): any := {
 # `k+1`, the index `m[k]` lowers to
 is_shifted_index(index: Node): bool := op_of(index) == Op.Add and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
-# else the run ends in no_field_<name>, which Rust's run reports as "no field name"
+# else the run ends in no_field_<name>, which the run reports as "no field name"
 # a bool field of a receiver of a known class (`p: P`) reads as a yes/no, not a value known only at run time:
 # `rest and p.s` stays yes/no (card bool-and-field-int), where a boxed read beside a yes/no made it 1 or 0
 def field_read(body: Body, target: Node, name: text, class_name: text = ""): TypedCode {
@@ -325,7 +325,7 @@ def declares_field(name: text): bool { module.classes.keys.any(class_name => nam
 def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c in "xyzw") }
 # a value of the kind given that ends the run in the error function named
 def ended_in(kind: ValueKind, error: text): TypedCode { TypedCode(kind, call_code(error_function(error)) + [op.drop, op.unreachable]) }
-# the index of a function that only traps, named so the run's error reads as Rust's does (rust-harness:src/wasm_emitter/control/traps.rs)
+# the index of a function that only traps, named so the run's error reads well
 def error_function(name: text): int {
 	if name in module.errors { return module.errors[name].index }
 	f = added_function(name, [], ValueKind.Int, [])
@@ -347,7 +347,7 @@ def field_assignment(map: TypedCode, name: TypedCode, value: TypedCode): TypedCo
 def text_value_of(name: text): TypedCode { TypedCode(ValueKind.Text, text_bytes(name)) }
 # the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
 # ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
-# the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
+# the attribute layers naming a base class: parser.warp's `extends`
 base_class_layers = ["extends", "inherited_from"]
 collect_types(n: Node): any := {
 	if declares_type(n) { return record_type(value_of(n)#2, value_of(n)#3) }
@@ -419,7 +419,7 @@ def field_kind(type: text?): ValueKind? {
 # a character given to a field typed text is that text (`"r"` is a character here)
 def texted(type: text?, value: TypedCode): TypedCode { if value.kind == ValueKind.Char and field_kind(type) == ValueKind.Text then shown_text(value) else value }
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
-# instance of a class is a node, as Rust's class-typed fields take it
+# instance of a class is a node, as class-typed fields take it
 def admits(type: text?, kind: ValueKind): bool {
 	if type != ø and is_union(aliased_type(type)) { return fits_union(aliased_type(type), kind) }
 	# a real field takes any real number, an int and a float too (decision real-canonical)
@@ -427,7 +427,7 @@ def admits(type: text?, kind: ValueKind): bool {
 	type == ø or field_kind(type) == ValueKind.Node or field_kind(type) == kind or (kind == ValueKind.Node and aliased_type(type) in module.classes)
 }
 # a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value
-# known only at run time too is written as it is, as Rust's field writes check no field type
+# known only at run time too is written as it is: a field write checks no field type
 def field_admits(name: text, kind: ValueKind): bool {
 	if kind == ValueKind.Node { return yes }
 	# the class of the target is not known here: a field of that name in any class admitting the kind may be the one
@@ -483,8 +483,8 @@ field_defaults(body: any): map := {
 	defaults
 }
 
-# a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
-# (rust-harness:src/wasm_emitter/declared_values.rs), a float field keeping an int
+# a typed field's value of another kind, or known only at run time, is checked then: "not an int",
+# a float field keeping an int
 field_check(kind: ValueKind): text? := match kind {
 	ValueKind.Int: "int_admitted"
 	ValueKind.List: "list_admitted"
@@ -496,7 +496,7 @@ field_check(kind: ValueKind): text? := match kind {
 def checked_at_run_time(field_type: text?, kind: ValueKind): bool { not admits(field_type, kind) and field_check(field_kind(field_type)) != ø }
 def field_value(field_type: text?, value: TypedCode): TypedCode { if checked_at_run_time(field_type, value.kind) then runtime_call(field_check(field_kind(field_type)), [value]) else value }
 
-# `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
+# `m.x = v`, also `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: Node, name: text, value: TypedCode): TypedCode {
 	if checks_fields(body, target) and not field_admits(name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " written to a typed field " + name) }
 	# a field some class declares: that field's setter, which tests only the classes declaring it
@@ -529,7 +529,7 @@ def keyed_assignment(body: Body, target: Node?, object: TypedCode, key: TypedCod
 # the code of a put into the map node a place target holds (a variable, or a field or element of one: `p.b.c = 4`),
 # which takes its result (ø becomes a map), else the put with its result dropped (a local named map reads as the word
 # map: card local-named); a main-level variable a function changes an entry of is changed for every function, as a
-# reference is in Rust's (`module.functions[name] = …`), not a new local of the function
+# reference is (`module.functions[name] = …`), not a new local of the function
 def put_back(body: Body, target: Node?, object: TypedCode, put: TypedCode): list {
 	if target is symbol and object.kind == ValueKind.Node and is_global(body, name_of(target)) { return dropped(global_assignment(global_key(body, name_of(target)), put)) }
 	if is_place(target) and object.kind == ValueKind.Node then dropped(assignment(body, target, put)) else dropped(put)
@@ -539,8 +539,8 @@ def is_place(target: Node?): bool {
 	if target is symbol { return yes }
 	type(target) is key and (op_of(target) == Op.Dot or op_of(target) == Op.Hash) and is_place(key_of(target))
 }
-# Rust checks a field write against the field's type only on a local it holds as an instance of the class
-# (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
+# a field write is checked against the field's type only on a local held as an instance of the class, never on a
+# parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
 def checks_fields(body: Body, target: Node): bool {
 	not (target is symbol and name_of(target) in body.names and body.names[name_of(target)] < #body.function.signature.parameters)
 }

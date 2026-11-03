@@ -71,7 +71,7 @@ Records start with build-keeps (2026-10-31); older store entries have only their
 - the Rust fingerprint: WARP_SOURCE of the warp binary that builds, the third line of a build file's warp.build
   section. rebuild.sh reads it from the warp.wasm beside that binary, or from WARP_RUST_FINGERPRINT.
 - every .warp module of lib/ outside compiler/ and data/: the std modules, sugar, aliases, lib/native, lib/crates.
-  The compiler bundles them (parser.warp LIBRARY_FILES, decision built-in-lib), so a built compiler reads no lib/
+  The compiler bundles them (core/passes/library.warp LIBRARY_FILES, decision built-in-lib), so a built compiler reads no lib/
   from any disk. With WARP_LIB set, a module file found there wins over its bundled copy, per module: a worktree's
   lib/ edit takes effect without a rebuild, and the next rebuild bundles it.
 

@@ -1,6 +1,6 @@
 # The intrinsics of core/emitter/emitter.warp (`intrinsic` and `time_intrinsic` there), each one or two instructions,
 # declared by their typed heads (decision bodiless-imports): emitter.warp supplies them, so a part of the runtime
-# compiles alone; the Rust lane, which has none, traps when one is called
+# compiles alone
 # nodes: their kind field, payloads and the nodes built of them
 with_kind(n: any, kind: int): any from runtime
 kind_code(n: any): int from runtime
@@ -104,8 +104,7 @@ memory_i32(address: int): int from runtime
 memory_u32(address: int): int from runtime
 memory_set_i32(address: int, value: int) from runtime
 memory_grown(pages: int): int from runtime
-# times and durations, packed in the kind field; time_of(info, position) builds one (emitter.warp time_words, which
-# Rust's lane knows only of a constant info)
+# times and durations, packed in the kind field; time_of(info, position) builds one (emitter.warp time_words)
 time_of(info: int, position: int): any from runtime
 time_position(t: any): int from runtime
 zone_index(t: any): int from runtime

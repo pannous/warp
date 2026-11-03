@@ -194,7 +194,7 @@ wasi_list(environment: bool): list := {
 	}
 	found
 }
-# wasi_environment() (lib/prelude.warp, Rust's wasi_emitter.rs): the environment as WASI gives it, each NAME=value line
+# wasi_environment() (lib/prelude.warp): the environment as WASI gives it, each NAME=value line
 # ended by a zero byte, which lib/wagi.warp splits by chr(0)
 wasi_environment(): text := {
 	joined = ""
@@ -238,7 +238,7 @@ written_bytes(fd: int, count: int) := {
 	store_scratch_word(scratch_iovec() + 4, count)
 	fd_write(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 }
-# `warn "careful"`: "warning: careful" on stderr, as the Rust lane says a runtime warning
+# `warn "careful"`: "warning: careful" on stderr
 warned(message: Node): Node := said_on_stderr("warning: " + text_of_textual(message))
 # `hint "…"`: "hint: …" on stderr, the compiler's hints (`A4 is sound's; fix: use sound`)
 hinted(message: Node): Node := said_on_stderr("hint: " + text_of_textual(message))

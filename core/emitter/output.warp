@@ -43,12 +43,12 @@ def shown_code(value: TypedCode): TypedCode {
 	shown_text(value)
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
-# first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
+# first, the values' texts joined without one (a one-character text is a character)
 def printed_value(body: Body, n: Node): TypedCode {
 	# `print first xs`: a call of a program function prints its value
 	if is_quote(n) or is_spaced_call(body, n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
 	if n#1 is text and text_value(n#1).kind == ValueKind.Text { return texts_joined(body, items_of(n), "") }
-	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
+	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between
 	if n.all(is_spaced_value) and not items_of(n)[1..].any(is_negative_literal) { return texts_joined(body, items_of(n), " ") }
 	runtime_call("items_text", [list_value(body, items_of(n))])
 }
@@ -69,7 +69,7 @@ is_spaced_value(n: Node): bool := {
 }
 # `5 -2`: a glued sign, a value of its own
 is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
-# `print x`: x's text and a newline to stdout, a statement: a body ending in it gives ø, as Rust's print does, and
+# `print x`: x's text and a newline to stdout, a statement: a body ending in it gives ø, and
 # a program ending in it prints nothing more (_start)
 def printed(value: TypedCode): TypedCode { TypedCode(no_kind, dropped(runtime_call("print_line", [shown_text(value)]))) }
 # the export `show`: the text the host prints main's result as, as print shows it (3.5km by a class's text(), π/2).

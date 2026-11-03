@@ -41,7 +41,7 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	if kind == no_kind or kind == ValueKind.Mixed { return TypedCode(no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]) }
 	TypedCode(kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end])
 }
-# `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø, as Rust gives
+# `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø
 def unmatched(c: list, a: TypedCode, numeric: bool): TypedCode {
 	if a.kind == no_kind { return TypedCode(no_kind, c + [op.if, no_value] + a.code + [op.end]) }
 	if a.kind == ValueKind.Int or a.kind == pending { return TypedCode(ValueKind.Int, c + [op.if] + value_type(ValueKind.Int) + converted(a, ValueKind.Int) + [op.else, op.i64_const, 0, op.end]) }
@@ -78,7 +78,7 @@ def loop_code(body: Body, test: Node, block: Node, last: int): list {
 is_endless(test: Node, block: Node): bool := test == yes and not mentions(block, "break")
 is_loop_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep as text)
 # whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
-# lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
+# lowered `for`'s step that came unmarked (iterator loops: `x = x·iterator.next()`)
 step_operators = ["=", "+=", "-=", "++", "--"]
 continued_safely(test: Node, parts: list): bool := {
 	if #parts == 0 { return yes }
@@ -164,8 +164,8 @@ def field_or_word(body: Body, value: TypedCode, name: text, word: function): Typ
 	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
 	TypedCode(ValueKind.Node, value.code + [op.local_set] + held + has_it + [op.if] + value_type(ValueKind.Node) + read + [op.else] + boxed(word(receiver)) + [op.end])
 }
-# the program's statement n about to run, its position in trap_position: a runtime error names it, as Rust's
-# (emit_trap_position); a runtime word's statements leave it, and so do a library function's: its lines are its
+# the program's statement n about to run, its position in trap_position: a runtime error names it;
+# a runtime word's statements leave it, and so do a library function's: its lines are its
 # file's, which the place would give the program's name, so an error in it names the program's calling line (card
 # wasm-trap: arrangement.warp:34:56 was a line of lib/timers.warp)
 def position_code(body: Body, n: Node): list {
@@ -214,8 +214,8 @@ def sequence(body: Body, items: list): TypedCode {
 	last = statement(body, valued.last)
 	TypedCode(last.kind, code + last.code, last.mark)
 }
-# a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
-# simpler); a fresh list makes it unshared, a list made inside a block of the statement does not outlast it
+# a statement of a sequence: a local stays unshared while statements only append to it; a fresh
+# list makes it unshared, a list made inside a block of the statement does not outlast it
 def statement(body: Body, n: Node): TypedCode {
 	kept = []
 	for name in body.unshared { if appends_only(n, name) { kept += [name] } }

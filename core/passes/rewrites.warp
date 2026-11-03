@@ -16,7 +16,7 @@
 # (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), `parameter` (of a definition's head,
 # F10), lets the rule rewrite code only
 # standing there: `rewrite $s except_if $c => if not $c then $s where statement`. The mark `alias` says the
-# pattern's first word is another spelling of the template's, which each firing notes as Rust's note_alias does ("warp
+# pattern's first word is another spelling of the template's, which each firing notes ("warp
 # says for", until "got it"): `rewrite each $xs $body => for $xs $body where statement and alias`. A phrase pattern
 # (`$n beat`) matches each run of those words in a longer phrase (of `x = 2 beats`, which the parser keeps as `(x = 2) beats`, the value), a statement
 # pattern also a block of just that statement, and a template of several statements `($a; $b)` takes the statement's
@@ -27,7 +27,6 @@
 # then $t else $b)` computes a once; a pattern of statements `($a; $b)` matches a run of them in a block; a rule's result is rewritten again until no rule fires; `T for $x in $xs...` splices T once for each item of a rest hole; a template of statements in a value's place is that value's block; `·` glues
 # words and holes into a name (`square·$a`, `$i·end`, F5). What the
 # template adds sits where the rewritten code was written, so errors point at the user's code (notes/rewrites.md).
-# Rust twin: rust-harness:src/modules/rewrites.rs lower
 use "walk.warp"
 use "scope.warp"
 use "uses.warp"
@@ -119,7 +118,7 @@ late_sugar_module_names = sugar_files(["ranges", "method_calls"])
 comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
-# the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
+# the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers", "tasks"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:

@@ -2,8 +2,8 @@
 
 The runtime words are what the pure Warp compiler gives compiled programs. Each word is compiled into a module only
 on its first call, so a word nobody calls costs nothing. This file sits beside the runtime folder, not in it:
-every entry of `core/runtime/` must run alone as warp (tests/functions/test_bodiless_runtime_words.rs
-`each_runtime_part_runs_alone`; for its folder `extended/` warp says it is a folder, no program).
+every entry of `core/runtime/` must run alone as warp (for its folder `extended/` warp says it is a folder, no
+program).
 
 > **Guideline:** once the compiler is fully functional, new functionality normally goes into
 > `extended/`, not core. Core grows only for what every program needs.

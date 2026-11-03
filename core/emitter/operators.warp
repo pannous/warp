@@ -45,7 +45,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	# that is no int traps (int_of_node)
 	if symbol == "*" and is_textual(a.kind) and is_count(b) { return repeated(a, b) }
 	if symbol == "*" and is_textual(b.kind) and is_count(a) { return repeated(b, a) }
-	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
+	# `"ab" * 2.5`: the error says how a text repeats, a trap could not
 	if textual and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and symbol not in comparisons { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	if a.kind == ValueKind.Node or b.kind == ValueKind.Node { return node_operation(body, symbol, boxed(a), boxed(b)) }
 	if symbol in comparisons and a.kind == ValueKind.Char and b.kind == ValueKind.Char { return operation_code(body, symbol, code_point(a), code_point(b)) }
@@ -82,7 +82,7 @@ def bools_as_ints(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCo
 	result
 }
 
-# base ^ exponent of floats: the runtime word float_pow (extensions/big_numbers/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
+# base ^ exponent of floats: the runtime word float_pow (extensions/big_numbers/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number
 def float_power(body: Body, base: list, exponent: list): TypedCode {
 	held = uleb(fresh_local(body, ValueKind.Float))
 	code = runtime_call("extended_float_power", [TypedCode(ValueKind.Float, base), TypedCode(ValueKind.Float, exponent)]).code + [op.local_tee] + held + [op.local_get] + held
@@ -175,9 +175,9 @@ def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode,
 	floats
 }
 # `floor x`: an int itself, a float's floor as an int, a boxed number by the runtime word node_floor (exact for a
-# ratio, as Rust's exact_floor)
+# ratio)
 # `type(x)`: the type value of x's kind, of a value known only at run time the one its kind names there (a list's
-# items unknown here, Rust's `list of int`, outside the core)
+# items unknown here, `list of int`, outside the core)
 static_type_word(kind: ValueKind): text? := match kind {
 	ValueKind.Int: "int"
 	ValueKind.Float: "float"

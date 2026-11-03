@@ -1,4 +1,4 @@
-# `parse(text)` is the code the text holds, as data (card pure-parse-call; Rust twin: rust-harness:src/lowering/words/parse_word.rs):
+# `parse(text)` is the code the text holds, as data (card pure-parse-call):
 # a constant text folds here into `as_code(data …)`, any other is parsed at run time by the host word parse_code.
 # A program's own `parse` stays its own, and so does a method `x.parse(…)`. `eval(text)` is a plain prelude function
 # (prelude.warp eval).
@@ -11,7 +11,7 @@ as_code_word = "as_code"
 parse_code_word = "parse_code"
 
 called_word(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
-# `data e`: e as written (Rust's blocks.rs as_data)
+# `data e`: e as written
 quoted_code_of(code: Node): Node := List([symbol(quote_word), code], Bracket.None, Separator.Space)
 
 # `parse "…"`, `parse(t)`, `parse t`: what the word is given, else ø
