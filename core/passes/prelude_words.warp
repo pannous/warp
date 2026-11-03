@@ -131,7 +131,7 @@ name_defined_in(line: text): text := {
 	leading = leading_name(line)
 	if leading == export_word { return name_defined_in(line[#leading ..].trim()) }
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
-	if leading is empty or leading == rewrite_word { return "" }
+	if count(leading) == 0 or leading == rewrite_word { return "" }
 	following = line[#leading ..].trim()
 	converted = conversion_target(following)
 	if converted != "" { return converted }

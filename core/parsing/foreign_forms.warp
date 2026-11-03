@@ -114,5 +114,5 @@ def without_colon(name: text): text := if name.starts_with(":") then name[1 .. n
 // Rust twin: scanning.rs name_and_block_follow
 def block_after_name(p: Parser, word: text): bool {
 	name = name_after_blanks(p, word)
-	not (name is empty) and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)
+	count(name) > 0 and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)
 }
