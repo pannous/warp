@@ -76,8 +76,8 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	if #unknown > 0 { throw outside_the_core + "no C signature for " + unknown.join(", ") + ": declare it with a foreign line, `name(x: i32): i32 from 'library'`" }
 	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)
 	prepend_runtime(library_runtime ?? runtime_bytes())
-	relocate_program(separate_output != "")
-	shake_runtime(library_runtime == ø and separate_output == "")
+	relocate_program(separate_module_wanted)
+	shake_runtime(library_runtime == ø and not separate_module_wanted)
 	cut_runtime_words(if own then left_out_runtime_words(COMPILER_BUILD_EXTENSIONS) else [])
 	linking = library_runtime == ø and prepended()
 	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
@@ -162,22 +162,20 @@ compile_file(source_file: text, wasm_file: text, folder: text) := {
 		compile_written(read(source_file), wasm_file, folder)
 	}
 }
-# the module of the source written to the wasm file, and as a separate module to separate_output when one is wanted
+# the module of the source written to the wasm file
 compile_written(source: text, wasm_file: text, folder: text) := {
 	compiled = compile(source, folder)
 	# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
 	if compiled is text { raise compiled }
 	write_bytes(wasm_file, compiled)
-	# a primitive module imports no runtime: its separate form is itself
-	if separate_output != "" { write_bytes(separate_output, if is_primitive_file(source) then compiled else separate_module()) }
 }
 
 # runtime.wasm beside this compiler, the harness's fifth argument of a compile: the program is compiled behind it (card
 # runtime-prepended), read once. A compile has no other runtime: without it, it fails
 RUNTIME_ARGUMENT = 5
-# where the program just compiled goes as a separate module too, importing runtime.wasm's instance: `warp build`'s
-# x.mod.wasm (commands.warp build; notes/runtime_linking.md "Separate modules"), none for a plain compile
-global separate_output = ""
+# whether the program compiled goes as a separate module too, importing runtime.wasm's instance (`warp build`'s
+# x.mod.wasm, extensions/commands/separate_module.warp): its code emitted relocatable, the runtime kept whole
+global separate_module_wanted = no
 global runtime_held = ø
 # runtime.wasm: a compile's fifth argument, else lib/'s (the native warp's, core/native/warp.warp)
 runtime_path(): text := if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" then args#RUNTIME_ARGUMENT else library_folder + "/" + RUNTIME_WASM
@@ -185,8 +183,6 @@ runtime_bytes(): list := {
 	if runtime_held == ø { runtime_held = read_bytes(runtime_path()) }
 	runtime_held
 }
-# the program just compiled behind runtime.wasm, as a module importing it instead
-separate_module(): list := linked_bytes(module.order)
 # runtime.wasm, the runtime words compiled once (emitter/prebuilt.warp), written beside warp.wasm by `warp rebuild`
 RUNTIME_WASM = "runtime.wasm"
 write_runtime(file: text) := {

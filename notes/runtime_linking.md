@@ -134,7 +134,7 @@ the stubs call through an exported funcref table the program fills at start. One
 The same runtime.wasm, not copied into the program but instantiated once and imported, as a page or an AOT build
 combines modules natively. Nothing is rewritten: a program's runtime words are imports, and imports come first in
 the function index space anyway, so the program numbers only its own functions, as today.
-- **Program module** (`warp build` writes it as x.mod.wasm, prebuilt.warp linked_bytes): the canonical types first
+- **Program module** (`warp build` writes it as x.mod.wasm, extensions/commands/separate_module.warp linked_bytes): the canonical types first
   (canonical_type_entries(), so its node, text and list types are the runtime's), then its class structs. Every
   runtime word it calls is a function import `warp_runtime.<word>` with the word's type (instead of compiling the
   word); runtime globals it reads are global imports; memory, the error tag and the `hooks` table are imported too.

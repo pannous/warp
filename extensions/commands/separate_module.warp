@@ -1,0 +1,145 @@
+# `warp build`'s x.mod.wasm (decision build-three-outputs; card mod-wasm-extension): a program linked to runtime.wasm
+# (notes/runtime_linking.md "Separate modules"), numbered as behind it, but every runtime function, global, the memory,
+# the error tag and the hooks table imported from its instance (`warp_runtime`); the hooks' code the program's own, set
+# into the table at instantiation. The compile emitted its code relocatable (separate_output, compiler.warp
+# relocate_program); linked_bytes moves every operand to the module's own numbering
+runtime_module_name = "warp_runtime"
+element_section_id = 9
+# an import of runtime.wasm's: its export of this name, of this kind and description
+def runtime_import(name: text, kind: int, description: list): list { name_bytes(runtime_module_name) + name_bytes(name) + [kind] + description }
+# the runtime's names by function index, as warp.runtime gives them
+def runtime_function_names(): map {
+	names = {}
+	for name in module.runtime_image.words.keys { names[module.runtime_image.words[name]#1] = name }
+	names
+}
+# the entries after the count of one of runtime.wasm's sections
+def runtime_entries(id: int): list {
+	content = runtime_part(id)
+	content[uleb_read(content, 0)#2 ..]
+}
+# the host words and C functions the program calls, then the runtime functions it calls, each by its index as behind
+# the runtime (called), each type moved to the linked numbering (types); then the runtime's memory, table of hooks, error
+# tag and globals
+def linked_imports(c_first_type: int, called: list, types: Move): list {
+	words = runtime_import_entries().map(entry => entry#1 + uleb(moved(types, entry#2))) + c_import_entries(c_first_type)
+	names = runtime_function_names()
+	function_types = runtime_function_types()
+	functions = called.map(index => if index < #module.imports then words[index] else runtime_import(names[index - runtime_shift()], export_function_byte, uleb(moved(types, function_types[index - #module.imports]))))
+	memory = runtime_import("memory", export_memory_byte, [0] + uleb(memory_pages))
+	table = runtime_import(hooks_table, export_table_byte, runtime_entries(table_section_id))
+	tag = runtime_import(error_tag_name, export_tag_byte, [0] + uleb(moved(types, runtime_tag_type())))
+	globals = module.runtime_image.globals.map(entry => runtime_import(entry#1, export_global_byte, value_type(entry#2) + [mutable]))
+	vector(functions + [memory, table, tag] + globals)
+}
+# the type of runtime.wasm's error tag (its one tag: an attribute 0, then the type)
+runtime_tag_type(): int := uleb_read(runtime_entries(section_ids.tag), 1)#1
+# the type of each of runtime.wasm's functions, in order
+def runtime_function_types(): list {
+	content = runtime_part(section_ids.function)
+	at = uleb_read(content, 0)#2
+	types = []
+	for i in 0..<module.runtime_image.functions {
+		type = uleb_read(content, at)
+		types += [type#1]
+		at = type#2
+	}
+	types
+}
+# runtime.wasm's function types, each entry's bytes, from the first behind its fixed GC types (the same entries the
+# program declares: canonical_type_entries)
+def runtime_function_type_entries(canonical: list): list {
+	content = runtime_part(section_ids.type)
+	at = uleb_read(content, 0)#2
+	if content[at ..< at + #canonical] != canonical { throw "runtime.wasm of other GC types: warp rebuild writes it anew" }
+	at += #canonical
+	entries = []
+	while at < #content {
+		if content[at] != function_type_byte { throw "runtime.wasm declares a type after its GC types that is no function's" }
+		end = value_types_end(content, value_types_end(content, at + 1))
+		entries += [content[at ..< end]]
+		at = end
+	}
+	entries
+}
+# where a vector of value types that starts at `at` ends: a reference type's heap type a signed LEB128 after it
+ref_null_type_byte = 99
+ref_type_byte = 100
+def value_types_end(content: list, at: int): int {
+	count = uleb_read(content, at)
+	at = count#2
+	for i in 0..<count#1 {
+		reference = content[at] == ref_null_type_byte or content[at] == ref_type_byte
+		at += 1
+		if reference {
+			while content[at] >= 128 { at += 1 }
+			at += 1
+		}
+	}
+	at
+}
+# the hooks the code can reach: one whose stub a runtime function calls that the code calls, directly or through the
+# runtime or another hook it reaches; an unreached hook's slot stays empty (card mod-unused-hooks)
+def reached_hooks(code: list): list {
+	reached = runtime_reach(runtime_positions_called(code))
+	own_hooks().filter(f => reached.has(f.index - #module.imports))
+}
+def hook_elements(hooks: list, first: int): list {
+	vector(range_list(#hooks).map(i => [0, op.i32_const] + sleb(module.runtime_image.hooks.index_of(hooks[i].name) - 1) + [op.end] + vector([uleb(first + i)])))
+}
+# the program importing only the host words, runtime functions and types its code uses: its code emitted relocatable
+# (relocates), each index moved to the linked numbering: the called imports, its own functions, its hooks; the fixed GC
+# types, the runtime's function types used, its classes, its own function types; its texts from segment 0
+def linked_bytes(functions: list): list {
+	hooks = reached_hooks(functions)
+	code = functions + hooks
+	calls = relocated_operands(code, relocated.calls)
+	called = range_list(#module.imports + module.runtime_image.functions).filter(index => calls.has(index))
+	numbering = {}
+	for k in 0..<#called { numbering[called[k]] = k }
+	for k in 0..<#functions { numbering[functions[k].index] = #called + k }
+	first_hook = #called + #functions
+	# the types: the runtime's function types those imports, the hooks and the code use
+	fixed = #gc_names
+	function_types = runtime_function_types()
+	hook_types = hooks.map(f => runtime_type_of(f))
+	host_types = runtime_import_entries().map(entry => entry#2)
+	wanted = {}
+	for index in called { wanted[if index < module.runtime_image.imports then host_types[index] else if index < #module.imports then -1 else function_types[index - #module.imports]] = yes }
+	for type in hook_types + relocated_operands(code, relocated.types).keys + [runtime_tag_type()] { wanted[type] = yes }
+	used = range_list(module.runtime_image.types).filter(type => type >= fixed and wanted.has(type))
+	retyped = {}
+	for k in 0..<#used { retyped[used[k]] = fixed + k }
+	classes = module.gc_order[fixed ..]
+	for k in 0..<#classes {
+		retyped[module.runtime_image.types + k] = fixed + #used + k
+		module.gc_indices[classes[k]] = fixed + #used + k
+	}
+	types_move = Move(0, retyped)
+	fixed_entries = range_list(fixed).map(i => gc_bytes(gc_definition(module.gc_order[i])))
+	runtime_types = runtime_function_type_entries(concatenated(fixed_entries))
+	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
+	first_own_type = fixed + #used + #classes
+	type_entries = fixed_entries + used.map(type => runtime_types[type - fixed]) + class_types + functions.map(function_type) + c_import_types()
+	types = section(section_ids.type, vector(type_entries))
+	declared = section(section_ids.function, vector(range_list(#functions).map(k => uleb(first_own_type + k)) + hook_types.map(type => uleb(retyped[type]))))
+	own_globals = module.global_order[#module.runtime_image.globals ..]
+	globals = section(section_ids.globals, vector(own_globals.map(global_entry)))
+	elements = section(element_section_id, hook_elements(hooks, first_hook))
+	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data)]
+	codes = section(section_ids.code, vector(code.map(f => moved_body(f, moves))))
+	texts = section(section_ids.data, vector(text_segments()))
+	imports = section(section_ids.import, linked_imports(first_own_type + #functions, called, types_move))
+	# the exports and names by the linked numbering
+	for f in functions { f.index = numbering[f.index] }
+	parts = [types, imports, declared, globals, section(section_ids.export, vector(program_exports(functions))), elements, section(section_ids.data_count, uleb(#module.texts)), codes, texts]
+	names = vector(functions.map(f => index_name(f.index, f.name)) + range_list(#hooks).map(i => index_name(first_hook + i, hooks[i].name)))
+	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
+}
+# the type runtime.wasm declares its function of this index with
+def runtime_type_of(f: Function): int {
+	types = runtime_part(section_ids.function)
+	at = uleb_read(types, 0)#2
+	for i in 0..<(f.index - #module.imports) { at = uleb_read(types, at)#2 }
+	uleb_read(types, at)#1
+}
