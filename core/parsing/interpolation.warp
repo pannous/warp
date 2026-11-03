@@ -1,13 +1,15 @@
 # Interpolated text (card sugar-twins; Rust twin: rust-harness:src/text/interpolation.rs): the parser keeps `"a \(x) b"` as its
 # template ["template", "a ${x} b"] (holes `${expr}`, a literal dollar `$$`); here it becomes text building,
 # `"a " + text_form(x) + " b"`, so every later pass reads the holes as code. The first pass: a template inside a type
-# or an error, which stay opaque views, is rewritten there too; sql and sh templates first become their typed values
-# (injection.warp).
+# or an error, which stay opaque views, is rewritten there too; first the extensions' text passes run (sql and sh
+# templates become their typed values, extensions/typed_templates.warp).
 use "../passes/walk.warp"
 use "parser.warp"
-use "injection.warp"
 
 text_form_word = "text_form"
+# the code of a hole as a node
+# (its parse as a node, as the program's own: through the view an empty part, the count's left of `#xs`, came back as [])
+code_node(code: text): Node := plain_node(parsed(code))
 # the hole's code: parsed as a program of its own, its templates built too
 hole(code: text): any := call_of(text_form_word, [interpolated_node(code_node(code))])
 
@@ -42,4 +44,4 @@ template_built(n: Node): Node := match n {
 
 interpolated_node(n: Node): Node := bottom_up(n, template_built)
 
-interpolation(program: Node): Node := interpolated_node(injected(program))
+interpolation(program: Node): Node := interpolated_node(with_text_passes(program))
