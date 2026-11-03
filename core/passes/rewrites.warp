@@ -101,30 +101,30 @@ one_word = "one"
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
 # their heads, and the late sugar after it took the loops a range counts: a range left is a value (the ranges sugar)
 # the sugar's files sit beside the other compiler extensions, bundled by their path within lib/ (parser.warp
-# BUNDLED_CORE_FOLDERS): `sugar("ranges")` names core/extensions/sugar/ranges.warp
+# BUNDLED_CORE_FOLDERS): `sugar_files(["ranges"])` names core/extensions/sugar/ranges.warp
 sugar_folder = "compiler/extensions/sugar/"
-sugar(names: list): list := names.map(name => sugar_folder + name)
+sugar_files(names: list): list := names.map(name => sugar_folder + name)
 # tuples and safe navigation first: data_items reads the names in `[a, b]` before the later sugar steps could see them
-first_sugar_module_names = sugar(["tuples", "safe_navigation", "lists", "arms", "heads", "test_words"])
+first_sugar_module_names = sugar_files(["tuples", "safe_navigation", "lists", "arms", "heads", "test_words"])
 # every other file of core/extensions/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
 placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
 sugar_module_names(): list := {
 	placed = placed_sugar_modules()
 	LIBRARY_FILES.keys.filter(path => path.starts_with(sugar_folder) and path.ends_with(module_extension)).map(path => path[0 ..< #path - #module_extension]).filter(name => name not in placed)
 }
-iteration_sugar_module_names = sugar(["iteration"])
-late_sugar_module_names = sugar(["ranges", "method_calls"])
+iteration_sugar_module_names = sugar_files(["iteration"])
+late_sugar_module_names = sugar_files(["ranges", "method_calls"])
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
 # a list literal (card sugar-comprehensions)
-comprehension_sugar_module_names = sugar(["comprehensions"])
+comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (core/extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
-declaration_sugar_module_names = sugar(["declarations"])
+declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers", "tasks"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = sugar(["functions", "declarations", "events", "defaults"])
+early_sugar_module_names = sugar_files(["functions", "declarations", "events", "defaults"])
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
