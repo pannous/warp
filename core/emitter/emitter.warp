@@ -34,7 +34,7 @@ use "control_flow.warp"
 use "../../extensions/quotes.warp"
 use "host.warp"
 use "times.warp"
-use "c_functions.warp"
+use "../../extensions/c_imports.warp"
 use "prebuilt.warp"
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
