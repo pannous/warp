@@ -622,6 +622,8 @@ calls(n: Node, found: list): list := {
 
 returns(n: Node, found: list): list := {
 	if head_name(n) == "return" and #n == 2 { found += [n#2] }
+	# a bare `return`, as `return ø` parses, gives ø (card style-css-length)
+	if n == symbol("return") { found += [ø] }
 	for part in node_parts(n) { returns(part, found) }
 	found
 }

@@ -1,0 +1,5 @@
+# a literal in a text's hole is its text: the hole's tree is that number's view, no list (card interpolated-number-literal)
+'c = "${12345}"; c'	'12345'
+'"a${12}b"'	'a12b'
+'"${1.5}"'	'1.5'
+'"${-1} and ${1+2}"'	'-1 and 3'
