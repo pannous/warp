@@ -129,7 +129,8 @@ Principles and Talking live only in common.md.
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
   `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`, `--chrome`, `--firefox`, `--suite
-  [filter…]`, `--again`; scripts/browser-dry-run.sh), until green; then dispatch the Playground workflow on your
+  [filter…]`, `--samples [sample…]` the samples against the native outputs, `--again`; scripts/browser-dry-run.sh),
+  until green; then dispatch the Playground workflow on your
   branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
 - Every CLI run of a program that might paint gets `WARP_NO_WINDOW=1` (no windows on the user's screen), except in try
   lines for the user: it also mutes sound and prints MIDI as hex.

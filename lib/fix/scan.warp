@@ -3,9 +3,14 @@
 code_mark = "c"
 text_mark = "t"
 comment_mark = "m"
+# the code after a line's separating tab, a pair's value and remark (`'1+1'⇥2⇥remark`): kept as written
+value_mark = "v"
 # nothing open at a line's end
 in_code = ""
-quotes = ["\"", "'", "`"]
+quotes = ["\"", "'", "`", "«"]
+# the quote closing a text: `«…»` closes with », the others with themselves
+closing_quote(c: text): text := if c == "«" then "»" else c
+text_closings = quotes.map(closing_quote)
 # `/* … */` and `/# … #/`: the opening and its closing
 block_comments = [["/*", "*/"], ["/#", "#/"]]
 # `#use lib`, `#include x`: a directive at the line start is a comment too
@@ -26,6 +31,7 @@ piece(cs: list, i: int, n: int): text := {
 	result
 }
 
+tab_character = "\t"
 is_blank_character(c: text): bool := c == " " or c == "\t"
 is_word_character(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c == "_")
 is_digit_character(c: text): bool := c != "" and is_digit(c[0])
@@ -58,13 +64,14 @@ scanned(lines: list): list := {
 		starts = inside
 		marks = ""
 		comment = -1
+		paired = no
 		i = 0
 		while i < #cs {
 			c = at(cs, i)
 			if inside == in_code {
 				closing = block_opened(cs, i)
 				if c in quotes {
-					inside = c
+					inside = closing_quote(c)
 					marks += text_mark
 					i += 1
 				} else if closing != "" {
@@ -75,10 +82,11 @@ scanned(lines: list): list := {
 					comment = i
 					while i < #cs { marks += comment_mark; i += 1 }
 				} else {
-					marks += code_mark
+					marks += if paired then value_mark else code_mark
+					paired = paired or (c == tab_character and piece(cs, 0, i).trim() != "")
 					i += 1
 				}
-			} else if #inside == 1 {
+			} else if inside in text_closings {
 				if c == "\\" and i + 1 < #cs {
 					marks += text_mark + text_mark
 					i += 2

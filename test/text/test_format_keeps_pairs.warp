@@ -1,0 +1,3 @@
+# warp format lays out a pair line's code only: its value and remark after the tab stay as written, «…» is a text (card format-pairs)
+is! 'use "../../lib/fix/fix.warp"; fixed("a,b\t{n:1}\tcard p71-says", layout_rules, no)#1' "a, b\t{n:1}\tcard p71-says\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("x=1\t«T{n:1,m:2}»", layout_rules, no)#1' "x = 1\t«T{n:1,m:2}»\n"
