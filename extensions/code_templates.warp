@@ -1,11 +1,9 @@
-# Code templates (notes/quasi_quote.md): quoted code with holes, where no pattern stands, builds code: `$a` splices the
+# Code templates (extension, card quotes-templates-serializer; notes/quasi_quote.md): quoted code with holes, where no pattern stands, builds code: `$a` splices the
 # value of a, `$(expr)` the value of expr, `$xs...` the items of xs. A pattern stands in the matcher's call, where
 # type_tests puts the right side of `is`, an arm's key and the right side of `==`:
 #   data($b - $a)            → filled_template(data($b - $a), {"b": b, "a": a})
 #   data(m.pop($(str(k))))   → filled_template(data(m.pop($·1)), {"·1": str(k)})
 # The prelude's filled_template puts the values in at run time; a quote without holes stays as it is.
-use "walk.warp"
-use "node_matches.warp"
 
 template_word = "filled_template"
 hole_mark = "$"

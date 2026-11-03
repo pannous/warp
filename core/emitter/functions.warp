@@ -300,7 +300,7 @@ function_compiled(f: Function, argument_kinds: list): any := {
 	parameter_kinds = []
 	for i in 0..<#f.signature.parameters {
 		declared = f.signature.parameters[i].type_name
-		annotation = if declared is empty then ø else annotated_kind(declared)
+		annotation = if count(declared) == 0 then ø else annotated_kind(declared)
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		# (in runtime.wasm, any argument: no program decides it)
 		given = if argument_kinds[i] == pending or module.relocating then ValueKind.Node else argument_kinds[i]

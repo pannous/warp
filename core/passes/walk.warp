@@ -160,7 +160,7 @@ node_from(view: View, keeps_maps: bool): Node := {
 	if kind == "list" { return List(view[3..].map(item => part(item)), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(part(view#4), view#2, view#3) }
 	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }
-	if kind is empty { return view }
+	if count(kind) == 0 { return view }
 	Key(symbol(opaque_word), Op.Colon, view)
 }
 
@@ -339,6 +339,11 @@ quote_word = "data"
 quote_symbol = symbol(quote_word)
 # data with its names spliced in (data_blocks.warp), which no pass rewrites either
 spliced_quote_symbol = symbol(HiddenWord.DataSpliced as text)
+# `data e`, glued `data(e)`, and its spliced form: what every pass leaves alone (the code they make:
+# extensions/quotes.warp)
+is_quote(n: Node): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == quote_symbol
+is_spliced_quote(n: Node): bool := bracket_of(n) == "(" and separator_of(n) == "" and #n == 2 and n#1 == spliced_quote_symbol
+is_spaced(n: Node): bool := bracket_of(n) == "" and separator_of(n) == " "
 def items_walked(items: list, quoting_allowed: bool, f: function): list {
 	walked = []
 	quoting = no

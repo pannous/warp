@@ -269,7 +269,7 @@ def bang_word_at(p: Parser): int {
 BLOCK_COLON_WORDS = ["then", "else", "do"]
 def word_names_key(p: Parser, word: text): bool {
 	after = p.at + word.length
-	not (word is empty) and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
+	count(word) > 0 and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
 }
 
 // The blank-separated words of the statement at the parser's position
@@ -495,7 +495,7 @@ def longest_spelled_at(p: Parser, candidates: list, spelling: function): any {
 def aliased_operator_at(p: Parser): list {
 	alias = alias_at(p)
 	canonical = if alias.length == 0 then "" else canonical_operator(alias#2)
-	if canonical is empty or (is_name_start(alias#1#1) and opens_block(p, alias#1.length)) then [] else [alias#1, canonical]
+	if count(canonical) == 0 or (is_name_start(alias#1#1) and opens_block(p, alias#1.length)) then [] else [alias#1, canonical]
 }
 // A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `contains`)
 // Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
@@ -521,7 +521,7 @@ def declared_type_names(source: text): list {
 	for line in code_only(source).split("\n") {
 		previous = ""
 		for word_written in line.replace("\t", " ").split(" ") {
-			if word_written is empty { continue }
+			if count(word_written) == 0 { continue }
 			if TYPE_SCAN_WORDS.contains(previous) {
 				end = symbol_end(word_written, 0, word_written.length)
 				if end > 0 and (end == word_written.length or "({<[:;".contains(word_written[end])) { type_names += [word_written[0 .. end]] }
@@ -1303,7 +1303,7 @@ def bit_operator(written: text, left: Node, right: Node, spelled: text): text {
 def may_be_whole_number(n: Node): bool := match n {
 	Symbol(name): not is_type_word(name) and not is_capitalized(name)
 	Key(left, op, right): if op == Op.Xor then may_be_whole_number(left) and may_be_whole_number(right) else not (NOT_WHOLE_OPERATORS contains op)
-	List(items, bracket, separator): bracket != Bracket.Square and (items is empty or may_be_whole_number(items#1))
+	List(items, bracket, separator): bracket != Bracket.Square and (count(items) == 0 or may_be_whole_number(items#1))
 	_: n is int and not (n is bool)
 }
 NOT_WHOLE_OPERATORS = [Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.And, Op.Or, Op.Not]
@@ -2021,7 +2021,7 @@ def operators_declared_in(statements: list): list {
 	for statement in statements {
 		if not statement.contains("precedence") { continue }
 		ranked = precedence_declaration(blank_words(statement), found)
-		if ranked is empty { continue }
+		if count(ranked) == 0 { continue }
 		for operator in found { if operator.glyph == ranked#1 { operator.level = ranked#2 } }
 	}
 	found
@@ -2190,13 +2190,13 @@ def precedence_declaration(words: list, declared: list): list {
 	direction = words#5
 	if direction != "above" and direction != "below" { return [] }
 	other = if words.length == 7 and words#6 == "operator" then words#7 else if words.length == 6 then words#6 else ""
-	if other is empty { return [] }
+	if count(other) == 0 { return [] }
 	glyph = words#2
 	if declared_level(declared, glyph) < 0 { raise "operator $(glyph) is built in: only a declared operator gets a precedence (`infix operator $(glyph) := …` first)" }
 	reference = declared_level(declared, other)
 	if reference < 0 {
 		canonical = canonical_operator(other)
-		if canonical is empty { raise "unknown operator $(other) in `operator $(glyph) has precedence $(direction) $(other)`" }
+		if count(canonical) == 0 { raise "unknown operator $(other) in `operator $(glyph) has precedence $(direction) $(other)`" }
 		reference = binding_powers(canonical)#1
 	}
 	[glyph, if direction == "above" then reference + PRECEDENCE_STEP else reference - PRECEDENCE_STEP]
@@ -2411,7 +2411,7 @@ def guarded_by(marker: text, guarded_part: Node, fallback: Node, caught: list): 
 	name = caught#1
 	caught_class = caught#2
 	if caught_class {
-		bound = if name is empty then CAUGHT_ERROR else name
+		bound = if count(name) == 0 then CAUGHT_ERROR else name
 		parts = parts + [keyed(":", symbol(bound), symbol(caught_class))]
 	} else if name and reads_name(fallback, name) {
 		parts = parts + [symbol(name)]
@@ -2804,7 +2804,7 @@ def pipe_parameters(p: Parser): Node := {
 	body = spaces_end(p, close + 1)
 	// Ruby's `do |item|⏎ … end`, `{ |x|⏎ … }`: inside a block the body may start on the next line
 	body_below = is_at(p.code, body, '\n', p.n) and (p.group.grouped or p.group.stops_at_end)
-	if peek(p.code, close, p.n) != '|' or names is empty or not is_name_start(names#1#1) or body >= p.n or ("\n;,)]}".contains(p.code[body]) and not body_below) { return ø }
+	if peek(p.code, close, p.n) != '|' or count(names) == 0 or not is_name_start(names#1#1) or body >= p.n or ("\n;,)]}".contains(p.code[body]) and not body_below) { return ø }
 	p.at = body
 	if names.length == 1 then symbol(names#1) else listed(Bracket.Round, Separator.Comma, names.map(name => symbol(name)))
 }
@@ -3774,9 +3774,9 @@ def dedented(source: text): text {
 	if #written == 0 { return "" }
 	common = min(written.map(indent_width))
 	first = 1
-	while lines#first.trim() is empty { first = first + 1 }
+	while count(lines#first.trim()) == 0 { first = first + 1 }
 	last = #lines
-	while lines#last.trim() is empty { last = last - 1 }
+	while count(lines#last.trim()) == 0 { last = last - 1 }
 	kept = []
 	for index in first .. last + 1 {
 		line = lines#index
@@ -4054,12 +4054,12 @@ def raised_terms(p: Parser): list {
 			end = end + 1
 		}
 		value = 0
-		while letters is empty and end < p.n and SUPERSCRIPT_DIGIT_INDEX.has("$(p.code[end])") {
+		while count(letters) == 0 and end < p.n and SUPERSCRIPT_DIGIT_INDEX.has("$(p.code[end])") {
 			value = value * 10 + SUPERSCRIPT_DIGIT_INDEX["$(p.code[end])"]
 			end = end + 1
 		}
 		if end == start { return terms }
-		terms += [[sign, if letters is empty then value else symbol(letters), end]]
+		terms += [[sign, if count(letters) == 0 then value else symbol(letters), end]]
 		at = end
 	}
 	terms
