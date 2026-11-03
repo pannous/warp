@@ -64,7 +64,7 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + kind_spelling(value.kind) + " for a typed field of " + class_name) }
 		codes += [as_node(boxed(field_value(field_type, value)))]
 	}
-	TypedCode(ValueKind.Node, instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [gc_type(class_struct(class_name))]))
+	TypedCode(ValueKind.Node, instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [class_struct_index(class_name)]))
 }
 # a field's type's zero: 0, 0.0, "", no, [], else ø (an untyped or optional field, one of a class)
 kind_zero(kind: ValueKind?): any := match kind {
@@ -84,6 +84,8 @@ def field_zero(type: text?): any { if type == base_type(type) then kind_zero(fie
 # getter (field_getter_code); the runtime sets and lists an instance's fields through instance_set / instance_entries,
 # written once the classes are known
 instance_struct_prefix = "class·"
+# the index of the struct type of a class's instances
+def class_struct_index(class_name: text): int := gc_type(class_struct(class_name))
 def class_struct(class_name: text): text {
 	name = instance_struct_prefix + class_name
 	if name not in module.class_structs {
@@ -111,7 +113,7 @@ def instance_struct(): text {
 # type_entries): wasm canonicalizes structurally equal types, so two classes of as many fields would be one type, and
 # the test of one class's struct would pass the other's instance; inside one group each type is its own
 def declare_class_structs() {
-	for class_name in classes_parents_first() { gc_type(class_struct(class_name)) }
+	for class_name in classes_parents_first() { class_struct_index(class_name) }
 }
 def classes_parents_first(): list {
 	deepest = 0
@@ -166,7 +168,7 @@ def boxed_field_read(body: Body, target: Node, name: text, class_name: text = ""
 	}
 	# a receiver of a known class: its field, read from its struct; another value as any value
 	if class_name != "" and struct_field(class_name, name) != ø {
-		struct_index = gc_type(class_struct(class_name))
+		struct_index = class_struct_index(class_name)
 		read = TypedCode(ValueKind.Node, held.code + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, struct_field(class_name, name)]))
 		return TypedCode(ValueKind.Node, boxed(target) + [op.local_set] + held.code[1..] + held.code + gc_code(gc_ops.ref_test, [struct_index]) + if_else_code(ValueKind.Node, read, call_values(made_late(field_getter_prefix + name, ValueKind.Node, ["m"]), [held])))
 	}
@@ -213,11 +215,24 @@ def made_classes(): list {
 def each_class_field(each: function, after: function = (count => [])): list {
 	code = []
 	for class_name in made_classes() {
-		struct_index = gc_type(class_struct(class_name))
+		struct_index = class_struct_index(class_name)
 		fields = module.classes[class_name].keys
 		inner = []
 		for i in 0..<#fields { inner += each(fields[i], [op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]), struct_index, i + #instance_fields) }
 		code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value] + inner + after(#fields) + [op.end]
+	}
+	code
+}
+# the code of a test of the instance (parameter 0) against each class declaring the field, a subclass before its
+# parent: for an instance of its struct, `access(the instance cast to it, the struct, the field's place)`
+def each_class_declaring(field: text, access: function): list {
+	code = []
+	for class_name in made_classes() {
+		place = struct_field(class_name, field)
+		if place != ø {
+			struct_index = class_struct_index(class_name)
+			code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value] + access([op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]), struct_index, place) + [op.end]
+		}
 	}
 	code
 }
@@ -244,35 +259,21 @@ def instance_set_code(f: Function) {
 field_getter_prefix = "field·"
 def field_getter_code(f: Function) {
 	name = f.name[#field_getter_prefix ..]
-	code = []
-	for class_name in made_classes() {
-		place = struct_field(class_name, name)
-		if place != ø {
-			struct_index = gc_type(class_struct(class_name))
-			code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value, op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, place]) + [op.return, op.end]
-		}
-	}
-	f.code = code + runtime_call("map_get", [TypedCode(ValueKind.Node, [op.local_get, 0]), text_value_of(name)]).code
+	read = (instance, struct_index, place) => instance + gc_code(gc_ops.struct_get, [struct_index, place]) + [op.return]
+	f.code = each_class_declaring(name, read) + runtime_call("map_get", [TypedCode(ValueKind.Node, [op.local_get, 0]), text_value_of(name)]).code
 }
 # `set·code(m, value)`: m with its field code set in the struct of whichever class declaring it m is an instance of;
 # any other value (a map, an instance whose class lacks the field) as field_with sets it
 field_setter_prefix = "set·"
 def field_setter_code(f: Function) {
 	name = f.name[#field_setter_prefix ..]
-	code = []
-	for class_name in made_classes() {
-		place = struct_field(class_name, name)
-		if place != ø {
-			struct_index = gc_type(class_struct(class_name))
-			code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value, op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]) + as_node([op.local_get, 1]) + gc_code(gc_ops.struct_set, [struct_index, place]) + [op.local_get, 0, op.return, op.end]
-		}
-	}
-	f.code = code + runtime_call("field_with", [TypedCode(ValueKind.Node, [op.local_get, 0]), text_value_of(name), TypedCode(ValueKind.Node, [op.local_get, 1])]).code
+	write = (instance, struct_index, place) => instance + as_node([op.local_get, 1]) + gc_code(gc_ops.struct_set, [struct_index, place]) + [op.local_get, 0, op.return]
+	f.code = each_class_declaring(name, write) + runtime_call("field_with", [TypedCode(ValueKind.Node, [op.local_get, 0]), text_value_of(name), TypedCode(ValueKind.Node, [op.local_get, 1])]).code
 }
 def instance_entries_code(f: Function) {
 	code = []
 	for class_name in made_classes() {
-		struct_index = gc_type(class_struct(class_name))
+		struct_index = class_struct_index(class_name)
 		fields = module.classes[class_name].keys
 		instance = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index])
 		entries = range_list(#fields).map(i => keyed_code(name_node(symbol(fields[i])), instance + gc_code(gc_ops.struct_get, [struct_index, i + #instance_fields])))
@@ -306,7 +307,7 @@ def instance_place_code(f: Function) {
 # is_class_instance(m): whether m is an instance of a class the program makes, a struct (an AST key without an
 # operator is marked as an instance too): a test of each class's struct, not of the open $Instance (subtype_prefix)
 def is_class_instance_code(f: Function) {
-	tests = made_classes().map(class_name => [op.local_get, 0] + gc_code(gc_ops.ref_test, [gc_type(class_struct(class_name))]))
+	tests = made_classes().map(class_name => [op.local_get, 0] + gc_code(gc_ops.ref_test, [class_struct_index(class_name)]))
 	f.code = if #tests == 0 then [op.i32_const, 0] else tests#1 + concatenated(tests[1 ..].map(test => test + [op.i32_or]))
 }
 # instance_show(m): the text m's class shows it as by its show() (decision show-hook), ø when the program's classes
