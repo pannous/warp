@@ -126,7 +126,7 @@ defining_keywords = function_keywords + declaration_keywords + ["class", "enum",
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
 # `infix operator ↑(x: number, n: number) := …`, else ""
 name_defined_in(line: text): text := {
-	declared = operator_declared(blank_words(line))
+	declared = operator_declared(operator_statement(blank_words(line)))
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1.glyph }
 	leading = leading_name(line)
 	if leading == export_word { return name_defined_in(line[#leading ..].trim()) }
