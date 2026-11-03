@@ -82,7 +82,7 @@ done
 row+=" | $(full_suite_rate "$main/$MAC_SUITE") | $(full_suite_rate "$main/$CLOUD_SUITE") |"
 echo "$row" >>"$main/$RATES"
 say "$row"
-say "$(python3 "$scripts/core-weight.py" 2026-10-29 "$main/data/core-weight/core-weight.html")"
+say "$(python3 "$scripts/vitals.py" 2026-10-29 "$main/data/vitals/vitals.html")"
 
 git -C "$main" add -- "${files[@]}" &&
 	git -C "$main" commit -q -m "chore: nightly pass rates at $tip ${row#*$tip | }" -- "${files[@]}" &&

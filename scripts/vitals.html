@@ -1,4 +1,4 @@
-<title>Core Weight</title>
+<title>Warp Vitals</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
@@ -60,6 +60,13 @@ td.sha { font-family: var(--font-data); color: var(--ink-3); white-space: nowrap
 td.sha a { color: var(--shrink); text-decoration: none; }
 td.sha a:hover, td.sha a:focus-visible { text-decoration: underline; }
 .grow { color: var(--grow); } .shrink { color: var(--shrink); }
+.tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.tier { background: var(--panel); border-radius: 6px; padding: 12px 14px 8px; display: grid; gap: 2px; position: relative; }
+.tier .value { font: 500 22px/1.1 var(--font-data); font-variant-numeric: tabular-nums; }
+.tier .change { font: 12px var(--font-data); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tier svg { display: block; width: 100%; height: auto; margin-top: 6px; overflow: visible; }
+.tier svg text { font: 10px var(--font-data); fill: var(--ink-3); }
+.tier .empty { color: var(--ink-3); font-size: 13px; }
 .tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 .table-wrap { overflow-x: auto; }
 footer { color: var(--ink-3); font-size: 12px; }
@@ -67,10 +74,21 @@ footer { color: var(--ink-3); font-size: 12px; }
 
 <div class="page">
   <header>
-    <div class="label">warp compiler · core/ lines of code</div>
-    <h1>Core weight since self-hosting</h1>
-    <p class="lede" id="lede"></p>
+    <div class="label">warp compiler · since self-hosting</div>
+    <h1>Warp vitals</h1>
+    <p class="lede">How many tests pass in each lane, and how heavy the compiler is, rebuilt from git history.</p>
   </header>
+
+  <section>
+    <h2>Tests passing</h2>
+    <p class="section-note">Each committed results file, one panel per lane, on one shared scale from 50% to 100%. A dot is one run; click it to open the commit that saved it.</p>
+    <div class="tiers" id="tiers"></div>
+  </section>
+
+  <section>
+    <h2>Core weight</h2>
+    <p class="section-note" id="lede"></p>
+  </section>
 
   <div class="figures" id="figures"></div>
 
@@ -97,6 +115,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
 <script>
 const DATA = __DATA__;
+const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const GROUP_COLORS = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7"];
 const WIDTH = 940, PAD = { left: 52, right: 12, top: 12, bottom: 26 };
 const rows = DATA.rows.map(([date, sha, subject, groups, delta, extensionsDelta, lib, test]) => ({ date, sha, subject, groups, delta, extensionsDelta, lib, test, core: groups.slice(0, -1).reduce((a, b) => a + b, 0), extensions: groups[groups.length - 1] }));
@@ -170,10 +189,41 @@ function tooltip(container, svg, x, describe) {
   });
 }
 
-const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const commitLink = sha => `<a href="${COMMIT_URL}${sha}" target="_blank" rel="noopener">${sha}</a>`;
 const escape = text => text.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.date.slice(5)}</span></div>`;
+
+(function tiers() {
+  const all = DATA.tiers.flatMap(([, , points]) => points.map(p => p[0]));
+  const time = date => new Date(date.replace(" ", "T")).getTime();
+  const start = time(rows[0].date), end = Math.max(time(rows[rows.length - 1].date), ...all.map(time));
+  const W = 300, H = 110, L = 30, R = 8, T = 6, B = 18, LOW = 50;
+  const x = date => L + (time(date) - start) / (end - start) * (W - L - R);
+  const y = rate => T + (1 - (rate - LOW) / (100 - LOW)) * (H - T - B);
+  const rate = p => p[2] / p[3] * 100;
+  const days = [...new Set(rows.map(dayOf))];
+  document.getElementById("tiers").innerHTML = "";
+  DATA.tiers.forEach(([name, path, points]) => {
+    const card = document.createElement("div"); card.className = "tier";
+    if (!points.length) { card.innerHTML = `<div class="label">${name}</div><div class="empty">no committed run yet</div>`; document.getElementById("tiers").appendChild(card); return; }
+    const lastPoint = points[points.length - 1], firstPoint = points[0];
+    card.innerHTML = `<div class="label">${name}</div><div class="value">${rate(lastPoint).toFixed(1)}%</div>` +
+      `<div class="change">${format(lastPoint[2])} of ${format(lastPoint[3])} · ${points.length > 1 ? signed(Math.round((rate(lastPoint) - rate(firstPoint)) * 10) / 10) + " pts since " + shortDay(firstPoint[0].slice(0, 10)) : "one run"} · ${path}</div>`;
+    const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name} pass rate over time` }, card);
+    [50, 75, 100].forEach(v => {
+      element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);
+      element("text", { x: L - 4, y: y(v) + 3, "text-anchor": "end" }, svg).textContent = v + "%";
+    });
+    days.forEach((day, i) => { if (i % 2 === 0) element("text", { x: x(day + " 00:00"), y: H - 4 }, svg).textContent = shortDay(day); });
+    if (points.length > 1) element("polyline", { points: points.map(p => `${x(p[0])},${y(rate(p))}`).join(" "), fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    points.forEach((p, i) => {
+      const dot = element("circle", { cx: x(p[0]), cy: y(rate(p)), r: i === points.length - 1 ? 4 : 2.5, fill: "var(--s1)", stroke: "var(--panel)", "stroke-width": 1.5, style: "cursor:pointer" }, svg);
+      element("title", {}, dot).textContent = `${p[0]} · ${p[1]} · ${p[2]}/${p[3]} (${rate(p).toFixed(1)}%)`;
+      dot.addEventListener("click", () => window.open(COMMIT_URL + p[1], "_blank", "noopener"));
+    });
+    document.getElementById("tiers").appendChild(card);
+  });
+})();
 
 (function stacked() {
   const container = document.getElementById("stack");
