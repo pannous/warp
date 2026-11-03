@@ -269,7 +269,7 @@ side_by_side_words(n: Node): list := {
 # a number, a text, or a variable holding no function
 is_plain_value(word: Node, locals: list, lowering: Lowering): bool := word is number or word is text or (word is symbol and is_variable(name_of(word), locals, lowering) and not lowering.function_values.has(name_of(word)))
 # `f 3 4`, words side by side: the first calls the others, its name kept; a lambda first is called with them,
-# `(x => x*2) 4` as `(x => x*2)(4)` (and `{it*2} 4`, lib/sugar/calls.warp)
+# `(x => x*2) 4` as `(x => x*2)(4)` (and `{it*2} 4`, core/extensions/sugar/calls.warp)
 lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
 	# `(a -1)`, `(a b)` of variables: a bound value heads no call, the values side by side are their list
 	if #words > 1 and words.all(word => is_plain_value(word, locals, lowering)) { return List(words, Bracket.Square, Separator.Comma) }

@@ -1,1 +1,1 @@
-# Compiler extensions: one optional capability per file whose compiler code (a pass, an emitter mode) only the programs using it need (primitive.warp); a capability that is rewrite rules only is sugar in lib/sugar/ (tuples, safe_navigation; notes/core_hygiene.md).
+# Compiler extensions: one optional capability per file whose compiler code (a pass, an emitter mode) only the programs using it need (primitive.warp); a capability that is rewrite rules only, a new spelling, is sugar in sugar/ (tuples, safe_navigation; notes/layers.md).

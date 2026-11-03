@@ -28,12 +28,12 @@ CPU seconds between phase markers:
   CPU and hotspots are the record's time and profile.txt: never build again to measure.
 - A synthetic program at 100/200/400/1600 statements shows superlinear terms quickly with the installed warp
   (`/usr/bin/time -p`, user CPU): `def gN(xs: list): int := xs.f(N) + 1` against `f(N) + 1`.
-- Rules in lib/sugar/ are not baked: switching one off in a worktree's lib (WARP_LIB) needs no rebuild, so a rule's
+- Rules in core/extensions/sugar/ are not baked: switching one off in a worktree's lib (WARP_LIB) needs no rebuild, so a rule's
   cost is bisected in seconds.
 - The wasmtime CLI profiler trapped on the compiler (card wasmtime-cli-refusal); the markers need no profiler.
 
 ## What it was
-1. lib/sugar/method_calls.warp `$m.$f($a...) … $module = module_named($m, $program)` (e3ab37c931): `$m is not
+1. core/extensions/sugar/method_calls.warp `$m.$f($a...) … $module = module_named($m, $program)` (e3ab37c931): `$m is not
    value` passes for a parameter (rule_scope is the program's), so module_named ran at nearly every `xs.f()`, and each
    call walked the whole program (names_bound_in) and read a module file. Quadratic: late_sugar 300 → 5.6 s.
    Fix: names_bound_in_kept (one-entry same_node cache) and used_module_text reads each module once.
