@@ -52,8 +52,8 @@ counts_from_the_end(bound: Node): bool := if bound is number then bound < 0 else
 negated_form(bound: Node): text := if bound is number then "${bound}" else "-${value_of(bound)}"
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
-// A number index keeps the number written in an attribute layer, as Rust's parser keeps WrittenIndex on `d#2`: a map
-// keyed by numbers reads it (number_keys.rs); plain_node drops the layer, number_keys.warp reads `d#2` itself
+// A number index keeps the number written in an attribute layer on `d#2`: a map
+// keyed by numbers reads it; plain_node drops the layer, number_keys.warp reads `d#2` itself
 one_based(index: Node): Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, 1)
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`

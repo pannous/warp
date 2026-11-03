@@ -1,5 +1,5 @@
-# The built-in node: the value Rust hands over and the $Node struct in wasm, declared case for case as rust-harness:src/node/mod.rs
-# Node has them (decision compiler-node-enum). No class is made of it: a case is a kind of node and its fields are the
+# The built-in node: the value a host hands over and the $Node struct in wasm, declared case for case (decision
+# compiler-node-enum). No class is made of it: a case is a kind of node and its fields are the
 # node's parts, so `f(n: Node): Node` takes any node, `Key(a, Op.Add, b)` builds
 # `a+b`, and `match n { Key(left, op, right): … }` tests the kind and reads the parts of the node itself.
 enum Node {

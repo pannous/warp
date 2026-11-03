@@ -1,7 +1,7 @@
 # Closures (emitter.warp's part): closure values, their calls through dispatchers, the text a closure shows
-## closures (Rust's lowering: rust-harness:src/lowering/definitions/closures.rs)
+## closures
 # `closure_new(target, captured…)`: a Function $Node holding the list [the target's number, the captured values…], its
-# value the target's name, as Rust's reads back; module.closures holds [target name, captured count] by number.
+# value the target's name; module.closures holds [target name, captured count] by number.
 # `closure_call_<n>(f, a…)`: a function made once per arity n, its code written last (dispatcher_code), that calls the
 # target f's number names; `<target>·captured·<i>(f)`: f's i-th captured value
 closure_call_prefix = "closure_call_"
@@ -9,9 +9,9 @@ captured_marker = "·captured·"
 # what joins the parts of a lifted name: a method's witness `len·Point`, a nested `outer·inner`
 name_joiner = "·"
 # `closure_text(f)`: the text of a closure, its lambda as written (`x => x*2`) or its target's name, a function made
-# once, its code written last (closure_text_code), as Rust's function_text table
+# once, its code written last (closure_text_code)
 closure_text_name = "closure_text"
-# the targets Rust's lowering lifts from a lambda
+# the targets the lowering lifts from a lambda
 lambda_prefixes = ["closure_lambda_", "lambda_value_"]
 is_lifted_lambda(name: text): bool := lambda_prefixes.any(prefix => name.starts_with(prefix))
 # the operators a closure takes part in (node_equal compares closures)
@@ -99,7 +99,7 @@ closure_shown(name: text, captured: int): text := {
 	names = taken_names(f.signature)[captured..]
 	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
 }
-# the name a function value shows, as Rust's (closures.rs function_name): `len` of a class's method that became the
+# the name a function value shows: `len` of a class's method that became the
 # witness `len·Point`, the last part of a nested `outer·inner`
 function_name(target: text): text := {
 	parts = target.split(name_joiner)
@@ -139,7 +139,7 @@ def instance_calls(closure: list, arity: int): list {
 }
 # a value called that is no closure fails in not_a_function; the closure's number picks, in one br_table jump, the
 # target's call on the captured values and the arguments (a test per closure made every call scan them all); a closure
-# of another arity fails in wrong_number_of_arguments (the runtime errors of Rust's rust-harness:src/wasm_emitter/functions/closures.rs)
+# of another arity fails in wrong_number_of_arguments
 dispatcher_code(f: Function): any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]

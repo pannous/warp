@@ -8,7 +8,7 @@
 # - a function of the program named as a value, `apply(square, 7)`, is the closure `closure_new(square)`; one without
 #   parameters stays its bare call
 # - a call of a variable or parameter, `f(x)`, calls the function value it holds: `closure_call_1(f, x)`
-# emitter.warp and analyzer.warp read closure_new and closure_call_<n> as they read Rust's.
+# emitter.warp and analyzer.warp read closure_new and closure_call_<n>.
 use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "scope.warp"
@@ -313,7 +313,7 @@ missing_arguments(words: list, lowering: Lowering): int := {
 	if wanted > 0 then wanted else 0
 }
 # `f g 1`, `first add 1 2`: more words than the function takes, a function word where its last argument goes: that
-# word's phrase is the argument, f(g(1)), as Rust's words take their arguments by their parameters (card
+# word's phrase is the argument, f(g(1)), as words take their arguments by their parameters (card
 # prelude-word-calls); ø for other words
 nested_phrase(words: list, lowering: Lowering): list? := {
 	taken = lowering.arities.get(name_of(words#1)) ?? 0

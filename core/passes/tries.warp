@@ -1,19 +1,19 @@
 # `try x else y` and `try x catch e { y }` (card pure-runs):
 # x runs inside ran·without·error, which says whether it finished (a runtime error deep inside throws the wasm tag
-# try_guard.rs catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch are checked
+# the try catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch are checked
 # before they happen: a division by 0 directly under `try`, an index out of a list written in place.
 #   try x else y        → (try·finished = ran·without·error({try·value = x});
 #                          if try·finished and not is_error(try·value) then {try·value} else {y})
 #   try x catch e { y } → … else {e = caught_error(try·finished, try·value); y}
 #   try a / b else y    → (try·divisor = b; if try·divisor == 0 then {y} else {…a / try·divisor…})
 #   try [1 2]#i else y  → (try·list = [1 2]; try·index = i; if 1 <= try·index <= count(try·list) then … else {y})
-# Each try's names carry its number (try·value·3), as Rust's do, so two tries of a function keep their own kinds.
+# Each try's names carry its number (try·value·3), so two tries of a function keep their own kinds.
 use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "../analysis/words.warp"
 
 applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
-# `{n}`, a block of one item, as Rust writes it
+# `{n}`, a block of one item
 braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
 try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semicolon)
 try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
@@ -95,7 +95,7 @@ handled_form(n: Node): Node := match n {
 assertion(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
 
 # parser.warp reads `try x else y` as `try·else(x, y)`, `try x catch e { y }` as `try·else(x, {y}, e)` and
-# `assert c else m` as `assert·else(c, m)`, as Rust's parser does
+# `assert c else m` as `assert·else(c, m)`
 try_form(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
 		if #parts == 3 and parts#1 == symbol(HiddenWord.AssertElse as text) { return assertion(parts#2, parts#3) }

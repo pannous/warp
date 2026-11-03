@@ -90,7 +90,7 @@ is_runtime_declaration(n: Node): bool := {
 	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 is symbol and name_of(words#3) in compiler_libraries
 }
 
-# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
+# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T
 result_word = "the result"
 result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {

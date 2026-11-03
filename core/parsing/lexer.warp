@@ -1,5 +1,5 @@
 // The parser's character-level reading: comments, texts, names, blocks and the gaps between code; a source is a text
-// or its code points, positions count items of it ("Rust twin" names the word of branch rust-bootstrap it replaced)
+// or its code points, positions count items of it
 use "positions.warp"
 
 // Where the comments and texts of a source start and end: [[start, end], …]
@@ -71,7 +71,7 @@ def starts_at(source: text or list, part: text, at: int, n: int): bool {
 	i == wanted
 }
 
-// A raised letter continues a name as in Rust (`xⁿ`), a raised digit ends it (`x²` squares x)
+// A raised letter continues a name (`xⁿ`), a raised digit ends it (`x²` squares x)
 def is_name_char(c: text): bool := is_alphanumeric(c) or is_letter_beyond_ascii(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
 
 // The superscript digits in digit order, the raised letters in the order of the letters they raise (no raised q)
@@ -252,10 +252,10 @@ def possessive(source: text, at: int, n: int): bool {
 	at > 0 and is_name_char(source[at - 1]) and is_at(source, at + 1, 's', n) and is_at(source, at + 2, ' ', n) and at + 3 < n and is_name_start(source[at + 3])
 }
 
-// `ø` is the empty value, never a name's start (Rust's atom reads it before names)
+// `ø` is the empty value, never a name's start (an atom reads it before names)
 def is_name_start(c: text): bool := is_alpha(c) or (is_letter_beyond_ascii(c) and c != 'ø') or c == '_'
 
-// `π`, `σ`, `é`, `名`: a letter beyond ASCII names as a Latin one does (Rust's is_alphabetic), a cased one or one of
+// `π`, `σ`, `é`, `名`: a letter beyond ASCII names as a Latin one does, a cased one or one of
 // the CJK, kana and Hangul blocks
 def is_letter_beyond_ascii(c: text): bool {
 	if c <= '~' { return false }

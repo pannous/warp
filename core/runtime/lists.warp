@@ -28,7 +28,7 @@ list_append(a: list, b: list): list := {
 	a
 }
 # `n#i` of a value known only at run time, counted from 1: a list's item, a text's character; ø has none ("1 not in
-# an empty list"), any other value fails as Rust's "not a list"
+# an empty list"), any other value fails as "not a list"
 node_at(n: Node, index: int): Node := {
 	if is_null(n) { index_out_of_range_of(index, 0) }
 	if is_extended_list(n) { return extended_list_at(n, index) }
@@ -59,7 +59,7 @@ node_length(n: Node): int := {
 	if kind_code(n) == Kind.Key { return 2 }
 	no_length_of(n)
 }
-# `xs.pop()`: the last item, dropped from xs in place by lowering its count (Rust's list_drop_last), so every alias
+# `xs.pop()`: the last item, dropped from xs in place by lowering its count, so every alias
 # sees the shorter list
 list_pop(xs: list): any := {
 	last = xs#(#xs)

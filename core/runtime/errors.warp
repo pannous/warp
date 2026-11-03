@@ -1,5 +1,5 @@
-## runtime errors: each fails inside a function of its name, which rust-harness:src/wasm_emitter/control/traps.rs reads off the
-## trace as the error's message; the global trap_detail holds the value the message names
+## runtime errors: each fails inside a function of its name, which the host reads off the trace as the error's
+## message; the global trap_detail holds the value the message names
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "nodes.warp"
@@ -12,10 +12,10 @@ divide_by_zero(): int := {
 	fail()
 	0
 }
-# `error("boom")`: the Error of the message, a value, not raised (Rust's text_builtins.rs error)
+# `error("boom")`: the Error of the message, a value, not raised
 error_node(message: Node): Node := failure_of(node_text(message))
-# `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
-# emit_data_item); `q.k = e`, `{k: e}`: a field holds none
+# `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail;
+# `q.k = e`, `{k: e}`: a field holds none
 held_list_item(item: Node): Node := {
 	if node_is_error(item) { a_list_item_holds_no_error(item) }
 	item
@@ -35,7 +35,7 @@ a_field_holds_no_error(error: Node): int := {
 	0
 }
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
-# the runtime errors of the library words, named for rust-harness:src/wasm_emitter/control/traps.rs to read off the trace
+# the runtime errors of the library words, named for the host to read off the trace
 index_out_of_range(): int := {
 	fail()
 	0
@@ -76,7 +76,7 @@ an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
 }
-# the run's error is the message (Rust's returned_error with its trap detail)
+# the run's error is the message, with its trap detail
 returned_error(message: text): int := {
 	global trap_detail = held(message)
 	fail()
@@ -86,7 +86,7 @@ index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
 	index_out_of_range()
 }
-# `raise X`: the run fails with X as its message (Rust's returned_error, rust-harness:src/wasm_emitter/control/traps.rs)
+# `raise X`: the run fails with X as its message
 returned_error(): int := {
 	fail()
 	0
@@ -145,7 +145,7 @@ index_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { index_must_be_an_integer() }
 	unboxed_int(n)
 }
-# a product beyond the int range (Rust's would be a big int)
+# a product beyond the int range
 int_overflow() := {
 	fail()
 	0
@@ -179,7 +179,7 @@ wrong_number_of_arguments() := {
 	fail()
 	0
 }
-# the runtime errors Rust's run names by the function trapping
+# the runtime errors the run names by the function trapping
 not_a_map(): int := {
 	fail()
 	0

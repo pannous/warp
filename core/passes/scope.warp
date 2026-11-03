@@ -187,8 +187,7 @@ is_function_definition(n: Node): bool := match n {
 	_: no
 }
 
-# the nodes outside the bodies of functions, whose names every function sees (Rust type_tests.rs
-# collect_outer_assigned_names)
+# the nodes outside the bodies of functions, whose names every function sees
 outer_nodes_in(top: Node): list := nodes_kept(top, n => not is_function_definition(n))
 
 binds(scope: map, name: text): bool := scope.has(name)

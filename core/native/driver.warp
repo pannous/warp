@@ -65,7 +65,7 @@ EVAL_CODE_WORD = 16
 # the end of a field in warp.wasm's parse-code encoding (core/parsing/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
-# at and the dots per inch of one CSS pixel per CSS inch, as the Rust harness's system_values.rs did
+# at and the dots per inch of one CSS pixel per CSS inch
 WINDOW_WIDTH_SLOT = 0
 WINDOW_HEIGHT_SLOT = 1
 DISPLAY_DPI_SLOT = 2
@@ -458,7 +458,7 @@ struct Single { value: f32 }
 float_at(address: pointer): Double := address
 single_at(address: pointer): Single := address
 
-# The GC heap a run starts with, as rust-harness:crates/warp-runtime engine.rs: reserved, committed lazily, growing as the
+# The GC heap a run starts with: reserved, committed lazily, growing as the
 # run needs (decision heap-per-run). A compiler building the compiler starts large: one starting small collects at each
 # of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild; at 128 MB 698 -> 1408 s).
 # A compiler compiling a program starts small, as a program does: one that never fills its heap never collects, so
@@ -467,7 +467,7 @@ single_at(address: pointer): Single := address
 BUILDER_GC_HEAP_BYTES = 536870912
 COMPILER_GC_HEAP_BYTES = 67108864
 PROGRAM_GC_HEAP_BYTES = 67108864
-# A program's fuel when it counts steps (decision fuel-metering, rust-harness:crates/warp-runtime fuel.rs): wasmtime burns about one
+# A program's fuel when it counts steps (decision fuel-metering): wasmtime burns about one
 # a WASM instruction; counting makes calls about four times slower, so only runs that ask for it count
 DEFAULT_FUEL = 100000000000
 OUT_OF_FUEL = 11
@@ -490,7 +490,7 @@ steps_of(digits: text): i64 := {
 	}
 	steps
 }
-# a run out of its fuel said as the Rust warp says it (errors/run_time.rs out_of_fuel)
+# a run out of its fuel, said as every host says it
 out_of_fuel(trap: pointer, fuel: i64): nothing := {
 	code = allocate(1)
 	if fuel > 0 and long_at(trap).value != 0 and wasmtime_trap_code(long_at(trap).value, code) and byte_at(code).value == OUT_OF_FUEL {
@@ -908,7 +908,7 @@ guest_result(caller: handle, context: handle, name: text, value: pointer): point
 ## the host words of warp's commands (core/commands/commands.warp), warp over libc
 COMMAND_OUTPUT_BYTES = 4096
 # os.command(line): the line run by sh, what it printed, its trailing newlines left off; else the Error naming its exit
-# status and what it said on stderr (as rust-harness:crates/warp-runtime std_adapters.rs executed)
+# status and what it said on stderr
 os_command(caller: handle, context: handle, listed: pointer, result: pointer): nothing := line_run(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), result)
 # os.exec(words): the argument vector (`exec sh "crontab -l"`, lib/os.warp) run as that command, each word a word of
 # its own however it reads (quoted for sh, no expansion), what it printed; else the Error naming the command (card
@@ -1190,7 +1190,7 @@ guest_int(caller: handle, context: handle, name: text, n: i64, result: pointer):
 guest_text_of(caller: handle, context: handle, t: text, result: pointer): nothing := guest_text(caller, context, native_pointer(t.address), t.length as i64, result)
 
 ## paint (card paint-native): the pixels as a PNG in the temporary folder, warp-paint/paint.png, then paint-2.png …
-## within one run, named on stderr, as the Rust harness wrote them headless: 0 paper, a value with
+## within one run, named on stderr: 0 paper, a value with
 ## an alpha byte its color, any other ink. A shader paints on the GPU, which the native warp has not yet
 PAPER = 250
 INK = 29
@@ -1340,7 +1340,7 @@ zlib_stored(bytes: pointer, length: i64): text := {
 	text_from(out, size as u32)
 }
 
-## regex: POSIX's extended syntax, on macOS enhanced (\s \w \d \b, (?:…)) to what Rust's regex crate reads alike
+## regex: POSIX's extended syntax, on macOS enhanced (\s \w \d \b, (?:…)), as common regex engines read them
 REGEX_BYTES = 256
 GROUPS = 10
 # the regmatch_t's of them, room for 8-byte offsets
@@ -1353,7 +1353,7 @@ SQUARE_LIST = 1
 DOLLAR = 36
 OPEN_CURLY = 123
 CLOSE_CURLY = 125
-# regex.matches, first, all and replace of (subject, pattern[, replacement]), as std_adapters.rs regex answers them
+# regex.matches, first, all and replace of (subject, pattern[, replacement])
 regex_answered(caller: handle, context: handle, member: text, listed: pointer, result: pointer): nothing := {
 	subject = c_string(shown(caller, context, item_of(caller, context, listed, 1)))
 	pattern = shown(caller, context, item_of(caller, context, listed, 2))
@@ -1676,8 +1676,8 @@ guest_error(caller: handle, context: handle, message: text, result: pointer): no
 }
 
 ## C calls
-# a module calling C describes each C function in its warp.c_functions section, a line of tab-separated fields each
-# : import module, library, name, parameters, C result register, what the result
+# a module calling C describes each C function in its warp.c_functions section, a line of tab-separated fields each:
+# import module, library, name, parameters, C result register, what the result
 # crosses as, the first out-pointer's pointee, struct layouts, how a failure shows. One the driver can't make (bytes,
 # structs) stops the run saying so
 WASM_HEADER = 8
@@ -1745,7 +1745,7 @@ c_line(table: text, from: text, name: text): text := {
 # its result's register and what it crosses as, how a failure shows, the first out-pointer's pointee
 struct Foreign { function: handle; name: pointer; name_length: u32; kinds: pointer; count: i32; register: i32; crossing: i32; failure: i32; pointee: pointer; pointee_length: u32 }
 foreign_at(address: pointer): Foreign := address
-# the kinds of the words c_signatures.rs names them by, each word's kind in one place (parameter_kind, register_of, …);
+# the kinds of the words the C signatures name them by, each word's kind in one place (parameter_kind, register_of, …);
 # 0 is a word the driver doesn't know
 PARAMETER_I32 = 1
 PARAMETER_I64 = 2

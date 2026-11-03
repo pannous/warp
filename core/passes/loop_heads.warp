@@ -11,7 +11,7 @@ use "../analysis/words.warp"
 
 loop_word = "for"
 loop_in_word = "in"
-# the type words whose loop over a text walks a unit instead of filtering (Rust: for_loop/headers.rs bytes_of)
+# the type words whose loop over a text walks a unit instead of filtering
 unit_type_words = ["byte", "codepoint", "char", "character"]
 
 # `k, v` or `(k, v)`: the two names a loop over a map binds

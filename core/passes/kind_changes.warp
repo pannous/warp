@@ -7,7 +7,6 @@ use "../analysis/words.warp"
 use "scope.warp"
 use "../analysis/diagnostics.warp"
 
-# Rust Op is_arithmetic and is_comparison
 arithmetic_operators = ["+", "-", "*", "/", "/!", "%", "rem", "^"]
 bool_operators = ["==", "!=", "<", ">", "<=", ">=", "≤", "≥", "≠", "is", "===", "!=="]
 # the kinds as messages name them, by the kind type_kinds holds a type as
@@ -18,7 +17,7 @@ function_kind = "function"
 number_kinds = {Int: 1, Float: 1}
 # marks a function's result among the known kinds, apart from a variable of the same name
 call_suffix = "()"
-# the value whose kind is the first change, where the error points (Rust: the assigned value)
+# the value whose kind is the first change, where the error points: the assigned value
 global changed_value = ø
 # the call a closure value is made with (lambdas.warp)
 closure_word = "closure_new"

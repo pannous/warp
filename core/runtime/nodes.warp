@@ -50,14 +50,14 @@ operator_code(spelled: text): int := {
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
 	0
 }
-# `key(1, "@@", 2)`: an operator no spelling names fails, as Rust's key builder does
+# `key(1, "@@", 2)`: an operator no spelling names fails
 key_node(left: Node, operator: Node, right: Node): Node := {
 	spelled = node_text(operator)
 	code = operator_code(spelled)
 	if code == 0 and spelled != "" { raised("unknown operator: " + spelled) }
 	keyed(code * KindUnit.Info + Kind.Key, left, right)
 }
-# `as_code(data e)`: e marked as code, of the type code (Rust's emit_as_code); the kind field without the code mark:
+# `as_code(data e)`: e marked as code, of the type code; the kind field without the code mark:
 # `parse("a+1") == data (a+1)`
 code_bit(n: Node): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Code), 2)
 code_free_kind(n: Node): int := marked_kind(n) - code_bit(n) * KindUnit.Code
@@ -105,7 +105,7 @@ spelling_code(spellings: list, spelled: text): int := {
 	0
 }
 # `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; no items is ø, as `()`
-# and `{}` parse, but `[]` in square brackets, the empty list (Rust's new_bracketed)
+# and `{}` parse, but `[]` in square brackets, the empty list
 bracketed_node(items: Node, bracket: Node): Node := {
 	if is_nothing(items) { return if text_order(node_text(bracket), "[") == 0 then list_node(Marked.SquareList, []) else ø }
 	if kind_code(items) != Kind.List { not_a_list() }

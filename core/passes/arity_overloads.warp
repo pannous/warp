@@ -1,5 +1,5 @@
-# Definitions of one name with different parameter counts (card pure-lane-merges; Rust: rust-harness:src/lowering/definitions/
-# overloads.rs lower_arity_overloads): `twice(n) := …` and `twice(a, b) := …` are the functions twice·1 and twice·2,
+# Definitions of one name with different parameter counts (card pure-lane-merges):
+# `twice(n) := …` and `twice(a, b) := …` are the functions twice·1 and twice·2,
 # and every call names the one its argument count fits, `x.twice(y)` counting its receiver; passed as a value,
 # `bottom_up(n, twice)`, it is the one the called function calls that parameter with. Definitions of one count stay
 # one function, whose clauses extensions/function_clauses.warp merges, unless their parameter types tell them apart (typed_overloads).
@@ -104,8 +104,7 @@ passed_on_count(body: Node, parameter: text, called: map): int? := {
 	ø
 }
 
-# function·index → how many arguments the function calls that parameter with, also by passing it on (Rust:
-# overloads.rs called_parameters)
+# function·index → how many arguments the function calls that parameter with, also by passing it on
 called_parameters(program: Node): map := {
 	definitions = nodes_in(program).filter(n => definition_call(n) != ø)
 	called = {}
@@ -173,7 +172,7 @@ arity_overloads(program: Node): Node := {
 	typed_overloads(if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program)))
 }
 
-# --- by parameter types (card pure-lane-refuses; Rust: overloads.rs lower_parameter_overloads) ---
+# --- by parameter types (card pure-lane-refuses) ---
 # `f(a: int) := 1; f(a: text) := 2` are the variants f·int and f·text, in a program or across the files it uses; a
 # call takes the variant its arguments fit best (an exact type before an int widened to a float, any last), and where
 # only the run time knows an argument's type, the first variant whose test it passes
@@ -339,8 +338,8 @@ static_kind(n: Node): list? := {
 	ø
 }
 
-# variable → the static_kind of the values assigned to it, [] where they differ: by name across the program, as Rust's
-# agreeing_kinds, so an `xs` of other values in another function leaves both to the run-time test
+# variable → the static_kind of the values assigned to it, [] where they differ: by name across the program,
+# so an `xs` of other values in another function leaves both to the run-time test
 assigned_kinds(program: Node): map := {
 	kinds = {}
 	for n in nodes_in(program) {

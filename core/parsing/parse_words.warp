@@ -11,7 +11,7 @@ as_code_word = "as_code"
 parse_code_word = "parse_code"
 
 called_word(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
-# `data e`: e as written (Rust's blocks.rs as_data)
+# `data e`: e as written
 quoted_code_of(code: Node): Node := List([symbol(quote_word), code], Bracket.None, Separator.Space)
 
 # `parse "…"`, `parse(t)`, `parse t`: what the word is given, else ø

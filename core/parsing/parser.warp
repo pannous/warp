@@ -1,6 +1,5 @@
 // The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as nodes
-// (core/passes/shapes.warp), each word next to its Rust twin in rust-harness:src/warp_parser (tests/parser/test_self_parser.rs),
-// which compares its view (tests/common/twins.rs node_view)
+// (core/passes/shapes.warp)
 use "lexer.warp"
 use "../passes/shapes.warp"
 use "../analysis/words.warp"
@@ -20,7 +19,7 @@ enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
 class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
 
-// The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
+// The view of a source's tree, as the pipeline hands it on
 def tree(source: text): View := view_of(parsed(source))
 
 // The tree of a source: one statement as itself, several as a list
@@ -536,7 +535,7 @@ def multi_word_types(source: text): list {
 }
 
 // Words naming one built-in type: warp's `x: fast int` is i64, `fast float` f64; C's names of several words the fixed
-// width they mean there, `unsigned int` uint32 (the Rust lane notes warp's word); `byte index`, `byte position`, `byte offset`
+// width they mean there, `unsigned int` uint32; `byte index`, `byte position`, `byte offset`
 // the count types of bytes (decision index-units, index_positions.warp). The longest first.
 COMPOUND_TYPES = [[["unsigned", "long", "long"], "uint64"], [["long", "long", "int"], "int64"], [["unsigned", "long"], "uint64"], [["long", "long"], "int64"], [["long", "int"], "int64"], [["unsigned", "int"], "uint32"], [["signed", "int"], "int32"], [["unsigned", "short"], "uint16"], [["short", "int"], "int16"], [["unsigned", "char"], "byte"], [["signed", "char"], "int8"], [["fast", "int"], "i64"], [["fast", "float"], "f64"], [["byte", "index"], "byte index"], [["byte", "position"], "byte position"], [["byte", "offset"], "byte offset"]]
 
@@ -2122,8 +2121,8 @@ def guarded_by(marker: text, guarded_part: Node, fallback: Node, caught: list): 
 	call_of(parts)
 }
 
-// whether n reads the name, in the holes of its texts too (`catch e { "caught: \(e)" }`): this parser keeps a text's
-// holes as written, Rust's parses them
+// whether n reads the name, in the holes of its texts too (`catch e { "caught: \(e)" }`): the parser keeps a text's
+// holes as written
 def reads_name(n: Node, name: text): bool := mentions(n, name) or has_hole(n, code => mentions(parsed(code), name))
 
 // `try: x` as Python writes it; the block may start on the next line
@@ -2192,7 +2191,7 @@ def prefixed(p: Parser): Node := {
 	if prefixed_operand != ø { return prefixed_operand }
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
 	word = word_at(p)
-	// `try: x except: y` guards as `try x except y` does: Python's colon names no key (Rust: the guard comes first)
+	// `try: x except: y` guards as `try x except y` does: Python's colon names no key (the guard comes first)
 	if guard_word_at(p, word) and not after_member_dot(p) { return guarded(p, word) }
 	// `op.if`, `math.sqrt`: a member's name is no keyword
 	if word_names_key(p, word) or after_member_dot(p) { return atom(p) }
@@ -2886,7 +2885,7 @@ def loop_variable(p: Parser): Node := {
 	listed(bracket, Separator.Comma, names)
 }
 
-// The atom at the parser's position at its line and column, as the Rust parser marks each atom: a warning or error
+// The atom at the parser's position at its line and column: a warning or error
 // about it names where it stands (card front-end-warnings)
 def atom(p: Parser): Node := {
 	start = p.at
@@ -3152,7 +3151,7 @@ def operand_before(p: Parser, start: int): bool {
 
 // The exact generators the core has no value for yet; `π`, `τ`, `ℯ` and `∞` are plain names lib/reals.warp defines
 EXACT_CONSTANTS = ["ⅈ", "ε", "ω"]
-// no node of its own in warp yet (card node-more-cases): the number view, which the Rust side reads as written
+// no node of its own in warp yet (card node-more-cases): the number view, read as written
 def exact_constant(word: text): Node := opaque(["number", word])
 
 // `@name` or `@name(value)` marks the atom after it: `@version(2) @draft tee{a:1}`; `@name: value` is the meta entry
@@ -3468,8 +3467,7 @@ def enum_body_at(p: Parser): bool {
 
 // `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
 // follows: `map function square on xs`); `function add(x) {…}` defines it
-// `function f`, `func f`: the function f as a value, marked as Rust's parser marks it (closures.rs
-// FUNCTION_REFERENCE_MARK), so the closure pass makes it a closure, a nested one too
+// `function f`, `func f`: the function f as a value, marked (FUNCTION_REFERENCE_MARK), so the closure pass makes it a closure, a nested one too
 FUNCTION_REFERENCE_MARK = "function_reference"
 def function_reference(p: Parser): Node := {
 	at = blank_end(p, p.at)
@@ -3563,7 +3561,7 @@ def type_continued(typed: Node, words: list): Node := match typed {
 // The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type
 // word types it, `global int n = 0` is `n:int = 0`
 DECLARATION_MODIFIERS = ["export", "mutable", "mut", "const", "constant", "final", "val"]
-// the type words of words.warp, as Rust reads them (`global long k = 7`)
+// the type words of words.warp (`global long k = 7`)
 DECLARED_TYPE_WORDS = type_words
 
 // `global x = 1`, `global n`, `export api: clock` as `global: x = 1`, a module-level variable; `global a, b` declares

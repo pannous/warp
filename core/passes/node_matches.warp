@@ -13,13 +13,13 @@ use "../parsing/phrase_blocks.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
 
-# node_cases.rs NODE_CASES: the type a case tests as (a List is any group) and the reader of each part, in order
+# the node cases: the type a case tests as (a List is any group) and the reader of each part, in order
 case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol": "symbol", "Key": "key"}
 case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
 	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"]}
 subject_name = HiddenWord.MatchSubject as text
 match_bound = HiddenWord.MatchBound as text
-# the readers whose part is a case of an enum spelled as the node carries it (node_cases.rs Part::Spelled)
+# the readers whose part is a case of an enum spelled as the node carries it
 spelled_readers = {"op_of": "Op", "bracket_of": "Bracket", "separator_of": "Separator"}
 # `Op·case(t)`: the case spelled t, `Op·text(c)`: the spelling of a case (node_cases.warp spelling_functions)
 spelled_function(enum_name: text, function: text): text := enum_name + "·" + function
@@ -78,7 +78,7 @@ is_value_pattern(pattern: Node, variants: map): bool := pattern is bool or match
 	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
 	# a value kept as written, the empty list `[]`
 	Key(left, op, right): left == opaque_symbol
-	# `ø: e`, `True: e` (the parser reads True as yes), as Rust's node_cases.rs reads Node.Empty and Node.True
+	# `ø: e`, `True: e` (the parser reads True as yes): Node.Empty and Node.True
 	_: pattern == ø or pattern is bool
 }
 
@@ -89,7 +89,7 @@ value_test(subject: Node, pattern: Node): Node := match pattern {
 	_: Key(subject, Op.Eq, pattern)
 }
 
-# `int: e`: an arm of a type word tests the subject's type, as Rust's `match 3 { int: … }` does
+# `int: e`: an arm of a type word tests the subject's type, `match 3 { int: … }`
 is_type_pattern(pattern: Node): bool := match pattern {
 	Symbol(word): is_tested_type_word(word)
 	_: no
@@ -103,7 +103,7 @@ guard_of(pattern: Node): Node := match pattern {
 
 guarded_pattern(pattern: Node): Node := if guard_of(pattern) == ø then pattern else value_of(pattern)
 
-# `n => "hi " + n`: a bare name its result mentions binds the subject (switch.rs is_binding_name), a guard's name too
+# `n => "hi " + n`: a bare name its result mentions binds the subject, a guard's name too
 is_name_arm(pattern: Node, result: Node, variants: map): bool := is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) and not is_value_pattern(pattern, variants) and mentions(result, name_of(pattern))
 
 # an arm of today's if-chain tests, else one for the matcher

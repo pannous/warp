@@ -3,14 +3,14 @@
 # `about`, with the message of the first row it matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`, optionally `TAB fix`
 # and then `TAB topic@expression`, what "got it" silences:
 # the pattern a node whose `$name` parts take any node (`data(…)` quotes it), the message and fix texts whose
-# `{name}` holes give that part and `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says
-# the warnings and fails on an error (notes/pure_diagnostics.md); compiler.warp fails on an error itself.
+# `{name}` holes give that part and `{a name}` it with its article. compiler.warp says
+# the warnings and fails on an error (notes/pure_diagnostics.md).
 use "../parsing/parser.warp"
 use "words.warp"
 
 # the message files in the order a fact is looked up, each with the level of its messages and its text, built into the
 # compiler when it is compiled, never read from a lib/ when it runs 
-# how much a diagnostic matters, spelled as Rust reads it in `diagnosed`
+# how much a diagnostic matters, spelled as `diagnosed` holds it
 enum Level { Error = "error", Warning = "warning", Hint = "hint" }
 message_files = [["errors.data", Level.Error, module_source("compiler/analysis/errors.data")], ["warnings.data", Level.Warning, module_source("compiler/analysis/warnings.data")], ["hints.data", Level.Hint, module_source("compiler/analysis/hints.data")]]
 quoting_word = "data"
@@ -91,7 +91,7 @@ shown(part: any): text := if part is symbol then name_of(part) else if part is t
 # what was diagnosed after the first `known` facts: a compile's own, past those of the runtime words lowered before it
 diagnosed_since(known: int): list := diagnosed[known ..]
 
-# the first error among the diagnosed in the program's file, as Rust's Diagnostic says it; ø when none is an error
+# the first error among the diagnosed in the program's file; ø when none is an error
 # todo list of what?
 first_error(found: list, file: text): text? := {
 	# todo BIG refactor said#1 =>  said.name Or whatever the number one here and everywhere applies to 
@@ -100,7 +100,7 @@ first_error(found: list, file: text): text? := {
 	said_text(failing, file)
 }
 
-# the diagnosed of a level in the program's file, each as Rust's Diagnostic says it: its warnings, its hints
+# the diagnosed of a level in the program's file: its warnings, its hints
 said_at(found: list, level: Level, file: text): list := found.filter(said => said#1 == level).map(said => said_text(said, file))
 
 # a diagnosed [level, message, fix, topic, place] as diagnostic says it: the message and where in the file,

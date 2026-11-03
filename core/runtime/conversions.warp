@@ -31,7 +31,7 @@ node_bytes(n: Node): int := {
 float_cast(n: Node): float := if textual_node(n) then text_as_float(text_of_node(n)) else float_of_node(n)
 # `x as number` of a value known only at run time: a text or character spells the number, a number stays
 number_cast(n: Node): Node := if textual_node(n) then text_as_number(text_of_node(n)) else n
-# a % b of floats as in mathematics, as the floats of Rust: the truncated remainder, plus |b| when below 0
+# a % b of floats as in mathematics: the truncated remainder (fmod), plus |b| when below 0
 float_mod(a: float, b: float): float := {
 	if b == 0 { divide_by_zero() }
 	q = a / b
@@ -39,12 +39,12 @@ float_mod(a: float, b: float): float := {
 	if rest < 0 { return rest + (if b < 0 then -b else b) }
 	rest
 }
-# a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
+# a boxed number added to a number variable (`s += x`); a text or any other value traps
 number_node(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { fail() }
 	n
 }
-# a boxed int where an int is needed; any other value traps, as Rust fails on it
+# a boxed int where an int is needed; any other value traps
 # an int of a program's int type, `x as Color` (extensions/int_types/marks.warp): the int marked with its type's kind field
 marked_int(value: Node, kind: int): Node := with_kind(value, kind)
 # the kind field telling a value's int type, `x is Color`; 0 for ø
@@ -55,7 +55,7 @@ int_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
 	whole_int(n)
 }
-# a value known only at run time given to a variable declared int: a float or a fraction is no whole number, as Rust's
+# a value known only at run time given to a variable declared int: a float or a fraction is no whole number
 int_admitted(n: Node): int := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { not_an_int() }
 	if kind_code(n) == Kind.Float or is_ratio(n) { an_int_must_be_a_whole_number() }
@@ -71,18 +71,18 @@ rational_admitted(n: Node): Node := {
 	if is_null(n) or kind_code(n) != Kind.Int { not_an_exact_number() }
 	n
 }
-# … given to a variable declared list: ø or a list (a map is kind 8 in curly braces, no list), kept as it is, as Rust's
+# … given to a variable declared list: ø or a list (a map is kind 8 in curly braces, no list), kept as it is
 list_admitted(n: Node): Node := {
 	if not is_null(n) and (kind_code(n) != Kind.List or marked_kind(n) == Marked.Map) { not_a_list() }
 	n
 }
-# … given to a typed field: kept when the type admits it, else "not a text", as Rust's
-# : a text or character for text, yes/no (or 0 and 1) for bool, a number for float
+# … given to a typed field: kept when the type admits it, else "not a text":
+# a text or character for text, yes/no (or 0 and 1) for bool, a number for float
 text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
 }
-# a yes/no, or 0 or 1, which a bool holds as no and yes (Rust: `f(): bool := x == 1 and 0` gives no)
+# a yes/no, or 0 or 1, which a bool holds as no and yes (`f(): bool := x == 1 and 0` gives no)
 holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
@@ -95,7 +95,7 @@ float_checked(n: Node): Node := {
 	n
 }
 # `x: T = v` of a class or enum T and a value known only at run time: v when it is an object (a symbol, key, block,
-# list or data: Rust's OBJECT_KINDS, rust-harness:src/wasm_emitter/declared_values.rs) or an error (of every type), else the run
+# list or data) or an error (of every type), else the run
 # fails with the message ("not a T")
 object_checked(value: Node, message: text): Node := {
 	if is_null(value) or kind_code(value) < Kind.Symbol or kind_code(value) == Kind.Meta or kind_code(value) > Kind.Error { returned_error(message) }
@@ -103,7 +103,7 @@ object_checked(value: Node, message: text): Node := {
 }
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
 # empty one) where a list is needed, a boxed character where one is needed; a failed Error there raises itself (its
-# own words, `split(exec sh "…", "\n")` on a page without processes), any other value traps, as Rust fails on it
+# own words, `split(exec sh "…", "\n")` on a page without processes), any other value traps
 text_of_node(n: Node): text := {
 	if not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Symbol) { return unboxed_text(n) }
 	if not is_null(n) and kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
@@ -125,8 +125,8 @@ list_of_node(n: Node): list := {
 	if kind_code(n) != Kind.List { fail() }
 	unboxed_list(n)
 }
-# `x as bool` of a value known only at run time, as Rust's cast: a text spelling a falsy word in any case ("No",
-# "false"; FALSY_TEXTS of rust-harness:src/wasm_emitter/mod.rs) is no, another value as a condition (card yes-print)
+# `x as bool` of a value known only at run time: a text spelling a falsy word in any case ("No",
+# "false") is no, another value as a condition (card yes-print)
 bool_cast(n: Node): bool := {
 	if is_null(n) or kind_code(n) != Kind.Text { return node_truthy(n) }
 	t = unboxed_text(n)
@@ -142,7 +142,7 @@ spells(t: text, word: text): bool := {
 	}
 	yes
 }
-# a value known only at run time as a condition, the rule of Rust's is_truthy (Node::is_falsy): ø and errors are no, a
+# a value known only at run time as a condition: ø and errors are no, a
 # list or map yes when it has items, a key when its key or value is, a number, character or text when not 0 or empty
 node_truthy(n: Node): bool := {
 	if is_null(n) { return no }

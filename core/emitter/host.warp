@@ -33,7 +33,7 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 	if result == ValueKind.F32 { return TypedCode(ValueKind.Float, code + [f64_promote]) }
 	TypedCode(result, code)
 }
-# the constructors a host word builds nodes with, as Rust's module exports them: [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
+# the constructors a host word builds nodes with: [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
 host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
 	["new_float", [ValueKind.Float], "built_float"], ["new_codepoint", [ValueKind.Char], "built_codepoint"], ["new_text", [ValueKind.Char, ValueKind.Char], "built_text"],
 	["new_symbol", [ValueKind.Char, ValueKind.Char], "built_symbol"], ["new_key", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_key"],
@@ -134,7 +134,7 @@ def host_argument(value: TypedCode, kind: ValueKind): list {
 	converted(value, kind)
 }
 # `x!`, Rust's unwrap: a number or text is itself, and so is what a function taking nothing gives, `f!` of
-# `f := {1+2}` (a node where a sum may grow); any other node may be data Rust runs as code (blocks.rs), which the core
+# `f := {1+2}` (a node where a sum may grow); any other node may be data that runs as code, which the core
 # can't yet
 def unwrapped(body: Body, n: Node): TypedCode {
 	value = expression_code(body, n)
@@ -143,7 +143,7 @@ def unwrapped(body: Body, n: Node): TypedCode {
 	value
 }
 
-# a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
+# a number a host word takes as an int: a fraction or a float rounded to the nearest: `sleep(1/60*1000)`
 def host_int(value: TypedCode): list {
 	if value.kind == ValueKind.Node or value.kind == ValueKind.Float { return runtime_call("rounded", [TypedCode(ValueKind.Float, converted(value, ValueKind.Float))]).code }
 	converted(value, ValueKind.Int)

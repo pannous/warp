@@ -1,6 +1,6 @@
 # Literals (emitter.warp's part): exact decimals, texts in the data segment, one code point as a character
-# a decimal literal as Rust reads it: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
-# 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float (Number::is_exact_decimal)
+# a decimal literal: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
+# 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float
 exact_decimal_digits = 15
 # a decimal stays a ratio of ints while its denominator, 10 to its fraction digits, fits an int64 (10^18); past that the
 # parser keeps its digits and big_decimal makes it exact all the same

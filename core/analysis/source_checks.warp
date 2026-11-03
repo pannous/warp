@@ -6,7 +6,7 @@ use "../passes/prelude_words.warp"
 use "diagnostics.warp"
 use "lints.warp"
 
-# words whose result is a changed copy of their argument: dropping it changes nothing (Rust COPY_WORDS)
+# words whose result is a changed copy of their argument: dropping it changes nothing
 copy_words = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"]
 sleep_word = "sleep"
 index_of_word = "index_of"

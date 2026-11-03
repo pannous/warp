@@ -1,5 +1,5 @@
-## The constructors a host word builds the program's values with: emitter.warp exports each under Rust's name with
-## Rust's signature (host_builders), a host word taking or giving nodes then reads and builds them as Rust's modules do
+## The constructors a host word builds the program's values with: emitter.warp exports each under its name and
+## signature (host_builders), so a host word taking or giving nodes reads and builds them
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "lists.warp"
