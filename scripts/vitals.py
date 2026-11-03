@@ -4,11 +4,12 @@
 scripts/vitals.py [since] [out.html]  (defaults: 2026-10-29, the start of self-hosting; data/vitals/vitals.html)
 Weight: lines of code for every first-parent commit of origin/main, the core without extensions and the extensions
 apart. Tests: every committed version of each results file (TIERS), its pass count read from its summary or its
-status lines. Both are reconstructed from git history (seconds) into scripts/vitals.html. The nightly run
+status lines. Build time: the CPU seconds and peak memory of each landing's compiler builds, read from the build
+records in the store (STORE). All of it is reconstructed (seconds) into scripts/vitals.html. The nightly run
 (scripts/integrate/nightly.sh) calls it; a Claude session republishes the page to its artifact URL
 (notes/core_hygiene.md "Warp vitals").
 """
-import collections, json, os, re, subprocess, sys
+import collections, glob, json, os, re, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SINCE = sys.argv[1] if len(sys.argv) > 1 else "2026-10-29"
@@ -26,6 +27,8 @@ SUMMARY = re.compile(r"(\d+) of (\d+) failed")
 HEADER = re.compile(r"^# \S+ \S+ \S+ (\d+)/(\d+)")
 STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME|ERR)\s")
 PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
+STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build records (notes/compiler_rebuilds.md)
+BUILDS = [("warp.wasm, built by the seed", "warp.record"), ("self-compile: warp.wasm compiles itself", "warp-self.record")]
 
 
 def component(path):
@@ -100,12 +103,37 @@ def tier_history(path):
     return points
 
 
-data = {"tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+def record_field(path, key):
+    with open(path) as lines:
+        return next((line.split() for line in lines if line.split()[1:2] == [key] or line.split()[:1] == [key]), None)
+
+
+def build_history(record, landed):
+    """Each landing's CPU seconds and peak memory of building <record>, its fastest full build (rebakes skipped)."""
+    fastest = {}
+    for folder in glob.glob(os.path.join(STORE, "*", record)):
+        try:
+            commit = record_field(os.path.join(folder, "inputs.txt"), "commit")[1]
+            with open(os.path.join(folder, "build.log")) as log:
+                if commit not in landed or "rebak" in log.read():
+                    continue
+            cpu = sum(float(record_field(os.path.join(folder, "time"), key)[1]) for key in ("user", "sys"))
+            peak = int(record_field(os.path.join(folder, "time"), "maximum")[0]) // 2**20
+        except (OSError, TypeError, ValueError, IndexError):
+            continue
+        if commit not in fastest or cpu < fastest[commit][2]:
+            fastest[commit] = [landed[commit], commit[:10], round(cpu, 1), peak]
+    return sorted(fastest.values())
+
+
+landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in commits}
+data = {"builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))
 first, last = rows[0], rows[-1]
 core = lambda row: sum(row[3][:-1])
 latest = "; ".join(f"{name} {points[-1][2]}/{points[-1][3]}" for name, _, points in data["tiers"] if points)
-print(f"{latest}; core {core(first)} -> {core(last)}, extensions {first[3][-1]} -> {last[3][-1]}, "
+builds = "; ".join(f"{record} {points[-1][2]} s" for _, record, points in data["builds"] if points)
+print(f"{latest}; {builds}; core {core(first)} -> {core(last)}, extensions {first[3][-1]} -> {last[3][-1]}, "
       f"lib {first[6]} -> {last[6]}, test {first[7]} -> {last[7]} over {len(rows)} landings: {OUT}")

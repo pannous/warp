@@ -86,6 +86,12 @@ footer { color: var(--ink-3); font-size: 12px; }
   </section>
 
   <section>
+    <h2>Build time</h2>
+    <p class="section-note">CPU seconds of each landing's compiler build, read from the build records in the store: the seed building warp.wasm, and warp.wasm compiling itself. A lighter core should compile faster. A dot is a landing; hover for its peak memory, click to open the commit.</p>
+    <div class="tiers" id="builds"></div>
+  </section>
+
+  <section>
     <h2>Core weight</h2>
     <p class="section-note" id="lede"></p>
   </section>
@@ -222,6 +228,37 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
       dot.addEventListener("click", () => window.open(COMMIT_URL + p[1], "_blank", "noopener"));
     });
     document.getElementById("tiers").appendChild(card);
+  });
+})();
+
+(function builds() {
+  const time = date => new Date(date.replace(" ", "T")).getTime();
+  const W = 300, H = 110, L = 34, R = 8, T = 6, B = 18;
+  const days = [...new Set(rows.map(dayOf))];
+  const start = time(rows[0].date), end = time(rows[rows.length - 1].date);
+  const x = date => L + (time(date) - start) / (end - start) * (W - L - R);
+  const holder = document.getElementById("builds");
+  DATA.builds.forEach(([name, record, points]) => {
+    const card = document.createElement("div"); card.className = "tier";
+    if (!points.length) { card.innerHTML = `<div class="label">${name}</div><div class="empty">no build record of a landing yet</div>`; holder.appendChild(card); return; }
+    const top = Math.ceil(Math.max(...points.map(p => p[2])) / 100) * 100;
+    const y = seconds => T + (1 - seconds / top) * (H - T - B);
+    const firstPoint = points[0], lastPoint = points[points.length - 1];
+    card.innerHTML = `<div class="label">${name}</div><div class="value">${Math.round(lastPoint[2])} s</div>` +
+      `<div class="change">${(lastPoint[3] / 1024).toFixed(1)} GB peak · ${points.length > 1 ? percent(firstPoint[2], lastPoint[2]) + " since " + shortDay(firstPoint[0].slice(0, 10)) : "one build"} · ${points.length} landings</div>`;
+    const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${name}: CPU seconds per landing` }, card);
+    [0, top / 2, top].forEach(v => {
+      element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);
+      element("text", { x: L - 4, y: y(v) + 3, "text-anchor": "end" }, svg).textContent = v + "s";
+    });
+    days.forEach((day, i) => { if (i % 2 === 0) element("text", { x: x(day + " 00:00"), y: H - 4 }, svg).textContent = shortDay(day); });
+    if (points.length > 1) element("polyline", { points: points.map(p => `${x(p[0])},${y(p[2])}`).join(" "), fill: "none", stroke: "var(--s3)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    points.forEach((p, i) => {
+      const dot = element("circle", { cx: x(p[0]), cy: y(p[2]), r: i === points.length - 1 ? 4 : 2.5, fill: "var(--s3)", stroke: "var(--panel)", "stroke-width": 1.5, style: "cursor:pointer" }, svg);
+      element("title", {}, dot).textContent = `${p[0]} · ${p[1]} · ${p[2]} s CPU · ${(p[3] / 1024).toFixed(1)} GB peak`;
+      dot.addEventListener("click", () => window.open(COMMIT_URL + p[1], "_blank", "noopener"));
+    });
+    holder.appendChild(card);
   });
 })();
 
