@@ -1,7 +1,7 @@
 # `warp build`'s x.mod.wasm (decision build-three-outputs; card mod-wasm-extension): a program linked to runtime.wasm
 # (notes/runtime_linking.md "Separate modules"), numbered as behind it, but every runtime function, global, the memory,
 # the error tag and the hooks table imported from its instance (`warp_runtime`); the hooks' code the program's own, set
-# into the table at instantiation. The compile emitted its code relocatable (separate_output, compiler.warp
+# into the table at instantiation. The compile emitted its code relocatable (separate_module_wanted, compiler.warp
 # relocate_program); linked_bytes moves every operand to the module's own numbering
 runtime_module_name = "warp_runtime"
 element_section_id = 9
