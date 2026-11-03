@@ -712,7 +712,7 @@ def runtime_reach(called: list): map {
 		i += 1
 		if not reached.has(p) {
 			reached[p] = yes
-			if graph.has(p) { pending += graph[p] }
+			if graph.has(p) and not cut_positions.has(p) { pending += graph[p] }
 			if at_position.has(p) { pending += runtime_positions_called([at_position[p]]) }
 		}
 	}
@@ -882,6 +882,17 @@ def body_ranges(content: list): list {
 # kept: the runtime positions kept, in order; places: each position's new index, -1 of one dropped; dropped: how many go
 class Shaking { kept: list; places: list; dropped: int }
 def shake_runtime(wanted: bool) { module.shakes_runtime = wanted }
+# the runtime positions of the words a build leaves out (decision extension-row-optional, compiler.warp
+# left_out_runtime_words): one reached is kept as a trapping stub, and nothing it calls is reached through it. A global,
+# as a Module field more fails the seed's compile
+global cut_positions = {}
+def cut_runtime_words(names: list) {
+	cut_positions = {}
+	if module.runtime_image == ø { return }
+	for name in names { if module.runtime_image.words.has(name) { cut_positions[module.runtime_image.words[name]#1 - module.runtime_image.imports] = yes } }
+}
+# a function body that only traps
+def trapping_body(): list := uleb(3) + [0, op.unreachable, op.end]
 def shaken(): bool := module.shaking != ø
 def dropped(): int := if shaken() then module.shaking.dropped else imports_dropped()
 def shaking_of(functions: list): any {
@@ -927,11 +938,11 @@ def shaken_runtime_code(moves: list): list {
 	ranges = body_ranges(content)
 	kept = {}
 	for p in module.shaking.kept { kept[p] = yes }
-	calls = runtime_call_sites().filter(site => kept.has(site#2)).map(site => site#1)
+	calls = runtime_call_sites().filter(site => kept.has(site#2) and not cut_positions.has(site#2)).map(site => site#1)
 	moved = rebased(content, calls, [[kept_calls(module.runtime_image.imports, {})]])
 	hooks = {}
 	for f in module.dispatchers { hooks[f.index - #module.imports] = f }
-	module.shaking.kept.map(p => if hooks.has(p) then moved_body(hooks[p], moves) else moved[ranges[p]#1 ..< ranges[p]#2])
+	module.shaking.kept.map(p => if hooks.has(p) then moved_body(hooks[p], moves) else if cut_positions.has(p) then trapping_body() else moved[ranges[p]#1 ..< ranges[p]#2])
 }
 # the types runtime.wasm declares its kept functions with
 def shaken_function_types(): list {
@@ -1100,4 +1111,4 @@ def stub_types(): list := if drops_imports() then stub_type_list.map(typed => ul
 def stub_names(): list := if drops_imports() then range_list(#stub_type_list).map(k => index_name(first_stub + k, unreached_import)) else []
 unreached_import = "unreached_import"
 # a stub's entry of the code section: no locals, a trap
-def unreached_import_stubs(): list := if drops_imports() then stub_type_list.map(typed => uleb(3) + [0, op.unreachable, op.end]) else []
+def unreached_import_stubs(): list := if drops_imports() then stub_type_list.map(typed => trapping_body()) else []

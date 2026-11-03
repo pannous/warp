@@ -1,0 +1,73 @@
+# Superscript powers (card parser-rows, decision core-is-self): `x²`, `x⁻¹`, `2ⁿ⁺¹` read after an operand; the lexer
+# keeps the superscript characters (lexer.warp SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS), names may hold raised letters
+superscripts_extension = Extension{name: "superscripts", suffix_readers: [superscript_power]}
+
+# `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
+# the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
+# Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
+def superscript_power(p: Parser, left: Node, min_power: int): Node := {
+	terms = raised_terms(p)
+	if terms.length == 0 { return ø }
+	width = terms#(terms.length)#3 - p.at
+	lettered = false
+	for term in terms {
+		if term#2 is symbol { lettered = true }
+	}
+	if lettered {
+		if binding_powers("^")#1 < min_power { return ø }
+		exponent = terms#1#2
+		for term in terms[1:] { exponent = Key(exponent, if term#1 < 0 then Op.Sub else Op.Add, term#2) }
+		p.at = p.at + width
+		return reciprocal_if(terms#1#1 < 0, Key(left, Op.Pow, exponent))
+	}
+	total = 0
+	for term in terms { total = total + term#1 * term#2 }
+	power = Key(left, Op.Pow, if total < 0 then 0 - total else total)
+	# a lone ² or ³ binds as a suffix: `a.b²` squares a.b
+	suffix = width == 1 and (total == 2 or total == 3)
+	if (if suffix then SUFFIX_POWER else binding_powers("^")#1) < min_power { return ø }
+	p.at = p.at + width
+	reciprocal_if(total < 0, power)
+}
+
+def reciprocal_if(negative: bool, power: Node): Node := if negative then Key(1, Op.Div, power) else power
+
+# The superscript terms at the parser's position, each [sign, value, end]: a raised number, or a raised name as a symbol
+def raised_terms(p: Parser): list {
+	terms = []
+	at = p.at
+	while true {
+		sign = 1
+		if is_at(p.code, at, '⁻', p.n) { sign = -1 }
+		start = if is_at(p.code, at, '⁻', p.n) or is_at(p.code, at, '⁺', p.n) then at + 1 else at
+		end = start
+		letters = ""
+		while end < p.n and SUPERSCRIPT_LETTER_INDEX.has("$(p.code[end])") {
+			letters = letters + RAISED_LETTERS[SUPERSCRIPT_LETTER_INDEX["$(p.code[end])"]]
+			end = end + 1
+		}
+		value = 0
+		while count(letters) == 0 and end < p.n and SUPERSCRIPT_DIGIT_INDEX.has("$(p.code[end])") {
+			value = value * 10 + SUPERSCRIPT_DIGIT_INDEX["$(p.code[end])"]
+			end = end + 1
+		}
+		if end == start { return terms }
+		terms += [[sign, if count(letters) == 0 then value else symbol(letters), end]]
+		at = end
+	}
+	terms
+}
+
+# Each superscript letter and digit → where it stands in its table, read once: finding a character in the table text
+# walked the table at each operand (a quarter of a parse, card compiler-parse-timing)
+SUPERSCRIPT_LETTER_INDEX = character_index(SUPERSCRIPT_LETTERS)
+SUPERSCRIPT_DIGIT_INDEX = character_index(SUPERSCRIPT_DIGITS)
+def character_index(table: text): map {
+	index = {}
+	at = 0
+	for c in table {
+		index["$(c)"] = at
+		at = at + 1
+	}
+	index
+}

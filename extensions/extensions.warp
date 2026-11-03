@@ -6,6 +6,9 @@ use "degrees.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 use "event_phrases.warp"
+use "float_suffixes.warp"
+use "durations.warp"
+use "superscripts.warp"
 use "go_tasks.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
@@ -14,6 +17,13 @@ EXTENSIONS = [
 	radix_numbers_extension
 	time_literals_extension
 	event_phrases_extension
+	float_suffixes_extension
+	durations_extension
+	superscripts_extension
 	tasks_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
+	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
 ]
+# the rows the compiler's own build carries (decision extension-row-optional): all but big numbers, so an int past 64
+# bits in the compiler traps instead of growing; every program it compiles carries them all
+COMPILER_BUILD_EXTENSIONS = EXTENSIONS.filter(row => row.name != "big_numbers")

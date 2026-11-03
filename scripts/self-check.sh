@@ -37,6 +37,17 @@ if [[ -z $extended_words || -n $core_uses_extended ]]; then
   echo "SELF CHECK RED: the core runtime uses the extended runtime, not through runtime/bridge.warp: $core_uses_extended"
   exit 1
 fi
+# nor does the emitter name an extension's runtime word: it calls the bridge's hooks, so a build may leave an extension
+# out (card compiler-without-big-numbers); but the words of the made mechanism, compiled only once a program makes such
+# values (runtime_words.warp made_case, shown_big_int)
+made_words=(holds_big_int holds_ratio big_int_text)
+extension_runtime=($worktree/extensions/big_numbers/*.warp $worktree/extensions/gpu_lists/runtime.warp)
+extension_words=$(grep -hv ' from runtime$' $extension_runtime | sed -n 's/^\([a-z_][a-z_0-9]*\)(.*:=.*/\1/p' | sort -u | grep -vxF -f <(print -l $made_words) | paste -sd'|' -)
+emitter_names_extension=$(grep -HnE "(runtime_call\(|runtime\[)\"($extension_words)\"" $worktree/core/emitter/*.warp)
+if [[ -z $extension_words || -n $emitter_names_extension ]]; then
+  echo "SELF CHECK RED: the emitter names an extension's runtime word, not a runtime/bridge.warp hook: $emitter_names_extension"
+  exit 1
+fi
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib

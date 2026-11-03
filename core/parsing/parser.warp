@@ -1169,9 +1169,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		}
 		// a declared operator binding looser than the context ends the operand, unless a built-in one of the glyph binds
 		if user_op != ø and user_op.fixity != Fixity.Prefix and operator_at(p).length == 0 { break }
-		power = superscript_power(p, left, min_power)
-		if power != ø {
-			left = power
+		suffixed = read_suffix(p, left, min_power)
+		if suffixed != ø {
+			left = suffixed
 			continue
 		}
 		test = if left == ø then [] else test_word_at(p, min_power)
@@ -3492,7 +3492,6 @@ def line_at(p: Parser, at: int): int {
 	first + 1
 }
 
-FLOAT_SUFFIXES = "fFdD"
 // the type words naming a kind of number, `number` itself not (Rust twin: type_tests.rs is_number_type_word)
 NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32", "float32", "float64", "fast"]
 // the number a literal was written as: a float with a point or an exponent, else an int
@@ -3529,11 +3528,11 @@ def bare_atom(p: Parser): Node := {
 		}
 		number_start = p.at
 		written = decimal_number(p)
-		// `0.1f`, `3d`: the float suffix of C, Java and C#, a tight conversion (C's `0.1l` is the litre instead)
-		// Rust twin: numbers.rs literal_type_suffix
-		if FLOAT_SUFFIXES.contains(peek(p.code, p.at, p.n)) and not is_name_char(peek(p.code, p.at + 1, p.n)) {
-			p.at = p.at + 1
-			return Key(written_number(written), Op.As, symbol("float"))
+		// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
+		literal = p.code[number_start .. p.at]
+		for reader in number_suffix_readers() {
+			form = reader(p, written, literal)
+			if form != ø { return form }
 		}
 		// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
 		glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
@@ -3549,11 +3548,6 @@ def bare_atom(p: Parser): Node := {
 		period = overlined_digits(p)
 		if period != "" and written.contains(".") { return repeating_decimal(written, period) }
 		if written.contains(".") { return with_glued_factor(p, decimal_value(written)) }
-		literal = p.code[number_start .. p.at]
-		if not (literal.contains("e") or literal.contains("E")) {
-			duration = with_time_unit(p, int(written))
-			if duration != ø { return duration }
-		}
 		return with_glued_factor(p, whole_number(written))
 	}
 	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
@@ -3890,60 +3884,6 @@ def trailing_attribute(p: Parser, marked: Node): Node := {
 	attributed(name, value, marked)
 }
 
-// The calendar length of each calendar unit word: [months, days, seconds]. A day can be 23 or 25 hours across a
-// daylight saving change and a month varies; an hour, a minute and a second are fixed, quantities of lib/units.warp
-// (`sleep 1 minute`)
-// Rust twin: time/calendar.rs unit_named
-TIME_UNITS = {"year": [12, 0, 0], "month": [1, 0, 0], "week": [0, 7, 0], "day": [0, 1, 0]}
-
-// The length of a time unit word, singular or plural (`day`, `days`), else ø
-def time_unit_named(word: text) := TIME_UNITS.get(if word.ends_with("s") then word[0 ..< #word - 1] else word)
-
-// `1 month`, `24 hours`, `1day`, `1 month 2 days`: an integer followed by a time unit word is a calendar duration, the
-// data view Rust's parser gives it, ["data", "1 month 2 days"] as the duration prints; else ø, nothing read
-// Rust twin: literals/units.rs with_time_unit, following_duration
-def with_time_unit(p: Parser, count: int): Node := {
-	unit = time_unit_at(p, p.at)
-	if unit == ø { return ø }
-	length = unit#1.map(part => part * count)
-	p.at = unit#2
-	while true {
-		spaces = run_end(p.code, p.at, ' ', p.n)
-		digits = digits_end(p.code, spaces, p.n)
-		following = if spaces > p.at and digits > spaces then time_unit_at(p, digits) else ø
-		if following == ø { break }
-		amount = int(p.code[spaces .. digits])
-		length = (1 to 3).map(i => length#i + following#1#i * amount)
-		p.at = following#2
-	}
-	opaque(["data", duration_text(length)])
-}
-
-// The time unit word at `at` after any spaces: [its length, where it ends], else ø; `{year:1970 month:1}`: a word that
-// starts the next entry or assignment is no unit
-// Rust twin: literals/units.rs time_unit_at, time/calendar.rs unit_after
-def time_unit_at(p: Parser, at: int): list? := {
-	at = run_end(p.code, at, ' ', p.n)
-	end = name_end(p.code, at, p.n)
-	unit = time_unit_named(p.code[at .. end])
-	if unit == ø { return ø }
-	after = run_end(p.code, end, ' ', p.n)
-	starts_entry = is_at(p.code, after, ':', p.n) or (is_at(p.code, after, '=', p.n) and not is_at(p.code, after + 1, '=', p.n))
-	if starts_entry then ø else [unit, end]
-}
-
-// `1 month 2 days`, `3 hours`: a duration's months, days and seconds as Rust's Duration prints them
-// Rust twin: time/calendar.rs Display for Duration
-def duration_text(length: list): text {
-	seconds = length#3
-	amounts = [[length#1, "month"], [length#2, "day"], [seconds ÷ 3600, "hour"], [seconds % 3600 ÷ 60, "minute"], [seconds % 60, "second"]]
-	parts = amounts.filter(amount => amount#1 != 0).map(amount => counted_unit(amount#1, amount#2))
-	if parts.length == 0 { return "0 seconds" }
-	parts.join(" ")
-}
-
-def counted_unit(amount: int, unit: text): text := if amount == 1 then "1 " + unit else "$(amount) $(unit)s"
-
 // The Unicode vulgar fractions, each the numerator and denominator its NFKD decomposition writes (½ is 1⁄2)
 // Rust twin: numbers.rs vulgar_fraction
 VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
@@ -3965,78 +3905,8 @@ def with_glued_factor(p: Parser, amount: Node): Node := {
 		return amount
 	}
 	factor = atom(p)
-	power = superscript_power(p, factor, 0)
-	Key(amount, Op.Mul, if power == ø then factor else power)
-}
-
-// `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
-// the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
-// Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
-def superscript_power(p: Parser, left: Node, min_power: int): Node := {
-	terms = raised_terms(p)
-	if terms.length == 0 { return ø }
-	width = terms#(terms.length)#3 - p.at
-	lettered = false
-	for term in terms {
-		if term#2 is symbol { lettered = true }
-	}
-	if lettered {
-		if binding_powers("^")#1 < min_power { return ø }
-		exponent = terms#1#2
-		for term in terms[1:] { exponent = Key(exponent, if term#1 < 0 then Op.Sub else Op.Add, term#2) }
-		p.at = p.at + width
-		return reciprocal_if(terms#1#1 < 0, Key(left, Op.Pow, exponent))
-	}
-	total = 0
-	for term in terms { total = total + term#1 * term#2 }
-	power = Key(left, Op.Pow, if total < 0 then 0 - total else total)
-	// a lone ² or ³ binds as a suffix: `a.b²` squares a.b
-	suffix = width == 1 and (total == 2 or total == 3)
-	if (if suffix then SUFFIX_POWER else binding_powers("^")#1) < min_power { return ø }
-	p.at = p.at + width
-	reciprocal_if(total < 0, power)
-}
-
-def reciprocal_if(negative: bool, power: Node): Node := if negative then Key(1, Op.Div, power) else power
-
-// The superscript terms at the parser's position, each [sign, value, end]: a raised number, or a raised name as a symbol
-def raised_terms(p: Parser): list {
-	terms = []
-	at = p.at
-	while true {
-		sign = 1
-		if is_at(p.code, at, '⁻', p.n) { sign = -1 }
-		start = if is_at(p.code, at, '⁻', p.n) or is_at(p.code, at, '⁺', p.n) then at + 1 else at
-		end = start
-		letters = ""
-		while end < p.n and SUPERSCRIPT_LETTER_INDEX.has("$(p.code[end])") {
-			letters = letters + RAISED_LETTERS[SUPERSCRIPT_LETTER_INDEX["$(p.code[end])"]]
-			end = end + 1
-		}
-		value = 0
-		while count(letters) == 0 and end < p.n and SUPERSCRIPT_DIGIT_INDEX.has("$(p.code[end])") {
-			value = value * 10 + SUPERSCRIPT_DIGIT_INDEX["$(p.code[end])"]
-			end = end + 1
-		}
-		if end == start { return terms }
-		terms += [[sign, if count(letters) == 0 then value else symbol(letters), end]]
-		at = end
-	}
-	terms
-}
-
-// Each superscript letter and digit → where it stands in its table, read once: finding a character in the table text
-// walked the table at each operand (a quarter of a parse, card compiler-parse-timing)
-SUPERSCRIPT_LETTER_INDEX = character_index(SUPERSCRIPT_LETTERS)
-SUPERSCRIPT_DIGIT_INDEX = character_index(SUPERSCRIPT_DIGITS)
-def character_index(table: text): map {
-	index = {}
-	at = 0
-	for c in table {
-		index["$(c)"] = at
-		at = at + 1
-	}
-	index
+	suffixed = read_suffix(p, factor, 0)
+	Key(amount, Op.Mul, if suffixed == ø then factor else suffixed)
 }
 
 ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]

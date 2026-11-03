@@ -9,13 +9,19 @@
 #   atom_readers: the first character of an atom it reads → its reader, given the parser there, which reads the atom
 #   and moves past it (`°C`); glued after a number or a name such an atom multiplies it, `30°`, `x°`
 #   number_readers: functions reading a number form at a digit (`0xff`, `2024-01-31`), each ø where its form is not
+#   number_suffix_readers: functions reading what follows a decimal number, given the parser after it, the number as
+#   decimal_number wrote it and as the source did (`0.1f`, `1 month`), each ø where its form is not
+#   suffix_readers: functions reading what follows an operand, given the parser after it, the operand and the binding
+#   power the context needs (`x²`), each ø where its form is not or binds looser
 #   keyword_readers: a word → the reader of the phrase it starts, given the parser at the word and the word, ø where
 #   its form is not there (`emit alarm`)
 #   block_words: words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
 #   value_settlers: a word starting a value that comes later → the word a place declared as a value calls on it,
 #   brought wherever the program calls the first (`task_go` → `task_awaited`: `n: int = go f(3)` awaits)
 #   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; keyword_readers: map = {}; block_words: list = []; value_settlers: map = {}; commands: list = []; runs: any = ø }
+#   runtime: its runtime root under extensions/, whose definitions (the bridge hooks' bodies) are trapping stubs in a
+#   build leaving the row out (decision extension-row-optional, compiler.warp left_out_runtime_words)
+class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; keyword_readers: map = {}; block_words: list = []; value_settlers: map = {}; commands: list = []; runs: any = ø; runtime: text = "" }
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")
@@ -47,6 +53,22 @@ global value_settler_table = ø
 extension_value_settlers(): map := {
 	if value_settler_table == ø { value_settler_table = joined_maps(EXTENSIONS.map(extension => extension.value_settlers)) }
 	value_settler_table
+}
+# what an extension reads after the operand, else ø
+global suffix_reader_list = ø
+read_suffix(p: Parser, operand: Node, min_power: int): Node := {
+	if suffix_reader_list == ø { suffix_reader_list = concatenated(EXTENSIONS.map(extension => extension.suffix_readers)) }
+	for reader in suffix_reader_list {
+		suffixed = reader(p, operand, min_power)
+		if suffixed != ø { return suffixed }
+	}
+	ø
+}
+# every extension's number suffix readers
+global number_suffix_reader_list = ø
+number_suffix_readers(): list := {
+	if number_suffix_reader_list == ø { number_suffix_reader_list = concatenated(EXTENSIONS.map(extension => extension.number_suffix_readers)) }
+	number_suffix_reader_list
 }
 # every extension's number readers
 global number_reader_list = ø
