@@ -144,8 +144,13 @@ def arithmetic(body: Body, symbol: text, left: Node, right: Node): TypedCode {
 		b = unboxed_int_slot(body, right, b)
 	}
 	if symbol in grown_words and a.kind == ValueKind.Int and b.kind == ValueKind.Int and not wraps(body, left, right) { return marked(symbol, runtime_call(grown_words[symbol], [a, b]), a, b) }
+	# `"ab" * 2.5`: a text repeats a whole number of times, so a fraction written there is refused at once; only a
+	# count known at run time is left to the runtime repeat
+	if symbol == "*" and ((is_textual(a.kind) and is_fraction(right)) or (is_textual(b.kind) and is_fraction(left))) { return refuse("the operator * on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	operation_code(body, symbol, a, b)
 }
+# a number literal with a fractional part: 2.5, not 3.0 (the int 3)
+is_fraction(n: Node): bool := n is float and n != float(int(n))
 # a variable declared int in an optional or union slot holds a node, an int still (boxing is the layout, not the type)
 boxed_int_slot(body: Body, n: Node): bool := n is symbol and name_of(n) in body.boxed_ints
 # a slot whose declared type has an int member: type() names its boxed whole number int

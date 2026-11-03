@@ -1,0 +1,5 @@
+# a function returning ø in one place and a text in another gives a node: its value held anywhere, ø included
+# (`return ø` parses as a bare `return`; card style-css-length)
+'f(n) := { if n == 6 { return ø }; "x" }; l = f(6); l == ø'	true
+'f(n) := { if n == 6 { return }; "x" }; l = f(1); l'	'x'
+'f(n) := { if n is int { return ø }; if not (n is pair) { return "s" }; l = f(n.key); if l == ø { return ø }; l + "!" }; f(data(a*b))'	's!'
