@@ -148,7 +148,7 @@ parser-keyword-table. Target shapes:
 | 4 | self-differential | Differential harness: warp twin vs Rust part over every sample and probe | none |
 | 5 | self-lexer | Tokenizer in warp (core/parsing/lexer.warp) | 1, 4 |
 | 6 | self-parser | Parser in warp producing the same Node as src/warp_parser (core/parsing/parser.warp) | 2, 5 |
-| 7 | self-serializer | Node::serialize in warp (core/emitter/serializer.warp) | 2, 4 |
+| 7 | self-serializer | Node::serialize in warp (extensions/serializer.warp) | 2, 4 |
 | 8 | self-showcase | The warp-written parser as a sample: warp parses itself | 6 |
 | 9 | self-next-phase | Plan the next parts: passes, analyzer, emitter (steps 10–18) | 6, 7 |
 
@@ -165,7 +165,7 @@ Rules
 - A new gap becomes its own card in this topic (`todo add … --topic self-hosted`).
 
 ## Serializer twin
-core/emitter/serializer.warp `serialize(view)` writes a node as Node::serialize does
+extensions/serializer.warp `serialize(view)` writes a node as Node::serialize does
 (tests/parser/test_self_serializer.rs). warp has no Node of its own for the parse of a source (no `parse` word giving
 Nodes, `data` drops Meta), so both twins share a plain-data view (tests/common/twins.rs node_view): a number, yes, no
 or ø as itself, every other node a list tagged by its kind (["key", op, left, right], ["list", bracket, separator,
