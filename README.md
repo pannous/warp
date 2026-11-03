@@ -139,6 +139,11 @@ Proven to be (almost) **production ready** by being able to compile the whole la
 [Wasp](https://github.com/pannous/wasp) (C++), which follows the Python experiments
 [Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script); its compiler is now written in Warp itself ([core](core)); Rust remains only as the native host (wasmtime, FFI). The old Rust compiler is preserved on the branch [rust-bootstrap](https://github.com/pannous/warp/tree/rust-bootstrap).
 
+The compiler has three layers:
+- **core**: just enough for warp to compile itself
+- **extensions**: every other language feature
+- **libraries**: modules programs import
+
 Feedback, issues and especially "this surprised me" reports are welcome.
 
 ## License
