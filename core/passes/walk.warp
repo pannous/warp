@@ -188,6 +188,8 @@ view_json(view: View): text := {
 # a text as a JSON string
 json_text(t: text): text := "\"" + t.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
 
+# the head of a type declaration, `type P` of `type P = int -> bool`, as the parser views it
+is_type_view(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 # the view of a node
 view_of(n: Node): View := {
 	view = unpositioned_view_of(n)
