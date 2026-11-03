@@ -15,7 +15,6 @@ operator_characters = chars("=+-*/<>!&|%^~?:.")
 operand_ends = chars("_)]}\"'`ø")
 operand_starts = chars("_([{\"'`#.$ø-!√")
 closing_brackets = [")", "]"]
-tab_character = "\t"
 
 # the line's new text by the rule
 laid_out(rule: text, line: Scanned): text := {

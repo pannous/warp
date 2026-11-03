@@ -27,6 +27,12 @@ The seed, warp-seed.wasm beside the binary (~/dev/bin; no file of git, published
 the seed compiler; it compiles compiler.warp to warp.wasm, which promotes itself to warp-self.wasm when it compiles
 itself once more (no fixed point needed).
 
+## Three layers (decision core-is-self: keeps the core from bloating)
+- **core/**: only what the compiler needs to compile itself. Aim: about 30% of the compiler, and shrinking.
+- **extensions/** (today core/extensions/): every other language feature, baked in through one static hook table.
+- **lib/**: modules programs import. A new feature goes into an extension or a library, never into the core;
+  the language is never simplified to shrink the core (scripts/vitals.py measures the split).
+
 ## Core Architecture
 
 Warp is similar to lisp: a data and code format from first principles,
