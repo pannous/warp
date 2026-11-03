@@ -48,6 +48,9 @@ class Task {
 	pause() := task_paused(self)
 	resume() := task_resumed(self)
 }
+// a place typed task (or thread, its alias while tasks share one scheduler) keeps the job
+type task = Task
+type thread = Task
 global task_queue = []
 global running_task = ø
 global failed_tasks = []
@@ -113,7 +116,8 @@ task_stepped(task: Task) := {
 		for handler in task.finish_handlers { handler() }
 	}
 }
-// `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is
+// `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is. The
+// emitter calls it too where a place typed as a value takes a task, `n: int = go f(3)` (decision task-to-value-awaits)
 task_awaited(x) := if x is Task then task_value(x) else x
 task_value(x: Task) := {
 	x.paused = no

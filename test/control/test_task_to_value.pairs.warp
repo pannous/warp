@@ -1,0 +1,10 @@
+# a task put into a place typed as a value is awaited in between; an untyped place or one typed task keeps the job
+# (decision task-to-value-awaits; thread is task's alias)
+'f(x) := x * 2; n: int = go f(3); n'	6
+'f(x) := x * 2; g(n: int) := n + 1; g(go f(3))'	7
+'f(x) := x * 2; h(): int := go f(3); h()'	6
+'f(x) := x * 2; r: float = go f(3); r'	6
+'f(x) := x * 2; job = go f(3); await job'	6
+'f(x) := x * 2; job: task = go f(3); await job'	6
+'f(x) := x * 2; job: thread = go f(3); await job'	6
+'f(x) := x * 2; job: task = go f(3); job is int'	no
