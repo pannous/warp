@@ -19,11 +19,11 @@ has_field(m: Node, name: text): bool := {
 	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance and not is_entry_block(m) { return no }
 	map_index(m, name) > 0
 }
-# `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
-# node_api.rs POSITIONED); any other node without a field of that name has no field line
+# `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it;
+# any other node without a field of that name has no field line
 positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
 # `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, which a field never shadows
-# (`.line` of the code `line = 1` is 1; card node-part-clash, Rust's node_api.rs PART_READERS)
+# (`.line` of the code `line = 1` is 1; card node-part-clash)
 # (line 0: a node marked by a pass but never written anywhere, with_attribute)
 node_line(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_line(n) else ø
 node_column(n: Node): Node := if is_meta(n) and meta_line(n) > 0 then meta_column(n) else ø
@@ -40,7 +40,7 @@ is_position_part(m: Node, name: text): bool := {
 position_part(m: Node, name: text): int := if same_bytes(name, "line") then meta_line(m) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
 is_entry(n: Node): bool := kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
-# `n.bracket`, `n.separator` of any node: a list's own, ø of any other node (Rust's node_api.rs); a map's entry or a
+# `n.bracket`, `n.separator` of any node: a list's own, ø of any other node; a map's entry or a
 # key's name of that name wins
 is_list_part(m: Node, name: text): bool := {
 	if not same_bytes(name, "bracket") and not same_bytes(name, "separator") { return no }

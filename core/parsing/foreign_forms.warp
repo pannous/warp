@@ -2,28 +2,22 @@
 // of modifiers mixing warp's (`public export fun f()`), and the forms `new Point(1, 2)`, Ruby's `attr_accessor :x`,
 // Kotlin's `enum class` and `data class`, `mixin Name {…}`, read as the warp form they mean. Modifiers without warp
 // meaning alone (`public static fun f()`, `private x = 4`) and `constant x` are rewrite rules: extensions/sugar/declarations.warp
-// Rust twin: rust-harness:src/warp_parser/definitions/foreign.rs
 // A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
 
 // Modifiers of other languages with no meaning in warp ; `static` marks the statement
-// Rust twin: foreign.rs FOREIGN_MODIFIERS
 FOREIGN_MODIFIERS = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local", "virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"]
 // Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant)
-// Rust twin: foreign.rs DEFINITION_MODIFIERS
 DEFINITION_MODIFIERS = ["global", "export", "import", "const", "final", "mutable", "mut"]
 // Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 // `open`, `abstract`, `sealed`, `final`, visibility
-// Rust twin: foreign.rs CLASS_MODIFIERS
 CLASS_MODIFIERS = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"]
 // The declaration words a class modifier stands before
-// Rust twin: mod.rs TYPE_DECLARATION_WORDS
 CLASS_KEYWORDS = ["class", "struct"]
 // Ruby's field declarations `attr_accessor :x, :y`
 RUBY_FIELD_WORDS = ["attr_accessor", "attr_reader", "attr_writer"]
 STATIC_WORD = "static"
 
 // The form another language writes with `word` at the parser's position, the parser after it; else ø, nothing read
-// Rust twin: atoms.rs keyword_form (skip_foreign_modifiers), foreign.rs foreign_form
 def foreign_form(p: Parser, word: text): Node := {
 	if starts_statement(p) {
 		skipped = without_foreign_modifiers(p, word)
@@ -48,7 +42,6 @@ def foreign_form(p: Parser, word: text): Node := {
 }
 
 // Only blanks stand between the start of the statement and the parser's position
-// Rust twin: atoms.rs word_starts_statement
 def starts_statement(p: Parser): bool {
 	at = p.at - 1
 	while at >= 0 and " \t\r".contains(p.code[at]) { at = at - 1 }
@@ -57,7 +50,6 @@ def starts_statement(p: Parser): bool {
 
 // `public export fun f(){…}` (P78): a run of modifiers with one of warp's that ends before a function definition is
 // skipped; the statement after it, marked @static after `static`. A run without warp's is extensions/sugar/declarations.warp's
-// Rust twin: foreign.rs skip_foreign_modifiers
 def without_foreign_modifiers(p: Parser, first: text): Node := {
 	if not is_modifier(first) { return ø }
 	words = [first]
@@ -82,7 +74,6 @@ def without_foreign_modifiers(p: Parser, first: text): Node := {
 def is_modifier(word: text): bool := FOREIGN_MODIFIERS.contains(word) or DEFINITION_MODIFIERS.contains(word)
 
 // The name after one or more blanks behind `word`, else ""
-// Rust twin: declarations.rs identifier_after_blanks, declared_type_after_blanks
 def name_after_blanks(p: Parser, word: text): text {
 	start = spaces_end(p, p.at + word.length)
 	if start == p.at + word.length { return "" }
@@ -90,14 +81,12 @@ def name_after_blanks(p: Parser, word: text): text {
 }
 
 // `class` or `struct` after the blanks behind `word`, the word a class modifier stands before, else ""
-// Rust twin: declarations.rs class_keyword_after_blanks
 def class_keyword_after(p: Parser, word: text): text {
 	name = name_after_blanks(p, word)
 	if CLASS_KEYWORDS.contains(name) then name else ""
 }
 
 // Ruby's `attr_accessor :x, :y` in a class body: the fields x and y, read to the end of the line
-// Rust twin: foreign.rs foreign_form (RUBY_FIELD_WORDS)
 def ruby_fields(p: Parser, word: text): Node := {
 	start = p.at + word.length
 	end = start
@@ -111,7 +100,6 @@ def ruby_fields(p: Parser, word: text): Node := {
 def without_colon(name: text): text := if name.starts_with(":") then name[1 .. name.length] else name
 
 // `mixin Name {`: a name and a block after the blanks behind `word`
-// Rust twin: scanning.rs name_and_block_follow
 def block_after_name(p: Parser, word: text): bool {
 	name = name_after_blanks(p, word)
 	count(name) > 0 and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)

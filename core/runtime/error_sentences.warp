@@ -1,6 +1,6 @@
-## the sentence a runtime error reads as, the one every host prints (the native driver, Rust's harness, the browser):
+## the sentence a runtime error reads as, the one every host prints (the native driver, the browser):
 ## the words of the runtime word it failed in (trap_name, set by emitter error_throw), the value it names (trap_detail)
-## and where it happened (trap_position), as Rust's abi/traps.rs trap_error and located_at word it
+## and where it happened (trap_position)
 use "intrinsics.warp"
 use "../analysis/kinds.warp"
 use "library_words.warp"

@@ -12,7 +12,7 @@ use "nodes.warp"
 node_add(a: Node, b: Node): Node := marks_kept(node_sum(a, b), a, b)
 node_sum(a: Node, b: Node): Node := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
-	# `+=` growing the sum in place leaves the list untouched; beside a text "ø"; beside a number Rust fails
+	# `+=` growing the sum in place leaves the list untouched; beside a text "ø"; beside a number it fails
 	if is_null(a) and is_null(b) { return a }
 	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return list_join(unboxed_list(b), new_list(0)) }
 	if not is_null(a) and kind_code(a) == Kind.List { return list_join(unboxed_list(a), appended_items(b)) }

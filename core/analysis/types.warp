@@ -3,7 +3,7 @@
 
 # a word of the program: a variable's, function's, field's or type's name
 type Name = text
-# the kind analyzer.warp infers for a value: one of Rust's Kinds or a finer one, Unknown while nothing flowed in; each
+# the kind analyzer.warp infers for a value: one of the node Kinds or a finer one, Unknown while nothing flowed in; each
 # spelled as the type word it reads as (decision kinds-as-cases: cases inside, spellings only at the edges)
 enum ValueKind { Unknown = "", Int = "int", Float = "float", Text = "text", Codepoint = "codepoint", List = "list",
 	Symbol = "symbol", Data = "data", Empty = "empty", Nil = "nil", Rational = "rational", Function = "function", Key = "key",

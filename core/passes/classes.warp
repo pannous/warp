@@ -6,7 +6,7 @@ use "../analysis/signatures.warp"
 use "../analysis/builtin_signatures.warp"
 use "../analysis/words.warp"
 
-# the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
+# the attribute layers naming a base class: parser.warp's `extends`
 base_layers = ["extends", "inherited_from"]
 # the constructor method, the word naming it when its body is a block, and the functions a construction becomes
 constructor_method = "init"

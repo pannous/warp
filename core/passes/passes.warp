@@ -1,5 +1,5 @@
 # The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): a source parsed by parser.warp, then
-# each pass twin in the order rust-harness:src/pipeline.rs runs its Rust twin. A pass joins here once its twin matches.
+# each pass in order.
 use "../parsing/parser.warp"
 use "../parsing/interpolation.warp"
 use "../parsing/number_words.warp"
@@ -30,13 +30,13 @@ use "rewrites.warp"
 use "library_calls.warp"
 use "../../extensions/property_accessors.warp"
 
-# the keyword rewrites among the sugar passes, one walk (Rust twin: rust-harness:src/pipeline.rs SUGAR_PHRASES, which also lowers
-# `xs .* 2` and `(p).a`: extensions/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
+# the keyword rewrites among the sugar passes, one walk (`xs .* 2` and `(p).a` are
+# extensions/sugar/arithmetic.warp's and methods.warp's rules): `a of b`
 sugar_phrases_table = [[is_lookup_word, lookup_phrase]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
 
-# the twins Rust's WARP_SELF_HOSTED=1 lane drives by index (self_hosted.rs TWINNED_PASSES); match arms and arrow result
-# types are extensions/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
+# the passes a stage names by index (stage); match arms and arrow result types are
+# extensions/sugar/arms.warp's and heads.warp's rules, their places kept so the indexes hold
 passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
@@ -47,7 +47,7 @@ passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 #   (extensions' passes after arity_overloads: function clauses, then `a, b = …`, extensions/function_clauses.warp
 #   and multiple_assignments.warp)
 #   type_tests spaced_prefix_calls         `x is T`, `f x` calls
-#   passes (twinned with Rust by index)    interpolation, two kept slots (arms and result arrows are rules now),
+#   passes (named by index)                interpolation, two kept slots (arms and result arrows are rules now),
 #                                          sugar_phrases (`a of b`), number_words_pass
 #   first_sugar node_matches node_cases    extensions/sugar's first rules (arms, heads), `match`, node cases
 #   enums_declared plain_enums             enums
@@ -68,8 +68,7 @@ owned_refusal(refusal: text, form: text?): text := {
 	refusal + " (" + form + "; owner " + (pass_owners.get(form) ?? "none") + " did not claim it)"
 }
 
-# the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
-# outside rust-harness:src/compiler/self_hosted.rs, first principles in warp
+# the pure lane's passes (card pure-runs): the indexed ones (passes#i is stage i) among the others
 pure_passes = [parse_words, tries, components, definitions, arity_overloads, type_tests, spaced_prefix_calls] + passes + [first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
@@ -106,7 +105,7 @@ global kept_iteration_sugar = []
 global kept_late_sugar = []
 # the comprehension rules it keeps (rewrites.warp comprehension_sugar_module_names)
 global kept_comprehension_sugar = []
-# (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words;
+# (the rewrite rules first, before any pass: a fired module's `use` brings its words;
 # after interpolation, so that a rule sees the code in a text's holes, `"$(2 in xs)"`; declared counts before the
 # prelude is reached, so the words index_positions answers with, `byte_index_of` for a `byte index b = t.find(part)`,
 # bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
@@ -165,7 +164,7 @@ comprehension_sugar(program: Node): Node := sugared(program, kept_comprehension_
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
 
 # the program as the passes leave it, its checks run (card pure-diagnostics): those of the program as written, then
-# those of the lowered program, as Rust runs them; what they find goes to `diagnosed` (diagnostics.warp)
+# those of the lowered program; what they find goes to `diagnosed` (diagnostics.warp)
 checked_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
 	program = plain_node(source_checks(parsed(rules_ended(source)), prelude))
@@ -176,7 +175,7 @@ checked_program(source: text, folder: text, prelude: text): Node := {
 # [the view of the checked program, what its checks diagnosed: [level, message, fix] each]
 checked(source: text, folder: text, prelude: text): list := [view_of(checked_program(source, folder, prelude)), diagnosed]
 
-# One stage of a compile Rust drives (card warp-pipeline-suite, rust-harness:src/compiler/self_hosted.rs): [0, source] gives the
+# One stage of a compile (card warp-pipeline-suite): [0, source] gives the
 # parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them and the
 # diagnostics of its checks (cards pure-runs, pure-diagnostics), with the definitions of the prelude's text it
 # reaches and the program's uses read from its folder

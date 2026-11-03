@@ -1,6 +1,6 @@
 # `x is int`, `n is symbol` (card pure-type-tests): `x is T` of a type word T no variable, parameter or loop variable
 # in reach names (a field `{symbol: …}` does not), or of a type the program declares, is the type test
-# is_type(x, "T"), as Rust's rust-harness:src/lowering/types/type_tests.rs lowers it (plain_enums.warp answers it for an enum);
+# is_type(x, "T") (plain_enums.warp answers it for an enum);
 # every other `x is v` is `x == v`. Only `is` tests a type: `3 == int` compares 3 with the type (no)
 use "../passes/walk.warp"
 use "words.warp"
@@ -9,7 +9,7 @@ use "../passes/scope.warp"
 tested_word_call(subject: Node, word: text, equality: Node, scope: map): Node :=
 	if is_tested_type(word, scope) then call_of("is_type", [tested(subject), word]) else equality
 
-# `type(x) is int` tests x, as the type of x is what it names (Rust: type_tests.rs is_type_call, card type-int)
+# `type(x) is int` tests x, as the type of x is what it names (card type-int)
 tested(subject: Node): Node := match subject {
 	List(items, bracket, separator): { if #items == 2 and items#1 == symbol("type") then items#2 else subject }
 	_: subject
@@ -44,8 +44,8 @@ type_test_node(n: Node, scope: map): Node := match n {
 	_: n
 }
 
-# a function's body sees the program's names outside function bodies and its own parameters and locals, as Rust's
-# Names::within: `x is key` in one function stays a type test beside a local `key` of another
+# a function's body sees the program's names outside function bodies and its own parameters and locals:
+# `x is key` in one function stays a type test beside a local `key` of another
 scoped_type_tests(n: Node, outer: map): Node := {
 	if is_function_definition(n) {
 		nodes = nodes_in(n)

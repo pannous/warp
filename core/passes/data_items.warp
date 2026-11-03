@@ -15,7 +15,7 @@ use "../analysis/words.warp"
 
 list_item_mark = HiddenWord.DataItem as text
 field_mark = HiddenWord.DataField as text
-# the methods that write their arguments into the list they are called on (Rust's list_mutations APPEND_METHODS)
+# the methods that write their arguments into the list they are called on
 item_writing_methods = ["add", "append", "push", "insert"]
 
 data_items(program: Node): Node := shown_in(program, admitting_errors(program), variables_given_maps(program))

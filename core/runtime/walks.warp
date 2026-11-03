@@ -1,8 +1,7 @@
 # The state of the walks over texts, shared by text.warp and characters.warp
 # the text counted last, its size then and its count; the two texts `t#i` walked last, each with its size then, the
 # index the walk stands at, that character's byte and the one before's (-1 when unknown): `for ch in t` counts t once
-# and walks on from the character before, also with another text indexed in between or one look back (linear time,
-# as Rust's text cursor)
+# and walks on from the character before, also with another text indexed in between or one look back (linear time)
 global counted_text = ""
 global counted_bytes = 0
 global counted = 0
