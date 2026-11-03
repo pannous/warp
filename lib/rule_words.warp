@@ -99,22 +99,25 @@ task_steps(block: Node): Node := {
 awaited_operand(x: Node): Node := if x is key and op_of(x) in awaited_ops then Key(awaited_operand(key_of(x)), op_of(x), value_of(x)) else call_of("task_awaited", [x])
 awaited_ops = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne, Op.And, Op.Or, Op.Xor, Op.Coalesce]
 # the amount of a statement `sleep(t)` or `sleep t`, else ø
-sleep_of(statement: Node): any := if is_call_of(statement, "sleep") and #statement == 2 then statement#2 else if is_group(statement) and bracket_of(statement) == "" and #statement == 2 and statement#1 == symbol("sleep") then statement#2 else ø
+sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #statement == 2 then statement#2 else if is_group(statement) and bracket_of(statement) == "" and #statement == 2 and statement#1 == symbol("sleep") then statement#2 else ø
 # `ticks` after `on every 1 second { ticks += 1 }`: a program that listens (a timer, an event, a variable's listener)
 # defines page_value(), its last expression again, which the page shows anew after each firing
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
 page_value_word = "page_value"
 listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
+# `test C` (core/extensions/sugar/test_words.warp) runs where it stands, a statement: no value to read again
+test_word = "test"
+is_test_line(statement: Node): bool := is_group(statement) and #statement > 1 and statement#1 == symbol(test_word)
 page_valued(program: Node): any := {
 	statements = level_statements(program)
 	# (the sugar reads the program before its `on click {…}` became a listen call)
-	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_of(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
+	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_named(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
 	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
 	# (a write, `x = 3` once signaled notifies its listeners, is no value to read again: run again it would write anew)
-	if is_declaration(last) or listens(last) or nodes_in(last).any(writes) { return ø }
+	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) { return ø }
 	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
@@ -122,7 +125,7 @@ page_valued(program: Node): any := {
 # that declares
 ended_by(program: Node, starting: text, ending_word: text): any := {
 	statements = level_statements(program)
-	if not statements.any(statement => is_call_of(statement, starting)) or statements.any(statement => is_call_of(statement, ending_word)) { return ø }
+	if not statements.any(statement => is_call_named(statement, starting)) or statements.any(statement => is_call_named(statement, ending_word)) { return ø }
 	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
 	ending = statements[last]
 	ended = if is_declaration(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
@@ -130,7 +133,9 @@ ended_by(program: Node, starting: text, ending_word: text): any := {
 }
 # the main level's statements, of lines and of `;` within a line alike
 level_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then level_statements(s) else [s])
-is_call_of(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
+# (its own name: the rule words share the compiler's one namespace, where core/passes/lambdas.warp's is_call_of(n, name:
+# Node) also takes a text, and which of the two a call reached changed with a seed: card main-landing-regression)
+is_call_named(n: Node, word: text): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)
 
 # --- stored tables (lib/storage.warp's program rule, card storage-table-writes) ---
 
@@ -152,7 +157,7 @@ tables_kept(program: Node): any := {
 ROW_ID = "id"
 # [list name, table name, class name] of `people = stored_table("people", Person)`, else none
 stored_table_of(statement: Node): list := {
-	if not is_key(statement, Op.Assign) or not (key_of(statement) is symbol) or not is_call_of(value_of(statement), "stored_table") { return [] }
+	if not is_key(statement, Op.Assign) or not (key_of(statement) is symbol) or not is_call_named(value_of(statement), "stored_table") { return [] }
 	call = value_of(statement)
 	[[name_of(key_of(statement)), call#2, "${call#3}"]]
 }
@@ -174,8 +179,8 @@ table_kept(n: Node, tables: map, fields: list): Node := {
 	if not is_key(n, Op.Dot) or not (key_of(n) is symbol) or not tables.has(name_of(key_of(n))) { return n }
 	call = value_of(n)
 	table = tables[name_of(key_of(n))]#2
-	if is_call_of(call, "add") and #call == 2 { return Key(key_of(n), Op.Dot, call_of("add", [call_of("stored_add", [table, call#2])])) }
-	if is_call_of(call, "remove") and #call == 2 { return Key(key_of(n), Op.Dot, call_of("remove", [call_of("stored_removed", [table, call#2])])) }
+	if is_call_named(call, "add") and #call == 2 { return Key(key_of(n), Op.Dot, call_of("add", [call_of("stored_add", [table, call#2])])) }
+	if is_call_named(call, "remove") and #call == 2 { return Key(key_of(n), Op.Dot, call_of("remove", [call_of("stored_removed", [table, call#2])])) }
 	n
 }
 
@@ -240,8 +245,15 @@ condition_listens(condition: Node, body: Node, flags: list): Node := {
 	unfired = flags.map(flag => Key(ø, Op.Not, Key(flag, Op.Hash, 1)))
 	block = if #flags == 0 then body else List(flags.map(flag => Key(Key(flag, Op.Hash, 1), Op.Assign, Node.True)) + [body], Bracket.Curly, Separator.Semicolon)
 	declared = flags.map(flag => Key(flag, Op.Assign, List([Node.False], Bracket.Square, Separator.Comma)))
-	listens = symbol_words(condition).map(name => call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block))]))
+	listens = symbol_words(condition).map(name => name_listener(name, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block)))
 	separated(bracketed(declared + listens, "("), ";")
+}
+# a listener of the name's changes running the code, which reads the written value as `value`, the one before as `old`
+name_listener(name: Node, code: Node): Node := call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, code)])
+# `on change b + c {…}`: a listener of each name the expression reads, running the block when the write changed its value
+change_listens(expression: Node, body: Node): Node := {
+	listens = symbol_words(expression).map(name => name_listener(name, Key(Key(ø, Op.If, Key(renamed(expression, name, symbol("value")), Op.Ne, renamed(expression, name, symbol("old")))), Op.Then, body)))
+	separated(bracketed(listens, "("), ";")
 }
 became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
 # the program with each write of a watched name notifying its listeners (signal_notify), `x = 3` as
@@ -279,7 +291,7 @@ gpu_list_made(v: Node): any := if gpu_creating(v) then gpu_packed(v) else ø
 # each name once, in the order first named: two listeners of total notify its listeners once a write
 distinct(names: list): list := names.fold([], (kept, name) => if name in kept then kept else kept + [name])
 # the names the statement's variable_listen calls listen to
-names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_of(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}")) + nodes_in(statement).filter(n => is_call_of(n, signal_word) and #n > 1).map(n => "${n#2}")
+names_listened(statement: Node): list := nodes_in(statement).filter(n => is_call_named(n, variable_listen_word) and #n > 1 and is_group(n#2)).flat_map(n => items_of(n#2).filter(name => name is text).map(name => "${name}")) + nodes_in(statement).filter(n => is_call_named(n, signal_word) and #n > 1).map(n => "${n#2}")
 
 # --- lists of signals (notes/signals.md "Lists of signals") ---
 
@@ -321,7 +333,7 @@ signal_list_part(n: Node, takers: map, taking: bool): Node := match n {
 signals_of(n: Node): Node := if is_group(n) and bracket_of(n) == "[" and items_of(n).all(item => item is symbol) then List(items_of(n).map(item => call_of(signal_word, ["${item}", item])), Bracket.Square, Separator.Comma) else n
 # the loop's part with a bare read of the item its variable's value, and a listener of the item's name listening to
 # the item, the Signal
-item_listened(n: Node, item: text): Node := bottom_up(renamed(n, item, call_of("signal_value", [symbol(item)])), part => if is_call_of(part, variable_listen_word) and is_group(part#2) then listening_item(part, item) else part)
+item_listened(n: Node, item: text): Node := bottom_up(renamed(n, item, call_of("signal_value", [symbol(item)])), part => if is_call_named(part, variable_listen_word) and is_group(part#2) then listening_item(part, item) else part)
 listening_item(call: Node, item: text): Node := match call {
 	List(items, bracket, separator): List([items#1, List(items_of(items#2).map(name => if name is text and "${name}" == item then symbol(item) else name), Bracket.Square, Separator.Comma)] + items[2 ..], bracket, separator)
 	_: call
@@ -576,13 +588,13 @@ used_word_help(word: text, source: text): any := {
 	ø
 }
 word_help_in(module_text: text, word: text): any := {
-	heads = definition_slices(module_text).filter(cut => cut#1 == word).map(cut => definition_head(cut#2))
+	heads = definition_slices(module_text).filter(cut => cut#1 == word).map(cut => written_head(cut#2))
 	if #heads == 0 { return ø }
 	doc = comment_above(module_text, word)
 	heads.join("\n") + (if doc == "" then "" else "\n" + doc)
 }
 # `midi(pitch)` of `midi(pitch) := …`: a definition's first line up to its `:=`
-definition_head(definition: text): text := definition.split("\n")#1.split(":=")#1.trim()
+written_head(definition: text): text := definition.split("\n")#1.split(":=")#1.trim()
 # `help(trick)` of a value only the run knows (the prelude's looked_up_word): [names, helps] of the program's classes and
 # functions and its used modules' words, the help of a text naming one or of an instance of a class; ø when the
 # program has its own help
@@ -663,6 +675,7 @@ rule_words = {
 	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
+	change_listens: change_listens,
 	class_help: class_help,
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,
