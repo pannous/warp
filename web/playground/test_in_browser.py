@@ -14,7 +14,7 @@ the deploy forgot fails here, not on the live page.
 `test_in_browser.py --samples [samples/….warp…]` (scripts/samples-web.sh) runs every sample in the page, each as its own
 file, and compares its output with the native run's (scripts/samples.sh: data/samples/out); writes test/samples-web.txt.
 `test_in_browser.py --tests [test/<topic>…]` (scripts/tests-web.sh) runs every case of test/ (each pair of a *.pairs.warp,
-each is! line) in the page, judged as the native `warp test` judges (core/commands/tests.warp: warp.wasm lists the
+each is! line) in the page, judged as the native `warp test` judges (extensions/commands/tests.warp: warp.wasm lists the
 cases, the page runs them, warp.wasm gives the verdicts), against the native verdicts of the stored baseline
 (scripts/baseline.sh); writes test/tests-web.txt.
 `test_in_browser.py --serve` only serves (http://127.0.0.1:PORT/web/playground/), for any browser.
@@ -42,7 +42,7 @@ MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns)\b")
 TESTS_WEB_RESULTS = "test/tests-web.txt"  # tracked: status and case, one a line
 TESTS_WEB_DATA = "data/tests-web"  # work/ (the native test work folder, its runs' results written by the page), report.txt
 PAGE_COMPILER = "web/playground/warp-lib/warp.wasm"  # the page's compiler lists and judges the cases natively too
-CASE_RUN_SECONDS = 30  # core/commands/tests.warp CASE_SECONDS: the page stops a run after it (?run_seconds)
+CASE_RUN_SECONDS = 30  # extensions/commands/tests.warp CASE_SECONDS: the page stops a run after it (?run_seconds)
 CASE_ANSWER_SECONDS = CASE_RUN_SECONDS + 10  # a page that finished no case in this long is stuck
 CASE_BATCH = 100  # cases the page runs in one go, its reports collected as they finish
 CASE_FILE = "test_case.warp"  # a case runs as a file of its test file's folder, so its uses resolve beside it
@@ -1311,7 +1311,7 @@ TAKE_REPORTS = "JSON.stringify((window.caseReports ?? []).splice(0))"
 
 
 def compiler_said(tree, *words):
-	"""what the page's compiler printed for a command of core/commands/tests.warp, run natively in `tree`"""
+	"""what the page's compiler printed for a command of extensions/commands/tests.warp, run natively in `tree`"""
 	ran = subprocess.run(["warp", os.path.join(tree, PAGE_COMPILER), *words], cwd=tree, capture_output=True, text=True)
 	if ran.returncode not in (0, 1):
 		sys.exit(f"error: warp {PAGE_COMPILER} {words[0]} failed ({ran.returncode}): {ran.stderr[-500:]}")
