@@ -1,31 +1,19 @@
-# Supervisor handover (2026-10-30 23:50)
+# Supervisor handover (2026-11-03 14:15, after the 14:05 Mac crash)
 
-The only Supervisor is warp-supervisor (tmux warp-supervisor; this transcript: 19cc9aeb-0f11-4d78-a3a9-a71850ba82fa).
-It took over from the old warp-supervisor session (99331, gone) at 22:23 on 2026-10-30. Respawn:
-`notes/agents/start.sh supervisor`, then rename to warp-supervisor (crontab jobs and claude-relay.sh send there).
-The :17 watch round is a session cron (CronCreate, prompt in notes/decisions.md "night-watch"): recreate it after a
-respawn.
+warp-supervisor (tmux warp-supervisor) resumed the team after the crash. The :17 watch round is a session cron
+(CronCreate, prompt: notes/decisions.md "night-watch" plus the paused-worker queue below): recreate it after a respawn.
+Main task: core → core + extensions (card core-extensions-roadmap, 30% core / 70% extensions, scripts/vitals.py).
 
-## Night rule (user 2026-10-30, the Interviewer is archived)
-During the night the Supervisor makes smart decisions itself, and since everything is undoable it decides eagerly.
-Only when really unsure: write the question into notes/night_2026-10-30.md "Open questions" and keep going. Every
-decision made tonight goes into notes/night_2026-10-30.md "Decisions", so the user can check them in the morning.
-Language-meaning questions that would go to the Interviewer go there too.
+## Sessions (resume: `FORCE_SPAWN=1 CLAUDE_RESUME=<id> ~/dev/bin/claude-remote.sh <role> /Users/me/dev/angles/warp "<prompt>"`)
+| session | id | state |
+|---|---|---|
+| warp-integrator | 94ab9e23-50f7-40cc-9daa-60a00d0186a9 | running |
+| warp-interviewer | 3e06d8ec-5034-4684-9fd0-c528a438884c | running; open: compiler int `/` → `÷` so big numbers become optional |
+| warp-fast-types | cf232177-28cd-4d9d-90bc-f50db0d16dbf | running: properties-extension (self-check, then land and retire) |
+| warp-units | 97dfcc99-1fad-4c0d-a735-139ed3dc55fd | running: commands-extension (had uncommitted files) |
+| warp-sugar | de6d4b58-3e26-41f0-8ce3-2012f175746f | paused: class-methods-extension (worktree clean, 3 commits) |
+| warp-error-text-trap | 3942cd53-cc5b-4ef3-995c-4b0209a60c2a | paused: gpu-lists-extraction (worktree clean, 2 commits) |
+| warp-markup-handler-spacing | b1badc07-d437-4863-b20c-a6c38874ed95 | paused: parser-rows (step 3 landed c7f627615e; next step) |
 
-## Sessions
-| session | card / task |
-|---|---|
-| warp-speed | speed work stopped by the user at 166 s (820 at the start of 10-31); full-suite regressions, groups down to "3 × ø" (notes/full_suite_2026-10-31.md) |
-| warp-quality | full-suite regressions, groups from "2 × T{n: 'x'}" on (emit-wasmtime landed 5044e2a7af) |
-| warp-shaders | use-sound (128 red suite lines; field vs outer word of the same name, Codex repro on branch datetime-arithmetic-fail) |
-| warp-units | units failing tests (lib/), scripts-self; units-rewrite-assign (core one-liner) waits for the user |
-| warp-operators (spawned 15:5x, tmux warp-operators) | rewrite-rules + union-later-member: rules whose meaning depends on operand kinds become typed operators, carefully, one at a time against a test baseline |
-| warp-integrator | seed e02b1cff (rebuild 446 → 225 s), full suite 302b5481cd: 3488/11643 failing |
-| Codex (cron 02/07/12/17/22:35) | notes/agents/codex_cards.txt; `retired:` lines are never continued (781e839056) |
-
-Retired tonight: warp-fixer, warp-wgsl, warp-exact-decimal-big, warp-cards, warp-diff-core, warp-build-failed-store
-(landed 06d61d3be1), warp-interviewer (archived by the user).
-
-## Waiting
-- codex-cron: 4 rounds per firing now; check data/agents/codex/*.last.md of the 23:5x run and the 02:35 run.
-- Promise: tell the user what warp-speed's profile finds and when lib-hash-rebake lands.
+Paused workers resume one per landing (two-feature-worker limit), in the order above.
+Landed today: big-numbers-extension (29ae30d9c5), parser-rows step 3 (c7f627615e), quotes-templates-serializer.
