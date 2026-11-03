@@ -1,43 +1,68 @@
 # What an extension registers (decision core-is-self, notes/core_extensions_roadmap.md "Hook table design"): one
 # Extension row each in extensions/extensions.warp, every field but its name optional. The core names no extension: it
 # knows this shape and walks the rows. Later fields join here: keyword handlers, passes. Its runtime words are
-# extensions/runtime.warp's, which joins them to the extended runtime, its list kinds too.
-#   operator_rows: the extension's operators, rows in lib/aliases.warp's format, its file's text (parser.warp bundled_module)
-#   library_words: a program's word → the runtime word it calls (emitter runtime_words.warp library_words)
-#   host_exports: runtime words every program exports under their own names, for a host (emitter host.warp)
-#   constant_tables: tables whose numbers its runtime words read by name, `GpuCell.I32` (emitter.warp constant_tables)
-#   atom_readers: the first character of an atom it reads → its reader, given the parser there, which reads the atom
-#   and moves past it (`°C`); glued after a number or a name such an atom multiplies it, `30°`, `x°`
-#   number_readers: functions reading a number form at a digit (`0xff`, `2024-01-31`), each ø where its form is not
-#   number_suffix_readers: functions reading what follows a decimal number, given the parser after it, the number as
-#   decimal_number wrote it and as the source did (`0.1f`, `1 month`), each ø where its form is not
-#   suffix_readers: functions reading what follows an operand, given the parser after it, the operand and the binding
-#   power the context needs (`x²`), each ø where its form is not or binds looser
-#   infix_readers: functions reading an operator after an operand inside an expression, given the parser there, the
-#   operand and the binding power the context needs, each ø where its form is not, OPERAND_ENDS where it binds looser
-#   and so ends the operand (`a ⊕ b` of a declared ⊕)
-#   prefix_readers: functions reading an operator and its operand where an expression starts, each ø where its form is
-#   not (`√16` of a declared √)
-#   glyph_owners: functions telling whether the parse reads the glyph as the extension's, never a free symbol
-#   prescans: a name → the function scanning a source before it is parsed, whose value the parser keeps under the
-#   name (Parser.scans: the operators a program declares)
-#   source_passes: functions run on the source before it is parsed, each giving [the new source, its shifts]: where the
-#   new source got shorter, [offset after the change, columns taken out], so nodes keep their written columns
-#   text_escape_readers: the character after a `\` in a text → the reader of the escape, given the text, the offset of
-#   the `\` and its length, giving [the characters, the length read], ø where its form is not (`\:alpha`)
-#   keyword_readers: a word → the reader of the phrase it starts, given the parser at the word and the word, ø where
-#   its form is not there, nothing read; one that read its statement to nothing (applied by a prescan) answers ø past it
-#   (`emit alarm`)
-#   block_words: words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
-#   text_passes: functions a program goes through before its texts interpolate (`sql "… $name"` built as a query)
-#   passes: a core pass's name → the extension's pass running right after it (`{"arity_overloads": clauses}`,
-#   decision extension-passes); a name of no core pass is refused
-#   value_settlers: a word starting a value that comes later → the word a place declared as a value calls on it,
-#   brought wherever the program calls the first (`task_go` → `task_awaited`: `n: int = go f(3)` awaits)
-#   commands: the command words it answers (`warp help`), and runs: the function running one, given its word
-#   runtime: its runtime root under extensions/, whose definitions (the bridge hooks' bodies) are trapping stubs in a
-#   build leaving the row out (decision extension-row-optional, compiler.warp left_out_runtime_words)
-class Extension { name: text; operator_rows: text = ""; library_words: map = {}; host_exports: list = []; constant_tables: map = {}; atom_readers: map = {}; number_readers: list = []; number_suffix_readers: list = []; suffix_readers: list = []; infix_readers: list = []; prefix_readers: list = []; glyph_owners: list = []; prescans: map = {}; keyword_readers: map = {}; block_words: list = []; source_passes: list = []; text_escape_readers: map = {}; value_settlers: map = {}; text_passes: list = []; passes: map = {}; commands: list = []; runs: any = ø; runtime: text = "" }
+# extensions/runtime.warp's, which joins them to the extended runtime, its list kinds too. One field a line, each
+# with what it holds above it (a new field is its own lines, so two cards adding fields merge cleanly).
+class Extension {
+	name: text
+	# the extension's operators, rows in lib/aliases.warp's format, its file's text (parser.warp bundled_module)
+	operator_rows: text = ""
+	# a program's word → the runtime word it calls (emitter runtime_words.warp library_words)
+	library_words: map = {}
+	# runtime words every program exports under their own names, for a host (emitter host.warp)
+	host_exports: list = []
+	# tables whose numbers its runtime words read by name, `GpuCell.I32` (emitter.warp constant_tables)
+	constant_tables: map = {}
+	# the first character of an atom it reads → its reader, given the parser there, which reads the atom and moves past
+	# it (`°C`); glued after a number or a name such an atom multiplies it, `30°`, `x°`
+	atom_readers: map = {}
+	# functions reading a number form at a digit (`0xff`, `2024-01-31`), each ø where its form is not
+	number_readers: list = []
+	# functions reading what follows a decimal number, given the parser after it, the number as decimal_number wrote it
+	# and as the source did (`0.1f`, `1 month`), each ø where its form is not
+	number_suffix_readers: list = []
+	# functions reading what follows an operand, given the parser after it, the operand and the binding power the
+	# context needs (`x²`), each ø where its form is not or binds looser
+	suffix_readers: list = []
+	# functions reading an operator after an operand inside an expression, given the parser there, the operand and the
+	# binding power the context needs, each ø where its form is not, OPERAND_ENDS where it binds looser and so ends the
+	# operand (`a ⊕ b` of a declared ⊕)
+	infix_readers: list = []
+	# functions reading an operator and its operand where an expression starts, each ø where its form is not (`√16` of a
+	# declared √)
+	prefix_readers: list = []
+	# functions telling whether the parse reads the glyph as the extension's, never a free symbol
+	glyph_owners: list = []
+	# a name → the function scanning a source before it is parsed, whose value the parser keeps under the name
+	# (Parser.scans: the operators a program declares)
+	prescans: map = {}
+	# a word → the reader of the phrase it starts, given the parser at the word and the word, ø where its form is not
+	# there, nothing read; one that read its statement to nothing (applied by a prescan) answers ø past it (`emit
+	# alarm`)
+	keyword_readers: map = {}
+	# words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
+	block_words: list = []
+	# functions run on the source before it is parsed, each giving [the new source, its shifts]: where the new source
+	# got shorter, [offset after the change, columns taken out], so nodes keep their written columns
+	source_passes: list = []
+	# the character after a `\` in a text → the reader of the escape, given the text, the offset of the `\` and its
+	# length, giving [the characters, the length read], ø where its form is not (`\:alpha`)
+	text_escape_readers: map = {}
+	# a word starting a value that comes later → the word a place declared as a value calls on it, brought wherever the
+	# program calls the first (`task_go` → `task_awaited`: `n: int = go f(3)` awaits)
+	value_settlers: map = {}
+	# functions a program goes through before its texts interpolate (`sql "… $name"` built as a query)
+	text_passes: list = []
+	# a core pass's name → the extension's pass running right after it (`{"arity_overloads": clauses}`, decision
+	# extension-passes); a name of no core pass is refused
+	passes: map = {}
+	# the command words it answers (`warp help`), and runs: the function running one, given its word
+	commands: list = []
+	runs: any = ø
+	# its runtime root under extensions/, whose definitions (the bridge hooks' bodies) are trapping stubs in a build
+	# leaving the row out (decision extension-row-optional, compiler.warp left_out_runtime_words)
+	runtime: text = ""
+}
 
 # every extension's operator rows, as one text per extension
 def extension_operator_rows(): list := EXTENSIONS.map(extension => extension.operator_rows).filter(rows => rows != "")

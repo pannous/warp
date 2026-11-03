@@ -928,9 +928,23 @@ def global_widens(name: text, held: ValueKind, kind: ValueKind): bool {
 # holds a node of another kind until then (card speed-symbol-calls)
 def interned_symbol(body: Body, word: text): TypedCode {
 	index = relocatable(relocated.globals, declared_global("symbol·" + word, "node")#1)
-	kept = [op.global_get] + index
-	made = runtime_call("symbol_node", [text_value_of(word)]).code
-	TypedCode(ValueKind.Node, kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept)
+	kept_once("symbol·" + word, index, () => runtime_call("symbol_node", [text_value_of(word)]).code)
+}
+# a value made once and kept in a global, an interned symbol or an enum's case: each such global's one function
+# `kept·<global>` makes it at its first call (until then the global holds a node of another kind) and gives it, so a
+# use is that call, not the making written out again (card main-constant-tables); right also in a fresh instance whose
+# main never ran (a host's task)
+global kept_functions = {}
+def kept_once(name: text, index: list, making: function): TypedCode {
+	if not kept_functions.has(name) {
+		f = added_function("kept·" + name, [], ValueKind.Node, [])
+		# the module's own, as a runtime word is: no export (module_layout.warp program_exports)
+		f.is_runtime = yes
+		kept = [op.global_get] + index
+		f.code = kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + making() + [op.global_set] + index + [op.end] + kept
+		kept_functions[name] = f
+	}
+	call_values(kept_functions[name], [])
 }
 # an enum's case, `Coin.Dime`, or a bare `Dime` of the one enum declaring it: made once, kept in the global
 # `case·Coin·Dime`, its enum's number in the kind's info byte, so two enums' cases of one name never equal (decision
@@ -939,11 +953,9 @@ def interned_symbol(body: Body, word: text): TypedCode {
 def case_value(enum_name: text, case: text): TypedCode {
 	if enum_name not in module.enum_numbers { module.enum_numbers[enum_name] = #module.enum_numbers.keys + 1 }
 	index = relocatable(relocated.globals, declared_global("case·" + enum_name + "·" + case, ValueKind.Node)#1)
-	kept = [op.global_get] + index
 	spelling = (module.case_spellings.get(enum_name) ?? {}).get(case)
 	kind = Kind.Symbol + module.enum_numbers[enum_name] * KindUnit.Info
-	made = if spelling == ø then node(kind, text_bytes(case)) else [op.i64_const] + sleb(kind) + text_bytes(case) + node(Kind.Text, text_bytes(spelling)) + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
-	TypedCode(ValueKind.Node, kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept)
+	kept_once("case·" + enum_name + "·" + case, index, () => if spelling == ø then node(kind, text_bytes(case)) else [op.i64_const] + sleb(kind) + text_bytes(case) + node(Kind.Text, text_bytes(spelling)) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]))
 }
 # `Coin.Dime`, or a bare `Dime` of the one enum declaring it (local_value)
 is_case(body: Body, n: Node): bool := {
@@ -1524,6 +1536,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.rereads = []
 	module.builders = []
 	module.made = {}
+	kept_functions = {}
 	module.made_sites = []
 	module.gc_indices = {}
 	module.gc_order = []
