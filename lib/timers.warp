@@ -9,10 +9,10 @@ TIMER_CLOCK = 2
 WEEKDAYS_SHIFT = 10000
 EVERY_DAY = 127
 ONCE = 0
-// only a clock time, hours:minutes, is a timer's: sound's `at bars(0) {…}` places its block on the beat clock (card
+rewrite on every day at $time $body: block => timer_at($time, EVERY_DAY, () => $body)
+rewrite on every day at $time {} => timer_at($time, EVERY_DAY, () => ø)
+// a bare `at` only of a clock time, hours:minutes: sound's `at bars(0) {…}` places its block on the beat clock (card
 // wasm-trap: taken as a clock time, it trapped)
-rewrite on every day at $hour:$minute $body: block => timer_at($hour:$minute, EVERY_DAY, () => $body)
-rewrite on every day at $hour:$minute {} => timer_at($hour:$minute, EVERY_DAY, () => ø)
 rewrite at $hour:$minute $body: block => timer_at($hour:$minute, ONCE, () => $body)
 rewrite on every $period $body: block => timer_every($period, () => $body)
 rewrite on every $count $unit $body: block => timer_every($count $unit, () => $body)
