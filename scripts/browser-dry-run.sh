@@ -5,6 +5,8 @@
 #   scripts/browser-dry-run.sh                     the Chrome and the Firefox tour of the collected site
 #   scripts/browser-dry-run.sh --chrome [name…]    only the Chrome tour · --firefox [name…] only the Firefox one
 #   scripts/browser-dry-run.sh --guide             the guide's snippets (test_in_browser.py --guide), in Chrome
+#   scripts/browser-dry-run.sh --samples [sample…] the samples in the page against data/samples/out, the native outputs
+#                                                  (scripts/samples.sh); brings back test/samples-web.txt, data/samples-web
 #   scripts/browser-dry-run.sh --again …           no build, no copy: the server checks what the last run copied
 # Names pick examples, as the Safari job names them. It checks the files as they are, committed or not, and prints the
 # page's first-load size (the compiler and its lib). Exit code 0 when every chosen check passed. The server side is
@@ -31,7 +33,7 @@ again=""
 if [ "${1:-}" = --again ]; then again=1; shift; fi
 checks=(chrome firefox)
 case "${1:-}" in
-	--chrome | --firefox | --guide) checks=("${1#--}"); shift ;;
+	--chrome | --firefox | --guide | --samples) checks=("${1#--}"); shift ;;
 	-*) sed -n '2,12p' "$0" >&2; exit 2 ;;
 esac
 
@@ -59,10 +61,12 @@ copy() { rsync -a --delete "$@"; }
 
 copy_to_server() {
 	echo "copying to $SERVER:$run_dir"
-	ssh "$SERVER" "mkdir -p $run_dir && chown $SERVER_USER: $SERVER_HOME/runs $run_dir"
+	ssh "$SERVER" "mkdir -p $run_dir/data/samples && chown $SERVER_USER: $SERVER_HOME/runs $run_dir"
 	# the repository's files as they are, new ones too: the tours run the runner's scripts from them
 	git ls-files -z --cached --others --exclude-standard | copy --from0 --files-from=- --ignore-missing-args . "$SERVER:$run_dir/"
 	copy "$site/" "$SERVER:$run_dir/_site/"
+	# the native outputs the samples check compares with, ignored by git
+	[ -d data/samples/out ] && copy data/samples/out/ "$SERVER:$run_dir/data/samples/out/"
 	ssh "$SERVER" "chown -R $SERVER_USER: $run_dir"
 }
 
@@ -106,7 +110,13 @@ tour_firefox() {
 	as_browser_user python3 web/playground/test_in_browser.py --examples --firefox --site _site "$@"
 }
 guide() { as_browser_user python3 web/playground/test_in_browser.py --examples --site _site --guide; }
-declare -A command=([chrome]=tour_chrome [firefox]=tour_firefox [guide]=guide)
+# the page served from the tree, with the site's built files (web/playground/.gitignore) and compiler
+samples() {
+	cp -a --update=none _site/. web/playground/
+	ln -sfn "$run_dir/_site/web/playground/warp-lib" web/playground/warp-lib
+	as_browser_user python3 web/playground/test_in_browser.py --samples "$@"
+}
+declare -A command=([chrome]=tour_chrome [firefox]=tour_firefox [guide]=guide [samples]=samples)
 verdicts=() failed=0
 for check in $checks; do
 	echo "==== $check on $(hostname) ===="
@@ -116,4 +126,10 @@ echo "==== browser dry run of $(basename "$run_dir") ===="
 printf '  %s\n' "${verdicts[@]}"
 exit $failed
 SERVER_SIDE
-} | ssh "$SERVER" "bash -s -- $remote_arguments"
+} | ssh "$SERVER" "bash -s -- $remote_arguments" && status=0 || status=$?
+# what the samples check wrote, brought home: the results only when all samples ran, the report always
+if [ "${checks[*]}" = samples ]; then
+	copy --ignore-missing-args "$SERVER:$run_dir/test/samples-web.txt" test/ 2>/dev/null || true
+	copy "$SERVER:$run_dir/data/samples-web/" data/samples-web/
+fi
+exit $status
