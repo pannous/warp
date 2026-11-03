@@ -1146,6 +1146,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	left = key_of(n)
 	right = value_of(n)
 	if body.intrinsics and table_number(left, read_field(n)) != ø { return number_value(table_number(left, read_field(n))) }
+	# a table's case this compiler doesn't know (an older seed than kinds.warp), named, not read as an unknown name
+	if body.intrinsics and left is symbol and name_of(left) in constant_tables { return refuse("no case " + name_of(left) + "." + read_field(n) + " in this compiler's constant tables") }
 	if operator == Op.Dot and is_case_read(body, left, right) { return case_value(name_of(left), name_of(right)) }
 	# `{}`: a map of no entries, not ø, so the entries a function given it writes reach every holder, as in Rust's
 	if is_empty_map(n) { return TypedCode(ValueKind.Node, node(Marked.Map, vector_code([]))) }

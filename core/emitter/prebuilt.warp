@@ -20,9 +20,11 @@ is_programs_method(name: text): bool := {
 	owner = name.split("·")#1
 	name.contains("·") and not module.enum_cases.has(owner) and not module.classes.has(owner)
 }
+# (the first few words and why: one cause usually drops hundreds of callers, a table case named by the first)
 dropped_words_refusal(dropped: list): text := {
-	why = dropped.map(name => name + " (" + module.left_out[name] + ")").join(", ")
-	"runtime.wasm would leave out " + why + ": this compiler cannot compile the runtime it builds; an older seed than its sources? scripts/refresh-seed.sh makes a newer one"
+	why = dropped[0 ..< min(3, #dropped)].map(name => name + " (" + module.left_out[name] + ")").join(", ")
+	more = if #dropped > 3 then " and " + (#dropped - 3) + " more words" else ""
+	"runtime.wasm would leave out " + why + more + ": this compiler cannot compile the runtime it builds; an older seed than its sources? scripts/refresh-seed.sh makes a newer one"
 }
 # every word compiled in name order, but those outside the core on their own (an enum's method naming the program's
 # enum): left out, and named in warp.runtime, for a program to compile as today; then the hooks: the closure calls of
