@@ -18,6 +18,8 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 - Procedure changes are persisted before they are announced (common.md "Talking").
 - User decisions you hear go into notes/decisions.md in the user's words: write them yourself, never route them through the Interviewer (user 2026-10-27). Grep it before forwarding a question.
 - Anything needed from the user goes to warp-interviewer once, never repeated in your replies.
+- NEVER repeat a question to the user (user 2026-11-02, third relapse: Frage 2 trailed ~8 replies). Ask once; no
+  answer in the next reply means hand it to warp-interviewer with its recommendation and drop it from every reply.
 - Never block on a question: an open AskUserQuestion stops this whole session, no worker message is read and no
   watch round fires (2026-10-31: one question froze the fleet's Supervisor 3 h 43 min, 20:07 to 23:50). While
   workers run, write the question with its recommended default into the open-questions file, tell the asker to go
