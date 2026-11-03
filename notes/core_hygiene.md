@@ -166,6 +166,6 @@ results-cloud.txt, samples.txt, samples-web.txt, tests-web.txt) and counts the l
 reconstructed from git history in ~6 s: the core without extensions (parsing, passes, analysis, emitter, runtime,
 native) and the extensions (extensions/, and lib/sugar/ before it moved there) always separately, plus lib/ and
 test/. It fills scripts/vitals.html into data/vitals/vitals.html; the nightly run (nightly.sh) refreshes
-it. The page is the artifact https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c: a Claude session
-republishes the file there (Artifact publish with that url). 2026-11-03: core 28,186 → 32,641 lines (+16%),
+it. The page is the artifact https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c: the Integrator
+republishes it after each landing and the Supervisor's hourly watch round as well (user 2026-11-03). 2026-11-03: core 28,186 → 32,641 lines (+16%),
 extensions 1,211 → 1,477 (+22%) over 381 landings; the core almost only grows, the largest cut was −71.

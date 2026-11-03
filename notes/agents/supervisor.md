@@ -52,6 +52,10 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 - Side research goes to a background Agent-tool subagent returning a short answer with sources.
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
 
+- Warp Vitals (user 2026-11-03): every watch round runs `python3 scripts/vitals.py` and republishes
+  data/vitals/vitals.html to https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c; the Integrator also
+  does so after each landing (integrator.md "Watching main").
+
 ## Team handover (reboot, shutdown, "handover")
 1. Tell every running session (ListAgents; tmux warp-*) to push its branch, note the card and write
    notes/handover/<card or role>.md, then reply "handover done".
