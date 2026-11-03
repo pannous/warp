@@ -5,7 +5,7 @@
 # with what it holds above it (a new field is its own lines, so two cards adding fields merge cleanly).
 class Extension {
 	name: text
-	# the extension's operators, rows in lib/aliases.warp's format, its file's text (parser.warp bundled_module)
+	# the extension's operators, rows in lib/aliases.warp's format, its file's text (library.warp bundled_module)
 	operator_rows: text = ""
 	# a program's word → the runtime word it calls (emitter runtime_words.warp library_words)
 	library_words: map = {}

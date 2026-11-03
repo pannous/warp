@@ -50,7 +50,7 @@ definition_slices(source: text): list := {
 	if not source_slices.has(source) { source_slices[source] = slices_of(source) }
 	source_slices[source]
 }
-# the baked slices when source is a bundled module's very text (as parser.warp source_parse), cut otherwise (a
+# the baked slices when source is a bundled module's very text (as library.warp source_parse), cut otherwise (a
 # WARP_LIB edit, a program)
 slices_of(source: text): list := {
 	for within in LIBRARY_SLICES.keys { if LIBRARY_FILES.get(within) == source { return unbaked_slices(LIBRARY_SLICES[within], source) } }
