@@ -8,4 +8,8 @@ EXTENSIONS = [
 	gpu_lists_extension
 	degrees_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
+	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
 ]
+# the rows the compiler's own build carries (decision extension-row-optional): all but big numbers, so an int past 64
+# bits in the compiler traps instead of growing; every program it compiles carries them all
+COMPILER_BUILD_EXTENSIONS = EXTENSIONS.filter(row => row.name != "big_numbers")
