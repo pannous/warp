@@ -21,7 +21,8 @@ global template_variables = []
 global lowered_templates = []
 
 # the code of a hole as a node
-code_node(code: text): Node := node_of(plain(tree(code)))
+# (its parse as a node, as the program's own: through the view an empty part, the count's left of `#xs`, came back as [])
+code_node(code: text): Node := plain_node(parsed(code))
 
 # the tag `sql` or `sh` n is, else ""
 tag_named(n: Node): text := {
