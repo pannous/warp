@@ -27,6 +27,8 @@ rewrite (shared $d) => global: $d
 // a cancelled task yields no result (decision stopped-no-result): reading or awaiting it raises "job was cancelled"
 rewrite cancel $x => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
 rewrite $x.cancel() => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
+// `end job` is refused, naming both: finish job or cancel job (decision end-refused)
+rewrite end $x => $refused where statement and $x is symbol and $refused = end_refused($x)
 // `stop job` pauses it, as a stopped job of a shell (decision stopped-no-result), and says so
 rewrite stop $x => task_stopped($x, $n) where statement and $x is symbol and $n = spelled($x)
 rewrite $x.stop() => task_stopped($x, $n) where statement and $x is symbol and $n = spelled($x)

@@ -11,7 +11,7 @@ is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); pau
 is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); job.pause(); job.resume(); job' 300000
 
 # try_catches_the_failure_of_a_task
-is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stop job; try await job else -1' (-1)
+is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); cancel job; try await job else -1' (-1)
 
 # lists_cross_to_a_task
 is! 'sum2(xs) := { s=0; for i in 0..#xs { s+=xs#(i+1) }; s }; job = go sum2([1,2,3]); await job' 6
