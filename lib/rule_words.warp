@@ -122,13 +122,13 @@ page_valued(program: Node): any := {
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
-# that declares
+# that declares or is a test line, which runs where it stands
 ended_by(program: Node, starting: text, ending_word: text): any := {
 	statements = level_statements(program)
 	if not statements.any(statement => is_call_named(statement, starting)) or statements.any(statement => is_call_named(statement, ending_word)) { return ø }
 	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
 	ending = statements[last]
-	ended = if is_declaration(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
+	ended = if is_declaration(ending) or is_test_line(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
 	separated(bracketed(statements[0 ..< last] + ended + statements[last + 1 ..], ""), ";")
 }
 # the main level's statements, of lines and of `;` within a line alike
