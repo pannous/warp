@@ -5,7 +5,7 @@
 # `type Angle = float` marks a float alike. Arithmetic keeps a mark (decision marks-survive-arithmetic), held unboxed
 # by the emitter as long as it can (decision marks-unboxed-first: TypedCode.mark, stamped where the value is boxed)
 use "int_type_shows.warp"
-use "class_methods.warp"
+use "classes.warp"
 
 shown_parameter = symbol("self")
 

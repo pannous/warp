@@ -7,8 +7,8 @@ use "walk.warp"
 use "../analysis/words.warp"
 use "../parsing/phrase_blocks.warp"
 use "../analysis/diagnostics.warp"
-use "class_methods.warp"
-use "class_statics.warp"
+use "classes.warp"
+use "../../extensions/class_methods.warp"
 use "scope.warp"
 use "lambdas.warp"
 use "data_blocks.warp"
@@ -221,11 +221,18 @@ is_call(n: Node): bool := match n {
 	_: no
 }
 
-# (a class's methods first become functions of the program: class_methods.warp; its conversions too, below)
+# (a class's methods first become functions of the program: the class rewrites of extensions/class_methods.warp; its
+# conversions too, below)
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
 	# then data written as data (data_blocks.warp), once the definitions say which functions take it
-	data_blocks(bottom_up(conversions(int_types(methods_lifted(statics_hoisted(program)))), definition))
+	data_blocks(bottom_up(conversions(int_types(classes_rewritten(fields_respelled(program)))), definition))
+}
+# the program through each class rewrite an extension gives
+classes_rewritten(program: Node): Node := {
+	rewritten = program
+	for rewrite in class_rewrites { rewritten = rewrite(rewritten) }
+	rewritten
 }
 
 # A program's conversions (decision general-conversions; Rust twin: rust-harness:src/lowering/types/conversions.rs): `Person as
