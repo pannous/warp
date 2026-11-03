@@ -74,3 +74,17 @@ piece (~250 lines), owned by the parsing row's time entry. Nothing here needs th
 ## Rules (user 2026-11-03)
 - The compiler's own source may change minimally where it helps a lot (e.g. it stops using a sugar form so the form can leave the core).
 - The language is never simplified to shrink the core: every spelling programs may write stays (decision self-source-minimal).
+
+## Lessons from wasp (C++, ~/dev/apps/wasp/source), 2026-11-03
+Sizes: parser 1.8k (Wasp.cpp + literals) vs warp 6k; analyzer 3.8k (Angle, Keywords, Operator/FunctionAnalyzer,
+Context, NodeTypes) vs warp passes + analysis 12.6k; emitter 6.3k vs warp emitter + runtime 10.5k.
+- The parser knew only structure (the data format); operators and keywords were grouped later. warp's parser.warp
+  (5k) holds keywords (34 quoted ones) and binding powers: candidates to leave the parser for tables.
+- Operators were rows, not code: prefix/suffix/infix lists, right-associatives, precedence (², ⁻¹, ‰, √ …).
+  A row per operator is what an extension should add.
+- One analyze() dispatcher: keyword → group* handler (if, while, for, class, import …), ~120 lines. As a
+  name → handler table it is the static hook table core-is-self wants.
+- Avoid its awkward parts: string compares spread through the if-chain, global mutable state, a hash memo against
+  re-analysis, html/js special cases inline, order-sensitive groupTypes → Declarations → Calls → Operators.
+- warp has 35 passes, 32 walking the tree on their own; wasp did one recursive walk. Fusing passes into one
+  dispatch walk shrinks code and time.
