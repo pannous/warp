@@ -50,7 +50,7 @@ typed_line(line: text, library: text): Builtin? := {
 library_lines(library: text): list := prelude_text.split("\n").map(line => typed_line(line, library)).filter(line => line != ø)
 
 runtime_lines = library_lines(runtime_library)
-# the words only the compiler's passes write, which no program calls (closures, cells and signals, memos, linear
+# the words only the compiler's passes write, which no program calls (closures, cells, memos, linear
 # arrays, the switch and extremum errors, times, Uniscript; ran·without·error, declared as the prelude declares the words programs call
 compiler_lines = [
 # Todo bring all of these for discussion And explanation to the interviewer 
@@ -59,9 +59,6 @@ compiler_lines = [
 	"closure_new(values...): function from emitter",
 	"cell_get(cell): any from emitter",
 	"cell_set(cell, value): any from emitter",
-	"signal_new(value): signal from emitter",
-	"signal_listeners(signal): any from emitter",
-	"signal_listeners_set(signal, listeners): any from emitter",
 	"memo_known(values...): int from emitter",
 	"memo_value(values...): int from emitter",
 	"memo_store(values...): int from emitter",
