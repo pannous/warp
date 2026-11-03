@@ -1,13 +1,13 @@
 ## exact rationals: int `/` gives one, an int over a positive int in lowest terms (the Rust twin's Number::Quotient),
 ## held in an Int $Node as a $Ratio (intrinsics is_ratio, ratio_of, ratio_numerator, ratio_denominator)
-use "../intrinsics.warp"
-use "../arithmetic.warp"
-use "../conversions.warp"
-use "../errors.warp"
-use "../floats.warp"
-use "../instructions.warp"
+use "../../compiler/runtime/intrinsics.warp"
+use "../../compiler/runtime/arithmetic.warp"
+use "../../compiler/runtime/conversions.warp"
+use "../../compiler/runtime/errors.warp"
+use "../../compiler/runtime/floats.warp"
+use "../../compiler/runtime/instructions.warp"
 use "big_ints.warp"
-use "../../emitter/byte_codes.warp"
+use "../../compiler/emitter/byte_codes.warp"
 int_gcd(a: int, b: int): int := {
 	if a < 0 { a = -a }
 	if b < 0 { b = -b }
@@ -113,11 +113,6 @@ factor_count(n: int, factor: int): int := {
 	}
 	count
 }
-power(base: int, exponent: int): int := {
-	out = 1
-	for i in 0..exponent { out = out * base }
-	out
-}
 # `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
 # rust-harness:src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
 # 14142135623730951/10^16; ∞ and NaN have no fraction
@@ -152,20 +147,6 @@ multiplied_within_64_bits(n: int, factor: int, times: int): int := {
 		n = n * factor
 	}
 	n
-}
-# a text of count zero digits
-zeros(count: int): text := {
-	out = new_text(if count > 0 then count else 0)
-	for i in 0..count { set_byte(out, i, Ascii.Zero) }
-	out
-}
-# `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
-floor_quotient(a: int, b: int): int := {
-	q = int_quotient(a, b)
-	if a - q * b < 0 {
-		if b > 0 { q -= 1 } else { q += 1 }
-	}
-	q
 }
 # `base ^ exponent` of exact numbers (rust-harness:src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
 # inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names. An int

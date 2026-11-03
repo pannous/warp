@@ -7,7 +7,6 @@ use "../intrinsics.warp"
 use "../builders.warp"
 use "../library_words.warp"
 use "../text_words.warp"
-use "exact.warp"
 use "../text.warp"
 use "../arithmetic.warp"
 
