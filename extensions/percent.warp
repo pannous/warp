@@ -1,0 +1,26 @@
+# The trailing percent (decision Trailing percent, card parser-rows): `80%`, `[10%, 20%]`, `10% == 1/10`, a % with no
+# operand after it is a percent; `50 % of 200` that much of 200 (extensions/sugar/arithmetic.warp gives the meaning)
+read_percent(p: Parser, operand: Node, min_power: int): Node := {
+	op = operator_at(p)
+	if op.length == 0 or op#2 != "%" or binding_powers("%")#1 < min_power { return ø }
+	before = p.at
+	p.at = p.at + op#1.length
+	if not percent_ends(p) {
+		p.at = before
+		return ø
+	}
+	percent = keyed("%", operand, ø)
+	if line_ends_after(p, p.at) or not keyword_at_position(p, "of", p.resumes[p.at]) { return percent }
+	p.at = p.resumes[p.at] + "of".length
+	skip_blanks(p)
+	keyed("*", percent, expression(p, binding_powers("%")#2))
+}
+percent_extension = Extension{name: "percent", suffix_readers: [read_percent]}
+
+# what follows a % on its line leaves it no operand: the line's end, a separator, a closing bracket, a comparison, `of`,
+# an operator standing apart (`10% + 1`; `7 % -3` takes the glued -3)
+def percent_ends(p: Parser): bool := {
+	if line_ends_after(p, p.at) { return true }
+	next = code_after(p, p.at)
+	",;)]}=<>!".contains(next) or keyword_at_position(p, "of", p.resumes[p.at]) or ("+-*/^".contains(next) and is_blank(peek(p.code, p.resumes[p.at] + 1, p.n)))
+}
