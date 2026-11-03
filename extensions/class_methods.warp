@@ -1,0 +1,10 @@
+# Class methods (card class-methods-extension, decision core-is-self): a class's methods as functions of the program,
+# their dispatch on the instance's class, inheritance (`extends`, `super`), the operators, orderings, conversions and
+# positions a class gives its instances, and its static fields. The core reads class declarations (passes/classes.warp);
+# the compiler itself declares classes without methods, so none of this runs when it compiles itself. Its parts name
+# the core words they read without a use: the core's definitions pass brings classes.warp and int_type_shows.warp first
+use "class_methods/statics.warp"
+use "class_methods/methods.warp"
+
+# the rewrites of a program's classes, in order, which the definitions pass runs
+class_rewrites = [statics_hoisted, methods_lifted]

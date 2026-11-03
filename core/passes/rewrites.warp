@@ -1239,7 +1239,7 @@ class_names_of(program: Node): map := {
 	}
 	classes
 }
-# the names the program assigns only instances of its classes, `s = Stack()` (class_methods.warp written_type), of its
+# the names the program assigns only instances of its classes, `s = Stack()` (classes.warp written_type), of its
 # nodes as the caller listed them
 instance_names_in(program: Node, nodes: list): map := {
 	classes = class_names_of(program)

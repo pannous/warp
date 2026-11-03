@@ -204,6 +204,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
+- core-int-division (user): the compiler's source writes every integer division as `÷` (plain `/` of ints and every `/!` in core/ become `÷`; `/!` stays an alias), so the compiler needs no exact ratios and big numbers stay an optional extension.
 - bool-int-fallthrough: a bool falls through to the int implementation of any operator.
 - element-wise-scalars: element-wise operators apply to a non-list value directly (`3 .* 3` → 9).
 - type-shows-nat (user): type(3) and an undeclared whole value show `nat`, a declared int shows `int`.

@@ -11,7 +11,7 @@ use "../analysis/signatures.warp"
 use "clauses.warp"
 use "../analysis/builtin_signatures.warp"
 use "../analysis/words.warp"
-use "class_methods.warp"
+use "classes.warp"
 use "definitions.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
