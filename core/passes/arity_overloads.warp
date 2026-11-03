@@ -35,22 +35,10 @@ arity_of(call: Node): list := {
 }
 span_takes(span: list, count: int): bool := span#1 <= count and (span#2 < 0 or count <= span#2)
 
-# name → its arities, for each name defined with several parameter counts within one owner, the main level or a
-# class, no two of them the same: methods of two classes, `Channel.more()` and `Interval.more(o)`, are told apart by
-# their receiver, not by their count
+# name → its arities, for each name defined with several parameter counts, no two of them the same
 overloaded_arities(program: Node): map := {
-	class_bodies = nodes_in(program).filter(n => class_view(n) != ø).map(nodes_in)
-	overloaded = {}
-	for owned in [nodes_kept(program, n => class_view(n) == ø)] + class_bodies {
-		arities = owned_arities(owned)
-		for name in arities.keys { overloaded[name] = arities[name] + (overloaded.get(name) ?? []).filter(span => not (span in arities[name])) }
-	}
-	overloaded
-}
-# name → its arities, of the names these nodes define with several parameter counts
-owned_arities(nodes: list): map := {
 	arities = {}
-	for n in nodes {
+	for n in nodes_in(program) {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
