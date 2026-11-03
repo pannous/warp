@@ -210,7 +210,8 @@ compiled_compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}
 # a character steps by code point: `c++` is the next letter, as `'a' to 'e'` counts
 code_point_steps = {"++": 1, "--": -1}
-smallest_int = -9223372036854775808
+# written below 2^63, as the literal 9223372036854775808 is a big int (the compiler builds without big numbers)
+smallest_int = -9223372036854775807 - 1
 largest_int = 9223372036854775807
 # (a refusal is thrown; a word ends with its value, not with `refuse`, whose kind would become the word's: card
 # is-early-return)
