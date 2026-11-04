@@ -1,0 +1,32 @@
+// lib/tables.warp display_width, truncate_display, pad_display: CJK, emoji clusters, combining and zero-width marks (card lib-text-tables)
+'use tables; display_width("hello")'	5
+'use tables; display_width("中文")'	4
+'use tables; display_width("한국어")'	6
+'use tables; display_width("ｱｲ")'	2
+'use tables; display_width("ＡＢ")'	4
+'use tables; display_width("é")'	1
+'use tables; display_width("à́b")'	2
+'use tables; display_width("😀")'	2
+'use tables; display_width("👨‍👩‍👧")'	2
+'use tables; display_width("🇩🇪")'	2
+'use tables; display_width("❤️")'	2
+'use tables; display_width("❤")'	1
+'use tables; display_width("👍🏽")'	2
+'use tables; display_width("a​b")'	2
+'use tables; display_width("‍")'	0
+'use tables; display_width("﻿x")'	1
+'use tables; display_width("x︎")'	1
+'use tables; display_width("")'	0
+'use tables; truncate_display("中文中文", 5)'	"中文…"
+'use tables; truncate_display("中文中文", 4)'	"中…"
+'use tables; truncate_display("abcdef", 4)'	"abc…"
+'use tables; truncate_display("abc", 3)'	"abc"
+'use tables; truncate_display("ééé", 2)'	"é…"
+'use tables; truncate_display("😀😀", 3)'	"😀…"
+'use tables; pad_display("中", 5, "left")'	"中   "
+'use tables; pad_display("中", 5, "right")'	"   中"
+'use tables; pad_display("中", 5, "center")'	" 中  "
+'use tables; pad_display("é", 3, "center")'	" é "
+'use tables; pad_display("abc", 2, "left")'	"abc"
+'use tables; pad_display("x", 3)'	"x  "
+'use tables; try { pad_display("x", 3, "middle") } catch e { e.message }'	"pad_display: align is left, right or center, not middle"

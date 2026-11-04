@@ -1,0 +1,22 @@
+// lib/tables.warp table_text: plain, box and markdown, alignment, CJK and emoji, truncation, map rows (card lib-text-tables)
+'use tables; table_text([["Ada", 36, "London"], ["中文名", 7, "北京"], ["José", 1234, "São Paulo"], ["👨‍👩‍👧", 0.5, "🇩🇪"]], {"headers": ["name", "age", "city"], "style": "plain"})'	"name     age  city\n------  ----  ---------\nAda       36  London\n中文名     7  北京\nJosé    1234  São Paulo\n👨‍👩‍👧       0.5  🇩🇪"
+'use tables; table_text([["Ada", 36, "London"], ["中文名", 7, "北京"], ["José", 1234, "São Paulo"], ["👨‍👩‍👧", 0.5, "🇩🇪"]], {"headers": ["name", "age", "city"], "style": "box"})'	"┌────────┬──────┬───────────┐\n│ name   │  age │ city      │\n├────────┼──────┼───────────┤\n│ Ada    │   36 │ London    │\n│ 中文名 │    7 │ 北京      │\n│ José   │ 1234 │ São Paulo │\n│ 👨‍👩‍👧     │  0.5 │ 🇩🇪        │\n└────────┴──────┴───────────┘"
+'use tables; table_text([["Ada", 36, "London"], ["中文名", 7, "北京"], ["José", 1234, "São Paulo"], ["👨‍👩‍👧", 0.5, "🇩🇪"]], {"headers": ["name", "age", "city"], "style": "markdown"})'	"| name   |  age | city      |\n| :----- | ---: | :-------- |\n| Ada    |   36 | London    |\n| 中文名 |    7 | 北京      |\n| José   | 1234 | São Paulo |\n| 👨‍👩‍👧     |  0.5 | 🇩🇪        |"
+// no headers, missing cells empty, combining marks
+'use tables; table_text([["été", 1], ["a"], ["x", "y", "z"]])'	"été  1\na\nx    y  z"
+'use tables; table_text([["été", 1], ["a"], ["x", "y", "z"]], {"style": "box"})'	"┌─────┬───┬───┐\n│ été │ 1 │   │\n│ a   │   │   │\n│ x   │ y │ z │\n└─────┴───┴───┘"
+// map rows: the headers are the keys in first-seen order, or the given ones
+'use tables; table_text([{"id": 1, "name": "Ann"}, {"name": "Bo", "note": "x|y"}, {"id": 3, "note": "日本"}], {"style": "markdown"})'	"|  id | name | note |\n| --: | :--- | :--- |\n|   1 | Ann  |      |\n|     | Bo   | x\\|y |\n|   3 |      | 日本 |"
+'use tables; table_text([{"id": 1, "name": "Ann"}, {"name": "Bo", "note": "x|y"}, {"id": 3, "note": "日本"}], {"style": "box"})'	"┌────┬──────┬──────┐\n│ id │ name │ note │\n├────┼──────┼──────┤\n│  1 │ Ann  │      │\n│    │ Bo   │ x|y  │\n│  3 │      │ 日本 │\n└────┴──────┴──────┘"
+'use tables; table_text([{"id": 1, "name": "Ann"}, {"name": "Bo", "note": "x|y"}, {"id": 3, "note": "日本"}], {"headers": ["note", "id"], "style": "plain"})'	"note  id\n----  --\n       1\nx|y\n日本   3"
+// number alignment: numbers right unless overridden; one text makes the column left
+'use tables; table_text([["a", 1, 1.5, "x"], ["b", 22, -3, 5]], {"headers": ["k", "n", "f", "mixed"]})'	"k   n    f  mixed\n-  --  ---  -----\na   1  1.5  x\nb  22   -3  5"
+'use tables; table_text([["a", 1, 1.5, "x"], ["b", 22, -3, 5]], {"headers": ["k", "n", "f", "mixed"], "align": "center"})'	"k  n    f   mixed\n-  --  ---  -----\na  1   1.5    x\nb  22  -3     5"
+'use tables; table_text([["a", 1, 1.5, "x"], ["b", 22, -3, 5]], {"headers": ["k", "n", "f", "mixed"], "align": ["right", "left"]})'	"k  n     f  mixed\n-  --  ---  -----\na  1   1.5  x\nb  22   -3  5"
+'use tables; table_text([["a", 1, 1.5, "x"], ["b", 22, -3, 5]], {"headers": ["k", "n", "f", "mixed"], "align": {"n": "left", "k": "center"}, "style": "markdown"})'	"|  k  | n   |   f | mixed |\n| :-: | :-- | --: | :---- |\n|  a  | 1   | 1.5 | x     |\n|  b  | 22  |  -3 | 5     |"
+// truncation by display width with …: a max width for every column, per column, and for the whole table
+'use tables; table_text([["a long description here", "中文中文中文", "😀😀😀"], ["short", "ab", "c"]], {"max_width": 5})'	"a lo…  中文…  😀😀…\nshort  ab     c"
+'use tables; table_text([["a long description here", "中文中文中文", "😀😀😀"], ["short", "ab", "c"]], {"max_width": [8, ø, 3], "style": "box"})'	"┌──────────┬──────────────┬─────┐\n│ a long … │ 中文中文中文 │ 😀… │\n│ short    │ ab           │ c   │\n└──────────┴──────────────┴─────┘"
+'use tables; table_text([["a long description here", "中文中文中文", "😀😀😀"], ["short", "ab", "c"]], {"width": 30, "style": "box", "headers": ["what", "中文", "emoji"]})'	"┌─────────┬─────────┬────────┐\n│ what    │ 中文    │ emoji  │\n├─────────┼─────────┼────────┤\n│ a long… │ 中文中… │ 😀😀😀 │\n│ short   │ ab      │ c      │\n└─────────┴─────────┴────────┘"
+'use tables; table_text([["a long description here", "中文中文中文", "😀😀😀"], ["short", "ab", "c"]], {"width": 25, "style": "markdown", "headers": ["what", "中文", "emoji"]})'	"| what  | 中文  | emoji |\n| :---- | :---- | :---- |\n| a lo… | 中文… | 😀😀… |\n| short | ab    | c     |"
+'use tables; try { table_text([[1]], {style: "fancy"}) } catch e { e.message }'	"table_text: style is plain, box or markdown, not fancy"
