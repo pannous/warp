@@ -162,33 +162,43 @@ json_number(value: any, exact: bool): text := {
 	if exact { raise "JSON has no exact " + spelled + ": it cannot be written as JSON exactly" }
 	"" + float(value)
 }
-// a run of characters needing no escape joins as one slice (card lib-perf-bench); a short text goes character by
-// character, quicker there than slicing
+// a text as a JSON string (RFC 8259 section 7): " and \\ escaped, U+0000-U+001F as the short escapes \\b \\f \\n \\r \\t
+// or else \\u00xx in lowercase hex (as python's json.dumps), a CRLF (one character in warp) as \\r\\n; anything else,
+// DEL and non-ASCII included, as itself. The parts collect in a list joined once, a run of plain characters as one
+// slice (cards lib-perf-bench, lib-json-ctrl-and-builders; core-text-append-cost)
 json_quoted(source: text): text := {
-	if #source <= 32 { return json_quoted_short(source) }
-	quoted = "\""
+	parts = ["\""]
 	plain = 0
 	i = 0
 	for character in source {
-		code = ord(character)
-		escape = JSON_ESCAPES.get("" + character) ?? (if code < 32 then "\\u00" + HEX_DIGITS#(code / 16 + 1) + HEX_DIGITS#(code % 16 + 1) else ø)
+		escape = json_escape(character)
 		if escape != ø {
-			if i > plain { quoted += source[plain ..< i] }
-			quoted += escape
+			if i > plain { parts.add(source[plain ..< i]) }
+			parts.add(escape)
 			plain = i + 1
 		}
 		i += 1
 	}
-	if i > plain { quoted += source[plain ..< i] }
-	quoted + "\""
+	if i > plain { parts.add(source[plain ..< i]) }
+	parts.add("\"")
+	join(parts, "")
 }
-json_quoted_short(source: text): text := {
-	quoted = "\""
-	for character in source {
-		code = ord(character)
-		quoted += JSON_ESCAPES.get("" + character) ?? (if code < 32 then "\\u00" + HEX_DIGITS#(code / 16 + 1) + HEX_DIGITS#(code % 16 + 1) else character)
-	}
-	quoted + "\""
+// the escape of one character, ø when it stands as itself; a character of several code points (a CRLF) escapes each
+json_escape(character: any): any := {
+	escape = JSON_ESCAPES.get("" + character)
+	if escape != ø { return escape }
+	if ord(character) >= 32 { return ø }
+	points = [ord(p) for p in ("" + character).codepoints]
+	if count(points) == 1 { return json_control(points[0]) }
+	join([if p < 32 then json_control(p) else (JSON_ESCAPES.get(chr(p)) ?? chr(p)) for p in points], "")
+}
+json_control(code: int): text := {
+	if code == 8 { return "\\b" }
+	if code == 9 { return "\\t" }
+	if code == 10 { return "\\n" }
+	if code == 12 { return "\\f" }
+	if code == 13 { return "\\r" }
+	"\\u00" + HEX_DIGITS[code /! 16] + HEX_DIGITS[code % 16]
 }
 // a map's entries, an instance's fields, as an object
 json_fields(value: any, written: function): text := json_object(value.keys.map(key => [json_key(key), written(value[key])]))
