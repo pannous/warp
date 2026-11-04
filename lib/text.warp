@@ -102,3 +102,30 @@ class Cursor { source: text; at = 0
 	skip_while(ok): int := count(take_while(ok))
 	rest() := source[at : count(source)]
 }
+// the Levenshtein distance: the fewest one-character inserts, deletes and replacements from a to b, by characters:
+// edit_distance("kitten", "sitting") is 3, edit_distance("café", "cafe") is 1
+def edit_distance(a: text, b: text): int {
+	xs = [c for c in a]
+	ys = [c for c in b]
+	row = [j for j in 0 to count(ys)]
+	for i in 1 to count(xs) {
+		previous = row
+		row = [i]
+		for j in 1 to count(ys) {
+			cost = if xs[i - 1] == ys[j - 1] then 0 else 1
+			row = row + [min(min(previous[j] + 1, row[j - 1] + 1), previous[j - 1] + cost)]
+		}
+	}
+	row[count(ys)]
+}
+// the leading spaces and tabs of a line
+indentation(line: text): text := { n = 0; while n < count(line) and (line[n] == " " or line[n] == "\t") { n = n + 1 }; line[0 ..< n] }
+// the longest start two texts share
+common_start(a: text, b: text): text := { n = 0; while n < count(a) and n < count(b) and a[n] == b[n] { n = n + 1 }; a[0 ..< n] }
+// without the leading whitespace all its non-blank lines share (Python's textwrap.dedent); blank lines become empty
+def dedent(t: text): text {
+	margin = nil
+	for line in lines(t) { if not is_blank(line) { margin = if margin == nil then indentation(line) else common_start(margin, indentation(line)) } }
+	cut = if margin == nil then 0 else count(margin)
+	join([if is_blank(line) then "" else line[cut..] for line in lines(t)], "\n")
+}
