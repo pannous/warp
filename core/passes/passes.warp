@@ -3,7 +3,6 @@
 use "../parsing/parser.warp"
 use "../parsing/interpolation.warp"
 use "../parsing/number_words.warp"
-use "of_lookups.warp"
 use "definitions.warp"
 use "../parsing/phrase_blocks.warp"
 use "loop_heads.warp"
@@ -27,11 +26,6 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 
-# the keyword rewrites among the sugar passes, one walk (`xs .* 2` and `(p).a` are
-# extensions/sugar/arithmetic.warp's and methods.warp's rules): `a of b`
-sugar_phrases_table = [[is_lookup_word, lookup_phrase]]
-sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
-
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
 # foreign lines and C imports off the source. with_used: interpolation, then used_passes (the program's rewrite rules,
 # extensions' index_positions and property_accessors, the used files and modules), the prelude's definitions it reaches. Then pure_passes in order:
@@ -44,7 +38,8 @@ sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_ta
 #   (extensions' passes after arity_overloads: function clauses, then `a, b = …`, extensions/function_clauses.warp
 #   and multiple_assignments.warp)
 #   type_tests spaced_prefix_calls         `x is T`, `f x` calls
-#   interpolation sugar_phrases            `"…${x}…"` holes, `a of b`
+#   interpolation                          `"…${x}…"` holes
+#   (the extension's pass after interpolation: `a of b`, extensions/of_lookups.warp)
 #   number_words_pass                      number words
 #   first_sugar node_matches node_cases    extensions/sugar's first rules (arms, heads), `match`, node cases
 #   enums_declared plain_enums             enums
@@ -66,7 +61,7 @@ owned_refusal(refusal: text, form: text?): text := {
 }
 
 # the pure lane's passes (card pure-runs)
-pure_passes = [tries, components, definition_heads, definitions, arity_overloads, type_tests, spaced_prefix_calls, interpolation, sugar_phrases, number_words_pass, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
+pure_passes = [tries, components, definition_heads, definitions, arity_overloads, type_tests, spaced_prefix_calls, interpolation, number_words_pass, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
 global lowering_passes = ø

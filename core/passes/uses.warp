@@ -233,7 +233,6 @@ baked_name(segment: list, names: list): text? := {
 }
 same_texts(a: map, b: map): bool :=#a == #b and a.keys.all(key => b.get(key) == a[key])
 # a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
-library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
 module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
 
