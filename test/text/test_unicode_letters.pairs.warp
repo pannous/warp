@@ -1,0 +1,8 @@
+# a letter of any script is a letter, cased or not (Unicode's letter categories); digits, marks and punctuation are none
+'count(letters("a1 名字 שלום!"))'	7
+'letters("x، ب٣")'	['x' 'ب']
+'is_unicode_letter("ا")'	yes
+'is_unicode_letter("é")'	yes
+'is_unicode_letter("٣")'	no
+'is_unicode_letter("。")'	no
+'is_unicode_letter("q")'	yes
