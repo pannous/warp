@@ -1,0 +1,17 @@
+// lib/json_tools.warp JSON Merge Patch: RFC 7396 appendix A, its whole table, then section 3's example (card lib-json-tools)
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "b"}\'), json(\'{"a": "c"}\')), json(\'{"a": "c"}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "b"}\'), json(\'{"b": "c"}\')), json(\'{"a": "b", "b": "c"}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "b"}\'), json(\'{"a": null}\')), json(\'{}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "b", "b": "c"}\'), json(\'{"a": null}\')), json(\'{"b": "c"}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": ["b"]}\'), json(\'{"a": "c"}\')), json(\'{"a": "c"}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "c"}\'), json(\'{"a": ["b"]}\')), json(\'{"a": ["b"]}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": {"b": "c"}}\'), json(\'{"a": {"b": "d", "c": null}}\')), json(\'{"a": {"b": "d"}}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": [{"b": "c"}]}\'), json(\'{"a": [1]}\')), json(\'{"a": [1]}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'["a", "b"]\'), json(\'["c", "d"]\')), json(\'["c", "d"]\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "b"}\'), json(\'["c"]\')), json(\'["c"]\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "foo"}\'), json(\'null\')), json(\'null\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"a": "foo"}\'), json(\'"bar"\')), json(\'"bar"\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"e": null}\'), json(\'{"a": 1}\')), json(\'{"e": null, "a": 1}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'[1, 2]\'), json(\'{"a": "b", "c": null}\')), json(\'{"a": "b"}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{}\'), json(\'{"a": {"bb": {"ccc": null}}}\')), json(\'{"a": {"bb": {}}}\'))'	true
+'use json_tools; json_equal(json_merge_patch(json(\'{"title": "Goodbye!", "author": {"givenName": "John", "familyName": "Doe"}, "tags": ["example", "sample"], "content": "This will be unchanged"}\'), json(\'{"title": "Hello!", "phoneNumber": "+01-123-456-7890", "author": {"familyName": null}, "tags": ["example"]}\')), json(\'{"title": "Hello!", "author": {"givenName": "John"}, "tags": ["example"], "content": "This will be unchanged", "phoneNumber": "+01-123-456-7890"}\'))'	true
