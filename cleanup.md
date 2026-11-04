@@ -135,3 +135,7 @@ Cover route matching and parameter outcomes, then annotate route helpers without
 ## Library router response signatures
 
 Cover response header and reset outcomes, then declare non-narrowing result types and verify behavior before smoke.
+
+## Library signal value signatures
+
+Cover mixed signal values and watched variable reads before adding non-narrowing signatures; verify outcomes and merged-main smoke.
