@@ -57,9 +57,17 @@ format_time(ms): text := {
 // the day number of a proleptic Gregorian date (lib/prelude.warp days_from_civil)
 days_from_date(year, month, day): int := days_from_civil(year, month, day)
 // "2026-10-07" → milliseconds since 1970 at midnight UTC
+// strict (card lib-audit-bugfixes-2): YYYY-MM-DD of digits, the month 1-12 and the day within it, else a raise
+// naming the text, no silent roll-over into the next month or year
 parse_date(t): int := {
 	parts = split(t, "-")
-	days_from_date(int(parts#1), int(parts#2), int(parts#3)) * 86400000
+	if count(parts) != 3 or not parts.all(p => is_digits(p)) { raise "parse_date: \"" + t + "\" is no YYYY-MM-DD date" }
+	year = int(parts#1)
+	month = int(parts#2)
+	day = int(parts#3)
+	if month < 1 or month > 12 { raise "parse_date: \"" + t + "\": no month " + str(month) }
+	if day < 1 or day > days_in_month(year, month) { raise "parse_date: \"" + t + "\": no day " + str(day) + " in that month" }
+	days_from_date(year, month, day) * 86400000
 }
 // milliseconds as the largest units: 5430000 → "1h 30m 30s", 250 → "250ms"; a duration value itself reads as
 // `1 hour 30 minutes 30 seconds` (core/runtime.warp duration_text)
