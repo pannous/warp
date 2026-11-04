@@ -1,0 +1,39 @@
+# Complex numbers (card lib-complex)
+'use complex; (Complex(3, 4) + Complex(1, -2)).text()'	"4+2i"
+'use complex; (Complex(3, 4) - Complex(1, -2)).text()'	"2+6i"
+'use complex; (Complex(1, 2) * Complex(3, 4)).text()'	"-5+10i"
+'use complex; complex_near(Complex(1, 2) / Complex(3, 4), Complex(0.44, 0.08), 0.000000001)'	yes
+'use complex; (Complex(3, 4) + 1).text()'	"4+4i"
+'use complex; (Complex(3, 4) * 2).text()'	"6+8i"
+'use complex; (Complex(6, 4) / 2).text()'	"3+2i"
+'use complex; Complex(1, 2) == Complex(1, 2)'	yes
+'use complex; Complex(1, 2) == Complex(1, 3)'	no
+'use complex; Complex(5, 0) == 5'	yes
+'use complex; complex_abs(Complex(3, 4))'	5.0
+'use complex; abs(complex_arg(Complex(0, 2)) - pi / 2) < 0.000000001'	yes
+'use complex; conj(Complex(3, 4)).text()'	"3-4i"
+'use complex; complex_near(complex_exp(Complex(0, pi)), -1, 0.000000001)'	yes
+'use complex; complex_sqrt(-1).text()'	"i"
+'use complex; complex_sqrt(Complex(-4, 0)).text()'	"2i"
+'use complex; complex_near(complex_sqrt(Complex(3, 4)), Complex(2, 1), 0.000000001)'	yes
+'use complex; complex_near(complex_log(Complex(-1, 0)), Complex(0, pi), 0.000000001)'	yes
+'use complex; complex_near(complex_pow(Complex(0, 1), 2), -1, 0.000000001)'	yes
+'use complex; complex_near(complex_sin(Complex(1, 1)), Complex(1.2984575814159773, 0.6349639147847361), 0.000000001)'	yes
+'use complex; complex_near(complex_cos(Complex(1, 1)), Complex(0.8337300251311491, -0.9888977057628651), 0.000000001)'	yes
+'use complex; z = polar(2, 1); complex_abs(z) ≈ 2 and complex_arg(z) ≈ 1'	yes
+'use complex; z = Complex(-3, 4); complex_near(polar(complex_abs(z), complex_arg(z)), z, 0.000000001)'	yes
+'use complex; Complex(3, 4).text()'	"3+4i"
+'use complex; Complex(3, -4).text()'	"3-4i"
+'use complex; Complex(0, 4).text()'	"4i"
+'use complex; Complex(3, 0).text()'	"3"
+'use complex; Complex(0, -1).text()'	"-i"
+'use complex; Complex(0, 0).text()'	"0"
+'use complex; Complex(1.5, 1).text()'	"1.5+i"
+'use complex; try (Complex(1, 1) / 0).text() else "refused"'	"refused"
+'use complex; try (Complex(1, 1) / Complex(0, 0)).text() else "refused"'	"refused"
+'use complex; (2 + Complex(1, 1)).text()'	"3+i"
+'use complex; csub(10, Complex(1, 1)).text()'	"9-i"
+'use complex; cdiv(2, Complex(1, 1)).text()'	"1-i"
+'use complex; cadd(1, 2).text()'	"3"
+'use complex; cmul(Complex(0, 1), Complex(0, 1)).text()'	"-1"
+'use complex; try cdiv(1, 0).text() else "refused"'	"refused"

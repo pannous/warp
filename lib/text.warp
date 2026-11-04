@@ -46,15 +46,16 @@ truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text): list {
 	out = []
-	for c in t {
+	for c in t.codepoints {
 		n = ord(c)
-		if n < 128 { out = out + [n] }
-		else if n < 2048 { out = out + [192 + n /! 64, 128 + n % 64] }
-		else if n < 65536 { out = out + [224 + n /! 4096, 128 + n /! 64 % 64, 128 + n % 64] }
-		else { out = out + [240 + n /! 262144, 128 + n /! 4096 % 64, 128 + n /! 64 % 64, 128 + n % 64] }
+		if n < 128 { out.add(n) }
+		else if n < 2048 { out.add(192 + n /! 64); out.add(128 + n % 64) }
+		else if n < 65536 { out.add(224 + n /! 4096); out.add(128 + n /! 64 % 64); out.add(128 + n % 64) }
+		else { out.add(240 + n /! 262144); out.add(128 + n /! 4096 % 64); out.add(128 + n /! 64 % 64); out.add(128 + n % 64) }
 	}
 	out
 }
+
 def from_utf8(bytes: any): text {
 	out = ""
 	i = 0

@@ -1,0 +1,74 @@
+// The standard library module complex (card lib-complex): `use complex`, then Complex(3, 4) + 1 is 4+4i. No literal
+// syntax: build values with Complex(re, im), polar(r, theta) or as_complex(x). + - * / and == are the class's operator
+// methods (as in uncertain.warp) and take a Complex or a plain number on the right; free functions are complex_… where
+// math already has the plain-number name (abs, arg, exp, log, sqrt, pow, sin, cos)
+//
+// Text form: each part prints as an integer when whole ("3", not "3.0"), else as the float. A zero part is left out
+// ("3", "4i") unless both are zero ("0"); an imaginary part of 1 or -1 prints as "i" or "-i"; a negative imaginary
+// part takes its own sign ("3-4i"), a positive one a "+" after a real part ("3+4i")
+
+class Complex {
+	re: float
+	im: float
+	plus(o: any): Complex := { b = as_complex(o); Complex(re + b.re, im + b.im) }
+	minus(o: any): Complex := { b = as_complex(o); Complex(re - b.re, im - b.im) }
+	times(o: any): Complex := { b = as_complex(o); Complex(re * b.re - im * b.im, re * b.im + im * b.re) }
+	divide(o: any): Complex := {
+		b = as_complex(o)
+		d = b.re * b.re + b.im * b.im
+		if d == 0 { raise "complex: division by zero" }
+		Complex((re * b.re + im * b.im) / d, (im * b.re - re * b.im) / d)
+	}
+	equals(o: any): bool := (o is Complex or o is number) and re == as_complex(o).re and im == as_complex(o).im
+	text(): text := complex_text(this)
+}
+
+// a Complex or a plain number as a Complex
+as_complex(x: any): Complex := if x is Complex then x else Complex(x * 1.0, 0.0)
+// r·e^(iθ)
+polar(r: number, theta: number): Complex := Complex(r * cos(theta), r * sin(theta))
+// |z|
+complex_abs(z: any): float := { c = as_complex(z); sqrt(c.re * c.re + c.im * c.im) }
+// the angle of z in (-π, π]
+complex_arg(z: any): float := { c = as_complex(z); atan2(c.im, c.re) }
+// the conjugate re - im·i
+conj(z: any): Complex := { c = as_complex(z); Complex(c.re, -c.im) }
+// e^z
+complex_exp(z: any): Complex := { c = as_complex(z); polar(exp(c.re), c.im) }
+// the principal logarithm: ln|z| + i·arg z; log 0 raises
+complex_log(z: any): Complex := {
+	if complex_abs(z) == 0 { raise "complex: the logarithm of 0" }
+	Complex(log(complex_abs(z)), complex_arg(z))
+}
+// the principal square root: its real part ≥ 0
+complex_sqrt(z: any): Complex := {
+	c = as_complex(z)
+	r = complex_abs(c)
+	a = sqrt((r + c.re) / 2)
+	b = sqrt((r - c.re) / 2)
+	Complex(a, if c.im < 0 then -b else b)
+}
+// z^w as e^(w·log z), 0^w is 0 (1 when w is 0)
+complex_pow(z: any, w: any): Complex := {
+	if complex_abs(z) == 0 { return if complex_abs(w) == 0 then Complex(1.0, 0.0) else Complex(0.0, 0.0) }
+	complex_exp(as_complex(w) * complex_log(z))
+}
+complex_sin(z: any): Complex := { c = as_complex(z); Complex(sin(c.re) * cosh(c.im), cos(c.re) * sinh(c.im)) }
+complex_cos(z: any): Complex := { c = as_complex(z); Complex(cos(c.re) * cosh(c.im), -sin(c.re) * sinh(c.im)) }
+// z within tolerance of w in both parts
+complex_near(z: any, w: any, tolerance: float): bool := complex_abs(as_complex(z) - as_complex(w)) <= tolerance
+
+complex_part(x: float): text := if x == floor(x) and abs(x) < 1000000000000000 then str(int(x)) else str(x)
+complex_text(z: Complex): text := {
+	if z.im == 0 { return complex_part(z.re) }
+	imaginary = if z.im == 1 then "i" else if z.im == -1 then "-i" else complex_part(z.im) + "i"
+	if z.re == 0 { return imaginary }
+	complex_part(z.re) + (if z.im > 0 then "+" else "") + imaginary
+}
+
+// the arithmetic as functions taking a Complex or a plain number on either side: `10 - z` and `10 / z` with a plain
+// number on the left trap in the compiler (a core matter), so write csub(10, z) and cdiv(10, z)
+cadd(a: any, b: any): Complex := as_complex(a) + b
+csub(a: any, b: any): Complex := as_complex(a) - b
+cmul(a: any, b: any): Complex := as_complex(a) * b
+cdiv(a: any, b: any): Complex := as_complex(a) / b
