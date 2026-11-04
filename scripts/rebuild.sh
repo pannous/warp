@@ -54,7 +54,10 @@ baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 copied() { clone "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
-inputs_line() { echo "$hash commit=$(git -C "$tree" rev-parse --short HEAD 2>/dev/null) built=$(date '+%Y-%m-%dT%H:%M:%S%z')"; }
+# the commit a build is of: the tree's HEAD, `<sha>+dirty` when its inputs hold uncommitted changes (inputs.txt lists
+# them), so a build of a worktree's edits is never taken for its base commit's ([--short])
+built_commit() { echo "$(git -C "$tree" rev-parse ${1:-} HEAD 2>/dev/null)$([ -n "$(git -C "$tree" status --short -- core extensions lib 2>/dev/null)" ] && echo +dirty)"; }
+inputs_line() { echo "$hash commit=$(built_commit --short) built=$(date '+%Y-%m-%dT%H:%M:%S%z')"; }
 
 # a file into the store under its hash, by its name or the path given, never over one there (write-once)
 publish() {
@@ -78,7 +81,7 @@ kept_failure() {
 	lines=$(printf '%s' "$output" | grep -c '')
 	rm -rf "$record.new-$$" && mkdir -p "$record.new-$$" || return 1
 	{
-		echo "rebuild.sh: $name of $hash build-failed${step:+ at step $step} (exit $status, commit $(git -C "$tree" rev-parse --short HEAD 2>/dev/null), $(date '+%Y-%m-%d %H:%M %Z'), by $warp)"
+		echo "rebuild.sh: $name of $hash build-failed${step:+ at step $step} (exit $status, commit $(built_commit --short), $(date '+%Y-%m-%d %H:%M %Z'), by $warp)"
 		if [ "$lines" -gt $SHOWN_LINES ]; then
 			echo "rebuild.sh: its first error line: $(printf '%s\n' "$output" | grep -m1 -E "$ERROR_LINE")"
 			echo "rebuild.sh: the step's last $SHOWN_LINES of $lines lines:"
@@ -126,7 +129,7 @@ recorded_inputs() {
 		echo "hash $hash"
 		echo "baked $baked"
 		echo "tree $tree"
-		echo "commit $(git -C "$tree" rev-parse HEAD 2>/dev/null) $(git -C "$tree" branch --show-current 2>/dev/null)"
+		echo "commit $(built_commit) $(git -C "$tree" branch --show-current 2>/dev/null)"
 		echo "seed $(sha "$WARP_SEED") $seed"
 		echo "warp $(sha "$binary") $binary"
 		echo "uncommitted:"
