@@ -1,0 +1,86 @@
+// lib/idna.warp Punycode: every RFC 3492 section 7.1 sample (A-S), its code points to its ASCII and back (card lib-encodings-more)
+// (A) Arabic (Egyptian):
+'use idna; punycode_encode([1604, 1610, 1607, 1605, 1575, 1576, 1578, 1603, 1604, 1605, 1608, 1588, 1593, 1585, 1576, 1610, 1567])'	"egbpdaj6bu4bxfgehfvwxn"
+'use idna; punycode_decode_points("egbpdaj6bu4bxfgehfvwxn")'	[1604, 1610, 1607, 1605, 1575, 1576, 1578, 1603, 1604, 1605, 1608, 1588, 1593, 1585, 1576, 1610, 1567]
+// (B) Chinese (simplified):
+'use idna; punycode_encode([20182, 20204, 20026, 20160, 20040, 19981, 35828, 20013, 25991])'	"ihqwcrb4cv8a8dqg056pqjye"
+'use idna; punycode_decode_points("ihqwcrb4cv8a8dqg056pqjye")'	[20182, 20204, 20026, 20160, 20040, 19981, 35828, 20013, 25991]
+// (C) Chinese (traditional):
+'use idna; punycode_encode([20182, 20497, 29234, 20160, 40637, 19981, 35498, 20013, 25991])'	"ihqwctvzc91f659drss3x8bo0yb"
+'use idna; punycode_decode_points("ihqwctvzc91f659drss3x8bo0yb")'	[20182, 20497, 29234, 20160, 40637, 19981, 35498, 20013, 25991]
+// (D) Czech: Pro<ccaron>prost<ecaron>nemluv<iacute><ccaron>esky
+'use idna; punycode_encode([80, 114, 111, 269, 112, 114, 111, 115, 116, 283, 110, 101, 109, 108, 117, 118, 237, 269, 101, 115, 107, 121])'	"Proprostnemluvesky-uyb24dma41a"
+'use idna; punycode_decode_points("Proprostnemluvesky-uyb24dma41a")'	[80, 114, 111, 269, 112, 114, 111, 115, 116, 283, 110, 101, 109, 108, 117, 118, 237, 269, 101, 115, 107, 121]
+// (E) Hebrew:
+'use idna; punycode_encode([1500, 1502, 1492, 1492, 1501, 1508, 1513, 1493, 1496, 1500, 1488, 1502, 1491, 1489, 1512, 1497, 1501, 1506, 1489, 1512, 1497, 1514])'	"4dbcagdahymbxekheh6e0a7fei0b"
+'use idna; punycode_decode_points("4dbcagdahymbxekheh6e0a7fei0b")'	[1500, 1502, 1492, 1492, 1501, 1508, 1513, 1493, 1496, 1500, 1488, 1502, 1491, 1489, 1512, 1497, 1501, 1506, 1489, 1512, 1497, 1514]
+// (F) Hindi (Devanagari):
+'use idna; punycode_encode([2351, 2361, 2354, 2379, 2327, 2361, 2367, 2344, 2381, 2342, 2368, 2325, 2381, 2351, 2379, 2306, 2344, 2361, 2368, 2306, 2348, 2379, 2354, 2360, 2325, 2340, 2375, 2361, 2376, 2306])'	"i1baa7eci9glrd9b2ae1bj0hfcgg6iyaf8o0a1dig0cd"
+'use idna; punycode_decode_points("i1baa7eci9glrd9b2ae1bj0hfcgg6iyaf8o0a1dig0cd")'	[2351, 2361, 2354, 2379, 2327, 2361, 2367, 2344, 2381, 2342, 2368, 2325, 2381, 2351, 2379, 2306, 2344, 2361, 2368, 2306, 2348, 2379, 2354, 2360, 2325, 2340, 2375, 2361, 2376, 2306]
+// (G) Japanese (kanji and hiragana):
+'use idna; punycode_encode([12394, 12380, 12415, 12435, 12394, 26085, 26412, 35486, 12434, 35441, 12375, 12390, 12367, 12428, 12394, 12356, 12398, 12363])'	"n8jok5ay5dzabd5bym9f0cm5685rrjetr6pdxa"
+'use idna; punycode_decode_points("n8jok5ay5dzabd5bym9f0cm5685rrjetr6pdxa")'	[12394, 12380, 12415, 12435, 12394, 26085, 26412, 35486, 12434, 35441, 12375, 12390, 12367, 12428, 12394, 12356, 12398, 12363]
+// (H) Korean (Hangul syllables):
+'use idna; punycode_encode([49464, 44228, 51032, 47784, 46304, 49324, 46988, 46308, 51060, 54620, 44397, 50612, 47484, 51060, 54644, 54620, 45796, 47732, 50620, 47560, 45208, 51339, 51012, 44620])'	"989aomsvi5e83db1d2a355cv1e0vak1dwrv93d5xbh15a0dt30a5jpsd879ccm6fea98c"
+'use idna; punycode_decode_points("989aomsvi5e83db1d2a355cv1e0vak1dwrv93d5xbh15a0dt30a5jpsd879ccm6fea98c")'	[49464, 44228, 51032, 47784, 46304, 49324, 46988, 46308, 51060, 54620, 44397, 50612, 47484, 51060, 54644, 54620, 45796, 47732, 50620, 47560, 45208, 51339, 51012, 44620]
+// (I) Russian (Cyrillic):
+'use idna; punycode_encode([1087, 1086, 1095, 1077, 1084, 1091, 1078, 1077, 1086, 1085, 1080, 1085, 1077, 1075, 1086, 1074, 1086, 1088, 1103, 1090, 1087, 1086, 1088, 1091, 1089, 1089, 1082, 1080])'	"b1abfaaepdrnnbgefbadotcwatmq2g4l"
+'use idna; punycode_decode_points("b1abfaaepdrnnbgefbaDotcwatmq2g4l")'	[1087, 1086, 1095, 1077, 1084, 1091, 1078, 1077, 1086, 1085, 1080, 1085, 1077, 1075, 1086, 1074, 1086, 1088, 1103, 1090, 1087, 1086, 1088, 1091, 1089, 1089, 1082, 1080]
+// (J) Spanish: Porqu<eacute>nopuedensimplementehablarenEspa<ntilde>ol
+'use idna; punycode_encode([80, 111, 114, 113, 117, 233, 110, 111, 112, 117, 101, 100, 101, 110, 115, 105, 109, 112, 108, 101, 109, 101, 110, 116, 101, 104, 97, 98, 108, 97, 114, 101, 110, 69, 115, 112, 97, 241, 111, 108])'	"PorqunopuedensimplementehablarenEspaol-fmd56a"
+'use idna; punycode_decode_points("PorqunopuedensimplementehablarenEspaol-fmd56a")'	[80, 111, 114, 113, 117, 233, 110, 111, 112, 117, 101, 100, 101, 110, 115, 105, 109, 112, 108, 101, 109, 101, 110, 116, 101, 104, 97, 98, 108, 97, 114, 101, 110, 69, 115, 112, 97, 241, 111, 108]
+// (K) Vietnamese:
+'use idna; punycode_encode([84, 7841, 105, 115, 97, 111, 104, 7885, 107, 104, 244, 110, 103, 116, 104, 7875, 99, 104, 7881, 110, 243, 105, 116, 105, 7871, 110, 103, 86, 105, 7879, 116])'	"TisaohkhngthchnitingVit-kjcr8268qyxafd2f1b9g"
+'use idna; punycode_decode_points("TisaohkhngthchnitingVit-kjcr8268qyxafd2f1b9g")'	[84, 7841, 105, 115, 97, 111, 104, 7885, 107, 104, 244, 110, 103, 116, 104, 7875, 99, 104, 7881, 110, 243, 105, 116, 105, 7871, 110, 103, 86, 105, 7879, 116]
+// (L) 3<nen>B<gumi><kinpachi><sensei>
+'use idna; punycode_encode([51, 24180, 66, 32068, 37329, 20843, 20808, 29983])'	"3B-ww4c5e180e575a65lsy2b"
+'use idna; punycode_decode_points("3B-ww4c5e180e575a65lsy2b")'	[51, 24180, 66, 32068, 37329, 20843, 20808, 29983]
+// (M) <amuro><namie>-with-SUPER-MONKEYS
+'use idna; punycode_encode([23433, 23460, 22856, 32654, 24693, 45, 119, 105, 116, 104, 45, 83, 85, 80, 69, 82, 45, 77, 79, 78, 75, 69, 89, 83])'	"-with-SUPER-MONKEYS-pc58ag80a8qai00g7n9n"
+'use idna; punycode_decode_points("-with-SUPER-MONKEYS-pc58ag80a8qai00g7n9n")'	[23433, 23460, 22856, 32654, 24693, 45, 119, 105, 116, 104, 45, 83, 85, 80, 69, 82, 45, 77, 79, 78, 75, 69, 89, 83]
+// (N) Hello-Another-Way-<sorezore><no><basho>
+'use idna; punycode_encode([72, 101, 108, 108, 111, 45, 65, 110, 111, 116, 104, 101, 114, 45, 87, 97, 121, 45, 12381, 12428, 12382, 12428, 12398, 22580, 25152])'	"Hello-Another-Way--fc4qua05auwb3674vfr0b"
+'use idna; punycode_decode_points("Hello-Another-Way--fc4qua05auwb3674vfr0b")'	[72, 101, 108, 108, 111, 45, 65, 110, 111, 116, 104, 101, 114, 45, 87, 97, 121, 45, 12381, 12428, 12382, 12428, 12398, 22580, 25152]
+// (O) <hitotsu><yane><no><shita>2
+'use idna; punycode_encode([12402, 12392, 12388, 23627, 26681, 12398, 19979, 50])'	"2-u9tlzr9756bt3uc0v"
+'use idna; punycode_decode_points("2-u9tlzr9756bt3uc0v")'	[12402, 12392, 12388, 23627, 26681, 12398, 19979, 50]
+// (P) Maji<de>Koi<suru>5<byou><mae>
+'use idna; punycode_encode([77, 97, 106, 105, 12391, 75, 111, 105, 12377, 12427, 53, 31186, 21069])'	"MajiKoi5-783gue6qz075azm5e"
+'use idna; punycode_decode_points("MajiKoi5-783gue6qz075azm5e")'	[77, 97, 106, 105, 12391, 75, 111, 105, 12377, 12427, 53, 31186, 21069]
+// (Q) <pafii>de<runba>
+'use idna; punycode_encode([12497, 12501, 12451, 12540, 100, 101, 12523, 12531, 12496])'	"de-jg4avhby1noc0d"
+'use idna; punycode_decode_points("de-jg4avhby1noc0d")'	[12497, 12501, 12451, 12540, 100, 101, 12523, 12531, 12496]
+// (R) <sono><supiido><de>
+'use idna; punycode_encode([12381, 12398, 12473, 12500, 12540, 12489, 12391])'	"d9juau41awczczp"
+'use idna; punycode_decode_points("d9juau41awczczp")'	[12381, 12398, 12473, 12500, 12540, 12489, 12391]
+// (S) -> $1.00 <-
+'use idna; punycode_encode([45, 62, 32, 36, 49, 46, 48, 48, 32, 60, 45])'	"-> $1.00 <--"
+'use idna; punycode_decode_points("-> $1.00 <--")'	[45, 62, 32, 36, 49, 46, 48, 48, 32, 60, 45]
+// (I) above is written with the RFC's mixed-case annotation D, which decoding reads as d; encoding writes lowercase
+'use idna; punycode_encode("bücher")'	"bcher-kva"
+'use idna; punycode_decode("bcher-kva")'	"bücher"
+'use idna; try { punycode_decode("abc-!") } catch e { e.message }'	"punycode: ! is no punycode digit"
+// domain_to_ascii and domain_to_unicode: lowercase, NFC, xn-- labels, the IDNA dots; python's idna codec agrees, lowercased (it keeps the case of ASCII labels, UTS #46 lowercases them)
+'use idna; domain_to_ascii("bücher.example")'	"xn--bcher-kva.example"
+'use idna; domain_to_unicode("xn--bcher-kva.example")'	"bücher.example"
+'use idna; domain_to_ascii("München.DE")'	"xn--mnchen-3ya.de"
+'use idna; domain_to_unicode("xn--mnchen-3ya.de")'	"münchen.de"
+'use idna; domain_to_ascii("www.Bücher.de")'	"www.xn--bcher-kva.de"
+'use idna; domain_to_unicode("www.xn--bcher-kva.de")'	"www.bücher.de"
+'use idna; domain_to_ascii("例え.テスト")'	"xn--r8jz45g.xn--zckzah"
+'use idna; domain_to_unicode("xn--r8jz45g.xn--zckzah")'	"例え.テスト"
+'use idna; domain_to_ascii("παράδειγμα.δοκιμή")'	"xn--hxajbheg2az3al.xn--jxalpdlp"
+'use idna; domain_to_unicode("xn--hxajbheg2az3al.xn--jxalpdlp")'	"παράδειγμα.δοκιμή"
+'use idna; domain_to_ascii("ドメイン名例.jp")'	"xn--eckwd4c7cu47r2wf.jp"
+'use idna; domain_to_unicode("xn--eckwd4c7cu47r2wf.jp")'	"ドメイン名例.jp"
+'use idna; domain_to_ascii("abc.example.com")'	"abc.example.com"
+'use idna; domain_to_unicode("abc.example.com")'	"abc.example.com"
+'use idna; domain_to_ascii("example.com.")'	"example.com."
+'use idna; domain_to_unicode("example.com.")'	"example.com."
+'use idna; domain_to_ascii("例え。テスト")'	"xn--r8jz45g.xn--zckzah"
+'use idna; domain_to_ascii("bücher．example｡com")'	"xn--bcher-kva.example.com"
+'use idna; domain_to_ascii("über.example")'	"xn--ber-goa.example"
+// non-transitional: ß stays ß (python's IDNA 2003 codec would map it to ss)
+'use idna; domain_to_ascii("straße.de")'	"xn--strae-oqa.de"
+'use idna; domain_to_unicode("XN--BCHER-KVA.Example")'	"bücher.example"
+'use idna; try { domain_to_ascii("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com") } catch e { e.message }'	"domain_to_ascii: the label aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa is longer than 63 characters"

@@ -20,7 +20,8 @@ Darwin)
 esac
 # the shared native warp: WARP_BINARY, else ~/dev/bin/warp (the Mac), else the warp on PATH (the box: ~/bin/warp)
 warp_binary=${WARP_BINARY:-$HOME/dev/bin/warp}
-[ -e "$warp_binary" ] || warp_binary=$(command -v warp)
+# (neither there: the path stays, so an error names where the binary was looked for, never an empty one)
+[ -e "$warp_binary" ] || warp_binary=$(command -v warp || echo "$warp_binary")
 # the main checkout and the compiler store (scripts/rebuild.sh)
 warp_main_checkout=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 if [ $warp_platform = mac ]; then warp_store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}

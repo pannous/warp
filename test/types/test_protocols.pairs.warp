@@ -1,0 +1,18 @@
+# a protocol names what its values can do: required words, default words over them, any class with the required
+# words conforms (decisions map-protocol and lowercase-protocols, card protocol-default-implementation, wiki trait.md)
+'protocol shape { area(); perimeter() := 2 * area() }; class sq{s:int; area() := s*s}; sq(3).perimeter()'	18
+'protocol shape { area(); perimeter() := 2 * area() }; class sq{s:int; area() := s*s}; perimeter(sq(3))'	18
+'trait shape { area(); perimeter() := 2 * area() }; class sq{s:int; area() := s*s}; sq(2).perimeter()'	8
+# a class giving a default word itself keeps its own
+'protocol shape { area(); perimeter() := 2 * area() }; class ci{r:int; area() := 3*r*r; perimeter() := 6*r}; ci(1).perimeter()'	6
+# conformance is structural, by methods or by functions of the class
+'protocol shape { area() }; class sq{s:int; area() := s*s}; sq(1) is shape'	yes
+'protocol shape { area() }; class dot{x:int}; dot(1) is shape'	no
+'protocol shape { area() }; class sq{s:int; area() := s*s}; 3 is shape'	no
+'protocol shape { area() }; class sq{s:int}; area(q: sq) := q.s * q.s; sq(2) is shape'	yes
+# a required word is a bare name, a signature or a body of pass
+'trait shape{area perimeter}; class sq{s:int; area() := s*s; perimeter() := 4*s}; sq(1) is shape'	yes
+'protocol named { name() := pass }; class a{n:int; name() := "a"}; a(1) is named'	yes
+# a parameter typed by the protocol takes any value conforming to it
+'protocol shape { area(); perimeter() := 2 * area() }; class sq{s:int; area() := s*s}; f(x: shape) := x.perimeter(); f(sq(2))'	8
+'protocol shape { area() }; class sq{s:int; area() := s*s}; class ci{r:int; area() := 3*r*r}; total(xs: list) := sum(xs.map(x => x.area())); total([sq(2), ci(1)])'	7
