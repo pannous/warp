@@ -3,6 +3,7 @@
 // as a number, and hmac(key, message, algorithm) of RFC 2104 with any of them, sha256 by default
 use text
 use math
+use bits
 sha256(subject: text or list): text := std_pure("hash", "sha256", [subject])
 crc32(subject: text or list): int := std_pure("hash", "crc32", [subject])
 
@@ -14,10 +15,7 @@ hex_byte(b: int): text := "0123456789abcdef"[b /! 16] + "0123456789abcdef"[b % 1
 
 // 32-bit words: whole numbers 0 to 2^32 - 1, kept there by % 2 ** 32
 word_not(x: int, width: int): int := 2 ** width - 1 - x
-rotate_left(x: int, n: int, width: int): int := (x * 2 ** n) % 2 ** width + x /! 2 ** (width - n)
-// 64-bit words are warp's ints themselves: + and * wrap, >> keeps the sign, so the logical shift masks it off
-shift_right(x: int, n: int): int := bit_and(x >> n, 2 ** (64 - n) - 1)
-rotate_right(x: int, n: int): int := bit_or(shift_right(x, n), x * 2 ** (64 - n))
+// rotate_left, rotate_right and the logical shift_right of 64-bit words are those of bits; + and * wrap
 // a number as its bytes, most significant first (big) or last
 big_endian(n: int, size: int): list := [n /! 256 ** (size - 1 - i) % 256 for i in 0 ..< size]
 little_endian(n: int, size: int): list := [n /! 256 ** i % 256 for i in 0 ..< size]
