@@ -1,0 +1,41 @@
+# mustache spec delimiters: Pair Behavior
+'use template; mustache("{{=<% %>=}}(<%text%>)", {"text": "Hey!"})'	"(Hey!)"
+
+# mustache spec delimiters: Special Characters
+'use template; mustache("({{=[ ]=}}[text])", {"text": "It worked!"})'	"(It worked!)"
+
+# mustache spec delimiters: Sections
+'use template; mustache("[\n{{#section}}\n  {{data}}\n  |data|\n{{/section}}\n\n{{= | | =}}\n|#section|\n  {{data}}\n  |data|\n|/section|\n]\n", {"section": yes, "data": "I got interpolated."})'	"[\n  I got interpolated.\n  |data|\n\n  {{data}}\n  I got interpolated.\n]\n"
+
+# mustache spec delimiters: Inverted Sections
+'use template; mustache("[\n{{^section}}\n  {{data}}\n  |data|\n{{/section}}\n\n{{= | | =}}\n|^section|\n  {{data}}\n  |data|\n|/section|\n]\n", {"section": no, "data": "I got interpolated."})'	"[\n  I got interpolated.\n  |data|\n\n  {{data}}\n  I got interpolated.\n]\n"
+
+# mustache spec delimiters: Partial Inheritence
+'use template; mustache("[ {{>include}} ]\n{{= | | =}}\n[ |>include| ]\n", {"value": "yes"}, {"include": ".{{value}}."})'	"[ .yes. ]\n[ .yes. ]\n"
+
+# mustache spec delimiters: Post-Partial Behavior
+'use template; mustache("[ {{>include}} ]\n[ .{{value}}.  .|value|. ]\n", {"value": "yes"}, {"include": ".{{value}}. {{= | | =}} .|value|."})'	"[ .yes.  .yes. ]\n[ .yes.  .|value|. ]\n"
+
+# mustache spec delimiters: Surrounding Whitespace
+'use template; mustache("| {{=@ @=}} |", {})'	"|  |"
+
+# mustache spec delimiters: Outlying Whitespace (Inline)
+'use template; mustache(" | {{=@ @=}}\n", {})'	" | \n"
+
+# mustache spec delimiters: Standalone Tag
+'use template; mustache("Begin.\n{{=@ @=}}\nEnd.\n", {})'	"Begin.\nEnd.\n"
+
+# mustache spec delimiters: Indented Standalone Tag
+'use template; mustache("Begin.\n  {{=@ @=}}\nEnd.\n", {})'	"Begin.\nEnd.\n"
+
+# mustache spec delimiters: Standalone Line Endings
+'use template; mustache("|\r\n{{= @ @ =}}\r\n|", {})'	"|\r\n|"
+
+# mustache spec delimiters: Standalone Without Previous Line
+'use template; mustache("  {{=@ @=}}\n=", {})'	"="
+
+# mustache spec delimiters: Standalone Without Newline
+'use template; mustache("=\n  {{=@ @=}}", {})'	"=\n"
+
+# mustache spec delimiters: Pair with Padding
+'use template; mustache("|{{= @   @ =}}|", {})'	"||"

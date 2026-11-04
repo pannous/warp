@@ -1,0 +1,26 @@
+# find_root, newton, integrate, linear_interpolate, polynomials and polyfit (card lib-numerics)
+'use numeric; abs(find_root(x => x * x - 2, 0, 2) - √2) < 0.000000001'	yes
+'use numeric; r = find_root(x => cos(x) - x, 0, 1); abs(cos(r) - r) < 0.000000001'	yes
+'use numeric; find_root(x => x - 3, 3, 5)'	3.0
+'use numeric; try find_root(x => x * x + 1, -1, 1) else "no bracket"'	"no bracket"
+'use numeric; abs(newton(x => x * x - 2, x => 2 * x, 1) - √2) < 0.000000001'	yes
+'use numeric; try newton(x => x * x + 1, x => 2 * x, 1) else "no convergence"'	"no convergence"
+'use numeric; try newton(x => x * x - 2, x => 2 * x, 0) else "zero derivative"'	"zero derivative"
+'use numeric; abs(integrate(x => x * x, 0, 3) - 9) < 0.000000001'	yes
+'use numeric; abs(integrate(x => sin(x), 0, π) - 2) < 0.000000001'	yes
+'use numeric; integrate(x => x, 2, 2)'	0.0
+'use numeric; linear_interpolate([0, 10, 20], [0, 100, 50], 15)'	75.0
+'use numeric; linear_interpolate([0, 10], [1, 3], 0)'	1.0
+'use numeric; linear_interpolate([0, 10], [1, 3], 10)'	3.0
+'use numeric; try linear_interpolate([0, 10], [1, 3], 11) else "outside"'	"outside"
+'use numeric; poly_eval([1, 2, 3], 2)'	17.0
+'use numeric; poly_eval([], 5)'	0.0
+'use numeric; poly_derivative([1, 2, 3])'	[2, 6]
+'use numeric; poly_derivative([7])'	[]
+'use numeric; poly_add([1, 2], [3, 4, 5])'	[4, 6, 5]
+'use numeric; poly_multiply([1, 1], [-1, 1])'	[-1, 0, 1]
+'use numeric; poly_roots([-2, 0, 1]).map(r => round(r * 1000) / 1000)'	[-1.414, 1.414]
+'use numeric; poly_roots([1, 0, 1])'	[]
+'use numeric; c = polyfit([0, 1, 2, 3], [1, 3, 9, 19], 2); abs(c#1 - 1) + abs(c#2) + abs(c#3 - 2) < 0.000000001'	yes
+'use numeric; c = polyfit([0, 1, 2, 3, 4], [1.1, 2.9, 5.2, 6.8, 9.1], 1); abs(c#1 - 1.04) < 0.001 and abs(c#2 - 1.99) < 0.001'	yes
+'use numeric; try polyfit([1, 2], [1, 2], 2) else "too few"'	"too few"
