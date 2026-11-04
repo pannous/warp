@@ -1,0 +1,239 @@
+// The standard library module json_tools: `use json_tools`, tools over JSON values as lib/json reads them (objects
+// maps of text keys, arrays lists, null ø, true/false bools, every number a float): JSON Pointer (RFC 6901)
+// json_pointer_get(doc, "/a/0"), also in its URI fragment form "#/a/0"; JSON Patch (RFC 6902) json_patch(doc, ops);
+// JSON Merge Patch (RFC 7396) json_merge_patch(target, patch); and a JSON Schema (draft 2020-12) validator,
+// json_validate(doc, schema), a list of errors each led by the JSON Pointer of its place, empty when the doc is valid.
+// Nothing changes its input: a patched document is a new value, whatever it shares with the input never mutated
+use json
+use url
+use regex
+
+// --- values
+json_kind(x: any): text := if x == ø then "null" else if x is bool then "boolean" else if x is number then "number" else if x is text then "string" else if json_is_array(x) then "array" else if json_is_object(x) then "object" else "a non-JSON " + type(x).name
+json_is_array(x: any): bool := x != ø and x is list
+json_is_object(x: any): bool := x != ø and x is map
+json_whole(x: any): bool := x is number and not (x is bool) and floor(x) == x
+// JSON's equality: numbers by value, objects regardless of key order, true never 1
+def json_equal(a: any, b: any): bool {
+	kind = json_kind(a)
+	if kind != json_kind(b) { return no }
+	if kind == "array" {
+		if count(a) != count(b) { return no }
+		for i in 0 ..< count(a) { if not json_equal(a[i], b[i]) { return no } }
+		return yes
+	}
+	if kind == "object" {
+		if count(a.keys) != count(b.keys) { return no }
+		for k in a.keys { if not (k in b) or not json_equal(a[k], b[k]) { return no } }
+		return yes
+	}
+	a == b
+}
+// a deep copy, so a patched document never shares what a caller may change
+def json_copy(x: any): any {
+	if json_is_array(x) { return [json_copy(item) for item in x] }
+	if json_is_object(x) { out = {}; for k in x.keys { out[k] = json_copy(x[k]) }; return out }
+	x
+}
+def json_shallow(x: any): any {
+	if json_is_array(x) { return [item for item in x] }
+	out = {}
+	for k in x.keys { out[k] = x[k] }
+	out
+}
+
+// --- JSON Pointer (RFC 6901)
+// the reference tokens of a pointer, ~1 read as / and ~0 as ~; "#…" is the URI fragment form, percent-decoded
+def json_pointer_tokens(pointer: text): list {
+	written = if pointer.starts_with("#") then url_decode(pointer[1 ..< count(pointer)]) else pointer
+	if written == "" { return [] }
+	if not written.starts_with("/") { raise "json pointer " + pointer + " does not start with /" }
+	parts = split(written, "/")
+	[replace(replace(part, "~1", "/"), "~0", "~") for part in parts[1 ..< count(parts)]]
+}
+json_pointer_escape(token: text): text := replace(replace(token, "~", "~0"), "/", "~1")
+json_pointer_of(tokens: list): text := join(["/" + json_pointer_escape(str(t)) for t in tokens], "")
+// an array index token: digits without a leading zero, below the array's count unless `end` allows it
+def json_index(token: text, size: int, end: bool, pointer: text): int {
+	if token == "-" and end { return size }
+	if token == "" or not is_digits(token) or (count(token) > 1 and token.starts_with("0")) { raise "json pointer " + pointer + ": " + token + " is no array index" }
+	n = int(token)
+	if n > size or (n == size and not end) { raise "json pointer " + pointer + ": index " + token + " is past the end of an array of " + str(size) }
+	n
+}
+def json_pointer_walk(doc: any, tokens: list, pointer: text): any {
+	here = doc
+	for token in tokens {
+		if json_is_object(here) {
+			if not (token in here) { raise "json pointer " + pointer + ": no member " + token }
+			here = here[token]
+		} else if json_is_array(here) { here = here[json_index(token, count(here), no, pointer)] }
+		else { raise "json pointer " + pointer + ": " + token + " reaches into a " + json_kind(here) }
+	}
+	here
+}
+json_pointer_get(doc: any, pointer: text): any := json_pointer_walk(doc, json_pointer_tokens(pointer), pointer)
+json_pointer_has(doc: any, pointer: text): bool := try { json_pointer_get(doc, pointer); yes } catch e { no }
+
+// --- JSON Patch (RFC 6902)
+// doc with the place `tokens` names changed by `how` ("add", "remove", "replace"), copied along the way only
+def json_changed(doc: any, tokens: list, depth: int, how: text, value: any, pointer: text): any {
+	if depth == count(tokens) { return if how == "remove" then ø else value }
+	token = tokens[depth]
+	if json_is_object(doc) {
+		out = json_shallow(doc)
+		if depth + 1 == count(tokens) {
+			if how != "add" and not (token in doc) { raise "json pointer " + pointer + ": no member " + token }
+			if how == "remove" { out.remove(token) } else { out[token] = value }
+			return out
+		}
+		if not (token in doc) { raise "json pointer " + pointer + ": no member " + token }
+		out[token] = json_changed(doc[token], tokens, depth + 1, how, value, pointer)
+		return out
+	}
+	if json_is_array(doc) {
+		final = depth + 1 == count(tokens)
+		i = json_index(token, count(doc), final and how == "add", pointer)
+		if not final { out = json_shallow(doc); out[i] = json_changed(doc[i], tokens, depth + 1, how, value, pointer); return out }
+		if how == "add" { return doc[0 ..< i] + [value] + doc[i ..< count(doc)] }
+		if how == "remove" { return doc[0 ..< i] + doc[i + 1 ..< count(doc)] }
+		out = json_shallow(doc)
+		out[i] = value
+		return out
+	}
+	raise "json pointer " + pointer + ": " + token + " reaches into a " + json_kind(doc)
+}
+def json_patch_member(op: any, name: text): any {
+	if not (name in op) { raise "it has no \"" + name + "\" member" }
+	op[name]
+}
+def json_patch_step(doc: any, op: any): any {
+	if not json_is_object(op) { raise "it is no object" }
+	verb = json_patch_member(op, "op")
+	target = json_patch_member(op, "path")
+	tokens = json_pointer_tokens(target)
+	if verb == "add" { return json_changed(doc, tokens, 0, "add", json_copy(json_patch_member(op, "value")), target) }
+	if verb == "remove" { return json_changed(doc, tokens, 0, "remove", ø, target) }
+	if verb == "replace" { return json_changed(doc, tokens, 0, "replace", json_copy(json_patch_member(op, "value")), target) }
+	if verb == "test" {
+		if not json_equal(json_pointer_walk(doc, tokens, target), json_patch_member(op, "value")) { raise "the value at " + target + " is " + json_written(json_pointer_walk(doc, tokens, target), no) + ", not " + json_written(op["value"], no) }
+		return doc
+	}
+	if verb != "copy" and verb != "move" { raise "op " + json_written(verb, no) + " is unknown" }
+	source = json_patch_member(op, "from")
+	source_tokens = json_pointer_tokens(source)
+	value = json_pointer_walk(doc, source_tokens, source)
+	if verb == "copy" { return json_changed(doc, tokens, 0, "add", json_copy(value), target) }
+	if verb == "move" {
+		if count(tokens) > count(source_tokens) and tokens[0 ..< count(source_tokens)] == source_tokens { raise "it moves " + source + " into its own child " + target }
+		return json_changed(json_changed(doc, source_tokens, 0, "remove", ø, source), tokens, 0, "add", value, target)
+	}
+	raise "op " + json_written(verb, no) + " is unknown"
+}
+// the document after every operation in order; any failing leaves nothing changed and raises naming its index
+def json_patch(doc: any, ops: list): any {
+	result = doc
+	for i in 0 ..< count(ops) {
+		op = ops[i]
+		place = if json_is_object(op) and "path" in op then " (" + str(op["path"]) + ")" else ""
+		result = try { json_patch_step(result, op) } catch e { raise "json_patch: operation " + str(i) + place + ": " + e.message }
+	}
+	result
+}
+
+// --- JSON Merge Patch (RFC 7396)
+def json_merge_patch(target: any, patch: any): any {
+	if not json_is_object(patch) { return json_copy(patch) }
+	out = if json_is_object(target) then json_shallow(target) else {}
+	for k in patch.keys {
+		if patch[k] == ø { if k in out { out.remove(k) } }
+		else { out[k] = json_merge_patch(if k in out then out[k] else ø, patch[k]) }
+	}
+	out
+}
+
+// --- JSON Schema (draft 2020-12): type, enum, const, properties, required, additionalProperties, items,
+// prefixItems, minItems, maxItems, uniqueItems, minLength, maxLength, pattern, minimum, maximum, exclusiveMinimum,
+// exclusiveMaximum, multipleOf, allOf, anyOf, oneOf, not, and $ref to a place in the root schema ("#/$defs/x")
+json_place(tokens: list): text := if count(tokens) == 0 then "(root)" else json_pointer_of(tokens)
+json_type_holds(x: any, kind: text): bool := if kind == "integer" then json_whole(x) else json_kind(x) == kind
+json_types_text(kinds: any): text := if json_is_array(kinds) then join([str(k) for k in kinds], " or ") else kinds
+def json_multiple(x: any, step: any): bool {
+	q = x / step
+	abs(q - floor(q + 0.5)) < 0.000000001
+}
+def json_check(x: any, schema: any, tokens: list, root: any): list {
+	if schema == yes { return [] }
+	if schema == no { return [json_place(tokens) + ": no value is allowed here"] }
+	if not json_is_object(schema) { raise "json_validate: a schema is an object or a bool, not " + json_kind(schema) }
+	place = json_place(tokens)
+	errors = []
+	if "$ref" in schema {
+		ref = schema["$ref"]
+		if not ref.starts_with("#") { raise "json_validate: only local $ref (#…) is supported, not " + ref }
+		errors = errors + json_check(x, json_pointer_get(root, ref), tokens, root)
+	}
+	if "type" in schema {
+		kinds = if json_is_array(schema["type"]) then schema["type"] else [schema["type"]]
+		holds = no
+		for k in kinds { if json_type_holds(x, k) { holds = yes } }
+		if not holds { return errors + [place + ": expected " + json_types_text(schema["type"]) + ", got " + json_kind(x)] }
+	}
+	if "const" in schema and not json_equal(x, schema["const"]) { errors.add(place + ": expected " + json_written(schema["const"], no)) }
+	if "enum" in schema {
+		found = no
+		for option in schema["enum"] { if json_equal(x, option) { found = yes } }
+		if not found { errors.add(place + ": " + json_written(x, no) + " is not one of " + json_written(schema["enum"], no)) }
+	}
+	if x is number and not (x is bool) {
+		if "minimum" in schema and x < schema["minimum"] { errors.add(place + ": " + json_written(x, no) + " is less than the minimum " + json_written(schema["minimum"], no)) }
+		if "maximum" in schema and x > schema["maximum"] { errors.add(place + ": " + json_written(x, no) + " is more than the maximum " + json_written(schema["maximum"], no)) }
+		if "exclusiveMinimum" in schema and x <= schema["exclusiveMinimum"] { errors.add(place + ": " + json_written(x, no) + " is not more than " + json_written(schema["exclusiveMinimum"], no)) }
+		if "exclusiveMaximum" in schema and x >= schema["exclusiveMaximum"] { errors.add(place + ": " + json_written(x, no) + " is not less than " + json_written(schema["exclusiveMaximum"], no)) }
+		if "multipleOf" in schema and not json_multiple(x, schema["multipleOf"]) { errors.add(place + ": " + json_written(x, no) + " is not a multiple of " + json_written(schema["multipleOf"], no)) }
+	}
+	if x is text {
+		if "minLength" in schema and count(x) < schema["minLength"] { errors.add(place + ": shorter than " + json_written(schema["minLength"], no) + " characters") }
+		if "maxLength" in schema and count(x) > schema["maxLength"] { errors.add(place + ": longer than " + json_written(schema["maxLength"], no) + " characters") }
+		if "pattern" in schema and first_match(x, schema["pattern"]) == ø { errors.add(place + ": does not match the pattern " + schema["pattern"]) }
+	}
+	if json_is_array(x) {
+		if "minItems" in schema and count(x) < schema["minItems"] { errors.add(place + ": fewer than " + json_written(schema["minItems"], no) + " items") }
+		if "maxItems" in schema and count(x) > schema["maxItems"] { errors.add(place + ": more than " + json_written(schema["maxItems"], no) + " items") }
+		if "uniqueItems" in schema and schema["uniqueItems"] == yes {
+			for i in 0 ..< count(x) { for j in i + 1 ..< count(x) { if json_equal(x[i], x[j]) { errors.add(place + ": items " + str(i) + " and " + str(j) + " are equal") } } }
+		}
+		prefix = if "prefixItems" in schema then schema["prefixItems"] else []
+		for i in 0 ..< count(x) {
+			if i < count(prefix) { errors = errors + json_check(x[i], prefix[i], tokens + [i], root) }
+			else if "items" in schema { errors = errors + json_check(x[i], schema["items"], tokens + [i], root) }
+		}
+	}
+	if json_is_object(x) {
+		if "required" in schema { for k in schema["required"] { if not (k in x) { errors.add(place + ": missing required property " + k) } } }
+		properties = if "properties" in schema then schema["properties"] else {}
+		for k in x.keys {
+			if k in properties { errors = errors + json_check(x[k], properties[k], tokens + [k], root) }
+			else if "additionalProperties" in schema {
+				extra = schema["additionalProperties"]
+				if extra == no { errors.add(json_place(tokens + [k]) + ": additional property " + k + " is not allowed") }
+				else { errors = errors + json_check(x[k], extra, tokens + [k], root) }
+			}
+		}
+	}
+	if "allOf" in schema { for part in schema["allOf"] { errors = errors + json_check(x, part, tokens, root) } }
+	if "anyOf" in schema {
+		passing = 0
+		for part in schema["anyOf"] { if count(json_check(x, part, tokens, root)) == 0 { passing = passing + 1 } }
+		if passing == 0 { errors.add(place + ": matches none of anyOf") }
+	}
+	if "oneOf" in schema {
+		passing = 0
+		for part in schema["oneOf"] { if count(json_check(x, part, tokens, root)) == 0 { passing = passing + 1 } }
+		if passing != 1 { errors.add(place + ": matches " + str(passing) + " of oneOf, not exactly 1") }
+	}
+	if "not" in schema and count(json_check(x, schema["not"], tokens, root)) == 0 { errors.add(place + ": must not match the not schema") }
+	errors
+}
+json_validate(doc: any, schema: any): list := json_check(doc, schema, [], schema)
+json_valid(doc: any, schema: any): bool := count(json_validate(doc, schema)) == 0
