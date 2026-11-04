@@ -1,0 +1,105 @@
+// lib/money.warp: exact Money in minor units, rounding modes, allocation, mixed currencies, parsing and formatting;
+// the expected amounts from python's decimal module (test/money/gen_money_tests.py, card lib-money)
+// the four rounding modes on ties, near-ties and negatives (python's ROUND_HALF_EVEN, HALF_UP, DOWN, UP)
+'use money; [money_of("0.125", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR 0.12", "EUR 0.13", "EUR 0.12", "EUR 0.13"]
+'use money; [money_of("0.135", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR 0.14", "EUR 0.14", "EUR 0.13", "EUR 0.14"]
+'use money; [money_of("-0.125", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR -0.12", "EUR -0.13", "EUR -0.12", "EUR -0.13"]
+'use money; [money_of("-0.135", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR -0.14", "EUR -0.14", "EUR -0.13", "EUR -0.14"]
+'use money; [money_of("2.675", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR 2.68", "EUR 2.68", "EUR 2.67", "EUR 2.68"]
+'use money; [money_of("-2.675", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR -2.68", "EUR -2.68", "EUR -2.67", "EUR -2.68"]
+'use money; [money_of("1.001", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR 1.00", "EUR 1.00", "EUR 1.00", "EUR 1.01"]
+'use money; [money_of("-1.001", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR -1.00", "EUR -1.00", "EUR -1.00", "EUR -1.01"]
+'use money; [money_of("0.005", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR 0.00", "EUR 0.01", "EUR 0.00", "EUR 0.01"]
+'use money; [money_of("-0.009", "EUR", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["EUR -0.01", "EUR -0.01", "EUR 0.00", "EUR -0.01"]
+'use money; [money_of("2.5", "JPY", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["JPY 2", "JPY 3", "JPY 2", "JPY 3"]
+'use money; [money_of("3.5", "JPY", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["JPY 4", "JPY 4", "JPY 3", "JPY 4"]
+'use money; [money_of("-2.5", "JPY", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["JPY -2", "JPY -3", "JPY -2", "JPY -3"]
+'use money; [money_of("1.0005", "BHD", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["BHD 1.000", "BHD 1.001", "BHD 1.000", "BHD 1.001"]
+'use money; [money_of("-1.0015", "KWD", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["KWD -1.002", "KWD -1.002", "KWD -1.001", "KWD -1.002"]
+'use money; [money_of("0.00005", "CLF", m).text() for m in ["half_even", "half_up", "down", "up"]]'	["CLF 0.0000", "CLF 0.0001", "CLF 0.0000", "CLF 0.0001"]
+// exact amounts: ints, fractions and decimal texts; one finer than the minor unit raises without a mode
+'use money; money_of(12.34, "EUR").text()'	"EUR 12.34"
+'use money; money_of(5, "JPY").text()'	"JPY 5"
+'use money; money_of("1.234", "TND").minor'	1234
+'use money; money_of(1/4, "CLF").text()'	"CLF 0.2500"
+'use money; try { money_of("0.125", "EUR") } catch e { e.message }'	"money: 0.125 is finer than EUR's 2 decimals; pass a rounding mode"
+'use money; try { money_of(1, "XYZ") } catch e { e.message }'	"money: XYZ is no ISO 4217 currency of lib/money.warp"
+'use money; try { money_of(1, "EUR", "sideways") } catch e { e.message }'	"money: the rounding mode is half_even, half_up, down or up, not sideways"
+'use money; [currency_minor_units(c) for c in ["JPY", "EUR", "BHD", "KWD", "TND", "CLF"]]'	[0, 2, 3, 3, 3, 4]
+// + - and scalar *, and mixed currencies refused
+'use money; (money_of(10.05, "EUR") + money_of(0.95, "EUR") - money_of(3, "EUR")).text()'	"EUR 8.00"
+'use money; (Money(1001, "EUR") * 3).text()'	"EUR 30.03"
+'use money; money_times(Money(1001, "EUR"), 1/2, "half_even").text()'	"EUR 5.00"
+'use money; money_times(Money(1001, "EUR"), 1/2, "half_up").text()'	"EUR 5.01"
+'use money; money_times(Money(1001, "EUR"), 1/3, "down").text()'	"EUR 3.33"
+'use money; money_times(Money(1001, "EUR"), 1/3, "up").text()'	"EUR 3.34"
+'use money; money_times(Money(1001, "EUR"), -1/2, "half_even").text()'	"EUR -5.00"
+'use money; (Money(1005, "EUR") * 0.5).text()'	"EUR 5.02"
+'use money; money_add(money_of(1, "USD"), money_of(2, "USD")) == money_of(3, "USD")'	true
+'use money; [money_of(1, "EUR") < money_of(2, "EUR"), money_of(-1, "EUR") > money_of(2, "EUR")]'	[true, false]
+'use money; try { money_of(1, "EUR") + money_of(1, "USD") } catch e { e.message }'	"money: EUR + USD mixes currencies; convert one first"
+'use money; try { money_sub(money_of(1, "EUR"), money_of(1, "JPY")) } catch e { e.message }'	"money: EUR - JPY mixes currencies; convert one first"
+'use money; try { money_of(1, "EUR") < money_of(1, "GBP") } catch e { e.message }'	"money: EUR compared with GBP mixes currencies; convert one first"
+'use money; try { money_of(1, "EUR") * 2.5e0 } catch e { e.message }'	"money: 2.5 is a float, not an exact number: write it as an int or a fraction (0.1, 1/3)"
+'use money; try { Money(4611686018427387903, "EUR") + Money(1, "EUR") } catch e { e.message }'	"money: 4611686018427387903 + 1 minor units is too large"
+// allocation: largest remainders, the parts always summing back (python's Fraction for the shares)
+'use money; [p.minor for p in money_allocate(Money(100, "EUR"), [1, 1, 1])]'	[34, 33, 33]
+'use money; [p.minor for p in money_allocate(Money(5, "EUR"), [1, 1, 1])]'	[2, 2, 1]
+'use money; [p.minor for p in money_allocate(Money(-100, "EUR"), [1, 1, 1])]'	[-34, -33, -33]
+'use money; [p.minor for p in money_allocate(Money(1001, "EUR"), [1, 2, 3])]'	[167, 334, 500]
+'use money; [p.minor for p in money_allocate(Money(1000, "EUR"), [1/3, 2/3])]'	[333, 667]
+'use money; [p.minor for p in money_allocate(Money(99, "EUR"), [70, 20, 10])]'	[69, 20, 10]
+'use money; [p.minor for p in money_allocate(Money(-1001, "EUR"), [1, 2, 3/2])]'	[-222, -445, -334]
+'use money; [p.minor for p in money_allocate(Money(1, "EUR"), [1, 1])]'	[1, 0]
+'use money; [p.minor for p in money_allocate(Money(0, "EUR"), [3, 7])]'	[0, 0]
+'use money; [p.minor for p in money_split(Money(100, "JPY"), 3)]'	[34, 33, 33]
+'use money; [p.minor for p in money_split(Money(1000, "JPY"), 7)]'	[143, 143, 143, 143, 143, 143, 142]
+'use money; [p.minor for p in money_split(Money(-7, "JPY"), 4)]'	[-2, -2, -2, -1]
+'use money; [p.minor for p in money_split(Money(10, "JPY"), 1)]'	[10]
+'use money; s = money_allocate(Money(123457, "BHD"), [1, 1, 1, 1, 1, 1, 1]); m = Money(0, "BHD"); for p in s { m = m + p }; m.text()'	"BHD 123.457"
+'use money; try { money_allocate(Money(5, "EUR"), [1, -1]) } catch e { e.message }'	"money: a negative ratio -1/1"
+// parsing en and de amounts, symbols or codes, negatives, JPY and BHD
+'use money; money_parse("€1.234,56").text()'	"EUR 1234.56"
+'use money; money_parse("$1,234.56").text()'	"USD 1234.56"
+'use money; money_parse("1.234,56 €").text()'	"EUR 1234.56"
+'use money; money_parse("-€0,50").text()'	"EUR -0.50"
+'use money; money_parse("($1,234.56)").text()'	"USD -1234.56"
+'use money; money_parse("USD 12").text()'	"USD 12.00"
+'use money; money_parse("¥1,235").text()'	"JPY 1235"
+'use money; money_parse("-1.235 ¥").text()'	"JPY -1235"
+'use money; money_parse("BHD 1,234.567").text()'	"BHD 1234.567"
+'use money; money_parse("1.234,567 BHD").text()'	"BHD 1234.567"
+'use money; money_parse("BHD 1.234").text()'	"BHD 1.234"
+'use money; money_parse("€1.234.567").text()'	"EUR 1234567.00"
+'use money; money_parse("CA$5.5").text()'	"CAD 5.50"
+'use money; money_parse("£0.99").text()'	"GBP 0.99"
+'use money; money_parse("1 234,50 EUR").text()'	"EUR 1234.50"
+'use money; money_parse("12,345", {style: "en", currency: "EUR"}).text()'	"EUR 12345.00"
+'use money; money_parse("12,345", {style: "de", currency: "BHD"}).text()'	"BHD 12.345"
+'use money; try { money_parse("12.345") } catch e { e.message }'	"money_parse: 12.345 names no currency; pass {currency: …}"
+'use money; try { money_parse("€1,234", {style: "en", currency: "EUR"}).text() } catch e { e.message }'	"EUR 1234.00"
+'use money; try { money_parse("€1.2345", {style: "en"}) } catch e { e.message }'	"money_parse: €1.2345 has 4 decimals, EUR has 2"
+// formatting en and de
+'use money; money_format(Money(123456, "EUR"), "en")'	"€1,234.56"
+'use money; money_format(Money(123456, "EUR"), "de")'	"1.234,56 €"
+'use money; money_format(Money(-123456, "EUR"), "en")'	"-€1,234.56"
+'use money; money_format(Money(-123456, "EUR"), "de")'	"-1.234,56 €"
+'use money; money_format(Money(5, "USD"), "en")'	"$0.05"
+'use money; money_format(Money(5, "USD"), "de")'	"0,05 $"
+'use money; money_format(Money(123456789, "USD"), "en")'	"$1,234,567.89"
+'use money; money_format(Money(123456789, "USD"), "de")'	"1.234.567,89 $"
+'use money; money_format(Money(1235, "JPY"), "en")'	"¥1,235"
+'use money; money_format(Money(1235, "JPY"), "de")'	"1.235 ¥"
+'use money; money_format(Money(-1235, "JPY"), "en")'	"-¥1,235"
+'use money; money_format(Money(-1235, "JPY"), "de")'	"-1.235 ¥"
+'use money; money_format(Money(1234567, "BHD"), "en")'	"BHD 1,234.567"
+'use money; money_format(Money(1234567, "BHD"), "de")'	"1.234,567 BHD"
+'use money; money_format(Money(-1, "KWD"), "en")'	"-KWD 0.001"
+'use money; money_format(Money(-1, "KWD"), "de")'	"-0,001 KWD"
+'use money; money_format(Money(12345, "CLF"), "en")'	"CLF 1.2345"
+'use money; money_format(Money(12345, "CLF"), "de")'	"1,2345 CLF"
+'use money; money_format(Money(0, "EUR"), "en")'	"€0.00"
+'use money; money_format(Money(0, "EUR"), "de")'	"0,00 €"
+'use money; money_format(money_parse("€1.234,56"))'	"€1,234.56"
+'use money; money_format(money_parse("$1,234.56"), "de")'	"1.234,56 $"
+'use money; money_round(Money(123456, "EUR"), 0, "half_even").text()'	"EUR 1235.00"

@@ -1,0 +1,106 @@
+# Protocols (card protocol-default-implementation, decisions map-protocol and lowercase-protocols, wiki trait.md): a
+# protocol names what its values can do, `protocol shape { area(); perimeter() := 2 * area() }` (`trait` the same):
+# - a required word is a bare name, a signature `area()` or a body of `pass`; any other member is a default word, a
+#   function of every value, `perimeter(self) := 2 * self.area()`, which a class giving the word itself overrides (the
+#   class methods route a method named like a function: extensions/class_methods/methods.warp)
+# - conformance is structural: a class conforms when it, or a class it extends, has each required word as a method or
+#   a function of it, `area(q: sq) := …`; `x is shape` tests x against the conforming classes
+# - a place typed by the protocol, `f(x: shape)`, takes any value
+protocols_extension = Extension{name: "protocols", keyword_readers: {"protocol": read_protocol, "trait": read_protocol}, passes_before: {"definition_heads": protocols_applied}}
+
+protocol_mark = "protocol"
+# what a default word calls its value, as a class method does
+protocol_self = "self"
+# the body marking a required word, Python's
+required_body = "pass"
+class Protocol { name: text; required: list; default_members: list }
+
+# `protocol shape {…}` opening a statement: the type declaration of its members, its name marked a protocol's
+read_protocol(p: Parser, word: text): Node := {
+	if not starts_statement(p) or not block_after_name(p, word) { return ø }
+	view = value_of(type_declaration(p, word))
+	opaque(["type", ["attribute", protocol_mark, view_of(true), view#2], view#3])
+}
+
+# the protocol a top statement declares, else ø
+protocol_of(statement: Node): Protocol? := {
+	if not (statement is key and key_of(statement) == opaque_symbol) { return ø }
+	view = value_of(statement)
+	if kind_of(view) != "type" or kind_of(view#2) != "attribute" or view#2#2 != protocol_mark { return ø }
+	members = view#3[3..].map(member_read)
+	given = members.filter(member => defined_word(member) != ø and value_of(member) != symbol(required_body))
+	Protocol(declared_type_name(view#2), members.filter(member => member not in given).map(required_word), given)
+}
+# the word a required member names: `area`, `area()`, `area() := pass`
+required_word(member: Node): text := if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else defined_word(member)
+
+# the program with its protocols applied: their declarations taken out, their default words functions of the
+# program, their tests and typed places resolved
+protocols_applied(program: Node): Node := {
+	statements = statements_in(program)
+	protocols = statements.map(protocol_of).filter(found => found != ø)
+	if #protocols == 0 { return program }
+	kept = statements.filter(statement => protocol_of(statement) == ø)
+	functions = []
+	conforming = {}
+	for declared in protocols {
+		functions += declared.default_members.map(member => default_function(member, declared))
+		conforming[declared.name] = conforming_classes(kept, declared)
+	}
+	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming)))
+	separated(bracketed(resolved, ""), ";")
+}
+
+# `perimeter() := 2 * area()` of a protocol: `perimeter(self) := 2 * self.area()`, each word of the protocol its
+# value's
+default_function(member: Node, protocol: Protocol): Node := {
+	head = key_of(member)
+	parameters = if is_called_name(head) then items_of(head)[1..] else []
+	words = protocol.required + protocol.default_members.map(defined_word)
+	shadowed = parameters.map(parameter => if parameter is symbol then name_of(parameter) else "")
+	body = bottom_up(value_of(member), n => own_word_called(n, words.filter(word => word not in shadowed)))
+	Key(call_of(defined_word(member), [symbol(protocol_self)] + parameters), Op.Define, body)
+}
+# `area()` of a protocol's own word: `self.area()`; a bare `area` too
+own_word_called(n: Node, words: list): Node := {
+	if is_called_name(n) and name_of(n#1) in words { return Key(symbol(protocol_self), Op.Dot, n) }
+	if n is symbol and name_of(n) in words { return Key(symbol(protocol_self), Op.Dot, call_of(name_of(n), [])) }
+	n
+}
+
+# the classes of the program conforming to a protocol: each required word a method of the class or of a class it
+# extends, or a function taking the class first
+conforming_classes(statements: list, protocol: Protocol): list := {
+	classes = {}
+	for statement in statements {
+		view = class_view(statement)
+		if view != ø { classes[declared_type_name(view#2)] = class_declared(statement, view) }
+	}
+	typed = statements.map(word_and_first_type).filter(pair => pair != ø)
+	classes.keys.filter(name => protocol.required.all(word => has_word(classes, name, word, typed)))
+}
+has_word(classes: map, name: text, word: text, typed: list): bool := {
+	declared = classes[name]
+	if declared.methods.any(method => defined_word(method) == word) or [word, name] in typed { return yes }
+	declared.parent in classes and has_word(classes, declared.parent, word, typed)
+}
+# [function, type] of a definition whose first parameter is typed, `area(q: sq) := …`, else ø
+word_and_first_type(statement: Node): list? := {
+	if not is_key(statement, Op.Define) or not is_called_name(key_of(statement)) or #key_of(statement) < 2 { return ø }
+	first = key_of(statement)#2
+	if is_key(first, Op.Colon) and value_of(first) is symbol then [name_of(key_of(statement)#1), name_of(value_of(first))] else ø
+}
+
+# `x is shape`: x is one of the conforming classes; `x: shape`, a place the protocol types, takes any value
+protocol_resolved(n: Node, conforming: map): Node := {
+	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in conforming) { return n }
+	classes = conforming[name_of(value_of(n))]
+	if is_key(n, Op.Is) {
+		if #classes == 0 { return False }
+		test = Key(key_of(n), Op.Is, symbol(classes#1))
+		for name in classes[1..] { test = Key(test, Op.Or, Key(key_of(n), Op.Is, symbol(name))) }
+		return test
+	}
+	if is_key(n, Op.Colon) { return Key(key_of(n), Op.Colon, symbol("any")) }
+	n
+}
