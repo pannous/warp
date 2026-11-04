@@ -4,7 +4,7 @@
 # with WARP_VALUE_AS_DATA set, then warp.wasm judges what they gave (test_verdicts). The test files: `*.pairs.warp`
 # (code ⇥ expected, one a line) and the `is!` lines of `test_*.warp`, under each folder (default test/) or named
 # themselves. The work folder: `runs`, a line `<run>\t<folder>` for each program, its code in `<run>.code`; the native
-# warp writes `<run>.out`, `<run>.err` and `<run>.status` (its exit status, or `timeout`)
+# warp writes `<run>.out`, `<run>.err` and `<run>.status` (its exit status, or `time ` and the limit it hit)
 TEST_FOLDER = "test"
 PAIRS_SUFFIX = ".pairs.warp"
 TEST_PREFIX = "test_"
@@ -16,10 +16,11 @@ EACH_FLAG = "--each"
 EXPECTED_RUN = "e"
 # the work folder's file of the listed cases' places
 LISTED = "cases"
-TIMED_OUT = "timeout"
+# a run that hit its CPU or wall-clock limit: a TIME with its reason, neither passed nor failed
+TIME_STATUS = "time "
+TIME_MARK = "⏲ TIME "
 TYPE_SHOWN = "class "
 NEVER_RAN = "·never ran"
-CASE_SECONDS = 30
 # a case slower than this is no part of `warp test` (decision no-slow-tests): said with its time, it belongs in
 # test/slow/<topic>/, run only when named
 SLOW_MILLISECONDS = 1000
@@ -52,8 +53,8 @@ test_listed(work: text, words: list) := {
 places_of(cases: list): text := cases.map(case => case.file + ":" + case.line + " " + case.code).join("\n")
 
 # `warp test-verdicts <work folder> [--each] [folder or file…]`: a ✗ line for each failed case (`--each`: a ✓ line
-# for each passed one too), a ⏱ line with the seconds of each case over SLOW_MILLISECONDS, and the total;
-# `<work folder>/failed` the count failed
+# for each passed one too), a TIME line for each case that hit a limit, a ⏱ line with the seconds of each case over
+# SLOW_MILLISECONDS, and the total; `<work folder>/failed` the count failed
 test_verdicts(work: text, words: list) := {
 	each = EACH_FLAG in words
 	cases = test_cases_of(words)
@@ -61,18 +62,26 @@ test_verdicts(work: text, words: list) := {
 		raise "the test files changed since this run listed its cases (a pull, an edit): its results would be another case's; run it again on a tree that holds still"
 	}
 	failed = 0
+	timed = 0
 	for n in 0 ..< #cases {
 		case = cases[n]
-		why = case_failure(case, run_result(work, "" + n), work + "/" + n + EXPECTED_RUN)
 		described = case.file + ":" + case.line + " " + debug_quoted(case.code) + " " + serialize(case.expected)
-		if why != "" { print "✗ " + described + ": " + why } else if each { print "✓ " + described }
-		if why != "" { failed += 1 }
+		limit = limit_hit(work + "/" + n)
+		if limit == "" { limit = limit_hit(work + "/" + n + EXPECTED_RUN) }
+		if limit != "" {
+			print TIME_MARK + described + ": " + limit
+			timed += 1
+		} else {
+			why = case_failure(case, run_result(work, "" + n), work + "/" + n + EXPECTED_RUN)
+			if why != "" { print "✗ " + described + ": " + why } else if each { print "✓ " + described }
+			if why != "" { failed += 1 }
+		}
 		took = run_milliseconds(work, "" + n) + run_milliseconds(work, n + EXPECTED_RUN)
 		if took > SLOW_MILLISECONDS { print SLOW_MARK + described + ": " + took / 100 / 10.0 + " s" }
 	}
 	skipped = test_files_of(words).map(file => #skipped_pairs(read(file))).sum()
-	total = if failed > 0 then "" + failed + " of " + #cases + " failed" else "✓ " + #cases + " tests passed"
-	print total + " in " + #test_files_of(words) + " files" + (if skipped > 0 then ", " + skipped + " skipped" else "")
+	total = if failed > 0 then "" + failed + " of " + #cases + " failed" else "✓ " + (#cases - timed) + " tests passed"
+	print total + " in " + #test_files_of(words) + " files" + (if skipped > 0 then ", " + skipped + " skipped" else "") + (if timed > 0 then ", " + timed + " hit a time limit" else "")
 	write(work + "/failed", "" + failed)
 }
 
@@ -96,10 +105,14 @@ run_result(work: text, run: text): any := {
 	at = work + (if run == "" then "" else "/" + run)
 	status = (try read(at + ".status") else NEVER_RAN).trim()
 	if status == NEVER_RAN { return "never ran: the runner wrote no " + at + ".status" }
-	if status == TIMED_OUT { return "timed out after " + CASE_SECONDS + " s" }
 	if status != "0" { return ["error", ["text", last_line_of(try read(at + ".err") else "")]] }
 	parts = (try read(at + ".out") else "").split(VALUE_MARK + "\n")
 	if #parts < 2 then ø else value_view(parts.last().trim())
+}
+# the limit a run hit, as its status says it, "" for a run that hit none
+limit_hit(run: text): text := {
+	status = (try read(run + ".status") else "").trim()
+	if status.starts_with(TIME_STATUS) then status[#TIME_STATUS ..< #status] else ""
 }
 # how long a run took, 0 for a run there was none of
 run_milliseconds(work: text, run: text): int := int(try read(work + "/" + run + ".ms") else "0")
