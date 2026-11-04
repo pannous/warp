@@ -129,3 +129,51 @@ def dedent(t: text): text {
 	cut = if margin == nil then 0 else count(margin)
 	join([if is_blank(line) then "" else line[cut..] for line in lines(t)], "\n")
 }
+
+// Number formatting (card lib-stats-format)
+// format_number(1234567.89) is "1,234,567.89": commas between groups of three whole digits, the sign and the fraction kept
+// as text gives them (no rounding); format_number(-1234) is "-1,234"
+format_number(n: any): text := {
+	s = "" + n
+	sign = ""
+	whole = ""
+	rest = ""
+	for c in s {
+		if c == "-" and whole == "" and rest == "" { sign = "-" } else if rest != "" or c == "." { rest = rest + c } else { whole = whole + c }
+	}
+	out = ""
+	k = 0
+	i = count(whole)
+	while i >= 1 { if k > 0 and k % 3 == 0 { out = "," + out }; out = "" + whole#i + out; k = k + 1; i = i - 1 }
+	sign + out + rest
+}
+// ordinalize(n): "1st" "2nd" "3rd" "4th" "11th" "12th" "13th" "21st" "101st" "111th"; a whole number >= 1, else refused.
+// Not named ordinal: the prelude's ordinal is ord, the codepoint of a character
+ordinalize(n: any): text := {
+	if not (n is int) or n < 1 { raise "ordinalize needs a whole number >= 1" }
+	suffix = "th"
+	if n % 100 < 11 or n % 100 > 13 {
+		if n % 10 == 1 { suffix = "st" }
+		if n % 10 == 2 { suffix = "nd" }
+		if n % 10 == 3 { suffix = "rd" }
+	}
+	"" + n + suffix
+}
+// human_size(bytes): decimal SI units, 1000 a step (B KB MB GB TB PB), as disks and networks count: 1500000 is "1.5 MB",
+// 1536 is "1.5 KB"; one decimal rounded half up, a .0 dropped ("2 KB"); under 1000 whole bytes ("999 B"); negatives refused
+human_size(bytes: any): text := {
+	if bytes < 0 { raise "human_size needs bytes >= 0" }
+	units = ["B", "KB", "MB", "GB", "TB", "PB"]
+	if bytes < 1000 { return "" + int(bytes) + " B" }
+	u = 1
+	v = bytes
+	while v >= 1000 and u < count(units) { v = v / 1000; u = u + 1 }
+	tenths = int(v * 10 + 1/2)
+	// rounding can reach the next unit: 999.95 KB is 1 MB
+	if tenths >= 10000 and u < count(units) { tenths = tenths / 1000; u = u + 1 }
+	whole = int(tenths / 10)
+	frac = tenths - whole * 10
+	shown = "" + whole
+	if frac != 0 { shown = shown + "." + frac }
+	shown + " " + units#u
+}

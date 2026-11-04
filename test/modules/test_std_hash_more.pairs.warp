@@ -1,0 +1,23 @@
+# md5_rfc_1321
+'use hash; md5("")'	"d41d8cd98f00b204e9800998ecf8427e"
+'use hash; md5("abc")'	"900150983cd24fb0d6963f7d28e17f72"
+'use hash; md5("12345678901234567890123456789012345678901234567890123456789012345678901234567890")'	"57edf4a22be3c955ac49da2e2107b67a"
+
+# sha1_fips_180
+'use hash; sha1("")'	"da39a3ee5e6b4b0d3255bfef95601890afd80709"
+'use hash; sha1("abc")'	"a9993e364706816aba3e25717850c26c9cd0d89d"
+'use hash; sha1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")'	"84983e441c3bd26ebaae4aa1f95129e5e54670f1"
+
+# sha512_fips_180
+'use hash; sha512("")'	"cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+'use hash; sha512("abc")'	"ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
+
+# hmac_rfc_4231_and_2202
+'use hash; hmac([11 for i in 1 to 20], "Hi There")'	"b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+'use hash; hmac("Jefe", "what do ya want for nothing?")'	"5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+'use hash; hmac([170 for i in 1 to 131], "Test Using Larger Than Block-Size Key - Hash Key First")'	"60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"
+'use hash; hmac("Jefe", "what do ya want for nothing?", sha512)'	"164b7a7bfcf819e2e395fbe73b56e0a387bd64222e831fd610270cd7ea2505549758bf75c05a994a6d034f65f8f0e6fdcaeab1a34d4a6b4b636e070a38bce737"
+'use hash; hmac([11 for i in 1 to 16], "Hi There", md5)'	"9294727a3638bb1c13f48ef8158bfc9d"
+'use hash; hmac("Jefe", "what do ya want for nothing?", md5)'	"750c783e6ab0b503eaa86e310a5db738"
+'use hash; hmac([11 for i in 1 to 20], "Hi There", sha1)'	"b617318655057264e28bc0b6fb378c8ef146be00"
+'use hash; hmac("Jefe", "what do ya want for nothing?", sha1)'	"effcdf6ae5eb2fa2d27416d5f184df9c259a7c79"

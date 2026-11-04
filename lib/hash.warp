@@ -1,4 +1,124 @@
-// The standard library module hash (notes/stdlib.md section 7): `use hash`, through the adapter std_pure, of a text's
-// UTF-8 bytes or a list of 0 to 255, zero bytes and all: sha256 as lowercase hex, crc32 as a number
+// The standard library module hash (notes/stdlib.md section 7): `use hash`, of a text's UTF-8 bytes or a list of 0 to
+// 255, zero bytes and all: sha256 (through the adapter std_pure) and md5, sha1, sha512 (in warp) as lowercase hex, crc32
+// as a number, and hmac(key, message, algorithm) of RFC 2104 with any of them, sha256 by default
+use text
+use math
 sha256(subject: text or list): text := std_pure("hash", "sha256", [subject])
 crc32(subject: text or list): int := std_pure("hash", "crc32", [subject])
+
+hash_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
+hex_digit(c: any): int := "0123456789abcdef".index_of(lower(c)) - 1
+hex_bytes(hex: text): list := [hex_digit(hex[2 * i]) * 16 + hex_digit(hex[2 * i + 1]) for i in 0 ..< count(hex) /! 2]
+bytes_hex(bytes: list): text := join([hex_byte(b) for b in bytes], "")
+hex_byte(b: int): text := "0123456789abcdef"[b /! 16] + "0123456789abcdef"[b % 16]
+
+// 32-bit words: whole numbers 0 to 2^32 - 1, kept there by % 2 ** 32
+word_not(x: int, width: int): int := 2 ** width - 1 - x
+rotate_left(x: int, n: int, width: int): int := (x * 2 ** n) % 2 ** width + x /! 2 ** (width - n)
+// 64-bit words are warp's ints themselves: + and * wrap, >> keeps the sign, so the logical shift masks it off
+shift_right(x: int, n: int): int := bit_and(x >> n, 2 ** (64 - n) - 1)
+rotate_right(x: int, n: int): int := bit_or(shift_right(x, n), x * 2 ** (64 - n))
+// a number as its bytes, most significant first (big) or last
+big_endian(n: int, size: int): list := [n /! 256 ** (size - 1 - i) % 256 for i in 0 ..< size]
+little_endian(n: int, size: int): list := [n /! 256 ** i % 256 for i in 0 ..< size]
+from_big_endian(bytes: list): int := { n = 0; for b in bytes { n = n * 256 + b }; n }
+from_little_endian(bytes: list): int := { n = 0; for b in reverse(bytes) { n = n * 256 + b }; n }
+// the Merkle–Damgård padding: 0x80, zeros, then the bit length in length_size bytes, to whole blocks
+def padded(bytes: list, block: int, length_size: int, length: list): list {
+	out = bytes + [128]
+	while count(out) % block != block - length_size { out = out + [0] }
+	out + length
+}
+
+MD5_SHIFTS = [7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21]
+MD5_SINES = [floor(abs(sin(i + 1)) * 2 ** 32) as int for i in 0 ..< 64]
+
+// RFC 1321
+def md5(subject: text or list): text {
+	bytes = hash_bytes(subject)
+	m = padded(bytes, 64, 8, little_endian(count(bytes) * 8, 8))
+	h = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]
+	for block in 0 ..< count(m) /! 64 {
+		start = 64 * block
+		w = [from_little_endian(m[start + 4 * i ..< start + 4 * i + 4]) for i in 0 ..< 16]
+		a = h[0]; b = h[1]; c = h[2]; d = h[3]
+		for i in 0 ..< 64 {
+			f = 0; g = 0
+			if i < 16 { f = bit_or(bit_and(b, c), bit_and(word_not(b, 32), d)); g = i }
+			else if i < 32 { f = bit_or(bit_and(d, b), bit_and(word_not(d, 32), c)); g = (5 * i + 1) % 16 }
+			else if i < 48 { f = b xor c xor d; g = (3 * i + 5) % 16 }
+			else { f = c xor bit_or(b, word_not(d, 32)); g = 7 * i % 16 }
+			t = d; d = c; c = b
+			b = (b + rotate_left((a + f + MD5_SINES[i] + w[g]) % 2 ** 32, MD5_SHIFTS[i], 32)) % 2 ** 32
+			a = t
+		}
+		h = [(h[0] + a) % 2 ** 32, (h[1] + b) % 2 ** 32, (h[2] + c) % 2 ** 32, (h[3] + d) % 2 ** 32]
+	}
+	join([bytes_hex(little_endian(x, 4)) for x in h], "")
+}
+
+// FIPS 180-4
+def sha1(subject: text or list): text {
+	bytes = hash_bytes(subject)
+	m = padded(bytes, 64, 8, big_endian(count(bytes) * 8, 8))
+	h = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0]
+	for block in 0 ..< count(m) /! 64 {
+		start = 64 * block
+		w = [from_big_endian(m[start + 4 * i ..< start + 4 * i + 4]) for i in 0 ..< 16]
+		for i in 16 ..< 80 { w = w + [rotate_left(w[i - 3] xor w[i - 8] xor w[i - 14] xor w[i - 16], 1, 32)] }
+		a = h[0]; b = h[1]; c = h[2]; d = h[3]; e = h[4]
+		for i in 0 ..< 80 {
+			f = 0; k = 0
+			if i < 20 { f = bit_or(bit_and(b, c), bit_and(word_not(b, 32), d)); k = 0x5a827999 }
+			else if i < 40 { f = b xor c xor d; k = 0x6ed9eba1 }
+			else if i < 60 { f = bit_or(bit_or(bit_and(b, c), bit_and(b, d)), bit_and(c, d)); k = 0x8f1bbcdc }
+			else { f = b xor c xor d; k = 0xca62c1d6 }
+			t = (rotate_left(a, 5, 32) + f + e + k + w[i]) % 2 ** 32
+			e = d; d = c; c = rotate_left(b, 30, 32); b = a; a = t
+		}
+		h = [(h[0] + a) % 2 ** 32, (h[1] + b) % 2 ** 32, (h[2] + c) % 2 ** 32, (h[3] + d) % 2 ** 32, (h[4] + e) % 2 ** 32]
+	}
+	join([bytes_hex(big_endian(x, 4)) for x in h], "")
+}
+
+SHA512_ROUNDS = [0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc, 0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118, 0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2, 0x72be5d74f27b896f, 0x80deb1fe3b1696b1, 0x9bdc06a725c71235, 0xc19bf174cf692694, 0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65, 0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5, 0x983e5152ee66dfab, 0xa831c66d2db43210, 0xb00327c898fb213f, 0xbf597fc7beef0ee4, 0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0x06ca6351e003826f, 0x142929670a0e6e70, 0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df, 0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x81c2c92e47edaee6, 0x92722c851482353b, 0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xc24b8b70d0f89791, 0xc76c51a30654be30, 0xd192e819d6ef5218, 0xd69906245565a910, 0xf40e35855771202a, 0x106aa07032bbd1b8, 0x19a4c116b8d2d0c8, 0x1e376c085141ab53, 0x2748774cdf8eeb99, 0x34b0bcb5e19b48a8, 0x391c0cb3c5c95a63, 0x4ed8aa4ae3418acb, 0x5b9cca4f7763e373, 0x682e6ff3d6b2b8a3, 0x748f82ee5defb2fc, 0x78a5636f43172f60, 0x84c87814a1f0ab72, 0x8cc702081a6439ec, 0x90befffa23631e28, 0xa4506cebde82bde9, 0xbef9a3f7b2c67915, 0xc67178f2e372532b, 0xca273eceea26619c, 0xd186b8c721c0c207, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178, 0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b, 0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c, 0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817]
+
+// FIPS 180-4
+def sha512(subject: text or list): text {
+	bytes = hash_bytes(subject)
+	m = padded(bytes, 128, 16, [0 for i in 1 to 8] + big_endian(count(bytes) * 8, 8))
+	h = [0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179]
+	for block in 0 ..< count(m) /! 128 {
+		start = 128 * block
+		w = [from_big_endian(m[start + 8 * i ..< start + 8 * i + 8]) for i in 0 ..< 16]
+		for i in 16 ..< 80 {
+			s0 = rotate_right(w[i - 15], 1) xor rotate_right(w[i - 15], 8) xor shift_right(w[i - 15], 7)
+			s1 = rotate_right(w[i - 2], 19) xor rotate_right(w[i - 2], 61) xor shift_right(w[i - 2], 6)
+			w = w + [w[i - 16] + s0 + w[i - 7] + s1]
+		}
+		v = h
+		for i in 0 ..< 80 {
+			a = v[0]; e = v[4]
+			s1 = rotate_right(e, 14) xor rotate_right(e, 18) xor rotate_right(e, 41)
+			choice = bit_and(e, v[5]) xor bit_and(-1 - e, v[6])
+			t1 = v[7] + s1 + choice + SHA512_ROUNDS[i] + w[i]
+			s0 = rotate_right(a, 28) xor rotate_right(a, 34) xor rotate_right(a, 39)
+			majority = bit_and(a, v[1]) xor bit_and(a, v[2]) xor bit_and(v[1], v[2])
+			v = [t1 + s0 + majority, a, v[1], v[2], v[3] + t1, e, v[5], v[6]]
+		}
+		h = [h[i] + v[i] for i in 0 ..< 8]
+	}
+	join([bytes_hex(big_endian(x, 8)) for x in h], "")
+}
+
+// RFC 2104 with any hash of this module: hmac("key", "message"), hmac("key", "message", sha1); the block is 128 bytes
+// for digests longer than 256 bits (sha512), else 64
+hmac(key: text or list, message: text or list): text := hmac(key, message, sha256)
+def hmac(key: text or list, message: text or list, algorithm: any): text {
+	block = if count(algorithm("")) > 64 then 128 else 64
+	k = hash_bytes(key)
+	if count(k) > block { k = hex_bytes(algorithm(k)) }
+	k = k + [0 for i in count(k) ..< block]
+	inner = algorithm([b xor 0x36 for b in k] + hash_bytes(message))
+	algorithm([b xor 0x5c for b in k] + hex_bytes(inner))
+}
