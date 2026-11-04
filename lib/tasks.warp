@@ -65,7 +65,7 @@ global running_task = ø
 global failed_tasks = []
 global task_sleep_said = no
 // the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
-task_go(first: function) := {
+task_go(first: function): Task := {
 	task = Task(clock(), first)
 	task.context = task_context()
 	task_queue = task_queue + [task]
