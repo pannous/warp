@@ -647,6 +647,7 @@ spelling_of(word: text): text := {
 	if glyph != word and is_operator_glyph(glyph) then glyph else word
 }
 implicit_modules(source: text, index_file: text, folder: text = "."): list := {
+	if yes { return [] }
 	index = word_index(index_file)
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
