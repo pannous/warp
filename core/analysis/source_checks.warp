@@ -17,7 +17,7 @@ source_checks(program: Node, prelude: text): Node := {
 	aliases = module_aliases(prelude)
 	for n in nodes_in(program) {
 		located_error(n)
-		for lint in extension_list("lints") { lint(n, program) }
+		for lint in hooks().lints { lint(n, program) }
 		bare_sleep(n)
 		spaced_sign(n)
 		uneven_spacing(n)
