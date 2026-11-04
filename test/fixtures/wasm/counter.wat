@@ -1,4 +1,4 @@
-;; built into counter.wasm by `wasm-tools parse tests/fixtures/wasm/counter.wat -o tests/fixtures/wasm/counter.wasm`:
+;; built into counter.wasm by `wasm-tools parse test/fixtures/wasm/counter.wat -o test/fixtures/wasm/counter.wasm`:
 ;; the binary form of an imported module (tests/modules/test_wasm_modules.rs)
 (module
   (global $count (mut i64) (i64.const 0))
