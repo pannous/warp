@@ -20,3 +20,10 @@
 
 # path syntax refused clearly
 «use xml; d = parse_xml("<a><b/></a>"); attempt(p) := try { "" + count(xml_find_all(d, p)) } catch e { "" + e }; [attempt("/a"), attempt("b[last()]"), attempt("b[@x=1]"), attempt("b/"), attempt("a|b"), attempt("b[1]")] == ["xml path /a: absolute paths are not supported (start with a tag, . or //)", "xml path b[last()]: unsupported predicate [last()] (use [@attr], [@attr='v'] or [n])", "xml path b[@x=1]: unsupported predicate [@x=1] (quote the value)", "xml path b/: a path ending in /", "xml path a|b: unsupported syntax a|b", "1"]»	true
+
+# namespace scoping and redeclaration, the xml prefix
+«use xml; nd = parse_xml("<r xmlns:a='urn:one' xml:lang='en'><a:b><a:c xmlns:a='urn:two'/></a:b><d xmlns='urn:dflt'><e xmlns=''/></d></r>"); [xml_find(nd, "a" + ":b")["ns"], xml_find(nd, "a" + ":b/a:c")["ns"], xml_find(nd, "d")["ns"], xml_find(nd, "d/e")["ns"], nd["attributes"]["xml:lang"]] == ["urn:one", "urn:two", "urn:dflt", "", "en"]»	true
+
+# BOM, CRLF, attribute normalization
+«use xml; [parse_xml(chr(0xFEFF) + "<r>x</r>")["text"], parse_xml("<r>a" + chr(13) + chr(10) + "b</r>")["text"], parse_xml("<r t='x" + chr(10) + "y &lt;&amp;&gt;'/>")["attributes"]["t"]] == ["x", "a" + chr(10) + "b", "x y <&>"]»	true
+

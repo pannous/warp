@@ -17,6 +17,7 @@
 // - namespaces: xmlns and xmlns:p declarations scope over the element and its descendants; an undeclared prefix is
 //   refused; the xml prefix is predeclared. Path steps match "tag" by local name in any namespace, "p:tag" by the
 //   prefix as written, "{uri}tag" by the namespace URI
+//   (warp interpolates {…} in a text literal: build that step as chr(123) + uri + chr(125) + tag)
 // - path syntax: tag, *, a/b, //tag (any depth below; also inside: a//b), . and .., [@attr], [@attr='v'] (or "v"),
 //   [n] (1-based position among the parent's matching children); a leading / and anything else is refused
 //   (results keep document order per step and are not deduplicated: //b/.. lists a parent once per matching child)
