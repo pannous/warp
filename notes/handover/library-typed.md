@@ -337,3 +337,5 @@ Cursor scanning: the public outcome passed 1/1 before and after declaring `at_en
 Cursor scanning slice landed on main at `7d5118d991`: the new public outcome passed before and after, formatting changed nothing, and smoke printed Hello on the merged branch. No existing tests were touched. Continue auditing remaining modules for precise types, preserving polymorphic inputs and avoiding generic-only signatures; revisit typed-return, typed-color, typed-infix and sound-overload-refused. The card remains open for the wider audit.
 
 Matrix audit: `WARP_NO_WINDOW=1 WARP_LIB=/Volumes/Worktrees/library-typed/lib /Users/me/dev/bin/warp 'use matrix; map_matrix([[1, 2], [3, 4]], x => x * 2)'` returned `[[2, 4], [6, 8]]`. Added a public outcome test before declaring the comprehension's list result; next run it, annotate the result, rerun and smoke. Default: preserve the existing input domains and tests.
+
+The matrix mapping outcome passed 1/1 before the signature. `map_matrix` now declares a list result, leaving inputs unchanged; next repeat the test, format, merge main and smoke. The wider audit remains open.
