@@ -1,0 +1,7 @@
+# a parameter named key or value, words of the language too, is the local the call gives (card parameter-named-key)
+'f(key) := key + 1; f(2)'	3
+'f(value: list): int := value.length; f([1, 2])'	2
+'f(key, value) := [key, value]; f(1, 2)'	[1, 2]
+'f(key: text): text := key.upper; f("a")'	'A'
+'f(value) := [1, 2].map(x => x + value); f(1)'	[2, 3]
+'m = {a: 1}; f(key: text): int := m[key]; f("a")'	1
