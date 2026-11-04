@@ -1480,7 +1480,7 @@ is_hole_kind(code: Node, kind: text): bool := {
 	if kind == "number" { return code is number or is_big_number_view(code) }
 	if kind == "int" { return code is int or (is_big_number_view(code) and not value_of(code)#2.contains(".")) }
 	if kind == "list" { return is_group(code) and bracket_of(code) == "[" }
-	if kind == "block" { return is_curly_group(code) and not is_braced_map(code) }
+	if kind == "block" { return (is_curly_group(code) and not is_braced_map(code)) or is_empty_map(code) }
 	if kind == "map" { return (is_curly_group(code) and is_braced_map(code)) or (code is symbol and rule_maps.has(name_of(code))) }
 	code is symbol and rule_hole(code) == ø
 }
