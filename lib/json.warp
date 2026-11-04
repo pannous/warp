@@ -167,6 +167,11 @@ json_number(value: any, exact: bool): text := {
 // DEL and non-ASCII included, as itself. The parts collect in a list joined once, a run of plain characters as one
 // slice (cards lib-perf-bench, lib-json-ctrl-and-builders; core-text-append-cost)
 json_quoted(source: text): text := {
+	if #source <= 32 {
+		quoted = "\""
+		for character in source { quoted += json_escape(character) ?? character }
+		return quoted + "\""
+	}
 	parts = ["\""]
 	plain = 0
 	i = 0

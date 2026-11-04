@@ -624,12 +624,18 @@ md_inline(t: text, st: map): text := {
 			tokens += [md_html(if spaces >= 2 then "<br />\n" else "\n")]
 			k = md_space(t, k + 1, no)
 		}
-		else { plain += c; k += 1 }
+		else {
+			j = k + 1
+			while j <= n and not (("" + t#j) in MD_INLINE_SPECIAL) { j += 1 }
+			plain += t[k - 1..<j - 1]
+			k = j
+		}
 	}
 	tokens = md_flush(tokens, plain)
 	md_emphasis(tokens, 1)
 	md_written(tokens)
 }
+MD_INLINE_SPECIAL = "\\`&<![]*_~\n"
 md_trim_end(t: text): text := { while t.ends_with(" ") { t = t[0..<#t - 1] }; t }
 md_times(c: text, n: int): text := { out = ""; for i in 1 to n { out += c }; out }
 md_white(c: text): bool := c == " " or c == "\n" or c == "\t" or c == chr(0xA0)
