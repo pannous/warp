@@ -1,0 +1,5 @@
+// Source: lib/router.warp route pattern contract (cards web-router and route-typed).
+'use router; route_matches("/users/:id:int", "/users/7")'	true
+'use router; route_matches("/users/:id:int", "/users/me")'	false
+'use router; route_parameter("/files/:path*", "/files/a/b", "path")'	'a/b'
+'use router; route_parameter("/users/:id", "/users/7", "id")'	7
