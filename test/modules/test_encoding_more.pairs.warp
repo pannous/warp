@@ -1,0 +1,82 @@
+// lib/encoding.warp base32, base32hex, base58, ascii85 and z85 on spec vectors, each checked against python3 first (card lib-encodings-more)
+// RFC 4648 section 10, base32 and base32hex
+'use encoding; base32_encode("")'	""
+'use encoding; base32hex_encode("")'	""
+'use encoding; [base32_decode(""), base32hex_decode("")]'	["", ""]
+'use encoding; base32_encode("f")'	"MY======"
+'use encoding; base32hex_encode("f")'	"CO======"
+'use encoding; [base32_decode("MY======"), base32hex_decode("CO======")]'	["f", "f"]
+'use encoding; base32_encode("fo")'	"MZXQ===="
+'use encoding; base32hex_encode("fo")'	"CPNG===="
+'use encoding; [base32_decode("MZXQ===="), base32hex_decode("CPNG====")]'	["fo", "fo"]
+'use encoding; base32_encode("foo")'	"MZXW6==="
+'use encoding; base32hex_encode("foo")'	"CPNMU==="
+'use encoding; [base32_decode("MZXW6==="), base32hex_decode("CPNMU===")]'	["foo", "foo"]
+'use encoding; base32_encode("foob")'	"MZXW6YQ="
+'use encoding; base32hex_encode("foob")'	"CPNMUOG="
+'use encoding; [base32_decode("MZXW6YQ="), base32hex_decode("CPNMUOG=")]'	["foob", "foob"]
+'use encoding; base32_encode("fooba")'	"MZXW6YTB"
+'use encoding; base32hex_encode("fooba")'	"CPNMUOJ1"
+'use encoding; [base32_decode("MZXW6YTB"), base32hex_decode("CPNMUOJ1")]'	["fooba", "fooba"]
+'use encoding; base32_encode("foobar")'	"MZXW6YTBOI======"
+'use encoding; base32hex_encode("foobar")'	"CPNMUOJ1E8======"
+'use encoding; [base32_decode("MZXW6YTBOI======"), base32hex_decode("CPNMUOJ1E8======")]'	["foobar", "foobar"]
+// base32 decoding takes lowercase and a missing padding, and refuses other characters
+'use encoding; base32_decode("mzxw6ytboi")'	"foobar"
+'use encoding; base32_decode_bytes("74======")'	[255]
+'use encoding; try { base32_decode("MZ1W6===") } catch e { e.message }'	"base32: 1 at 3 is no base32 digit"
+'use encoding; try { base32hex_decode("CPNW") } catch e { e.message }'	"base32hex: W at 4 is no base32hex digit"
+'use encoding; base32_encode([0, 255, 128])'	"AD7YA==="
+// base58, the Bitcoin alphabet: leading zero bytes are leading 1s
+'use encoding; base58_encode("Hello World!")'	"2NEpo7TZRRrLZSi2U"
+'use encoding; base58_decode_bytes("2NEpo7TZRRrLZSi2U")'	[72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]
+'use encoding; base58_encode("The quick brown fox jumps over the lazy dog")'	"7DdiPPYtxLjCD3wA1po2rvZHTDYjkZYiEtazrfiwJcwnKCizhGFhBGHeRdx"
+'use encoding; base58_decode_bytes("7DdiPPYtxLjCD3wA1po2rvZHTDYjkZYiEtazrfiwJcwnKCizhGFhBGHeRdx")'	[84, 104, 101, 32, 113, 117, 105, 99, 107, 32, 98, 114, 111, 119, 110, 32, 102, 111, 120, 32, 106, 117, 109, 112, 115, 32, 111, 118, 101, 114, 32, 116, 104, 101, 32, 108, 97, 122, 121, 32, 100, 111, 103]
+'use encoding; base58_encode([0, 0, 1])'	"112"
+'use encoding; base58_decode_bytes("112")'	[0, 0, 1]
+'use encoding; base58_encode([0])'	"1"
+'use encoding; base58_decode_bytes("1")'	[0]
+'use encoding; base58_encode([0, 0, 0, 0])'	"1111"
+'use encoding; base58_decode_bytes("1111")'	[0, 0, 0, 0]
+'use encoding; base58_encode([])'	""
+'use encoding; base58_decode_bytes("")'	[]
+'use encoding; base58_encode([0, 0, 40, 127, 180, 205])'	"11233QC4"
+'use encoding; base58_decode_bytes("11233QC4")'	[0, 0, 40, 127, 180, 205]
+'use encoding; base58_encode([250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255])'	"2uY4MYQ9SBuPSmHFV8g77x17hScFgRpEVpcv1F7SdFuV1yMR9p"
+'use encoding; base58_decode_bytes("2uY4MYQ9SBuPSmHFV8g77x17hScFgRpEVpcv1F7SdFuV1yMR9p")'	[250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255, 250, 251, 252, 253, 254, 255]
+'use encoding; base58_decode("2NEpo7TZRRrLZSi2U")'	"Hello World!"
+'use encoding; try { base58_decode("abc0") } catch e { e.message }'	"base58: 0 at 4 is no base58 digit"
+// ascii85: Man and Wikipedia's Leviathan sample, z for a zero group, short final groups, <~ ~> accepted on decoding
+'use encoding; ascii85_encode("Man ")'	"9jqo^"
+'use encoding; ascii85_decode_bytes("<~9jqo^~>")'	[77, 97, 110, 32]
+'use encoding; ascii85_encode("Man")'	"9jqo"
+'use encoding; ascii85_decode_bytes("<~9jqo~>")'	[77, 97, 110]
+'use encoding; ascii85_encode("Ma")'	"9jn"
+'use encoding; ascii85_decode_bytes("<~9jn~>")'	[77, 97]
+'use encoding; ascii85_encode("M")'	"9`"
+'use encoding; ascii85_decode_bytes("<~9`~>")'	[77]
+'use encoding; ascii85_encode("Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure.")'	"9jqo^BlbD-BleB1DJ+*+F(f,q/0JhKF<GL>Cj@.4Gp$d7F!,L7@<6@)/0JDEF<G%<+EV:2F!,O<DJ+*.@<*K0@<6L(Df-\\0Ec5e;DffZ(EZee.Bl.9pF\"AGXBPCsi+DGm>@3BB/F*&OCAfu2/AKYi(DIb:@FD,*)+C]U=@3BN#EcYf8ATD3s@q?d$AftVqCh[NqF<G:8+EV:.+Cf>-FD5W8ARlolDIal(DId<j@<?3r@:F%a+D58'ATD4$Bl@l3De:,-DJs`8ARoFb/0JMK@qB4^F!,R<AKZ&-DfTqBG%G>uD.RTpAKYo'+CT/5+Cei#DII?(E,9)oF*2M7/c"
+'use encoding; ascii85_decode_bytes("<~9jqo^BlbD-BleB1DJ+*+F(f,q/0JhKF<GL>Cj@.4Gp$d7F!,L7@<6@)/0JDEF<G%<+EV:2F!,O<DJ+*.@<*K0@<6L(Df-\\\\0Ec5e;DffZ(EZee.Bl.9pF\\"AGXBPCsi+DGm>@3BB/F*&OCAfu2/AKYi(DIb:@FD,*)+C]U=@3BN#EcYf8ATD3s@q?d$AftVqCh[NqF<G:8+EV:.+Cf>-FD5W8ARlolDIal(DId<j@<?3r@:F%a+D58\'ATD4$Bl@l3De:,-DJs`8ARoFb/0JMK@qB4^F!,R<AKZ&-DfTqBG%G>uD.RTpAKYo\'+CT/5+Cei#DII?(E,9)oF*2M7/c~>")'	[77, 97, 110, 32, 105, 115, 32, 100, 105, 115, 116, 105, 110, 103, 117, 105, 115, 104, 101, 100, 44, 32, 110, 111, 116, 32, 111, 110, 108, 121, 32, 98, 121, 32, 104, 105, 115, 32, 114, 101, 97, 115, 111, 110, 44, 32, 98, 117, 116, 32, 98, 121, 32, 116, 104, 105, 115, 32, 115, 105, 110, 103, 117, 108, 97, 114, 32, 112, 97, 115, 115, 105, 111, 110, 32, 102, 114, 111, 109, 32, 111, 116, 104, 101, 114, 32, 97, 110, 105, 109, 97, 108, 115, 44, 32, 119, 104, 105, 99, 104, 32, 105, 115, 32, 97, 32, 108, 117, 115, 116, 32, 111, 102, 32, 116, 104, 101, 32, 109, 105, 110, 100, 44, 32, 116, 104, 97, 116, 32, 98, 121, 32, 97, 32, 112, 101, 114, 115, 101, 118, 101, 114, 97, 110, 99, 101, 32, 111, 102, 32, 100, 101, 108, 105, 103, 104, 116, 32, 105, 110, 32, 116, 104, 101, 32, 99, 111, 110, 116, 105, 110, 117, 101, 100, 32, 97, 110, 100, 32, 105, 110, 100, 101, 102, 97, 116, 105, 103, 97, 98, 108, 101, 32, 103, 101, 110, 101, 114, 97, 116, 105, 111, 110, 32, 111, 102, 32, 107, 110, 111, 119, 108, 101, 100, 103, 101, 44, 32, 101, 120, 99, 101, 101, 100, 115, 32, 116, 104, 101, 32, 115, 104, 111, 114, 116, 32, 118, 101, 104, 101, 109, 101, 110, 99, 101, 32, 111, 102, 32, 97, 110, 121, 32, 99, 97, 114, 110, 97, 108, 32, 112, 108, 101, 97, 115, 117, 114, 101, 46]
+'use encoding; ascii85_encode([0, 0, 0, 0])'	"z"
+'use encoding; ascii85_decode_bytes("<~z~>")'	[0, 0, 0, 0]
+'use encoding; ascii85_encode([0, 0, 0, 0, 0, 0, 0, 0, 120])'	"zzGQ"
+'use encoding; ascii85_decode_bytes("<~zzGQ~>")'	[0, 0, 0, 0, 0, 0, 0, 0, 120]
+'use encoding; ascii85_encode("")'	""
+'use encoding; ascii85_decode_bytes("<~~>")'	[]
+'use encoding; ascii85_encode([255, 255, 255, 255])'	"s8W-!"
+'use encoding; ascii85_decode_bytes("<~s8W-!~>")'	[255, 255, 255, 255]
+'use encoding; ascii85_decode("9jqo^ BlbD-")'	"Man is d"
+'use encoding; try { ascii85_decode("9jqo^v") } catch e { e.message }'	"ascii85: v at 6 is no ascii85 digit"
+// z85, ZeroMQ RFC 32: its vector, and lengths that are no multiple of 4 (bytes) or 5 (text) refused
+'use encoding; z85_encode([134, 79, 210, 111, 181, 89, 247, 91])'	"HelloWorld"
+'use encoding; z85_decode_bytes("HelloWorld")'	[134, 79, 210, 111, 181, 89, 247, 91]
+'use encoding; z85_encode([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31])'	"009c61o!#m2NH?C3>iWS5d]J*6CRx17-skh9337x"
+'use encoding; z85_decode_bytes("009c61o!#m2NH?C3>iWS5d]J*6CRx17-skh9337x")'	[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+'use encoding; z85_encode([255, 255, 255, 255, 255, 255, 255, 255])'	"%nSc0%nSc0"
+'use encoding; z85_decode_bytes("%nSc0%nSc0")'	[255, 255, 255, 255, 255, 255, 255, 255]
+'use encoding; z85_encode([97, 98, 99, 100])'	"vpA.S"
+'use encoding; z85_decode_bytes("vpA.S")'	[97, 98, 99, 100]
+'use encoding; try { z85_encode("abc") } catch e { e.message }'	"z85: 3 bytes are no multiple of 4"
+'use encoding; try { z85_decode("Hello" + "W") } catch e { e.message }'	"z85: 6 characters are no multiple of 5"
+// the older words of use encoding still work
+'use encoding; [base64_encode("foo"), base64_decode("Zm9v"), hex_encode("foo"), hex_decode("666f6f")]'	["Zm9v", "foo", "666f6f", "foo"]
