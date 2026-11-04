@@ -1,0 +1,96 @@
+// The standard library module numeric (card lib-numerics): `use numeric`. Roots, integrals, interpolation and
+// polynomials over floats. A polynomial is the list of its coefficients from the constant up: [c0, c1, c2] is
+// c0 + c1·x + c2·x²
+use math
+use matrix
+
+ROOT_TOLERANCE = 0.000000000001
+ROOT_STEPS = 200
+// a root of f between a and b by bisection, f(a) and f(b) of opposite signs (or one of them 0); the interval halves
+// until it is narrower than 1e-12 or 200 halvings were made
+find_root(f: function, a: number, b: number): float := {
+	low = a as float; high = b as float
+	f_low = f(low); f_high = f(high)
+	if f_low == 0 { return low }
+	if f_high == 0 { return high }
+	if (f_low > 0) == (f_high > 0) { raise "find_root: f(" + str(a) + ") and f(" + str(b) + ") have the same sign, so no root is bracketed between them" }
+	for step in 1 to ROOT_STEPS {
+		middle = (low + high) / 2
+		f_middle = f(middle)
+		if f_middle == 0 or (high - low) / 2 < ROOT_TOLERANCE { return middle }
+		if (f_middle > 0) == (f_low > 0) { low = middle; f_low = f_middle } else { high = middle }
+	}
+	(low + high) / 2
+}
+// a root of f by Newton's method from x0, df its derivative: done when a step is under 1e-12 (relative), raising on a
+// zero derivative or when 100 steps did not converge
+newton(f: function, df: function, x0: number): float := {
+	x = x0 as float
+	for step in 1 to 100 {
+		slope = df(x)
+		if slope == 0 { raise "newton: the derivative is 0 at x = " + str(x) + ", no Newton step from there" }
+		next = x - f(x) / slope
+		if abs(next - x) <= ROOT_TOLERANCE * max(1.0, abs(next)) { return next }
+		x = next
+	}
+	raise "newton: no convergence from x0 = " + str(x0) + " within 100 steps"
+}
+// the integral of f from a to b by adaptive Simpson: each half refined until the estimates agree within 1e-10, at
+// most 50 halvings deep
+integrate(f: function, a: number, b: number): float := {
+	lo = a as float; hi = b as float
+	m = (lo + hi) / 2
+	fa = f(lo); fm = f(m); fb = f(hi)
+	simpson_adaptive(f, lo, hi, fa, fm, fb, simpson(lo, hi, fa, fm, fb), 0.0000000001, 50)
+}
+simpson(a: float, b: float, fa: float, fm: float, fb: float): float := (b - a) / 6 * (fa + 4 * fm + fb)
+simpson_adaptive(f: function, a: float, b: float, fa: float, fm: float, fb: float, whole: float, tolerance: float, depth: int): float := {
+	m = (a + b) / 2
+	lm = (a + m) / 2; rm = (m + b) / 2
+	flm = f(lm); frm = f(rm)
+	left = simpson(a, m, fa, flm, fm)
+	right = simpson(m, b, fm, frm, fb)
+	if depth <= 0 or abs(left + right - whole) <= 15 * tolerance { return left + right + (left + right - whole) / 15 }
+	simpson_adaptive(f, a, m, fa, flm, fm, left, tolerance / 2, depth - 1) + simpson_adaptive(f, m, b, fm, frm, fb, right, tolerance / 2, depth - 1)
+}
+// y at x on the straight lines through the points (xs ascending): an x outside xs#1 … xs.last raises, it is never
+// extrapolated
+linear_interpolate(xs: list, ys: list, x: number): float := {
+	if count(xs) != count(ys) or count(xs) < 2 { raise "linear_interpolate: xs and ys need the same length, at least 2" }
+	if x < xs#1 or x > xs.last { raise "linear_interpolate: x = " + str(x) + " is outside " + str(xs#1) + " … " + str(xs.last) }
+	i = 1
+	while i < count(xs) - 1 and x > xs#(i + 1) { i += 1 }
+	t = (x - xs#i) / (xs#(i + 1) - xs#i)
+	ys#i + t * (ys#(i + 1) - ys#i)
+}
+// the polynomial's value at x by Horner's rule: poly_eval([1, 2, 3], 2) is 1 + 4 + 12 = 17
+poly_eval(p: list, x: number): float := { value = 0.0; for i in 0 to count(p) - 1 { value = value * x + p#(count(p) - i) }; value }
+// [c1, 2·c2, 3·c3, …]; a constant's derivative is []
+poly_derivative(p: list): list := [i * p#(i + 1) for i in 1 to count(p) - 1]
+poly_add(p: list, q: list): list := [(if i <= count(p) then p#i else 0) + (if i <= count(q) then q#i else 0) for i in 1 to max(count(p), count(q))]
+poly_multiply(p: list, q: list): list := {
+	if count(p) == 0 or count(q) == 0 { return [] }
+	out = [0 for i in 1 to count(p) + count(q) - 1]
+	for i in 1 to count(p) { for j in 1 to count(q) { out#(i + j - 1) = out#(i + j - 1) + p#i * q#j } }
+	out
+}
+// the real roots of a polynomial of degree 1 or 2, ascending ([] for none); higher degrees: find_root or newton
+poly_roots(p: list): list := {
+	if count(p) == 2 { if p#2 == 0 { raise "poly_roots: the polynomial is a constant" }; return [-p#1 / p#2] }
+	if count(p) != 3 { raise "poly_roots: degree 1 or 2 only, this one has " + str(count(p) - 1) + "; use find_root or newton" }
+	a = p#3; b = p#2; c = p#1
+	if a == 0 { return poly_roots([c, b]) }
+	d = b * b - 4 * a * c
+	if d < 0 { return [] }
+	r1 = (-b - √d) / (2 * a); r2 = (-b + √d) / (2 * a)
+	if d == 0 then [r1] else [min(r1, r2), max(r1, r2)]
+}
+// the least-squares polynomial of the degree through the points, by the normal equations (Vᵀ V) c = Vᵀ y solved with
+// matrix's solve
+polyfit(xs: list, ys: list, degree: int): list := {
+	if count(xs) != count(ys) { raise "polyfit: xs and ys need the same length" }
+	if count(xs) <= degree { raise "polyfit: a polynomial of degree " + str(degree) + " needs more than " + str(degree) + " points" }
+	v = [[x ^ k for k in 0 to degree] for x in xs]
+	vt = transpose(v)
+	solve(matmul(vt, v), [sum([vt#i#j * ys#j for j in 1 to count(ys)]) for i in 1 to degree + 1])
+}
