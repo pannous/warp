@@ -1,7 +1,7 @@
 // The standard library module text (notes/stdlib.md): standard functions of every program, `repeat(t, 2)` or `t.repeat(2)`, no `use` needed (`use text` only for the qualified `text.repeat(t, 2)`)
 use list
 use letter_ranges
-repeat(t: text, n: int) := t * n
+repeat(t: text, n: int) := if n < 0 then raise "repeat needs a count of at least 0, not " + str(n) else t * n
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
 pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
 // format("{} has {} items", ["cart", 3]): each {} takes the next value
@@ -59,11 +59,20 @@ def to_utf8(t: text): list {
 def from_utf8(bytes: any): text {
 	out = ""
 	i = 0
-	while i < count(bytes) {
+	total = count(bytes)
+	while i < total {
 		b = bytes[i]
-		length = if b < 128 then 1 else if b < 224 then 2 else if b < 240 then 3 else 4
+		if not (b is int) or b < 0 or b > 255 { raise "from_utf8: " + str(b) + " at position " + str(i) + " is not a byte" }
+		length = if b < 128 then 1 else if b >= 194 and b < 224 then 2 else if b >= 224 and b < 240 then 3 else if b >= 240 and b < 245 then 4 else 0
+		if length == 0 { raise "from_utf8: the byte " + str(b) + " at position " + str(i) + " cannot start a character (invalid UTF-8)" }
+		if i + length > total { raise "from_utf8: the character starting at position " + str(i) + " is cut off (invalid UTF-8)" }
 		n = if length == 1 then b else if length == 2 then b % 32 else if length == 3 then b % 16 else b % 8
-		for k in 1 to length - 1 { n = n * 64 + bytes[i + k] % 64 }
+		for k in 1 to length - 1 {
+			c = bytes[i + k]
+			if not (c is int) or c < 128 or c > 191 { raise "from_utf8: the byte " + str(c) + " at position " + str(i + k) + " is not a continuation byte (invalid UTF-8)" }
+			n = n * 64 + c % 64
+		}
+		if (length == 3 and n < 2048) or (length == 4 and (n < 65536 or n > 1114111)) or (n >= 55296 and n <= 57343) { raise "from_utf8: an overlong or out-of-range sequence at position " + str(i) + " (invalid UTF-8)" }
 		out = out + chr(n)
 		i = i + length
 	}
