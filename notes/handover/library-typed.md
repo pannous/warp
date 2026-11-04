@@ -279,3 +279,5 @@ Task any audit: on current merged main, direct headless `use tasks; jobs = [go {
 Board card `await-within` tracks the timed-await owner failure. Task creation audit: direct headless public outcome `use tasks; job = go { 3 * 4 }; [is_done(job), await job, is_done(job)]` returned `[no, 12, yes]` before typing `task_go`. Added public outcome test; next annotate its result as Task and verify the same outcome, then format and smoke.
 
 `task_go(first: function): Task` now declares its result; next rerun the public outcome, format, merge main and smoke.
+
+Task creation signature slice landed on main at `334adf4ebf0164a5cd65ce700d4fc5533998dbd2`. The new public outcome returned `[no, 12, yes]` before and after, formatter made no changes, and merged-main smoke printed Hello. Existing tests were not changed. `warp test` remains unrun because `warp-test-timeout` is unavailable; direct checks cover the new cases. Remaining: audit the other task and library signatures, revisit typed-return, typed-color, typed-infix and R variadics, and review existing internal-helper tests without changing them. Default: preserve heterogeneous inputs and results with `any`.
