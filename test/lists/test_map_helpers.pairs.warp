@@ -1,0 +1,23 @@
+# deep_merge, pick, omit, filter_entries, transform_keys, get_path and set_path (card lib-map-helpers)
+'deep_merge({a: {x: 1, y: 2}, b: 1}, {a: {y: 3, z: 4}, c: 5})'	{a: {x: 1, y: 3, z: 4}, b: 1, c: 5}
+'deep_merge({a: {x: 1}}, {a: 2})'	{a: 2}
+'deep_merge({a: [1, 2]}, {a: [3]})'	{a: [3]}
+'a = {p: {q: 1}}; deep_merge(a, {p: {q: 2}}); a'	{p: {q: 1}}
+'deep_merge({}, {})'	{}
+'pick({a: 1, b: 2, c: 3}, ["a", "c", "zz"])'	{a: 1, c: 3}
+'omit({a: 1, b: 2, c: 3}, ["b", "zz"])'	{a: 1, c: 3}
+'pick({}, ["a"])'	{}
+'filter_entries({a: 1, b: 2, c: 3}, (k, v) => k != "a" and v < 3)'	{b: 2}
+'transform_keys({a: 1, b: 2}, k => k + "2")'	{a2: 1, b2: 2}
+'get_path({a: {b: {c: 7}}}, ["a", "b", "c"])'	7
+'get_path({a: [{b: 5}, {b: 6}]}, ["a", 2, "b"])'	6
+'get_path({a: {b: 1}}, ["a", "x"])'	ø
+'get_path({a: [1]}, ["a", 3])'	ø
+'get_path({a: 1}, ["a", "b"])'	ø
+'get_path({}, ["a"])'	ø
+'get_path({a: 1}, [])'	{a: 1}
+'set_path({a: {b: 1}}, ["a", "c"], 2)'	{a: {b: 1, c: 2}}
+'set_path({}, ["x", "y", "z"], 1)'	{x: {y: {z: 1}}}
+'set_path({a: [{b: 1}, {b: 2}]}, ["a", 2, "b"], 9)'	{a: [{b: 1}, {b: 9}]}
+'m = {a: {b: 1}}; set_path(m, ["a", "b"], 2); m'	{a: {b: 1}}
+'try set_path({a: [1]}, ["a", 5], 0) else "refused"'	"refused"
