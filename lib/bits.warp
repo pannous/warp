@@ -1,0 +1,91 @@
+// The standard library module bits: `use bits`, whole numbers as the bits of a 64-bit word (or of a narrower width)
+// and as bytes, floats as their IEEE 754 bytes: int_bytes(258, 16) is [1, 2], float_bytes(1.0, 32) is [63, 128, 0, 0],
+// popcount(255) is 8. Widths are in bits, 8, 16, 32 or 64; byte order "big" (most significant first) or "little".
+// An int is a signed 64-bit word here: an unsigned 64-bit value of 2^63 or more reads as its negative twin
+
+// the word instructions themselves (decision wasm-instruction-body)
+popcount(n: int): int := wasm i64.popcnt
+leading_zeros(n: int): int := wasm i64.clz
+trailing_zeros(n: int): int := wasm i64.ctz
+// the logical shift: zeros come in from the left (`>>` keeps the sign)
+shift_right(n: int, count: int): int := wasm i64.shr_u
+both_bits(a: int, b: int): int := wasm i64.and
+rotate_left(n: int, count: int): int := wasm i64.rotl
+rotate_right(n: int, count: int): int := wasm i64.rotr
+
+// the low width bits of n
+bit_mask(width: int): int := if width >= 64 then -1 else (1 << width) - 1
+low_bits(n: int, width: int): int := both_bits(n, bit_mask(width))
+// of the low width bits only
+popcount(n: int, width: int): int := popcount(low_bits(n, width))
+leading_zeros(n: int, width: int): int := leading_zeros(low_bits(n, width)) - (64 - width)
+trailing_zeros(n: int, width: int): int := min(trailing_zeros(n), width)
+// the bits n needs, its highest one bit's place: bit_length(5) is 3, bit_length(0) is 0, a negative number 64
+bit_length(n: int): int := 64 - leading_zeros(n)
+rotate_left(n: int, count: int, width: int): int := if width >= 64 then rotate_left(n, count) else {
+	x = low_bits(n, width)
+	k = count % width
+	low_bits(x << k, width) + shift_right(x, width - k)
+}
+rotate_right(n: int, count: int, width: int): int := rotate_left(n, width - count % width, width)
+// the low width bits as a signed number: signed(255, 8) is -1
+signed(n: int, width: int): int := { x = low_bits(n, width); if width < 64 and x >= 1 << (width - 1) then x - (1 << width) else x }
+
+// n's low width bits as width / 8 bytes, two's complement for a negative n
+def int_bytes(n: int, width: int, order: text): list {
+	bytes = [both_bits(shift_right(n, 8 * i), 255) for i in 0 ..< width /! 8]
+	if order == "big" then reverse(bytes) else bytes
+}
+int_bytes(n: int, width: int): list := int_bytes(n, width, "big")
+// bytes back to their number, unsigned or (signed: yes) two's complement
+def bytes_int(bytes: list, order: text, signed_number: bool): int {
+	ordered = if order == "big" then bytes else reverse(bytes)
+	n = 0
+	for b in ordered { n = (n << 8) + b }
+	if signed_number then signed(n, 8 * count(bytes)) else n
+}
+bytes_int(bytes: list, order: text): int := bytes_int(bytes, order, no)
+bytes_int(bytes: list): int := bytes_int(bytes, "big", no)
+
+// an f64's bits rounded to an f32's, to nearest, ties to even; subnormals, ±0, ±infinity and NaN kept
+def f32_bits(x: float): int {
+	b = float_bits(x)
+	sign = shift_right(b, 63) << 31
+	exponent = both_bits(shift_right(b, 52), 0x7ff)
+	fraction = low_bits(b, 52)
+	if exponent == 0x7ff { return sign + (0xff << 23) + (if fraction == 0 then 0 else 0x400000 + shift_right(low_bits(fraction, 51), 29)) }
+	if exponent == 0 and fraction == 0 { return sign }
+	significand = if exponent == 0 then fraction else fraction + (1 << 52)
+	field = (if exponent == 0 then 1 else exponent) - 1023 + 127
+	shift = if field >= 1 then 29 else 29 + 1 - field
+	if shift >= 54 { return sign }
+	q = shift_right(significand, shift)
+	rest = low_bits(significand, shift)
+	half = 1 << (shift - 1)
+	if rest > half or (rest == half and q % 2 == 1) { q = q + 1 }
+	if field < 1 { return sign + q }
+	if q == 1 << 24 { q = 1 << 23; field = field + 1 }
+	if field >= 0xff { return sign + (0xff << 23) }
+	sign + (field << 23) + q - (1 << 23)
+}
+// an f32's bits as the f64 of the same value, exactly
+def f32_float(bits: int): float {
+	sign = shift_right(both_bits(bits, 0xffffffff), 31)
+	field = both_bits(shift_right(bits, 23), 0xff)
+	fraction = low_bits(bits, 23)
+	if field == 0xff { return bits_float((sign << 63) + (0x7ff << 52) + (fraction << 29)) }
+	if field == 0 {
+		if fraction == 0 { return bits_float(sign << 63) }
+		// fraction * 2^-149, a normal f64: its top one bit becomes the implicit one
+		top = bit_length(fraction) - 1
+		return bits_float((sign << 63) + ((top - 149 + 1023) << 52) + low_bits(fraction << (52 - top), 52))
+	}
+	bits_float((sign << 63) + ((field - 127 + 1023) << 52) + (fraction << 29))
+}
+// x as its IEEE 754 bytes: width 64 (binary64) or 32 (binary32, rounded to nearest)
+float_bytes(x: float, width: int, order: text): list := int_bytes(if width == 32 then f32_bits(x) else float_bits(x), width, order)
+float_bytes(x: float, width: int): list := float_bytes(x, width, "big")
+float_bytes(x: float): list := float_bytes(x, 64, "big")
+// 4 or 8 bytes back to their float
+bytes_float(bytes: list, order: text): float := { n = bytes_int(bytes, order); if count(bytes) == 4 then f32_float(n) else bits_float(n) }
+bytes_float(bytes: list): float := bytes_float(bytes, "big")
