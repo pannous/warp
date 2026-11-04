@@ -63,6 +63,9 @@ class Extension {
 	arm_lowerings: list = []
 	# functions finding the standard modules a source uses without saying it, given the source and its folder
 	implicit_uses: list = []
+	# functions given each node of the program as written and the program, each diagnosing what it finds (source_checks.warp,
+	# beside the core's own lints)
+	lints: list = []
 	# the command words it answers (`warp help`), and runs: the function running one, given its word
 	commands: list = []
 	runs: any = ø
