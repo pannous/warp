@@ -131,3 +131,7 @@ Cover rendered CSS declarations and attributes before declaring text results; ke
 ## Library router signature slice
 
 Cover route matching and parameter outcomes, then annotate route helpers without narrowing their inputs or mixed return values. Verify the outcomes and smoke on merged main.
+
+## Library router response signatures
+
+Cover response header and reset outcomes, then declare non-narrowing result types and verify behavior before smoke.

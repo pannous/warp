@@ -101,15 +101,15 @@ route_fits(kind: any, segment: any): bool := {
 global answer_status = 200
 global answer_content_type = ""
 global answer_header_lines = ""
-status(code: int) := answer_header("Status", code)
-header(name: text, value: any) := answer_header(name, value)
-answer_header(name: any, value: any) := {
+status(code: int): any := answer_header("Status", code)
+header(name: text, value: any): any := answer_header(name, value)
+answer_header(name: any, value: any): any := {
 	let field = lower(str(name))
 	if field == "status" { answer_status = value }
 	else if field == "content-type" { answer_content_type = str(value) }
 	else { answer_header_lines = answer_header_lines + "\n" + str(name) + ": " + str(value) }
 }
-answer_reset() := {
+answer_reset(): any := {
 	answer_status = 200
 	answer_content_type = ""
 	answer_header_lines = ""
@@ -120,11 +120,11 @@ answer_reset() := {
 // exactly the request's path answers it, else the first whose pattern matches (as the host's route_at picks)
 global route_table = []
 // `+=`, not route_table.add: a program's own function add (`server def add(a, b)`) would take that call
-route_add(method: text, path: any, answer: function) := {
+route_add(method: text, path: any, answer: function): any := {
 	route_table += [{method: method, path: path, answer: answer}]
 	ø
 }
-route_answer(request: any) := {
+route_answer(request: any): any := {
 	for route in route_table {
 		if route.method == request.method and route.path == request.path { return route.answer(request) }
 	}
