@@ -1,0 +1,5 @@
+# a unit after a comparison's right side binds to its number (card hour-minute-equality): x == (120 minutes)
+'x = 2 hours; x == 120 minutes'	yes
+'x = 2 hours; x != 120 minutes'	no
+'x = 2 hours; x == 2 minutes'	no
+'x = 90 seconds; 1.5 minutes == x'	yes
