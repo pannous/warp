@@ -1,0 +1,3 @@
+# a phrase statement in a rewrite rule's spliced block stays one statement: the tuple loop's body `print a` (card says-unknown)
+'for (a, b) in [(1, 2)] { print a }; 7'	7
+'s = []; for (a, b) in [(1, 2), (3, 4)] { s.add b }; s'	[2, 4]
