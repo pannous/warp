@@ -104,6 +104,9 @@ log2(x: float): float from 'm'
 trunc(x: float): float from 'm'
 log1p(x: float): float from 'm'
 expm1(x: float): float from 'm'
+exp2(x: float): float from 'm'
+erf(x: float): float from 'm'
+erfc(x: float): float from 'm'
 
 gcd(a: int, b: int): int := {
 	x = if a < 0 then 0 - a else a
