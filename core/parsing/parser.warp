@@ -2799,7 +2799,7 @@ def bare_atom(p: Parser): Node := {
 // The atoms by their first character: each reader reads its atom at the parser's position, or answers ø unmoved when
 // the character starts none of its forms; extensions add theirs (core/extension.warp atom_readers), a character two
 // rows claim is refused loudly
-def core_atom_rows(): list := [reading_rows("0123456789".chars(), number_atom), reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), reading_rows(["\"", "'", "«"], p => quoted(p)), {".": dot_atom, "\\": unknown_entity, "*": starred_name, "$": pattern_hole, "(": group_atom, "[": group_atom, "{": group_atom}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom)]
+def core_atom_rows(): list := [reading_rows("0123456789".chars(), number_atom), reading_rows(["\"", "'", "«"], p => quoted(p)), {".": dot_atom, "*": starred_name, "$": pattern_hole, "(": group_atom, "[": group_atom, "{": group_atom}]
 def reading_rows(characters: list, reader: function): map {
 	rows = {}
 	for c in characters { rows["$(c)"] = reader }
@@ -2840,8 +2840,6 @@ def number_atom(p: Parser): Node := {
 	// i64 a float (card int-beyond)
 	// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
 	if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
-	period = overlined_digits(p)
-	if period != "" and written.contains(".") { return repeating_decimal(written, period) }
 	with_glued_factor(p, if written.contains(".") then decimal_value(written) else whole_number(written))
 }
 // `.5` is 0.5, `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case),
@@ -2853,14 +2851,6 @@ def dot_atom(p: Parser): Node := {
 	if not (is_name_start(next) or next == '$') { return ø }
 	advance(p)
 	Key(ø, Op.Dot, atom(p))
-}
-// `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
-def unknown_entity(p: Parser): Node := {
-	if char_ahead(p, 1) != ':' or not is_alpha(char_ahead(p, 2)) { return ø }
-	end = name_end(p.code, p.at + 2, p.n)
-	unknown = "" + p.code[p.at .. end]
-	p.at = end
-	unknown
 }
 // `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter. `$f(x)`, `$f(x) {…}`: a hole
 // applied reads as the name it stands for applied, its arguments read as a call's (typed_parameters): `$f($x)`
@@ -2883,17 +2873,6 @@ def group_atom(p: Parser): Node := {
 	advance(p)
 	symbol(union + "?")
 }
-def truth_atom(p: Parser): Node := {
-	truth = truth_glyph_at(p)
-	if truth == "" { return ø }
-	p.at += truth.length
-	not FALSE_GLYPHS.contains(truth)
-}
-def exact_atom(p: Parser): Node := {
-	constant = "$(p.code[p.at])"
-	advance(p)
-	exact_constant(constant)
-}
 // `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing); a closer ends the atoms. Every
 // other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
 // (card unicode-glyphs)
@@ -2907,16 +2886,6 @@ def character_atom(p: Parser, c: text): Node := {
 	if opens_text(code_points("$(c)")#1) { return quoted(p) }
 	advance(p)
 	if is_free_symbol(p, c) then symbol("$(c)") else c
-}
-
-// The glyphs that are true or false, longest spelling first: `✔️` is `✔` with an emoji variation selector
-// (card keyword-glyphs)
-TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", "🗸", "🗹"]
-FALSE_GLYPHS = ["⊥", "❌", "✗"]
-TRUTH_GLYPH_STARTS = by_first_character(TRUE_GLYPHS + FALSE_GLYPHS, glyph => glyph)
-def truth_glyph_at(p: Parser): text {
-	for glyph in starting_here(TRUTH_GLYPH_STARTS, p, p.at) { if at_text(p, glyph) { return glyph } }
-	""
 }
 
 // The Unicode blocks of symbols a program may use before anything defines them (decision unicode-symbols): arrows,
@@ -2981,22 +2950,6 @@ def operand_before(p: Parser, start: int): bool {
 	at >= 0 and is_operand_end(p.code[at])
 }
 
-// The exact generators the core has no value for yet; `π`, `τ`, `ℯ` and `∞` are plain names lib/reals.warp defines
-EXACT_CONSTANTS = ["ⅈ", "ε", "ω"]
-// no node of its own in warp yet (card node-more-cases): the number view, read as written
-def exact_constant(word: text): Node := opaque(["number", word])
-
-// The Unicode vulgar fractions, each the numerator and denominator its NFKD decomposition writes (½ is 1⁄2)
-VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
-
-// `⅓` is the exact 1/3; digits glued after it multiply it
-def vulgar_fraction(p: Parser): Node := {
-	parts = VULGAR_FRACTIONS[p.code[p.at]]
-	advance(p)
-	fraction = keyed("/", int(parts#1), int(parts#2))
-	if is_digit(char_here(p)) then Key(fraction, Op.Mul, atom(p)) else fraction
-}
-
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 def with_glued_factor(p: Parser, amount: Node): Node := {
 	c = char_here(p)
@@ -3045,7 +2998,6 @@ def named(p: Parser): Node := {
 	if constant == "true" { return true }
 	if constant == "false" { return false }
 	if constant == "empty" and not names_key(p) { return ø }
-	if not names_case(p, word.length) and EXACT_CONSTANTS.contains(word.lower()) { return exact_constant(word) }
 	// `https://pannous.com`, `ssh://host`: a URL, the rest of which reads as one text
 	if p.code[p.at .. min(p.at + 3, p.n)] == "://" { return url_text(p, word) }
 	// the Java/C array type `int[]` is the list type `[int]`
@@ -3573,33 +3525,6 @@ def decimal_number(p: Parser): text {
 		}
 	}
 	written
-}
-
-// `0.16̅`: the digits under an overline (U+0305, one grapheme with its digit) repeat forever
-def overlined_digits(p: Parser): text {
-	period = ""
-	while p.at < p.n and p.code[p.at].ends_with("̅") and is_digit(p.code[p.at].replace("̅", "")) {
-		period = period + p.code[p.at].replace("̅", "")
-		advance(p)
-	}
-	period
-}
-
-// a.b followed by the period p repeating, exactly: (abp - ab) / (10^#b · (10^#p - 1)), 0.3̅ is 1/3, 2.45̅ 221/90
-def repeating_decimal(written: text, period: text): Node {
-	parts = written.split(".")
-	fraction = parts#2
-	digits = parts#1 + fraction
-	keyed("/", int(digits + period) - int(digits), (ten_to_the(period.length) - 1) * ten_to_the(fraction.length))
-}
-
-def ten_to_the(count: int): int {
-	power = 1
-	while count > 0 {
-		power = power * 10
-		count -= 1
-	}
-	power
 }
 
 def digits_read(p: Parser): text {
