@@ -43,6 +43,8 @@ md_after(line: text, n: int): text := if n >= #line then "" else line[n..<#line]
 // the line without its indentation of up to 3 spaces
 md_unindent(line: text): text := md_after(line, min(md_indent(line), 3))
 md_run(t: text, c: text): int := { n = 0; while n < #t and t#(n + 1) == c { n += 1 }; n }
+// the run of c at place k of t, counted in place rather than on a slice of the rest
+md_run_at(t: text, k: int, c: text): int := { n = 0; while k + n <= #t and t#(k + n) == c { n += 1 }; n }
 
 // block starts
 md_is_break(line: text): bool := {
@@ -572,17 +574,17 @@ md_inline(t: text, st: map): text := {
 	plain = ""
 	while k <= n {
 		c = "" + t#k
-		if c == "\\" and k < n and t#(k + 1) == "\n" { tokens = md_flush(tokens, plain); plain = ""; tokens += [md_html("<br />\n")]; k = md_space(t, k + 2, no) }
+		if c == "\\" and k < n and t#(k + 1) == "\n" { tokens = md_flush(tokens, plain); plain = ""; tokens.add(md_html("<br />\n")); k = md_space(t, k + 2, no) }
 		else if c == "\\" and k < n and ("" + t#(k + 1)) in MD_PUNCTUATION { plain += t#(k + 1); k += 2 }
 		else if c == "`" {
-			run = md_run(t[k - 1..<n], "`")
+			run = md_run_at(t, k, "`")
 			close = md_code_close(t, k + run, run)
 			if close == 0 { plain += "`" * run; k += run }
 			else {
 				code = t[k + run - 1..<close - 1].replace("\n", " ")
 				if #code >= 2 and code.starts_with(" ") and code.ends_with(" ") and code.trim() != "" { code = code[1..<#code - 1] }
 				tokens = md_flush(tokens, plain); plain = ""
-				tokens += [md_html("<code>" + md_escape(code) + "</code>")]
+				tokens.add(md_html("<code>" + md_escape(code) + "</code>"))
 				k = close + run
 			}
 		}
@@ -592,11 +594,11 @@ md_inline(t: text, st: map): text := {
 		}
 		else if c == "<" {
 			r = md_autolink(t, k)
-			if #r > 0 { tokens = md_flush(tokens, plain); plain = ""; tokens += [md_html(r#1)]; k = r#2 }
+			if #r > 0 { tokens = md_flush(tokens, plain); plain = ""; tokens.add(md_html(r#1)); k = r#2 }
 			else { plain += "<"; k += 1 }
 		}
-		else if c == "!" and k < n and t#(k + 1) == "[" { tokens = md_flush(tokens, plain); plain = ""; tokens += [{"kind": "open", "image": yes, "active": yes, "at": k + 2}]; k += 2 }
-		else if c == "[" { tokens = md_flush(tokens, plain); plain = ""; tokens += [{"kind": "open", "image": no, "active": yes, "at": k + 1}]; k += 1 }
+		else if c == "!" and k < n and t#(k + 1) == "[" { tokens = md_flush(tokens, plain); plain = ""; tokens.add({"kind": "open", "image": yes, "active": yes, "at": k + 2}); k += 2 }
+		else if c == "[" { tokens = md_flush(tokens, plain); plain = ""; tokens.add({"kind": "open", "image": no, "active": yes, "at": k + 1}); k += 1 }
 		else if c == "]" {
 			tokens = md_flush(tokens, plain); plain = ""
 			r = md_close_bracket(tokens, t, k, st)
@@ -604,7 +606,7 @@ md_inline(t: text, st: map): text := {
 			k = r#2
 		}
 		else if c == "*" or c == "_" or c == "~" {
-			run = md_run(t[k - 1..<n], c)
+			run = md_run_at(t, k, c)
 			before = if k == 1 then " " else "" + t#(k - 1)
 			after = if k + run > n then " " else "" + t#(k + run)
 			left = not md_white(after) and (not md_punct(after) or md_white(before) or md_punct(before))
@@ -614,14 +616,14 @@ md_inline(t: text, st: map): text := {
 			if c == "_" { opens = left and (not right or md_punct(before)); closes = right and (not left or md_punct(after)) }
 			tokens = md_flush(tokens, plain); plain = ""
 			if c == "~" and run > 2 { plain += "~" * run }
-			else { tokens += [{"kind": "delim", "char": c, "size": run, "original": run, "opens": opens, "closes": closes, "active": yes, "before": "", "after": ""}] }
+			else { tokens.add({"kind": "delim", "char": c, "size": run, "original": run, "opens": opens, "closes": closes, "active": yes, "before": "", "after": ""}) }
 			k += run
 		}
 		else if c == "\n" {
 			spaces = 0
 			while plain.ends_with(" ") { plain = plain[0..<#plain - 1]; spaces += 1 }
 			tokens = md_flush(tokens, plain); plain = ""
-			tokens += [md_html(if spaces >= 2 then "<br />\n" else "\n")]
+			tokens.add(md_html(if spaces >= 2 then "<br />\n" else "\n"))
 			k = md_space(t, k + 1, no)
 		}
 		else {
@@ -641,12 +643,12 @@ md_times(c: text, n: int): text := { out = ""; for i in 1 to n { out += c }; out
 md_white(c: text): bool := c == " " or c == "\n" or c == "\t" or c == chr(0xA0)
 md_punct(c: text): bool := c in MD_PUNCTUATION
 md_html(h: text): map := {"kind": "html", "text": h}
-md_flush(tokens: list, plain: text): list := if plain == "" then tokens else tokens + [{"kind": "text", "text": plain}]
+md_flush(tokens: list, plain: text): list := { if plain != "" { tokens.add({"kind": "text", "text": plain}) }; tokens }
 md_code_close(t: text, at: int, run: int): int := {
 	k = at
 	while k <= #t {
 		if t#k == "`" {
-			r = md_run(t[k - 1..<#t], "`")
+			r = md_run_at(t, k, "`")
 			if r == run { return k }
 			k += r
 		} else { k += 1 }
@@ -682,7 +684,7 @@ md_autolink(t: text, k: int): list := {
 md_close_bracket(tokens: list, t: text, k: int, st: map): list := {
 	opener = 0
 	for j in 1 to #tokens { if tokens#j["kind"] == "open" { opener = j } }
-	if opener == 0 { return [tokens + [{"kind": "text", "text": "]"}], k + 1] }
+	if opener == 0 { tokens.add({"kind": "text", "text": "]"}); return [tokens, k + 1] }
 	o = tokens#opener
 	if not o["active"] { return [md_literal_opener(tokens, opener) + [{"kind": "text", "text": "]"}], k + 1] }
 	label_text = t[o["at"] - 1..<k - 1]
