@@ -1,0 +1,3 @@
+# Page metadata and groups: decisions html-render-mode, html-meta
+'use markup; to_html(html{title:"Shop", description:"Books", body{p{"Hi"}}})'	'<html><head><title>Shop</title><meta name="description" content="Books"></head><body><p>Hi</p></body></html>'
+'use markup; page_of([div{"one"}, p{"two"}])'	'<div>one</div><p>two</p>'
