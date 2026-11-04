@@ -29,39 +29,56 @@ def base64_encode(t: text): text {
 	out
 }
 
-def base64_decode(t: text): text {
+// strict decoding: whitespace (space, tab, CR, LF) is skipped, any other character outside the alphabet raises
+// with its position (1-based, in the text as given); = only as the last one or two characters, the digits then a
+// multiple of 4; unpadded, a final group of one digit raises (it cannot spell a byte)
+def base64_decode_bytes(t: text): list {
 	out = []
 	n = 0
 	bits = 0
-	for c in t {
-		v = digit_value(BASE64_DIGITS, c)
-		if v >= 0 {
-			n = n * 64 + v
-			bits = bits + 6
-			if bits >= 8 {
-				bits = bits - 8
-				p = 2 ** bits
-				out = out + [n /! p]
-				n = n % p
+	digits = 0
+	pads = 0
+	for i in 0 ..< count(t) {
+		c = t[i]
+		if not (c in [" ", "\t", "\r", "\n"]) {
+			if c == "=" { pads = pads + 1 } else {
+				v = digit_value(BASE64_DIGITS, c)
+				if v < 0 { raise "base64: " + c + " at " + str(i + 1) + " is no base64 digit" }
+				if pads > 0 { raise "base64: " + c + " at " + str(i + 1) + " follows the = padding" }
+				digits = digits + 1
+				n = n * 64 + v
+				bits = bits + 6
+				if bits >= 8 { bits = bits - 8; p = 2 ** bits; out.add(n /! p); n = n % p }
 			}
 		}
 	}
-	from_utf8(out)
+	if pads > 2 { raise "base64: " + str(pads) + " = padding characters (at most 2)" }
+	if pads > 0 and (digits + pads) % 4 != 0 { raise "base64: the padding leaves " + str(digits + pads) + " characters, no multiple of 4" }
+	if digits % 4 == 1 { raise "base64: a final group of one digit" }
+	out
 }
+base64_decode(t: text): text := from_utf8(base64_decode_bytes(t))
 
 hex_byte(n: int): text := HEX_DIGITS[n /! 16] + HEX_DIGITS[n % 16]
 hex_encode(t: text): text := join([hex_byte(n) for n in to_utf8(t)], "")
 
 // the bytes a hex text spells, for data that is no UTF-8 text (compressed, hashed): hex_decode_bytes("ff00") is [255, 0]
+// strict: an odd number of digits or a character that is no hex digit (either case) raises with its position
 def hex_decode_bytes(t: text): list {
+	if count(t) % 2 != 0 { raise "hex: " + str(count(t)) + " digits are an odd count" }
 	out = []
-	low = lower(t)
 	i = 0
-	while i + 1 < count(low) {
-		out.add(digit_value(HEX_DIGITS, low[i]) * 16 + digit_value(HEX_DIGITS, low[i + 1]))
+	while i + 1 < count(t) {
+		out.add(encoding_hex_digit(t[i], i + 1) * 16 + encoding_hex_digit(t[i + 1], i + 2))
 		i = i + 2
 	}
 	out
+}
+// the value of one hex digit (either case) at a position, raising for any other character
+encoding_hex_digit(c: any, at: int): int := {
+	v = digit_value(HEX_DIGITS, lower(c))
+	if v < 0 { raise "hex: " + c + " at " + str(at) + " is no hex digit" }
+	v
 }
 hex_decode(t: text): text := from_utf8(hex_decode_bytes(t))
 

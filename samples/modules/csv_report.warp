@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+# A sales CSV turned into a markdown table with a total per region (csv, tables)
+use csv
+use tables
+sales = csv_rows("region,product,units\nnorth,apples,12\nsouth,pears,7\nnorth,pears,5\nsouth,apples,9\neast,plums,4")
+totals = {}
+for row in sales[1:] {
+	region = row#1
+	totals[region] = (totals.get(region) ?? 0) + int(row#3)
+}
+rows = [[region, totals.get(region)] for region in keys(totals)]
+table_text(rows, {headers: ["region", "units"], style: "markdown"})
