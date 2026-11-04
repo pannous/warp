@@ -1,0 +1,466 @@
+// The standard library module xml: `use xml`, a non-validating XML 1.0 reader into an element tree, a small
+// ElementTree-like path query, and a writer.
+// parse_xml(t) gives the root element; xml_text(e) the concatenated text of e and its descendants;
+// xml_find(e, path) the first match (ø for none) and xml_find_all(e, path) a list; to_xml(e) writes an element back
+// so that parse_xml(to_xml(e)) == e.
+// Decisions (card lib-xml):
+// - an element is a map {"name": qualified name, "prefix": "" or the prefix, "local": the local name, "ns": the
+//   namespace URI ("" for none), "attributes": {qualified name: value} in document order (xmlns ones included),
+//   "children": elements and texts in document order (mixed content kept), "text": the element's own direct text}
+// - the XML declaration, comments and processing instructions are skipped (text on either side joins)
+// - CDATA is literal text; entities: only XML's five (amp lt gt quot apos) and numeric &#n; / &#xh; refs (decoded
+//   by lib/html's html_entity); any other name is refused (no HTML names, no DTD-declared ones)
+// - DOCTYPE: skipped, also an internal subset, but a subset declaring <!ENTITY is refused (no entity expansion, so
+//   no billion laughs)
+// - whitespace: a text run that is whitespace only (between tags) is dropped unless it came from CDATA; any other
+//   text is kept verbatim; attribute values get tab and newline normalized to a space; CR LF reads as LF
+// - namespaces: xmlns and xmlns:p declarations scope over the element and its descendants; an undeclared prefix is
+//   refused; the xml prefix is predeclared. Path steps match "tag" by local name in any namespace, "p:tag" by the
+//   prefix as written, "{uri}tag" by the namespace URI
+// - path syntax: tag, *, a/b, //tag (any depth below; also inside: a//b), . and .., [@attr], [@attr='v'] (or "v"),
+//   [n] (1-based position among the parent's matching children); a leading / and anything else is refused
+//   (results keep document order per step and are not deduplicated: //b/.. lists a parent once per matching child)
+// - errors: "xml line L, column C: …" for mismatched or unclosed tags, duplicate attributes, bad entities, junk after
+//   the root and a missing root
+use html
+
+def xml_fail(st: map, p: int, message: text) {
+	t = st["t"]
+	line = 1
+	last = 0
+	i = 0
+	for c in t[0 ..< p] { i = i + 1; if c == "\n" { line = line + 1; last = i } }
+	full = "xml line " + line + ", column " + (p - last + 1) + ": " + message
+	raise (if full.ends_with(" a") or full.ends_with(" at") or full.ends_with(" ") then full + "." else full)
+}
+
+def xml_ch(st: map, p: int): text {
+	if p < st["n"] { return st["t"]#(p + 1) }
+	""
+}
+
+def xml_at(st: map, s: text): bool {
+	p = st["p"]
+	k = count(s)
+	p + k <= st["n"] and st["t"][p ..< p + k] == s
+}
+
+// the 0-based position of s at or after from, -1 when absent
+def xml_index(st: map, s: text, from: int): int {
+	if from >= st["n"] { return -1 }
+	at = st["t"][from..].index_of(s)
+	if at == 0 { return -1 }
+	from + at - 1
+}
+
+def xml_name_char(c: text): bool {
+	if c == "" { return no }
+	is_digit(c) or c == "_" or c == "-" or c == "." or c == ":" or (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or ord(c) > 127
+}
+
+def xml_name(st: map): text {
+	start = st["p"]
+	p = start
+	while xml_name_char(xml_ch(st, p)) { p = p + 1 }
+	if p == start { xml_fail(st, start, "a name expected") }
+	st["p"] = p
+	st["t"][start ..< p]
+}
+
+def xml_space(st: map): bool {
+	p = st["p"]
+	start = p
+	c = xml_ch(st, p)
+	while c == " " or c == "\n" or c == "\t" or c == chr(13) { p = p + 1; c = xml_ch(st, p) }
+	st["p"] = p
+	p > start
+}
+
+def xml_blank(t: text): bool {
+	for c in t { if not (c == " " or c == "\n" or c == "\t" or c == chr(13)) { return no } }
+	yes
+}
+
+// raw text with entity references decoded; base is raw's position for error columns
+def xml_decode(st: map, raw: text, base: int): text {
+	if not raw.contains("&") { return raw }
+	out = ""
+	i = 0
+	n = count(raw)
+	while i < n {
+		c = raw#(i + 1)
+		if c == "&" {
+			semi = raw[i..].index_of(";")
+			if semi == 0 { xml_fail(st, base + i, "an & without ; (write &amp;)") }
+			name = raw[i + 1 ..< i + semi - 1]
+			ch = nil
+			if name == "amp" { ch = "&" }
+			if name == "lt" { ch = "<" }
+			if name == "gt" { ch = ">" }
+			if name == "quot" { ch = "\"" }
+			if name == "apos" { ch = "'" }
+			if name.starts_with("#") { ch = html_entity(name) }
+			if ch == nil or ch == chr(0) {
+				if name.starts_with("#") { xml_fail(st, base + i, "bad character reference &" + name + ";") }
+				xml_fail(st, base + i, "unknown entity &" + name + "; (XML has only amp, lt, gt, quot and apos)")
+			}
+			out = out + ch
+			i = i + semi
+		} else {
+			out = out + c
+			i = i + 1
+		}
+	}
+	out
+}
+
+// skip one comment or processing instruction at the position; no when there is none
+def xml_skip_markup(st: map): bool {
+	p = st["p"]
+	if xml_at(st, "<!--") {
+		e = xml_index(st, "-->", p + 4)
+		if e < 0 { xml_fail(st, p, "an unclosed comment <!--") }
+		st["p"] = e + 3
+		return yes
+	}
+	if xml_at(st, "<?") {
+		e = xml_index(st, "?>", p + 2)
+		if e < 0 { xml_fail(st, p, "an unclosed processing instruction <?") }
+		st["p"] = e + 2
+		return yes
+	}
+	no
+}
+
+def xml_doctype(st: map) {
+	p = st["p"]
+	q = p + 9
+	while yes {
+		c = xml_ch(st, q)
+		if c == "" { xml_fail(st, p, "an unclosed <!DOCTYPE") }
+		if c == ">" { st["p"] = q + 1; return }
+		if c == "\"" or c == "'" {
+			e = xml_index(st, c, q + 1)
+			if e < 0 { xml_fail(st, q, "an unclosed quote in <!DOCTYPE") }
+			q = e + 1
+		} else if c == "[" {
+			e = xml_index(st, "]", q + 1)
+			if e < 0 { xml_fail(st, q, "an unclosed [ in <!DOCTYPE") }
+			subset = st["t"][q + 1 ..< e]
+			if subset.contains("<!ENTITY") { xml_fail(st, q + subset.index_of("<!ENTITY"), "entity declarations (<!ENTITY) are refused: no entity expansion") }
+			q = e + 1
+		} else {
+			q = q + 1
+		}
+	}
+}
+
+// whitespace, comments, processing instructions (and in the prolog a DOCTYPE)
+def xml_misc(st: map, prolog: bool) {
+	seen_doctype = no
+	while yes {
+		xml_space(st)
+		if xml_skip_markup(st) {
+			// skipped
+		} else if prolog and not seen_doctype and xml_at(st, "<!DOCTYPE") {
+			xml_doctype(st)
+			seen_doctype = yes
+		} else {
+			return
+		}
+	}
+}
+
+def xml_resolve(st: map, scope: map, qname: text, p: int, for_attribute: bool): list {
+	colon = qname.index_of(":")
+	if colon == 0 { return ["", qname, if for_attribute then "" else (scope.get("") ?? "")] }
+	prefix = qname[0 ..< colon - 1]
+	local = qname[colon..]
+	if prefix == "" or local == "" or local.contains(":") { xml_fail(st, p, "a bad qualified name " + qname) }
+	uri = scope.get(prefix)
+	if uri == nil { xml_fail(st, p, "the undeclared namespace prefix " + prefix + ":") }
+	[prefix, local, uri]
+}
+
+def xml_element(st: map, outer: map): map {
+	start = st["p"]
+	st["p"] = start + 1
+	name = xml_name(st)
+	attributes = {}
+	places = {}
+	closed = no
+	while yes {
+		had_space = xml_space(st)
+		p = st["p"]
+		c = xml_ch(st, p)
+		if c == "" { xml_fail(st, start, "an unclosed start tag <" + name) }
+		if c == ">" { st["p"] = p + 1; break }
+		if c == "/" {
+			if xml_ch(st, p + 1) != ">" { xml_fail(st, p, "/> expected") }
+			st["p"] = p + 2
+			closed = yes
+			break
+		}
+		if not had_space { xml_fail(st, p, "whitespace expected before an attribute") }
+		key = xml_name(st)
+		xml_space(st)
+		if xml_ch(st, st["p"]) != "=" { xml_fail(st, st["p"], "= expected after the attribute " + key) }
+		st["p"] = st["p"] + 1
+		xml_space(st)
+		q = xml_ch(st, st["p"])
+		if q != "\"" and q != "'" { xml_fail(st, st["p"], "a quoted value expected for the attribute " + key) }
+		e = xml_index(st, q, st["p"] + 1)
+		if e < 0 { xml_fail(st, st["p"], "an unclosed value of the attribute " + key) }
+		raw = st["t"][st["p"] + 1 ..< e]
+		if raw.contains("<") { xml_fail(st, st["p"] + raw.index_of("<"), "a < inside the value of the attribute " + key) }
+		if attributes.get(key) != nil { xml_fail(st, p, "the duplicate attribute " + key) }
+		attributes[key] = xml_decode(st, raw, st["p"] + 1).replace("\t", " ").replace("\n", " ")
+		places[key] = p
+		st["p"] = e + 1
+	}
+	scope = {}
+	for k in keys(outer) { scope[k] = outer[k] }
+	for k in keys(attributes) {
+		if k == "xmlns" { scope[""] = attributes[k] }
+		if k.starts_with("xmlns:") { scope[k[6..]] = attributes[k] }
+	}
+	for k in keys(attributes) {
+		if k != "xmlns" and not k.starts_with("xmlns:") { xml_resolve(st, scope, k, places[k], yes) }
+	}
+	parts = xml_resolve(st, scope, name, start + 1, no)
+	kids = []
+	own = ""
+	element = {"name": name, "prefix": parts#1, "local": parts#2, "ns": parts#3, "attributes": attributes, "children": kids, "text": ""}
+	if closed { return element }
+	buffer = ""
+	literal = no
+	while yes {
+		p = st["p"]
+		if p >= st["n"] { xml_fail(st, start, "the unclosed element <" + name + ">") }
+		if xml_ch(st, p) == "<" {
+			if xml_at(st, "<![CDATA[") {
+				e = xml_index(st, "]]>", p + 9)
+				if e < 0 { xml_fail(st, p, "an unclosed <![CDATA[") }
+				buffer = buffer + st["t"][p + 9 ..< e]
+				literal = yes
+				st["p"] = e + 3
+			} else if xml_skip_markup(st) {
+				// a comment or processing instruction: dropped
+			} else if xml_at(st, "<!") {
+				xml_fail(st, p, "a declaration inside an element")
+			} else {
+				if buffer != "" and (literal or not xml_blank(buffer)) { kids.add(buffer); own = own + buffer }
+				buffer = ""
+				literal = no
+				if xml_at(st, "</") {
+					st["p"] = p + 2
+					end = xml_name(st)
+					xml_space(st)
+					if xml_ch(st, st["p"]) != ">" { xml_fail(st, st["p"], "> expected to close </" + end) }
+					if end != name { xml_fail(st, p, "mismatched end tag </" + end + ">, expected </" + name + ">") }
+					st["p"] = st["p"] + 1
+					break
+				}
+				child = xml_element(st, scope)
+				kids.add(child)
+			}
+		} else {
+			e = xml_index(st, "<", p)
+			if e < 0 { e = st["n"] }
+			raw = st["t"][p ..< e]
+			if raw.contains("]]>") { xml_fail(st, p + raw.index_of("]]>") - 1, "]]> outside CDATA") }
+			buffer = buffer + xml_decode(st, raw, p)
+			st["p"] = e
+		}
+	}
+	element["text"] = own
+	element
+}
+
+global parse_xml(source: text): map := {
+	t = source.replace(chr(13) + "\n", "\n").replace(chr(13), "\n")
+	st = {"t": t, "p": 0, "n": count(t)}
+	if xml_ch(st, 0) == chr(0xFEFF) { st["p"] = 1 }
+	xml_misc(st, yes)
+	if xml_ch(st, st["p"]) != "<" or xml_at(st, "</") or xml_at(st, "<!") {
+		xml_fail(st, st["p"], if st["p"] >= st["n"] then "no root element" else "a root element expected")
+	}
+	root = xml_element(st, {"xml": "http://www.w3.org/XML/1998/namespace"})
+	xml_misc(st, no)
+	if st["p"] < st["n"] { xml_fail(st, st["p"], "junk after the root element") }
+	root
+}
+
+global xml_text(node: any): text := {
+	if node is text { return node }
+	out = ""
+	for c in node["children"] { out = out + xml_text(c) }
+	out
+}
+
+// --- paths ---
+
+def xml_path_fail(path: text, why: text) {
+	raise "xml path " + path + ": " + why
+}
+
+// steps: [axis ("child" or "deep"), test, predicates text list]
+def xml_path_steps(path: text): list {
+	if path == "" { xml_path_fail("''", "an empty path") }
+	if path.starts_with("/") and not path.starts_with("//") { xml_path_fail(path, "absolute paths are not supported (start with a tag, . or //)") }
+	steps = []
+	i = 0
+	n = count(path)
+	deep = no
+	while i < n {
+		if path#(i + 1) == "/" {
+			if i + 1 < n and path#(i + 2) == "/" { deep = yes; i = i + 2 } else { i = i + 1 }
+			if i >= n { xml_path_fail(path, "a path ending in /") }
+		}
+		start = i
+		while i < n and path#(i + 1) != "/" and path#(i + 1) != "[" {
+			if path#(i + 1) == "{" {
+				close = path[i..].index_of("}")
+				if close == 0 { xml_path_fail(path, "an unclosed {") }
+				i = i + close
+			} else {
+				i = i + 1
+			}
+		}
+		test = path[start ..< i]
+		predicates = []
+		while i < n and path#(i + 1) == "[" {
+			j = i + 1
+			quote = ""
+			scanning = yes
+			while scanning and j < n {
+				c = path#(j + 1)
+				closes = quote == "" and c == "]"
+				if closes { scanning = no } else {
+					if quote == "" and (c == "'" or c == "\"") { quote = c } else if c == quote { quote = "" }
+					j = j + 1
+				}
+			}
+			if j >= n { xml_path_fail(path, "an unclosed [") }
+			predicate = path[i + 1 ..< j]
+			xml_predicate_ok(path, {"attributes": {}}, predicate, 1)
+			predicates.add(predicate)
+			i = j + 1
+		}
+		if test == "" { xml_path_fail(path, "a step without a tag") }
+		if test != "." and test != ".." and test != "*" {
+			bare = if test.starts_with("{") then test[test.index_of("}")..] else test
+			ok = bare != ""
+			for c in bare { if not xml_name_char(c) { ok = no } }
+			if not ok { xml_path_fail(path, "unsupported syntax " + test) }
+		}
+		steps.add([if deep then "deep" else "child", test, predicates])
+		deep = no
+	}
+	steps
+}
+
+def xml_matches(e: map, test: text): bool {
+	if test == "*" { return yes }
+	if test.starts_with("{") {
+		close = test.index_of("}")
+		return e["ns"] == test[1 ..< close - 1] and e["local"] == test[close..]
+	}
+	if test.contains(":") { return e["name"] == test }
+	e["local"] == test
+}
+
+def xml_predicate_ok(path: text, e: map, predicate: text, position: int): bool {
+	p = predicate.trim()
+	if p != "" and is_digit(p#1) {
+		for c in p { if not is_digit(c) { xml_path_fail(path, "unsupported predicate [" + predicate + "]") } }
+		return position == int(p)
+	}
+	if not p.starts_with("@") { xml_path_fail(path, "unsupported predicate [" + predicate + "] (use [@attr], [@attr='v'] or [n])") }
+	eq = p.index_of("=")
+	if eq == 0 { return e["attributes"].get(p[1..].trim()) != nil }
+	key = p[1 ..< eq - 1].trim()
+	value = p[eq..].trim()
+	q = if value != "" then value#1 else ""
+	if count(value) < 2 or (q != "'" and q != "\"") or not value.ends_with(q) { xml_path_fail(path, "unsupported predicate [" + predicate + "] (quote the value)") }
+	(e["attributes"].get(key) ?? nil) == value[1 ..< count(value) - 1]
+}
+
+// a context is {"el": element, "up": the parent's context or ø}
+def xml_below(c: map, out: list) {
+	out.add(c)
+	for k in c["el"]["children"] {
+		if k is map {
+			d = {"el": k, "up": c}
+			xml_below(d, out)
+		}
+	}
+}
+
+global xml_find_all(element: map, path: text): list := {
+	steps = xml_path_steps(path)
+	current = [{"el": element, "up": nil}]
+	for step in steps {
+		axis = step#1
+		test = step#2
+		predicates = step#3
+		bases = current
+		if axis == "deep" {
+			bases = []
+			for c in current { xml_below(c, bases) }
+		}
+		next = []
+		for c in bases {
+			if test == "." {
+				next.add(c)
+			} else if test == ".." {
+				u = c["up"]
+				if u != nil { next.add(u) }
+			} else {
+				position = 0
+				for k in c["el"]["children"] {
+					if k is map and xml_matches(k, test) {
+						position = position + 1
+						ok = yes
+						for pr in predicates { if not xml_predicate_ok(path, k, pr, position) { ok = no } }
+						if ok {
+							d = {"el": k, "up": c}
+							next.add(d)
+						}
+					}
+				}
+			}
+		}
+		if test == "." or test == ".." {
+			kept = []
+			for c in next {
+				ok = yes
+				for pr in predicates { if not xml_predicate_ok(path, c["el"], pr, 1) { ok = no } }
+				if ok { kept.add(c) }
+			}
+			next = kept
+		}
+		current = next
+	}
+	out = []
+	for c in current { out.add(c["el"]) }
+	out
+}
+
+global xml_find(element: map, path: text): any := {
+	all = xml_find_all(element, path)
+	if count(all) == 0 { return nil }
+	all#1
+}
+
+def xml_escape(t: text): text := html_escape(t).replace("&#39;", "&apos;")
+
+global to_xml(node: any): text := {
+	if node is text { return xml_escape(node) }
+	out = "<" + node["name"]
+	for k in keys(node["attributes"]) { out = out + " " + k + "=\"" + xml_escape(node["attributes"][k]) + "\"" }
+	if count(node["children"]) == 0 { return out + "/>" }
+	out = out + ">"
+	for c in node["children"] { out = out + to_xml(c) }
+	out + "</" + node["name"] + ">"
+}
