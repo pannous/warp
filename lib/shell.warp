@@ -46,7 +46,7 @@ grep(pattern: text, source: any): list := [line for line in (if source is list t
 is_folder(path: text): bool := list_files(path) is list
 // `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches the wildcards * and ?, sorted, hidden
 // folders skipped (find itself searches a list)
-find_files(folder: text, pattern: text) := sort(paths_named(folder, wildcard_regex(pattern)))
+find_files(folder: text, pattern: text): list := sort(paths_named(folder, wildcard_regex(pattern)))
 paths_named(folder: text, wanted: text): list := {
 	found = []
 	for name in list_files(folder) {
