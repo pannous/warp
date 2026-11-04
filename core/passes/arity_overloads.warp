@@ -163,16 +163,17 @@ arity_overloads(program: Node): Node := {
 	overloaded = overloaded_arities(program)
 	if #overloaded == 0 { return typed_overloads(program) }
 	resolved_program = resolved(program, overloaded, called_parameters(program))
-	refuse_overload_values(resolved_program, overloaded, arities_described)
+	refused_overload_values(resolved_program, overloaded, arities_described)
 	typed_overloads(resolved_program)
 }
 
 # A function defined more than once named as a value, `xs.map(quoted)`, `g = quoted`: its definitions are variants by
 # now and the name means none of them, refused naming them and the lambda that says which; inside a definition or a
-# lambda, a parameter of the name is its own
+# lambda, a parameter or variable of the name is its own (`sum = hi + lo`), at the top too
+refused_overload_values(program: Node, overloaded: map, described: function) := refuse_overload_values(program, shadowed(overloaded, names_bound(program, [])), described)
 refuse_overload_values(n: Node, overloaded: map, described: function) := {
 	call = definition_call(n)
-	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) else []
+	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + names_bound(value_of(n), []) else []
 	if #bound > 0 { overloaded = shadowed(overloaded, bound) }
 	if #overloaded == 0 { return ø }
 	for part in value_parts(n) {
@@ -633,7 +634,7 @@ typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
 	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
-	refuse_overload_values(resolved, overloaded, types_described)
+	refused_overload_values(resolved, overloaded, types_described)
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
