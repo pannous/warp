@@ -237,12 +237,6 @@ spelled_cases(n: Node): list? := match n {
 }
 is_spelled_case(row: Node): bool := is_key(row, Op.Assign) and is_name(key_of(row)) and value_of(row) is text
 
-# the spelled enums the program declares, by name
-spelled_declarations(n: Node, found: map): map := {
-	declared = spelled_cases(n)
-	if declared != ø { found[declared#1] = declared#2 } else if is_group(n) { for part in items_of(n) { spelled_declarations(part, found) } }
-	found
-}
 
 # node.warp's spelled enums and the program's own, their spellings taken in; the program's declarations go, as
 # with_spelled_enums declares each spelled enum again with its spelling functions
@@ -272,12 +266,6 @@ is_numbered_case(row: Node): bool := is_key(row, Op.Assign) and is_name(key_of(r
 # the numbered enums the program declares, by name, each case with its number: {Coin: {Penny: 1, Dime: 10}}
 global numbered_enums = {}
 
-numbered_declarations(n: Node, found: map): map := {
-	declared = numbered_cases(n)
-	if declared != ø { found[declared#1] = declared#2 } else if is_group(n) { for part in items_of(n) { numbered_declarations(part, found) } }
-	found
-}
-
 # a numbered enum declared as the plain enum of its cases, its numbers kept in numbered_enums for `as int`
 unnumbered(n: Node): Node := {
 	declared = numbered_cases(n)
@@ -286,9 +274,9 @@ unnumbered(n: Node): Node := {
 }
 
 taking_spelled_enums(program: Node): Node := {
-	numbered_enums = numbered_declarations(program, {})
+	numbered_enums = declarations_found(program, numbered_cases, {})
 	if #numbered_enums > 0 { program = bottom_up(program, unnumbered) }
-	own = spelled_declarations(program, {})
+	own = declarations_found(program, spelled_cases, {})
 	spelled_enums = node_spelled_enums + own.keys
 	spellings = {}
 	for enum_name in node_spelled_enums { spellings[enum_name] = node_spellings[enum_name] }
@@ -310,6 +298,6 @@ node_cases(program: Node): Node := {
 	scope = scope_of(program)
 	builds = {}
 	for case in ["Key", "List"] { if not (binds_value(scope, case) or binds_as(scope, case, Meaning.Function)) { builds[case] = yes } }
-	declared = enums_in(program, {})
+	declared = declarations_found(program, declared_enum, {})
 	with_spelled_enums(bottom_up(program, n => node_value(n, builds, declared, scope)), declared)
 }

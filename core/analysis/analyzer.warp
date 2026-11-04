@@ -252,10 +252,9 @@ loop_kind(body: Node, scope: Scope): ValueKind := {
 
 # a loop body without the step a `for` lowering appended, shown as `loop·step: i++`
 without_step(body: Node): Node := {
-	if not is_group(body) or #body == 0 or not is_step(body#(#body)) { return body }
+	if not is_group(body) or #body == 0 or not is_loop_step(body#(#body)) { return body }
 	group_like(body, items_of(body)[0 ..< #body - 1])
 }
-is_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep as text)
 
 # `xs#i`: an element of a list of known elements, a character of a text
 subscript_kind(indexed: Node, index: Node, scope: Scope): ValueKind := {

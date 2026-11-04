@@ -188,7 +188,7 @@ enum_node(n: Node, enums: map, subjects: map): Node := match n {
 }
 
 plain_enums(program: Node): Node := {
-	enums = enums_in(program, {})
+	enums = declarations_found(program, declared_enum, {})
 	if #enums.keys == 0 { return program }
 	program = expected_in(program, Expectation(enums, parameter_types_of(program), scope_of(program), program))
 	enum_results = results_in(program, enums)

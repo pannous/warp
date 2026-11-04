@@ -48,19 +48,11 @@ overloaded_arities(program: Node): map := {
 	}
 	overloaded = {}
 	for name in arities.keys {
-		if #arities[name] > 1 and distinct_totals(arities[name]) { overloaded[name] = arities[name] }
+		if #arities[name] > 1 and all_distinct(arities[name].map(span => span#2)) { overloaded[name] = arities[name] }
 	}
 	overloaded
 }
 
-distinct_totals(variants: list): bool := {
-	totals = []
-	for span in variants {
-		if span#2 in totals { return no }
-		totals += [span#2]
-	}
-	yes
-}
 
 
 # the definition's target naming its variant: `twice(a, b): int` as `twice·2(a, b): int`
@@ -259,7 +251,7 @@ overloaded_types(program: Node): map := {
 	for name in signatures.keys {
 		variants = signatures[name]
 		typed = variants.any(types => types.any(t => t != any_word))
-		if #variants > 1 and typed and all_different(variants) and variants.all(types => types.all(type => is_overload_type(type, classes))) { overloaded[name] = variants }
+		if #variants > 1 and typed and all_distinct(variants) and variants.all(types => types.all(type => is_overload_type(type, classes))) { overloaded[name] = variants }
 	}
 	overloaded
 }
@@ -314,14 +306,6 @@ library_variant(name: text, types: list): Node := {
 	Key(call_of(typed_variant(name, types), parameters), Op.Define, call_of(name, values))
 }
 
-all_different(variants: list): bool := {
-	seen = []
-	for types in variants {
-		if types in seen { return no }
-		seen += [types]
-	}
-	yes
-}
 
 # [kind, element kind or ø] of an argument whose type the compile knows, a literal; ø for one only the run time knows
 static_kind(n: Node): list? := {
@@ -528,7 +512,7 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 	for types in in_test_order(candidates, kinds).reverse() {
 		variant = call_of(typed_variant(name, types), passed)
 		tests = tested_places(kinds, types).map(at => run_time_test(values#at, types#at))
-		chain = if not tests then variant else Key(Key(Key(ø, Op.If, joined(tests)), Op.Then, variant), Op.Else, chain)
+		chain = if not tests then variant else chosen(joined(tests), variant, chain)
 	}
 	if not bindings then chain else List(bindings + [chain], Bracket.Round, Separator.Semicolon)
 }
@@ -607,11 +591,6 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 # inside a definition or a lambda its parameters are its own, never an overloaded function of their name: the prelude's
 # `f(item)` of map(xs, f) calls its f, `find => find(a, b)` its find, not the program's or a library's variants
 shadowed(overloaded: map, parameters: list): map := if parameters.any(name => name in overloaded) then without_keys(overloaded, parameters) else overloaded
-without_keys(m: map, names: list): map := {
-	kept = {}
-	for key in m.keys { if key not in names { kept[key] = m[key] } }
-	kept
-}
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
@@ -654,7 +633,7 @@ overloaded_results(program: Node): map := {
 	}
 	overloaded = {}
 	for name in results.keys {
-		if #results[name] > 1 and results[name].all(type => type != ø) and all_different(results[name]) and taken[name].all(types => types == taken[name]#1) { overloaded[name] = results[name] }
+		if #results[name] > 1 and results[name].all(type => type != ø) and all_distinct(results[name]) and taken[name].all(types => types == taken[name]#1) { overloaded[name] = results[name] }
 	}
 	overloaded
 }

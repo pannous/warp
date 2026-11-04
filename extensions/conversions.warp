@@ -60,13 +60,13 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 	it = symbol(converted_value)
 	# a class's own instance stays itself, a value of no source type is refused: no built-in conversion makes one
 	refused = call_of(raise_word, ["no conversion to " + target + " of that value"])
-	tried = if not binds_as(scope, target, Meaning.Type) then Key(it, Op.As, symbol(target)) else Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(target))), Op.Then, it), Op.Else, refused)
+	tried = if not binds_as(scope, target, Meaning.Type) then Key(it, Op.As, symbol(target)) else chosen(Key(it, Op.Is, symbol(target)), it, refused)
 	functions = []
 	for conversion in written.reverse() {
 		name = conversion_name(target) + "·" + conversion#1
 		body = converting_uses(renamed(conversion#3, conversion#4, it), targets)
 		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
-		tried = Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(conversion#1))), Op.Then, call_of(name, [it])), Op.Else, tried)
+		tried = chosen(Key(it, Op.Is, symbol(conversion#1)), call_of(name, [it]), tried)
 	}
 	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
 }

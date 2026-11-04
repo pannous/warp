@@ -129,7 +129,7 @@ counted_node(n: Node, counted: map, type_words: list): Node := {
 	if parts != ø {
 		return match n {
 			Key(head, op, body): {
-				inner = unbound(counted, parts#1)
+				inner = without_keys(counted, parts#1)
 				for parameter in counted_parameters(head, type_words) { inner[parameter#1] = parameter#2 }
 				Key(plain_counted(head, type_words), op, counted_node(body, scope_counts(body, inner, type_words), type_words))
 			}
@@ -154,12 +154,6 @@ declared_count(n: Node, type_words: list): list? := match n {
 plain_counted(n: Node, type_words: list): Node := {
 	if declared_count(n, type_words) != ø { return Key(key_of(n), Op.Colon, symbol(count_type)) }
 	children(n, x => plain_counted(x, type_words))
-}
-# what the names around a function count, but those its parameters bind
-unbound(counted: map, parameters: list): map := {
-	seen = {}
-	for name in counted.keys() { if name not in parameters { seen[name] = counted[name] } }
-	seen
 }
 
 # the type words a program leaves free: one it assigns or declares is its own name (`index = 3`, `position: int`)

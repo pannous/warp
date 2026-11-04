@@ -429,3 +429,27 @@ first_answer(items: list, asking: function): any := {
 	}
 	ø
 }
+# `if test then value else otherwise`, as a node
+chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
+# whether no item comes twice
+all_distinct(items: list): bool := {
+	seen = []
+	for item in items {
+		if item in seen { return no }
+		seen += [item]
+	}
+	yes
+}
+# the map without the entries of these keys
+without_keys(m: map, names: list): map := {
+	kept = {}
+	for key in m.keys { if key not in names { kept[key] = m[key] } }
+	kept
+}
+# what reading finds in the tree, by name: reading gives [name, value] of a node it finds, else ø, and a found node
+# is not searched further
+declarations_found(n: Node, reading: function, found: map): map := {
+	declared = reading(n)
+	if declared != ø { found[declared#1] = declared#2 } else if is_group(n) { for part in items_of(n) { declarations_found(part, reading, found) } }
+	found
+}
