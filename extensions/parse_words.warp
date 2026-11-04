@@ -1,10 +1,7 @@
-# `parse(text)` is the code the text holds, as data (card pure-parse-call):
-# a constant text folds here into `as_code(data …)`, any other is parsed at run time by the host word parse_code.
+# `parse(text)` is the code the text holds, as data: a constant text folds here into `as_code(data …)`, any other is
+# parsed at run time by the host word parse_code, which asks warp.wasm's parse-code command (extensions/commands).
 # A program's own `parse` stays its own, and so does a method `x.parse(…)`. `eval(text)` is a plain prelude function
 # (prelude.warp eval).
-use "../passes/walk.warp"
-use "parser.warp"
-use "../passes/uses.warp"
 
 parse_word = "parse"
 as_code_word = "as_code"

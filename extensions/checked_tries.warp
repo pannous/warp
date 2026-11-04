@@ -1,5 +1,5 @@
 # The tries whose error wasm cannot catch, checked before it happens (card compiler-untaken-lines), and `assert c else
-# m`; run right after parse_words, so core tries.warp guards what they leave as any try:
+# m`; run right before tries, so core tries.warp guards what they leave as any try:
 #   try a / b else y    → (try·divisor = b; if try·divisor == 0 then {y} else {try a / try·divisor else y})
 #   try [1 2]#i else y  → (try·list = [1 2]; try·index = i; if 1 <= try·index <= count(try·list) then … else {y})
 #   try x = a / b else y → x = (the checked division)
@@ -60,4 +60,4 @@ assertion(condition: Node, message: Node): Node := chosen(condition, braced(1), 
 
 checked_tries(program: Node): Node := bottom_up(program, checked_form)
 
-checked_tries_extension = Extension{name: "checked_tries", passes: {"parse_words": checked_tries}}
+checked_tries_extension = Extension{name: "checked_tries", passes_before: {"tries": checked_tries}}

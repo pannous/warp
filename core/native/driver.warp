@@ -62,7 +62,7 @@ PARSE_CODE_WORD = 13
 REAL_PATH_WORD = 14
 SIGNAL_LISTEN_WORD = 15
 EVAL_CODE_WORD = 16
-# the end of a field in warp.wasm's parse-code encoding (core/parsing/parse_words.warp FIELD_END)
+# the end of a field in warp.wasm's parse-code encoding (extensions/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
 # at and the dots per inch of one CSS pixel per CSS inch
@@ -988,7 +988,7 @@ system_value(name: text): i64 := {
 	exit(1)
 	0
 }
-# eval_code(t) (decision N31, core/parsing/parse_words.warp eval_call): warp.wasm compiles t as a program of its own,
+# eval_code(t) (decision N31, the prelude's eval): warp.wasm compiles t as a program of its own,
 # beside the compiled program, its value printed as data after the value mark; it runs with what it prints written to a
 # file, what it printed before the value goes on to this run's output, and the value is built again in the module as
 # parse_code builds a tree. A text that fails to compile or run gives an Error saying why
