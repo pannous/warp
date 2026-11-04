@@ -1,0 +1,83 @@
+// The standard library module slugs (card lib-text-slugs): `use slugs`. ASCII folding, slugs, case conversions that
+// keep acronyms whole, word-aware truncation. Not baked into the compiler (scripts/compiler-inputs.sh BAKED).
+//
+// Words for the case conversions: runs of letters and digits, split at every other character and inside a run before
+// an upper-case letter that follows a lower-case letter or a digit ("parseURL" → parse URL, "v2Beta" → v2 Beta) and
+// before the last upper-case letter of an acronym that a lower-case letter follows ("HTTPServer" → HTTP Server).
+// Digits stay with the letters before them: "parseURL2Text" → parse URL2 Text, so to_snake gives parse_url2_text
+use text
+
+// single letters and their ASCII letters, position for position
+FOLD_FROM = "ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĹĺĻļĽľĿŀŁłÑñŃńŅņŇňÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽžÐð"
+FOLD_TO   = "AAAAAAaaaaaaAaAaAaCcCcCcCcCcDdDdEEEEeeeeEeEeEeEeEeGgGgGgGgHhHhIIIIiiiiIiIiIiIiIiJjKkLlLlLlLlLlNnNnNnNnOOOOOOooooooOoOoOoRrRrRrSsSsSsSsTtTtTtUUUUuuuuUuUuUuUuUuUuWwYyyYyYZzZzZzDd"
+// letters that fold to more than one
+FOLD_MANY = [["ß", "ss"], ["ẞ", "SS"], ["æ", "ae"], ["Æ", "AE"], ["œ", "oe"], ["Œ", "OE"], ["þ", "th"], ["Þ", "TH"], ["ĳ", "ij"], ["Ĳ", "IJ"]]
+
+// the text with Latin letters folded to ASCII: diacritics stripped (é → e, ø → o), ß → ss, æ → ae, œ → oe, þ → th;
+// other characters kept
+ascii_fold(t: text): text := {
+	out = ""
+	for c in t {
+		s = "" + c
+		at = index_of(FOLD_FROM, s)
+		if at > 0 { out = out + FOLD_TO#at; continue }
+		many = FOLD_MANY.filter(p => p#1 == s)
+		out = out + (if count(many) > 0 then many#1#2 else s)
+	}
+	out
+}
+// ascii_fold the German way: ä ö ü → ae oe ue (Ä Ö Ü → Ae Oe Ue) first
+ascii_fold_german(t: text): text := {
+	out = ""
+	for c in t {
+		s = "" + c
+		out = out + (if s == "ä" then "ae" else if s == "ö" then "oe" else if s == "ü" then "ue" else if s == "Ä" then "Ae" else if s == "Ö" then "Oe" else if s == "Ü" then "Ue" else s)
+	}
+	ascii_fold(out)
+}
+slug_is_upper(s: text): bool := upper(s) == s and lower(s) != s
+slug_is_lower(s: text): bool := lower(s) == s and upper(s) != s
+// the runs of letters and digits of t
+alphanumeric_runs(t: text): list := {
+	runs = []; run = ""
+	for c in t {
+		s = "" + c
+		if is_alphanumeric(s) or slug_is_upper(s) or slug_is_lower(s) { run = run + s } else if run != "" { runs += [run]; run = "" }
+	}
+	if run != "" { runs += [run] }
+	runs
+}
+// a URL-safe slug: folded, lower case, each run of other characters one sep, none at the ends
+slugify(t: text, sep = "-"): text := join(alphanumeric_runs(lower(ascii_fold(t))), sep)
+// the words of an identifier or phrase, by the rule above
+case_words(t: text): list := {
+	out = []
+	for run in alphanumeric_runs(t) {
+		cs = [("" + c) for c in run]
+		word = ""
+		for k in 1 to count(cs) {
+			s = cs#k
+			if word != "" and slug_is_upper(s) {
+				before = cs#(k - 1)
+				after_lower = k < count(cs) and slug_is_lower(cs#(k + 1))
+				if not slug_is_upper(before) or after_lower { out += [word]; word = "" }
+			}
+			word = word + s
+		}
+		if word != "" { out += [word] }
+	}
+	out
+}
+to_snake(t: text): text := join(case_words(t).map(w => lower(w)), "_")
+to_kebab(t: text): text := join(case_words(t).map(w => lower(w)), "-")
+to_constant(t: text): text := join(case_words(t).map(w => upper(w)), "_")
+to_pascal(t: text): text := join(case_words(t).map(w => upper(w[0:1]) + lower(w[1:])), "")
+to_camel(t: text): text := { p = to_pascal(t); if p == "" then "" else lower(p[0]) + p[1:] }
+// runs of whitespace one space, none at the ends
+normalize_whitespace(t: text): text := join(words(t), " ")
+// the first n words, whitespace normalized, and "…" when words were cut; t itself when it has no more than n
+truncate_words(t: text, n: int): text := {
+	ws = words(t)
+	if count(ws) <= n { return t }
+	join(ws[0: n], " ") + "…"
+}
