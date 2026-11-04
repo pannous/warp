@@ -28,4 +28,8 @@ works() {
 	esac
 }
 works 'use draw; use sound; tuning'
+# an argument whose parameter the callee calls with one argument is that variant
+works 'scaled(x) := x * 2; scaled(x, y) := x * y; apply(f, x) := f(x); apply(scaled, 3)'
+# a bare name is the call of the variant taking nothing: the host's random()
+works 'random < 1'
 exit $status
