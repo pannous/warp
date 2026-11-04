@@ -132,7 +132,7 @@ with_text_passes(program: Node): Node := {
 	passed
 }
 # the standard modules the source uses without saying it, as the extensions find them
-implicit_modules_of(source: text, folder: text = "."): list := concatenated(extension_list("implicit_uses").map(find => find(source, folder)))
+implicit_modules_of(source: text, folder: text = "."): list := concatenated(extension_list("implicit_uses").map(modules_found => modules_found(source, folder)))
 # a match's arms through every extension's arm lowerings, in row order
 with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
 	lowered = arms
