@@ -127,3 +127,15 @@ Cover escaping and numeric rendering before declaring text results for the share
 ## library-typed markup CSS helpers
 
 Cover rendered CSS declarations and attributes before declaring text results; keep generic inputs and verify focused outcomes and merged-main smoke.
+
+## Library router signature slice
+
+Cover route matching and parameter outcomes, then annotate route helpers without narrowing their inputs or mixed return values. Verify the outcomes and smoke on merged main.
+
+## Library router response signatures
+
+Cover response header and reset outcomes, then declare non-narrowing result types and verify behavior before smoke.
+
+## Library signal value signatures
+
+Cover mixed signal values and watched variable reads before adding non-narrowing signatures; verify outcomes and merged-main smoke.
