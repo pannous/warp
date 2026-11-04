@@ -1,0 +1,65 @@
+# mustache spec inverted: Falsey
+'use template; mustache("\\"{{^boolean}}This should be rendered.{{/boolean}}\\"", {"boolean": no})'	"\"This should be rendered.\""
+
+# mustache spec inverted: Truthy
+'use template; mustache("\\"{{^boolean}}This should not be rendered.{{/boolean}}\\"", {"boolean": yes})'	"\"\""
+
+# mustache spec inverted: Null is falsey
+'use template; mustache("\\"{{^null}}This should be rendered.{{/null}}\\"", {"null": nil})'	"\"This should be rendered.\""
+
+# mustache spec inverted: Context
+'use template; mustache("\\"{{^context}}Hi {{name}}.{{/context}}\\"", {"context": {"name": "Joe"}})'	"\"\""
+
+# mustache spec inverted: List
+'use template; mustache("\\"{{^list}}{{n}}{{/list}}\\"", {"list": [{"n": 1}, {"n": 2}, {"n": 3}]})'	"\"\""
+
+# mustache spec inverted: Empty List
+'use template; mustache("\\"{{^list}}Yay lists!{{/list}}\\"", {"list": []})'	"\"Yay lists!\""
+
+# mustache spec inverted: Doubled
+'use template; mustache("{{^bool}}\n* first\n{{/bool}}\n* {{two}}\n{{^bool}}\n* third\n{{/bool}}\n", {"bool": no, "two": "second"})'	"* first\n* second\n* third\n"
+
+# mustache spec inverted: Nested (Falsey)
+'use template; mustache("| A {{^bool}}B {{^bool}}C{{/bool}} D{{/bool}} E |", {"bool": no})'	"| A B C D E |"
+
+# mustache spec inverted: Nested (Truthy)
+'use template; mustache("| A {{^bool}}B {{^bool}}C{{/bool}} D{{/bool}} E |", {"bool": yes})'	"| A  E |"
+
+# mustache spec inverted: Context Misses
+'use template; mustache("[{{^missing}}Cannot find key \'missing\'!{{/missing}}]", {})'	"[Cannot find key 'missing'!]"
+
+# mustache spec inverted: Dotted Names - Truthy
+'use template; mustache("\\"{{^a.b.c}}Not Here{{/a.b.c}}\\" == \\"\\"", {"a": {"b": {"c": yes}}})'	"\"\" == \"\""
+
+# mustache spec inverted: Dotted Names - Falsey
+'use template; mustache("\\"{{^a.b.c}}Not Here{{/a.b.c}}\\" == \\"Not Here\\"", {"a": {"b": {"c": no}}})'	"\"Not Here\" == \"Not Here\""
+
+# mustache spec inverted: Dotted Names - Broken Chains
+'use template; mustache("\\"{{^a.b.c}}Not Here{{/a.b.c}}\\" == \\"Not Here\\"", {"a": {}})'	"\"Not Here\" == \"Not Here\""
+
+# mustache spec inverted: Surrounding Whitespace
+'use template; mustache(" | {{^boolean}}\t|\t{{/boolean}} | \n", {"boolean": no})'	" | \t|\t | \n"
+
+# mustache spec inverted: Internal Whitespace
+'use template; mustache(" | {{^boolean}} {{! Important Whitespace }}\n {{/boolean}} | \n", {"boolean": no})'	" |  \n  | \n"
+
+# mustache spec inverted: Indented Inline Sections
+'use template; mustache(" {{^boolean}}NO{{/boolean}}\n {{^boolean}}WAY{{/boolean}}\n", {"boolean": no})'	" NO\n WAY\n"
+
+# mustache spec inverted: Standalone Lines
+'use template; mustache("| This Is\n{{^boolean}}\n|\n{{/boolean}}\n| A Line\n", {"boolean": no})'	"| This Is\n|\n| A Line\n"
+
+# mustache spec inverted: Standalone Indented Lines
+'use template; mustache("| This Is\n  {{^boolean}}\n|\n  {{/boolean}}\n| A Line\n", {"boolean": no})'	"| This Is\n|\n| A Line\n"
+
+# mustache spec inverted: Standalone Line Endings
+'use template; mustache("|\r\n{{^boolean}}\r\n{{/boolean}}\r\n|", {"boolean": no})'	"|\r\n|"
+
+# mustache spec inverted: Standalone Without Previous Line
+'use template; mustache("  {{^boolean}}\n^{{/boolean}}\n/", {"boolean": no})'	"^\n/"
+
+# mustache spec inverted: Standalone Without Newline
+'use template; mustache("^{{^boolean}}\n/\n  {{/boolean}}", {"boolean": no})'	"^\n/\n"
+
+# mustache spec inverted: Padding
+'use template; mustache("|{{^ boolean }}={{/ boolean }}|", {"boolean": no})'	"|=|"
