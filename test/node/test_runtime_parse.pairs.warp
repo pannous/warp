@@ -1,0 +1,3 @@
+# parse of a text known only at run time: the host's parse_code asks warp.wasm's parse-code command
+'t = "a * " + "2"; n = parse(t); n.op'	'*'
+'t = "[1, " + "2]"; #parse(t)'	2

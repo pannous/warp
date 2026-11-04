@@ -1,0 +1,18 @@
+# A program's calls of some words rewritten with its scopes respected (notes/dispatch.md: shadowing is scoped):
+# everywhere but on the right of `.` and inside a definition or lambda binding the word itself, so
+# `f(t) := { parse = x => 7; parse(t) }` and `parse => parse(t)` call their own
+words_rewritten(n: Node, rewrite: function, words: list): Node := {
+	if is_key(n, Op.Dot) { return Key(words_rewritten(key_of(n), rewrite, words), Op.Dot, value_of(n)) }
+	if (is_key(n, Op.Define) or is_key(n, Op.Arrow)) and words.any(word => binds_word(n, word)) { return n }
+	rewrite(children(n, child => words_rewritten(child, rewrite, words)))
+}
+
+# does the definition or lambda bind the word: a parameter of that name, or a definition of it in its body
+binds_word(binder: Node, word: text): bool := {
+	head = key_of(binder)
+	if is_key(binder, Op.Arrow) and word in parameters_of(head) { return yes }
+	if is_group(head) and items_of(head).any(part => part == symbol(word)) { return yes }
+	body = value_of(binder)
+	statements = if is_curly_group(body) then items_of(body) else [body]
+	statements.any(statement => declared_name(statement) == word)
+}

@@ -54,4 +54,4 @@ trailing_attribute(p: Parser, marked: Node): Node := {
 }
 # `ys = xs.map(f) @parallel` after an operand binding no looser than an assignment
 read_trailing_attribute(p: Parser, operand: Node, min_power: int): Node := if operand != ø and at_char(p, '@') and min_power <= binding_powers("=")#2 then trailing_attribute(p, operand) else ø
-attributes_extension = Extension{name: "attributes", atom_readers: {"@": at_atom}, suffix_readers: [read_trailing_attribute]}
+attributes_extension = Extension{name: "attributes", atom_readers: {"@": at_atom}, suffix_readers: {"@": read_trailing_attribute}}

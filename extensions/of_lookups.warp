@@ -1,12 +1,9 @@
-# One rule (card sugar-twins): `a of b` is `b.a`. `first 3 of xs`
+# One rule: `a of b` is `b.a`. `first 3 of xs`
 # is `xs.first(3)`, `a of b of c` is `c.b.a`, `name of p + 1` is `p.name + 1`; the object takes its qualifier
 # (`name of people where …`). Not lookups: a type phrase `list of int` and a spaced definition `square of a number = …`.
 # `type of x` is the call `type(x)`. `in` and `from` select like `of` after a selector word the program does not bind:
 # `length of characters in text` is `text.characters.length`; else `x in xs` stays membership (decision sugar-triage).
 # Left out (notes/self_hosting_dropped.md): the walk `print words in t`, the unit count `byte count of t`.
-use "walk.warp"
-use "../analysis/words.warp"
-use "scope.warp"
 
 of_word = "of"
 type_call_word = "type"
@@ -149,8 +146,8 @@ is_phrase_group(n: Node): bool := match n {
 	_: no
 }
 
-# the keyword rewrite of a phrase with `of` (or `in`, `from` after a selector word), an entry of passes.warp
-# sugar_phrases_table; `type of x` triggers it by the declaration head's name `of`
+# the keyword rewrite of a phrase with `of` (or `in`, `from` after a selector word), of_lookups' one entry below;
+# `type of x` triggers it by the declaration head's name `of`
 is_lookup_word(word: Node): bool := is_word(word, of_word) or (word is symbol and selecting_words contains name_of(word))
 lookup_phrase(n: Node): Node := {
 	scope = rewritten_bindings()
@@ -164,3 +161,7 @@ lookup_phrase(n: Node): Node := {
 	if type_of_body(n) != none_word { return type_of_called([n])#1 }
 	n
 }
+
+# the phrases of the program with a lookup word, one keyword walk, right after interpolation
+of_lookups(program: Node): Node := keyword_rewrites(program, [[is_lookup_word, lookup_phrase]])
+of_lookups_extension = Extension{name: "of_lookups", passes: {"interpolation": of_lookups}}

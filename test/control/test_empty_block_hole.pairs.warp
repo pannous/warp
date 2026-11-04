@@ -1,0 +1,4 @@
+# an empty `{}` given where a rule takes a block is an empty block (a rule's `$body: block` hole), not a map
+'a = 1; on change a {}; a = 2; a'	2
+'n = 5; each [1, 2] {}; n'	5
+'xs = [1, 2]; xs.each {}; 3'	3

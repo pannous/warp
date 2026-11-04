@@ -1,10 +1,7 @@
-# `parse(text)` is the code the text holds, as data (card pure-parse-call):
-# a constant text folds here into `as_code(data …)`, any other is parsed at run time by the host word parse_code.
+# `parse(text)` is the code the text holds, as data: a constant text folds here into `as_code(data …)`, any other is
+# parsed at run time by the host word parse_code, which asks warp.wasm's parse-code command (extensions/commands).
 # A program's own `parse` stays its own, and so does a method `x.parse(…)`. `eval(text)` is a plain prelude function
 # (prelude.warp eval).
-use "../passes/walk.warp"
-use "parser.warp"
-use "../passes/uses.warp"
 
 parse_word = "parse"
 as_code_word = "as_code"
@@ -31,23 +28,6 @@ parse_call(n: Node): Node := {
 	if given == ø { return n }
 	if folds(given) { return called_word(as_code_word, [quoted_code_of(plain_node(parsed(given)))]) }
 	called_word(as_code_word, [called_word(parse_code_word, [given])])
-}
-
-# the words rewritten everywhere but on the right of `.` and inside a definition binding the word itself (notes/
-# dispatch.md: shadowing is scoped): `f(t) := { parse = x => 7; parse(t) }` calls its own
-words_rewritten(n: Node, rewrite: function, words: list): Node := {
-	if is_key(n, Op.Dot) { return Key(words_rewritten(key_of(n), rewrite, words), Op.Dot, value_of(n)) }
-	if is_key(n, Op.Define) and words.any(word => binds_word(n, word)) { return n }
-	rewrite(children(n, child => words_rewritten(child, rewrite, words)))
-}
-
-# does the definition bind the word: a parameter of that name, or a definition of it in its body
-binds_word(definition: Node, word: text): bool := {
-	head = key_of(definition)
-	if is_group(head) and items_of(head).any(part => part == symbol(word)) { return yes }
-	body = value_of(definition)
-	statements = if is_curly_group(body) then items_of(body) else [body]
-	statements.any(statement => declared_name(statement) == word)
 }
 
 parse_words(program: Node): Node := {

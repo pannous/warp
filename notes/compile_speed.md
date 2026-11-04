@@ -114,3 +114,20 @@ rows_of, written_at, place_text together 0.1 %; dropped_value 0.2 %; source_chec
 (the used files go through checked_parse), so they don't show at all. The two hints (alias_word, implicit_use) only
 say what the rewrite and use resolution do anyway. kind_changes (2.0 %) and main_globals (0.3 %) find errors too,
 so they must run. A switch that skips the producers would save under 0.5 %: not built.
+
+## Compile-cost drift after the parser moves (card compile-cost-drift, 2026-11-04)
+Each landing's compiler compiling one fixed source (idioms 3f968216af, worktree drift-src), instructions retired, one
+warm-up run discarded (notes/compiler_rebuilds.md "Build records"; data/drift/landings.sh, landings.times):
+idioms 3.6496e12; 704bb24c11 (attributes, sum types leave the parser) 3.6939e12 (+1.2%); 41c1e0d036 (checked tries,
+lints; a sibling branch) 3.7198e12 (+1.9%); 8225781320 (both) 3.7465e12 (+2.7%); dd2e1b5bcc, 27084eb53b, cf91fce346 flat.
+- Joining every extension row once into one Extension row (extension.warp hooks(), landed 181f8a6500) took 1.86%
+  back: hooks were looked up by field name in a map per call.
+- What is left grows no function of its own: the profiles spread it over runtime words (is_class_instance,
+  holds_entries, slot_free, node_equal, GC). WARP_TIMES put idioms vs 41c1's +1.9 s in "used modules" (wall, GC
+  included); the checked_tries pass itself is 0.16 s.
+- Suffix readers keyed by their first character (extension.warp read_suffix, one map get an operator round) took
+  2.13% more: 3.7227e12 -> 3.6433e12, below idioms. Each round had asked every suffix reader in turn, and read_percent
+  read a whole operator there (operator_at, aliases included), superscript_power scanned for raised terms: a hook on a
+  hot path keyed by what starts its form costs one lookup, a list of hooks costs each one's own scan. The drift is gone.
+- Not it: the map index's 64-slot scan. Home slots by first-name hash (data/drift/home-slot.patch) measured +0.08%,
+  index_last already catches most lookups (card map-hash-index keeps the proper fix for its own sake).

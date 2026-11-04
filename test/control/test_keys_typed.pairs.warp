@@ -1,0 +1,3 @@
+# Key values and event listeners: decision keys-enum, notes/agents/common.md
+'use keys; [held_key() == Key.none, key() == Key.none]'	[yes, yes]
+'use keys; seen = Key.none; on key { seen = key }; emit key{key:"q"}; seen == Key.q'	yes

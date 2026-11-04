@@ -18,7 +18,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
 // What stands at the parser's position (card parser-checklist-idioms): its character, the one k further, the one at
 // any offset, each a line break past the end; whether the character or a text stands there
 def char_here(p: Parser): text := peek(p.code, p.at, p.n)
@@ -84,7 +84,7 @@ def written_tree(written: text, uses: text = ""): Node := {
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
 	statements = source_operator_statements(source)
-	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), scans: extension_scans(source + uses), aliases: by_first_character(aliases_among(statements) + aliases_among(math_operator_statements()), alias => alias.spelling), circumfixes: circumfixes_among(statements) + circumfixes_among(math_operator_statements()), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
+	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), scans: extension_scans(source + uses), aliases: by_first_character(aliases_among(statements) + aliases_among(math_operator_statements()), alias => alias.spelling), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
 	items_until(p, Bracket.None, ItemsEnd.Source)
 }
 
@@ -176,8 +176,6 @@ def defined_spelling(statement: OperatorStatement): text {
 // `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
 // function, `√x` is sqrt(x) (the pre-scan made the spelling an operator: aliases_among)
 class OperatorAlias { spelling: text; target: text }
-// `circumfix operator ⌊ ⌋ := floor`: `⌊x⌋` is floor(x)
-class Circumfix { opening: text; closing: text; function: text }
 // A prefix alias names a function by the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
 def alias_of(statement: OperatorStatement?): OperatorAlias? {
 	if statement == ø or not statement.keyword or #statement.head != 1 or #statement.body != 1 { return ø }
@@ -185,12 +183,8 @@ def alias_of(statement: OperatorStatement?): OperatorAlias? {
 	prefix = statement.fixity == Fixity.Prefix
 	if (statement.fixity == Fixity.Infix or prefix) and (is_operator_spelling(target) or (prefix and is_plain_name(target))) then OperatorAlias{spelling: statement.head#1, target: target} else ø
 }
-def circumfix_of(statement: OperatorStatement?): Circumfix? {
-	if statement == ø or not statement.keyword or statement.fixity != Fixity.Circumfix or #statement.head != 2 or #statement.body != 1 { return ø }
-	Circumfix{opening: statement.head#1, closing: statement.head#2, function: statement.body#1}
-}
-// a statement that only spells: an alias or a circumfix, applied by the pre-scan
-def only_spells(statement: OperatorStatement?): bool := alias_of(statement) != ø or circumfix_of(statement) != ø
+// a statement that only spells: an alias, applied by the pre-scan (a circumfix: extensions/circumfixes.warp)
+def only_spells(statement: OperatorStatement?): bool := alias_of(statement) != ø
 // The operator a statement declares, as a list of it, else []: its spelling, unless the statement only spells
 def operator_declared(statement: OperatorStatement?): list := if statement == ø or statement.spelling == "" or only_spells(statement) then [] else [declared_of(statement.spelling, statement.fixity)]
 // An alias spelling a function, `√` of sqrt, no operator
@@ -205,9 +199,8 @@ def math_operator_statements(): list {
 	if math_statements == ø { math_statements = operator_statements(code_statements_of("math")) }
 	math_statements
 }
-// the aliases and the circumfixes among statements
+// the aliases among statements
 def aliases_among(statements: list): list := statements.map(alias_of).filter(alias => alias != ø)
-def circumfixes_among(statements: list): list := statements.map(circumfix_of).filter(circumfix => circumfix != ø)
 // A library's code statements by its name ("math"), split once a compile for every scanner of them: splitting math's
 // text for its operators, its aliases and its circumfixes each was a tenth of a small program's compile
 global library_code_statements = {}
@@ -581,7 +574,7 @@ def with_trailing_item(assignment: Node, item: Node): Node := match assignment {
 	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_item(value, item) else if names_method(value) and bar_lambda(item) != ø then method_given(value, bar_lambda(item)) else spaced((if names_method(value) then [value] else group_parts(value)#3) + [item]))
 	_: assignment
 }
-// `{ |x| x + 1 }`, `{ |a, b| a + b }`: the one lambda a block holds, its parameters between bars (pipe_parameters); else ø
+// `{ |x| x + 1 }`, `{ |a, b| a + b }`: the one lambda a block holds, its parameters between bars (extensions/pipe_lambdas.warp); else ø
 def bar_lambda(block: Node): any {
 	parts = group_parts(block)
 	if parts == ø or not is_block(block) or #parts#3 != 1 { return ø }
@@ -2068,7 +2061,7 @@ def prefixed(p: Parser): Node := {
 	// a reader that moved on read its statement, if only to nothing (a declaration a prescan applied)
 	if phrase != ø or p.at != word_start { return phrase }
 	if word in FIXITY_WORDS {
-		// an alias or circumfix the pre-scan applied
+		// an alias the pre-scan applied
 		if only_spells(operator_statement(statement_words_at(p))) { return skip_statement(p) }
 		method = operator_method_definition(p, word)
 		if method != ø { return method }
@@ -2126,35 +2119,6 @@ PREFIX_POWER = 162
 // lib/math.warp's alias line)
 DASH_GLYPHS = "‐‑‒–—―−"
 
-// The circumfix operator opening at the parser's position as [opening, closing, function], else []
-def circumfix_at(p: Parser): Circumfix? := p.circumfixes.find(circumfix => at_text(p, circumfix.opening))
-// The glyph opens or closes a circumfix operator: `⌋` is no free symbol
-def is_circumfix_glyph(p: Parser, glyph: text): bool := p.circumfixes.any(circumfix => circumfix.opening == glyph or circumfix.closing == glyph)
-// Where the circumfix pair opened before `from` closes, past the pairs nested in it, else n
-def circumfix_closing(p: Parser, circumfix: Circumfix, from: int): int {
-	depth = 0
-	for at in from ..< p.n {
-		if starts_at(p.code, circumfix.closing, at, p.n) {
-			if depth == 0 { return at }
-			depth -= 1
-		} else if starts_at(p.code, circumfix.opening, at, p.n) { depth += 1 }
-	}
-	p.n
-}
-// `‖x‖`, `⌊x⌋` bracket a whole expression like parentheses and call their function with it: `‖3-5‖*2` is 4
-def circumfixed(p: Parser, circumfix: Circumfix): Node := {
-	opened = p.at + circumfix.opening.length
-	closing = circumfix_closing(p, circumfix, opened)
-	if closing >= p.n { raise "Missing closing " + circumfix.closing }
-	whole = p.n
-	p.at = opened
-	p.n = closing
-	inner = expression(p, 0)
-	p.n = whole
-	p.at = closing + circumfix.closing.length
-	call_of([symbol(circumfix.function), inner])
-}
-
 def prefixed_by_symbol(p: Parser, c: text): Node := {
 	head = operator_method_head(p)
 	if head != ø { return head }
@@ -2189,8 +2153,6 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		advance(p)
 		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
-	circumfix = circumfix_at(p)
-	if circumfix != ø { return circumfixed(p, circumfix) }
 	// `√x`, `∛x`: a glyph spelling a function calls it (lib/math.warp `prefix operator √ := sqrt`)
 	spelled = alias_at(p)
 	if spelled != ø and spells_function(spelled) {
@@ -2208,14 +2170,6 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 			skip_spaces(p)
 			return keyed(relation, ø, expression(p, binding_powers(relation)#2))
 		}
-	}
-	if c == '|' {
-		parameters = pipe_parameters(p)
-		// the body binds as after `=>`: it takes an assignment, `|x| total += x`
-		// `do |item|⏎  print item⏎end`: the rest of the block is the body
-		body_below = parameters != ø and at_char(p, '\n')
-		if body_below { return keyed("->", parameters, single_statement_or_block(items_until(p, Bracket.Curly, ItemsEnd.Rest))) }
-		if parameters != ø { return keyed("->", parameters, expression(p, binding_powers("=>")#2)) }
 	}
 	// `&lerp`: a reference to the function, an `&` glued to the word after it and not to one before it (`a &b`)
 	if c == '&' and is_alpha(next) and not (p.at > 0 and is_name_char(p.code[p.at - 1])) {
@@ -2291,26 +2245,6 @@ def starred_name(p: Parser): Node := {
 		}
 	}
 	ø
-}
-
-// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, the parser
-// placed on the body after them (in a block also on the lines below); ø (nothing consumed) when no names between bars and a body follow
-def pipe_parameters(p: Parser): Node := {
-	close = p.at + 1
-	while close < p.n and (" ,".contains(p.code[close]) or is_name_char(p.code[close])) { close += 1 }
-	names = p.code[p.at + 1 .. close].split(' ').join(",").split(',').filter(name => name)
-	body = spaces_end(p, close + 1)
-	// Ruby's `do |item|⏎ … end`, `{ |x|⏎ … }`: inside a block the body may start on the next line
-	body_below = is_at(p.code, body, '\n', p.n) and (p.group.grouped or p.group.stops_at_end)
-	if char_at(p, close) != '|' or count(names) == 0 or not is_name_start(names#1#1) or body >= p.n or ("\n;,)]}".contains(p.code[body]) and not body_below) { return ø }
-	p.at = body
-	if names.length == 1 then symbol(names#1) else listed(Bracket.Round, Separator.Comma, names.map(name => symbol(name)))
-}
-
-// A block of one statement as that statement
-def single_statement_or_block(block: Node): Node := {
-	parts = group_parts(block)
-	if parts != ø and parts#3.length == 1 then parts#3#1 else block
 }
 
 // `:post` (wiki/symbol.md): the symbol itself, written as the call symbol("post"), never evaluated
@@ -2895,7 +2829,7 @@ FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '�
 def is_free_symbol(p: Parser, c: text): bool {
 	glyph = "$(c)"
 	// a declared operator calls as declared: `prefix operator ∆` makes `print ∆ 5` print ∆(5), no free infix
-	if glyph.length != 1 or aliases_starting(p, glyph).any(alias => alias.spelling == glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or owned_glyph(p, glyph) { return false }
+	if glyph.length != 1 or aliases_starting(p, glyph).any(alias => alias.spelling == glyph) or symbol_operator(glyph) != ø or owned_glyph(p, glyph) { return false }
 	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2)
 }
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;

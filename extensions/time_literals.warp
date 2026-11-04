@@ -49,3 +49,10 @@ def suffix_close(p: Parser, at: int): int {
 	}
 	if close >= p.n or close == at then 0 else close
 }
+# `hh:mm` at `at` (from the lexer, card lexer-helpers-to-extensions)
+clock_at(source: text, at: int, n: int): bool := digits(source, at, 2, n) and is_at(source, at + 2, ':', n) and digits(source, at + 3, 2, n)
+digits(source: text, at: int, count: int, n: int): bool := {
+	i = 0
+	while i < count and at + i < n and is_digit(source[at + i]) { i += 1 }
+	i == count
+}

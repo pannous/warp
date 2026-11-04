@@ -4,6 +4,10 @@ use "gpu_lists/gpu_lists.warp"
 use "commands.warp"
 use "degrees.warp"
 use "glyph_atoms.warp"
+use "pipe_lambdas.warp"
+use "circumfixes.warp"
+use "index_positions.warp"
+use "property_accessors.warp"
 use "attributes.warp"
 use "sum_types.warp"
 use "radix_numbers.warp"
@@ -25,6 +29,11 @@ use "multiple_assignments.warp"
 use "match_patterns.warp"
 use "conversions.warp"
 use "implicit_uses.warp"
+use "scoped_words.warp"
+use "parse_words.warp"
+use "iteration_inlining.warp"
+use "of_lookups.warp"
+use "match_phrases.warp"
 use "checked_tries.warp"
 use "text_lints.warp"
 EXTENSIONS = [
@@ -32,6 +41,10 @@ EXTENSIONS = [
 	gpu_lists_extension
 	degrees_extension
 	glyph_atoms_extension
+	pipe_lambdas_extension
+	circumfixes_extension
+	index_positions_extension
+	property_accessors_extension
 	attributes_extension
 	sum_types_extension
 	radix_numbers_extension
@@ -56,7 +69,12 @@ EXTENSIONS = [
 	Extension{name: "int_types", passes: {"definition_heads": int_types}}
 	conversions_extension
 	implicit_uses_extension
+	# right before tries, in this order: parse words, then the checked tries the core's tries guard
+	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
+	iteration_inlining_extension
+	of_lookups_extension
+	match_phrases_extension
 	text_lints_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 	Extension{name: "big_numbers", runtime: "big_numbers.warp"}

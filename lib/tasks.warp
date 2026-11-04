@@ -24,6 +24,8 @@ rewrite finish $x => $awaited where $awaited = awaited_operand($x)
 // `shared n = 0` (wiki/async.md): one value every task sees; cooperative tasks run in one instance, so it is the
 // a global of the main level as a `linear` array is, its `+=` atomic as any step is
 rewrite (shared $d) => global: $d
+// after a condition return a value: a task that waits until the condition holds, then gives the value
+rewrite (after $c return $x) => task_when(() => $c, () => $x)
 // a cancelled task yields no result (decision stopped-no-result): reading or awaiting it raises "job was cancelled"
 rewrite cancel $x => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
 rewrite $x.cancel() => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
@@ -65,12 +67,15 @@ global running_task = ø
 global failed_tasks = []
 global task_sleep_said = no
 // the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
-task_go(first: function) := {
+task_go(first: function): Task := {
 	task = Task(clock(), first)
 	task.context = task_context()
 	task_queue = task_queue + [task]
 	task
 }
+// the task of `after`: each turn it checks the condition, giving the others their turn until it holds
+task_when(holds: function, value: function): Task := task_go(() => task_polled(holds, value))
+task_polled(holds: function, value: function) := if holds() then value() else task_sleep(1, () => task_polled(holds, value))
 // a sleep's amount in ms: a duration's, a plain number's seconds (as sleep)
 sleep_ms_of(amount) := (if amount is Time then amount.amount else amount) * 1000
 // the rest of the running task, due once it slept that long (ms)
@@ -128,8 +133,8 @@ task_stepped(task: Task) := {
 handlers_run(handlers: list) := for handler in handlers { handler() }
 // `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is. The
 // emitter calls it too where a place typed as a value takes a task, `n: int = go f(3)` (decision task-to-value-awaits)
-task_awaited(x) := if x is Task then task_value(x) else x
-task_value(x: Task) := {
+task_awaited(x: any): any := if x is Task then task_value(x) else x
+task_value(x: Task): any := {
 	x.paused = no
 	tasks_run_while(() => not x.done, ø)
 	x.awaited = yes
@@ -137,7 +142,7 @@ task_value(x: Task) := {
 	x.value
 }
 // `await any jobs`: the value of the first to be done
-task_awaited_any(xs) := {
+task_awaited_any(xs: any): any := {
 	tasks_run_while(() => not xs.any(is_done), ø)
 	task_awaited(xs.filter(is_done)#1)
 }
@@ -148,10 +153,10 @@ task_value_within(x: Task, ms, fallback: function) := {
 	if x.done then task_value(x) else fallback()
 }
 // a value is done, a task once its last step ran
-is_done(x) := if x is Task then task_finished(x) else yes
-task_finished(x: Task) := x.done
+is_done(x: any): bool := if x is Task then task_finished(x) else yes
+task_finished(x: Task): bool := x.done
 // a task named name ends without a result: an await or read of it raises; one done already keeps its value
-task_cancelled(x, name: text) := {
+task_cancelled(x: any, name: text): any := {
 	if x is Task and not x.done { task_ended(x, name) }
 	ø
 }
@@ -165,7 +170,7 @@ task_stopped(x, name: text) := {
 	warning("stop pauses " + name + "; to end it: cancel " + name)
 	task_paused(x)
 }
-task_paused(x) := {
+task_paused(x: any): any := {
 	if x is Task and not x.paused { task_held(x) }
 	ø
 }
@@ -181,7 +186,7 @@ task_cancelled_then(x, handler: function) := {
 	if x is Task { x.cancel_handlers += [handler] }
 	ø
 }
-task_resumed(x) := {
+task_resumed(x: any): any := {
 	if x is Task { x.paused = no }
 	ø
 }

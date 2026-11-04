@@ -143,6 +143,7 @@ extension_command(command: text) := match command {
 	"data": show_data()
 	"lower": show_lowered()
 	"uses": show_uses()
+	"parse-code": write_parse_code(args#2, args#3)
 	"build": build(args[1 ..< #args])
 	"repl": repl()
 	"repl-step": repl_step(args#2, args#3, args#4)

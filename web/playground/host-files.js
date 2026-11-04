@@ -14,17 +14,12 @@ const NO_PROCESSES = "not in the browser: a page runs no process or shell, nativ
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
-// a task's Worker starts with the files written so far (host-tasks.js startTask) and hands the program's Worker each
-// one it wrote with its result (task-worker.js self.taskWrote), as natively the tasks of a run share the file system
-self.writtenFilesForTask = () => writtenFiles;
-self.takeWrittenFiles = files => files?.forEach((content, path) => writtenFiles.set(path, content));
 
 // a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
 function keepWritten(path, content) {
 	writtenFiles.set(filePath(path), content);
 	keepWrittenFile(filePath(path), content);
 	if (typeof content !== "string") self.keepFile?.(filePath(path), content);
-	self.taskWrote?.(path, content);
 }
 
 const textOfFile = path => {

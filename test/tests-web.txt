@@ -1,4 +1,4 @@
-# a824d89f53 2026-11-03 09:32 9682/12444 77.8%
+# 6dde37dae9 2026-11-04 05:34 9732/12488 77.9%
 ok   test/control/test_after.pairs.warp:4 "job = go { sleep(10ms); 3 }; await job or 0" 3
 BOTH test/control/test_after.warp:4 "shared done = false; go { sleep(50ms); done = true }; last = after done return \"third\"; await last" "third"
 BOTH test/control/test_after.warp:5 "shared n = 0; go { for i in 1 to 5 { n += 1 } }; five = after (n == 5) return n * 2; await five" 10
@@ -389,8 +389,8 @@ ok   test/control/test_event_footguns.warp:26 "n = 0; on alarm { n += event.leve
 ok   test/control/test_event_footguns.warp:29 "n = 0; on a { n += 1; if n < 3 { emit b } }; on b { emit a }; emit a; n" 3
 ok   test/control/test_event_footguns.warp:32 "b = 1; c = 2; n = 0; on change b + c { n += 1 }; b = 5; c = 2; b = 7; n" 2
 ok   test/control/test_event_footguns.warp:33 "b = 1; c = 2; seen = 0; on change b * c { seen = b * c }; c = 10; seen" 10
-ok   test/control/test_event_footguns.warp:36 "shared n = 0; count = 0; on set n { count += 1 }; job = go { for i in 1 to 5 { n += 1 } }; await job; sleep(50 ms); count" 5
-ok   test/control/test_event_footguns.warp:37 "shared n = 0; last = 0; on set n { last = n }; job = go { for i in 1 to 3 { n = i * 10 } }; await job; sleep(50 ms); last" 30
+BOTH test/control/test_event_footguns.warp:36 "shared n = 0; count = 0; on set n { count += 1 }; job = go { for i in 1 to 5 { n += 1 } }; await job; sleep(50 ms); count" 5
+BOTH test/control/test_event_footguns.warp:37 "shared n = 0; last = 0; on set n { last = n }; job = go { for i in 1 to 3 { n = i * 10 } }; await job; sleep(50 ms); last" 30
 BOTH test/control/test_event_footguns.warp:40 "n = 0; watch(s) := whenever s > 5 { n += 1 }; x = 0; watch(x); x = 6; x = 3; x = 8; n" 2
 BOTH test/control/test_event_footguns.warp:41 "n = 0; watch(s) := once s > 5 { n += 1 }; x = 0; watch(x); x = 6; x = 3; x = 8; n" 1
 ok   test/control/test_event_footguns.warp:44 "twice = f => f(1); y = twice(x => x + 3); alarms = 0; on alarm { alarms += 1 }; emit alarm; alarms" 1
@@ -526,7 +526,7 @@ BOTH test/control/test_function_objects.warp:37 "# doubles a number\ntwice(x) :=
 BOTH test/control/test_function_objects.warp:41 "# doubles a number\ntwice(x) := x*2\nfs = [function twice]\nfs#1.signature" "(x) -> int"
 ok   test/control/test_function_objects.warp:47 "# header\n\n# doubles\ntwice(x) := x*2\ntwice.doc" "doubles"
 ok   test/control/test_function_objects.warp:52 "use math\ngcd.doc" ""
-ok   test/control/test_function_objects.warp:54 "use math\nlerp.doc" "the value a fraction t of the way from a to b"
+PAGE test/control/test_function_objects.warp:54 "use math\nlerp.doc" "the value a fraction t of the way from a to b"
 BOTH test/control/test_function_objects.warp:58 "class Dog { name: text; bark() := \"wuff \" + name }\nd = Dog(\"rex\")\nfs = d.methods\nfs#1(d)" "wuff rex"
 BOTH test/control/test_function_objects.warp:62 "class Dog { name: text; bark() := \"wuff \" + name }\nd = Dog(\"rex\")\n[m.name for m in methods(Dog)]" ["bark"]
 BOTH test/control/test_function_objects.warp:67 "class P{}; def x(_:P):=\"hi\"; print methods(P); print methods(P).count; 1" 1
@@ -1486,6 +1486,14 @@ ok   test/control/test_task_signals.warp:4 "n = 0; check(x) := { emit found{valu
 ok   test/control/test_task_signals.warp:5 "seen = 0; check(x) := { emit found{value: x}; 0 }; on found { seen = event.value }; await go check(7); seen" 7
 ok   test/control/test_task_stop.pairs.warp:2 "f(x) := x; t = go f(1); stop t; 3" 3
 NONE test/control/test_task_stop.pairs.warp:3 "f(x) := x; t = go f(2); cancel t; await t" 2
+ok   test/control/test_task_to_value.pairs.warp:3 "f(x) := x * 2; n: int = go f(3); n" 6
+ok   test/control/test_task_to_value.pairs.warp:4 "f(x) := x * 2; g(n: int) := n + 1; g(go f(3))" 7
+ok   test/control/test_task_to_value.pairs.warp:5 "f(x) := x * 2; h(): int := go f(3); h()" 6
+ok   test/control/test_task_to_value.pairs.warp:6 "f(x) := x * 2; r: float = go f(3); r" 6
+ok   test/control/test_task_to_value.pairs.warp:7 "f(x) := x * 2; job = go f(3); await job" 6
+ok   test/control/test_task_to_value.pairs.warp:8 "f(x) := x * 2; job: task = go f(3); await job" 6
+ok   test/control/test_task_to_value.pairs.warp:9 "f(x) := x * 2; job: thread = go f(3); await job" 6
+ok   test/control/test_task_to_value.pairs.warp:10 "f(x) := x * 2; job: task = go f(3); job is int" no
 ok   test/control/test_task_values.pairs.warp:4 "f(x) := x * 2; job = go f(21); await job" 42
 ok   test/control/test_task_values.pairs.warp:5 "g(t) := t + \"!\"; job = go g(\"a\"); await job" "a!"
 ok   test/control/test_task_values.pairs.warp:6 "h(x:float) := x / 2; job = go h(3); await job" 1.5
@@ -1500,15 +1508,16 @@ ok   test/control/test_task_values.warp:15 "spin(n) := { i = 0; while i < n { i 
 ok   test/control/test_tasks.pairs.warp:4 "f(x):=x*2; job = go f(3); await job" 6
 ok   test/control/test_tasks.pairs.warp:5 "f(x):=x*2; job = go f(3); await job + 1" 7
 ok   test/control/test_tasks.pairs.warp:8 "go(x) := x + 1; go(2)" 3
-BOTH test/control/test_tasks.pairs.warp:11 "job = go 3; once job finishes: x = 7; x" 7
-BOTH test/control/test_tasks.pairs.warp:12 "job = go 3; once job pauses: print \"held\"; await job" 3
-ok   test/control/test_tasks.pairs.warp:15 "job = go 3; stop job; job" ø
-ok   test/control/test_tasks.pairs.warp:16 "job = go 3; job.stop(); job" ø
+NONE test/control/test_tasks.pairs.warp:11 "job = go 3; once job finishes: x = 7; await job; x" 7
+ok   test/control/test_tasks.pairs.warp:12 "job = go 3; once job pauses: print \"held\"; await job" 3
+ok   test/control/test_tasks.pairs.warp:15 "job = go 3; stop job; job" 3
+ok   test/control/test_tasks.pairs.warp:16 "job = go 3; job.stop(); job" 3
 ok   test/control/test_tasks.pairs.warp:19 "def go(n: int): int { n + 1 }; go(2)" 3
 ok   test/control/test_tasks.pairs.warp:20 "fun go(n) { n + 1 }; go(2)" 3
 ok   test/control/test_tasks.pairs.warp:21 "def await(n: int): int { n * 2 }; await(4)" 8
+ok   test/control/test_tasks.pairs.warp:24 "job = go 3; end job; 1" error
 BOTH test/control/test_tasks.warp:4 "download(u) := u + 1; job = go download(1); once the download finishes: y = 5; y + job" 7
-BOTH test/control/test_tasks.warp:5 "download(u) := u; job = go download(2); on download.stop : print \"cancelled\"; job" 2
+ok   test/control/test_tasks.warp:5 "download(u) := u; job = go download(2); on download.stop : print \"cancelled\"; job" 2
 ok   test/control/test_ternary_branch_calls.pairs.warp:2 "n=7; n>4 ? [n].map(d=>d*d) : n" [49]
 ok   test/control/test_ternary_branch_calls.pairs.warp:3 "n=7; n<4 ? n : [n].map(d=>d*d)" [49]
 ok   test/control/test_ternary_branch_calls.pairs.warp:4 "n=7; n>4 ? [n, 1].filter(d=>d>1) : []" [7]
@@ -1572,15 +1581,15 @@ ok   test/control/test_threads.pairs.warp:27 "twice(f, v) := f(f(v)); job = go t
 ok   test/control/test_threads.warp:4 "f(ms) := { sleep(ms / 1000); ms }; a = go f(1000); b = go f(1000); c = go f(1000); await a + await b + await c" 3000
 ok   test/control/test_threads.warp:7 "f(ms) := { sleep(ms / 1000); ms }; a = go f(1); b = go f(2); await a + await b" 3
 ok   test/control/test_threads.warp:10 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); pause job; resume job; await job" 300000
-BOTH test/control/test_threads.warp:11 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); job.pause(); job.resume(); job" 300000
-BOTH test/control/test_threads.warp:14 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stop job; try await job else -1" (-1)
+ok   test/control/test_threads.warp:11 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); job.pause(); job.resume(); job" 300000
+ok   test/control/test_threads.warp:14 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); cancel job; try await job else -1" (-1)
 ok   test/control/test_threads.warp:17 "sum2(xs) := { s=0; for i in 0..#xs { s+=xs#(i+1) }; s }; job = go sum2([1,2,3]); await job" 6
 ok   test/control/test_threads.warp:18 "total(xs) := { s=0; for x in xs { s+=x }; s }; big=(0..20000).map(x=>x); a = go total(big); b = go total(big); await a + await b" 399980000
 BOTH test/control/test_threads.warp:21 "f(ms) := { sleep(ms / 1000); ms }; job = go f(300); x = 0; once job finishes: x = 7; sleep(0.6s); x" 7
 ok   test/control/test_threads.warp:22 "f(ms) := { sleep(ms / 1000); ms }; job = go f(1000); x = 0; once job finishes: x = 7; y = x; y" 0
-BOTH test/control/test_threads.warp:23 "f(ms) := { sleep(ms / 1000); ms }; job = go f(200); x = 0; once job finishes: x = 7; z = 1; x" 7
+ok   test/control/test_threads.warp:23 "f(ms) := { sleep(ms / 1000); ms }; job = go f(200); x = 0; once job finishes: x = 7; z = 1; await job; x" 7
 BOTH test/control/test_threads.warp:24 "f(ms) := { sleep(ms / 1000); ms }; job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 { sleep(0.1s) }; done" 1
-BOTH test/control/test_threads.warp:27 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300ms); stopped" 1
+ok   test/control/test_threads.warp:27 "spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300ms); stopped" 1
 ok   test/control/test_time_of_day.pairs.warp:4 "n = 1; at 9:00 { n = 2 }; n" 1
 BOTH test/control/test_time_of_day.pairs.warp:5 "n = 1; on every friday at 17:00 { n = 2 }; n" 1
 ok   test/control/test_timers.pairs.warp:2 "n = 1; on every 500ms { n = 2 }; n" 1
@@ -1806,19 +1815,21 @@ ok   test/control/test_word_statements.warp:4 "seven() := 7\nf() := {\nseven\n8\
 ok   test/control/test_word_statements.warp:10 "seven() := 7\nif 1 {\nseven\n9\n}" 9
 ok   test/control/test_word_statements.warp:15 "seven() := 7\njob = go {\nseven\n10\n}\nawait job" 10
 ok   test/control/test_word_statements.warp:23 "seven() := 7\njob = go{\nseven\n10\n}\nawait job" 10
-PAGE test/errors/test_dropped_error_raises.pairs.warp:3 "write(\"no such folder/x.txt\", \"hi\"); 1" error
+ok   test/errors/test_dropped_error_raises.pairs.warp:3 "write(\"/dev/null/x.txt\", \"hi\"); 1" error
 ok   test/errors/test_dropped_error_raises.pairs.warp:4 "for i in 1..2 { read(\"no such file\") }; 2" error
-ok   test/errors/test_dropped_error_raises.pairs.warp:5 "r: text? = write(\"no such folder/x.txt\", \"hi\"); 3" 3
-PAGE test/errors/test_dropped_error_raises.pairs.warp:6 "is_error(write(\"no such folder/x.txt\", \"hi\"))" yes
-ok   test/errors/test_dropped_error_raises.pairs.warp:7 "try write(\"no such folder/x.txt\", \"hi\"); 4" 4
-PAGE test/errors/test_dropped_error_raises.pairs.warp:8 "try write(\"no such folder/x.txt\", \"hi\") catch e { 5 }" 5
+ok   test/errors/test_dropped_error_raises.pairs.warp:5 "r: text? = write(\"/dev/null/x.txt\", \"hi\"); 3" 3
+ok   test/errors/test_dropped_error_raises.pairs.warp:6 "is_error(write(\"/dev/null/x.txt\", \"hi\"))" yes
+ok   test/errors/test_dropped_error_raises.pairs.warp:7 "try write(\"/dev/null/x.txt\", \"hi\"); 4" 4
+ok   test/errors/test_dropped_error_raises.pairs.warp:8 "try write(\"/dev/null/x.txt\", \"hi\") catch e { 5 }" 5
 ok   test/errors/test_dropped_error_raises.pairs.warp:9 "try read(\"no such file\") else 6" 6
+ok   test/errors/test_error_into_conversion.pairs.warp:3 "try { split(error(\"boom\"), \",\") } catch e { e.message }" "boom"
+ok   test/errors/test_error_into_conversion.pairs.warp:4 "try { for x in error(\"boom\") { x } } catch e { e.message }" "boom"
 ok   test/errors/test_error_sentences.pairs.warp:4 "try { n = 0; 7 % n } catch e { e.message }" "divide by zero"
 ok   test/errors/test_error_sentences.pairs.warp:5 "try { [1 2]#5 } catch e { e.message }" "index out of range"
 ok   test/errors/test_error_sentences.pairs.warp:6 "try { raise \"boom\" } catch e { e.message }" "boom"
 ok   test/errors/test_error_sentences.pairs.warp:7 "m = {a: 1}; k = \"b\"; try { m[k] } catch e { e.message }" "no field b"
-NONE test/errors/test_errors_one_rule.pairs.warp:2 "r = write(\"no such folder/x.txt\", \"hi\"); 1" error
-NONE test/errors/test_errors_one_rule.pairs.warp:3 "f(p) := write(p, \"hi\"); r = f(\"no such folder/x.txt\"); 2" error
+ok   test/errors/test_errors_one_rule.pairs.warp:2 "r = write(\"/dev/null/x.txt\", \"hi\"); 1" error
+ok   test/errors/test_errors_one_rule.pairs.warp:3 "f(p) := write(p, \"hi\"); r = f(\"/dev/null/x.txt\"); 2" error
 ok   test/errors/test_expected_errors.pairs.warp:3 "zork(\"a\")" error
 ok   test/errors/test_expected_errors.pairs.warp:4 "raise \"boom\"" error
 ok   test/errors/test_expected_errors.pairs.warp:5 "x := 1; x = 2; x" error
@@ -2808,7 +2819,7 @@ ok   test/functions/test_function_words.pairs.warp:15 "twice(x) := x*2; twice.re
 ok   test/functions/test_function_words.pairs.warp:16 "use math; gcd.return_type" "int"
 ok   test/functions/test_function_words.pairs.warp:18 "twice(x) := {\"doubles a number\"; x*2}; twice.doc" "doubles a number"
 ok   test/functions/test_function_words.pairs.warp:19 "twice(x) := x*2; twice.doc" ""
-ok   test/functions/test_function_words.pairs.warp:20 "use math; lerp.doc" "the value a fraction t of the way from a to b"
+PAGE test/functions/test_function_words.pairs.warp:20 "use math; lerp.doc" "the value a fraction t of the way from a to b"
 ok   test/functions/test_function_words.pairs.warp:21 "use math; gcd.doc" ""
 ok   test/functions/test_function_words_consume.pairs.warp:4 "def show(a, b) = a + b; show 1, 2" 3
 ok   test/functions/test_function_words_consume.pairs.warp:5 "def add(a: int, b: int) = a + b; add 1 2" 3
@@ -3347,6 +3358,9 @@ BOTH test/functions/test_parameter_retype.pairs.warp:4 "f(n) := { n = \"x\"; n }
 BOTH test/functions/test_parameter_retype.pairs.warp:5 "f(n) := { n = \"xy\"; n }; f(5)" "xy"
 BOTH test/functions/test_parameter_retype.pairs.warp:6 "f(n) := { n = [1]; n }; f(5)" [1]
 BOTH test/functions/test_parameter_retype.pairs.warp:7 "f(n) := { n = 2.5; n }; f(5)" 2.5
+ok   test/functions/test_parameter_shadowing.pairs.warp:2 "g = find => find(2, 3); g((a, b) => a * b)" 6
+ok   test/functions/test_parameter_shadowing.pairs.warp:3 "h = (count, x) => count(x); h(n => n + 1, 41)" 42
+ok   test/functions/test_parameter_shadowing.pairs.warp:4 "f(find: function) := find(2, 3); f((a, b) => a - b)" -1
 BOTH test/functions/test_parameter_shapes.pairs.warp:4 "f(p{name, title?}) := \"Hi \" + p.name; f({name:\"Ann\"})" "Hi Ann"
 BOTH test/functions/test_parameter_shapes.pairs.warp:5 "def f(p:{name}) { p.name }; f({name:\"Ann\"})" "Ann"
 BOTH test/functions/test_parameter_shapes.pairs.warp:8 "f(p{name?, phone}) := p.phone; f({phone:\"8\"})" "8"
@@ -3551,6 +3565,10 @@ BOTH test/functions/test_returned_blocks.pairs.warp:6 "def mk(k){ {it + k} }; mk
 BOTH test/functions/test_returned_blocks.pairs.warp:9 "def f(x){ it * 2 }; f(4)" 8
 BOTH test/functions/test_returned_function_names.pairs.warp:4 "def make(){ def inc(){ 1 }; function inc }; c = make(); c()" 1
 BOTH test/functions/test_returned_function_names.pairs.warp:5 "def make(){ def inc(){ 1 }; inc }; make()" 1
+ok   test/functions/test_rewrite_infix_head.pairs.warp:1 "rewrite upto $n => (1 to $n); upto 3" [1, 2, 3]
+ok   test/functions/test_rewrite_infix_head.pairs.warp:2 "rewrite mod $n => ($n * 10); mod 4" 40
+ok   test/functions/test_rewrite_infix_head.pairs.warp:3 "7 mod 3" 1
+ok   test/functions/test_rewrite_infix_head.pairs.warp:4 "1 upto 4" [1, 2, 3]
 BOTH test/functions/test_round8_call_forms.pairs.warp:4 "[1, 2, 3].sum { |x| x * 2 }" 12
 ok   test/functions/test_round8_call_forms.pairs.warp:5 "[1, 2, 3].count { |x| x > 1 }" 2
 ok   test/functions/test_round8_call_forms.pairs.warp:8 "mk(k) := it => it * k; t = mk(3); t(4)" 12
@@ -6348,6 +6366,9 @@ ok   test/numbers/test_int_division.pairs.warp:14 "x = -7.5; x % 2" 0.5
 ok   test/numbers/test_int_division.pairs.warp:15 "x = 1/2; x % 3" 0.5
 ok   test/numbers/test_int_division.pairs.warp:16 "x = 1/2; x/!1" 0
 ok   test/numbers/test_int_division.warp:4 "use draw\ncolors = [hsv(band * 280 / 16, 1, 1) for band in 0..16]\ncolors#4" 4294958848
+ok   test/numbers/test_int_global_wraps.pairs.warp:3 "global w: int = 10; def at(r: int, c: int) { place = r * w + c; place }; at(2, 3)" 23
+ok   test/numbers/test_int_global_wraps.pairs.warp:4 "global w: int = 2^62; def f(a: int) { a * w }; f(4)" 0
+ok   test/numbers/test_int_global_wraps.pairs.warp:5 "global w: int = 2^63 - 1; def g() { w + 1 }; g()" -9223372036854775808
 ok   test/numbers/test_libm_functions.pairs.warp:4 "hypot(3, 4)" 5
 ok   test/numbers/test_libm_functions.pairs.warp:5 "atan2(1, 1) * 4" 3.141592653589793
 ok   test/numbers/test_libm_functions.pairs.warp:6 "asin(1) * 2" 3.141592653589793
@@ -7100,6 +7121,9 @@ ok   test/operators/test_equality_never_chains.pairs.warp:10 "1<2<3" yes
 BOTH test/operators/test_equality_never_chains.pairs.warp:11 "3>2>1" yes
 BOTH test/operators/test_equality_never_chains.pairs.warp:12 "1<3<2" no
 ok   test/operators/test_equality_never_chains.pairs.warp:13 "1<=1<2" yes
+ok   test/operators/test_extension_rows.pairs.warp:2 "use uncertain; str(6 ± 1)" "6.0 ± 1.0"
+ok   test/operators/test_extension_rows.pairs.warp:3 "use uncertain; str(6 +- 1)" "6.0 ± 1.0"
+ok   test/operators/test_extension_rows.pairs.warp:4 "use uncertain; str(2 * 3 ± 1)" "6.0 ± 1.0"
 ok   test/operators/test_factorial.pairs.warp:2 "24!" 620448401733239439360000
 ok   test/operators/test_factorial.pairs.warp:3 "5! + 1" 121
 ok   test/operators/test_factorial.pairs.warp:4 "0!" 1
@@ -7111,13 +7135,19 @@ ok   test/operators/test_floor_division_bang.pairs.warp:10 "x = 3; x != 3" no
 ok   test/operators/test_floor_division_bang.pairs.warp:11 "!yes" no
 ok   test/operators/test_floor_division_operator.pairs.warp:4 "x = 7.0; x /= 2; x" 3.5
 ok   test/operators/test_floor_division_operator.pairs.warp:5 "2*7 /! 2" 7
-ok   test/operators/test_floor_quotient.pairs.warp:4 "7 /! -2" -3
-ok   test/operators/test_floor_quotient.pairs.warp:5 "7.5 /! 2" 3
-ok   test/operators/test_floor_quotient.pairs.warp:6 "a=-7; b=-2; a /! b * b + a%b == a" 1
-ok   test/operators/test_floor_quotient.pairs.warp:9 "global n=0; f() := { n = n + 1; 7 }; f() /! 2; n" 1
-ok   test/operators/test_floor_quotient.pairs.warp:12 "floor(10^30/3) == 333333333333333333333333333333" 1
-ok   test/operators/test_floor_quotient.pairs.warp:13 "x=7; floor(x/-2)" -4
-ok   test/operators/test_floor_quotient.pairs.warp:16 "-7 /! 2" -4
+ok   test/operators/test_floor_quotient.pairs.warp:1 "xs = [7, -7]; xs[0] ÷ 2" 3
+ok   test/operators/test_floor_quotient.pairs.warp:2 "xs = [7, -7]; xs[1] ÷ 2" -4
+ok   test/operators/test_floor_quotient.pairs.warp:3 "xs = [7, -7]; xs[0] ÷ -2" -4
+ok   test/operators/test_floor_quotient.pairs.warp:4 "xs = [7, -7]; xs[1] ÷ -2" 3
+ok   test/operators/test_floor_quotient.pairs.warp:5 "xs = [6, 3]; xs[0] ÷ xs[1]" 2
+ok   test/operators/test_floor_quotient.pairs.warp:6 "xs = [7.5, 2]; xs[0] ÷ xs[1]" 3
+ok   test/operators/test_floor_quotient.pairs.warp:7 "xs = [-7.5, 2]; xs[0] ÷ xs[1]" -4
+ok   test/operators/test_floor_quotient.pairs.warp:8 "xs = [1/3, 2]; xs[0] ÷ xs[1]" 0
+ok   test/operators/test_floor_quotient.pairs.warp:9 "xs = [7/2, 1/2]; xs[0] ÷ xs[1]" 7
+ok   test/operators/test_floor_quotient.pairs.warp:10 "try { xs = [7, 0]; xs[0] ÷ xs[1] } catch e { e.message }" "divide by zero"
+ok   test/operators/test_floor_quotient.pairs.warp:11 "try { xs = [7.5, 0]; xs[0] ÷ xs[1] } catch e { e.message }" "divide by zero"
+ok   test/operators/test_floor_quotient.pairs.warp:12 "xs = [7, 2]; floor(xs[0] / xs[1])" 3
+ok   test/operators/test_floor_quotient.pairs.warp:13 "xs = [-7.5]; floor(xs[0])" -8
 ok   test/operators/test_glued_negative.pairs.warp:2 "[1 -1]" [1, -1]
 ok   test/operators/test_glued_negative.pairs.warp:3 "a=3; [a -1]" [3, -1]
 ok   test/operators/test_glued_negative.pairs.warp:4 "f(a,b):=a*b; f 3 -1" -3
@@ -7345,6 +7375,15 @@ ok   test/operators/test_operator_precedence.warp:4 "infix operator ⊕ := a+b; 
 ok   test/operators/test_operator_precedence.warp:7 "infix operator ⊕ := a+b; infix operator ⊗ := a*b; operator ⊗ has precedence above ⊕; 1 ⊕ 2 ⊗ 3" 7
 ok   test/operators/test_operator_precedence.warp:8 "infix operator ⊕ := a+b; infix operator ⊗ := a*b; operator ⊗ has precedence below ⊕; 1 ⊕ 2 ⊗ 3" 9
 ok   test/operators/test_operator_precedence.warp:11 "operator ⊕ has precedence above *\ninfix operator ⊕ := a+b\n2 * 3 ⊕ 4" 14
+ok   test/operators/test_operator_rows.pairs.warp:2 "2 + 3 * 4" 14
+ok   test/operators/test_operator_rows.pairs.warp:3 "2 ^ 3 ^ 2" 512
+ok   test/operators/test_operator_rows.pairs.warp:4 "10 - 4 - 3" 3
+ok   test/operators/test_operator_rows.pairs.warp:5 "1 < 2 and 3 > 2 or no" yes
+ok   test/operators/test_operator_rows.pairs.warp:6 "xs = [5 6 7]; xs#2 + 1" 7
+ok   test/operators/test_operator_rows.pairs.warp:7 "x = ø; x ?? 1 + 2" 3
+ok   test/operators/test_operator_rows.pairs.warp:8 "yes ? 1 : 2" 1
+ok   test/operators/test_operator_rows.pairs.warp:9 "7 / 2 as int" 3
+ok   test/operators/test_operator_rows.pairs.warp:10 "f = x -> x * 2; f(4)" 8
 ok   test/operators/test_operator_spacing.pairs.warp:3 "1 +1" [1, 1]
 ok   test/operators/test_operator_spacing.pairs.warp:4 "1 -1" [1, -1]
 ok   test/operators/test_operator_spacing.pairs.warp:5 "1 + 1" 2
@@ -8296,7 +8335,7 @@ ok   test/reflection/test_function_definition_sample.pairs.warp:2 "area(width: i
 ok   test/reflection/test_instance_members.pairs.warp:2 "class Point { x: int; y: int; length() := sqrt(x*x + y*y) }; p = Point(3, 4); p.fields == [\"x\", \"y\"] and p.methods == [\"length\"]" "yes"
 ok   test/reflection/test_instance_members.pairs.warp:3 "class Point { x: int; y: int; length() := sqrt(x*x + y*y) }; p = Point(3, 4); dir(p) == [\"x\", \"y\", \"length\"]" "yes"
 ok   test/reflection/test_instance_members.pairs.warp:4 "# the area\narea(w: int, h: int) := w * h\narea.full" "# the area
-ok   test/reflection/test_runtime_help.pairs.warp:2 "use sound; t = \"midi\"; help(t)" "midi(pitch)
+NONE test/reflection/test_runtime_help.pairs.warp:2 "use sound; t = \"midi\"; help(t)" "midi(pitch)
 ok   test/reflection/test_runtime_help.pairs.warp:3 "class Point { x: int }; p = Point(3); help(p)" "class Point
 ok   test/reflection/test_runtime_help.pairs.warp:4 "twice(x) := x * 2; name = \"twice\"; function(name).definition" "twice(x) := x * 2"
 ok   test/scope/test_colon_body_assignment.pairs.warp:4 "i=0;while i<3: i+=2;i" 4
@@ -8601,6 +8640,8 @@ ok   test/text/test_declared_text_one_character.pairs.warp:7 "string x = \"ab\";
 ok   test/text/test_error_as_text.pairs.warp:4 "t = \"boom\"; byte_slice(t, 0, 2)" "bo"
 ok   test/text/test_error_as_text.pairs.warp:5 "t = \"boom\"; t.bytecount" 4
 ok   test/text/test_for_each_char.warp:4 "t = \"abc\"; w = \"xy\"; n = 0; for ch in t { n += #w }; t += \"d\"; [n, #t]" [6 4]
+ok   test/text/test_format_keeps_pairs.warp:2 "use \"../../lib/fix/fix.warp\"; fixed(\"a,b\t{n:1}\tcard p71-says\", layout_rules, no)#1" "a, b	{n:1}	card p71-says
+ok   test/text/test_format_keeps_pairs.warp:3 "use \"../../lib/fix/fix.warp\"; fixed(\"x=1\t«T{n:1,m:2}»\", layout_rules, no)#1" "x = 1	«T{n:1,m:2}»
 ok   test/text/test_format_keeps_tabs.warp:2 "use \"../../lib/fix/fix.warp\"; line = \"x\" + \"\t\" + \"2\"; fixed(line, layout_rules, no)#1 == line + \"\n\"" yes
 ok   test/text/test_format_keeps_tabs.warp:3 "use \"../../lib/fix/fix.warp\"; fixed(\"a   b\", layout_rules, no)#1" "a b
 ok   test/text/test_guillemet_strings.pairs.warp:4 "«hello»" "hello"
@@ -11005,6 +11046,9 @@ ok   test/types/test_union_aliases.pairs.warp:12 "f(x: int): (int or text)? := i
 ok   test/types/test_union_aliases.pairs.warp:13 "x: (int or text)? = ø; [x]" [ø]
 ok   test/types/test_union_aliases.pairs.warp:14 "f(x: (int or text)?) := 1; f(ø) + f(2) + f(\"ab\")" 3
 ok   test/types/test_union_aliases.pairs.warp:15 "f(x: (int or text)?) := 1; f([1])" error
+ok   test/types/test_union_beside_bound_word.pairs.warp:2 "g(x: list or number) := 1; list = 3; g([1])" 1
+ok   test/types/test_union_beside_bound_word.pairs.warp:3 "g(x: text or number) := 2; fun f(text) := text; g(4)" 2
+ok   test/types/test_union_beside_bound_word.pairs.warp:4 "fun search(list, target) := list[0] == target; search([2 3], 2) and sum([2 3]) == 5" yes
 ok   test/types/test_union_later_member.pairs.warp:3 "x: text | int = 3; x" 3
 ok   test/types/test_union_later_member.pairs.warp:4 "x: text or float = 2.5; x" 2.5
 ok   test/types/test_union_later_member.pairs.warp:5 "class P{x:int}; p: text | P = \"ab\"; p" "ab"
