@@ -1,0 +1,3 @@
+# Task controls preserve pause/resume and cancellation behavior (decisions stopped-no-result and task-handlers).
+'use tasks; job = go { 12 }; pause job; resume job; await job'	12
+'use tasks; job = go { 3 }; cancel job; try await job else 9'	9

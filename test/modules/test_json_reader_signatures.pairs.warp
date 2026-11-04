@@ -1,0 +1,2 @@
+// JSON parsing and writing: notes/stdlib.md section 7
+use json; to_json(parse_json("{a: [1, true, null], b: {c: -23}}"))	"{\"a\":[1,true,null],\"b\":{\"c\":-23}}"
