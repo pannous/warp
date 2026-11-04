@@ -1,0 +1,10 @@
+// card lib-csv-url-conformance: csv_rows drops a leading UTF-8 BOM; parse_url ends the userinfo at the last @
+'use csv; csv_rows(chr(0xFEFF) + "a,b\r\n1,2\r\n")'	[["a", "b"], ["1", "2"]]
+'use csv; csv_maps(chr(0xFEFF) + "id,name\r\n1,x\r\n")[0]["id"]'	"1"
+'use csv; csv_rows("a," + chr(0xFEFF) + "b")'	[["a", "﻿b"]]
+'use csv; csv_rows(csv_text([[chr(0xFEFF) + "a"]]))'	[["a"]]
+'use url; u = parse_url("http://::@c@d:2"); [u.user, u.password, u.host, u.port]'	["", ":@c", "d", 2]
+'use url; parse_url("https://@test@test@example:800/").host'	"example"
+'use url; parse_url("https://a@b@c/x").user'	"a@b"
+'use url; u = parse_url("http://u:p@h/"); [u.user, u.password, u.host]'	["u", "p", "h"]
+'use url; url_text(parse_url("http://a@b@c:1/p"))'	"http://a@b@c:1/p"
