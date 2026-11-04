@@ -17,3 +17,43 @@ map_matrix(m: any, f: any) := [[f(x) for x in row] for row in m]
 matrix_add(a: any, b: any): list := [[a#i#j + b#i#j for j in 1 to cols(a)] for i in 1 to rows(a)]
 scale(m: any, k: any): list := map_matrix(m, x => k * x)
 matmul(a: any, b: any): list := [[sum([a#i#k * b#k#j for k in 1 to cols(a)]) for j in 1 to cols(b)] for i in 1 to rows(a)]
+// determinant, inverse and solve (card lib-matrix-solve) share one Gauss-Jordan elimination with partial pivoting
+determinant(a: list): float := eliminated(a, [[] for i in 1 to rows(a)], "determinant")#1
+inverse(a: list): list := {
+	reduced = eliminated(a, identity(rows(a)), "inverse")
+	if reduced#2 == ø { raise "inverse: the matrix is singular (its determinant is 0), it has no inverse" }
+	reduced#2
+}
+// x with a·x = b: b a vector gives the vector x, b a matrix (one column per right side) the matrix of the solutions
+solve(a: list, b: list): list := {
+	vector = count(b) > 0 and not (b#1 is list)
+	reduced = eliminated(a, if vector then [[v] for v in b] else b, "solve")
+	if reduced#2 == ø { raise "solve: the matrix is singular (its determinant is 0), the system has no single solution" }
+	if vector then [row#1 for row in reduced#2] else reduced#2
+}
+// the square matrix a beside the columns of extra, as many rows each, reduced to the identity: [a's determinant,
+// extra turned into a⁻¹·extra], [0, ø] for a singular a; the row with the largest pivot comes up each column
+eliminated(a: list, extra: list, what: text): list := {
+	n = rows(a)
+	if n == 0 or any_row_length(a, n) { raise what + ": the matrix must be square, it has " + str(n) + " rows of " + str(if n == 0 then 0 else cols(a)) }
+	if rows(extra) != n { raise what + ": the right side has " + str(rows(extra)) + " rows, the matrix " + str(n) }
+	m = [[x as float for x in a#i] + [x as float for x in extra#i] for i in 1 to n]
+	width = n + cols(extra)
+	det = 1.0
+	for col in 1 to n {
+		pivot = col
+		for r in col to n { if abs(m#r#col) > abs(m#pivot#col) { pivot = r } }
+		if abs(m#pivot#col) < 0.000000000001 { return [0.0, ø] }
+		if pivot != col { swapped = m#col; m#col = m#pivot; m#pivot = swapped; det = -det }
+		p = m#col#col
+		det = det * p
+		m#col = [m#col#k / p for k in 1 to width]
+		for r in 1 to n {
+			f = m#r#col
+			if r != col and f != 0 { m#r = [m#r#k - f * m#col#k for k in 1 to width] }
+		}
+	}
+	[det, [[m#i#k for k in n + 1 to width] for i in 1 to n]]
+}
+// a row of another length than n
+any_row_length(a: list, n: int): bool := a.any(row => count(row) != n)
