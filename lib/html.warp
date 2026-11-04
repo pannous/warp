@@ -2,7 +2,14 @@
 // html_escape("a<b") is "a&lt;b"; html_unescape reads &amp; &lt; &gt; &quot; &apos; and numeric &#39; &#x27;
 use text
 
-HTML_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'"}
+HTML_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": chr(0xA0), "copy": "©", "reg": "®",
+	"trade": "™", "hellip": "…", "mdash": "—", "ndash": "–", "lsquo": "‘", "rsquo": "’", "ldquo": "“", "rdquo": "”",
+	"laquo": "«", "raquo": "»", "middot": "·", "bull": "•", "deg": "°", "plusmn": "±", "times": "×", "divide": "÷",
+	"frac12": "½", "frac14": "¼", "frac34": "¾", "sect": "§", "para": "¶", "euro": "€", "pound": "£", "yen": "¥",
+	"cent": "¢", "auml": "ä", "ouml": "ö", "uuml": "ü", "Auml": "Ä", "Ouml": "Ö", "Uuml": "Ü", "szlig": "ß",
+	"eacute": "é", "egrave": "è", "aacute": "á", "agrave": "à", "ccedil": "ç", "ntilde": "ñ", "AElig": "Æ", "aelig": "æ",
+	"Dcaron": "Ď", "HilbertSpace": "ℋ", "DifferentialD": "ⅆ", "ClockwiseContourIntegral": "∲", "ngE": "≧̸",
+	"larr": "←", "rarr": "→", "uarr": "↑", "darr": "↓", "harr": "↔", "ne": "≠", "le": "≤", "ge": "≥", "infin": "∞"}
 
 html_escape(t: text): text := replace(replace(replace(replace(replace(t, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#39;")
 
