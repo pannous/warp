@@ -93,12 +93,12 @@ wrap(t, width): text := { out = []; line = ""; for w in words(t) { if line is em
 // a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
 // then `c.peek()` is '1'; `at` counts the characters read (an index)
 class Cursor { source: text; at = 0
-	at_end() := at >= count(source)
+	at_end(): bool := at >= count(source)
 	peek() := source[at]
 	advance() := { taken = source[at]; at += 1; taken }
-	looking_at(part) := source[at : min(at + count(part), count(source))] == part
-	skip(part) := { if looking_at(part) { at += count(part); return true }; false }
+	looking_at(part): bool := source[at : min(at + count(part), count(source))] == part
+	skip(part): bool := { if looking_at(part) { at += count(part); return true }; false }
 	take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
-	skip_while(ok) := count(take_while(ok))
+	skip_while(ok): int := count(take_while(ok))
 	rest() := source[at : count(source)]
 }
