@@ -905,8 +905,9 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	declare_global(global_key(body, name_of(name)), if kind == ø then value else admitted(settled(value, kind), kind))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
-	# a global declared early takes its value's kind from the module's next reading on
-	if name in module.early_globals and value.kind != module.globals[name]#2 { widens_later(global_slot(name), value.kind) }
+	# a global declared early takes its value's kind from the module's next reading on, joined with the kinds earlier
+	# readings learned: a value whose kind follows the global's own (a call reading it) would else flip it each reading
+	if name in module.early_globals and value.kind != module.globals[name]#2 { widens_later(global_slot(name), joint_kind(module.later_kinds.get(global_slot(name)) ?? pending, value.kind)) }
 	if name not in module.globals and value.mark != 0 { module.global_marks[name] = value.mark }
 	declared_global(name, value.kind)
 	global_assignment(name, value)

@@ -551,18 +551,22 @@ shadows(own: map, name: text, count: int): bool := {
 	not is_group(head) or takes(signature_of(items_of(head)), count)
 }
 
-# the program with each function it defines named as one of `library` under its own name (name·own): its definition,
-# its value and the calls it takes; a call it doesn't take keeps the library's word
+# the program with each function it defines named as one of `library` under its own name (name·own): its definitions,
+# one overload set of the program's when it defines the name by several arities, its value and the calls one of them
+# takes; a call none takes keeps the library's word
 with_own_words(program: Node, library: list): Node := {
 	heads = own_heads(program)
 	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(heads[name]))
 	for name in owned {
 		mine = own_word(name)
-		program = separated(bracketed(statements_in(program).map(statement => if binds_locally(statement, name) then statement else own_named(statement, name, mine, heads)), ""), ";")
+		arities = heads_defining(program, name).map(head => signature_of(items_of(head)))
+		program = separated(bracketed(statements_in(program).map(statement => if binds_locally(statement, name) then statement else own_named(statement, name, mine, arities)), ""), ";")
 	}
 	program
 }
-own_named(code: Node, name: text, mine: text, heads: map): Node := bottom_up(renamed(code, name, symbol(mine)), n => if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(mine) and not shadows(heads, name, #n - 1) then group_like(n, [symbol(name)] + items_of(n)[1 ..]) else n)
+own_named(code: Node, name: text, mine: text, arities: list): Node := bottom_up(renamed(code, name, symbol(mine)), n => if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(mine) and not arities.any(signature => takes(signature, #n - 1)) then group_like(n, [symbol(name)] + items_of(n)[1 ..]) else n)
+# the heads of the program's top-level definitions of the function name, `f(a)` and `f(a, b)`
+heads_defining(program: Node, name: text): list := statements_in(program).filter(statement => declared_name(statement) == name).map(definition_head_of).filter(head => head != ø)
 # a statement binding the name itself, not defining it: a local `handler = page_handlers#n` (lib/markup.warp
 # page_event beside its handler(name, action)), whose uses are that local's
 binds_locally(statement: Node, name: text): bool := declared_name(statement) != name and names_bound_in(statement).has(name)
