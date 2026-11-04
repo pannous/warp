@@ -163,7 +163,6 @@ arity_overloads(program: Node): Node := {
 	overloaded = overloaded_arities(program)
 	if #overloaded == 0 { return typed_overloads(program) }
 	resolved_program = resolved(program, overloaded, called_parameters(program))
-	refused_overload_values(resolved_program, without_bare_calls(overloaded), arities_described)
 	typed_overloads(resolved_program)
 }
 
@@ -638,7 +637,6 @@ typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
 	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
-	refused_overload_values(resolved, overloaded, types_described)
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
