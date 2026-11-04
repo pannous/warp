@@ -1,0 +1,16 @@
+# a declaration needs one of its two words: the fixity word alone, or `operator` alone with the fixity its parameters
+# give, 2 infix and 1 prefix (card operator-word-optional, the user's "infix operator: either would do")
+'infix ⊕(a, b) := a + 2*b; 1 ⊕ 2'	5
+'prefix √ := sqrt; √16'	4
+'suffix ‼(n) := n * 2; 4‼'	8
+'prefix ∆(x) := x * 3; ∆5'	15
+'prefix operator ∆(x) := x * 3; ∆5'	15
+'operator ⊕(a, b) := a - b; 5 ⊕ 2'	3
+'operator ∆(x) := x * 3; ∆5'	15
+'operator ∆ := it*it; ∆3'	9
+'operator √ := sqrt; √16'	4
+# the two-word forms and a class's operator method stay
+'infix operator ⊕ := a+b; 2 ⊕ 3'	5
+'suffix operator ‼ := it*2; 3‼'	6
+'operator × := *; 2 × 3'	6
+'class V { n: int; operator #(i) := n * i }; v = V{n: 3}; v#2'	6
