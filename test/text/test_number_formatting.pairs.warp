@@ -1,0 +1,18 @@
+# format_number, ordinalize, human_size (lib/text.warp, card lib-stats-format)
+
+'format_number(1234567.89)'	"1,234,567.89"
+'format_number(-1234.5)'	"-1,234.5"
+'format_number(1000000)'	"1,000,000"
+'format_number(999) == "999"'	yes
+'format_number(-999)'	"-999"
+'format_number(0) == "0"'	yes
+
+'[ordinalize(1), ordinalize(2), ordinalize(3), ordinalize(4), ordinalize(11), ordinalize(12), ordinalize(13)]'	["1st", "2nd", "3rd", "4th", "11th", "12th", "13th"]
+'[ordinalize(21), ordinalize(22), ordinalize(23), ordinalize(101), ordinalize(111), ordinalize(112), ordinalize(1000)]'	["21st", "22nd", "23rd", "101st", "111th", "112th", "1000th"]
+'ordinalize(0)'	error	ordinalize needs a whole number >= 1
+'ordinalize(-3)'	error	ordinalize needs a whole number >= 1
+'ordinalize(2.5)'	error	ordinalize needs a whole number >= 1
+
+'[human_size(1536), human_size(1500000), human_size(2000), human_size(1234567890)]'	["1.5 KB", "1.5 MB", "2 KB", "1.2 GB"]
+'[human_size(0), human_size(999), human_size(1000), human_size(999950)]'	["0 B", "999 B", "1 KB", "1 MB"]
+'human_size(-1)'	error	human_size needs bytes >= 0
