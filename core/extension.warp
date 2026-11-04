@@ -24,6 +24,9 @@ class Extension {
 	# functions reading what follows an operand, given the parser after it, the operand and the binding power the
 	# context needs (`x²`), each ø where its form is not or binds looser
 	suffix_readers: list = []
+	# functions reading a type declaration's body after its head, given the parser there, the type's name and its
+	# parameters (`type Opt = Some(int) | None`), each ø where its form is not
+	type_readers: list = []
 	# functions reading an operator after an operand inside an expression, given the parser there, the operand and the
 	# binding power the context needs, each ø where its form is not, OPERAND_ENDS where it binds looser and so ends the
 	# operand (`a ⊕ b` of a declared ⊕)
@@ -166,6 +169,8 @@ with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
 extension_value_settlers(): map := extension_map("value_settlers")
 # what an extension reads after the operand, else ø
 read_suffix(p: Parser, operand: Node, min_power: int): Node := first_answer(extension_list("suffix_readers"), reader => reader(p, operand, min_power))
+# the type an extension reads after a declaration's head, else ø
+read_type(p: Parser, name: Node, parameters: list): Node := first_answer(extension_list("type_readers"), reader => reader(p, name, parameters))
 # what an infix reader answers for an operator binding looser than the context: the operand ends before it
 OPERAND_ENDS = symbol("operand ends")
 # what an extension reads after the operand inside an expression, OPERAND_ENDS, else ø

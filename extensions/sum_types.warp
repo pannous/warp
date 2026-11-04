@@ -1,0 +1,156 @@
+# Sum types (card parser-forms-to-extensions): `type Shape = Circle(r: float) | Dot`, Elm's `= Failure HttpError | …`,
+# `enum Shape { Circle(r), Rect(w, h), Dot }`: the type, its variants without payload by name, a class extending it
+# for each variant with one
+# `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the position
+# after the `=` or `:` when the declaration lists alternatives one of which carries a payload, else -1
+variants_start(p: Parser): int := {
+	at = space_end(p.code, p.at, p.n)
+	sign = char_at(p, at)
+	next = char_at(p, at + 1)
+	if not ((sign == '=' and next != '=' and next != '>') or (sign == ':' and next != '=')) { return -1 }
+	start = at + 1
+	depth = 0
+	alternatives = false
+	payload = false
+	words = 0
+	at = start
+	while at < p.n {
+		c = p.code[at]
+		after_word = is_name_char(p.code[at - 1])
+		if depth == 0 and ";)]}".contains(c) { break }
+		if depth == 0 and c == '\n' and char_at(p, space_end(p.code, at + 1, p.n)) != '|' { break }
+		if c == '(' and depth == 0 and after_word { payload = true }
+		if "([{".contains(c) {
+			depth += 1
+		} else if ")]}".contains(c) {
+			depth -= 1
+		} else if c == '|' and depth == 0 and char_at(p, at + 1) == '|' {
+			at += 1
+		} else if c == '|' and depth == 0 {
+			alternatives = true
+			words = 0
+		} else if depth == 0 and is_name_char(c) and not after_word {
+			words += 1
+			payload = payload or words > 1
+		}
+		at += 1
+	}
+	if alternatives and payload then start else -1
+}
+# The sum type `Name = A(T) | B | C(x: int)` (card sum-types): the type without fields, its variants without payload
+# by name, then a class extending it for each variant with a payload
+sum_type(p: Parser, name: Node, start: int, parameters: list): Node := {
+	p.at = start
+	bare = []
+	classes = []
+	while true {
+		p.at = space_end(p.code, p.at, p.n)
+		end = symbol_end(p.code, p.at, p.n)
+		if end == p.at { raise "a variant of " + view_of(name)#2 + " needs a name" }
+		variant = p.code[p.at .. end]
+		p.at = end
+		payload = []
+		if at_char(p, '(') {
+			advance(p)
+			group = items_until(p, Bracket.Round, ItemsEnd.Closer)
+			payload = if is_list_of(group, "(") then group_parts(group)#3 else [group]
+		}
+		# Elm's `Failure HttpError`: the payload's types after the name
+		skip_spaces(p)
+		while is_name_start(char_here(p)) {
+			end = symbol_end(p.code, p.at, p.n)
+			payload += [symbol(p.code[p.at .. end])]
+			p.at = end
+			skip_spaces(p)
+		}
+		if payload.length == 0 { bare += [symbol(variant)] } else { classes += [variant_class(name, variant, payload, parameters)] }
+		after = space_end(p.code, p.at, p.n)
+		if char_at(p, after) != '|' { break }
+		p.at = after + 1
+	}
+	sum_type_of(name, bare, classes)
+}
+# The sum type of its bare variants by name, then the classes of the variants with a payload
+sum_type_of(name: Node, bare: list, classes: list): Node := listed(Bracket.None, Separator.Semicolon, [declared_type_node(attributed("variants", spaced(bare), name), listed(Bracket.Curly, Separator.None, []))] + classes)
+# `enum Shape { Circle(r), Rect(w, h), Dot }` follows `enum`: its braced cases, one with values
+enum_values_ahead(p: Parser): bool := {
+	at = name_end(p.code, blank_end(p, p.at), p.n)
+	if at == blank_end(p, p.at) { return false }
+	at = space_end(p.code, at, p.n)
+	if char_at(p, at) != '{' { return false }
+	depth = 0
+	while at < p.n {
+		c = p.code[at]
+		if c == '(' and depth == 1 and is_name_char(p.code[at - 1]) { return true }
+		if "([{".contains(c) {
+			depth += 1
+		} else if ")]}".contains(c) {
+			if depth == 1 { return false }
+			depth -= 1
+		}
+		at += 1
+	}
+	false
+}
+# `enum Shape { Circle(r), Rect(w, h), Dot }`, Swift's `case circle(radius: Double)` lines: each case with values a
+# class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
+enum_with_values(p: Parser): Node := {
+	p.at = blank_end(p, p.at)
+	end = name_end(p.code, p.at, p.n)
+	name = symbol(p.code[p.at .. end])
+	p.at = space_end(p.code, end, p.n) + 1
+	cases = braced_items(p)
+	bare = []
+	classes = []
+	for case in case_rows(cases).map(without_case_word) {
+		parts = group_parts(case)
+		if parts != ø and #parts#3 > 0 and is_symbol(parts#3#1) {
+			classes += [variant_class(name, name_of(parts#3#1), parts#3[1:], [])]
+		} else if is_symbol(case) {
+			bare += [case]
+		} else {
+			raise "a case of enum " + name_of(name) + " is a name with optional values"
+		}
+	}
+	sum_type_of(name, bare, classes)
+}
+# The words of the built-in types a variant's payload names: `rgb(int, int, int)` gives types, `rgb(r, g, b)` fields
+BUILTIN_TYPE_WORDS = DECLARED_TYPE_WORDS + ["list", "map", "any", "real", "rational", "exact", "long", "double", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"]
+# A variant with a payload: the class extending the sum type, its fields in order (an unnamed one is `value`, several
+# `value1`, `value2`…, a lowercase name that is no type a field of any value)
+variant_class(type_name: Node, variant: text, payload: list, parameters: list): Node := {
+	fields = []
+	position = 0
+	for field in payload {
+		position += 1
+		# `(T)` and `(radius: int)` arrive as groups of one
+		if is_list_of(field, "(") and #group_parts(field)#3 == 1 { field = group_parts(field)#3#1 }
+		if is_typed_field(field) {
+			fields += [field]
+		} else if is_symbol(field) and name_of(field)#1.lower() == name_of(field)#1 and not BUILTIN_TYPE_WORDS.contains(name_of(field)) {
+			fields += [Key(field, Op.Colon, symbol("any"))]
+		} else {
+			field_name = if payload.length == 1 then "value" else "value" + position
+			fields += [Key(symbol(field_name), Op.Colon, field)]
+		}
+	}
+	declared_type_node(attributed("extends", type_name, symbol(variant)), listed(Bracket.Curly, Separator.Semicolon, fields.map(field => untyped(field, parameters))))
+}
+is_typed_field(node: Node): bool := match node {
+	Key(name, Op.Colon, kind): yes
+	_: no
+}
+# the sum type a declaration's head starts, `type Opt = Some(int) | None`, else ø
+read_sum_type(p: Parser, name: Node, parameters: list): Node := {
+	start = variants_start(p)
+	if start < 0 then ø else sum_type(p, name, start, parameters)
+}
+# `enum Shape { Circle(r), … }` with a case carrying values, else ø with the parser where it was
+read_enum_with_values(p: Parser, word: text): Node := {
+	start = p.at
+	p.at += word.length
+	if enum_values_ahead(p) { return enum_with_values(p) }
+	p.at = start
+	ø
+}
+sum_types_extension = Extension{name: "sum_types", keyword_readers: {"enum": read_enum_with_values}, type_readers: [read_sum_type]}
