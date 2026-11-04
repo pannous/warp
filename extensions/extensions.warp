@@ -3,6 +3,7 @@
 use "gpu_lists/gpu_lists.warp"
 use "commands.warp"
 use "degrees.warp"
+use "glyph_atoms.warp"
 use "pipe_lambdas.warp"
 use "circumfixes.warp"
 use "index_positions.warp"
@@ -39,6 +40,7 @@ EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
+	glyph_atoms_extension
 	pipe_lambdas_extension
 	circumfixes_extension
 	index_positions_extension
