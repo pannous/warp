@@ -32,10 +32,12 @@ to_json_of_classes(value: any, classes: any): text := to_json(value)
 exact_json(value: any, classes: any): text := json_written(value, yes)
 
 json_refusal(source, problem): text := "" + source + " is no json: " + problem
-// the place of the first character after spaces and comments from at on
+// the place of the first character after spaces and comments from at on; a character other than / starts no
+// comment, so it returns before slicing (card lib-perf-bench)
 json_skipped(source: text, at: int): int := {
 	while at <= #source {
 		if source#at in JSON_SPACE { at += 1 }
+		else if source#at != "/" { return at }
 		else if source[at - 1..<at + 1] == "//" { while at <= #source and source#at != "\n" { at += 1 } }
 		else if source[at - 1..<at + 1] == "/*" {
 			at += 2
@@ -90,6 +92,7 @@ json_after_item(source: text, at: int, closing: text): int := {
 	if at <= #source and source#at != closing { raise json_refusal(source, "no , or " + closing + " after an item") }
 	at
 }
+// a run of plain characters joins the text as one slice, not character by character (card lib-perf-bench)
 json_text_read(source: text, at: int, quote: text): list := {
 	read = ""
 	while at <= #source and source#at != quote {
@@ -103,8 +106,9 @@ json_text_read(source: text, at: int, quote: text): list := {
 				at += 2
 			}
 		} else {
-			read += source#at
-			at += 1
+			start = at
+			while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+			read += source[start - 1..<at - 1]
 		}
 	}
 	if at > #source { raise json_refusal(source, "no closing " + quote) }
@@ -158,7 +162,27 @@ json_number(value: any, exact: bool): text := {
 	if exact { raise "JSON has no exact " + spelled + ": it cannot be written as JSON exactly" }
 	"" + float(value)
 }
+// a run of characters needing no escape joins as one slice (card lib-perf-bench); a short text goes character by
+// character, quicker there than slicing
 json_quoted(source: text): text := {
+	if #source <= 32 { return json_quoted_short(source) }
+	quoted = "\""
+	plain = 0
+	i = 0
+	for character in source {
+		code = ord(character)
+		escape = JSON_ESCAPES.get("" + character) ?? (if code < 32 then "\\u00" + HEX_DIGITS#(code / 16 + 1) + HEX_DIGITS#(code % 16 + 1) else ø)
+		if escape != ø {
+			if i > plain { quoted += source[plain ..< i] }
+			quoted += escape
+			plain = i + 1
+		}
+		i += 1
+	}
+	if i > plain { quoted += source[plain ..< i] }
+	quoted + "\""
+}
+json_quoted_short(source: text): text := {
 	quoted = "\""
 	for character in source {
 		code = ord(character)
