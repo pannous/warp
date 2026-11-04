@@ -1,0 +1,2 @@
+# Shell file search (lib/shell.warp): matching paths.
+'use shell; find_files("samples/hello", "hello.warp")'	["samples/hello/hello.warp"]
