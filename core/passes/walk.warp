@@ -421,3 +421,11 @@ joined(conditions: list): Node := {
 }
 # the statements as one round group, `(a; b; c)`
 statements(list: list): Node := List(list, Bracket.Round, Separator.Semicolon)
+# the first answer of asking each item in turn that is not ø, else ø
+first_answer(items: list, asking: function): any := {
+	for item in items {
+		answer = asking(item)
+		if answer != ø { return answer }
+	}
+	ø
+}

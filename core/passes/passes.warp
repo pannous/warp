@@ -38,7 +38,9 @@ sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_ta
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
 # foreign lines and C imports off the source. with_used: interpolation, the program's rewrite rules, index_positions,
 # property_accessors, the used files and modules, the prelude's definitions it reaches. Then pure_passes in order:
-#   parse_words tries definitions          `parse`/`eval` words, try/catch, definitions and their heads (`… from runtime`)
+#   parse_words tries                      `parse`/`eval` words, try/catch
+#   definition_heads definitions           which functions answer ø, class fields; definitions and their heads
+#   (extensions' passes after definition_heads: class methods, int types, conversions)
 #   preposition_heads arity_overloads      `f of x` heads, several definitions of one name by arity
 #   (extensions' passes after arity_overloads: function clauses, then `a, b = …`, extensions/function_clauses.warp
 #   and multiple_assignments.warp)
@@ -55,7 +57,7 @@ sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_ta
 # the pass that owns each form the emitter may refuse: a refusal of that form names it, so a form that reaches the
 # emitter unlowered says which pass did not claim it
 pass_owners = {"foreign C call": "c_imports", "runtime declaration": "definitions", "try": "tries", "multiple assignment": "multiple_assignments",
-	"for loop": "loop_heads and iteration_sugar", "match": "node_matches", "match arm": "first_sugar (extensions/sugar/arms.warp)", "enum": "enums_declared",
+	"for loop": "loop_heads and iteration_sugar", "match": "node_matches", "match arm": "first_sugar (extensions/sugar/arms.warp)", "pattern arm": "match_patterns (extensions/match_patterns.warp)", "enum": "enums_declared",
 	"comprehension": "comprehensions", "lambda": "lambdas", "number word": "number_words_pass", "fallback": "sugar (extensions/sugar/fallbacks.warp)"}
 
 # the emitter's refusal naming its form and owner pass: `form` one of pass_owners, ø for a form no pass owns
@@ -65,7 +67,7 @@ owned_refusal(refusal: text, form: text?): text := {
 }
 
 # the pure lane's passes (card pure-runs)
-pure_passes = [parse_words, tries, components, definitions, arity_overloads, type_tests, spaced_prefix_calls, interpolation, sugar_phrases, number_words_pass, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
+pure_passes = [parse_words, tries, components, definition_heads, definitions, arity_overloads, type_tests, spaced_prefix_calls, interpolation, sugar_phrases, number_words_pass, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
 global lowering_passes = ø

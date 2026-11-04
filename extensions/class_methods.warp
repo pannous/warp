@@ -6,5 +6,5 @@
 use "class_methods/statics.warp"
 use "class_methods/methods.warp"
 
-# the rewrites of a program's classes, in order, which the definitions pass runs
-class_rewrites = [statics_hoisted, methods_lifted]
+# the program's classes rewritten: their static fields hoisted, then their methods lifted to functions of the program
+classes_rewritten(program: Node): Node := methods_lifted(statics_hoisted(program))

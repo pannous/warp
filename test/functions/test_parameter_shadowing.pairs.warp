@@ -1,0 +1,4 @@
+# a parameter is its definition's or lambda's own, never a library word or an overloaded function of its name
+'g = find => find(2, 3); g((a, b) => a * b)'	6
+'h = (count, x) => count(x); h(n => n + 1, 41)'	42
+'f(find: function) := find(2, 3); f((a, b) => a - b)'	-1

@@ -56,6 +56,11 @@ class Extension {
 	# a core pass's name → the extension's pass running right after it (`{"arity_overloads": clauses}`, decision
 	# extension-passes); a name of no core pass is refused
 	passes: map = {}
+	# functions lowering a match's arms past the core's (cases, values, types, `_`), given the arms, the subject and the
+	# enum variants, each giving arms the core lowers (`n if n > 5 => e` as an arm `_`)
+	arm_lowerings: list = []
+	# functions finding the standard modules a source uses without saying it, given the source and its folder
+	implicit_uses: list = []
 	# the command words it answers (`warp help`), and runs: the function running one, given its word
 	commands: list = []
 	runs: any = ø
@@ -86,18 +91,18 @@ claimed_once(maps: list): map := {
 	}
 	joined
 }
+# every extension's entries of one Extension field, joined once: its lists as one list, its maps as one map
+extension_list(field: text): list := extension_table(field, concatenated)
+extension_map(field: text): map := extension_table(field, joined_maps)
+global extension_tables = {}
+extension_table(field: text, joining: function): any := {
+	if not extension_tables.has(field) { extension_tables[field] = joining(EXTENSIONS.map(extension => extension[field])) }
+	extension_tables[field]
+}
 # the reader of an atom starting with the character, else ø
-global atom_reader_table = ø
-atom_reader(c: any): any := {
-	if atom_reader_table == ø { atom_reader_table = joined_maps(EXTENSIONS.map(extension => extension.atom_readers)) }
-	atom_reader_table.get("$(c)")
-}
+atom_reader(c: any): any := extension_map("atom_readers").get("$(c)")
 # the reader of the phrase a word starts, else ø
-global keyword_reader_table = ø
-keyword_reader_of(word: text): any := {
-	if keyword_reader_table == ø { keyword_reader_table = joined_maps(EXTENSIONS.map(extension => extension.keyword_readers)) }
-	keyword_reader_table.get(word)
-}
+keyword_reader_of(word: text): any := extension_map("keyword_readers").get(word)
 # the source after every extension's pass, [text, shifts] (an earlier pass's shifts moved by a later one's)
 passed_source(source: text): list := {
 	shifts = []
@@ -118,15 +123,13 @@ taken_before(shifts: list, at: int): int := {
 	taken
 }
 # the escape an extension reads in a text at the `\` at `at`: [its characters, the length read], else ø
-global text_escape_table = ø
 text_escape_at(source: any, at: int, n: int): list? := {
-	if text_escape_table == ø { text_escape_table = joined_maps(EXTENSIONS.map(extension => extension.text_escape_readers)) }
 	if at + 1 >= n { return ø }
-	reader = text_escape_table.get("$(source[at + 1])")
+	reader = extension_map("text_escape_readers").get("$(source[at + 1])")
 	if reader == ø then ø else reader(source, at, n)
 }
 # every word an extension takes a glued block for
-extension_block_words(): list := concatenated(EXTENSIONS.map(extension => extension.block_words))
+extension_block_words(): list := extension_list("block_words")
 # the core passes with each extension's pass after the one it names, rows in order
 with_extension_passes(core: list): list := {
 	follows = concatenated(EXTENSIONS.map(extension => extension.passes.keys.map(name => [name, extension.passes[name]])))
@@ -136,47 +139,27 @@ with_extension_passes(core: list): list := {
 # the program through every extension's text passes, in row order
 with_text_passes(program: Node): Node := {
 	passed = program
-	for pass in concatenated(EXTENSIONS.map(extension => extension.text_passes)) { passed = pass(passed) }
+	for pass in extension_list("text_passes") { passed = pass(passed) }
 	passed
 }
-# every starter word → the word settling its value, read once
-global value_settler_table = ø
-extension_value_settlers(): map := {
-	if value_settler_table == ø { value_settler_table = joined_maps(EXTENSIONS.map(extension => extension.value_settlers)) }
-	value_settler_table
+# the standard modules the source uses without saying it, as the extensions find them
+implicit_modules_of(source: text, folder: text = "."): list := concatenated(extension_list("implicit_uses").map(modules_found => modules_found(source, folder)))
+# a match's arms through every extension's arm lowerings, in row order
+with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
+	lowered = arms
+	for lowering in extension_list("arm_lowerings") { lowered = lowering(lowered, subject, variants) }
+	lowered
 }
+# every starter word → the word settling its value
+extension_value_settlers(): map := extension_map("value_settlers")
 # what an extension reads after the operand, else ø
-global suffix_reader_list = ø
-read_suffix(p: Parser, operand: Node, min_power: int): Node := {
-	if suffix_reader_list == ø { suffix_reader_list = concatenated(EXTENSIONS.map(extension => extension.suffix_readers)) }
-	for reader in suffix_reader_list {
-		suffixed = reader(p, operand, min_power)
-		if suffixed != ø { return suffixed }
-	}
-	ø
-}
+read_suffix(p: Parser, operand: Node, min_power: int): Node := first_answer(extension_list("suffix_readers"), reader => reader(p, operand, min_power))
 # what an infix reader answers for an operator binding looser than the context: the operand ends before it
 OPERAND_ENDS = symbol("operand ends")
 # what an extension reads after the operand inside an expression, OPERAND_ENDS, else ø
-global infix_reader_list = ø
-read_infix(p: Parser, operand: Node, min_power: int): Node := {
-	if infix_reader_list == ø { infix_reader_list = concatenated(EXTENSIONS.map(extension => extension.infix_readers)) }
-	for reader in infix_reader_list {
-		continued = reader(p, operand, min_power)
-		if continued != ø { return continued }
-	}
-	ø
-}
+read_infix(p: Parser, operand: Node, min_power: int): Node := first_answer(extension_list("infix_readers"), reader => reader(p, operand, min_power))
 # the operator and operand an extension reads where an expression starts, else ø
-global prefix_reader_list = ø
-read_prefix(p: Parser): Node := {
-	if prefix_reader_list == ø { prefix_reader_list = concatenated(EXTENSIONS.map(extension => extension.prefix_readers)) }
-	for reader in prefix_reader_list {
-		prefixed = reader(p)
-		if prefixed != ø { return prefixed }
-	}
-	ø
-}
+read_prefix(p: Parser): Node := first_answer(extension_list("prefix_readers"), reader => reader(p))
 # whether an extension reads the glyph as its own in this parse
 owned_glyph(p: Parser, glyph: text): bool := EXTENSIONS.any(extension => extension.glyph_owners.any(owns => owns(p, glyph)))
 # each extension's prescan of the source, by its name
@@ -190,21 +173,11 @@ extension_scans(source: text): map := {
 	}
 	scans
 }
-# every extension's number suffix readers
-global number_suffix_reader_list = ø
-number_suffix_readers(): list := {
-	if number_suffix_reader_list == ø { number_suffix_reader_list = concatenated(EXTENSIONS.map(extension => extension.number_suffix_readers)) }
-	number_suffix_reader_list
-}
-# every extension's number readers
-global number_reader_list = ø
-number_readers(): list := {
-	if number_reader_list == ø { number_reader_list = concatenated(EXTENSIONS.map(extension => extension.number_readers)) }
-	number_reader_list
-}
-extension_host_exports(): list := concatenated(EXTENSIONS.map(extension => extension.host_exports))
+number_suffix_readers(): list := extension_list("number_suffix_readers")
+number_readers(): list := extension_list("number_readers")
+extension_host_exports(): list := extension_list("host_exports")
 # every command word an extension answers
-extension_command_words(): list := concatenated(EXTENSIONS.map(extension => extension.commands))
+extension_command_words(): list := extension_list("commands")
 # the command run by the extension answering its word
 run_extension_command(command: text) := {
 	for extension in EXTENSIONS {
