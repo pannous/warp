@@ -121,3 +121,41 @@ histogram(xs: any, bins: any): list := {
 	}
 	out
 }
+
+// Combinatorics and sorted search (card lib-combinatorics-search). Orders follow input positions lexicographically;
+// equal elements are kept by position (permutations([1, 1]) is [[1 1] [1 1]]). math's choose(n, k) counts combinations.
+// every ordering of xs, n! lists: permutations([1, 2, 3]) is [[1 2 3] [1 3 2] [2 1 3] [2 3 1] [3 1 2] [3 2 1]]
+permutations(xs: any): list := {
+	if count(xs) <= 1 { return [xs] }
+	out = []
+	for i in 1 to count(xs) {
+		rest = take(xs, i - 1) + drop(xs, i)
+		for p in permutations(rest) { out = out + [[xs#i] + p] }
+	}
+	out
+}
+// the k-element subsets of xs, each in input order: combinations([1, 2, 3], 2) is [[1 2] [1 3] [2 3]]; k = 0 gives [[]],
+// k > count(xs) gives [], k < 0 is refused
+combinations(xs: any, k: any): list := {
+	if k < 0 { raise "combinations needs k >= 0" }
+	if k == 0 { return [[]] }
+	if k > count(xs) { return [] }
+	out = []
+	for i in 1 to count(xs) - k + 1 {
+		for c in combinations(drop(xs, i), k - 1) { out = out + [[xs#i] + c] }
+	}
+	out
+}
+// every subset of xs, 2^n lists by size then position: powerset([1, 2]) is [[] [1] [2] [1 2]]
+powerset(xs: any): list := { out = []; for k in 0 to count(xs) { out = out + combinations(xs, k) }; out }
+// the position (from 1, like index_of) of x in the ascending list xs, the first of equal ones; 0 when x is not there
+binary_search(xs: any, x: any): int := { at = lower_bound(xs, x); if at <= count(xs) and xs#at == x then at else 0 }
+// the first position (from 1) whose element is not below x, count(xs) + 1 when every one is
+lower_bound(xs: any, x: any): int := { lo = 1; hi = count(xs) + 1; while lo < hi { mid = (lo + hi) / 2 as int; if xs#mid < x { lo = mid + 1 } else { hi = mid } }; lo }
+// a new ascending list with x added after the elements equal to it (stable): insert_sorted([1, 3], 2) is [1 2 3]
+insert_sorted(xs: any, x: any): list := {
+	lo = 1
+	hi = count(xs) + 1
+	while lo < hi { mid = (lo + hi) / 2 as int; if xs#mid <= x { lo = mid + 1 } else { hi = mid } }
+	take(xs, lo - 1) + [x] + drop(xs, lo - 1)
+}
