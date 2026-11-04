@@ -1,0 +1,7 @@
+# html_escape_and_unescape
+'use html; html_escape("<a href=\\"x\\">Tom & Jerry'"'"'s</a>")'	"&lt;a href=&quot;x&quot;&gt;Tom &amp; Jerry&#39;s&lt;/a&gt;"
+'use html; html_escape("plain é")'	"plain é"
+'use html; html_unescape("&lt;b&gt; &amp; &quot;q&quot; &apos;a&#39;")'	"<b> & \"q\" 'a'"
+'use html; html_unescape("&#233; &#xE9; &#XE9; &#x1F30D;")'	"é é é 🌍"
+'use html; html_unescape("a & b &unknown; &")'	"a & b &unknown; &"
+'use html; html_unescape(html_escape("<\\"&'"'"'>"))'	"<\"&'>"

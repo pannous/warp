@@ -1,0 +1,50 @@
+// The standard library module csv (RFC 4180): `use csv`, CSV text as rows of texts and back, or with its header row as
+// maps: csv_rows("a,b\n1,\"x,y\"") is [["a", "b"], ["1", "x,y"]]; quoted fields keep commas, doubled quotes and line
+// breaks; lines end in LF or CRLF; csv_text quotes a field only when it holds a comma, a quote, CR or LF
+
+def csv_rows(t: text): list {
+	rows = []
+	row = []
+	field = ""
+	quoted = no
+	cs = [c for c in t]
+	i = 0
+	while i < count(cs) {
+		c = cs[i]
+		if quoted {
+			if c == "\"" {
+				if i + 1 < count(cs) and cs[i + 1] == "\"" { field = field + "\""; i = i + 1 } else { quoted = no }
+			} else { field = field + c }
+		} else if c == "\"" { quoted = yes }
+		else if c == "," { row = row + [field]; field = "" }
+		// a CRLF is one character of the text
+		else if c == "\n" or c == "\r" or c == "\r\n" {
+			rows = rows + [row + [field]]
+			row = []
+			field = ""
+		} else { field = field + c }
+		i = i + 1
+	}
+	if count(row) > 0 or field != "" { rows = rows + [row + [field]] }
+	rows
+}
+
+// the rows after the header, each a map of header field to value
+def csv_maps(t: text): list {
+	rows = csv_rows(t)
+	out = []
+	for r in 1 ..< count(rows) {
+		m = {}
+		for k in 0 ..< count(rows[0]) { m[rows[0][k]] = if k < count(rows[r]) then rows[r][k] else "" }
+		out = out + [m]
+	}
+	out
+}
+
+csv_needs_quotes(f: text): bool := f.contains(",") or f.contains("\"") or f.contains("\n") or f.contains("\r")
+csv_field(value: any): text := { f = str(value); if csv_needs_quotes(f) then "\"" + replace(f, "\"", "\"\"") + "\"" else f }
+csv_line(row: list): text := join([csv_field(f) for f in row], ",")
+// rows of values as CSV text, lines ending in CRLF (RFC 4180)
+csv_text(rows: list): text := join([csv_line(row) + "\r\n" for row in rows], "")
+// maps as CSV text under the header row
+csv_text(maps: list, header: list): text := csv_text([header] + [[m[k] for k in header] for m in maps])
