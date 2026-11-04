@@ -461,7 +461,61 @@ routed(n: Node, routing: Routing): Node := {
 	if is_key(n, Op.Hash) and key_of(n) == ø and counting_method in routing.methods { return call_of(routed_name(counting_method), [parts(value_of(n))]) }
 	# `count(b)`, `len(b)`, `size(b)` the same as `#b`
 	if is_called_name(n) and #n == 2 and counts(name_of(n#1)) and counting_method in routing.methods { return call_of(routed_name(counting_method), [parts(n#2)]) }
-	method_routed(n, routing)
+	# `for k in p` of an instance whose class has keys() and no next(): walked by its keys, as a map is (decision
+	# map-protocol)
+	if walks_keys(n, routing) { return List([n#1, parts(n#2), n#3, parts(Key(n#4, Op.Dot, call_of(unaliased("keys"), []))), parts(n#5)], Bracket.None, Separator.Space) }
+	method_routed(map_form_call(n, routing), routing)
+}
+# A class with the map words is a map (decision map-protocol): each map form on its instance calls its method,
+# `keys(p)` p.keys(), `p["k"]` and `p.k` (no field k) p.get("k"), `p["k"] = v` and `p.k = v` p.set("k", v),
+# `k in p` p.has(k); any other node as it is. The words as the prelude's aliases left them, a class's has() its
+# collection_contains()
+# a word as the user writes it or as the prelude's aliases left it (`keys` or map_keys)
+is_map_protocol_word(word: text): bool := {
+	for protocol_word in ["keys", "get", "has", "set", "remove"] { if unaliased(protocol_word) == unaliased(word) { return yes } }
+	no
+}
+map_form_call(n: Node, routing: Routing): Node := {
+	if is_called_name(n) and #n >= 2 and is_map_protocol_word(name_of(n#1)) and unaliased(name_of(n#1)) in routing.methods {
+		return Key(n#2, Op.Dot, call_of(unaliased(name_of(n#1)), items_of(n)[2..]))
+	}
+	# `values(p)` of a class with keys and get but no values of its own: the values its get gives, `keys(p).map(k => p.get(k))`
+	if is_called_name(n) and #n == 2 and unaliased(name_of(n#1)) == unaliased("values") and keyed_by(n#2, "get", routing) and not keyed_by(n#2, "values", routing) { return keyed_values(n#2) }
+	if is_group(n) and bracket_of(n) == "" and #n == 3 and n#2 is symbol and name_of(n#2) == "in" and keyed_by(n#3, "has", routing) { return Key(n#3, Op.Dot, call_of(unaliased("has"), [n#1])) }
+	if is_key(n, Op.Assign) {
+		named = map_key(key_of(n), routing)
+		return if named != "" and keyed_by(key_of(key_of(n)), "set", routing) then Key(key_of(key_of(n)), Op.Dot, call_of(unaliased("set"), [named, value_of(n)])) else n
+	}
+	named = map_key(n, routing)
+	if named != "" and keyed_by(key_of(n), "get", routing) then Key(key_of(n), Op.Dot, call_of(unaliased("get"), [named])) else n
+}
+keyed_values(m: Node): Node := {
+	held = fresh_name("map", fresh_number())
+	walked = fresh_name("key", fresh_number())
+	read = Key(walked, Op.Arrow, Key(held, Op.Dot, call_of(unaliased("get"), [walked])))
+	statements([Key(held, Op.Assign, m), Key(call_of(unaliased("keys"), [held]), Op.Dot, call_of("map", [read]))])
+}
+# the key a map form reads: "k" of `p["k"]` (the parser's p#("k"+1)) and of `p.k` when p's class has no field or
+# method k; else ""
+map_key(n: Node, routing: Routing): text := {
+	if is_key(n, Op.Hash) and is_key(value_of(n), Op.Add) and value_of(value_of(n)) == 1 and kind_of(view_of(key_of(value_of(n)))) == "text" { return view_of(key_of(value_of(n)))#2 }
+	if not (is_key(n, Op.Dot) and value_of(n) is symbol) { return "" }
+	owner = static_type(key_of(n), routing)
+	word = name_of(value_of(n))
+	if owner == ø or owner not in routing.classes or word in fields_reaching(routing.classes, owner) or word in methods_reaching(routing.classes, owner) { return "" }
+	word
+}
+# whether a value statically is an instance of a class having the map word
+keyed_by(n: Node, word: text, routing: Routing): bool := {
+	owner = static_type(n, routing)
+	owner != ø and owner in routing.classes and unaliased(word) in methods_reaching(routing.classes, owner)
+}
+walks_keys(n: Node, routing: Routing): bool := {
+	if not (is_group(n) and bracket_of(n) == "" and #n == 5 and n#1 is symbol and name_of(n#1) == "for" and n#3 is symbol and name_of(n#3) == "in") { return no }
+	walked = static_type(n#4, routing)
+	if walked == ø or walked not in routing.classes { return no }
+	reached = methods_reaching(routing.classes, walked)
+	unaliased("keys") in reached and "next" not in reached
 }
 counts(word: text): bool := word == counting_method or canonical_word(word) == counting_method
 # `b#p` of a value, no field read `m#("x"+1)` nor typed array `float[n]` (the parser's float#(n+1), extensions/sugar/lists.warp)
@@ -476,7 +530,8 @@ position_call(element: Node, word: text, written: list, parts: function): Node :
 method_routed(n: Node, routing: Routing): Node := match n {
 	Key(left, Op.Dot, right): {
 		object = routed(left, routing)
-		member = routed(right, routing)
+		# a member call `.get(k)` is no bare call `get(k)`: only its arguments are routed
+		member = if is_called_name(right) then children(right, part => routed(part, routing)) else routed(right, routing)
 		method = routed_member(right, routing)
 		static = left is symbol and name_of(left) in routing.classes
 		type = static_type(left, routing)
