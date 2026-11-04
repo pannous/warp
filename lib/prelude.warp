@@ -293,6 +293,10 @@ bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
 infix operator ↓(x: number, b: number) := log(x, b)
+// the logarithm of x to the base: log(100, 10) is 2
+log(x: number, base: number): float := log(x) / log(base)
+// ∜x (lib/math.warp prefix operator)
+fourth_root(x) := sqrt(sqrt(x))
 replace(t, old, with new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
 is_digit(c) := c >= '0' and c <= '9'

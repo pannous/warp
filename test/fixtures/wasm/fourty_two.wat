@@ -1,5 +1,5 @@
-;; built into fourty_two.wasm (found first, what the browser build reads) by `wasm-tools parse tests/fixtures/wasm/fourty_two.wat -o tests/fixtures/wasm/fourty_two.wasm`
-;; a WebAssembly module for `import tests/fixtures/wasm/fourty_two` (tests/modules/test_wasm_modules.rs)
+;; built into fourty_two.wasm (found first, what the browser build reads) by `wasm-tools parse test/fixtures/wasm/fourty_two.wat -o test/fixtures/wasm/fourty_two.wasm`
+;; a WebAssembly module for `import test/fixtures/wasm/fourty_two` (tests/modules/test_wasm_modules.rs)
 (module
   (global $ft (export "ft") i64 (i64.const 42))
   (global $counter (mut i32) (i32.const 0))

@@ -21,6 +21,8 @@ global parse_json(source: any): any := {
 	if json_skipped(source, read#2) <= #source { raise json_refusal(source, "more after the value") }
 	read#1
 }
+// `use json` makes the plain parse(t) JSON's, json.parse(t)
+parse(source: text): any := parse_json(source)
 // json of warp data, `json{ 'a':1 }`, is that data
 global json(source: any): any := if source is text then parse_json(source) else source
 global to_json(value: any): text := json_written(value, no)
