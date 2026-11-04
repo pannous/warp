@@ -575,13 +575,10 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)
 	if call != ø {
-		# a parameter named like an overloaded function is the definition's own: the prelude's `f(item)` of map(xs, f)
-		# calls its f, never the program's f(n: int, t: text)
-		parameters = items_of(call)[1 ..].map(parameter_name)
-		inner = if parameters.any(name => name in overloaded) then without_keys(overloaded, parameters) else overloaded
 		head = if name_of(call#1) in overloaded then renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))) else key_of(n)
-		return Key(head, Op.Define, typed_resolved(value_of(n), inner, judge))
+		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, items_of(call)[1 ..].map(parameter_name)), judge))
 	}
+	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, parameters_of(key_of(n))), judge)) }
 	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument
 	method = if is_key(n, Op.Dot) then value_of(n) else ø
 	if method != ø and is_group(method) and bracket_of(method) == "(" and #method > 0 and method#1 is symbol and name_of(method#1) in overloaded {
@@ -591,6 +588,9 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
 }
 
+# inside a definition or a lambda its parameters are its own, never an overloaded function of their name: the prelude's
+# `f(item)` of map(xs, f) calls its f, `find => find(a, b)` its find, not the program's or a library's variants
+shadowed(overloaded: map, parameters: list): map := if parameters.any(name => name in overloaded) then without_keys(overloaded, parameters) else overloaded
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }

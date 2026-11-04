@@ -108,7 +108,7 @@ tried(name: text, clauses: list, at: int): Node := {
 	if #tests == 0 { return branch }
 	test = joined(tests)
 	rest = if at == #clauses then unmatched_clauses(name) else tried(name, clauses, at + 1)
-	Key(Key(Key(ø, Op.If, test), Op.Then, branch), Op.Else, rest)
+	chosen(test, branch, rest)
 }
 
 merged_function(name: text, clauses: list): Node := {
