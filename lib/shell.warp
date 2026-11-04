@@ -58,7 +58,7 @@ paths_named(folder: text, wanted: text): list := {
 }
 // `*.json` → `^[^/]*\.json$`: a wildcard pattern as the regular expression of the names it matches
 wildcard_regex(pattern: text): text := "^" + [wildcard_piece(c) for c in pattern].join("") + "$"
-wildcard_piece(c: text) := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
+wildcard_piece(c: text): text := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
 // the bytes of a file or of all files below a folder, as du counts them (size itself is a list's)
 file_size(path: text): int := if is_folder(path) then sum([file_size(path.remove_suffix("/") + "/" + name) for name in list_files(path)]) else count(read_bytes(path))
 // `info ./a.txt` → {size: 20, modified: 1760536980000, kind: "file"}, modified in milliseconds as clock() counts
