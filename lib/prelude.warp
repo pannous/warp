@@ -48,10 +48,10 @@ print(values...): nothing from emitter
 fetch(url: text) := std_io("net", "get", [url])
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
-map(xs: list, f: function): list from emitter
-map(t: text, f: function): list from emitter
-filter(xs: list, f: function): list from emitter
-filter(t: text, f: function): list from emitter
+map(xs: list, f: (any) -> any): list from emitter
+map(t: text, f: (any) -> any): list from emitter
+filter(xs: list, f: (any) -> bool): list from emitter
+filter(t: text, f: (any) -> bool): list from emitter
 // the first element, combined with every later one in turn: `[3, 1, 2].reduce((a, b) => a + b)` is 6
 reduce(xs: list, f: function) := {
 	if count(xs) == 0 { raise "reduce of an empty list" }
@@ -59,15 +59,15 @@ reduce(xs: list, f: function) := {
 	for i in 2 to count(xs) { combined = f(combined, xs#i) }
 	combined
 }
-fold(xs: list, start, f: function): same as start from emitter
+fold(xs: list, start, f: (any, any) -> any): same as start from emitter
 any(xs: list, f: function): bool from emitter
 any(t: text, f: function): bool from emitter
 // all of any value: `f(all xs)` broadcasts (wiki/all.md), a typed `all` would nest as a call of two values
 all(xs, f: function): bool from emitter
 find(xs: list, f: function): element of xs from emitter
 find(t: text, f: function): element of t from emitter
-each(xs: list, f: function) from emitter
-each(t: text, f: function) from emitter
+each(xs: list, f: (any) -> any) from emitter
+each(t: text, f: (any) -> any) from emitter
 // the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
 insert(xs: list, at: int, x) := list_insert(xs, at, x)
