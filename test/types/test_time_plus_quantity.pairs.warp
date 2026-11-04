@@ -1,0 +1,7 @@
+# a duration quantity of lib/units (an hour, a minute, a second) moves a time as the calendar's durations do (card unknown-name)
+'(2024-01-31T10:00 + 24 h) == 2024-02-01T10:00'	yes
+'2024-01-31T10:00 + 90 minutes'	2024-01-31T11:30
+'2024-01-31T10:00 - 1 h'	2024-01-31T09:00
+'2024-01-31 + 1 day + 0 days'	2024-02-01
+'2024-01-31T10:00 + 2.5'	error	a time moved by a float is refused, not a trap
+'x = [2.5]#1; try { 2024-01-31T10:00 + x } catch e { e.message }'	"a time takes + or - a duration, a duration takes + or - a duration and * a whole number: nothing else is arithmetic on times"
