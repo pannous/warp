@@ -169,11 +169,12 @@ arity_overloads(program: Node): Node := {
 
 # A function defined more than once named as a value, `xs.map(quoted)`, `g = quoted`: its definitions are variants by
 # now and the name means none of them, refused naming them and the lambda that says which; inside a definition or a
-# lambda, a parameter or variable of the name is its own (`sum = hi + lo`), at the top too
+# lambda, a parameter or variable of the name is its own (`sum = hi + lo`, `for tested in …`), at the top too
 refused_overload_values(program: Node, overloaded: map, described: function) := refuse_overload_values(program, shadowed(overloaded, names_bound(program, [])), described)
 refuse_overload_values(n: Node, overloaded: map, described: function) := {
 	call = definition_call(n)
 	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + names_bound(value_of(n), []) else []
+	bound = bound + loop_variables(n)
 	if #bound > 0 { overloaded = shadowed(overloaded, bound) }
 	if #overloaded == 0 { return ø }
 	for part in value_parts(n) {

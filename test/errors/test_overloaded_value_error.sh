@@ -16,6 +16,6 @@ refused() {
 refused 'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; [1, 2].map(quoted)' \
 	'quoted is defined 2 times, for (text) and (int); pass a lambda that calls the one you mean, e.g. x => quoted(x)'
 refused 'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; g = quoted; g(2)' 'quoted is defined 2 times'
-refused 'twice(x) := x * 2; twice(x, y) := x * y; [1, 2].map(twice)' \
-	'twice is defined 2 times, with 1 and 2 parameters; pass a lambda that calls the one you mean, e.g. x => twice(x)'
+refused 'scaled(x) := x * 2; scaled(x, y) := x * y; g = scaled; g(3)' \
+	'scaled is defined 2 times, with 1 and 2 parameters; pass a lambda that calls the one you mean, e.g. x => scaled(x)'
 exit $status
