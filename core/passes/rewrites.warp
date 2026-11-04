@@ -123,7 +123,7 @@ std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", 
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = sugar_files(["functions", "declarations", "events", "defaults"])
+early_sugar_module_names = sugar_files(["functions", "declarations", "events", "defaults", "articles"])
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
@@ -436,11 +436,11 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 
 # the program with the rules of the early sugar modules applied, before the passes; also each library definition the
 # program reaches (prelude_words.warp with_reached: math's `norm` declares `var total = 0`), whose words are its own.
-# A program with no phrase holding a rule's first word stays as it is (a rule's result may need another's, `fun` `def`)
+# A program with no phrase holding a word a rule needs stays as it is (a rule's result may need another's, `fun` `def`)
 early_sugared(program: Node): Node := {
 	rules = early_module_rules()
 	words = phrase_words(program)
-	if not rules.any(rule => words.has(needed_word(rule))) { return program }
+	if not rules.any(rule => needed_words(rule).any(word => words.has(word))) { return program }
 	sugared(program, unbound_rules(rules, program))
 }
 # the rules of the early sugar modules, read once

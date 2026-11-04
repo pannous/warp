@@ -1,4 +1,10 @@
-# Supervisor handover (2026-11-03 14:15, after the 14:05 Mac crash)
+# Supervisor handover (2026-11-04 19:56, resumed after the ~14:47 reboot)
+
+Session dfee1812-07cf-489d-b436-5fa7144eb022 (tmux warp-supervisor). Resumed warp-integrator (94ab9e23),
+warp-interviewer (3e06d8ec), warp-sugar (de6d4b58: redefined-functions regression), warp-markup-handler-spacing
+(b1badc07: protocol landing A). warp-error-text-trap (3942cd53) had finished its card, left down (two-worker rule).
+Watch round cron recreated at :17. Cloud sessions landed ~40 lib-* modules on main between 14:49 and 19:47.
+
 
 warp-supervisor (tmux warp-supervisor) resumed the team after the crash. The :17 watch round is a session cron
 (CronCreate, prompt: notes/decisions.md "night-watch" plus the paused-worker queue below): recreate it after a respawn.

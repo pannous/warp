@@ -14,11 +14,11 @@ format(template, values) := {
 	result
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
-words(t) := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
-lines(t: text) := split(t, "\n")
+words(t): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
+lines(t: text): list := split(t, "\n")
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
 // of any script: letters of "x، ب٣" is ['x' 'ب']
-letters(t) := [c for c in chars(t) if is_unicode_letter(c)]
+letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
 // whether c is a letter of any script, cased or not (Unicode's letter categories): `q`, `é`, `ا`, `名`; no digit, mark
 // or punctuation. is_alpha stays ASCII's a–z and A–Z
 is_unicode_letter(c): bool := {
@@ -39,22 +39,23 @@ letter_range_before(code: int): int := {
 }
 capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
 center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
-title(t) := join([capitalize(w) for w in words(t)], " ")
+title(t): text := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
-slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
+slug(t): text := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
 truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text): list {
 	out = []
-	for c in t {
+	for c in t.codepoints {
 		n = ord(c)
-		if n < 128 { out = out + [n] }
-		else if n < 2048 { out = out + [192 + n /! 64, 128 + n % 64] }
-		else if n < 65536 { out = out + [224 + n /! 4096, 128 + n /! 64 % 64, 128 + n % 64] }
-		else { out = out + [240 + n /! 262144, 128 + n /! 4096 % 64, 128 + n /! 64 % 64, 128 + n % 64] }
+		if n < 128 { out.add(n) }
+		else if n < 2048 { out.add(192 + n /! 64); out.add(128 + n % 64) }
+		else if n < 65536 { out.add(224 + n /! 4096); out.add(128 + n /! 64 % 64); out.add(128 + n % 64) }
+		else { out.add(240 + n /! 262144); out.add(128 + n /! 4096 % 64); out.add(128 + n /! 64 % 64); out.add(128 + n % 64) }
 	}
 	out
 }
+
 def from_utf8(bytes: any): text {
 	out = ""
 	i = 0
@@ -79,11 +80,11 @@ is_palindrome(t): bool := { s = lower(join([c for c in t if is_alphanumeric(c)],
 word_count(t): int := count(words(t))
 // "helloWorld", "Hello World", "hello-world" → "hello_world"
 snake_case(t): text := { out = ""; for c in t { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out and last(out) != "_" { out = out + "_" } }; out }
-kebab_case(t) := join(split(snake_case(t), "_"), "-")
+kebab_case(t): text := join(split(snake_case(t), "_"), "-")
 // "hello_world" → "helloWorld"
-camel_case(t) := { parts = [p for p in split(snake_case(t), "_") if p]; if parts is empty then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
+camel_case(t): text := { parts = [p for p in split(snake_case(t), "_") if p]; if parts is empty then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
 // each line indented by n spaces
-indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
+indent(t, n): text := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
 is_numeric(t): bool := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
@@ -93,12 +94,87 @@ wrap(t, width): text := { out = []; line = ""; for w in words(t) { if line is em
 // a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
 // then `c.peek()` is '1'; `at` counts the characters read (an index)
 class Cursor { source: text; at = 0
-	at_end() := at >= count(source)
+	at_end(): bool := at >= count(source)
 	peek() := source[at]
 	advance() := { taken = source[at]; at += 1; taken }
-	looking_at(part) := source[at : min(at + count(part), count(source))] == part
-	skip(part) := { if looking_at(part) { at += count(part); return true }; false }
+	looking_at(part): bool := source[at : min(at + count(part), count(source))] == part
+	skip(part): bool := { if looking_at(part) { at += count(part); return true }; false }
 	take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
-	skip_while(ok) := count(take_while(ok))
+	skip_while(ok): int := count(take_while(ok))
 	rest() := source[at : count(source)]
+}
+// the Levenshtein distance: the fewest one-character inserts, deletes and replacements from a to b, by characters:
+// edit_distance("kitten", "sitting") is 3, edit_distance("café", "cafe") is 1
+def edit_distance(a: text, b: text): int {
+	xs = [c for c in a]
+	ys = [c for c in b]
+	row = [j for j in 0 to count(ys)]
+	for i in 1 to count(xs) {
+		previous = row
+		row = [i]
+		for j in 1 to count(ys) {
+			cost = if xs[i - 1] == ys[j - 1] then 0 else 1
+			row = row + [min(min(previous[j] + 1, row[j - 1] + 1), previous[j - 1] + cost)]
+		}
+	}
+	row[count(ys)]
+}
+// the leading spaces and tabs of a line
+indentation(line: text): text := { n = 0; while n < count(line) and (line[n] == " " or line[n] == "\t") { n = n + 1 }; line[0 ..< n] }
+// the longest start two texts share
+common_start(a: text, b: text): text := { n = 0; while n < count(a) and n < count(b) and a[n] == b[n] { n = n + 1 }; a[0 ..< n] }
+// without the leading whitespace all its non-blank lines share (Python's textwrap.dedent); blank lines become empty
+def dedent(t: text): text {
+	margin = nil
+	for line in lines(t) { if not is_blank(line) { margin = if margin == nil then indentation(line) else common_start(margin, indentation(line)) } }
+	cut = if margin == nil then 0 else count(margin)
+	join([if is_blank(line) then "" else line[cut..] for line in lines(t)], "\n")
+}
+
+// Number formatting (card lib-stats-format)
+// format_number(1234567.89) is "1,234,567.89": commas between groups of three whole digits, the sign and the fraction kept
+// as text gives them (no rounding); format_number(-1234) is "-1,234"
+format_number(n: any): text := {
+	s = "" + n
+	sign = ""
+	whole = ""
+	rest = ""
+	for c in s {
+		if c == "-" and whole == "" and rest == "" { sign = "-" } else if rest != "" or c == "." { rest = rest + c } else { whole = whole + c }
+	}
+	out = ""
+	k = 0
+	i = count(whole)
+	while i >= 1 { if k > 0 and k % 3 == 0 { out = "," + out }; out = "" + whole#i + out; k = k + 1; i = i - 1 }
+	sign + out + rest
+}
+// ordinalize(n): "1st" "2nd" "3rd" "4th" "11th" "12th" "13th" "21st" "101st" "111th"; a whole number >= 1, else refused.
+// Not named ordinal: the prelude's ordinal is ord, the codepoint of a character
+ordinalize(n: any): text := {
+	if not (n is int) or n < 1 { raise "ordinalize needs a whole number >= 1" }
+	suffix = "th"
+	if n % 100 < 11 or n % 100 > 13 {
+		if n % 10 == 1 { suffix = "st" }
+		if n % 10 == 2 { suffix = "nd" }
+		if n % 10 == 3 { suffix = "rd" }
+	}
+	"" + n + suffix
+}
+// human_size(bytes): decimal SI units, 1000 a step (B KB MB GB TB PB), as disks and networks count: 1500000 is "1.5 MB",
+// 1536 is "1.5 KB"; one decimal rounded half up, a .0 dropped ("2 KB"); under 1000 whole bytes ("999 B"); negatives refused
+human_size(bytes: any): text := {
+	if bytes < 0 { raise "human_size needs bytes >= 0" }
+	units = ["B", "KB", "MB", "GB", "TB", "PB"]
+	if bytes < 1000 { return "" + int(bytes) + " B" }
+	u = 1
+	v = bytes
+	while v >= 1000 and u < count(units) { v = v / 1000; u = u + 1 }
+	tenths = int(v * 10 + 1/2)
+	// rounding can reach the next unit: 999.95 KB is 1 MB
+	if tenths >= 10000 and u < count(units) { tenths = tenths / 1000; u = u + 1 }
+	whole = int(tenths / 10)
+	frac = tenths - whole * 10
+	shown = "" + whole
+	if frac != 0 { shown = shown + "." + frac }
+	shown + " " + units#u
 }

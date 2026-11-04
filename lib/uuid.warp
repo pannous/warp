@@ -1,0 +1,18 @@
+// UUIDs (card lib-uuid): `uuid()` is a random version 4 UUID as lowercase text, 8-4-4-4-12 hex digits, its version
+// nibble 4 and its variant bits 10 (RFC 9562); `is_uuid(t)` says whether a text is one in that form (any version),
+// `uuid_parsed(t)` gives its 16 bytes, raising for a text that is none
+uuid(): text := {
+	digits = (1 to 32).map(i => hex_digit(random_below(16)))
+	digits#13 = "4"
+	digits#17 = hex_digit(8 + random_below(4))
+	uuid_grouped(digits.join(""))
+}
+hex_digit(n: int): text := to_base(n, 16)
+// 32 hex digits as 8-4-4-4-12
+uuid_grouped(h: text): text := h[0: 8] + "-" + h[8: 12] + "-" + h[12: 16] + "-" + h[16: 20] + "-" + h[20: 32]
+is_uuid(t: text): bool := #t == 36 and (1 to 36).all(i => if i in [9, 14, 19, 24] then t#i == '-' else is_hex_digit(t#i))
+uuid_parsed(t: text): list := {
+	if not is_uuid(t) { raise "not a UUID: " + t + " (8-4-4-4-12 hex digits)" }
+	h = lower(t).replace("-", "")
+	(0 to 15).map(i => from_base(h[2 * i: 2 * i + 2], 16))
+}

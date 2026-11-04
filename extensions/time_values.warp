@@ -133,11 +133,15 @@ def time_field(time: TypedCode, name: text): TypedCode {
 time_operators = {"+": 0, "-": 1, "*": 2}
 # the runtime words an operand's parts are read with: its form, position, months and days
 operand_parts = ["operand_form", "operand_position", "duration_months", "duration_days"]
-# each operand held in a local, read four times
+# the kinds a time's operand may be: a time, a whole number, a node holding either or a quantity (time_operand)
+time_operand_kinds = [ValueKind.Time, ValueKind.Int, ValueKind.Node]
+# each operand held in a local, read four times; a node as time_operand gives it, lib/units' quantity a duration
 def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 	stored = []
 	parts = []
 	for operand in [a, b] {
+		if operand.kind not in time_operand_kinds { return refuse("a time moved by a " + kind_spelling(operand.kind) + ": a time takes + or - a duration") }
+		if operand.kind == ValueKind.Node and module.functions.has(time_operand_word) { operand = call_values(module.functions[time_operand_word], [operand]) }
 		place = fresh_local(body, ValueKind.Node)
 		stored += boxed(operand) + [op.local_set] + uleb(place)
 		held = TypedCode(ValueKind.Node, [op.local_get] + uleb(place))

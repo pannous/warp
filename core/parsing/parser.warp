@@ -149,23 +149,45 @@ def operator_statement(words: list): OperatorStatement? {
 	if not (words#1 in FIXITY_WORDS) { return operator_pattern(words, define) }
 	start = if words#1 != "operator" and define > 1 and words#2 == "operator" then 2 else 1
 	keyword = words#start == "operator"
-	statement = OperatorStatement{fixity: FIXITY_WORDS[words#1], keyword: keyword, spelling: "", head: words[start .. define], body: words[define + 1 .. words.length]}
+	head = words[start .. define]
+	body = words[define + 1 .. words.length]
+	fixity = if words#1 == "operator" then given_fixity(head, body) else FIXITY_WORDS[words#1]
+	statement = OperatorStatement{fixity: fixity, keyword: keyword, spelling: "", head: head, body: body}
 	statement.spelling = defined_spelling(statement)
 	statement
+}
+// `operator` without a fixity word (one of the two words does, card operator-word-optional): the fixity its parameters
+// give, `⊕(a, b)` infix and `∆(x)` prefix; else a body saying `it` or naming a function, `operator √ := sqrt`, prefix;
+// else infix, `operator × := *`, `operator ≈ := approximately`
+def given_fixity(head: list, body: list): Fixity {
+	written = head.join(" ")
+	if written.contains("(") { return if written.contains(",") then Fixity.Infix else Fixity.Prefix }
+	if body.any(says_it) { return Fixity.Prefix }
+	if #body == 1 and is_plain_name(body#1) and not is_operator_spelling(body#1) { return Fixity.Prefix }
+	Fixity.Infix
+}
+// whether a word of code holds the name `it` whole, `it*it`, `f(it)`
+def says_it(word: text): bool {
+	at = 0
+	while at + 1 < word.length {
+		if word[at .. at + 2] == "it" and (at == 0 or not is_name_char(word[at - 1])) and (at + 2 == word.length or not is_name_char(word[at + 2])) { return true }
+		at += 1
+	}
+	false
 }
 // `a ⊕ b := …`: an infix operator declared by a pattern of two plain names around its glyph
 def operator_pattern(words: list, define: int): OperatorStatement? {
 	if define != 3 or not is_operator_glyph(words#2) or not is_plain_name(words#1) or not is_plain_name(words#3) { return ø }
 	OperatorStatement{fixity: Fixity.Infix, keyword: no, spelling: words#2, head: words[0 .. 3], body: words[4 .. words.length]}
 }
-// the operator a statement defines: its one glyph (`operator ⊕ := …`), or for infix a word or glyph with its parameters,
-// `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`; a built-in word, `infix operator
-// as(n: any, e: enum) := …`, is no new operator but an overload of it (operator_method_definition)
+// the operator a statement defines: its one glyph (`operator ⊕ := …`), or a word or glyph with its parameters,
+// `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`, `prefix ∆(x) := …`; a built-in word,
+// `infix operator as(n: any, e: enum) := …`, is no new operator but an overload of it (operator_method_definition)
 def defined_spelling(statement: OperatorStatement): text {
 	if #statement.head == 0 or statement.fixity == Fixity.Circumfix { return "" }
 	first = statement.head#1
 	if #statement.head == 1 and is_operator_glyph(first) { return first }
-	if statement.fixity != Fixity.Infix { return "" }
+	if statement.fixity != Fixity.Infix and not first.contains("(") { return "" }
 	named = is_name_start(first#1)
 	end = if named then name_end(first, 0, first.length) else 0
 	if not named { while end < first.length and first[end] != '(' { end += 1 } }
@@ -176,9 +198,10 @@ def defined_spelling(statement: OperatorStatement): text {
 // `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
 // function, `√x` is sqrt(x) (the pre-scan made the spelling an operator: aliases_among)
 class OperatorAlias { spelling: text; target: text }
-// A prefix alias names a function by the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
+// A prefix alias names a function by the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`;
+// either word declares one, `prefix √ := sqrt` as `operator √ := sqrt`
 def alias_of(statement: OperatorStatement?): OperatorAlias? {
-	if statement == ø or not statement.keyword or #statement.head != 1 or #statement.body != 1 { return ø }
+	if statement == ø or #statement.head != 1 or #statement.body != 1 { return ø }
 	target = statement.body#1
 	prefix = statement.fixity == Fixity.Prefix
 	if (statement.fixity == Fixity.Infix or prefix) and (is_operator_spelling(target) or (prefix and is_plain_name(target))) then OperatorAlias{spelling: statement.head#1, target: target} else ø
@@ -1335,7 +1358,7 @@ def counts_units(left: Node): bool := left is symbol and UNIT_WORDS.contains(nam
 UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "codepoint", "codepoints", "grapheme", "graphemes"]
 
 // An operand follows `width` characters on: blanks, then no end of the expression
-// `alias contains = collection_contains`: an assignment's `=` (no `==`) after the blanks at `at`
+// `contains = …`: an assignment's `=` (no `==`) after the blanks at `at`
 def assigned_at(p: Parser, at: int): bool {
 	sign = blank_end(p, at)
 	char_at(p, sign) == '=' and char_at(p, sign + 1) != '='
@@ -1361,8 +1384,10 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
 	if keyword_at(p, "for") and char_ahead(p, 3) != ':' { return false }
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and (if p.iterable then word_ends_header(p) else not word_begins_item(p))
-	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
+	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c) or hole_at(p))
 }
+// a rule's hole `$t` here, which stands where a name does: `$x is a $t` reads as `x is a number` does
+def hole_at(p: Parser): bool := char_here(p) == '$' and is_name_start(char_ahead(p, 1))
 
 // `r = move 1 from: 10 to: 3`: a label word with a colon and a blank after it labels the argument after them, also
 // where the call is an operand (decision labels-calls); ø where no label stands

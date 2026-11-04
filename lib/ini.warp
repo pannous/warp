@@ -1,0 +1,78 @@
+// The standard library module ini: `use ini`, INI configuration text read into a map and written back.
+// parse_ini(t) gives a map: each [section] a map of its keys, keys before any section at the top level beside them.
+// Decisions (card lib-ini-toml):
+// - a line is a [section], a key = value or key: value pair (the first = or : splits), blank, or a comment whose first
+//   non-space character is ; or #; anything else is refused naming its line ("ini line 4: no = or : in …")
+// - comments are whole lines only: a value keeps a ; or # inside it (url = http://x/#top)
+// - keys, values and section names are trimmed; keys keep their case; values stay texts (no numbers or booleans guessed)
+// - a value wholly inside matching "…" or '…' loses those quotes, no escapes inside, so spaces at its ends can be kept
+// - a key twice in one section, or a section twice, is refused (as Python's strict configparser), not silently merged
+// - section names are taken whole: [a.b] is the section "a.b", no nesting
+// to_ini(m) writes the top-level texts and numbers first, then each map as a [section]; deeper maps are refused
+
+global parse_ini(source: text): map := {
+	out = {}
+	section = out
+	section_name = ""
+	number = 0
+	for raw in source.replace(chr(13) + "\n", "\n").split("\n") {
+		number += 1
+		line = raw.trim()
+		if line == "" or line.starts_with(";") or line.starts_with("#") { continue }
+		if line.starts_with("[") {
+			if not line.ends_with("]") { raise ini_refusal(number, "no closing ] in " + line) }
+			section_name = line[1..<#line - 1].trim()
+			if section_name == "" { raise ini_refusal(number, "an empty section name") }
+			if out.has(section_name) { raise ini_refusal(number, "duplicate section " + section_name) }
+			section = {}
+			out[section_name] = section
+			continue
+		}
+		at = ini_split_place(line)
+		if at == 0 { raise ini_refusal(number, "no = or : in " + line) }
+		key = line[0..<at - 1].trim()
+		if key == "" { raise ini_refusal(number, "a value without a key") }
+		if section.has(key) { raise ini_refusal(number, "duplicate key " + key + (if section_name == "" then "" else " in section " + section_name)) }
+		section[key] = ini_unquoted(line[at..<#line].trim())
+	}
+	out
+}
+ini_refusal(number: int, problem: text): text := {
+	message = "ini line " + number + ": " + problem
+	// a period after a message ending in " a" or " at": the runtime's place check reads past such an end and traps
+	// (card core-error-sentence-tail)
+	if message.ends_with(" a") or message.ends_with(" at") or message.ends_with(" ") then message + "." else message
+}
+// the place (from 1) of the first = or :, 0 when there is none
+ini_split_place(line: text): int := {
+	for i in 1 to #line { if line#i == "=" or line#i == ":" { return i } }
+	0
+}
+ini_unquoted(value: text): text := {
+	if #value >= 2 and (value#1 == "\"" or value#1 == "'") and value#(#value) == value#1 { return value[1..<#value - 1] }
+	value
+}
+
+global to_ini(m: map): text := {
+	out = ""
+	for key in m.keys { if not (m[key] is map) { out += ini_line(key, m[key]) } }
+	for key in m.keys {
+		if m[key] is map {
+			if out != "" { out += "\n" }
+			out += "[" + key + "]\n"
+			section = m[key]
+			for k in section.keys {
+				if section[k] is map { raise "to_ini: the section " + key + " holds the map " + k + ": INI has one level of sections" }
+				out += ini_line(k, section[k])
+			}
+		}
+	}
+	out
+}
+// key = value, a value quoted when its ends are spaces or quotes, or it is empty of meaning without them
+ini_line(key: any, value: any): text := {
+	written = "" + value
+	if "\n" in written { raise "to_ini: the value of " + key + " spans lines" }
+	if written != written.trim() or written.starts_with("\"") or written.starts_with("'") { written = "\"" + written + "\"" }
+	"" + key + " = " + written + "\n"
+}

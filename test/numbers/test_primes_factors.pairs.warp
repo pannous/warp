@@ -1,0 +1,19 @@
+# primes up to n by a sieve, prime factors with multiplicity, the next prime (card lib-primes-factors)
+'use math; primes(30)'	[2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+'use math; primes(0)'	[]
+'use math; primes(1)'	[]
+'use math; primes(2)'	[2]
+'use math; count(primes(1000))'	168
+'use math; primes(7919).last'	7919
+'use math; prime_factors(12)'	[2, 2, 3]
+'use math; prime_factors(1)'	[]
+'use math; prime_factors(2)'	[2]
+'use math; prime_factors(1024)'	[2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+'use math; prime_factors(7919)'	[7919]
+'use math; prime_factors(360)'	[2, 2, 2, 3, 3, 5]
+'use math; try prime_factors(0) else "refused"'	"refused"
+'use math; try prime_factors(-6) else "refused"'	"refused"
+'use math; next_prime(7)'	11
+'use math; next_prime(8)'	11
+'use math; next_prime(0)'	2
+'use math; next_prime(7919)'	7927

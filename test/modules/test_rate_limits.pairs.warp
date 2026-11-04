@@ -1,0 +1,7 @@
+# throttle_calls_at_most_once_per_period
+'use functions; n = 0; f = throttle(x => { n = n + 1; x }, 10000); [f(1), f(2), f(3), n]'	[1, 1, 1, 1]
+'use functions; n = 0; f = throttle(x => { n = n + 1; x }, 30); f(1); sleep(40 ms); [f(2), n]'	[2, 2]
+
+# debounce_runs_after_a_quiet_period
+'use functions; n = 0; f = debounce(x => { n = n + 1; x }, 10000); [f(1), f(2), n]'	[1, 1, 1]
+'use functions; n = 0; f = debounce(x => { n = n + 1; x }, 30); f(1); sleep(40 ms); [f(2), n]'	[2, 2]

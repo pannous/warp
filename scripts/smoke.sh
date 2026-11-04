@@ -2,7 +2,8 @@
 # scripts/smoke.sh <worktree>: a branch's smoke test, building only what the branch needs (card lib-no-rebuild, user
 # 2026-10-30: a library change needs no compiler rebuild). Hello runs with WARP_LIB=<worktree>/lib, which reads every
 # changed module and sugar rule anew:
-#   - lib/ only: no build; the installed compilers are cloned into the worktree's lib/ (copy-on-write, ignored files)
+#   - lib/ only: no build; the installed compilers are cloned into the worktree's lib/ (copy-on-write, ignored files),
+#     and a changed lib/*.warp has the standard modules prebuilt anew by them, failing loudly as a build would
 #   - core/, or a lib/ file the compiler reads at its own build (BAKED, compiler-inputs.sh --baked-files): said loudly with the files, then `scripts/rebuild.sh pure <worktree>` first (core/: run
 #     `scripts/self-check.sh <worktree>` too)
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
@@ -34,6 +35,13 @@ else
 	done
 	for library in "$installed"/lib*warp_*.*; do clone "$library" "$tree/lib/" 2>/dev/null; done
 	way="the installed compilers, no rebuild"
+	# a changed module is prebuilt anew by the installed compiler, as a build's modules step does: one that does not
+	# prebuild fails the smoke (card scripts-smoke, 2026-11-04: a lib-only `: list` broke every build unseen)
+	if { git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | grep -qE '^lib/.*\.warp$'; then
+		prebuilt=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 "$INSTALLED" "$tree/lib/warp.wasm" modules "$tree/lib/modules" "$tree/lib/runtime.wasm" 2>&1) ||
+			{ echo "smoke: build-failed at step modules:" >&2; echo "$prebuilt" | without_runtime_noise | tail -3 >&2; exit 1; }
+		way="$way, the changed lib's modules prebuilt"
+	fi
 fi
 got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 timeout 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 [[ $got == *$EXPECTED* ]] || { echo "smoke: hello got ${got:0:160}" >&2; exit 1; }

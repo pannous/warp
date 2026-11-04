@@ -1,0 +1,43 @@
+// The standard library module html: `use html`, the five special characters of HTML text as entities and back:
+// html_escape("a<b") is "a&lt;b"; html_unescape reads &amp; &lt; &gt; &quot; &apos; and numeric &#39; &#x27;
+use text
+
+HTML_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": chr(0xA0), "copy": "©", "reg": "®",
+	"trade": "™", "hellip": "…", "mdash": "—", "ndash": "–", "lsquo": "‘", "rsquo": "’", "ldquo": "“", "rdquo": "”",
+	"laquo": "«", "raquo": "»", "middot": "·", "bull": "•", "deg": "°", "plusmn": "±", "times": "×", "divide": "÷",
+	"frac12": "½", "frac14": "¼", "frac34": "¾", "sect": "§", "para": "¶", "euro": "€", "pound": "£", "yen": "¥",
+	"cent": "¢", "auml": "ä", "ouml": "ö", "uuml": "ü", "Auml": "Ä", "Ouml": "Ö", "Uuml": "Ü", "szlig": "ß",
+	"eacute": "é", "egrave": "è", "aacute": "á", "agrave": "à", "ccedil": "ç", "ntilde": "ñ", "AElig": "Æ", "aelig": "æ",
+	"Dcaron": "Ď", "HilbertSpace": "ℋ", "DifferentialD": "ⅆ", "ClockwiseContourIntegral": "∲", "ngE": "≧̸",
+	"larr": "←", "rarr": "→", "uarr": "↑", "darr": "↓", "harr": "↔", "ne": "≠", "le": "≤", "ge": "≥", "infin": "∞"}
+
+html_escape(t: text): text := replace(replace(replace(replace(replace(t, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#39;")
+
+// the character an entity name names: "lt", "#60", "#x3C"; nil when it names none
+def html_entity(name: text): any {
+	if name.starts_with("#x") or name.starts_with("#X") {
+		n = 0
+		for c in lower(name[2..]) { d = "0123456789abcdef".index_of(c); if d == 0 { return nil }; n = n * 16 + d - 1 }
+		return if count(name) > 2 then chr(n) else nil
+	}
+	if name.starts_with("#") {
+		n = 0
+		for c in name[1..] { if not is_digit(c) { return nil }; n = n * 10 + ord(c) - 48 }
+		return if count(name) > 1 then chr(n) else nil
+	}
+	HTML_NAMED.get(name)
+}
+
+def html_unescape(t: text): text {
+	out = ""
+	rest = t
+	while rest.contains("&") {
+		at = rest.index_of("&")
+		out = out + rest[0 ..< at - 1]
+		rest = rest[at - 1..]
+		end = rest.index_of(";")
+		character = if end > 1 then html_entity(rest[1 ..< end - 1]) else nil
+		if character != nil { out = out + character; rest = rest[end..] } else { out = out + "&"; rest = rest[1..] }
+	}
+	out + rest
+}

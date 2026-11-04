@@ -1,0 +1,17 @@
+# Alias arrows (decision alias-arrows, card alias-arc-cosine): an alias line points from the new name to the word it
+# names, `alias acos => arc_cosine` or `alias arc_cosine <= acos`; a plain `alias acos = arc_cosine` says no
+# direction and is refused with the arrow it means (warp fix writes it). The core resolves the alias
+# (passes/uses.warp with_own_aliases); a module's lines it reads as text (alias_pair)
+alias_arrows_extension = Extension{name: "alias_arrows", keyword_readers: {"alias": read_alias}}
+
+# `alias twice => double` opening a statement: the alias the core resolves, twice naming double; ø for any other
+# statement with the word, `alias typedef => :alias` or a variable `alias = 3`
+read_alias(p: Parser, word: text): Node := {
+	words = statement_words_at(p)
+	if not starts_statement(p) or #words != 4 or not is_plain_name(words#2) or not is_plain_name(words#4) { return ø }
+	if words#3 == "=" { raise "`" + join(words, " ") + "` at " + line_and_column(p.code, p.at) + ": " + alias_direction_fix(words#2, words#4) }
+	pair = alias_pair(words#2 + " " + words#3 + " " + words#4)
+	if #pair == 0 { return ø }
+	p.at = statement_end(p)
+	bracketed([symbol(alias_keyword), Key(symbol(pair#1), Op.Assign, symbol(pair#2))], "")
+}

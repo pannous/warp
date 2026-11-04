@@ -1,0 +1,2 @@
+# Matrix operations: notes/stdlib.md and lib/matrix.warp
+'use matrix; map_matrix([[1, 2], [3, 4]], x => x * 2)'	[[2 4] [6 8]]

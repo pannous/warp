@@ -1,0 +1,6 @@
+# Public text helpers, notes/stdlib.md and lib/text.warp.
+'use text; title("hello world")'	'Hello World'
+'use text; slug("Hello, Big World!")'	'hello-big-world'
+'use text; kebab_case("Hello World")'	'hello-world'
+'use text; camel_case("Hello big World")'	'helloBigWorld'
+'use text; indent("one\ntwo", 2)'	'  one\n  two'

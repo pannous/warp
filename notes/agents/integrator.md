@@ -10,8 +10,8 @@ Workers land their own branches: they merge origin/main, smoke-test that merge (
 and push it (common.md "Done", user decision self-landing). You repeat no test. You watch main.
 
 ## Watching main
-- The pusher runs `scripts/integrate/after-push.sh` in the background right after its push (common.md "Done"), and a
-  cron runs it with `--if-moved` every 2 minutes (log ~/Library/Logs/warp/cron/after-push.log) as the safety net: main and the compilers
+- Every push to main starts `scripts/integrate/after-push.sh` by itself: the pre-push hook (scripts/integrate/on-push.sh)
+  runs it once the pushed commit is on main (log ~/Library/Logs/warp/after-push.log; no cron since 2026-11-04): main and the compilers
   beside ~/dev/bin/warp stay in step (user). In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
   its lib (`scripts/rebuild.sh both`: the pusher's smoke build of the same inputs is reused from the store), checks
   hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside the binary and pulls the
@@ -24,7 +24,8 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
   owner re-lands it fixed. A lane regression with no suspect: `git bisect run` from the newest good/* tag (handbook).
 - `warp self` red never blocks anything: an urgent card for the author of the newest core change. The self lane may
   pass up to 5 % fewer tests than the pure lane.
-- The full suite at rare intervals (nightly, before a release), in the background, as `scripts/full-suite.sh
+- The full suite twice a day by cron (05:00 and 15:00, user 2026-11-04: "run the test a couple of times a day"; log
+  ~/Library/Logs/warp/cron/full-suite.log) and before a release, in the background, as `scripts/full-suite.sh
   --commit` (one at a time on the machine, by its lock; `warp test --each test` into test/results.txt only when the
   run ended with its summary: a ✓ or ✗ line per test, in file order, and the `m of n failed` summary), committed, so
   `git diff test/results.txt` (or `git log -p`) shows what went green or red since the last run (user 2026-10-28). Its

@@ -137,8 +137,7 @@ def operator_declaration(p: Parser, word: text, statement: OperatorStatement): N
 	p.at += 2
 	skip_spaces(p)
 	body = expression(p, 0)
-	parameters = if not infix then [symbol("it")] else if declared == ø then ø else group_items(declared)
-	if parameters == ø { parameters = if mentions(body, "left") or mentions(body, "right") then [symbol("left"), symbol("right")] else [symbol("a"), symbol("b")] }
+	parameters = if declared != ø then group_items(declared) else if not infix then [symbol("it")] else if mentions(body, "left") or mentions(body, "right") then [symbol("left"), symbol("right")] else [symbol("a"), symbol("b")]
 	Key(operator_call(glyph, parameters), Op.Define, body)
 }
 

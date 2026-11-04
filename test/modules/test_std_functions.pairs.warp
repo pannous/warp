@@ -1,0 +1,10 @@
+# memoize_runs_f_once_per_argument
+'use functions; n = 0; g = memoize(x => { n = n + 1; x * 2 }); [g(2), g(2), g(3), g(2), n]'	[4, 4, 6, 4, 2]
+'use functions; n = 0; g = memoize(t => { n = n + 1; upper(t) }); [g("a"), g("a"), n]'	["A", "A", 1]
+'use functions; n = 0; g = memoize(xs => { n = n + 1; xs#1 + xs#2 }); [g([1, 2]), g([1, 2]), g([2, 1]), n]'	[3, 3, 3, 2]
+
+# retry_returns_the_first_success
+'use functions; n = 0; retry(() => { n = n + 1; if n < 3 { raise "busy" }; n * 10 }, 5, 1)'	30
+'use functions; n = 0; retry(() => { n = n + 1; 7 }, 3, 1); n'	1
+'use functions; n = 0; try { retry(() => { n = n + 1; raise "down" }, 3, 1) } catch e { [e.message, n] }'	["down", 3]
+'use functions; n = 0; t = wall_clock_ms(); try { retry(() => { n = n + 1; raise "x" }, 3, 20) } catch e { 0 }; wall_clock_ms() - t >= 60'	true
