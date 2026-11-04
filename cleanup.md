@@ -139,3 +139,11 @@ Cover response header and reset outcomes, then declare non-narrowing result type
 ## Library signal value signatures
 
 Cover mixed signal values and watched variable reads before adding non-narrowing signatures; verify outcomes and merged-main smoke.
+
+## Library typed polling
+
+Cover changed and unchanged polled values, then declare the helper's generic result without narrowing listener behavior; verify direct outcomes and smoke on merged main.
+
+## Library typed tasks
+
+Cover waiting and completion for task and ordinary values, then type their shared helpers without narrowing the values they accept or return. Verify the outcomes and smoke against merged main.
