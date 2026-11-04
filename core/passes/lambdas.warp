@@ -172,21 +172,15 @@ newly_bound(n: Node, found: list): list := match n {
 	Key(target, Op.Assign, value): bound_target(target, found)
 	_: found
 }
-# [x] of `for x in xs {…}` and of a comprehension `[x * 2 for x in xs]`, else none
+# [x] of `for x in xs {…}`, else none
 loop_variables(n: Node): list := match n {
-	List(parts, bracket, separator): iteration_variables(parts)
+	List(parts, Bracket.None, Separator.Space): { if #parts >= 4 and parts#1 == symbol("for") and parts#3 == symbol("in") then bound_target(parts#2, []) else [] }
 	_: []
 }
 bound_target(target: Node, found: list): list := match target {
 	Symbol(name): { if name in found then found else found + [name] }
 	Key(name, Op.Colon, type): bound_target(name, found)
-	# `for (input, target) in examples`
-	List(items, Bracket.Round, separator): items_bound(items, found)
 	_: found
-}
-items_bound(items: list, found: list): list := {
-	for item in items { found = bound_target(item, found) }
-	found
 }
 
 # every name the node mentions, each once, in order
