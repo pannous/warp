@@ -1,0 +1,11 @@
+# an alias line points from the new name to the word it names, either way round (decision alias-arrows, card
+# alias-arc-cosine): `alias twice => double` and `alias double <= twice` both make twice(…) call double
+'double(x) := 2*x; alias twice => double; twice(4)'	8
+'double(x) := 2*x; alias double <= twice; twice(4)'	8
+'alias twice => double; double(x) := 2*x; twice(5)'	10
+# a plain `=` says no direction: refused, its fix names the arrow
+'double(x) := 2*x; alias twice = double; twice(4)'	error	an alias says its direction with => or <=
+# the library's aliases still name their words
+'acos(1.0)'	0
+'keys({a: 1, b: 2})'	['a', 'b']
+'size([1, 2, 3])'	3

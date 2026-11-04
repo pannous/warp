@@ -231,29 +231,29 @@ bit_or(a: int, b: int) := (a xor b) + bit_and(a, b)
 square(x: number) := x * x
 square_root(x) := each_any(x, e -> sqrt(e))
 cube_root(x) := ∛x
-alias pow = power
+alias pow => power
 power(base, exponent) := base ^ exponent
-alias exp = exponential
+alias exp => exponential
 exponential(x) := each_any(x, e -> exp(e))
-alias ln = natural_log
+alias ln => natural_log
 natural_log(x) := each_any(x, e -> log(e))
-alias log2 = binary_log
+alias log2 => binary_log
 binary_log(x) := each_any(x, e -> log2(e))
-alias log10 = decimal_log
+alias log10 => decimal_log
 decimal_log(x) := each_any(x, e -> log10(e))
 // the logarithm of x to any base: logarithm(8, 2) is 3
 logarithm(x, base) := log(x) / log(base)
-alias sin = sine
+alias sin => sine
 sine(x) := each_any(x, e -> sin(e))
-alias cos = cosine
+alias cos => cosine
 cosine(x) := each_any(x, e -> cos(e))
-alias tan = tangent
+alias tan => tangent
 tangent(x) := each_any(x, e -> tan(e))
-alias asin = arc_sine
+alias asin => arc_sine
 arc_sine(x) := each_any(x, e -> asin(e))
-alias acos = arc_cosine
+alias acos => arc_cosine
 arc_cosine(x) := each_any(x, e -> acos(e))
-alias atan = arc_tangent
+alias atan => arc_tangent
 arc_tangent(x) := each_any(x, e -> atan(e))
 # arcsine(x) := asin(x)
 # arccosine(x) := acos(x)
@@ -264,22 +264,22 @@ arctan=&arc_tangent
 # arctan:=arc_tangent
 // the angle of the point (x, y) from the x axis, in radians: C's atan2(y, x)
 angle(x, y) := atan2(y, x)
-alias sinh = hyperbolic_sine
+alias sinh => hyperbolic_sine
 hyperbolic_sine(x) := each_any(x, e -> sinh(e))
-alias cosh = hyperbolic_cosine
+alias cosh => hyperbolic_cosine
 hyperbolic_cosine(x) := each_any(x, e -> cosh(e))
-alias tanh = hyperbolic_tangent
+alias tanh => hyperbolic_tangent
 hyperbolic_tangent(x) := each_any(x, e -> tanh(e))
 // the length of the long side of a right triangle with sides a and b
-alias hypot = hypotenuse
+alias hypot => hypotenuse
 hypotenuse(a, b) := hypot(a, b)
-alias ceil = ceiling
+alias ceil => ceiling
 ceiling(x) := each_any(x, e -> ceil(e))
 // x without its fraction, toward zero: whole_part(-2.5) is -2
-alias trunc = whole_part
+alias trunc => whole_part
 whole_part(x) := each_any(x, e -> trunc(e))
 // what remains of a after taking out b as often as it fits, with the sign of a (C's fmod)
-alias fmod = remainder
+alias fmod => remainder
 remainder(a, b) := fmod(a, b)
 
 // The exact arithmetic the runtime emits in Rust (rust-harness:src/wasm_emitter/numbers/exact.rs int_gcd, ratio_new, exact_div,

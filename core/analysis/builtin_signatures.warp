@@ -86,11 +86,11 @@ compiler_lines = [
 emitter_lines = library_lines(emitter_library) + compiler_lines
 typed_lines = runtime_lines + emitter_lines
 
-# `alias size = count` → ["size", "count"]
-alias_pairs = prelude_text.split("\n").filter(line => line.starts_with(alias_start)).map(line => line.remove_prefix(alias_start).split("=").map(word => word.trim()))
+# `alias size => count` → ["size", "count"]
+alias_pairs = prelude_text.split("\n").filter(line => line.starts_with(alias_start)).map(line => alias_pair(line.remove_prefix(alias_start)))
 
 # the library word a word names: its canonical word (lib/aliases.warp: `size` is count), through the prelude's
-# `alias keys = map_keys` lines
+# `alias keys => map_keys` lines
 unaliased(written: text): text := {
 	word = canonical_word(written) ?? written
 	for pair in alias_pairs { if pair#1 == word { return pair#2 } }

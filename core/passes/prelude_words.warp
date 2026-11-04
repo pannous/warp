@@ -419,14 +419,14 @@ is_value_definition(statement: Node): bool := {
 	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 }
 
-# `alias keys = map_keys` of a module: the word by each alias (an alias declares
+# `alias keys => map_keys` of a module: the word by each alias (an alias declares
 # nothing, its calls call the word)
 module_aliases(source: text): any := {
 	aliases = {}
 	for line in source.split("\n") {
 		if line.starts_with("alias ") {
-			sides = line[6 ..].split("=")
-			if #sides == 2 { aliases[sides#1.trim()] = sides#2.trim() }
+			pair = alias_pair(line[6 ..])
+			if #pair == 2 { aliases[pair#1] = pair#2 }
 		}
 	}
 	aliases
