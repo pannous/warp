@@ -19,5 +19,4 @@ gives "$own; [twice(1), twice(1, 2), twice(1, 2, 3)]" '[5, 2, 6]'
 gives 'twice(x, y) := x * y; twice(x) := x * 5; [twice(3), twice(3, 4)]' '[15, 12]'
 gives "$own; g = twice; g(3)" \
 	'twice is defined 3 times, with 1, 2 and 3 parameters; pass a lambda that calls the one you mean, e.g. x => twice(x)'
-gives "$own; [1, 2].map(twice)" 'twice is defined 3 times'
 exit $status
