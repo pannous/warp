@@ -1,0 +1,31 @@
+// lib/cron.warp: 5-field cron expressions, Vixie rules, zones (card lib-cron)
+'use cron; cron_next(\'*/15 * * * *\', "2026-11-04 10:07").text()'	"2026-11-04T10:15:00Z"
+'use cron; cron_next(\'*/15 * * * *\', "2026-11-04 10:15").text()'	"2026-11-04T10:30:00Z"
+'use cron; cron_previous(\'*/15 * * * *\', "2026-11-04 10:15").text()'	"2026-11-04T10:00:00Z"
+'use cron; cron_next(\'0 0 29 2 *\', "2026-11-04 10:07").text()'	"2028-02-29T00:00:00Z"
+'use cron; cron_previous(\'0 0 29 2 *\', "2026-11-04 10:07").text()'	"2024-02-29T00:00:00Z"
+'use cron; cron_next(\'0 9 13 * FRI\', "2026-11-04 10:07").text()'	"2026-11-06T09:00:00Z"
+'use cron; cron_next(\'0 9 13 * FRI\', "2026-11-06 10:00").text()'	"2026-11-13T09:00:00Z"
+// a * day field keeps the AND: odd days that are Fridays
+'use cron; cron_next(\'0 9 */2 * fri\', "2026-11-04 10:07").text()'	"2026-11-13T09:00:00Z"
+'use cron; cron_next(\'0 12 * * 7\', "2026-11-04 10:07").text()'	"2026-11-08T12:00:00Z"
+'use cron; cron_next(\'30 8-10/2 * jan-mar,dec mon-fri\', "2026-11-04 10:07").text()'	"2026-12-01T08:30:00Z"
+'use cron; cron_next(\'@yearly\', "2026-11-04 10:07").text()'	"2027-01-01T00:00:00Z"
+'use cron; cron_next(\'@monthly\', "2026-11-04 10:07").text()'	"2026-12-01T00:00:00Z"
+'use cron; cron_next(\'@weekly\', "2026-11-04 10:07").text()'	"2026-11-08T00:00:00Z"
+'use cron; cron_next(\'@daily\', "2026-11-04 10:07").text()'	"2026-11-05T00:00:00Z"
+'use cron; cron_next(\'@hourly\', "2026-11-04 10:07").text()'	"2026-11-04T11:00:00Z"
+'use cron; cron_parse(\'@annually\') == cron_parse(\'0 0 1 1 *\')'	true
+'use cron; cron_parse(\'@midnight\') == cron_parse(\'@daily\')'	true
+'use cron; cron_matches(\'*/15 9-17 * * mon-fri\', "2026-11-04 10:15")'	true
+'use cron; cron_matches(\'*/15 9-17 * * mon-fri\', "2026-11-08 10:15")'	false
+'use cron; cron_next(\'30 2 * * *\', "2026-03-28 12:00", "Europe/Berlin").text()'	"2026-03-30T00:30:00Z"
+'use cron; cron_next(\'30 2 * * *\', "2026-10-24 12:00", "Europe/Berlin").text()'	"2026-10-25T00:30:00Z"
+'use cron; cron_next(\'30 2 * * *\', "2026-10-25 00:30", "Europe/Berlin").text()'	"2026-10-26T01:30:00Z"
+'use cron; cron_next(\'0 9 * * *\', "2026-11-04 10:07", 3600).text()'	"2026-11-05T08:00:00Z"
+'use cron; try { cron_parse(\'60 * * * *\') } catch e { e.message }'	"cron: 60 is out of the minute's 0-59"
+'use cron; try { cron_parse(\'* * * *\') } catch e { e.message }'	"cron: * * * * has 4 fields, not 5 (minute hour day-of-month month day-of-week)"
+'use cron; try { cron_parse(\'* * * foo *\') } catch e { e.message }'	"cron: foo is no month"
+'use cron; try { cron_parse(\'5-1 * * * *\') } catch e { e.message }'	"cron: 5-1 runs backwards in the minute"
+'use cron; try { cron_parse(\'@sometimes\') } catch e { e.message }'	"cron: unknown macro @sometimes"
+'use cron; try { cron_next(\'0 0 31 2 *\', 0) } catch e { e.message }'	"cron: the expression fires on no day within 30 years"

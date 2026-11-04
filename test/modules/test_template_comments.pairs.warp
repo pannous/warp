@@ -1,0 +1,35 @@
+# mustache spec comments: Inline
+'use template; mustache("12345{{! Comment Block! }}67890", {})'	"1234567890"
+
+# mustache spec comments: Multiline
+'use template; mustache("12345{{!\n  This is a\n  multi-line comment...\n}}67890\n", {})'	"1234567890\n"
+
+# mustache spec comments: Standalone
+'use template; mustache("Begin.\n{{! Comment Block! }}\nEnd.\n", {})'	"Begin.\nEnd.\n"
+
+# mustache spec comments: Indented Standalone
+'use template; mustache("Begin.\n  {{! Indented Comment Block! }}\nEnd.\n", {})'	"Begin.\nEnd.\n"
+
+# mustache spec comments: Standalone Line Endings
+'use template; mustache("|\r\n{{! Standalone Comment }}\r\n|", {})'	"|\r\n|"
+
+# mustache spec comments: Standalone Without Previous Line
+'use template; mustache("  {{! I\'m Still Standalone }}\n!", {})'	"!"
+
+# mustache spec comments: Standalone Without Newline
+'use template; mustache("!\n  {{! I\'m Still Standalone }}", {})'	"!\n"
+
+# mustache spec comments: Multiline Standalone
+'use template; mustache("Begin.\n{{!\nSomething\'s going on here...\n}}\nEnd.\n", {})'	"Begin.\nEnd.\n"
+
+# mustache spec comments: Indented Multiline Standalone
+'use template; mustache("Begin.\n  {{!\n    Something\'s going on here...\n  }}\nEnd.\n", {})'	"Begin.\nEnd.\n"
+
+# mustache spec comments: Indented Inline
+'use template; mustache("  12 {{! 34 }}\n", {})'	"  12 \n"
+
+# mustache spec comments: Surrounding Whitespace
+'use template; mustache("12345 {{! Comment Block! }} 67890", {})'	"12345  67890"
+
+# mustache spec comments: Variable Name Collision
+'use template; mustache("comments never show: >{{! comment }}<", {"! comment": 1, "! comment ": 2, "!comment": 3, "comment": 4})'	"comments never show: ><"

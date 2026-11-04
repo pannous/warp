@@ -1,0 +1,21 @@
+# edit_distance_counts_characters
+'edit_distance("kitten", "sitting")'	3
+'edit_distance("", "abc")'	3
+'edit_distance("abc", "")'	3
+'edit_distance("abc", "abc")'	0
+'edit_distance("flaw", "lawn")'	2
+'edit_distance("café", "cafe")'	1
+'edit_distance("🌍x", "x")'	1
+'edit_distance("über", "uber")'	1
+'"kitten".edit_distance("sitting")'	3
+
+# dedent_strips_the_common_margin
+'dedent("  a\n  b")'	"a\nb"
+'dedent("    a\n  b")'	"  a\nb"
+'dedent("  a\n\n  b")'	"a\n\nb"
+'dedent("  a\n     \n  b")'	"a\n\nb"
+'dedent("a\n  b")'	"a\n  b"
+'dedent("\ta\n\tb")'	"a\nb"
+'dedent("\t a\n\tb")'	" a\nb"
+'dedent(" \ta\n\t b")'	" \ta\n\t b"
+'dedent("")'	""

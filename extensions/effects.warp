@@ -1,0 +1,63 @@
+# Effect annotations (decision effect-annotations, notes/effects.md): `@pure f(x) := …`, `@io`, `@ffi` mark a definition
+# with the effects it may have, meta annotations as `@primitive` is; a function with an effect its marks leave out is
+# refused, naming the calls that lead to it: `@pure shout(t) := print t` does IO via shout → print.
+# A function's effects are those of the words it calls, the program's functions and the library's it reaches followed
+# through their bodies: the host's words and the emitter's that read or write (print, read) do IO, a foreign line's
+# word (`sqrt(x: f64): f64 from "c"`) is FFI. Allocation is pure (`[x, x]`), as construction is (wiki/pure.md)
+
+# each mark → the effects it allows
+EFFECT_MARKS = {pure: [], io: ["IO"], ffi: ["FFI"]}
+# the emitter's words that read or write; every host word but the pure one does IO
+emitter_io_words = ["print", "read"]
+pure_host_words = ["std_pure"]
+
+# the effect a word has by itself, else ø: FFI of a foreign line's word, IO of a host or emitter word that does IO
+own_effect(word: text, foreign: map): text? := {
+	if foreign.has(word) { return "FFI" }
+	if word in emitter_io_words or (host_words.has(word) and word not in pure_host_words) { return "IO" }
+	ø
+}
+
+# name → the marks the program gives it, of each function it marks
+effect_marks_given(): map := {
+	given = {}
+	for mark in EFFECT_MARKS.keys {
+		for name in marked_names.get(mark) ?? [] { if mark not in (given.get(name) ?? []) { given[name] = (given.get(name) ?? []) + [mark] } }
+	}
+	given
+}
+
+# the program as it is, once every marked function has only the effects its marks allow; else refused with the first
+# chain of calls to an effect they leave out
+checked_effects(program: Node): Node := {
+	given = effect_marks_given()
+	if #given == 0 { return program }
+	bodies = {}
+	foreign = {}
+	for statement in statements_in(program) {
+		if is_function_definition(statement) { bodies[declared_name(statement)] = value_of(statement) }
+		else if is_foreign_line(statement) { foreign[declared_name(statement)] = yes }
+	}
+	for name in given.keys {
+		allowed = given[name].flat_map(mark => EFFECT_MARKS[mark])
+		chain = effect_chain(name, bodies, foreign, allowed, {})
+		if chain != ø { raise "${name} is marked ${given[name].map(mark => "@" + mark).join(" ")} but does ${chain#(#chain)} via ${chain[0 ..< #chain - 1].join(" → ")}" }
+	}
+	program
+}
+
+# the calls from word to an effect not allowed, the effect last: [shout, print, "IO"]; else ø
+effect_chain(word: text, bodies: map, foreign: map, allowed: list, seen: map): list? := {
+	effect = own_effect(word, foreign)
+	if effect != ø { return if effect in allowed then ø else [word, effect] }
+	if not bodies.has(word) or seen.has(word) { return ø }
+	seen[word] = yes
+	for called in symbol_words(bodies[word]) {
+		chain = effect_chain(called, bodies, foreign, allowed, seen)
+		if chain != ø { return [word] + chain }
+	}
+	ø
+}
+
+# after the last pure pass, the library's definitions the program reaches beside its own
+effects_extension = Extension{name: "effects", attributes: EFFECT_MARKS.keys, passes: {"number_keys": checked_effects}}

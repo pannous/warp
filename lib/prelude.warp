@@ -496,7 +496,7 @@ task_context_back(context) := ø
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)
 random_until(a, b) := if a is int and b is int then a + random_below(b - a) else random_fraction(a, b)
-random_between(a, b) := if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b)
+random_between(a, b) := { if a > b { raise "random_between needs lo <= hi" }; if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b) }
 // random(x) by the value's type (card random-dispatches): of a list one of its elements, of a whole number n one of 0…n-1,
 // of a fraction a float from 0 up to it
 random_element(xs) := xs#(random_below(count(xs)) + 1)

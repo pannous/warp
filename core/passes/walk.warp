@@ -86,13 +86,13 @@ plain_node(n: Node): Node := {
 	plain = plain_parts(n)
 	if plain === ø or is_positioned(plain) then plain else placed(plain, n)
 }
-# the attributes an extension reads past plain_node, each the names it marks: `@primitive add(…) := …` marks add,
-# noted as the layer goes (as rewrites.warp lists the extensions' rule files)
-read_attributes = ["primitive"]
+# the attributes the extensions read past plain_node (their rows' attributes), each noting the names it marks:
+# `@primitive add(…) := …` marks add, `@pure f(x) := …` f
+read_attributes(): list := hooks().attributes
 global marked_names = {}
 marked(attribute: any, n: Node): Node := {
 	name = if n is symbol then name_of(n) else if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ø
-	if attribute in read_attributes and name != ø { marked_names[attribute] = (marked_names.get(attribute) ?? []) + [name] }
+	if attribute in read_attributes() and name != ø { marked_names[attribute] = (marked_names.get(attribute) ?? []) + [name] }
 	n
 }
 function_reference_mark = "function_reference"

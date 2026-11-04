@@ -1,0 +1,569 @@
+// The standard library module yaml: `use yaml`, a practical YAML 1.2 subset read into maps and lists, and written back.
+// parse_yaml(t) gives the value of a one-document text (ø for none); parse_yaml_all(t) a list of every document's
+// value (decision: one function per shape, so a caller never guesses whether a list is a stream or a document; a
+// stream of several refuses parse_yaml and names parse_yaml_all). to_yaml(v) the block-style YAML of a value, which
+// parse_yaml reads back equal.
+// Decisions (card lib-yaml):
+// - the core schema: null, Null, NULL, ~ and empty are ø; true/false (any of the three casings) yes/no; 12, +12, -12,
+//   0o17, 0x1F whole numbers; 1.5, .5, 1e3, .inf, -.inf, .nan floats; everything else, quoted or not, a text
+// - block mappings and sequences by indentation, "- key: v" compact entries, flow [..] and {..} over several lines,
+//   plain (also over several lines), '…' ('' a quote) and "…" (YAML's escapes) scalars, | and > with - and + and an
+//   indentation digit, # comments, --- and ... , anchors &a and aliases *a (the same value), the << merge key (a map
+//   or a list of maps; the mapping's own keys win)
+// - refused with "yaml line N: …": tabs as indentation, bad indentation, an undefined alias, a duplicate key,
+//   unclosed flow collections and quotes, tags (!…), complex keys (? …) and directives (%…)
+// - the errors' text gets a period when it would end in " a" or " at" (card core-error-sentence-tail)
+
+YAML_ESCAPED = {"0": chr(0), "a": chr(7), "b": chr(8), "t": "\t", "\t": "\t", "n": "\n", "v": chr(11), "f": chr(12), "r": chr(13), "e": chr(27), " ": " ", "\"": "\"", "/": "/", "\\": "\\", "N": chr(0x85), "_": chr(0xA0), "L": chr(0x2028), "P": chr(0x2029)}
+YAML_HEX = "0123456789abcdef"
+YAML_DIGITS = "0123456789"
+YAML_NULLS = ["", "~", "null", "Null", "NULL"]
+YAML_TRUES = ["true", "True", "TRUE"]
+YAML_FALSES = ["false", "False", "FALSE"]
+YAML_INDICATORS = "-?:,[]{}#&*!|>'\"%@`"
+
+global parse_yaml(source: text): any := {
+	documents = parse_yaml_all(source)
+	if #documents == 0 { return ø }
+	if #documents > 1 { raise "yaml: " + #documents + " documents in one text: parse_yaml_all reads them all" }
+	documents#1
+}
+global parse_yaml_all(source: text): list := {
+	st = {"lines": source.replace(chr(13) + "\n", "\n").split("\n"), "i": 1, "anchors": {}}
+	documents = []
+	explicit = no
+	while true {
+		yaml_skip_blank(st)
+		if st["i"] > #(st["lines"]) { break }
+		line = yaml_line(st)
+		if line.starts_with("%") { yaml_fail(st, "directives (%…) are not supported") }
+		if yaml_is_marker(line, "...") { st["i"] = st["i"] + 1; explicit = no; continue }
+		if yaml_is_marker(line, "---") {
+			rest = line[3..<#line].trim()
+			if rest == "" or rest.starts_with("#") { st["i"] = st["i"] + 1; yaml_skip_blank(st); if st["i"] > #(st["lines"]) or yaml_at_marker(st) { documents += [ø]; continue } }
+			else { st["lines"][st["i"] - 1] = rest }
+		}
+		st["anchors"] = {}
+		documents += [yaml_node(st, 0)]
+		yaml_skip_blank(st)
+		if st["i"] <= #(st["lines"]) and not yaml_at_marker(st) { yaml_fail(st, "bad indentation: this line belongs to no node") }
+	}
+	documents
+}
+
+// lines
+yaml_line(st: map): text := st["lines"]#(st["i"])
+yaml_fail(st: map, problem: text): any := {
+	message = "yaml line " + min(st["i"], #(st["lines"])) + ": " + problem
+	raise (if message.ends_with(" a") or message.ends_with(" at") or message.ends_with(" ") then message + "." else message)
+}
+yaml_is_marker(line: text, marker: text): bool := line.starts_with(marker) and (#line == 3 or line#4 == " " or line#4 == "\t")
+yaml_at_marker(st: map): bool := { line = yaml_line(st); yaml_is_marker(line, "---") or yaml_is_marker(line, "...") }
+// the spaces before a line's content; a tab among them, before content, is refused
+yaml_indent(st: map, line: text): int := {
+	n = 0
+	while n < #line and line#(n + 1) == " " { n += 1 }
+	if n < #line and line#(n + 1) == "\t" {
+		rest = line.trim()
+		if rest != "" and not rest.starts_with("#") { yaml_fail(st, "a tab used as indentation") }
+	}
+	n
+}
+yaml_blank(line: text): bool := { t = line.trim(); t == "" or t.starts_with("#") }
+yaml_skip_blank(st: map): any := { while st["i"] <= #(st["lines"]) and yaml_blank(yaml_line(st)) { st["i"] = st["i"] + 1 }; ø }
+// the indentation of the next content line, -1 at the end or a document marker
+yaml_next_indent(st: map): int := {
+	yaml_skip_blank(st)
+	if st["i"] > #(st["lines"]) or yaml_at_marker(st) { return -1 }
+	yaml_indent(st, yaml_line(st))
+}
+yaml_is_entry(t: text): bool := t == "-" or t.starts_with("- ") or t.starts_with("-\t")
+
+// a node starting on the current line at indentation indent
+yaml_node(st: map, indent: int): any := {
+	line = yaml_line(st)
+	n = yaml_indent(st, line)
+	content = line[n..<#line]
+	if yaml_is_entry(content) { return yaml_sequence(st, n) }
+	if content.starts_with("? ") or content == "?" { yaml_fail(st, "complex keys (? …) are not supported") }
+	if yaml_key_end(st, content) > 0 { return yaml_mapping(st, n) }
+	st["i"] = st["i"] + 1
+	yaml_value(st, content, n - 1, no)
+}
+yaml_sequence(st: map, n: int): list := {
+	items = []
+	while yaml_next_indent(st) == n {
+		line = yaml_line(st)
+		content = line[n..<#line]
+		if not yaml_is_entry(content) { yaml_fail(st, "bad indentation: a mapping key among sequence entries") }
+		rest = content[1..<#content]
+		gap = 1
+		while gap <= #rest and (rest#gap == " " or rest#gap == "\t") { gap += 1 }
+		rest = rest[gap - 1..<#rest]
+		if yaml_is_entry(rest) or (not rest.starts_with("#") and yaml_key_end(st, rest) > 0 and not rest.starts_with("&") and not rest.starts_with("*")) {
+			// a compact node: the rest of the line read as if it began its own line at its column
+			column = n + gap
+			st["lines"][st["i"] - 1] = " " * column + rest
+			items += [yaml_node(st, column)]
+		} else {
+			st["i"] = st["i"] + 1
+			items += [yaml_value(st, rest, n, no)]
+		}
+	}
+	if yaml_next_indent(st) > n { yaml_fail(st, "bad indentation of a sequence entry") }
+	items
+}
+yaml_mapping(st: map, n: int): map := {
+	out = {}
+	merges = []
+	while yaml_next_indent(st) == n {
+		line = yaml_line(st)
+		content = line[n..<#line]
+		if yaml_is_entry(content) { yaml_fail(st, "bad indentation: a sequence entry among mapping keys") }
+		if content.starts_with("? ") or content == "?" { yaml_fail(st, "complex keys (? …) are not supported") }
+		end = yaml_key_end(st, content)
+		if end == 0 { yaml_fail(st, "a mapping key expected, with a colon and a space after it") }
+		raw = content[0..<end - 1].trim()
+		key = yaml_key(st, raw)
+		rest = content[end..<#content]
+		st["i"] = st["i"] + 1
+		value = yaml_value(st, rest, n, yes)
+		if raw == "<<" { merges += [value]; continue }
+		if out.has(key) { st["i"] = st["i"] - 1; yaml_fail(st, "duplicate key " + key) }
+		out[key] = value
+	}
+	if yaml_next_indent(st) > n { yaml_fail(st, "bad indentation of a mapping entry") }
+	for merged in merges {
+		sources = if merged is list then merged else [merged]
+		for source in sources {
+			if not (source is map) { yaml_fail(st, "<< merges a map or a list of maps") }
+			for k in source.keys { if not out.has(k) { out[k] = source[k] } }
+		}
+	}
+	out
+}
+// the place (from 1) of the colon ending a mapping key on this text, 0 when it holds no key
+yaml_key_end(st: map, t: text): int := {
+	if t == "" { return 0 }
+	at = 1
+	first = t#1
+	if first == "\"" or first == "'" {
+		at = 2
+		closed = no
+		while at <= #t and not closed {
+			if first == "\"" and t#at == "\\" { at += 2 }
+			else if t#at == first and first == "'" and at < #t and t#(at + 1) == "'" { at += 2 }
+			else if t#at == first { closed = yes }
+			else { at += 1 }
+		}
+		at += 1
+		while at <= #t and t#at == " " { at += 1 }
+		if at <= #t and t#at == ":" and (at == #t or t#(at + 1) == " " or t#(at + 1) == "\t") { return at }
+		return 0
+	}
+	if first == "[" or first == "{" or first == "#" or first == "|" or first == ">" { return 0 }
+	while at <= #t {
+		c = t#at
+		if c == "#" and at > 1 and (t#(at - 1) == " " or t#(at - 1) == "\t") { return 0 }
+		if c == ":" and (at == #t or t#(at + 1) == " " or t#(at + 1) == "\t") { return at }
+		at += 1
+	}
+	0
+}
+yaml_key(st: map, raw: text): text := {
+	if raw.starts_with("\"") or raw.starts_with("'") { return "" + yaml_quoted_line(st, raw) }
+	if raw.starts_with("&") or raw.starts_with("*") or raw.starts_with("!") { yaml_fail(st, "anchors, aliases and tags on keys are not supported") }
+	raw
+}
+yaml_quoted_line(st: map, raw: text): text := {
+	// flow errors count from the line after the current one, as for a value
+	st["i"] = st["i"] + 1
+	r = yaml_flow_text(st, raw, 1)
+	st["i"] = st["i"] - 1
+	if r#2 <= #raw { yaml_fail(st, "unexpected text after a quoted key") }
+	r#1
+}
+
+// the value after "key:" or "- " (t, the rest of its line, already consumed): on this line, or the block below
+// indented more than parent (with same, a mapping's, also a sequence at the key's own indentation)
+yaml_value(st: map, t: text, parent: int, same: bool): any := {
+	t = t.trim()
+	anchor = ""
+	if t.starts_with("&") {
+		end = 2
+		while end <= #t and t#end != " " and t#end != "\t" { end += 1 }
+		anchor = t[1..<end - 1]
+		t = t[end - 1..<#t].trim()
+	}
+	value = yaml_value_read(st, t, parent, same)
+	if anchor != "" { st["anchors"][anchor] = value }
+	value
+}
+yaml_value_read(st: map, t: text, parent: int, same: bool): any := {
+	if t.starts_with("!") { st["i"] = st["i"] - 1; yaml_fail(st, "tags (!…) are not supported") }
+	if t.starts_with("*") {
+		name = t[1..<#t].trim()
+		cut = 1
+		while cut <= #name and name#cut != " " { cut += 1 }
+		rest = name[cut - 1..<#name].trim()
+		name = name[0..<cut - 1]
+		if rest != "" and not rest.starts_with("#") { st["i"] = st["i"] - 1; yaml_fail(st, "unexpected text after the alias *" + name) }
+		if not st["anchors"].has(name) { st["i"] = st["i"] - 1; yaml_fail(st, "undefined alias *" + name) }
+		return st["anchors"][name]
+	}
+	if t == "" or t.starts_with("#") {
+		next = yaml_next_indent(st)
+		if next > parent { return yaml_node(st, next) }
+		if same and next == parent and next >= 0 and yaml_is_entry(yaml_line(st)[next..<#(yaml_line(st))]) { return yaml_sequence(st, next) }
+		return ø
+	}
+	if t.starts_with("|") or t.starts_with(">") { return yaml_block_scalar(st, t, parent) }
+	if t.starts_with("[") or t.starts_with("{") or t.starts_with("\"") or t.starts_with("'") { return yaml_flow_lines(st, t) }
+	yaml_plain_lines(st, t, parent)
+}
+
+// a plain scalar, continued on the lines below that are indented more than parent
+yaml_plain_lines(st: map, t: text, parent: int): any := {
+	text = yaml_plain_cut(t)
+	folded = no
+	while yaml_next_indent(st) > parent {
+		line = yaml_line(st).trim()
+		if yaml_key_end(st, line) > 0 or yaml_is_entry(line) { yaml_fail(st, "bad indentation: a mapping or sequence inside a plain scalar") }
+		text = text + " " + yaml_plain_cut(line)
+		folded = yes
+		st["i"] = st["i"] + 1
+	}
+	if folded then text else yaml_scalar(text)
+}
+// a plain scalar's text before a comment
+yaml_plain_cut(t: text): text := {
+	for at in 2 to #t { if t#at == "#" and (t#(at - 1) == " " or t#(at - 1) == "\t") { return t[0..<at - 1].trim() } }
+	t.trim()
+}
+// the core schema of a plain scalar
+yaml_scalar(t: text): any := {
+	if t in YAML_NULLS { return ø }
+	if t in YAML_TRUES { return yes }
+	if t in YAML_FALSES { return no }
+	if t.starts_with("0x") and #t > 2 and yaml_all_in(t[2..<#t].lower(), YAML_HEX) { return yaml_base(t[2..<#t].lower(), 16) }
+	if t.starts_with("0o") and #t > 2 and yaml_all_in(t[2..<#t], "01234567") { return yaml_base(t[2..<#t], 8) }
+	sign = ""
+	body = t
+	if t.starts_with("-") or t.starts_with("+") { sign = "" + t#1; body = t[1..<#t] }
+	if body == ".inf" or body == ".Inf" or body == ".INF" { i = float("1e308") * 10.0; return if sign == "-" then 0.0 - i else i }
+	if t == ".nan" or t == ".NaN" or t == ".NAN" { i = float("1e308") * 10.0; return i - i }
+	if body != "" and yaml_all_in(body, YAML_DIGITS) { n = yaml_base(body, 10); return if sign == "-" then 0 - n else n }
+	if yaml_is_float(body) {
+		digits = body
+		if digits.starts_with(".") { digits = "0" + digits }
+		at = 1
+		while at <= #digits and digits#at != "e" and digits#at != "E" { at += 1 }
+		if digits#(at - 1) == "." { digits = digits[0..<at - 1] + "0" + digits[at - 1..<#digits] }
+		return float((if sign == "-" then "-" else "") + digits)
+	}
+	t
+}
+yaml_all_in(t: text, allowed: text): bool := { for c in t { if not (c in allowed) { return no } }; yes }
+yaml_base(digits: text, base: int): int := { n = 0; for d in digits { n = n * base + YAML_HEX.find(d) - 1 }; n }
+// (\.[0-9]+ | [0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?
+yaml_is_float(t: text): bool := {
+	at = 1
+	whole = 0
+	while at <= #t and t#at in YAML_DIGITS { at += 1; whole += 1 }
+	fraction = 0
+	dot = no
+	if at <= #t and t#at == "." { dot = yes; at += 1; while at <= #t and t#at in YAML_DIGITS { at += 1; fraction += 1 } }
+	if whole == 0 and fraction == 0 { return no }
+	if at <= #t and (t#at == "e" or t#at == "E") {
+		at += 1
+		if at <= #t and (t#at == "+" or t#at == "-") { at += 1 }
+		exponent = 0
+		while at <= #t and t#at in YAML_DIGITS { at += 1; exponent += 1 }
+		if exponent == 0 { return no }
+		return at > #t
+	}
+	at > #t and dot
+}
+
+// | and >: the lines below indented more than parent; - strips the final line breaks, + keeps them all
+yaml_block_scalar(st: map, header: text, parent: int): text := {
+	literal = header#1 == "|"
+	chomp = "clip"
+	explicit = 0
+	for c in yaml_plain_cut(header)[1..<#(yaml_plain_cut(header))] {
+		if c == "-" { chomp = "strip" } else if c == "+" { chomp = "keep" } else if c in "123456789" { explicit = ord(c) - 48 } else { st["i"] = st["i"] - 1; yaml_fail(st, "bad block scalar header " + header) }
+	}
+	lines = st["lines"]
+	indent = if explicit > 0 then max(parent, 0) + explicit else 0
+	if explicit == 0 {
+		j = st["i"]
+		while j <= #lines and lines#j.trim() == "" { j += 1 }
+		if j <= #lines { indent = yaml_indent(st, lines#j) }
+		if indent <= parent { indent = parent + 1 }
+	}
+	body = []
+	while st["i"] <= #lines {
+		line = lines#(st["i"])
+		if line.trim() == "" { body += [""]; st["i"] = st["i"] + 1; continue }
+		n = 0
+		while n < #line and line#(n + 1) == " " { n += 1 }
+		if n < indent { break }
+		if parent < 0 and (yaml_is_marker(line, "---") or yaml_is_marker(line, "...")) { break }
+		body += [line[indent..<#line]]
+		st["i"] = st["i"] + 1
+	}
+	trailing = 0
+	while #body > 0 and body#(#body) == "" { trailing += 1; body = body[0..<#body - 1] }
+	out = ""
+	for k in 1 to #body {
+		line = body#k
+		if k == 1 { out = line; continue }
+		previous = body#(k - 1)
+		if literal or line == "" or line.starts_with(" ") or previous.starts_with(" ") or previous == "" {
+			if literal or line == "" or line.starts_with(" ") or previous.starts_with(" ") { out += "\n" }
+			out += line
+		} else { out += " " + line }
+	}
+	if #body == 0 { return if chomp == "keep" then "\n" * trailing else "" }
+	if chomp == "strip" { return out }
+	if chomp == "clip" { return out + "\n" }
+	out + "\n" * (trailing + 1)
+}
+
+// a flow collection or quoted scalar starting at t and running on over the lines below as needed
+yaml_flow_lines(st: map, t: text): any := {
+	start = st["i"] - 1
+	source = t
+	lines = st["lines"]
+	j = st["i"]
+	while j <= #lines { source = source + "\n" + lines#j; j += 1 }
+	r = yaml_flow_value(st, source, 1)
+	used = source[0..<r#2 - 1]
+	breaks = 0
+	for c in used { if c == "\n" { breaks += 1 } }
+	st["i"] = start + 1 + breaks
+	// the rest of the last line: nothing but a comment
+	after = source[r#2 - 1..<#source]
+	cut = 1
+	while cut <= #after and after#cut != "\n" { cut += 1 }
+	tail = after[0..<cut - 1].trim()
+	if tail != "" and not tail.starts_with("#") { st["i"] = start + breaks; yaml_fail(st, "unexpected " + tail + " after a value") }
+	st["i"] = start + 1 + breaks
+	r#1
+}
+// the place of the line holding source's character at (for errors in flow text)
+yaml_flow_fail(st: map, source: text, at: int, problem: text): any := {
+	breaks = 0
+	for k in 1 to min(at - 1, #source) { if source#k == "\n" { breaks += 1 } }
+	st["i"] = st["i"] + breaks - 1
+	yaml_fail(st, problem)
+}
+yaml_flow_space(source: text, at: int): int := {
+	while at <= #source {
+		c = source#at
+		if c == " " or c == "\t" or c == "\n" { at += 1 }
+		else if c == "#" and (at == 1 or source#(at - 1) == " " or source#(at - 1) == "\n" or source#(at - 1) == "\t") { while at <= #source and source#at != "\n" { at += 1 } }
+		else { return at }
+	}
+	at
+}
+// [value, the place after it]
+yaml_flow_value(st: map, source: text, at: int): list := {
+	at = yaml_flow_space(source, at)
+	if at > #source { yaml_flow_fail(st, source, at, "a value expected") }
+	c = source#at
+	anchor = ""
+	if c == "&" {
+		end = at + 1
+		while end <= #source and not (source#end in " \t\n,]}") { end += 1 }
+		anchor = source[at..<end - 1]
+		at = yaml_flow_space(source, end)
+		c = source#at
+	}
+	r = []
+	if c == "[" { r = yaml_flow_sequence(st, source, at + 1) }
+	else if c == "{" { r = yaml_flow_mapping(st, source, at + 1) }
+	else if c == "\"" or c == "'" { r = yaml_flow_text(st, source, at) }
+	else if c == "*" {
+		end = at + 1
+		while end <= #source and not (source#end in " \t\n,]}") { end += 1 }
+		name = source[at..<end - 1]
+		if not st["anchors"].has(name) { yaml_flow_fail(st, source, at, "undefined alias *" + name) }
+		r = [st["anchors"][name], end]
+	}
+	else if c == "!" { yaml_flow_fail(st, source, at, "tags (!…) are not supported") }
+	else {
+		end = at
+		while end <= #source and not (source#end in ",]}\n") and not (source#end == ":" and (end == #source or source#(end + 1) in " \t\n,]}")) and not (source#end == "#" and source#(end - 1) == " ") { end += 1 }
+		r = [yaml_scalar(source[at - 1..<end - 1].trim()), end]
+	}
+	if anchor != "" { st["anchors"][anchor] = r#1 }
+	r
+}
+yaml_flow_sequence(st: map, source: text, at: int): list := {
+	items = []
+	while true {
+		at = yaml_flow_space(source, at)
+		if at > #source { yaml_flow_fail(st, source, at, "an unclosed [") }
+		if source#at == "]" { return [items, at + 1] }
+		r = yaml_flow_value(st, source, at)
+		at = yaml_flow_space(source, r#2)
+		if at <= #source and source#at == ":" {
+			// a single pair [a: 1]
+			v = yaml_flow_value(st, source, at + 1)
+			pair = {}
+			pair["" + r#1] = v#1
+			r = [pair, v#2]
+			at = yaml_flow_space(source, v#2)
+		}
+		items += [r#1]
+		if at > #source { yaml_flow_fail(st, source, at, "an unclosed [") }
+		if source#at == "," { at += 1 } else if source#at != "]" { yaml_flow_fail(st, source, at, "no , or ] in a flow sequence") }
+	}
+	[items, at]
+}
+yaml_flow_mapping(st: map, source: text, at: int): list := {
+	out = {}
+	while true {
+		at = yaml_flow_space(source, at)
+		if at > #source { yaml_flow_fail(st, source, at, "an unclosed {") }
+		if source#at == "}" { return [out, at + 1] }
+		k = yaml_flow_value(st, source, at)
+		key = if k#1 == ø then "" else "" + k#1
+		at = yaml_flow_space(source, k#2)
+		value = ø
+		if at <= #source and source#at == ":" {
+			v = yaml_flow_value(st, source, at + 1)
+			at = yaml_flow_space(source, v#2)
+			value = v#1
+		}
+		if out.has(key) { yaml_flow_fail(st, source, at, "duplicate key " + key) }
+		out[key] = value
+		if at > #source { yaml_flow_fail(st, source, at, "an unclosed {") }
+		if source#at == "," { at += 1 } else if source#at != "}" { yaml_flow_fail(st, source, at, "no , or } in a flow mapping") }
+	}
+	[out, at]
+}
+// '…' or "…" at source's place at: a line break and the spaces around it fold to one space, empty lines to breaks
+yaml_flow_text(st: map, source: text, at: int): list := {
+	quote = "" + source#at
+	at += 1
+	out = ""
+	while true {
+		if at > #source { yaml_flow_fail(st, source, at, "an unclosed " + quote) }
+		c = source#at
+		if c == quote {
+			if quote == "'" and at < #source and source#(at + 1) == "'" { out += "'"; at += 2; continue }
+			return [out, at + 1]
+		}
+		if quote == "\"" and c == "\\" {
+			e = if at < #source then "" + source#(at + 1) else ""
+			if e == "\n" {
+				at += 2
+				while at <= #source and (source#at == " " or source#at == "\t") { at += 1 }
+				continue
+			}
+			size = if e == "x" then 2 else if e == "u" then 4 else if e == "U" then 8 else 0
+			if size > 0 {
+				code = 0
+				for k in 1 to size {
+					d = if at + 1 + k <= #source then ("" + source#(at + 1 + k)).lower() else ""
+					if d == "" or not (d in YAML_HEX) { yaml_flow_fail(st, source, at, "bad escape: " + size + " hex digits expected") }
+					code = code * 16 + YAML_HEX.find(d) - 1
+				}
+				out += "" + chr(code)
+				at += 2 + size
+				continue
+			}
+			if not YAML_ESCAPED.has(e) { yaml_flow_fail(st, source, at, "bad escape \\" + e) }
+			out += YAML_ESCAPED[e]
+			at += 2
+			continue
+		}
+		if c == "\n" {
+			// fold: trailing spaces dropped, empty lines kept as breaks, else one space
+			while out.ends_with(" ") or out.ends_with("\t") { out = out[0..<#out - 1] }
+			at += 1
+			empties = 0
+			while true {
+				while at <= #source and (source#at == " " or source#at == "\t") { at += 1 }
+				if at <= #source and source#at == "\n" { empties += 1; at += 1 } else { break }
+			}
+			out += if empties == 0 then " " else "\n" * empties
+			continue
+		}
+		out += c
+		at += 1
+	}
+	[out, at]
+}
+
+// writing
+global to_yaml(value: any): text := {
+	if value is map and #(value.keys) > 0 { return yaml_map_written(value, 0) }
+	if value is list and #value > 0 { return yaml_list_written(value, 0) }
+	yaml_scalar_written(value) + "\n"
+}
+yaml_map_written(m: map, indent: int): text := {
+	out = ""
+	pad = " " * indent
+	for k in m.keys {
+		v = m[k]
+		out += pad + yaml_text_written("" + k) + ":"
+		if v is map and #(v.keys) > 0 { out += "\n" + yaml_map_written(v, indent + 2) }
+		else if v is list and #v > 0 { out += "\n" + yaml_list_written(v, indent + 2) }
+		else { out += " " + yaml_scalar_written(v) + "\n" }
+	}
+	out
+}
+yaml_list_written(xs: list, indent: int): text := {
+	out = ""
+	pad = " " * indent
+	for v in xs {
+		if (v is map and #(v.keys) > 0) or (v is list and #v > 0) {
+			inner = if v is map then yaml_map_written(v, indent + 2) else yaml_list_written(v, indent + 2)
+			out += pad + "- " + inner[indent + 2..<#inner]
+		} else { out += pad + "- " + yaml_scalar_written(v) + "\n" }
+	}
+	out
+}
+yaml_scalar_written(v: any): text := {
+	if v == ø { return "null" }
+	if v is bool { return if v then "true" else "false" }
+	if v is map { return "{}" }
+	if v is list { return "[]" }
+	if v is text or v is codepoint { return yaml_text_written("" + v) }
+	if v is int { return "" + v }
+	if v is number {
+		written = "" + float(v)
+		if written == "NaN" or written == "-NaN" { return ".nan" }
+		if written == "∞" { return ".inf" }
+		if written == "-∞" { return "-.inf" }
+		return if "." in written or "e" in written then written else written + ".0"
+	}
+	yaml_text_written("" + v)
+}
+// plain when it reads back as this same text, else double-quoted with escapes
+yaml_text_written(t: text): text := if yaml_plain_safe(t) then t else yaml_quoted(t)
+yaml_plain_safe(t: text): bool := {
+	if t == "" or t != t.trim() { return no }
+	if not (yaml_scalar(t) is text) or yaml_scalar(t) != t { return no }
+	if ("" + t#1) in YAML_INDICATORS { return no }
+	if t.ends_with(":") or ": " in t or " #" in t or "\t" in t { return no }
+	if yaml_is_marker(t, "---") or yaml_is_marker(t, "...") { return no }
+	for c in t { code = ord(c); if code < 32 or code == 127 or c == "," or c == "[" or c == "]" or c == "{" or c == "}" { return no } }
+	yes
+}
+yaml_quoted(t: text): text := {
+	out = "\""
+	for c in t {
+		code = ord(c)
+		if c == "\"" { out += "\\\"" }
+		else if c == "\\" { out += "\\\\" }
+		else if c == "\n" { out += "\\n" }
+		else if c == "\t" { out += "\\t" }
+		else if code < 32 or code == 127 { out += "\\x" + YAML_HEX#(code / 16 + 1) + YAML_HEX#(code % 16 + 1) }
+		else { out += c }
+	}
+	out + "\""
+}

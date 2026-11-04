@@ -1,0 +1,177 @@
+// The standard library module unicode: `use unicode`, the normalization forms of UAX #15 and full case folding,
+// Unicode 15.1.0 (the version of lib/unicode_data.warp, the same as python3's unicodedata on the box when written).
+// nfc(t), nfd(t), nfkc(t), nfkd(t), unicode_unicode_normalize(t, "NFC"), is_normalized(t, "NFKD"): full canonical or compatibility
+// decomposition applied recursively, the canonical ordering of marks by their combining class, and canonical
+// composition with its blocking rule, skipping the full composition exclusions (CompositionExclusions.txt, the
+// singletons and the non-starter decompositions, derived when the tables load); Hangul syllables decompose and
+// compose by arithmetic (UAX #15 / Unicode 3.12), not tables. casefold(t) is the full case folding of
+// CaseFolding.txt's statuses C and F ("Straße" to "strasse", "İ" to "i̇"); the Turkic mappings (status T) are not
+// applied. codepoint_numbers(t) and text_of_codepoints(ns) go between texts and code point numbers.
+// The tables load on first use (lib/unicode_data.warp, compact decimal texts). To regenerate them for another
+// Unicode version: download UnicodeData.txt, CompositionExclusions.txt, CaseFolding.txt and NormalizationTest.txt
+// from https://www.unicode.org/Public/<version>/ucd/, set VERSION in test/unicode/gen_unicode_tables.py, and run
+// `python3 test/unicode/gen_unicode_tables.py <download dir>` from the repository root (it rewrites the tables and
+// the sampled tests test/modules/test_unicode_*.pairs.warp)
+use unicode_data
+
+UNICODE_STATE = {}
+UNICODE_CCC = {}
+UNICODE_DECOMPOSITION = {}
+UNICODE_COMPATIBLE = {}
+UNICODE_COMPOSITION = {}
+UNICODE_FOLDING = {}
+UNICODE_CANONICAL_FULL = {}
+UNICODE_COMPATIBLE_FULL = {}
+HANGUL_S = 44032
+HANGUL_L = 4352
+HANGUL_V = 4449
+HANGUL_T = 4519
+HANGUL_V_COUNT = 21
+HANGUL_T_COUNT = 28
+HANGUL_N_COUNT = 588
+HANGUL_S_COUNT = 11172
+
+unicode_numbers(t: text, separator: text): list := [int(x) for x in split(t, separator) if x != ""]
+// the tables, read from lib/unicode_data.warp's texts the first time any function needs them
+def unicode_load(): bool {
+	if "loaded" in UNICODE_STATE { return yes }
+	nums = unicode_numbers(unicode_ccc_text(), " ")
+	edge = 0
+	for i in 0 ..< count(nums) /! 3 {
+		s = edge + nums[3 * i]
+		for k in s ..< s + nums[3 * i + 1] { UNICODE_CCC[k] = nums[3 * i + 2] }
+		edge = s + nums[3 * i + 1]
+	}
+	key = 0
+	for entry in split(unicode_decomposition_text(), ";") {
+		parts = split(entry, " ")
+		key = key + int(parts[0])
+		compat = parts[1] == "1"
+		if parts[2].starts_with("*") {
+			n = int(parts[2][1 ..< count(parts[2])])
+			delta = int(parts[3])
+			for k in key ..< key + n { UNICODE_DECOMPOSITION[k] = [k + delta]; if compat { UNICODE_COMPATIBLE[k] = yes } }
+			key = key + n - 1
+		} else {
+			UNICODE_DECOMPOSITION[key] = [int(p) for p in parts[2 ..< count(parts)]]
+			if compat { UNICODE_COMPATIBLE[key] = yes }
+		}
+	}
+	excluded = {}
+	for n in unicode_numbers(unicode_exclusion_text(), " ") { excluded[n] = yes }
+	for written in UNICODE_DECOMPOSITION.keys {
+		k = int(str(written))
+		d = UNICODE_DECOMPOSITION[k]
+		if count(d) == 2 and not (k in UNICODE_COMPATIBLE) and not (k in excluded) and not (k in UNICODE_CCC) and not (d[0] in UNICODE_CCC) { UNICODE_COMPOSITION[d[0] * 2097152 + d[1]] = k }
+	}
+	runs = unicode_numbers(unicode_folding_text(), " ")
+	edge = 0
+	for i in 0 ..< count(runs) /! 4 {
+		s = edge + runs[4 * i]
+		for j in 0 ..< runs[4 * i + 1] { UNICODE_FOLDING[s + j * runs[4 * i + 2]] = [s + j * runs[4 * i + 2] + runs[4 * i + 3]] }
+		edge = s + (runs[4 * i + 1] - 1) * runs[4 * i + 2]
+	}
+	for entry in split(unicode_folding_multi_text(), ";") { ns = unicode_numbers(entry, " "); UNICODE_FOLDING[ns[0]] = ns[1 ..< count(ns)] }
+	UNICODE_STATE["loaded"] = yes
+	yes
+}
+combining_class(n: int): int := { unicode_load(); if n in UNICODE_CCC then UNICODE_CCC[n] else 0 }
+
+codepoint_numbers(t: text): list := [ord(c) for c in t.codepoints]
+text_of_codepoints(ns: list): text := join([str(chr(n)) for n in ns], "")
+
+// the full decomposition of one code point, memoized
+def unicode_full(n: int, compat: bool): list {
+	if compat and n in UNICODE_COMPATIBLE_FULL { return UNICODE_COMPATIBLE_FULL[n] }
+	if not compat and n in UNICODE_CANONICAL_FULL { return UNICODE_CANONICAL_FULL[n] }
+	result = [n]
+	if n >= HANGUL_S and n < HANGUL_S + HANGUL_S_COUNT {
+		index = n - HANGUL_S
+		result = [HANGUL_L + index /! HANGUL_N_COUNT, HANGUL_V + index % HANGUL_N_COUNT /! HANGUL_T_COUNT]
+		if index % HANGUL_T_COUNT != 0 { result.add(HANGUL_T + index % HANGUL_T_COUNT) }
+	} else if n in UNICODE_DECOMPOSITION and (compat or not (n in UNICODE_COMPATIBLE)) {
+		result = []
+		for part in UNICODE_DECOMPOSITION[n] { result = result + unicode_full(part, compat) }
+	}
+	if compat { UNICODE_COMPATIBLE_FULL[n] = result } else { UNICODE_CANONICAL_FULL[n] = result }
+	result
+}
+// decomposed and in canonical order: each run of marks stably sorted by combining class
+def unicode_decomposed(ns: list, compat: bool): list {
+	unicode_load()
+	classes = UNICODE_CCC
+	out = []
+	for n in ns {
+		if n < 160 { out.add(n) } else { for part in unicode_full(n, compat) { out.add(part) } }
+	}
+	for i in 1 ..< count(out) {
+		c = if out[i] in classes then classes[out[i]] else 0
+		if c != 0 {
+			j = i
+			while j > 0 and (if out[j - 1] in classes then classes[out[j - 1]] else 0) > c { swap = out[j - 1]; out[j - 1] = out[j]; out[j] = swap; j = j - 1 }
+		}
+	}
+	out
+}
+def unicode_pair(a: int, b: int): int {
+	unicode_load()
+	if a >= HANGUL_L and a < HANGUL_L + 19 and b >= HANGUL_V and b < HANGUL_V + HANGUL_V_COUNT { return HANGUL_S + ((a - HANGUL_L) * HANGUL_V_COUNT + b - HANGUL_V) * HANGUL_T_COUNT }
+	if a >= HANGUL_S and a < HANGUL_S + HANGUL_S_COUNT and (a - HANGUL_S) % HANGUL_T_COUNT == 0 and b > HANGUL_T and b < HANGUL_T + HANGUL_T_COUNT { return a + b - HANGUL_T }
+	key = a * 2097152 + b
+	if key in UNICODE_COMPOSITION then UNICODE_COMPOSITION[key] else -1
+}
+// canonical composition of a decomposed, ordered sequence: a mark joins the last starter unless a mark of the same
+// or a higher class, or a starter, stands between them
+def unicode_composed(ns: list): list {
+	unicode_load()
+	classes = UNICODE_CCC
+	out = []
+	starter = -1
+	between = -1
+	for n in ns {
+		c = if n in classes then classes[n] else 0
+		if starter >= 0 and (count(out) - 1 == starter or (between != 0 and between < c)) {
+			joined = unicode_pair(out[starter], n)
+			if joined >= 0 { out[starter] = joined; continue }
+		}
+		if c == 0 { starter = count(out); between = -1 } else { between = if count(out) - 1 == starter then c else max(between, c) }
+		if c == 0 and starter != count(out) { between = 0 }
+		out.add(n)
+	}
+	out
+}
+nfd(t: text): text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), no))
+nfkd(t: text): text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), yes))
+nfc(t: text): text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), no)))
+nfkc(t: text): text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), yes)))
+def unicode_normalize(t: text, form: text): text {
+	f = upper(form)
+	if f == "NFC" { return nfc(t) }
+	if f == "NFD" { return nfd(t) }
+	if f == "NFKC" { return nfkc(t) }
+	if f == "NFKD" { return nfkd(t) }
+	raise "unicode_normalize: the form is NFC, NFD, NFKC or NFKD, not " + form
+}
+is_normalized(t: text, form: text): bool := codepoint_numbers(unicode_normalize(t, form)) == codepoint_numbers(t)
+def casefold(t: text): text {
+	unicode_load()
+	out = []
+	for n in codepoint_numbers(t) { if n in UNICODE_FOLDING { for m in UNICODE_FOLDING[n] { out.add(m) } } else { out.add(n) } }
+	text_of_codepoints(out)
+}
+// the NormalizationTest.txt invariants of one line's five columns (lists of code point numbers): the ones that
+// fail, by name, so [] when the line holds
+def normalization_check(columns: list): list {
+	c = columns
+	failed = []
+	forms = [["NFC", no, yes], ["NFD", no, no], ["NFKC", yes, yes], ["NFKD", yes, no]]
+	expected = [[1, 1, 1, 3, 3], [2, 2, 2, 4, 4], [3, 3, 3, 3, 3], [4, 4, 4, 4, 4]]
+	for f in 0 ..< 4 {
+		for i in 0 ..< 5 {
+			d = unicode_decomposed(c[i], forms[f][1])
+			got = if forms[f][2] then unicode_composed(d) else d
+			if got != c[expected[f][i]] { failed.add(forms[f][0] + "(c" + str(i + 1) + ")") }
+		}
+	}
+	failed
+}

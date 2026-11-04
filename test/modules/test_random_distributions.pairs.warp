@@ -1,0 +1,31 @@
+# lib/random.warp distributions (card lib-random-distributions); `use "random"` while `use random` hits core-use-overloaded-name
+
+# random_between: whole numbers inclusive, fractions in [lo, hi)
+'use "random"; seed(1); ok = true; for i in 1 to 500 { r = random_between(1, 6); if r < 1 or r > 6 or not (r is int) { ok = false } }; ok'	yes
+'use "random"; seed(1); seen = 0; for i in 1 to 500 { if random_between(1, 3) == 3 { seen = seen + 1 } }; seen > 100'	yes
+'use "random"; seed(1); ok = true; for i in 1 to 500 { r = random_between(1.5, 2.5); if r < 1.5 or r >= 2.5 { ok = false } }; ok'	yes
+'use "random"; random_between(4, 4)'	4
+'use "random"; random_between(6, 1)'	error	random_between needs lo <= hi
+
+# reproducible: the same seed, the same draws
+'use "random"; seed(42); a = [random_between(1, 100), normal(0, 1), random_exponential(1), weighted_choice([1, 2, 3], [1, 1, 1])]; seed(42); b = [random_between(1, 100), normal(0, 1), random_exponential(1), weighted_choice([1, 2, 3], [1, 1, 1])]; a == b'	yes
+
+# normal: Box-Muller
+'use "random"; seed(7); t = 0.0; for i in 1 to 2000 { t = t + normal(5, 2) }; m = t / 2000; m > 4.7 and m < 5.3'	yes
+'use "random"; seed(7); t = 0.0; for i in 1 to 2000 { x = normal(0, 1); t = t + x * x }; v = t / 2000; v > 0.85 and v < 1.15'	yes
+'use "random"; normal(3, 0)'	3
+'use "random"; normal(0, -1)'	error	normal needs sd >= 0
+
+# random_exponential: inverse transform, mean 1/rate, never below 0
+'use "random"; seed(7); t = 0.0; for i in 1 to 2000 { t = t + random_exponential(4) }; m = t / 2000; m > 0.22 and m < 0.28'	yes
+'use "random"; seed(3); ok = true; for i in 1 to 500 { if random_exponential(2) < 0 { ok = false } }; ok'	yes
+'use "random"; random_exponential(0)'	error	random_exponential needs rate > 0
+'use "random"; random_exponential(-1)'	error	random_exponential needs rate > 0
+
+# weighted_choice: frequencies follow the weights, a zero weight is never drawn
+'use "random"; seed(5); a = 0; c = 0; for i in 1 to 2000 { w = weighted_choice(["a", "b", "c"], [1, 0, 3]); if w == "a" { a = a + 1 }; if w == "c" { c = c + 1 } }; a + c == 2000 and a > 400 and a < 600'	yes
+'use "random"; weighted_choice([9], [2])'	9
+'use "random"; weighted_choice([], [])'	error	weighted_choice of an empty list
+'use "random"; weighted_choice([1, 2], [1])'	error	weighted_choice needs one weight per item
+'use "random"; weighted_choice([1, 2], [1, -1])'	error	weighted_choice needs weights >= 0
+'use "random"; weighted_choice([1, 2], [0, 0])'	error	weighted_choice needs a weight above 0

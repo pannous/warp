@@ -1,0 +1,16 @@
+# INI: parse_ini and to_ini (lib/ini.warp, card lib-ini-toml)
+
+«use ini; m = parse_ini("; top comment\\nname = demo\\n\\n[server]\\nhost = example.com\\nport: 8080\\n  # indented comment\\npath = \\"  /x  \\"\\nurl = http://x/#top\\nempty =\\n\\n[Section Two]\\nKey = Value with = sign\\n"); [m["name"], m["server"]["host"], m["server"]["port"]]»	["demo", "example.com", "8080"]
+«use ini; m = parse_ini("; top comment\\nname = demo\\n\\n[server]\\nhost = example.com\\nport: 8080\\n  # indented comment\\npath = \\"  /x  \\"\\nurl = http://x/#top\\nempty =\\n\\n[Section Two]\\nKey = Value with = sign\\n"); [m["server"]["path"], m["server"]["url"], m["server"]["empty"]]»	["  /x  ", "http://x/#top", ""]
+«use ini; m = parse_ini("; top comment\\nname = demo\\n\\n[server]\\nhost = example.com\\nport: 8080\\n  # indented comment\\npath = \\"  /x  \\"\\nurl = http://x/#top\\nempty =\\n\\n[Section Two]\\nKey = Value with = sign\\n"); m["Section Two"]["Key"]»	"Value with = sign"
+«use ini; m = parse_ini("; top comment\\nname = demo\\n\\n[server]\\nhost = example.com\\nport: 8080\\n  # indented comment\\npath = \\"  /x  \\"\\nurl = http://x/#top\\nempty =\\n\\n[Section Two]\\nKey = Value with = sign\\n"); m.keys»	["name", "server", "Section Two"]
+«use ini; m = parse_ini("; top comment\\nname = demo\\n\\n[server]\\nhost = example.com\\nport: 8080\\n  # indented comment\\npath = \\"  /x  \\"\\nurl = http://x/#top\\nempty =\\n\\n[Section Two]\\nKey = Value with = sign\\n"); parse_ini(to_ini(m)) == m»	yes
+«use ini; m = parse_ini("[a]\\nx = 1\\n[b]\\ny = 'q'\\n"); to_ini(m)»	"[a]\nx = 1\n\n[b]\ny = q\n"
+«use ini; m = parse_ini(""); m == {}»	yes
+«use ini; m = parse_ini("a = 1\\r\\n[s]\\r\\nb = 2\\r\\n"); [m["a"], m["s"]["b"]]»	["1", "2"]
+«use ini; (try { parse_ini("[s]\\nk = 1\\nk = 2") } catch e { "" + e }) == "ini line 3: duplicate key k in section s"»	yes
+«use ini; (try { parse_ini("[s]\\n[t]\\n[s]") } catch e { "" + e }) == "ini line 3: duplicate section s"»	yes
+«use ini; (try { parse_ini("a = 1\\njunk line") } catch e { "" + e }) == "ini line 2: no = or : in junk line"»	yes
+«use ini; (try { parse_ini("[s\\nk=1") } catch e { "" + e }) == "ini line 1: no closing ] in [s"»	yes
+«use ini; (try { parse_ini("= 1") } catch e { "" + e }) == "ini line 1: a value without a key"»	yes
+«use ini; (try { to_ini({s: {deep: {x: 1}}}) } catch e { "" + e }).starts_with("to_ini: the section s holds the map deep")»	yes

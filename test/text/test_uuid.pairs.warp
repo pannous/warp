@@ -1,0 +1,13 @@
+# uuid() (card lib-uuid): a random version 4 UUID, lowercase 8-4-4-4-12 hex, version nibble 4, variant bits 10
+'use uuid; #uuid()'	36
+'use uuid; u = uuid(); [u#9, u#14, u#19, u#24]'	['-', '-', '-', '-']
+'use uuid; uuid()#15'	'4'
+'use uuid; uuid()#20 in "89ab"'	yes
+'use uuid; u = uuid(); u == lower(u)'	yes
+'use uuid; is_uuid(uuid())'	yes
+'use uuid; uuid() != uuid()'	yes
+'use uuid; is_uuid("123e4567-e89b-42d3-a456-426614174000")'	yes
+'use uuid; is_uuid("123e4567e89b42d3a456426614174000")'	no
+'use uuid; is_uuid("123e4567-e89b-42d3-a456-42661417400g")'	no
+'use uuid; uuid_parsed("123e4567-E89B-42d3-a456-426614174000")'	[18, 62, 69, 103, 232, 155, 66, 211, 164, 86, 66, 102, 20, 23, 64, 0]
+'use uuid; try uuid_parsed("nope") else "refused"'	"refused"

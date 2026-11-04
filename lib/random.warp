@@ -1,4 +1,5 @@
 // The standard library module random (notes/stdlib.md): `use random`, over the host words random and random_below
+use math
 // The host word random needs no `use`: `random` is a float from 0 up to 1, `random(6)` a whole number 0…5, `random(1, 6)` a die roll 1…6 (both ends included; fractions give a float from a up to b), `random int`, `random bool`, `random codepoint`, `random float`
 
 choice(xs: any): any := xs#(random_below(count(xs)) + 1)
@@ -6,3 +7,38 @@ shuffle(xs: list): list := { out = xs; i = count(out); while i > 1 { j = random_
 sample(xs: list, k: any): list := { mixed = shuffle(xs); out = []; for i in 1 to min(k, count(mixed)) { out = out + [mixed#i] }; out }
 // the same numbers after the same seed: seed(42); [random_below(100), random()]
 seed(n: any): any := random_seed(n)
+
+// Distributions (card lib-random-distributions). random_between(lo, hi) lives in the prelude: whole numbers give a whole
+// number in [lo, hi], both ends included; fractions a float in [lo, hi); lo > hi is refused. One name serves both:
+// typed overloads (int, int) / (real, real) don't compile, so the prelude's value dispatch stays.
+// weighted_choice(xs, weights): xs#i with probability weights#i / sum(weights); a zero weight is never drawn.
+// Refuses an empty list, a different count of weights, a negative weight, and weights all zero.
+weighted_choice(xs: list, weights: list): any := {
+	if count(xs) == 0 { raise "weighted_choice of an empty list" }
+	if count(weights) != count(xs) { raise "weighted_choice needs one weight per item" }
+	total = 0.0
+	for w in weights { if w < 0 { raise "weighted_choice needs weights >= 0" }; total = total + w }
+	if total <= 0 { raise "weighted_choice needs a weight above 0" }
+	r = random() * total
+	chosen = 0
+	acc = 0.0
+	for i in 1 to count(xs) { acc = acc + weights#i; if chosen == 0 and weights#i > 0 and r < acc { chosen = i } }
+	// rounding can leave r just at the total: the last item with weight wins
+	if chosen == 0 { for i in 1 to count(xs) { if weights#i > 0 { chosen = i } } }
+	xs#chosen
+}
+// normal(mean, sd): a normally distributed float by Box-Muller; u1 = 1 - random() lies in (0, 1], so log never sees 0.
+// sd 0 gives the mean; sd < 0 is refused.
+normal(mean: any, sd: any): any := {
+	if sd < 0 { raise "normal needs sd >= 0" }
+	u1: float = 1.0 - random()
+	u2: float = random()
+	mean + sd * sqrt(-2.0 * log(u1)) * cos(2.0 * pi * u2)
+}
+// random_exponential(rate): an exponentially distributed float >= 0 with mean 1/rate, by inverse transform; rate <= 0 is
+// refused. Not named exponential: math's exponential(x) is e^x.
+random_exponential(rate: any): any := {
+	if rate <= 0 { raise "random_exponential needs rate > 0" }
+	u: float = 1.0 - random()
+	0.0 - log(u) / rate
+}

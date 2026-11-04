@@ -1,0 +1,44 @@
+// lib/json_tools.warp JSON Patch: RFC 6902 appendix A, A.1-A.16, the error ones by their message (card lib-json-tools)
+// A.1 adding an object member
+'use json_tools; json_equal(json_patch(json(\'{"foo": "bar"}\'), json(\'[{"op": "add", "path": "/baz", "value": "qux"}]\')), json(\'{"baz": "qux", "foo": "bar"}\'))'	true
+// A.2 adding an array element
+'use json_tools; json_equal(json_patch(json(\'{"foo": ["bar", "baz"]}\'), json(\'[{"op": "add", "path": "/foo/1", "value": "qux"}]\')), json(\'{"foo": ["bar", "qux", "baz"]}\'))'	true
+// A.3 removing an object member
+'use json_tools; json_equal(json_patch(json(\'{"baz": "qux", "foo": "bar"}\'), json(\'[{"op": "remove", "path": "/baz"}]\')), json(\'{"foo": "bar"}\'))'	true
+// A.4 removing an array element
+'use json_tools; json_equal(json_patch(json(\'{"foo": ["bar", "qux", "baz"]}\'), json(\'[{"op": "remove", "path": "/foo/1"}]\')), json(\'{"foo": ["bar", "baz"]}\'))'	true
+// A.5 replacing a value
+'use json_tools; json_equal(json_patch(json(\'{"baz": "qux", "foo": "bar"}\'), json(\'[{"op": "replace", "path": "/baz", "value": "boo"}]\')), json(\'{"baz": "boo", "foo": "bar"}\'))'	true
+// A.6 moving a value
+'use json_tools; json_equal(json_patch(json(\'{"foo": {"bar": "baz", "waldo": "fred"}, "qux": {"corge": "grault"}}\'), json(\'[{"op": "move", "from": "/foo/waldo", "path": "/qux/thud"}]\')), json(\'{"foo": {"bar": "baz"}, "qux": {"corge": "grault", "thud": "fred"}}\'))'	true
+// A.7 moving an array element
+'use json_tools; json_equal(json_patch(json(\'{"foo": ["all", "grass", "cows", "eat"]}\'), json(\'[{"op": "move", "from": "/foo/1", "path": "/foo/3"}]\')), json(\'{"foo": ["all", "cows", "eat", "grass"]}\'))'	true
+// A.8 testing a value: success
+'use json_tools; json_equal(json_patch(json(\'{"baz": "qux", "foo": ["a", 2, "c"]}\'), json(\'[{"op": "test", "path": "/baz", "value": "qux"}, {"op": "test", "path": "/foo/1", "value": 2}]\')), json(\'{"baz": "qux", "foo": ["a", 2, "c"]}\'))'	true
+// A.10 adding a nested member object
+'use json_tools; json_equal(json_patch(json(\'{"foo": "bar"}\'), json(\'[{"op": "add", "path": "/child", "value": {"grandchild": {}}}]\')), json(\'{"foo": "bar", "child": {"grandchild": {}}}\'))'	true
+// A.11 ignoring unrecognized elements
+'use json_tools; json_equal(json_patch(json(\'{"foo": "bar"}\'), json(\'[{"op": "add", "path": "/baz", "value": "qux", "xyz": 123}]\')), json(\'{"foo": "bar", "baz": "qux"}\'))'	true
+// A.14 ~ escape ordering
+'use json_tools; json_equal(json_patch(json(\'{"/": 9, "~1": 10}\'), json(\'[{"op": "test", "path": "/~01", "value": 10}]\')), json(\'{"/": 9, "~1": 10}\'))'	true
+// A.16 adding an array value
+'use json_tools; json_equal(json_patch(json(\'{"foo": ["bar"]}\'), json(\'[{"op": "add", "path": "/foo/-", "value": ["abc", "def"]}]\')), json(\'{"foo": ["bar", ["abc", "def"]]}\'))'	true
+// copy (RFC 6902 4.5) and adding to the end and the whole document
+'use json_tools; json_equal(json_patch(json(\'{"a": [1]}\'), json(\'[{"op": "copy", "from": "/a", "path": "/b"}, {"op": "add", "path": "/b/-", "value": 2}, {"op": "add", "path": "", "value": {"c": [{"a": 1}]}}]\')), json(\'{"c": [{"a": 1}]}\'))'	true
+// A.9 testing a value: error
+'use json_tools; try { json_patch(json(\'{"baz": "qux"}\'), json(\'[{"op": "test", "path": "/baz", "value": "bar"}]\')) } catch e { e.message }'	"json_patch: operation 0 (/baz): the value at /baz is \"qux\", not \"bar\""
+// A.12 adding to a nonexistent target
+'use json_tools; try { json_patch(json(\'{"foo": "bar"}\'), json(\'[{"op": "add", "path": "/baz/bat", "value": "qux"}]\')) } catch e { e.message }'	"json_patch: operation 0 (/baz/bat): json pointer /baz/bat: no member baz"
+// A.15 comparing strings and numbers
+'use json_tools; try { json_patch(json(\'{"/": 9, "~1": 10}\'), json(\'[{"op": "test", "path": "/~01", "value": "10"}]\')) } catch e { e.message }'	"json_patch: operation 0 (/~01): the value at /~01 is 10, not \"10\""
+// a move into its own child
+'use json_tools; try { json_patch(json(\'{"a": {"b": 1}}\'), json(\'[{"op": "move", "from": "/a", "path": "/a/b/c"}]\')) } catch e { e.message }'	"json_patch: operation 0 (/a/b/c): it moves /a into its own child /a/b/c"
+// an unknown op, a missing member
+'use json_tools; try { json_patch(json(\'{"a": 1}\'), json(\'[{"op": "add", "path": "/b", "value": 2}, {"op": "frob", "path": "/a"}]\')) } catch e { e.message }'	"json_patch: operation 1 (/a): op \"frob\" is unknown"
+// a missing value
+'use json_tools; try { json_patch(json(\'{"a": 1}\'), json(\'[{"op": "replace", "path": "/a"}]\')) } catch e { e.message }'	"json_patch: operation 0 (/a): it has no \"value\" member"
+// A.13 invalid patch document: lib/json keeps the last of a repeated key, so the op is remove, and /baz is missing
+'use json_tools; try { json_patch(json(\'{"foo": "bar"}\'), json(\'[{"op":"add","path":"/baz","value":"qux","op":"remove"}]\')) } catch e { e.message }'	"json_patch: operation 0 (/baz): json pointer /baz: no member baz"
+// atomic: a failing patch leaves the input as it was, and a passing one never changes it either
+'use json_tools; d = json(\'{"a": [1]}\'); try { json_patch(d, json(\'[{"op": "add", "path": "/a/-", "value": 2}, {"op": "remove", "path": "/x"}]\')) } catch e { 0 }; d.json'	"{\"a\":[1]}"
+'use json_tools; d = json(\'{"a": {"b": [1]}}\'); p = json_patch(d, json(\'[{"op": "add", "path": "/a/b/0", "value": 0}]\')); d.json + p.json'	"{\"a\":{\"b\":[1]}}{\"a\":{\"b\":[0,1]}}"

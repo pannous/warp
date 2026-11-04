@@ -1,0 +1,101 @@
+# mustache spec sections: Truthy
+'use template; mustache("\\"{{#boolean}}This should be rendered.{{/boolean}}\\"", {"boolean": yes})'	"\"This should be rendered.\""
+
+# mustache spec sections: Falsey
+'use template; mustache("\\"{{#boolean}}This should not be rendered.{{/boolean}}\\"", {"boolean": no})'	"\"\""
+
+# mustache spec sections: Null is falsey
+'use template; mustache("\\"{{#null}}This should not be rendered.{{/null}}\\"", {"null": nil})'	"\"\""
+
+# mustache spec sections: Context
+'use template; mustache("\\"{{#context}}Hi {{name}}.{{/context}}\\"", {"context": {"name": "Joe"}})'	"\"Hi Joe.\""
+
+# mustache spec sections: Parent contexts
+'use template; mustache("\\"{{#sec}}{{a}}, {{b}}, {{c.d}}{{/sec}}\\"", {"a": "foo", "b": "wrong", "sec": {"b": "bar"}, "c": {"d": "baz"}})'	"\"foo, bar, baz\""
+
+# mustache spec sections: Variable test
+'use template; mustache("\\"{{#foo}}{{.}} is {{foo}}{{/foo}}\\"", {"foo": "bar"})'	"\"bar is bar\""
+
+# mustache spec sections: List Contexts
+'use template; mustache("{{#tops}}{{#middles}}{{tname.lower}}{{mname}}.{{#bottoms}}{{tname.upper}}{{mname}}{{bname}}.{{/bottoms}}{{/middles}}{{/tops}}", {"tops": [{"tname": {"upper": "A", "lower": "a"}, "middles": [{"mname": "1", "bottoms": [{"bname": "x"}, {"bname": "y"}]}]}]})'	"a1.A1x.A1y."
+
+# mustache spec sections: Deeply Nested Contexts
+'use template; mustache("{{#a}}\n{{one}}\n{{#b}}\n{{one}}{{two}}{{one}}\n{{#c}}\n{{one}}{{two}}{{three}}{{two}}{{one}}\n{{#d}}\n{{one}}{{two}}{{three}}{{four}}{{three}}{{two}}{{one}}\n{{#five}}\n{{one}}{{two}}{{three}}{{four}}{{five}}{{four}}{{three}}{{two}}{{one}}\n{{one}}{{two}}{{three}}{{four}}{{.}}6{{.}}{{four}}{{three}}{{two}}{{one}}\n{{one}}{{two}}{{three}}{{four}}{{five}}{{four}}{{three}}{{two}}{{one}}\n{{/five}}\n{{one}}{{two}}{{three}}{{four}}{{three}}{{two}}{{one}}\n{{/d}}\n{{one}}{{two}}{{three}}{{two}}{{one}}\n{{/c}}\n{{one}}{{two}}{{one}}\n{{/b}}\n{{one}}\n{{/a}}\n", {"a": {"one": 1}, "b": {"two": 2}, "c": {"three": 3, "d": {"four": 4, "five": 5}}})'	"1\n121\n12321\n1234321\n123454321\n12345654321\n123454321\n1234321\n12321\n121\n1\n"
+
+# mustache spec sections: List
+'use template; mustache("\\"{{#list}}{{item}}{{/list}}\\"", {"list": [{"item": 1}, {"item": 2}, {"item": 3}]})'	"\"123\""
+
+# mustache spec sections: Empty List
+'use template; mustache("\\"{{#list}}Yay lists!{{/list}}\\"", {"list": []})'	"\"\""
+
+# mustache spec sections: Doubled
+'use template; mustache("{{#bool}}\n* first\n{{/bool}}\n* {{two}}\n{{#bool}}\n* third\n{{/bool}}\n", {"bool": yes, "two": "second"})'	"* first\n* second\n* third\n"
+
+# mustache spec sections: Nested (Truthy)
+'use template; mustache("| A {{#bool}}B {{#bool}}C{{/bool}} D{{/bool}} E |", {"bool": yes})'	"| A B C D E |"
+
+# mustache spec sections: Nested (Falsey)
+'use template; mustache("| A {{#bool}}B {{#bool}}C{{/bool}} D{{/bool}} E |", {"bool": no})'	"| A  E |"
+
+# mustache spec sections: Context Misses
+'use template; mustache("[{{#missing}}Found key \'missing\'!{{/missing}}]", {})'	"[]"
+
+# mustache spec sections: Implicit Iterator - String
+'use template; mustache("\\"{{#list}}({{.}}){{/list}}\\"", {"list": ["a", "b", "c", "d", "e"]})'	"\"(a)(b)(c)(d)(e)\""
+
+# mustache spec sections: Implicit Iterator - Integer
+'use template; mustache("\\"{{#list}}({{.}}){{/list}}\\"", {"list": [1, 2, 3, 4, 5]})'	"\"(1)(2)(3)(4)(5)\""
+
+# mustache spec sections: Implicit Iterator - Decimal
+'use template; mustache("\\"{{#list}}({{.}}){{/list}}\\"", {"list": [1.1, 2.2, 3.3, 4.4, 5.5]})'	"\"(1.1)(2.2)(3.3)(4.4)(5.5)\""
+
+# mustache spec sections: Implicit Iterator - Array
+'use template; mustache("\\"{{#list}}({{#.}}{{.}}{{/.}}){{/list}}\\"", {"list": [[1, 2, 3], ["a", "b", "c"]]})'	"\"(123)(abc)\""
+
+# mustache spec sections: Implicit Iterator - HTML Escaping
+'use template; mustache("\\"{{#list}}({{.}}){{/list}}\\"", {"list": ["&", "\\"", "<", ">"]})'	"\"(&amp;)(&quot;)(&lt;)(&gt;)\""
+
+# mustache spec sections: Implicit Iterator - Triple mustache
+'use template; mustache("\\"{{#list}}({{{.}}}){{/list}}\\"", {"list": ["&", "\\"", "<", ">"]})'	"\"(&)(\")(<)(>)\""
+
+# mustache spec sections: Implicit Iterator - Ampersand
+'use template; mustache("\\"{{#list}}({{&.}}){{/list}}\\"", {"list": ["&", "\\"", "<", ">"]})'	"\"(&)(\")(<)(>)\""
+
+# mustache spec sections: Implicit Iterator - Root-level
+'use template; mustache("\\"{{#.}}({{value}}){{/.}}\\"", [{"value": "a"}, {"value": "b"}])'	"\"(a)(b)\""
+
+# mustache spec sections: Dotted Names - Truthy
+'use template; mustache("\\"{{#a.b.c}}Here{{/a.b.c}}\\" == \\"Here\\"", {"a": {"b": {"c": yes}}})'	"\"Here\" == \"Here\""
+
+# mustache spec sections: Dotted Names - Falsey
+'use template; mustache("\\"{{#a.b.c}}Here{{/a.b.c}}\\" == \\"\\"", {"a": {"b": {"c": no}}})'	"\"\" == \"\""
+
+# mustache spec sections: Dotted Names - Broken Chains
+'use template; mustache("\\"{{#a.b.c}}Here{{/a.b.c}}\\" == \\"\\"", {"a": {}})'	"\"\" == \"\""
+
+# mustache spec sections: Surrounding Whitespace
+'use template; mustache(" | {{#boolean}}\t|\t{{/boolean}} | \n", {"boolean": yes})'	" | \t|\t | \n"
+
+# mustache spec sections: Internal Whitespace
+'use template; mustache(" | {{#boolean}} {{! Important Whitespace }}\n {{/boolean}} | \n", {"boolean": yes})'	" |  \n  | \n"
+
+# mustache spec sections: Indented Inline Sections
+'use template; mustache(" {{#boolean}}YES{{/boolean}}\n {{#boolean}}GOOD{{/boolean}}\n", {"boolean": yes})'	" YES\n GOOD\n"
+
+# mustache spec sections: Standalone Lines
+'use template; mustache("| This Is\n{{#boolean}}\n|\n{{/boolean}}\n| A Line\n", {"boolean": yes})'	"| This Is\n|\n| A Line\n"
+
+# mustache spec sections: Indented Standalone Lines
+'use template; mustache("| This Is\n  {{#boolean}}\n|\n  {{/boolean}}\n| A Line\n", {"boolean": yes})'	"| This Is\n|\n| A Line\n"
+
+# mustache spec sections: Standalone Line Endings
+'use template; mustache("|\r\n{{#boolean}}\r\n{{/boolean}}\r\n|", {"boolean": yes})'	"|\r\n|"
+
+# mustache spec sections: Standalone Without Previous Line
+'use template; mustache("  {{#boolean}}\n#{{/boolean}}\n/", {"boolean": yes})'	"#\n/"
+
+# mustache spec sections: Standalone Without Newline
+'use template; mustache("#{{#boolean}}\n/\n  {{/boolean}}", {"boolean": yes})'	"#\n/\n"
+
+# mustache spec sections: Padding
+'use template; mustache("|{{# boolean }}={{/ boolean }}|", {"boolean": yes})'	"|=|"
