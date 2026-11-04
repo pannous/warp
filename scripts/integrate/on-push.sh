@@ -11,6 +11,10 @@ LOG=$HOME/Library/Logs/warp/after-push.log
 MAIN_CHECKOUT=$(cd "$(dirname "$0")/../.." && pwd)
 AFTER_PUSH=$MAIN_CHECKOUT/scripts/integrate/after-push.sh
 NO_COMMIT=0000000000000000000000000000000000000000
+# the hook runs inside the pushing worktree's git environment (GIT_DIR, GIT_INDEX_FILE …): left set, every git call
+# below and in after-push.sh acts on that worktree, gone a moment after its push (2026-11-04 20:21: the tree stayed on
+# the old tip and native-2ad9eb2dc got the old compilers, "unknown name protocol")
+unset $(git rev-parse --local-env-vars)
 
 on_main() {
 	git -C "$MAIN_CHECKOUT" fetch -q origin main 2>/dev/null &&
