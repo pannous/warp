@@ -37,8 +37,9 @@ sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_ta
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
 # foreign lines and C imports off the source. with_used: interpolation, the program's rewrite rules, index_positions,
 # property_accessors, the used files and modules, the prelude's definitions it reaches. Then pure_passes in order:
+#   (extensions' passes before tries: `parse` words, then checked tries, extensions/parse_words.warp and
+#   checked_tries.warp)
 #   tries                                  try/catch
-#   (the extension's pass after tries: `parse` words, extensions/parse_words.warp)
 #   definition_heads definitions           which functions answer ø, class fields; definitions and their heads
 #   (extensions' passes after definition_heads: class methods, int types, conversions)
 #   preposition_heads arity_overloads      `f of x` heads, several definitions of one name by arity

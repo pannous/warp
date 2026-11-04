@@ -56,6 +56,8 @@ class Extension {
 	# a core pass's name → the extension's pass running right after it (`{"arity_overloads": clauses}`, decision
 	# extension-passes); a name of no core pass is refused
 	passes: map = {}
+	# a core pass's name → the extension's pass running right before it (`{"tries": checked_tries}`)
+	passes_before: map = {}
 	# functions lowering a match's arms past the core's (cases, values, types, `_`), given the arms, the subject and the
 	# enum variants, each giving arms the core lowers (`n if n > 5 => e` as an arm `_`)
 	arm_lowerings: list = []
@@ -130,12 +132,19 @@ text_escape_at(source: any, at: int, n: int): list? := {
 }
 # every word an extension takes a glued block for
 extension_block_words(): list := extension_list("block_words")
-# the core passes with each extension's pass after the one it names, rows in order
+# the core passes with each extension's passes before and after the one they name, rows in order
 with_extension_passes(core: list): list := {
-	follows = concatenated(EXTENSIONS.map(extension => extension.passes.keys.map(name => [name, extension.passes[name]])))
-	for pair in follows { if not core.any(pass => "${pass}" == pair#1) { raise "an extension's pass follows " + pair#1 + ", which is no core pass" } }
-	concatenated(core.map(pass => [pass] + follows.filter(pair => pair#1 == "${pass}").map(pair => pair#2)))
+	before = named_passes(core, "passes_before")
+	after = named_passes(core, "passes")
+	concatenated(core.map(pass => passes_at(before, pass) + [pass] + passes_at(after, pass)))
 }
+# every extension's [core pass name, its pass] of the field, refused loudly where the name is no core pass
+named_passes(core: list, field: text): list := {
+	pairs = concatenated(EXTENSIONS.map(extension => extension[field].keys.map(name => [name, extension[field][name]])))
+	for pair in pairs { if not core.any(pass => "${pass}" == pair#1) { raise "an extension's pass names " + pair#1 + ", which is no core pass" } }
+	pairs
+}
+passes_at(pairs: list, pass: any): list := pairs.filter(pair => pair#1 == "${pass}").map(pair => pair#2)
 # the program through every extension's text passes, in row order
 with_text_passes(program: Node): Node := {
 	passed = program

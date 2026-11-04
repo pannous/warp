@@ -23,6 +23,7 @@ use "match_patterns.warp"
 use "conversions.warp"
 use "implicit_uses.warp"
 use "parse_words.warp"
+use "checked_tries.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
@@ -49,7 +50,9 @@ EXTENSIONS = [
 	Extension{name: "int_types", passes: {"definition_heads": int_types}}
 	conversions_extension
 	implicit_uses_extension
-	Extension{name: "parse_words", passes: {"tries": parse_words}}
+	# right before tries, in this order: parse words, then the checked tries the core's tries guard
+	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
+	checked_tries_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
 ]
