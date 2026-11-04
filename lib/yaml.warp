@@ -11,7 +11,8 @@
 //   indentation digit, # comments, --- and ... , anchors &a and aliases *a (the same value), the << merge key (a map
 //   or a list of maps; the mapping's own keys win)
 // - refused with "yaml line N: …": tabs as indentation, bad indentation, an undefined alias, a duplicate key,
-//   unclosed flow collections and quotes, tags (!…), complex keys (? …) and directives (%…)
+//   unclosed flow collections and quotes, tags (!…), complex keys (? …) and directives (%…); anchors and aliases on
+//   scalar keys are read (&a key: v, *a : v)
 // - the errors' text gets a period when it would end in " a" or " at" (card core-error-sentence-tail)
 
 YAML_ESCAPED = {"0": chr(0), "a": chr(7), "b": chr(8), "t": "\t", "\t": "\t", "n": "\n", "v": chr(11), "f": chr(12), "r": chr(13), "e": chr(27), " ": " ", "\"": "\"", "/": "/", "\\": "\\", "N": chr(0x85), "_": chr(0xA0), "L": chr(0x2028), "P": chr(0x2029)}
@@ -90,11 +91,14 @@ yaml_node(st: map, indent: int): any := {
 	st["i"] = st["i"] + 1
 	yaml_value(st, content, n - 1, no)
 }
-yaml_sequence(st: map, n: int): list := {
+yaml_sequence(st: map, n: int): list := yaml_sequence(st, n, no)
+// under_key: the sequence is a mapping value at the key's own indentation, ended by the mapping's next key
+yaml_sequence(st: map, n: int, under_key: bool): list := {
 	items = []
 	while yaml_next_indent(st) == n {
 		line = yaml_line(st)
 		content = line[n..<#line]
+		if under_key and not yaml_is_entry(content) { return items }
 		if not yaml_is_entry(content) { yaml_fail(st, "bad indentation: a mapping key among sequence entries") }
 		rest = content[1..<#content]
 		gap = 1
@@ -172,9 +176,26 @@ yaml_key_end(st: map, t: text): int := {
 }
 yaml_key(st: map, raw: text): text := {
 	if raw.starts_with("\"") or raw.starts_with("'") { return "" + yaml_quoted_line(st, raw) }
-	if raw.starts_with("&") or raw.starts_with("*") or raw.starts_with("!") { yaml_fail(st, "anchors, aliases and tags on keys are not supported") }
+	if raw.starts_with("!") { yaml_fail(st, "tags on keys are not supported") }
+	// an alias as a key names a scalar anchored before; an anchor on a key anchors the key's text
+	if raw.starts_with("*") {
+		name = raw[1..<#raw].trim()
+		if not st["anchors"].has(name) { yaml_fail(st, "undefined alias *" + name) }
+		value = st["anchors"][name]
+		if value is map or value is list { yaml_fail(st, "a mapping or sequence as a key is not supported") }
+		return "" + (if value == ø then "" else yaml_key_text(value))
+	}
+	if raw.starts_with("&") {
+		end = 2
+		while end <= #raw and raw#end != " " and raw#end != "\t" { end += 1 }
+		name = raw[1..<end - 1]
+		key = yaml_key(st, raw[end - 1..<#raw].trim())
+		st["anchors"][name] = key
+		return key
+	}
 	raw
 }
+yaml_key_text(v: any): text := if v is bool then (if v then "true" else "false") else "" + v
 yaml_quoted_line(st: map, raw: text): text := {
 	// flow errors count from the line after the current one, as for a value
 	st["i"] = st["i"] + 1
@@ -214,7 +235,7 @@ yaml_value_read(st: map, t: text, parent: int, same: bool): any := {
 	if t == "" or t.starts_with("#") {
 		next = yaml_next_indent(st)
 		if next > parent { return yaml_node(st, next) }
-		if same and next == parent and next >= 0 and yaml_is_entry(yaml_line(st)[next..<#(yaml_line(st))]) { return yaml_sequence(st, next) }
+		if same and next == parent and next >= 0 and yaml_is_entry(yaml_line(st)[next..<#(yaml_line(st))]) { return yaml_sequence(st, next, yes) }
 		return ø
 	}
 	if t.starts_with("|") or t.starts_with(">") { return yaml_block_scalar(st, t, parent) }
@@ -226,10 +247,15 @@ yaml_value_read(st: map, t: text, parent: int, same: bool): any := {
 yaml_plain_lines(st: map, t: text, parent: int): any := {
 	text = yaml_plain_cut(t)
 	folded = no
-	while yaml_next_indent(st) > parent {
+	while true {
+		j = st["i"]
+		blank_lines = 0
+		while j <= #(st["lines"]) and st["lines"]#j.trim() == "" { blank_lines += 1; j += 1 }
+		if yaml_next_indent(st) <= parent { break }
 		line = yaml_line(st).trim()
 		if yaml_key_end(st, line) > 0 or yaml_is_entry(line) { yaml_fail(st, "bad indentation: a mapping or sequence inside a plain scalar") }
-		text = text + " " + yaml_plain_cut(line)
+		// an empty line between two of its lines is a line break (yaml-test-suite 36F6)
+		text = text + (if blank_lines > 0 then "\n" * blank_lines else " ") + yaml_plain_cut(line)
 		folded = yes
 		st["i"] = st["i"] + 1
 	}
@@ -302,14 +328,19 @@ yaml_block_scalar(st: map, header: text, parent: int): text := {
 		if indent <= parent { indent = parent + 1 }
 	}
 	body = []
+	started = no
 	while st["i"] <= #lines {
 		line = lines#(st["i"])
-		if line.trim() == "" { body += [""]; st["i"] = st["i"] + 1; continue }
+		// the empty piece after the text's final line break is no line (spec 8.4, 8.6)
+		if line == "" and st["i"] == #lines { st["i"] = st["i"] + 1; break }
+		// a blank line keeps its spaces past the indentation once the content started (yaml-test-suite H2RW, L24T)
+		if line.trim() == "" { body += [if started and #line > indent then line[indent..<#line] else ""]; st["i"] = st["i"] + 1; continue }
 		n = 0
 		while n < #line and line#(n + 1) == " " { n += 1 }
 		if n < indent { break }
 		if parent < 0 and (yaml_is_marker(line, "---") or yaml_is_marker(line, "...")) { break }
 		body += [line[indent..<#line]]
+		started = yes
 		st["i"] = st["i"] + 1
 	}
 	trailing = 0
