@@ -14,11 +14,11 @@ format(template, values) := {
 	result
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
-words(t) := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
-lines(t: text) := split(t, "\n")
+words(t): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
+lines(t: text): list := split(t, "\n")
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
 // of any script: letters of "x، ب٣" is ['x' 'ب']
-letters(t) := [c for c in chars(t) if is_unicode_letter(c)]
+letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
 // whether c is a letter of any script, cased or not (Unicode's letter categories): `q`, `é`, `ا`, `名`; no digit, mark
 // or punctuation. is_alpha stays ASCII's a–z and A–Z
 is_unicode_letter(c): bool := {
