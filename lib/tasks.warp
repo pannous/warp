@@ -128,8 +128,8 @@ task_stepped(task: Task) := {
 handlers_run(handlers: list) := for handler in handlers { handler() }
 // `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is. The
 // emitter calls it too where a place typed as a value takes a task, `n: int = go f(3)` (decision task-to-value-awaits)
-task_awaited(x) := if x is Task then task_value(x) else x
-task_value(x: Task) := {
+task_awaited(x: any): any := if x is Task then task_value(x) else x
+task_value(x: Task): any := {
 	x.paused = no
 	tasks_run_while(() => not x.done, ø)
 	x.awaited = yes
@@ -148,8 +148,8 @@ task_value_within(x: Task, ms, fallback: function) := {
 	if x.done then task_value(x) else fallback()
 }
 // a value is done, a task once its last step ran
-is_done(x) := if x is Task then task_finished(x) else yes
-task_finished(x: Task) := x.done
+is_done(x: any): bool := if x is Task then task_finished(x) else yes
+task_finished(x: Task): bool := x.done
 // a task named name ends without a result: an await or read of it raises; one done already keeps its value
 task_cancelled(x, name: text) := {
 	if x is Task and not x.done { task_ended(x, name) }
