@@ -1,0 +1,7 @@
+# natural_sort_compares_digit_runs_as_numbers
+'use ordering; natural_sort(["a10", "a2", "a1"])'	["a1", "a2", "a10"]
+'use ordering; natural_sort(["file10.txt", "file9.txt", "file100.txt", "file1.txt"])'	["file1.txt", "file9.txt", "file10.txt", "file100.txt"]
+'use ordering; natural_sort(["b1", "a10", "a9b", "a9a"])'	["a9a", "a9b", "a10", "b1"]
+'use ordering; natural_sort(["x01", "x1", "x001"])'	["x1", "x01", "x001"]
+'use ordering; natural_sort(["10", "9", "", "1"])'	["", "1", "9", "10"]
+'use ordering; [natural_compare("v1.10", "v1.9"), natural_compare("a", "a"), natural_compare("a", "a1")]'	[1, 0, -1]
