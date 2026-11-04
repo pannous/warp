@@ -26,15 +26,15 @@
 'class Form{fields:int}; f = Form(3); f.fields'	3
 
 # a_modules_exports
-'import tests/fixtures/wasm/fourty_two; "ft" in dir(fourty_two)'	true
-'import tests/fixtures/wasm/fourty_two; fourty_two.exports#1'	'add32'
+'import test/fixtures/wasm/fourty_two; "ft" in dir(fourty_two)'	true
+'import test/fixtures/wasm/fourty_two; fourty_two.exports#1'	'add32'
 
 # a_warp_modules_functions_and_their_params
-'import tests/fixtures/wasm/shapes; twice(21)'	42
-'import tests/fixtures/wasm/shapes; twice(a: 21)'	42
-'import tests/fixtures/wasm/shapes; shapes.twice.params'	['a']
+'import test/fixtures/wasm/shapes; twice(21)'	42
+'import test/fixtures/wasm/shapes; twice(a: 21)'	42
+'import test/fixtures/wasm/shapes; shapes.twice.params'	['a']
 
 # a_warp_modules_classes
-'import tests/fixtures/wasm/shapes; shapes.P.fields'	['x', 'y']
-'import tests/fixtures/wasm/shapes; shapes.P.methods'	['sq']
-'import tests/fixtures/wasm/shapes; dir(shapes.P)'	['x', 'y', 'sq']
+'import test/fixtures/wasm/shapes; shapes.P.fields'	['x', 'y']
+'import test/fixtures/wasm/shapes; shapes.P.methods'	['sq']
+'import test/fixtures/wasm/shapes; dir(shapes.P)'	['x', 'y', 'sq']

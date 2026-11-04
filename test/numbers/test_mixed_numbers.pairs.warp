@@ -1,0 +1,10 @@
+# a whole number with a vulgar fraction glued after it is the mixed number (decision mixed-number-glyph)
+'3½'	3.5
+'2¾'	2.75
+'-1¼'	-1.25
+'3½ * 2'	7
+# a decimal before the fraction names no mixed number: refused at its place
+'2.5½'	error	a mixed number is whole before its fraction
+# a fraction alone stays itself; digits glued after it multiply it
+'½'	0.5
+'½3'	1.5
