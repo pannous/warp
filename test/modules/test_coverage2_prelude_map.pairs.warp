@@ -1,0 +1,10 @@
+# coverage audit 2 (ranked 81-160): prelude and map helpers, edge cases
+«fold([1, 2, 3], 0, (a, b) -> a + b) == 6 and fold([], 5, (a, b) -> a + b) == 5»	true
+«r = try { reduce([], (a, b) -> a + b) } catch e { "raised" }; r == "raised" and reduce([1, 2, 3], (a, b) -> a * b) == 6»	true
+«[count_of("banana", "a"), count_of("aaaa", "aa"), count_of("", "a")] == [3, 2, 0]»	true
+«[round_to(3.14159, 2), round_to(-3.14159, 2), round_to(7, 0)] == [3.14, -3.14, 7]»	true
+«mean([1, 2, 3, 4]) == 2.5 and mean([1/3, 2/3]) == 0.5»	true
+«sort_by(["ccc", "a", "bb"], s -> count(s)) == ["a", "bb", "ccc"] and sort_by([], s -> s) == []»	true
+«use map; a = {x: {y: 1}}; b = deep_merge(a, {x: {z: 2}}); b.x.z == 2 and b.x.y == 1 and not has(a.x, "z")»	true
+«use map; set_path({}, ["a", "b"], 1) == {a: {b: 1}}»	true
+«use map; r = try { set_path({a: [1]}, ["a", 5], 9) } catch e { "" + e }; r == "set_path: no position 5 in a list of 1"»	true
