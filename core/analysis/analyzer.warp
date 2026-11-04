@@ -968,20 +968,6 @@ analyze(program: Node): Node := {
 	program
 }
 
-# the kinds as data, spelled: {functions: {f: {params: [kind…], result: kind}}, variables: {x: kind}, value: kind}
-kinds(program: Node): map := {
-	analyze(program)
-	functions = {}
-	for name in defined_functions.keys() {
-		scope = scopes[name]
-		functions[name] = {params: taken_names(defined_signatures[name]).map(own => kind_spelling(scope.kinds[own])), result: kind_spelling(results[name])}
-	}
-	main = scopes[""]
-	variables = {}
-	for name in main.kinds.keys() { if name not in main.declared_globals { variables[name] = kind_spelling(main.kinds[name]) } }
-	{functions: functions, variables: variables, value: kind_spelling(inferred_kind(program, main))}
-}
-
 # the kinds emitter.warp holds values as: int, float, char, text, list, any other value a boxed node
 emitter_kind(kind: ValueKind): ValueKind := if kind == ValueKind.Codepoint then ValueKind.Char else if kind in emitter_kept_kinds then kind else ValueKind.Node
 emitter_kept_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Text, ValueKind.List]

@@ -447,6 +447,19 @@ return_kind(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
 	if definition == ø then ø else function_result_kind(name, definition)
 }
+# the kinds as data, spelled: {functions: {f: {params: [kind…], result: kind}}, variables: {x: kind}, value: kind}
+kinds(program: Node): map := {
+	analyze(program)
+	functions = {}
+	for name in defined_functions.keys() {
+		scope = scopes[name]
+		functions[name] = {params: taken_names(defined_signatures[name]).map(own => kind_spelling(scope.kinds[own])), result: kind_spelling(results[name])}
+	}
+	main = scopes[""]
+	variables = {}
+	for name in main.kinds.keys() { if name not in main.declared_globals { variables[name] = kind_spelling(main.kinds[name]) } }
+	{functions: functions, variables: variables, value: kind_spelling(inferred_kind(program, main))}
+}
 function_result_kind(name: Node, definition: Node): any := {
 	found = kinds(definition).functions.get("${name}")
 	if found == ø then ø else found.result

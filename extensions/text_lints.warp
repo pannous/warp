@@ -1,0 +1,61 @@
+# Lints of texts (card compiler-untaken-lines): warnings a program as written may earn, through the Extension field
+# lints, each given every node as written and the program; their messages are in core/analysis/warnings.data
+
+# --- `"3" + 3` joins the texts (card print-oldest; "a" + 3 does not warn) ---
+
+spelled_number_join(n: Node, program: Node) := {
+	if not is_operator(n, "+") { return ø }
+	left = key_of(n)
+	right = value_of(n)
+	spelled = spelled_number(left, right) ?? spelled_number(right, left)
+	if spelled == ø { return ø }
+	conversion = if spelled.contains(".") then "float" else "int"
+	written = sum_written(left, right, spelled, "")
+	as_sum = sum_written(left, right, conversion + "(" + spelled + ")", "")
+	as_text = sum_written(left, right, spelled, "str")
+	diagnose(call_of("spelled_number_join", [written, spelled, as_sum, as_text]), n)
+}
+# `left + right` with the text side written `spelling`, the number side as a numeral, inside `converter(…)` if any
+sum_written(left: Node, right: Node, spelling: text, converter: text): text := operand_form(left, spelling, converter) + " + " + operand_form(right, spelling, converter)
+operand_form(side: Node, spelling: text, converter: text): text := {
+	if not (side is number) { return spelling }
+	if count(converter) == 0 then "${side}" else converter + "(${side})"
+}
+# the text side quoted, when it spells a number and the other side is one
+spelled_number(text_side: Node, number_side: Node): text? := {
+	if not (number_side is number) or not (text_side is text or text_side is codepoint) { return ø }
+	digits = ("" + text_side).trim()
+	if is_numeral(digits) then "\"" + digits + "\"" else ø
+}
+# `12`, `-4.5`: an optional sign, digits, at most one decimal point
+is_numeral(t: text): bool := {
+	digits = if t.starts_with("-") or t.starts_with("+") then t[1..] else t
+	parts = digits.split(".")
+	#parts <= 2 and #digits > #parts - 1 and parts.all(part => part.chars().all(c => "0123456789".contains(c)))
+}
+
+index_of_word = "index_of"
+
+# --- a text's index_of names no unit (decision byte-index-of): it counts characters from 1, as find does ---
+
+text_index_of(n: Node, program: Node) := {
+	receiver = index_of_receiver(without_mark(n))
+	if receiver != ø and is_evident_text(receiver, program) { diagnose(call_of("text_index_of", []), n) }
+	ø
+}
+# t of `t.index_of(x)`, `t.index_of x` and `index_of(t, x)`, else ø
+index_of_receiver(n: Node): Node := {
+	if is_operator(n, ".") and is_index_of_call(value_of(n), 1) { return key_of(n) }
+	if is_index_of_call(n, 2) { return n#2 }
+	ø
+}
+is_index_of_call(n: Node, receiver_place: int): bool := is_group(n) and #n > receiver_place and n#1 == symbol(index_of_word)
+# a text written as one, or a name the program assigns only such texts
+is_evident_text(n: Node, program: Node): bool := {
+	if n is text { return yes }
+	if not (n is symbol) { return no }
+	given = assigned_values(program, name_of(n))
+	#given > 0 and given.all(value => value is text)
+}
+
+text_lints_extension = Extension{name: "text_lints", lints: [spelled_number_join, text_index_of]}
