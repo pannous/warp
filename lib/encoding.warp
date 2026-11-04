@@ -1,5 +1,5 @@
 // The standard library module encoding: `use encoding`, texts as base64 (RFC 4648) and hex of their UTF-8 bytes,
-// and uuid(), a random version 4 UUID: base64_encode("foo") is "Zm9v", hex_encode("foo") is "666f6f"
+// base64_encode("foo") is "Zm9v", hex_encode("foo") is "666f6f"
 use text
 
 BASE64_DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -58,13 +58,4 @@ def hex_decode(t: text): text {
 		i = i + 2
 	}
 	from_utf8(out)
-}
-
-// xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx with random lowercase hex x and y one of 8 9 a b
-def uuid(): text {
-	out = ""
-	for i in 0 ..< 36 {
-		out = out + (if i == 8 or i == 13 or i == 18 or i == 23 then "-" else if i == 14 then "4" else if i == 19 then HEX_DIGITS[8 + random(4)] else HEX_DIGITS[random(16)])
-	}
-	out
 }

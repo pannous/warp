@@ -14,9 +14,3 @@
 'use encoding; hex_decode("666F6F")'	"foo"
 'use encoding; hex_decode(hex_encode("héllo"))'	"héllo"
 
-# use_encoding_uuid_v4_shape
-'use encoding; count(uuid())'	36
-'use encoding; u = uuid(); [u[8], u[13], u[18], u[23]]'	["-" "-" "-" "-"]
-'use encoding; uuid()[14]'	"4"
-'use encoding; "89ab".contains(uuid()[19])'	true
-'use encoding; uuid() != uuid()'	true
