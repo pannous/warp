@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+# A config changed by overrides, shown as a unified diff, and the patch applied to the old text (map, diff)
+use map
+use diff
+config_text(c: any) := join([key + " = " + str(c.get(key)) for key in keys(c)], "\n")
+base = {host: "localhost", port: 8080, debug: yes, workers: 2}
+production = deep_merge(base, {host: "example.com", debug: no})
+production = set_path(production, ["workers"], 8)
+old = config_text(base)
+new = config_text(production)
+patch = unified_diff(old, new)
+if apply_patch(old, patch) != new { raise "the patch did not apply" }
+patch + "similarity " + str(round_to(similarity(old, new), 2))

@@ -1,0 +1,14 @@
+// card lib-config-conformance: toml-test cases parse_toml now gets right: int64's minimum, calendar dates, offsets,
+// a bare carriage return
+'use toml; parse_toml("a = -9223372036854775808")["a"] == 0 - 9223372036854775807 - 1'	yes
+'use toml; parse_toml("a = 9223372036854775807")["a"] == 9223372036854775807'	yes
+'use toml; parse_toml("a = 2024-02-29")["a"]["value"]'	"2024-02-29"
+'use toml; parse_toml("a = 2000-02-29T01:02:03Z")["a"]["value"]'	"2000-02-29T01:02:03Z"
+'use toml; try { parse_toml("a = 2100-02-29") } catch e { e.message.ends_with("no such date 2100-02-29") }'	yes
+'use toml; try { parse_toml("a = 1988-02-30T15:15:15") } catch e { e.message.ends_with("no such date 1988-02-30") }'	yes
+'use toml; try { parse_toml("a = 2023-04-31") } catch e { e.message.ends_with("no such date 2023-04-31") }'	yes
+'use toml; try { parse_toml("d = 1985-06-18 17:04:07+25:00") } catch e { "refused" }'	"refused"
+'use toml; try { parse_toml("d = 1985-06-18 17:04:07+12:60") } catch e { "refused" }'	"refused"
+'use toml; try { parse_toml("a = 1\\r b = 2") } catch e { "refused" }'	"refused"
+'use toml; try { parse_toml("a = 1 # x\\r") } catch e { "refused" }'	"refused"
+'use toml; parse_toml("a = 1\\r\\nb = 2")["b"]'	2

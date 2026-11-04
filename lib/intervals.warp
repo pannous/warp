@@ -1,0 +1,113 @@
+// The standard library module intervals (card lib-intervals): `use intervals`. An Extent runs from lo to hi, half-open
+// [lo, hi) by default, closed [lo, hi] made by closed_extent; lo and hi are numbers or lib/time Instants (any values
+// < and == order and hi - lo measures). Named Extent, not Interval or Span: lib/uncertain has Interval, lib/time_arithmetic
+// Span, lib/list union/intersection and lib/collections contains, so the functions here are extent_… or *_intervals.
+//
+// Mixed ends: each extent decides its own hi end, lo is always included. A point p is in e when lo <= p and p < hi
+// (or p == hi for a closed one). Two extents overlap when they share a point: [1, 3) and [3, 5) don't, [1, 3] and
+// [3, 5) do (in 3). A half-open extent with lo == hi is empty and overlaps nothing; a closed one is the point lo.
+// intersection's hi end is that of the extent ending first (closed only if every extent ending there is);
+// extent_union joins overlapping or touching extents, and raises for disjoint ones (merge_intervals gives the list).
+// The gaps of subtract_intervals are half-open up to each busy start and start at each busy end, a closed busy end
+// point included in the gap after it (slots are half-open)
+
+class Extent {
+	lo: any
+	hi: any
+	closed: bool
+	text(): text := "[" + str(lo) + ", " + str(hi) + (if closed then "]" else ")")
+}
+
+// [lo, hi)
+extent(lo: any, hi: any): Extent := { if hi < lo { raise "extent: hi before lo" }; Extent(lo, hi, no) }
+// [lo, hi]
+closed_extent(lo: any, hi: any): Extent := { if hi < lo { raise "closed_extent: hi before lo" }; Extent(lo, hi, yes) }
+earlier_of(a: any, b: any): any := if b < a then b else a
+later_of(a: any, b: any): any := if a < b then b else a
+extent_is_empty(e: Extent): bool := e.lo == e.hi and not e.closed
+// hi - lo, 0 for an empty one
+extent_length(e: Extent): any := e.hi - e.lo
+// a point inside e, or the extent x wholly inside e
+extent_contains(e: Extent, x: any): bool := {
+	if x is Extent {
+		if extent_is_empty(x) { return e.lo <= x.lo and x.lo <= e.hi }
+		return e.lo <= x.lo and (x.hi < e.hi or (x.hi == e.hi and (e.closed or not x.closed)))
+	}
+	e.lo <= x and (x < e.hi or (e.closed and x == e.hi))
+}
+// a and b share a point
+extents_overlap(a: Extent, b: Extent): bool := {
+	if extent_is_empty(a) or extent_is_empty(b) { return no }
+	start = later_of(a.lo, b.lo)
+	first = if a.hi < b.hi then a else if b.hi < a.hi then b else (if a.closed then b else a)
+	start < first.hi or (start == first.hi and first.closed)
+}
+// the shared part, ø when none
+extent_intersection(a: Extent, b: Extent): any := {
+	if not extents_overlap(a, b) { return ø }
+	hi = earlier_of(a.hi, b.hi)
+	closed = (a.hi != hi or a.closed) and (b.hi != hi or b.closed)
+	Extent(later_of(a.lo, b.lo), hi, closed)
+}
+// a and b overlap or one ends where the other starts
+extents_join(a: Extent, b: Extent): bool := extents_overlap(a, b) or a.hi == b.lo or b.hi == a.lo
+// one extent covering overlapping or touching a and b; raises for disjoint ones
+extent_union(a: Extent, b: Extent): Extent := {
+	if extent_is_empty(a) { return b }
+	if extent_is_empty(b) { return a }
+	if not extents_join(a, b) { raise "extent_union: " + a.text() + " and " + b.text() + " are disjoint" }
+	hi = later_of(a.hi, b.hi)
+	Extent(earlier_of(a.lo, b.lo), hi, (a.hi == hi and a.closed) or (b.hi == hi and b.closed))
+}
+// the extents sorted by lo, the empty ones dropped
+sorted_extents(xs: list): list := {
+	out = []
+	for e in xs {
+		if extent_is_empty(e) { continue }
+		k = count(out)
+		while k > 0 and e.lo < out#k.lo { k -= 1 }
+		out = out[0: k] + [e] + out[k:]
+	}
+	out
+}
+// the extents with overlapping and touching ones joined, sorted by lo
+merge_intervals(xs: list): list := {
+	out = []
+	for e in sorted_extents(xs) {
+		if count(out) > 0 and extents_join(out#(count(out)), e) { out = out[0: count(out) - 1] + [extent_union(out#(count(out)), e)] }
+		else { out += [e] }
+	}
+	out
+}
+// the parts of whole outside every busy extent: its free slots
+subtract_intervals(whole: Extent, busy: list): list := {
+	gaps = []
+	cursor = whole.lo
+	for b in merge_intervals(busy) {
+		if not extents_overlap(whole, b) and not (b.lo == whole.hi) { continue }
+		if cursor < b.lo { gaps += [Extent(cursor, earlier_of(b.lo, whole.hi), no)] }
+		cursor = later_of(cursor, b.hi)
+	}
+	if cursor < whole.hi or (whole.closed and cursor == whole.hi and not merge_intervals(busy).any(b => extent_contains(b, cursor))) { gaps += [Extent(cursor, whole.hi, whole.closed)] }
+	gaps
+}
+// the summed length of the merged extents
+total_length(xs: list): any := {
+	merged = merge_intervals(xs)
+	if count(merged) == 0 { return 0 }
+	total = extent_length(merged#1)
+	for e in merged[1:] { total = total + extent_length(e) }
+	total
+}
+// Extents kept as added (not merged, so stabbing sees each); add and remove give a new set, remove cuts the removed
+// part out of every stored extent, splitting those it lies inside
+class IntervalSet {
+	items: list
+	add(e: Extent): IntervalSet := IntervalSet(items + [e])
+	remove(e: Extent): IntervalSet := { kept = []; for x in items { kept = kept + subtract_intervals(x, [e]) }; IntervalSet(kept) }
+	contains(x: any): bool := items.any(e => extent_contains(e, x))
+	// every stored extent holding the point p
+	stabbing(p: any): list := items.filter(e => extent_contains(e, p))
+	merged(): list := merge_intervals(items)
+}
+interval_set(xs: list): IntervalSet := IntervalSet(xs)

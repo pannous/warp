@@ -8,9 +8,9 @@ product(xs: any): any := fold(xs, 1, *)
 take(xs: any, n: any): list := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
 drop(xs: any, n: any): list := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
 flatten(xs: any): list := { out = []; for x in xs { out += x }; out }
-chunk(xs: any, n: any): list := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
+chunk(xs: any, n: any): list := { if n < 1 { raise "chunk needs a size of at least 1, not " + str(n) }; out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
 window(xs: any, n: any): list := [xs[i:i + n] for i in 0 to count(xs) - n]
-median(xs: any): number := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
+median(xs: any): number := { if count(xs) == 0 { raise "median of an empty list" }; s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
 flat_map(xs: any, f: any): list := { out = []; for x in xs { out += f(x) }; out }
 // [kept, rest]: the elements f holds for, and the others
 partition(xs: any, f: any): list := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }

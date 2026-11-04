@@ -11,6 +11,8 @@
 # tree of their own (started by each install, which stops the one still running on an older tip), and installs the
 # warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
+# git acts on the trees named by -C, never on a caller's repository (a hook's GIT_DIR, on-push.sh)
+unset $(git rev-parse --local-env-vars)
 MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
 # the native warp's folder by a name that outlives installs: what executables it builds find libwarp_wasmtime by
 # (their rpath, card native-rpath-builds-folder)
@@ -71,9 +73,12 @@ rerun_if_changed() {
 	exec "$0" "${arguments[@]}"
 }
 
-red() { # red <what: detail> [--urgent]: one card per kind of failure (its key from <what>), noted again per failing tip
+# red <what: detail> [--urgent]: one card per kind of failure and day (after-push-<what>-<MMDD>), noted again per failing
+# tip. The prefix and the day keep it off a real card of the same name (a 22:15 "native warp" RED landed on the
+# native-harness card native-warp, 2026-11-04) and off an old day's RED of the same kind
+red() {
 	local key text="main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)"
-	key=$(echo "${1%%:*}" | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')
+	key=after-push-$(echo "${1%%:*}" | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')-$(date +%m%d)
 	if todo show "$key" 2>/dev/null | head -1 | grep -qv '^\[Done\]\|Archived'; then
 		todo note "$key" "$text" >/dev/null
 	else
@@ -206,11 +211,22 @@ install_native() {
 	say "native warp of ${tip:0:10} installed${early:+ (its compilers follow)}: $MAIN_WARP -> $folder/warp"
 }
 
+# tree_at <commit>: the tree holds exactly that commit's sources, so what it builds is that commit's compiler
+tree_at() {
+	[ "$(git -C "$TREE" rev-parse HEAD)" = "$1" ] && git -C "$TREE" diff --quiet HEAD -- core lib extensions
+}
+# the warp.wasm beside ~/dev/bin/warp is the tree's (a stale tree or copy installed another commit's compiler under
+# this tip's name, native-2ad9eb2dc 2026-11-04)
+installed_compilers_are_trees() {
+	local folder
+	folder=$(installed_folder) && cmp -s "$TREE/lib/warp.wasm" "$folder/warp.wasm"
+}
+
 # watch <commit>: install its compilers, then (unless main moved on meanwhile) the slow tiers
 watch() {
 	tip=$1
 	since=$(cat "$state/watched" 2>/dev/null || git -C "$TREE" rev-parse "$tip^")
-	git -C "$TREE" checkout -q --detach "$tip" || return 1
+	git -C "$TREE" checkout -q --detach "$tip" && tree_at "$tip" || { red "the tree $TREE is not at ${tip:0:10}" --urgent; return 1; }
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
 	echo "$tip" >"$state/handled"
 	# every stage builds with the installed native warp: without one, nothing installs (relink ~/dev/bin/warp by hand)
@@ -231,7 +247,7 @@ watch() {
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
 	# stage two: its compilers beside it, else the whole native warp
-	if [ -n "$early" ]; then install_compilers; else install_native; fi
+	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
 	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
 	echo "$tip" >"$state/watched"
 	"$0" --slow </dev/null &

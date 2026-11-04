@@ -1,0 +1,17 @@
+// card lib-markdown-commonmark-2: CommonMark 0.31.2 examples markdown_html now passes (tabs kept after the indentation,
+// Unicode punctuation in flanking, ß/ẞ folding, nested image alt, lazy quote lines, definitions-only paragraphs, empty
+// list items); expected from the spec; test/markdown/commonmark_spec.py runs all 652
+'use markdown; markdown_html("\\tfoo\\tbaz\\t\\tbim\\n") == "<pre><code>foo\\tbaz\\t\\tbim\\n</code></pre>\\n"'	yes
+'use markdown; markdown_html("  \\tfoo\\tbaz\\t\\tbim\\n") == "<pre><code>foo\\tbaz\\t\\tbim\\n</code></pre>\\n"'	yes
+'use markdown; markdown_html("    a\\ta\\n    ὐ\\ta\\n") == "<pre><code>a\\ta\\nὐ\\ta\\n</code></pre>\\n"'	yes
+'use markdown; markdown_html("\\\\\\t\\\\A\\\\a\\\\ \\\\3\\\\φ\\\\«\\n") == "<p>\\\\\\t\\\\A\\\\a\\\\ \\\\3\\\\φ\\\\«</p>\\n"'	yes
+'use markdown; markdown_html("> foo\\nbar\\n===\\n") == "<blockquote>\\n<p>foo\\nbar\\n===</p>\\n</blockquote>\\n"'	yes
+'use markdown; markdown_html("[foo]: /url\\n===\\n[foo]\\n") == "<p>===\\n<a href=\\"/url\\">foo</a></p>\\n"'	yes
+'use markdown; markdown_html("> foo\\n    - bar\\n") == "<blockquote>\\n<p>foo\\n- bar</p>\\n</blockquote>\\n"'	yes
+'use markdown; markdown_html("* a\\n*\\n\\n* c\\n") == "<ul>\\n<li>\\n<p>a</p>\\n</li>\\n<li></li>\\n<li>\\n<p>c</p>\\n</li>\\n</ul>\\n"'	yes
+'use markdown; markdown_html("- a\\n- b\\n\\n  [ref]: /url\\n- d\\n") == "<ul>\\n<li>\\n<p>a</p>\\n</li>\\n<li>\\n<p>b</p>\\n</li>\\n<li>\\n<p>d</p>\\n</li>\\n</ul>\\n"'	yes
+'use markdown; markdown_html("*$*alpha.\\n\\n*£*bravo.\\n\\n*€*charlie.\\n") == "<p>*$*alpha.</p>\\n<p>*£*bravo.</p>\\n<p>*€*charlie.</p>\\n"'	yes
+'use markdown; markdown_html("[ẞ]\\n\\n[SS]: /url\\n") == "<p><a href=\\"/url\\">ẞ</a></p>\\n"'	yes
+'use markdown; markdown_html("![foo ![bar](/url)](/url2)\\n") == "<p><img src=\\"/url2\\" alt=\\"foo bar\\" /></p>\\n"'	yes
+'use markdown; markdown_html("a\\tb\\n") == "<p>a\\tb</p>\\n"'	yes
+'use markdown; markdown_html("*«*x\\n") == "<p>*«*x</p>\\n"'	yes

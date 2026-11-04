@@ -1,0 +1,10 @@
+// card lib-perf-bench: json_quoted's slice path for texts past 32 characters and its character path below, json's
+// text reading by runs, and json_skipped's comments, written and read exactly as before
+'use json; to_json("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")'	"\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\""
+'use json; to_json("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")'	"\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\""
+'use json; to_json("abc \\"quoted\\" back\\\\slash\\ttab\\nnewline é😀 abc \\"quoted\\" back\\\\slash\\ttab\\nnewline é😀 ")'	"\"abc \\\"quoted\\\" back\\\\slash\\ttab\\nnewline é😀 abc \\\"quoted\\\" back\\\\slash\\ttab\\nnewline é😀 \""
+'use json; t = "abc \\"quoted\\" back\\\\slash\\ttab\\nnewline é😀 abc \\"quoted\\" back\\\\slash\\ttab\\nnewline é😀 "; json(to_json(t)) == t'	yes
+'use json; count(to_json(join(["ab\\"" for i in 0 ..< 50], "")))'	202
+'use json; json("\\"" + join(["abcdefghij" for i in 0 ..< 100], "") + "\\\\n\\"") == join(["abcdefghij" for i in 0 ..< 100], "") + "\\n"'	yes
+'use json; json("[1, // c\\n 2, /* x */ 3, {\\"a\\" : \'b\' /**/}]")'	[1, 2, 3, {a: 'b'}]
+'use json; json("  /* lead */ 7 ")'	7

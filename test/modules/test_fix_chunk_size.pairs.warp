@@ -1,0 +1,2 @@
+# chunk refuses a size below 1 (chunk([1], 0) gave [[1]]): fix(lib), card lib-coverage-audit
+«use list; attempt(f) := try { str(f()) } catch e { "" + e }; [attempt(() -> chunk([1, 2], 0)), attempt(() -> chunk([1, 2], -1)), chunk([1, 2, 3], 1)] == ["chunk needs a size of at least 1, not 0", "chunk needs a size of at least 1, not -1", [[1], [2], [3]]]»	true

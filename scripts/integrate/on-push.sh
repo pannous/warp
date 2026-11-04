@@ -11,6 +11,11 @@ LOG=$HOME/Library/Logs/warp/after-push.log
 MAIN_CHECKOUT=$(cd "$(dirname "$0")/../.." && pwd)
 AFTER_PUSH=$MAIN_CHECKOUT/scripts/integrate/after-push.sh
 NO_COMMIT=0000000000000000000000000000000000000000
+# the hook runs in the pusher's environment: its git variables (GIT_DIR, GIT_INDEX_FILE …) and its warp ones (WARP_LIB,
+# WARP_BINARY …) name the pushing worktree, gone a moment after its push. Left set, after-push.sh acts on that worktree
+# (2026-11-04 20:21: the tree stayed on the old tip, native-2ad9eb2dc got the old compilers, "unknown name protocol";
+# 22:20: the installed compilers' hello looked for own-name-arity-overloads/lib/warp.wasm)
+unset $(git rev-parse --local-env-vars) $(compgen -e | grep '^WARP_')
 
 on_main() {
 	git -C "$MAIN_CHECKOUT" fetch -q origin main 2>/dev/null &&

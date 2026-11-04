@@ -32,10 +32,12 @@ to_json_of_classes(value: any, classes: any): text := to_json(value)
 exact_json(value: any, classes: any): text := json_written(value, yes)
 
 json_refusal(source, problem): text := "" + source + " is no json: " + problem
-// the place of the first character after spaces and comments from at on
+// the place of the first character after spaces and comments from at on; a character other than / starts no
+// comment, so it returns before slicing (card lib-perf-bench)
 json_skipped(source: text, at: int): int := {
 	while at <= #source {
 		if source#at in JSON_SPACE { at += 1 }
+		else if source#at != "/" { return at }
 		else if source[at - 1..<at + 1] == "//" { while at <= #source and source#at != "\n" { at += 1 } }
 		else if source[at - 1..<at + 1] == "/*" {
 			at += 2
@@ -90,21 +92,27 @@ json_after_item(source: text, at: int, closing: text): int := {
 	if at <= #source and source#at != closing { raise json_refusal(source, "no , or " + closing + " after an item") }
 	at
 }
+// a run of plain characters joins the text as one slice, not character by character (card lib-perf-bench)
 json_text_read(source: text, at: int, quote: text): list := {
 	read = ""
 	while at <= #source and source#at != quote {
 		if source#at == "\\" {
 			escaped = source#(at + 1)
 			if escaped == "u" {
-				read += chr(hex_value(source[at + 1..<at + 5]))
-				at += 6
+				r = json_unicode_read(source, at)
+				read += r[0]
+				at = r[1]
 			} else {
-				read += JSON_ESCAPED.get("" + escaped) ?? escaped
+				// by code point too: a combining mark after \n is part of the n's character
+				points = ("" + escaped).codepoints
+				first = "" + points[0]
+				read += (JSON_ESCAPED.get(first) ?? first) + join([points[i] for i in 1 ..< count(points)], "")
 				at += 2
 			}
 		} else {
-			read += source#at
-			at += 1
+			start = at
+			while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+			read += source[start - 1..<at - 1]
 		}
 	}
 	if at > #source { raise json_refusal(source, "no closing " + quote) }
@@ -124,6 +132,37 @@ whole_number(digits: text): int := {
 	for digit in digits { if digit != "-" and digit != "+" { n = n * 10 + ord(digit) - 48 } }
 	if negative then 0 - n else n
 }
+// a \uXXXX escape at the backslash: [its text, the place after]; the 4 hex digits (either case) are read by code point,
+// not by character, so a combining mark after them (\u0000 then U+0301) stays a mark of its own; a high surrogate
+// with a low one after it is one character (\ud83d\ude00 is 😀); a lone surrogate raises, as warp texts are UTF-8
+// (python's json.loads keeps it as a lone code point)
+json_unicode_read(source: text, at: int): list := {
+	h = json_hex_at(source, at)
+	code = h[0]
+	next = at + 6
+	if code >= 0xDC00 and code < 0xE000 { raise json_refusal(source, "a lone low surrogate \\u" + json_hex4(code)) }
+	if code >= 0xD800 and code < 0xDC00 {
+		if h[1] != "" or next + 1 > #source or source#next != "\\" or source#(next + 1) != "u" { raise json_refusal(source, "a lone high surrogate \\u" + json_hex4(code)) }
+		l = json_hex_at(source, next)
+		if l[0] < 0xDC00 or l[0] >= 0xE000 { raise json_refusal(source, "a lone high surrogate \\u" + json_hex4(code)) }
+		return [chr(0x10000 + (code - 0xD800) * 1024 + l[0] - 0xDC00) + l[1], next + 6]
+	}
+	[chr(code) + h[1], next]
+}
+// the value of the 4 hex digits after a \u at the backslash, and the code points past them in the same character
+json_hex_at(source: text, at: int): list := {
+	points = [ord(p) for p in source[at + 1..<at + 5].codepoints]
+	if count(points) < 4 { raise json_refusal(source, "a \\u escape needs 4 hex digits") }
+	n = 0
+	for i in 0 ..< 4 {
+		d = points[i]
+		digit = if d >= 48 and d <= 57 then d - 48 else if d >= 97 and d <= 102 then d - 87 else if d >= 65 and d <= 70 then d - 55 else -1
+		if digit < 0 { raise json_refusal(source, "a \\u escape needs 4 hex digits") }
+		n = n * 16 + digit
+	}
+	[n, join([chr(points[i]) for i in 4 ..< count(points)], "")]
+}
+json_hex4(code: int): text := join([HEX_DIGITS[(code /! (16 ** k)) % 16] for k in [3, 2, 1, 0]], "")
 hex_value(digits: text): int := {
 	n = 0
 	for digit in digits.lower() { n = n * 16 + HEX_DIGITS.find(digit) - 1 }
@@ -158,13 +197,48 @@ json_number(value: any, exact: bool): text := {
 	if exact { raise "JSON has no exact " + spelled + ": it cannot be written as JSON exactly" }
 	"" + float(value)
 }
+// a text as a JSON string (RFC 8259 section 7): " and \\ escaped, U+0000-U+001F as the short escapes \\b \\f \\n \\r \\t
+// or else \\u00xx in lowercase hex (as python's json.dumps), a CRLF (one character in warp) as \\r\\n; anything else,
+// DEL and non-ASCII included, as itself. The parts collect in a list joined once, a run of plain characters as one
+// slice (cards lib-perf-bench, lib-json-ctrl-and-builders; core-text-append-cost)
 json_quoted(source: text): text := {
-	quoted = "\""
-	for character in source {
-		code = ord(character)
-		quoted += JSON_ESCAPES.get("" + character) ?? (if code < 32 then "\\u00" + HEX_DIGITS#(code / 16 + 1) + HEX_DIGITS#(code % 16 + 1) else character)
+	if #source <= 32 {
+		quoted = "\""
+		for character in source { quoted += json_escape(character) ?? character }
+		return quoted + "\""
 	}
-	quoted + "\""
+	parts = ["\""]
+	plain = 0
+	i = 0
+	for character in source {
+		escape = json_escape(character)
+		if escape != ø {
+			if i > plain { parts.add(source[plain ..< i]) }
+			parts.add(escape)
+			plain = i + 1
+		}
+		i += 1
+	}
+	if i > plain { parts.add(source[plain ..< i]) }
+	parts.add("\"")
+	join(parts, "")
+}
+// the escape of one character, ø when it stands as itself; a character of several code points (a CRLF) escapes each
+json_escape(character: any): any := {
+	escape = JSON_ESCAPES.get("" + character)
+	if escape != ø { return escape }
+	if ord(character) >= 32 { return ø }
+	points = [ord(p) for p in ("" + character).codepoints]
+	if count(points) == 1 { return json_control(points[0]) }
+	join([if p < 32 then json_control(p) else (JSON_ESCAPES.get(chr(p)) ?? chr(p)) for p in points], "")
+}
+json_control(code: int): text := {
+	if code == 8 { return "\\b" }
+	if code == 9 { return "\\t" }
+	if code == 10 { return "\\n" }
+	if code == 12 { return "\\f" }
+	if code == 13 { return "\\r" }
+	"\\u00" + HEX_DIGITS[code /! 16] + HEX_DIGITS[code % 16]
 }
 // a map's entries, an instance's fields, as an object
 json_fields(value: any, written: function): text := json_object(value.keys.map(key => [json_key(key), written(value[key])]))

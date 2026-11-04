@@ -1,0 +1,4 @@
+# merge gives a new map and leaves both inputs alone; update (Python's dict.update) changes its first map in place: fix(lib), card lib-coverage-audit
+«use map; a = {"x": 1, "y": 2}; b = {"y": 3, "z": 4}; m = merge(a, b); [a, b, m] == [{"x": 1, "y": 2}, {"y": 3, "z": 4}, {"x": 1, "y": 3, "z": 4}]»	true
+«use map; a = {"x": 1}; r = update(a, {"x": 3, "y": 2}); [a, r] == [{"x": 3, "y": 2}, {"x": 3, "y": 2}]»	true
+«use map; [merge({}, {}), merge({"a": 1}, {}), merge({}, {"a": 1})] == [{}, {"a": 1}, {"a": 1}]»	true

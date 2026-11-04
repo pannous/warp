@@ -4,14 +4,15 @@
 use text
 use math
 use bits
+use encoding
 sha256(subject: text or list): text := std_pure("hash", "sha256", [subject])
 crc32(subject: text or list): int := std_pure("hash", "crc32", [subject])
 
 hash_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
-hex_digit(c: any): int := "0123456789abcdef".index_of(lower(c)) - 1
-hex_bytes(hex: text): list := [hex_digit(hex[2 * i]) * 16 + hex_digit(hex[2 * i + 1]) for i in 0 ..< count(hex) /! 2]
+// the hex helpers are lib/encoding.warp's (card lib-audit-bugfixes); hex_digit keeps its -1 for a non-digit
+hex_digit(c: any): int := digit_value(HEX_DIGITS, lower(c))
+hex_bytes(hex: text): list := hex_decode_bytes(hex)
 bytes_hex(bytes: list): text := join([hex_byte(b) for b in bytes], "")
-hex_byte(b: int): text := "0123456789abcdef"[b /! 16] + "0123456789abcdef"[b % 16]
 
 // 32-bit words: whole numbers 0 to 2^32 - 1, kept there by % 2 ** 32
 word_not(x: int, width: int): int := 2 ** width - 1 - x
