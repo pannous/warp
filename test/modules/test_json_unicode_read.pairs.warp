@@ -1,0 +1,28 @@
+// card lib-json-reader-markdown-scan: json reads a \uXXXX escape's 4 hex digits (either case) by code point, so a
+// combining mark after them stays; surrogate pairs join; a lone surrogate raises (python's json.loads keeps it);
+// expected from python's json.loads, round trips through to_json
+'use json; json("\\"a\\\\u0000" + chr(769) + "b\\"") == "a" + chr(0) + chr(769) + "b"'	yes
+'use json; json("\\"\\\\u0041" + chr(769) + "\\"") == "A" + chr(769)'	yes
+'use json; json("\\"\\\\u00e9\\\\u00E9\\\\u00Ff\\\\uABCD\\\\uabcd\\"") == "ééÿꯍꯍ"'	yes
+'use json; json("\\"\\\\ud83d\\\\ude00\\"") == "😀"'	yes
+'use json; json("\\"\\\\uD83D\\\\uDE00\\"") == "😀"'	yes
+'use json; json("\\"x\\\\ud83d\\\\ude00y\\"") == "x😀y"'	yes
+'use json; json("\\"\\\\ud834\\\\udd1e\\"") == "𝄞"'	yes
+'use json; json("\\"\\\\ud83d\\\\ude00" + chr(769) + "\\"") == "😀" + chr(769)'	yes
+'use json; json("\\"\\\\u000a\\\\u000D\\\\u001f\\\\u007f\\"") == chr(10) + chr(13) + chr(31) + chr(127)'	yes
+'use json; json("\\"\\\\u0000\\"") == chr(0)'	yes
+'use json; json("\\"\\\\u005c\\\\u0022\\"") == "\\\\\\""'	yes
+'use json; json("\\"\\\\/\\\\b\\\\f\\"") == "/" + chr(8) + chr(12)'	yes
+'use json; to_json(json("[\\"\\\\u0000" + chr(769) + "\\", {\\"k\\\\u00e9\\": \\"\\\\ud83d\\\\ude00\\"}]")) == to_json(json("[\\"\\\\u0000" + chr(769) + "\\", {\\"ké\\": \\"😀\\"}]"))'	yes
+'use json; to_json(json("{\\"\\\\u0000" + chr(769) + "\\": 1}")) == to_json(json("{\\"\\\\u0000" + chr(769) + "\\": 1}"))'	yes
+'use json; json("\\"a\\\\n" + chr(769) + "\\\\t" + chr(768) + "\\"") == "a" + chr(10) + chr(769) + chr(9) + chr(768)'	yes
+'use json; try { json("\\"\\\\ud83d\\"") } catch e { e.message == "\\"\\\\ud83d\\" is no json: a lone high surrogate \\\\ud83d" }'	yes
+'use json; try { json("\\"\\\\ud83d\\\\u0041\\"") } catch e { e.message == "\\"\\\\ud83d\\\\u0041\\" is no json: a lone high surrogate \\\\ud83d" }'	yes
+'use json; try { json("\\"\\\\ude00\\"") } catch e { e.message == "\\"\\\\ude00\\" is no json: a lone low surrogate \\\\ude00" }'	yes
+'use json; try { json("\\"\\\\u12G4\\"") } catch e { e.message == "\\"\\\\u12G4\\" is no json: a \\\\u escape needs 4 hex digits" }'	yes
+'use json; try { json("\\"\\\\u12\\"") } catch e { e.message == "\\"\\\\u12\\" is no json: a \\\\u escape needs 4 hex digits" }'	yes
+'use json; x = chr(0) + chr(769); json(to_json(x)) == x'	yes
+'use json; x = "A" + chr(769); json(to_json(x)) == x'	yes
+'use json; x = "😀" + chr(769); json(to_json(x)) == x'	yes
+'use json; x = chr(31) + chr(768) + "z"; json(to_json(x)) == x'	yes
+'use json; x = "a" + chr(13) + chr(10) + chr(769); json(to_json(x)) == x'	yes
