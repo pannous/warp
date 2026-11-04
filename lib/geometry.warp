@@ -1,0 +1,282 @@
+// The standard library module geometry: `use geometry`, points and vectors as lists of numbers ([x, y] or [x, y, z]),
+// polygons as lists of [x, y] points (open: the last point is not repeated), geographic points as [latitude, longitude]
+// in degrees.
+// Decisions (card lib-geometry):
+// - reuse: the baked lib/math.warp already gives dot, norm, distance, cross (3D) and to_radians/to_degrees, and its
+//   angle(x, y) is atan2; so this module's vector words carry a vec_ prefix (vec_add, vec_sub, vec_scale, vec_dot,
+//   vec_norm, vec_cross, vec_cross2, vec_angle, vec_rotate) and geo_distance; they check their inputs (numbers only,
+//   equal dimensions, a refusal rather than a guess) and then delegate to math's words where one exists
+// - vec_cross(u, v) is the 3D cross product (a vector); vec_cross2(u, v) the 2D one, the scalar u.x*v.y - u.y*v.x
+// - vec_angle(u, v): the unsigned angle between two vectors in radians, 0..pi; a zero-length vector is refused
+// - vec_rotate(v, radians): a 2D vector rotated counter-clockwise
+// - bounding_box(points): [[min x, min y], [max x, max y]] (any dimension, per coordinate)
+// - polygon_signed_area: the shoelace area, positive for counter-clockwise; polygon_area its absolute value;
+//   polygon_centroid the area centroid (a zero-area polygon is refused); fewer than 3 points are refused
+// - point_in_polygon(p, polygon): yes inside, and yes on the boundary (edges and corners count as inside)
+// - segment_intersection(a, b, c, d): the crossing point, ø when the segments do not meet; collinear segments that
+//   overlap give the overlap's end nearest a (touching end to end gives that shared point)
+// - convex_hull(points): Andrew's monotone chain, counter-clockwise from the lowest x (then lowest y), collinear
+//   points on the hull's edges left out, duplicates removed; fewer than 3 distinct points come back as they are
+//   (distinct, sorted)
+// - haversine_km(a, b): great-circle distance, earth radius 6371 km; initial_bearing(a, b): degrees 0 up to 360,
+//   clockwise from north
+use math
+
+GEO_EPSILON = 0.000000001
+
+def geo_check(name: text, u: any) {
+	if not (u is list) or count(u) == 0 { raise name + " needs a vector, a list of numbers, not " + str(u) }
+	for x in u { if not (x is number) { raise name + " needs numbers, not " + str(x) + " in " + str(u) } }
+}
+
+def geo_pair(name: text, u: any, v: any) {
+	geo_check(name, u)
+	geo_check(name, v)
+	if count(u) != count(v) { raise name + ": mismatched dimensions " + count(u) + " and " + count(v) + " (" + str(u) + ", " + str(v) + ")" }
+}
+
+def geo_dims(name: text, u: any, n: int) {
+	geo_check(name, u)
+	if count(u) != n { raise name + " needs " + n + "D vectors, not " + str(u) }
+}
+
+global vec_add(u: any, v: any): list := {
+	geo_pair("vec_add", u, v)
+	out = []
+	for i in 1 to count(u) { out.add(u#i + v#i) }
+	out
+}
+
+global vec_sub(u: any, v: any): list := {
+	geo_pair("vec_sub", u, v)
+	out = []
+	for i in 1 to count(u) { out.add(u#i - v#i) }
+	out
+}
+
+global vec_scale(u: any, k: number): list := {
+	geo_check("vec_scale", u)
+	out = []
+	for x in u { out.add(x * k) }
+	out
+}
+
+global vec_dot(u: any, v: any): number := {
+	geo_pair("vec_dot", u, v)
+	total = 0
+	for i in 1 to count(u) { total = total + u#i * v#i }
+	total
+}
+
+global vec_norm(u: any): float := {
+	geo_check("vec_norm", u)
+	sqrt(vec_dot(u, u))
+}
+
+global geo_distance(a: any, b: any): float := {
+	geo_pair("geo_distance", a, b)
+	vec_norm(vec_sub(a, b))
+}
+
+global vec_cross(u: any, v: any): list := {
+	geo_dims("vec_cross", u, 3)
+	geo_dims("vec_cross", v, 3)
+	[u#2 * v#3 - u#3 * v#2, u#3 * v#1 - u#1 * v#3, u#1 * v#2 - u#2 * v#1]
+}
+
+global vec_cross2(u: any, v: any): number := {
+	geo_dims("vec_cross2", u, 2)
+	geo_dims("vec_cross2", v, 2)
+	u#1 * v#2 - u#2 * v#1
+}
+
+global vec_angle(u: any, v: any): float := {
+	geo_pair("vec_angle", u, v)
+	nu = vec_norm(u)
+	nv = vec_norm(v)
+	if nu == 0 or nv == 0 { raise "vec_angle of a zero-length vector (" + str(u) + ", " + str(v) + ") has no angle" }
+	c = vec_dot(u, v) / (nu * nv)
+	if c > 1 { c = 1 }
+	if c < -1 { c = -1 }
+	acos(c)
+}
+
+global vec_rotate(v: any, radians: number): list := {
+	geo_dims("vec_rotate", v, 2)
+	c = cos(radians)
+	s = sin(radians)
+	[v#1 * c - v#2 * s, v#1 * s + v#2 * c]
+}
+
+global bounding_box(points: list): list := {
+	if count(points) == 0 { raise "bounding_box of no points" }
+	low = []
+	high = []
+	for x in points#1 { low.add(x); high.add(x) }
+	for p in points {
+		geo_pair("bounding_box", points#1, p)
+		for i in 1 to count(p) {
+			if p#i < low#i { low[i - 1] = p#i }
+			if p#i > high#i { high[i - 1] = p#i }
+		}
+	}
+	[low, high]
+}
+
+def geo_polygon(name: text, polygon: any) {
+	if not (polygon is list) or count(polygon) < 3 { raise name + " needs a polygon of at least 3 points, not " + str(polygon) }
+	for p in polygon { geo_dims(name, p, 2) }
+}
+
+global polygon_signed_area(polygon: list): float := {
+	geo_polygon("polygon_signed_area", polygon)
+	n = count(polygon)
+	total = 0.0
+	for i in 1 to n {
+		p = polygon#i
+		q = polygon#(i % n + 1)
+		total = total + p#1 * q#2 - q#1 * p#2
+	}
+	total / 2
+}
+
+global polygon_area(polygon: list): float := abs(polygon_signed_area(polygon))
+
+global polygon_centroid(polygon: list): list := {
+	a = polygon_signed_area(polygon)
+	if abs(a) < GEO_EPSILON { raise "polygon_centroid of a polygon with no area " + str(polygon) }
+	n = count(polygon)
+	cx = 0.0
+	cy = 0.0
+	for i in 1 to n {
+		p = polygon#i
+		q = polygon#(i % n + 1)
+		f = p#1 * q#2 - q#1 * p#2
+		cx = cx + (p#1 + q#1) * f
+		cy = cy + (p#2 + q#2) * f
+	}
+	[cx / (6 * a), cy / (6 * a)]
+}
+
+// p on the segment a-b (within the tolerance)
+def geo_on_segment(p: list, a: list, b: list): bool {
+	cr = vec_cross2(vec_sub(b, a), vec_sub(p, a))
+	if abs(cr) > GEO_EPSILON * (1 + vec_norm(vec_sub(b, a))) { return no }
+	p#1 >= min(a#1, b#1) - GEO_EPSILON and p#1 <= max(a#1, b#1) + GEO_EPSILON and p#2 >= min(a#2, b#2) - GEO_EPSILON and p#2 <= max(a#2, b#2) + GEO_EPSILON
+}
+
+global point_in_polygon(p: list, polygon: list): bool := {
+	geo_polygon("point_in_polygon", polygon)
+	geo_dims("point_in_polygon", p, 2)
+	n = count(polygon)
+	inside = no
+	for i in 1 to n {
+		a = polygon#i
+		b = polygon#(i % n + 1)
+		if geo_on_segment(p, a, b) { return yes }
+		if (a#2 > p#2) != (b#2 > p#2) {
+			x = a#1 + (p#2 - a#2) * (b#1 - a#1) / (b#2 - a#2)
+			if p#1 < x { inside = not inside }
+		}
+	}
+	inside
+}
+
+global segment_intersection(a: list, b: list, c: list, d: list): any := {
+	for p in [a, b, c, d] { geo_dims("segment_intersection", p, 2) }
+	r = vec_sub(b, a)
+	s = vec_sub(d, c)
+	denominator = vec_cross2(r, s)
+	qp = vec_sub(c, a)
+	if abs(denominator) < GEO_EPSILON {
+		if abs(vec_cross2(qp, r)) > GEO_EPSILON { return nil }
+		// collinear: the overlap's end nearest a
+		rr = vec_dot(r, r)
+		if rr == 0 {
+			if geo_on_segment(a, c, d) { return a }
+			return nil
+		}
+		t0 = vec_dot(qp, r) / rr
+		t1 = t0 + vec_dot(s, r) / rr
+		lo = min(t0, t1)
+		hi = max(t0, t1)
+		if hi < -GEO_EPSILON or lo > 1 + GEO_EPSILON { return nil }
+		t = max(lo, 0)
+		return vec_add(a, vec_scale(r, t))
+	}
+	t = vec_cross2(qp, s) / denominator
+	u = vec_cross2(qp, r) / denominator
+	if t < -GEO_EPSILON or t > 1 + GEO_EPSILON or u < -GEO_EPSILON or u > 1 + GEO_EPSILON { return nil }
+	vec_add(a, vec_scale(r, t))
+}
+
+def geo_before(p: list, q: list): bool := p#1 < q#1 or (p#1 == q#1 and p#2 < q#2)
+
+def geo_sorted(points: list): list {
+	if count(points) <= 1 { return points }
+	half = count(points) /! 2
+	left = geo_sorted(points[0 ..< half])
+	right = geo_sorted(points[half ..< count(points)])
+	out = []
+	i = 1
+	j = 1
+	while i <= count(left) or j <= count(right) {
+		take_left = j > count(right) or (i <= count(left) and not geo_before(right#j, left#i))
+		if take_left { p = left#i; out.add(p); i = i + 1 } else { p = right#j; out.add(p); j = j + 1 }
+	}
+	out
+}
+
+def geo_turn(o: list, a: list, b: list): number := (a#1 - o#1) * (b#2 - o#2) - (a#2 - o#2) * (b#1 - o#1)
+
+global convex_hull(points: list): list := {
+	for p in points { geo_dims("convex_hull", p, 2) }
+	sorted = geo_sorted(points)
+	unique = []
+	for p in sorted { if count(unique) == 0 or unique#count(unique) != p { unique.add(p) } }
+	if count(unique) < 3 { return unique }
+	lower = []
+	for p in unique {
+		while count(lower) >= 2 and geo_turn(lower#(count(lower) - 1), lower#count(lower), p) <= 0 { lower = lower[0 ..< count(lower) - 1] }
+		lower.add(p)
+	}
+	upper = []
+	k = count(unique)
+	while k >= 1 {
+		p = unique#k
+		while count(upper) >= 2 and geo_turn(upper#(count(upper) - 1), upper#count(upper), p) <= 0 { upper = upper[0 ..< count(upper) - 1] }
+		upper.add(p)
+		k = k - 1
+	}
+	lower[0 ..< count(lower) - 1] + upper[0 ..< count(upper) - 1]
+}
+
+def geo_latlon(name: text, p: any) {
+	geo_dims(name, p, 2)
+	if p#1 < -90 or p#1 > 90 { raise name + ": latitude " + str(p#1) + " is not within -90..90" }
+}
+
+global haversine_km(a: list, b: list): float := {
+	geo_latlon("haversine_km", a)
+	geo_latlon("haversine_km", b)
+	f1 = to_radians(a#1)
+	f2 = to_radians(b#1)
+	df = f2 - f1
+	dl = to_radians(b#2 - a#2)
+	h = sin(df / 2) * sin(df / 2) + cos(f1) * cos(f2) * sin(dl / 2) * sin(dl / 2)
+	2 * 6371 * atan2(sqrt(h), sqrt(1 - h))
+}
+
+global initial_bearing(a: list, b: list): float := {
+	geo_latlon("initial_bearing", a)
+	geo_latlon("initial_bearing", b)
+	f1 = to_radians(a#1)
+	f2 = to_radians(b#1)
+	dl = to_radians(b#2 - a#2)
+	y = sin(dl) * cos(f2)
+	x = cos(f1) * sin(f2) - sin(f1) * cos(f2) * cos(dl)
+	d = to_degrees(atan2(y, x))
+	while d < 0 { d = d + 360 }
+	while d >= 360 { d = d - 360 }
+	d
+}
