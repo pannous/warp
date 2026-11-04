@@ -308,7 +308,7 @@ is_word_char(c) := is_alphanumeric(c) or c == '_'
 // at least one character, each passing is_class: consists_of("42", is_digit)
 consists_of(t: text, is_class) := { if t is empty { return false }; for c in t { if not is_class(c) { return false } }; true }
 // a whole number, optionally signed: "-3"
-is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
+is_integer(t: text) := consists_of(unsigned(t), is_digit)
 // a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`
 fits_text_type(t: text, type: text) := match type {
 	"int" | "integer" => is_integer(t)
@@ -346,7 +346,7 @@ text_holes(t, pieces: [text], types: [text]) := {
 // from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
 // symbols, which needs the grapheme runtime
 to_base(n: int, base: int, upper = false) := { if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
-from_base(t: text, base: int) := { out = 0; for c in lower(t) { code = ord(c); out = out * base + code - (if code < 58 then 48 else 87) }; out }
+from_base(t: text, base: int) := { if base < 2 or base > 36 { raise "from_base: the base " + str(base) + " is not 2 to 36" }; if t == "" { raise "from_base of an empty text" }; out = 0; for c in lower(t) { code = ord(c); digit = if code >= 48 and code < 58 then code - 48 else if code >= 97 and code <= 122 then code - 87 else 99; if digit >= base { raise "from_base: " + c + " is not a base-" + str(base) + " digit in " + t }; out = out * base + digit }; out }
 // how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
 // "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
 radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
