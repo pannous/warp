@@ -196,7 +196,7 @@ value_parts(n: Node): list := match n {
 	List(items, bracket, separator): items
 	_: []
 }
-overload_value_refusal(name: text, variants: list, described: function, at: Node): text := name + " is defined " + "${#variants}" + " times, " + described(variants) + "; pass a lambda that calls the one you mean, e.g. x => " + name + "(x)" + place_text(written_at(at), "")
+overload_value_refusal(name: text, variants: list, described: function, at: Node): text := written_word(name) + " is defined " + "${#variants}" + " times, " + described(variants) + "; pass a lambda that calls the one you mean, e.g. x => " + written_word(name) + "(x)" + place_text(written_at(at), "")
 arities_described(spans: list): text := "with " + and_listed(spans.map(span_text).sort()) + " parameters"
 types_described(variants: list): text := "for " + and_listed(variants.map(types_text))
 types_text(types: list): text := "(" + types.join(", ") + ")"
