@@ -32,4 +32,7 @@ works 'use draw; use sound; tuning'
 works 'scaled(x) := x * 2; scaled(x, y) := x * y; apply(f, x) := f(x); apply(scaled, 3)'
 # a bare name is the call of the variant taking nothing: the host's random()
 works 'random < 1'
+# a comprehension's variable and a text pattern's hole are their own names, though functions of the name are overloaded
+works 'sum(xs) := 1; sum(a, b) := 2; [max(sum, 1) for sum in [5, 6]]'
+works 'post(a, b) := 1; post(a, b, c) := 2; f(p) := match p { "/u/" + post: int => "\\(post)" }; f("/u/3")'
 exit $status

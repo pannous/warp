@@ -173,7 +173,7 @@ arity_overloads(program: Node): Node := {
 refused_overload_values(program: Node, overloaded: map, described: function) := refuse_overload_values(program, shadowed(overloaded, names_bound(program, [])), described)
 refuse_overload_values(n: Node, overloaded: map, described: function) := {
 	call = definition_call(n)
-	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + names_bound(value_of(n), []) else []
+	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + pattern_names(key_of(n)) + names_bound(value_of(n), []) else []
 	bound = bound + loop_variables(n)
 	if #bound > 0 { overloaded = shadowed(overloaded, bound) }
 	if #overloaded == 0 { return ø }

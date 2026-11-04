@@ -843,10 +843,12 @@ names_bound_in_kept(program: Node): any := {
 }
 # the names in a view, `["attribute", "variants", ["list", ["symbol", "red"]], ["symbol", "Color"]]`'s red and Color
 view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
-# the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point)
+# the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the
+# holes of a text pattern `"/users/" + id: int`
 pattern_names(pattern: Node): list := match pattern {
 	Symbol(name): [name]
 	Key(head, Op.Colon, type): pattern_names(head)
+	Key(head, Op.Add, tail): pattern_names(head) + pattern_names(tail)
 	Key(head, op, fields): if is_group(fields) then pattern_names(fields) else []
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
 }
