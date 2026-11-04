@@ -510,13 +510,7 @@ function_type_arity(type: text): int? := {
 	if #arrows == 0 { return ø }
 	head = type.split(arrows#1)#1.trim()
 	if head.starts_with("(") and head.ends_with(")") { head = head[1 ..< #head - 1].trim() }
-	if head == "" { return 0 }
-	depth = 0
-	count = 1
-	for c in head {
-		if c == '(' { depth += 1 } else if c == ')' { depth -= 1 } else if c == ',' and depth == 0 { count += 1 }
-	}
-	count
+	if head == "" then 0 else #outer_parts(head)
 }
 
 # the sum of the arguments' fits, ø when one does not fit
