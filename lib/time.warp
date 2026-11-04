@@ -274,6 +274,7 @@ parse_pattern(t: text, pattern: text): int := {
 	}
 	if at != #t { pattern_mismatch(t, pattern, at, "the end") }
 	if values["M"] < 1 or values["M"] > 12 or values["d"] < 1 or values["d"] > days_in_month(values["y"], values["M"]) { raise "parse_pattern: " + t + " names no date" }
+	if values["H"] > 23 or values["m"] > 59 or values["s"] > 59 or values["S"] > 999 { raise "parse_pattern: " + t + " names no time of day (hours 0-23, minutes and seconds 0-59, milliseconds 0-999)" }
 	days_from_date(values["y"], values["M"], values["d"]) * 86400000 + ((values["H"] * 60 + values["m"]) * 60 + values["s"]) * 1000 + values["S"]
 }
 pattern_month(i: int, run: int): text := if run >= 4 then MONTH_NAMES#i else MONTH_NAMES#i[0: 3]
