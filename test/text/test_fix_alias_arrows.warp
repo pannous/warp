@@ -1,0 +1,6 @@
+# warp fix writes the arrow of an alias line that says no direction (decision alias-arrows, card alias-arc-cosine)
+is! 'use "../../lib/fix/fix.warp"; fixed("alias acos = arc_cosine", [], yes)#1' "alias acos => arc_cosine\n"
+# an alias with its arrow, a variable named alias and a comparison stay
+is! 'use "../../lib/fix/fix.warp"; fixed("alias acos => arc_cosine", [], yes)#1' "alias acos => arc_cosine\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("alias = 3", [], yes)#1' "alias = 3\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("alias a == b", [], yes)#1' "alias a == b\n"

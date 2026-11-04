@@ -19,9 +19,9 @@ class Queue { items = []
 	poll() := dequeue()
 	shift() := dequeue()
 }
-alias ArrayDeque = Deque
-alias VecDeque = Deque
-alias deque = Deque
+alias ArrayDeque => Deque
+alias VecDeque => Deque
+alias deque => Deque
 class Deque { items = []
 	push_back(x) := items.add(x)
 	push_front(x) := { items = [x] + items }
@@ -37,10 +37,10 @@ class Deque { items = []
 	pollLast() := pop_back()
 	pollFirst() := pop_front()
 }
-alias HashSet = Set
-alias TreeSet = Set
-alias LinkedHashSet = Set
-alias frozenset = Set
+alias HashSet => Set
+alias TreeSet => Set
+alias LinkedHashSet => Set
+alias frozenset => Set
 class Set { items = []
 	init(xs = []) := { for x in xs { if not (x in items) { items.add(x) } } }
 	add(x) := { if not (x in items) { items.add(x) } }
@@ -57,6 +57,6 @@ class Counter { keys = []; counts = []
 	most_common() := { best = 1; for i in 1 to count(counts) { if counts#i > counts#best { best = i } }; keys#best }
 }
 // warp maps keep insertion order: an ordered map is a map
-alias OrderedDict = OrderedMap
-alias LinkedHashMap = OrderedMap
+alias OrderedDict => OrderedMap
+alias LinkedHashMap => OrderedMap
 OrderedMap() := {}
