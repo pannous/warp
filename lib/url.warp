@@ -39,3 +39,220 @@ def query_map(t: text): map {
 }
 // a map as a query string, keys and values percent-encoded
 query_text(m: map): text := join([url_encode(str(k)) + "=" + url_encode(str(m[k])) for k in keys(m)], "&")
+
+// URLs as maps (RFC 3986): parse_url("https://u:p@example.com:8080/a?q=1#top") is {scheme: "https", user: "u",
+// password: "p", host: "example.com", port: 8080, path: "/a", query: "q=1", fragment: "top"}. A part the text does not
+// have is nil, one it has empty is "" ("http://h/?" has query ""), so url_text gives the text back; host is nil
+// without an authority (a relative reference, mailto:x) and "" for an empty one (file:///x); an IPv6 host keeps no brackets
+
+// the 0-based place of the first of the characters in t, -1 when none is there
+first_of(t: text, characters: text): int := if t == "" then -1 else { cs = [c for c in t]; at = -1; for i in 0 ..< count(cs) { if at < 0 and characters.contains(cs[i]) { at = i } }; at }
+is_scheme(t: text): bool := t != "" and is_alpha(t[0]) and all([c for c in t], c => is_alphanumeric(c) or "+-.".contains(c))
+
+def parse_url(t: text): map {
+	u = {scheme: nil, user: nil, password: nil, host: nil, port: nil, path: "", query: nil, fragment: nil}
+	rest = t
+	at = first_of(rest, "#")
+	if at >= 0 { u.fragment = rest[at + 1..]; rest = rest[0 ..< at] }
+	at = first_of(rest, "?")
+	if at >= 0 { u.query = rest[at + 1..]; rest = rest[0 ..< at] }
+	at = first_of(rest, ":/")
+	if at > 0 and rest[at] == ":" and is_scheme(rest[0 ..< at]) { u.scheme = lower(rest[0 ..< at]); rest = rest[at + 1..] }
+	if rest.starts_with("//") {
+		rest = rest[2..]
+		at = first_of(rest, "/")
+		authority = if at >= 0 then rest[0 ..< at] else rest
+		rest = if at >= 0 then rest[at..] else ""
+		at = first_of(authority, "@")
+		if at >= 0 {
+			userinfo = authority[0 ..< at]
+			authority = authority[at + 1..]
+			colon = first_of(userinfo, ":")
+			if colon >= 0 { u.user = userinfo[0 ..< colon]; u.password = userinfo[colon + 1..] } else { u.user = userinfo }
+		}
+		hostport = authority
+		if hostport.starts_with("[") {
+			close = first_of(hostport, "]")
+			u.host = hostport[1 ..< close]
+			hostport = hostport[close + 1..]
+			if hostport.starts_with(":") { u.port = if hostport == ":" then "" else int(hostport[1..]) }
+		} else {
+			colon = first_of(hostport, ":")
+			if colon >= 0 { u.host = hostport[0 ..< colon]; u.port = if colon + 1 == count(hostport) then "" else int(hostport[colon + 1..]) } else { u.host = hostport }
+		}
+	}
+	u.path = rest
+	u
+}
+// the URL text of the parts (RFC 3986 section 5.3)
+def url_text(u: map): text {
+	out = ""
+	if u.scheme != nil { out = out + u.scheme + ":" }
+	if u.host != nil {
+		out = out + "//"
+		if u.user != nil { out = out + u.user + (if u.password != nil then ":" + u.password else "") + "@" }
+		out = out + (if u.host.contains(":") then "[" + u.host + "]" else u.host)
+		if u.port != nil { out = out + ":" + str(u.port) }
+	}
+	out = out + u.path
+	if u.query != nil { out = out + "?" + u.query }
+	if u.fragment != nil { out = out + "#" + u.fragment }
+	out
+}
+
+// "/a/b/c/./../../g" is "/a/g" (section 5.2.4)
+def remove_dot_segments(path: text): text {
+	input = path
+	output = []
+	while input != "" {
+		if input.starts_with("../") { input = input[3..] }
+		else if input.starts_with("./") { input = input[2..] }
+		else if input.starts_with("/./") { input = input[2..] }
+		else if input == "/." { input = "/" + input[2..] }
+		else if input.starts_with("/../") or input == "/.." {
+			input = "/" + input[(if input == "/.." then 3 else 4)..]
+			if count(output) > 0 { output = output[0 ..< count(output) - 1] }
+		}
+		else if input == "." or input == ".." { input = "" }
+		else {
+			start = if input.starts_with("/") then 1 else 0
+			slash = if start < count(input) then first_of(input[start..], "/") else -1
+			cut = if slash < 0 then count(input) else start + slash
+			output = output + [input[0 ..< cut]]
+			input = input[cut..]
+		}
+	}
+	join(output, "")
+}
+// the path of a reference relative to the base's (section 5.2.3)
+merged_path(base: map, path: text): text := if base.host != nil and base.path == "" then "/" + path else {
+	slash = count(base.path) - 1
+	while slash >= 0 and base.path[slash] != "/" { slash = slash - 1 }
+	base.path[0 ..< slash + 1] + path
+}
+// a reference resolved against a base URL (section 5.2.2, strict): resolve_url("http://a/b/c/d;p?q", "../g") is "http://a/b/g"
+def resolve_url(base_text: text, reference: text): text {
+	base = parse_url(base_text)
+	r = parse_url(reference)
+	t = {scheme: nil, user: nil, password: nil, host: nil, port: nil, path: "", query: nil, fragment: r.fragment}
+	if r.scheme != nil {
+		t.scheme = r.scheme; t.user = r.user; t.password = r.password; t.host = r.host; t.port = r.port
+		t.path = remove_dot_segments(r.path); t.query = r.query
+	} else {
+		if r.host != nil {
+			t.user = r.user; t.password = r.password; t.host = r.host; t.port = r.port
+			t.path = remove_dot_segments(r.path); t.query = r.query
+		} else {
+			if r.path == "" {
+				t.path = base.path
+				t.query = if r.query != nil then r.query else base.query
+			} else {
+				t.path = remove_dot_segments(if r.path.starts_with("/") then r.path else merged_path(base, r.path))
+				t.query = r.query
+			}
+			t.user = base.user; t.password = base.password; t.host = base.host; t.port = base.port
+		}
+		t.scheme = base.scheme
+	}
+	url_text(t)
+}
+
+// IP addresses as their bytes: 4 for IPv4, 16 for IPv6; nil for a text that is none. IPv4 is the strict dotted quad of
+// inet_pton: four decimal numbers 0 to 255 without leading zeros ("01.2.3.4" is refused, as octal would read it)
+def ipv4_bytes(t: text): any {
+	parts = split(t, ".")
+	if count(parts) != 4 { return nil }
+	bytes = []
+	for p in parts {
+		if p == "" or count(p) > 3 or not all([c for c in p], c => is_digit(c)) or (count(p) > 1 and p[0] == "0") { return nil }
+		n = int(p)
+		if n > 255 { return nil }
+		bytes.add(n)
+	}
+	bytes
+}
+// the groups of IPv6 text, a trailing dotted quad as its two groups; nil when a group is not 1 to 4 hex digits
+def ipv6_groups(t: text): any {
+	if t == "" { return [] }
+	groups = []
+	parts = split(t, ":")
+	for i in 0 ..< count(parts) {
+		p = parts[i]
+		if i == count(parts) - 1 and p.contains(".") {
+			quad = ipv4_bytes(p)
+			if quad == nil { return nil }
+			groups = groups + [quad[0] * 256 + quad[1], quad[2] * 256 + quad[3]]
+		} else {
+			if p == "" or count(p) > 4 { return nil }
+			n = 0
+			for c in p { v = url_hex_value(c); if v < 0 { return nil }; n = n * 16 + v }
+			groups.add(n)
+		}
+	}
+	groups
+}
+// RFC 4291 text, :: once for a run of zero groups, an IPv4 address at the end allowed: "::ffff:1.2.3.4"
+def ipv6_bytes(t: text): any {
+	halves = split(t, "::")
+	if count(halves) > 2 { return nil }
+	head = ipv6_groups(halves[0])
+	tail = if count(halves) == 2 then ipv6_groups(halves[1]) else []
+	if head == nil or tail == nil { return nil }
+	missing = 8 - count(head) - count(tail)
+	if (count(halves) == 2 and missing < 1) or (count(halves) == 1 and missing != 0) { return nil }
+	groups = head + [0 for i in 0 ..< missing] + tail
+	join_bytes = []
+	for g in groups { join_bytes = join_bytes + [g /! 256, g % 256] }
+	join_bytes
+}
+is_ipv4(t: text): bool := ipv4_bytes(t) != nil
+is_ipv6(t: text): bool := ipv6_bytes(t) != nil
+ip_bytes(t: text): any := if t.contains(":") then ipv6_bytes(t) else ipv4_bytes(t)
+// an IPv4 address as one number: ipv4_int("10.0.0.1") is 167772161
+ipv4_int(t: text): int := { n = 0; for b in ipv4_bytes(t) { n = n * 256 + b }; n }
+hex_group(n: int): text := { if n == 0 { return "0" }; out = ""; rest = n; while rest > 0 { out = "0123456789abcdef"[rest % 16] + out; rest = rest /! 16 }; out }
+// the canonical text (RFC 5952) of an address, its text or its bytes: lower case, no leading zeros, the longest run of
+// two or more zero groups (the first of equal ones) as ::, an IPv4-mapped address as ::ffff:a.b.c.d
+def ip_text(address: any): text {
+	bytes = if address is text then ip_bytes(address) else address
+	if count(bytes) == 4 { return join([str(b) for b in bytes], ".") }
+	groups = [bytes[2 * i] * 256 + bytes[2 * i + 1] for i in 0 ..< 8]
+	if all([groups[i] for i in 0 ..< 5], g => g == 0) and groups[5] == 0xffff { return "::ffff:" + join([str(b) for b in bytes[12..]], ".") }
+	best = -1; best_length = 1; i = 0
+	while i < 8 {
+		if groups[i] == 0 {
+			j = i
+			while j < 8 and groups[j] == 0 { j = j + 1 }
+			if j - i > best_length { best = i; best_length = j - i }
+			i = j
+		} else { i = i + 1 }
+	}
+	texts = [hex_group(g) for g in groups]
+	if best < 0 { return join(texts, ":") }
+	join(texts[0 ..< best], ":") + "::" + join(texts[best + best_length..], ":")
+}
+// whether the network "10.0.0.0/8" or "2001:db8::/32" holds the address, of the same family
+def cidr_contains(cidr: text, ip: text): bool {
+	parts = split(cidr, "/")
+	network = ip_bytes(parts[0])
+	address = ip_bytes(ip)
+	if network == nil or address == nil or count(network) != count(address) { return no }
+	prefix = if count(parts) > 1 then int(parts[1]) else 8 * count(network)
+	whole = prefix /! 8
+	for i in 0 ..< whole { if network[i] != address[i] { return no } }
+	rest = prefix % 8
+	rest == 0 or network[whole] /! 2 ** (8 - rest) == address[whole] /! 2 ** (8 - rest)
+}
+
+// a pragmatic e-mail address check, not RFC 5322's whole grammar (no quoted local parts, comments or IP literals):
+// local@domain, the local part dot-atoms (letters, digits and !#$%&'*+/=?^_`{|}~- between single dots), the domain two or
+// more labels of letters, digits and inner hyphens, up to 63 characters each, the address up to 254 characters
+EMAIL_ATOM = "!#$%&'*+/=?^_`{|}~-"
+is_atom(t: text): bool := t != "" and all([c for c in t], c => is_alphanumeric(c) or EMAIL_ATOM.contains(c))
+is_label(t: text): bool := t != "" and count(t) <= 63 and t[0] != "-" and t[count(t) - 1] != "-" and all([c for c in t], c => is_alphanumeric(c) or c == "-")
+def is_email(t: text): bool {
+	parts = split(t, "@")
+	if count(parts) != 2 or count(t) > 254 or count(parts[0]) > 64 { return no }
+	labels = split(parts[1], ".")
+	all(split(parts[0], "."), a => is_atom(a)) and count(labels) >= 2 and all(labels, l => is_label(l))
+}
