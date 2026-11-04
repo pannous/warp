@@ -28,7 +28,7 @@ class Instant {
 // and `1h` counted in ms, one of another dimension a DimensionError
 milliseconds_of(duration: any) := duration
 // ".692", ".69", ".5", or nothing on a whole second
-millis_fraction(millis) := {
+millis_fraction(millis): text := {
 	if millis == 0 then return ""
 	if millis % 100 == 0 then return "." + millis /! 100
 	if millis % 10 == 0 then return "." + two_digits(millis /! 10)
@@ -43,7 +43,7 @@ weekday(ms): int := (day_number(ms) + 3) % 7 + 1
 today() := date_of(clock())
 add_days(ms, n) := ms + n * 86400000
 days_between(from, to): int := day_number(to) - day_number(from)
-two_digits(n) := if n < 10 then "0" + n else "" + n
+two_digits(n): text := if n < 10 then "0" + n else "" + n
 // ISO 8601: 2026-10-07
 format_date(ms): text := {
 	d = date_of(ms)
@@ -57,7 +57,7 @@ format_time(ms): text := {
 // the day number of a proleptic Gregorian date (lib/prelude.warp days_from_civil)
 days_from_date(year, month, day) := days_from_civil(year, month, day)
 // "2026-10-07" → milliseconds since 1970 at midnight UTC
-parse_date(t) := {
+parse_date(t): int := {
 	parts = split(t, "-")
 	days_from_date(int(parts#1), int(parts#2), int(parts#3)) * 86400000
 }
