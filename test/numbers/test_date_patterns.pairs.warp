@@ -1,0 +1,14 @@
+# format_pattern and parse_pattern with yyyy MM dd HH mm ss tokens, UTC (card lib-date-patterns)
+'use time; format_pattern(0, "yyyy-MM-dd HH:mm:ss")'	"1970-01-01 00:00:00"
+'use time; format_pattern(parse_pattern("2026-11-04 14:05", "yyyy-MM-dd HH:mm"), "yyyy-MM-dd HH:mm")'	"2026-11-04 14:05"
+'use time; p = "dd.MM.yyyy HH:mm:ss.SSS"; t = "29.02.2024 23:59:58.123"; format_pattern(parse_pattern(t, p), p) == t'	yes
+'use time; format_pattern(parse_pattern("2026-03-07 09:05:01", "yyyy-MM-dd HH:mm:ss"), "d/M/yy H:mm:ss")'	"7/3/26 9:05:01"
+'use time; format_pattern(parse_pattern("3/7/2026 9:05", "d/M/yyyy H:mm"), "dd.MM.yyyy HH:mm")'	"03.07.2026 09:05"
+'use time; format_pattern(parse_pattern("2026-11-04", "yyyy-MM-dd"), "EEEE, d MMMM yyyy")'	"Wednesday, 4 November 2026"
+'use time; format_pattern(parse_pattern("4 Nov 2026", "d MMM yyyy"), "yyyy-MM-dd")'	"2026-11-04"
+'use time; format_pattern(0, "\'day\' d")'	"day 1"
+'use time; parse_pattern("1970-01-02", "yyyy-MM-dd")'	86400000
+'use time; try parse_pattern("2026/11/04", "yyyy-MM-dd") else "mismatch"'	"mismatch"
+'use time; try parse_pattern("2026-11-4", "yyyy-MM-dd") else "mismatch"'	"mismatch"
+'use time; try parse_pattern("2026-11-04 extra", "yyyy-MM-dd") else "mismatch"'	"mismatch"
+'use time; try parse_pattern("2026-02-30", "yyyy-MM-dd") else "no date"'	"no date"
