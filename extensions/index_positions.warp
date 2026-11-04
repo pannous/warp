@@ -4,10 +4,6 @@
 # position one more, so `i: index = "a👍🏽b".find("b")` is 2 and `p: position = …` 3. `find(t, part)` and `index_of`
 # give positions, `byte_index_of`, `argmax` and `argmin` indexes; arithmetic with a plain int keeps what a value counts,
 # and so does a name assigned only such values. A function definition is its own scope.
-use "walk.warp"
-use "scope.warp"
-use "number_keys.warp"
-use "../analysis/diagnostics.warp"
 
 position_word = "position"
 index_word = "index"
@@ -171,3 +167,5 @@ index_positions(program: Node): Node := {
 	type_words = free_type_words(program)
 	counted_node(program, scope_counts(program, {}, type_words), type_words)
 }
+# a whole pass of the used stage, right after the program's rewrite rules (card leaves-core)
+index_positions_extension = Extension{name: "index_positions", passes: {"rules_rewritten": index_positions}}
