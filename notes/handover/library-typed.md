@@ -363,3 +363,9 @@ Time parsing slice landed on main at `c69aadaffb`: new public outcomes passed 2/
 2026-11-04 continuation: day calculation baseline `use time; [day_number(172800000), days_from_date(1970, 1, 2), add_days(0, 2)]` returned `[2, 1, 172800000]`. Added public outcome coverage; next run it, annotate precise integer day helpers without narrowing inputs, rerun and smoke. Existing tests remain untouched.
 
 The new calendar outcome passed 1/1 before typing. `day_number` and `days_from_date` now declare integer results; inputs remain unchanged. Next repeat the outcome, format, merge main and smoke. `add_days` remains untyped because fractional inputs can produce fractional results.
+
+Calendar day helper slice landed on main at `8ec8e8b58c`: new outcome passed before and after typing, five focused time outcomes passed, formatting changed nothing, and merged-main smoke printed Hello. Existing tests and input domains were unchanged; `add_days` remains untyped to preserve fractional results. Remaining: audit other library signatures for precise types and revisit typed-return, typed-color, typed-infix and sound-overload-refused. Default: avoid generic-only annotations and preserve polymorphic inputs and existing tests.
+
+2026-11-04 continuation: wall-clock baseline `WARP_NO_WINDOW=1 WARP_LIB=/Volumes/Worktrees/library-typed/lib /Users/me/dev/bin/warp 'use time; [now is Instant, now.ms > 0]'` returned `[yes, yes]`. Added a public outcome for the documented Instant. Next run it before annotating `now` and `wall_clock_ms`, then repeat and smoke. Default: retain existing behavior and input domains; no existing tests changed.
+
+The wall-clock outcome passed 1/1 before and after declaring `now(): Instant` and `wall_clock_ms(): int`. Next format, merge current main, smoke and land this slice, then continue the precise-signature audit and tracked compiler interactions. No existing tests were changed.
