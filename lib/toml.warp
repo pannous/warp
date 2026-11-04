@@ -1,0 +1,533 @@
+// The standard library module toml: `use toml`, TOML 1.0 text read into maps and lists, and written back.
+// parse_toml(t) gives a map; to_toml(m) the TOML text of a map, which parse_toml reads back equal.
+// Decisions (card lib-ini-toml):
+// - tables are maps in their written order, arrays lists, strings texts, booleans yes/no, integers whole numbers
+//   (exact, any size), floats floats (inf and nan the float infinity and NaN)
+// - dates and times are tagged maps {toml: kind, value: text}, kind one of offset-date-time, local-date-time,
+//   local-date, local-time, the text as written with a space between date and time made a T: lib/time's Instant
+//   holds only milliseconds of an offset date-time, so a local date or time, or an offset, would be lost in it
+// - to_toml writes a whole float with .0 so it reads back a float; a map in an array of maps becomes [[array]] tables
+// - errors name the line: "toml line 3: duplicate key a"
+
+TOML_BARE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
+TOML_DIGITS = "0123456789"
+TOML_HEX = "0123456789abcdef"
+TOML_ESCAPED = {"b": chr(8), "t": "\t", "n": "\n", "f": chr(12), "r": "\r", "\"": "\"", "\\": "\\"}
+TOML_WRITTEN_ESCAPES = {"\"": "\\\"", "\\": "\\\\", "\n": "\\n", "\t": "\\t", "\r": "\\r", chr(8): "\\b", chr(12): "\\f"}
+TOML_DATE_KINDS = ["offset-date-time", "local-date-time", "local-date", "local-time"]
+
+global parse_toml(source: text): map := {
+	// CR LF is one character of a text: read as a line break
+	st = {"src": source.replace(chr(13) + "\n", "\n"), "at": 1, "kinds": {}}
+	root = {}
+	current = root
+	current_path = ""
+	source = st["src"]
+	n = #source
+	while true {
+		toml_skip_blank(st, yes)
+		if st["at"] > n { break }
+		c = source#(st["at"])
+		if c == "[" {
+			if toml_peek(st, 1) == "[" {
+				st["at"] = st["at"] + 2
+				keys = toml_key_read(st)
+				toml_expect(st, "]]")
+				header = toml_array_table(st, root, keys)
+				current = header#1
+				current_path = header#2
+			} else {
+				st["at"] = st["at"] + 1
+				keys = toml_key_read(st)
+				toml_expect(st, "]")
+				header = toml_table(st, root, keys)
+				current = header#1
+				current_path = header#2
+			}
+		} else {
+			toml_pair(st, st["kinds"], current, current_path)
+		}
+		toml_line_end(st)
+	}
+	root
+}
+
+// errors
+toml_line_of(st: map): int := {
+	line = 1
+	src = st["src"]
+	upto = min(st["at"] - 1, #src)
+	for i in 1 to upto { if src#i == "\n" { line += 1 } }
+	line
+}
+toml_fail(st: map, problem: text): any := raise error_safe("toml line " + toml_line_of(st) + ": " + problem)
+// a period after a message ending in " a" or " at": the runtime's place check reads past such an end and traps
+// (card core-error-sentence-tail)
+error_safe(message: text): text := if message.ends_with(" a") or message.ends_with(" at") or message.ends_with(" ") then message + "." else message
+toml_peek(st: map, ahead: int): text := { at = st["at"] + ahead; if at <= #(st["src"]) then "" + st["src"]#at else "" }
+toml_char(st: map): text := toml_peek(st, 0)
+
+// spaces and tabs; with lines also newlines and comments
+toml_skip_blank(st: map, lines: bool): any := {
+	src = st["src"]
+	while st["at"] <= #src {
+		c = "" + src#(st["at"])
+		if c == " " or c == "\t" { st["at"] = st["at"] + 1 }
+		else if lines and (c == "\n" or c == "\r") { st["at"] = st["at"] + 1 }
+		else if lines and c == "#" { toml_comment(st) }
+		else { return ø }
+	}
+	ø
+}
+toml_comment(st: map): any := {
+	src = st["src"]
+	while st["at"] <= #src and src#(st["at"]) != "\n" {
+		code = ord(src#(st["at"]))
+		if (code < 32 and code != 9 and code != 13) or code == 127 { toml_fail(st, "a control character in a comment") }
+		st["at"] = st["at"] + 1
+	}
+	ø
+}
+// after a pair or header: spaces, a comment, then a newline or the end
+toml_line_end(st: map): any := {
+	toml_skip_blank(st, no)
+	c = toml_char(st)
+	if c == "#" { toml_comment(st); c = toml_char(st) }
+	if c == "\r" and toml_peek(st, 1) == "\n" { st["at"] = st["at"] + 1; c = "\n" }
+	if c == "" { return ø }
+	if c != "\n" { toml_fail(st, "unexpected " + c + " after a value") }
+	st["at"] = st["at"] + 1
+	ø
+}
+toml_expect(st: map, word: text): any := {
+	toml_skip_blank(st, no)
+	for i in 1 to #word { if toml_peek(st, i - 1) != "" + word#i { toml_fail(st, "expected " + word) } }
+	st["at"] = st["at"] + #word
+	ø
+}
+
+// keys: a.b."c d".'e', as a list of texts
+toml_key_read(st: map): list := {
+	keys = []
+	while true {
+		toml_skip_blank(st, no)
+		c = toml_char(st)
+		if c == "\"" { st["at"] = st["at"] + 1; keys += [toml_basic_read(st)] }
+		else if c == "'" { st["at"] = st["at"] + 1; keys += [toml_literal_read(st)] }
+		else {
+			key = ""
+			while toml_char(st) != "" and toml_char(st) in TOML_BARE { key += toml_char(st); st["at"] = st["at"] + 1 }
+			if key == "" { toml_fail(st, "a key expected" + (if c == "" or c == "\n" then "" else ", not " + c)) }
+			keys += [key]
+		}
+		toml_skip_blank(st, no)
+		if toml_char(st) != "." { return keys }
+		st["at"] = st["at"] + 1
+	}
+	keys
+}
+toml_path(path: text, key: text): text := if path == "" then chr(1) + key else path + chr(1) + key
+toml_shown(keys: list): text := keys.join(".")
+
+// key = value into table (at path), the kinds of paths in kinds: dotted keys make tables of kind dotted
+toml_pair(st: map, kinds: map, table: map, path: text): any := {
+	keys = toml_key_read(st)
+	toml_expect(st, "=")
+	toml_skip_blank(st, no)
+	value = toml_value_read(st)
+	for i in 1 to #keys - 1 {
+		key = keys#i
+		path = toml_path(path, key)
+		if table.has(key) {
+			if kinds.get(path) != "dotted" { toml_fail(st, "key " + toml_shown(keys) + " extends " + key + ", which is no table of dotted keys here") }
+			table = table[key]
+		} else {
+			fresh = {}
+			table[key] = fresh
+			kinds[path] = "dotted"
+			table = fresh
+		}
+	}
+	last = keys#(#keys)
+	if table.has(last) { toml_fail(st, "duplicate key " + toml_shown(keys)) }
+	table[last] = value
+	kinds[toml_path(path, last)] = "value"
+	ø
+}
+// the table a header's leading keys lead to: a missing one made, an array of tables its last table
+toml_walk(st: map, root: map, keys: list, upto: int): list := {
+	kinds = st["kinds"]
+	table = root
+	path = ""
+	for i in 1 to upto {
+		key = keys#i
+		path = toml_path(path, key)
+		if table.has(key) {
+			kind = kinds.get(path) ?? "value"
+			if kind == "array-of-tables" { items = table[key]; table = items#(#items) }
+			else if kind == "table" or kind == "implicit" or kind == "dotted" { table = table[key] }
+			else { toml_fail(st, "key " + toml_shown(keys) + ": " + key + " is already a value, not a table") }
+		} else {
+			fresh = {}
+			table[key] = fresh
+			kinds[path] = "implicit"
+			table = fresh
+		}
+	}
+	[table, path]
+}
+toml_table(st: map, root: map, keys: list): list := {
+	kinds = st["kinds"]
+	up = toml_walk(st, root, keys, #keys - 1)
+	table = up#1
+	key = keys#(#keys)
+	path = toml_path(up#2, key)
+	if table.has(key) {
+		kind = kinds.get(path) ?? "value"
+		if kind == "implicit" { kinds[path] = "table"; return [table[key], path] }
+		if kind == "table" { toml_fail(st, "duplicate table [" + toml_shown(keys) + "]") }
+		toml_fail(st, "table [" + toml_shown(keys) + "] redefines the " + (if kind == "dotted" then "dotted keys" else if kind == "array-of-tables" then "array of tables" else "key") + " " + toml_shown(keys))
+	}
+	fresh = {}
+	table[key] = fresh
+	kinds[path] = "table"
+	[fresh, path]
+}
+toml_array_table(st: map, root: map, keys: list): list := {
+	kinds = st["kinds"]
+	up = toml_walk(st, root, keys, #keys - 1)
+	table = up#1
+	key = keys#(#keys)
+	path = toml_path(up#2, key)
+	fresh = {}
+	if table.has(key) {
+		if kinds.get(path) != "array-of-tables" { toml_fail(st, "[[" + toml_shown(keys) + "]] appends to " + toml_shown(keys) + ", which is no array of tables") }
+		items = table[key]
+		items.add(fresh)
+		// the new table starts empty: forget what the previous one defined
+		inside = path + chr(1)
+		for k in kinds.keys { if k.starts_with(inside) { kinds.remove(k) } }
+	} else {
+		table[key] = [fresh]
+		kinds[path] = "array-of-tables"
+	}
+	[fresh, path]
+}
+
+// values
+toml_value_read(st: map): any := {
+	c = toml_char(st)
+	if c == "" or c == "\n" { toml_fail(st, "a value expected") }
+	if c == "\"" {
+		if toml_peek(st, 1) == "\"" and toml_peek(st, 2) == "\"" { st["at"] = st["at"] + 3; return toml_multiline_read(st, "\"") }
+		st["at"] = st["at"] + 1
+		return toml_basic_read(st)
+	}
+	if c == "'" {
+		if toml_peek(st, 1) == "'" and toml_peek(st, 2) == "'" { st["at"] = st["at"] + 3; return toml_multiline_read(st, "'") }
+		st["at"] = st["at"] + 1
+		return toml_literal_read(st)
+	}
+	if c == "[" { st["at"] = st["at"] + 1; return toml_array_read(st) }
+	if c == "{" { st["at"] = st["at"] + 1; return toml_inline_read(st) }
+	toml_scalar_read(st)
+}
+toml_array_read(st: map): list := {
+	items = []
+	while true {
+		toml_skip_blank(st, yes)
+		if toml_char(st) == "]" { st["at"] = st["at"] + 1; return items }
+		items += [toml_value_read(st)]
+		toml_skip_blank(st, yes)
+		c = toml_char(st)
+		if c == "," { st["at"] = st["at"] + 1 }
+		else if c == "]" { st["at"] = st["at"] + 1; return items }
+		else { toml_fail(st, "no , or ] in an array" + (if c == "" then "" else ", but " + c)) }
+	}
+	items
+}
+// { a = 1, b.c = 2 }: on one line, no trailing comma, closed for later keys and tables
+toml_inline_read(st: map): map := {
+	table = {}
+	kinds = {}
+	toml_skip_blank(st, no)
+	if toml_char(st) == "}" { st["at"] = st["at"] + 1; return table }
+	while true {
+		toml_pair(st, kinds, table, "")
+		toml_skip_blank(st, no)
+		c = toml_char(st)
+		if c == "," { st["at"] = st["at"] + 1; toml_skip_blank(st, no); if toml_char(st) == "}" { toml_fail(st, "a trailing comma in an inline table") } }
+		else if c == "}" { st["at"] = st["at"] + 1; return table }
+		else { toml_fail(st, "no , or } in an inline table" + (if c == "" or c == "\n" then "" else ", but " + c)) }
+	}
+	table
+}
+
+// strings
+toml_basic_read(st: map): text := {
+	src = st["src"]
+	out = ""
+	while true {
+		c = toml_char(st)
+		if c == "" or c == "\n" { toml_fail(st, "no closing \" in a string") }
+		if c == "\"" { st["at"] = st["at"] + 1; return out }
+		if c == "\\" { out += toml_escape_read(st) }
+		else { toml_check_character(st, c); out += c; st["at"] = st["at"] + 1 }
+	}
+	out
+}
+toml_literal_read(st: map): text := {
+	out = ""
+	while true {
+		c = toml_char(st)
+		if c == "" or c == "\n" { toml_fail(st, "no closing ' in a literal string") }
+		if c == "'" { st["at"] = st["at"] + 1; return out }
+		toml_check_character(st, c)
+		out += c
+		st["at"] = st["at"] + 1
+	}
+	out
+}
+toml_check_character(st: map, c: text): any := {
+	code = ord(c)
+	if (code < 32 and code != 9) or code == 127 { toml_fail(st, "a control character in a string") }
+	ø
+}
+// after the backslash: \b \t \n \f \r \" \\ \uXXXX \UXXXXXXXX
+toml_escape_read(st: map): text := {
+	e = toml_peek(st, 1)
+	if e == "u" or e == "U" {
+		size = if e == "u" then 4 else 8
+		code = 0
+		for i in 1 to size {
+			d = toml_peek(st, 1 + i).lower()
+			if d == "" or not (d in TOML_HEX) { toml_fail(st, "bad unicode escape: " + size + " hex digits expected") }
+			code = code * 16 + TOML_HEX.find(d) - 1
+		}
+		if code > 0x10FFFF or (code >= 0xD800 and code <= 0xDFFF) { toml_fail(st, "bad unicode escape: no Unicode scalar value") }
+		st["at"] = st["at"] + 2 + size
+		return "" + chr(code)
+	}
+	if e == "" or not TOML_ESCAPED.has(e) { toml_fail(st, "bad escape \\" + e) }
+	st["at"] = st["at"] + 2
+	TOML_ESCAPED[e]
+}
+// """…""" or '''…''': a newline right after the opening dropped; in a basic one a backslash at a line's end drops the
+// line break and the spaces after it; up to two quotes may stand right before the closing three
+toml_multiline_read(st: map, quote: text): text := {
+	out = ""
+	if toml_char(st) == "\n" { st["at"] = st["at"] + 1 }
+	else if toml_char(st) == "\r" and toml_peek(st, 1) == "\n" { st["at"] = st["at"] + 2 }
+	while true {
+		c = toml_char(st)
+		if c == "" { toml_fail(st, "no closing " + quote + quote + quote) }
+		if c == quote and toml_peek(st, 1) == quote and toml_peek(st, 2) == quote {
+			run = 3
+			while toml_peek(st, run) == quote { run += 1 }
+			if run > 5 { toml_fail(st, "too many quotes closing a string") }
+			for i in 1 to run - 3 { out += quote }
+			st["at"] = st["at"] + run
+			return out
+		}
+		if quote == "\"" and c == "\\" {
+			ahead = 1
+			while toml_peek(st, ahead) == " " or toml_peek(st, ahead) == "\t" { ahead += 1 }
+			if toml_peek(st, ahead) == "\n" or (toml_peek(st, ahead) == "\r" and toml_peek(st, ahead + 1) == "\n") {
+				st["at"] = st["at"] + ahead
+				while toml_char(st) == " " or toml_char(st) == "\t" or toml_char(st) == "\n" or toml_char(st) == "\r" { st["at"] = st["at"] + 1 }
+			} else { out += toml_escape_read(st) }
+		} else {
+			if c != "\n" and c != "\r" { toml_check_character(st, c) }
+			out += c
+			st["at"] = st["at"] + 1
+		}
+	}
+	out
+}
+
+// booleans, numbers, dates and times: the token up to a space, comma, bracket, brace or comment; a date and a time
+// apart by one space are one token
+toml_scalar_read(st: map): any := {
+	token = toml_token(st)
+	if #token == 10 and toml_is_date(token) and toml_char(st) == " " and toml_peek(st, 1) in TOML_DIGITS {
+		st["at"] = st["at"] + 1
+		token = token + "T" + toml_token(st)
+	}
+	if token == "true" { return yes }
+	if token == "false" { return no }
+	if #token >= 10 and toml_is_date(token[0..<10]) { return toml_date(st, token) }
+	if #token >= 8 and toml_is_time(token[0..<8]) { return toml_local_time(st, token) }
+	toml_number(st, token)
+}
+toml_token(st: map): text := {
+	token = ""
+	while true {
+		c = toml_char(st)
+		if c == "" or c == " " or c == "\t" or c == "\n" or c == "\r" or c == "," or c == "]" or c == "}" or c == "#" { return token }
+		token += c
+		st["at"] = st["at"] + 1
+	}
+	token
+}
+toml_all_digits(t: text): bool := { if t == "" { return no }; for c in t { if not (c in TOML_DIGITS) { return no } }; yes }
+toml_is_date(t: text): bool := #t == 10 and toml_all_digits(t[0..<4]) and t#5 == "-" and toml_all_digits(t[5..<7]) and t#8 == "-" and toml_all_digits(t[8..<10])
+toml_is_time(t: text): bool := #t == 8 and toml_all_digits(t[0..<2]) and t#3 == ":" and toml_all_digits(t[3..<5]) and t#6 == ":" and toml_all_digits(t[6..<8])
+toml_tagged(kind: text, value: text): map := {"toml": kind, "value": value}
+toml_date(st: map, token: text): map := {
+	date = token[0..<10]
+	month = toml_whole(date[5..<7])
+	day = toml_whole(date[8..<10])
+	if month < 1 or month > 12 or day < 1 or day > 31 { toml_fail(st, "no such date " + date) }
+	if #token == 10 { return toml_tagged("local-date", date) }
+	t = token#11
+	if t != "T" and t != "t" { toml_fail(st, "no date-time " + token) }
+	rest = token[11..<#token]
+	written = date + "T" + rest
+	if #rest < 8 or not toml_is_time(rest[0..<8]) { toml_fail(st, "no time in " + token) }
+	toml_check_time(st, rest[0..<8])
+	after = toml_fraction_end(st, rest, 9)
+	if after > #rest { return toml_tagged("local-date-time", written) }
+	zone = rest[after - 1..<#rest]
+	if zone == "Z" or zone == "z" { return toml_tagged("offset-date-time", written) }
+	if #zone == 6 and (zone#1 == "+" or zone#1 == "-") and toml_all_digits(zone[1..<3]) and zone#4 == ":" and toml_all_digits(zone[4..<6]) {
+		return toml_tagged("offset-date-time", written)
+	}
+	toml_fail(st, "no offset date-time " + token)
+}
+toml_local_time(st: map, token: text): map := {
+	toml_check_time(st, token[0..<8])
+	if toml_fraction_end(st, token, 9) <= #token { toml_fail(st, "no local time " + token) }
+	toml_tagged("local-time", token)
+}
+toml_check_time(st: map, t: text): any := {
+	if toml_whole(t[0..<2]) > 23 or toml_whole(t[3..<5]) > 59 or toml_whole(t[6..<8]) > 60 { toml_fail(st, "no such time " + t) }
+	ø
+}
+// the place after an optional .digits from at
+toml_fraction_end(st: map, t: text, at: int): int := {
+	if at > #t or t#at != "." { return at }
+	at += 1
+	start = at
+	while at <= #t and t#at in TOML_DIGITS { at += 1 }
+	if at == start { toml_fail(st, "no digits after . in " + t) }
+	at
+}
+toml_whole(digits: text): int := { n = 0; for d in digits { n = n * 10 + ord(d) - 48 }; n }
+
+// integers: decimal (no leading zeros), 0x 0o 0b; _ only between digits. floats: a fraction, an exponent, inf, nan
+toml_number(st: map, token: text): any := {
+	if token == "inf" or token == "+inf" { return toml_infinity() }
+	if token == "-inf" { return 0.0 - toml_infinity() }
+	if token == "nan" or token == "+nan" or token == "-nan" { i = toml_infinity(); return i - i }
+	if #token > 2 and token#1 == "0" and (token#2 == "x" or token#2 == "o" or token#2 == "b") {
+		base = if token#2 == "x" then 16 else if token#2 == "o" then 8 else 2
+		digits = toml_digits(st, token[2..<#token], token, TOML_HEX[0..<base])
+		n = 0
+		for d in digits.lower() { n = n * base + TOML_HEX.find(d) - 1 }
+		return n
+	}
+	sign = ""
+	body = token
+	if token != "" and (token#1 == "+" or token#1 == "-") { sign = "" + token#1; body = token[1..<#token] }
+	if body == "" { toml_fail(st, "no value " + token) }
+	whole_end = 1
+	while whole_end <= #body and (body#whole_end in TOML_DIGITS or body#whole_end == "_") { whole_end += 1 }
+	whole = toml_digits(st, body[0..<whole_end - 1], token, TOML_DIGITS)
+	if #whole > 1 and whole#1 == "0" { toml_fail(st, "a leading zero in " + token) }
+	rest = body[whole_end - 1..<#body]
+	if rest == "" { n = toml_whole(whole); return if sign == "-" then 0 - n else n }
+	fraction = ""
+	if rest#1 == "." {
+		at = 2
+		while at <= #rest and (rest#at in TOML_DIGITS or rest#at == "_") { at += 1 }
+		fraction = "." + toml_digits(st, rest[1..<at - 1], token, TOML_DIGITS)
+		rest = rest[at - 1..<#rest]
+	}
+	exponent = ""
+	if rest != "" and (rest#1 == "e" or rest#1 == "E") {
+		e_sign = ""
+		e_body = rest[1..<#rest]
+		if e_body != "" and (e_body#1 == "+" or e_body#1 == "-") { e_sign = "" + e_body#1; e_body = e_body[1..<#e_body] }
+		exponent = "e" + e_sign + toml_digits(st, e_body, token, TOML_DIGITS)
+		rest = ""
+	}
+	if rest != "" { toml_fail(st, "no value " + token) }
+	float(sign + whole + fraction + exponent)
+}
+// the digits of a part without its underscores, each _ between two digits; at least one digit
+toml_digits(st: map, part: text, token: text, allowed: text): text := {
+	if part == "" { toml_fail(st, "no value " + token) }
+	out = ""
+	previous = "_"
+	for c in part.lower() {
+		if c == "_" { if previous == "_" { toml_fail(st, "a misplaced _ in " + token) } }
+		else if not (c in allowed) { toml_fail(st, "no value " + token) }
+		else { out += c }
+		previous = "" + c
+	}
+	if previous == "_" { toml_fail(st, "a misplaced _ in " + token) }
+	out
+}
+toml_infinity(): any := float("1e308") * 10.0
+
+// writing
+global to_toml(m: map): text := toml_table_written(m, [])
+toml_table_written(m: map, keys: list): text := {
+	out = ""
+	for k in m.keys { v = m[k]; if not toml_is_table(v) and not toml_is_table_array(v) { out += toml_key_written(k) + " = " + toml_value_written(v) + "\n" } }
+	for k in m.keys {
+		v = m[k]
+		here = keys + [k]
+		if toml_is_table(v) {
+			if out != "" { out += "\n" }
+			out += "[" + here.map(toml_key_written).join(".") + "]\n" + toml_table_written(v, here)
+		} else if toml_is_table_array(v) {
+			for item in v {
+				if out != "" { out += "\n" }
+				out += "[[" + here.map(toml_key_written).join(".") + "]]\n" + toml_table_written(item, here)
+			}
+		}
+	}
+	out
+}
+toml_is_date_value(v: any): bool := v is map and #(v.keys) == 2 and v.has("toml") and v.has("value") and v["toml"] in TOML_DATE_KINDS
+toml_is_table(v: any): bool := v is map and not toml_is_date_value(v)
+toml_is_table_array(v: any): bool := {
+	if not (v is list) or #v == 0 { return no }
+	for item in v { if not toml_is_table(item) { return no } }
+	yes
+}
+toml_key_written(k: any): text := {
+	key = "" + k
+	if key == "" { return "\"\"" }
+	for c in key { if not (c in TOML_BARE) { return toml_quoted(key) } }
+	key
+}
+toml_quoted(t: text): text := {
+	out = "\""
+	for c in t {
+		code = ord(c)
+		if TOML_WRITTEN_ESCAPES.has("" + c) { out += TOML_WRITTEN_ESCAPES["" + c] }
+		else if code < 32 or code == 127 { out += "\\u00" + TOML_HEX#(code / 16 + 1) + TOML_HEX#(code % 16 + 1) }
+		else { out += c }
+	}
+	out + "\""
+}
+toml_value_written(v: any): text := {
+	if v is bool { return if v then "true" else "false" }
+	if v is text or v is codepoint { return toml_quoted("" + v) }
+	if v is int { return "" + v }
+	if v is number { return toml_float_written(v) }
+	if toml_is_date_value(v) { return v["value"] }
+	if v is map { return "{" + v.keys.map(k => toml_key_written(k) + " = " + toml_value_written(v[k])).join(", ") + "}" }
+	if v is list { return "[" + v.map(toml_value_written).join(", ") + "]" }
+	if v == ø { raise "to_toml: TOML has no null" }
+	toml_quoted("" + v)
+}
+toml_float_written(v: any): text := {
+	written = "" + float(v)
+	if written == "NaN" or written == "-NaN" { return "nan" }
+	if written == "∞" { return "inf" }
+	if written == "-∞" { return "-inf" }
+	if "." in written or "e" in written { written } else { written + ".0" }
+}
