@@ -1,0 +1,13 @@
+// card lib-config-conformance: yaml-test-suite cases parse_yaml now gets right: chomping and blank lines in block
+// scalars, a sequence at its key's indentation, anchors and aliases on keys, empty lines in a plain scalar
+'use yaml; parse_yaml("strip: |-\\n  text\\nclip: |\\n  text\\nkeep: |+\\n  text\\n") == {"strip": "text", "clip": "text\\n", "keep": "text\\n"}'	yes
+'use yaml; parse_yaml("strip: >-\\n\\nclip: >\\n\\nkeep: |+\\n\\n") == {"strip": "", "clip": "", "keep": "\\n"}'	yes
+'use yaml; parse_yaml("foo: |\\n  x\\n   \\n") == {"foo": "x\\n \\n"}'	yes
+'use yaml; parse_yaml("text: |\\n  a\\n    \\n  b\\n") == {"text": "a\\n  \\nb\\n"}'	yes
+'use yaml; parse_yaml("- |+\\n\\n\\n") == ["\\n\\n"]'	yes
+'use yaml; parse_yaml("one:\\n- 2\\n- 3\\nfour: 5\\n") == {"one": [2, 3], "four": 5}'	yes
+'use yaml; parse_yaml("foo:\\n- 42\\nbar:\\n  - 44\\n") == {"foo": [42], "bar": [44]}'	yes
+'use yaml; parse_yaml("&a a: b\\nc: &d d\\n") == {"a": "b", "c": "d"}'	yes
+'use yaml; parse_yaml("&a a: &b b\\n*b : *a\\n") == {"a": "b", "b": "a"}'	yes
+'use yaml; parse_yaml("plain: a\\n b\\n\\n c\\n") == {"plain": "a b\\nc"}'	yes
+'use yaml; parse_yaml("plain: a\\n\\n\\n b\\n") == {"plain": "a\\n\\nb"}'	yes
