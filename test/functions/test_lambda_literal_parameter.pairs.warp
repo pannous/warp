@@ -1,0 +1,11 @@
+# a lambda's parameter is a name: one written as a literal is refused at its line, never a lambda that drops its
+# argument (card pure-lane-traps-2)
+'x = (1 => 2); 3'	error	a number before => is no parameter
+'f = ("a" => 2); f(1)'	error	nor a text
+'[1, 2].map(1 => 2)'	error	nor inside an iteration word
+# a name, _, a typed name and a tuple stay parameters
+'g = (_ => 7); g(1)'	7
+'k = (x: int => x * 2); k(4)'	8
+'h = ((a, b) => a + b); h(1, 2)'	3
+# a match arm keeps its literal pattern
+'match 1 { 1 => "one"; _ => "other" }'	'one'

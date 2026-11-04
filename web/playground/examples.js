@@ -308,7 +308,7 @@ c.increment(2)
 [demo.fib(50), demo.words("a bc d"), c.value()]` },
 	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
 use c
-import tests/fixtures/wasm/zlib
+import test/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },
 	"kitchen sink": { value: '"✓ 34 tests passed"', get code() { return SAMPLES.kitchensink; } },
 };

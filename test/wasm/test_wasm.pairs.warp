@@ -417,8 +417,8 @@
 'suffix ³ := it*it*it; 3³'	27
 
 # test_import_wasm
-'import tests/fixtures/wasm/fourty_two'	ø
-'require tests/fixtures/wasm/fourty_two'	ø
+'import test/fixtures/wasm/fourty_two'	ø
+'require test/fixtures/wasm/fourty_two'	ø
 
 # test_math_library
 'x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255'	255

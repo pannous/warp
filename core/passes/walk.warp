@@ -15,6 +15,8 @@ time_field_word = "time_field_of"
 is_big_number_view(n: Node): bool := n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "number"
 # `+ - *` of a run-time time: lib/time_arithmetic.warp's word, its module (extensions/time_values.warp time_operation_call)
 time_operation_word = "time_operation"
+# what an operand of those is before its parts are read: a time, or a quantity lib/units moves it by (`t + 1 h`)
+time_operand_word = "time_operand"
 time_arithmetic_module = "time_arithmetic"
 time_operator_symbols = ["+", "-", "*"]
 
