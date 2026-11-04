@@ -1,0 +1,132 @@
+// The standard library module cron: `use cron`, the 5-field cron expressions of Vixie cron (crontab(5)): minute, hour,
+// day of month, month, day of week, each `*`, a number, a range a-b, a step */n or a-b/n, or a list of those; months
+// JAN-DEC and days SUN-SAT by name in any case, 7 Sunday as 0; @yearly @annually @monthly @weekly @daily @midnight
+// @hourly. When day of month and day of week are both restricted (neither starts with *), either one matching is enough.
+// cron_next("*/15 * * * *", "2026-11-04 10:07") is the Instant 2026-11-04T10:15:00Z; a time is an Instant, milliseconds
+// since 1970 or a UTC text "yyyy-MM-dd HH:mm"; the zone (lib/time's zone names, UTC by default, or a fixed offset in
+// seconds east) is the wall clock the fields are read on: a local time a DST change skips never fires, a repeated one
+// fires once, at its first occurrence. An invalid expression raises, naming the field
+use time
+
+CRON_MACROS = {"@yearly": "0 0 1 1 *", "@annually": "0 0 1 1 *", "@monthly": "0 0 1 * *", "@weekly": "0 0 * * 0", "@daily": "0 0 * * *", "@midnight": "0 0 * * *", "@hourly": "0 * * * *"}
+CRON_FIELDS = ["minute", "hour", "day of month", "month", "day of week"]
+CRON_LOW = [0, 0, 1, 1, 0]
+CRON_HIGH = [59, 23, 31, 12, 7]
+CRON_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+CRON_DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+
+// a number or (months, days) a name of a field, else it raises
+def cron_number(t: text, field: int): int {
+	word = lower(t)
+	if field == 3 and word in CRON_MONTHS { return CRON_MONTHS.index_of(word) }
+	if field == 4 and word in CRON_DAYS { return CRON_DAYS.index_of(word) - 1 }
+	if not is_digits(t) { raise "cron: " + t + " is no " + CRON_FIELDS[field] }
+	n = int(t)
+	if n < CRON_LOW[field] or n > CRON_HIGH[field] { raise "cron: " + t + " is out of the " + CRON_FIELDS[field] + "'s " + str(CRON_LOW[field]) + "-" + str(CRON_HIGH[field]) }
+	n
+}
+// the values one field allows, ascending, day of week 7 as 0
+def cron_values(t: text, field: int): list {
+	allowed = []
+	for item in split(t, ",") {
+		parts = split(item, "/")
+		if count(parts) > 2 { raise "cron: " + item + " has two steps in the " + CRON_FIELDS[field] }
+		step = if count(parts) == 2 then int_step(parts[1], field) else 1
+		span = parts[0]
+		low = CRON_LOW[field]
+		high = if field == 4 then 6 else CRON_HIGH[field]
+		if span != "*" {
+			ends = split(span, "-")
+			if count(ends) > 2 or ends[0] == "" { raise "cron: " + item + " is no range of the " + CRON_FIELDS[field] }
+			low = cron_number(ends[0], field)
+			high = if count(ends) == 2 then cron_number(ends[1], field) else (if count(parts) == 2 then raise "cron: " + item + ": a step needs * or a range" else low)
+			if high < low { raise "cron: " + item + " runs backwards in the " + CRON_FIELDS[field] }
+		}
+		v = low
+		while v <= high { allowed.add(if field == 4 and v == 7 then 0 else v); v = v + step }
+	}
+	[v for v in CRON_LOW[field] to CRON_HIGH[field] if v in allowed]
+}
+int_step(t: text, field: int): int := { if not is_digits(t) or int(t) == 0 { raise "cron: /" + t + " is no step of the " + CRON_FIELDS[field] }; int(t) }
+
+// an expression as a map: its five lists of values and whether day of month and day of week are unrestricted (*)
+def cron_parse(expression: text): map {
+	written = trim(expression)
+	if written.starts_with("@") {
+		if not (lower(written) in keys(CRON_MACROS)) { raise "cron: unknown macro " + written }
+		written = CRON_MACROS[lower(written)]
+	}
+	fields = [f for f in split(replace(written, "\t", " "), " ") if f != ""]
+	if count(fields) != 5 { raise "cron: " + expression + " has " + str(count(fields)) + " fields, not 5 (minute hour day-of-month month day-of-week)" }
+	{minutes: cron_values(fields[0], 0), hours: cron_values(fields[1], 1), days: cron_values(fields[2], 2), months: cron_values(fields[3], 3), weekdays: cron_values(fields[4], 4), any_day: fields[2].starts_with("*"), any_weekday: fields[4].starts_with("*")}
+}
+cron_of(expression: any): map := if expression is text then cron_parse(expression) else expression
+
+// a time as seconds since 1970: an Instant, milliseconds, or a UTC text "yyyy-MM-dd HH:mm"
+cron_seconds(time: any): int := if time is Instant then time.ms /! 1000 else if time is text then parse_pattern(time, "yyyy-MM-dd HH:mm") /! 1000 else time /! 1000
+cron_zone(zone: any): Zone := if zone is Zone then zone else if zone is text then zone_named(zone) else Zone("UTC" + str(zone), zone, Dst.Never)
+zone_offsets(zone: Zone): list := if zone.dst == Dst.Never then [zone.standard] else [zone.standard, zone.standard + 3600]
+
+// whether a day (its day number since 1970) is one of the expression's (the OR of Vixie cron when both are restricted)
+def cron_day_holds(c: map, days: int): bool {
+	date = civil_from_days(days)
+	if not (date.month in c.months) { return no }
+	in_month = date.day in c.days
+	in_week = (days + 4) % 7 in c.weekdays
+	if c.any_day or c.any_weekday then in_month and in_week else in_month or in_week
+}
+cron_wall_holds(c: map, wall: int): bool := cron_day_holds(c, wall /! 86400) and (wall % 86400 /! 3600) in c.hours and (wall % 3600 /! 60) in c.minutes
+// the first instant a wall time means in the zone, nil when a DST change skips it
+wall_instant(zone: Zone, wall: int): any := { found = nil; for o in zone_offsets(zone) { t = wall - o; if zone_offset(zone, t) == o and (found == nil or t < found) { found = t } }; found }
+local_wall(zone: Zone, seconds: int): int := seconds + zone_offset(zone, seconds)
+
+cron_matches(expression: any, time: any, zone: any): bool := { s = cron_seconds(time) /! 60 * 60; z = cron_zone(zone); w = local_wall(z, s); cron_wall_holds(cron_of(expression), w) and wall_instant(z, w) == s }
+cron_matches(expression: any, time: any): bool := cron_matches(expression, time, "UTC")
+
+// the first wall minute from wall on (by: 1) or back (by: -1) the expression holds at, skipping whole months, days
+// and hours that cannot; it raises when none comes within 30 years (0 0 31 2 *)
+def cron_scan(c: map, wall: int, by: int): int {
+	w = wall
+	limit = 30 * 366 * 86400
+	while abs(w - wall) < limit {
+		days = w /! 86400
+		date = civil_from_days(days)
+		if not (date.month in c.months) {
+			w = if by > 0 then days_from_civil(date.year + (if date.month == 12 then 1 else 0), date.month % 12 + 1, 1) * 86400 else days_from_civil(date.year, date.month, 1) * 86400 - 60
+		} else if not cron_day_holds(c, days) { w = if by > 0 then (days + 1) * 86400 else days * 86400 - 60 }
+		else if not ((w % 86400 /! 3600) in c.hours) { w = if by > 0 then (w /! 3600 + 1) * 3600 else w /! 3600 * 3600 - 60 }
+		else if not ((w % 3600 /! 60) in c.minutes) { w = w + 60 * by }
+		else { return w }
+	}
+	raise "cron: the expression fires on no day within 30 years"
+}
+// the first time strictly after `after` the expression fires, as an Instant
+def cron_next(expression: any, after: any, zone: any): Instant {
+	c = cron_of(expression)
+	z = cron_zone(zone)
+	start = cron_seconds(after)
+	wall = local_wall(z, start) /! 60 * 60 + 60
+	while yes {
+		wall = cron_scan(c, wall, 1)
+		t = wall_instant(z, wall)
+		if t != nil and t > start { return Instant(t * 1000) }
+		wall = wall + 60
+	}
+	raise "cron: unreachable"
+}
+cron_next(expression: any, after: any): Instant := cron_next(expression, after, "UTC")
+// the last time strictly before `before` the expression fired, as an Instant
+def cron_previous(expression: any, before: any, zone: any): Instant {
+	c = cron_of(expression)
+	z = cron_zone(zone)
+	end = cron_seconds(before)
+	wall = (local_wall(z, end) + 59) /! 60 * 60 - 60
+	while yes {
+		wall = cron_scan(c, wall, -1)
+		t = wall_instant(z, wall)
+		if t != nil and t < end { return Instant(t * 1000) }
+		wall = wall - 60
+	}
+	raise "cron: unreachable"
+}
+cron_previous(expression: any, before: any): Instant := cron_previous(expression, before, "UTC")
