@@ -211,7 +211,20 @@ to_degrees(radians) := radians * 180 / pi
 isqrt(n: int) := { r = floor(sqrt(n as float)) as int; while r * r > n { r = r - 1 }; while (r + 1) * (r + 1) <= n { r = r + 1 }; r }
 is_square(n: int) := n >= 0 and isqrt(n) * isqrt(n) == n
 divisors(n: int) := [d for d in 1..n + 1 if n % d == 0]
-prime_factors(n: int) := { out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest /! d }; d++ }; if rest > 1 { out = out + [rest] }; out }
+prime_factors(n: int) := { if n < 1 { raise "prime_factors needs a positive whole number, not " + str(n) }; out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest /! d }; d++ }; if rest > 1 { out = out + [rest] }; out }
+// the primes up to and including n, by the sieve of Eratosthenes: primes(10) is [2, 3, 5, 7]
+primes(n: int): list := {
+	if n < 2 { return [] }
+	composite = [no for i in 1 to n]
+	p = 2
+	while p * p <= n {
+		if not composite#p { multiple = p * p; while multiple <= n { composite#multiple = yes; multiple += p } }
+		p += 1
+	}
+	(2 to n).filter(i => not composite#i)
+}
+// the smallest prime greater than n: next_prime(7) is 11
+next_prime(n: int): int := { candidate = max(n + 1, 2); while not is_prime(candidate) { candidate += 1 }; candidate }
 // the one bits of whole numbers ≥ 0 (`&` and `|` are logical, `xor` is bitwise already): bit_count(6) is 2
 bit_count(n: int) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest /! 2 }; out }
 // two's-complement bits of any whole numbers, by a + b = (a xor b) + 2 * bit_and(a, b): bit_and(-129, 127) is 127;
