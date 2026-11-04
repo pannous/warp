@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # scripts/integrate/after-push.sh [--if-moved] [<commit>, default origin/main]: keeps the compilers beside ~/dev/bin/warp
-# in step with main (user: "main should be immediately synchronized with the binary"). The pusher runs it in the
-# background right after its push (notes/agents/common.md "Done"); a cron runs it with --if-moved every 2 minutes as the
-# safety net, which returns at once when main is the tip handled last. In its own tree at main's tip: the compilers of
+# in step with main (user: "main should be immediately synchronized with the binary"). Every push to main starts it,
+# through the pre-push hook (on-push.sh); --if-moved returns at once when main is the tip handled last. In its own tree at main's tip: the compilers of
 # its lib (scripts/rebuild.sh both: the pusher's smoke build of the same inputs, in the store, is reused), hello through
 # them, both moved beside the binary (in two stages when they must be built: the native warp first, with the last
 # install's compilers, then the compilers beside it), the user's checkout pulled; then promote-self.sh and tiers 1-2 (gate.sh) of what
@@ -109,12 +108,23 @@ copy_compilers() {
 	done
 }
 
+# installed_folder: the installed native warp's folder, one of $BUILDS with its warp, else the reason on stderr. A
+# dangling ~/dev/bin/warp resolves to some other folder: stage one then copied the main checkout, dangling links and
+# 11 GB a try, and rebuild.sh found no binary (2026-11-04 18:06-18:15, card rebuild-pure-failed)
+installed_folder() {
+	local folder
+	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
+	[[ $folder == "$BUILDS"/* && -x $folder/warp ]] && { echo "$folder"; return; }
+	echo "no native warp installed: $MAIN_WARP -> $(readlink "$MAIN_WARP"), not a warp in $BUILDS" >&2
+	return 1
+}
+
 # the tree's compilers into the installed native warp's folder (the slow lane's promoted warp-self.wasm), and with them
 # the tree's lib/ sources they were built with (stage one left the previous ones beside the previous compilers)
 install_compilers() {
 	[ -n "$slow" ] && [ "$(cat "$installed_state/watched")" != "$tip" ] && return  # a newer tip is installed meanwhile
 	local folder lane got
-	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
+	folder=$(installed_folder) || return 1
 	copy_compilers "$TREE/lib" "$folder" &&
 		rsync -aL --exclude /data --exclude /warp --exclude '/*.wasm*' --exclude /modules --exclude '/*.kept' \
 			"$TREE/lib/" "$folder/" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
@@ -178,11 +188,12 @@ install_native() {
 	# sources are the tip's: a tip's lib/*.warp arrives with its compilers (stage two), never beside older ones (card
 	# after-push-stage: 677282ce44's reals.warp on b5eb834c40's compilers made π / 2 'no field coefficient' for 30 min)
 	if [ -n "$early" ]; then
-		rsync -aL --exclude /warp "$(dirname "$(readlink -f "$MAIN_WARP")")/" "$folder.new/" &&
+		local installed
+		installed=$(installed_folder) && rsync -aL --exclude /warp "$installed/" "$folder.new/" &&
 			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
 	else
 		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
-	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; return 1; }
+	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
@@ -202,6 +213,9 @@ watch() {
 	git -C "$TREE" checkout -q --detach "$tip" || return 1
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
 	echo "$tip" >"$state/handled"
+	# every stage builds with the installed native warp: without one, nothing installs (relink ~/dev/bin/warp by hand)
+	local missing
+	missing=$(installed_folder 2>&1 >/dev/null) || { red "$missing" --urgent; return 1; }
 	# warp's wasmtime C API in the user's lib/ too, where native builds link it from (card wasmtime-bundled); the tree's
 	# lib/ gets it from rebuild.sh
 	"$scripts/wasmtime-c-api.sh" "$MAIN_CHECKOUT/lib" ||

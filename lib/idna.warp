@@ -1,0 +1,120 @@
+// The standard library module idna: `use idna`, Punycode (RFC 3492) and internationalized domain names.
+// punycode_encode(code points or a text) is the ASCII Punycode, punycode_decode(t) the text back (its code points
+// punycode_decode_points(t)). domain_to_ascii("bücher.example") is "xn--bcher-kva.example", domain_to_unicode
+// the way back: a pragmatic UTS #46 (non-transitional, so ß stays ß): labels split on . and the dots U+3002, U+FF0E,
+// U+FF61, each lowercased and put in NFC (lib/unicode), a label with a code point past ASCII written as xn-- and its
+// Punycode. Not done: UTS #46's full mapping table (only lowercasing and NFC), its disallowed code points, the bidi
+// rules (RFC 5893) and the CONTEXTJ/CONTEXTO rules (RFC 5892); a label of more than 63 characters raises
+use unicode
+
+PUNY_BASE = 36
+PUNY_TMIN = 1
+PUNY_TMAX = 26
+PUNY_SKEW = 38
+PUNY_DAMP = 700
+PUNY_DIGITS = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+def puny_adapt(delta: int, points: int, first_time: bool): int {
+	d = if first_time then delta /! PUNY_DAMP else delta /! 2
+	d = d + d /! points
+	k = 0
+	while d > (PUNY_BASE - PUNY_TMIN) * PUNY_TMAX /! 2 { d = d /! (PUNY_BASE - PUNY_TMIN); k = k + PUNY_BASE }
+	k + (PUNY_BASE - PUNY_TMIN + 1) * d /! (d + PUNY_SKEW)
+}
+puny_threshold(k: int, bias: int): int := if k <= bias then PUNY_TMIN else if k >= bias + PUNY_TMAX then PUNY_TMAX else k - bias
+puny_points(subject: text or list): list := if subject is list then subject else codepoint_numbers(subject)
+def punycode_encode(subject: text or list): text {
+	input = puny_points(subject)
+	out = join([str(chr(c)) for c in input if c < 128], "")
+	basic = count(out)
+	handled = basic
+	if basic > 0 { out = out + "-" }
+	n = 128
+	delta = 0
+	bias = 72
+	while handled < count(input) {
+		m = -1
+		for c in input { if c >= n and (m < 0 or c < m) { m = c } }
+		delta = delta + (m - n) * (handled + 1)
+		n = m
+		for c in input {
+			if c < n { delta = delta + 1 }
+			if c == n {
+				q = delta
+				k = PUNY_BASE
+				while yes {
+					t = puny_threshold(k, bias)
+					if q < t { break }
+					out = out + PUNY_DIGITS[t + (q - t) % (PUNY_BASE - t)]
+					q = (q - t) /! (PUNY_BASE - t)
+					k = k + PUNY_BASE
+				}
+				out = out + PUNY_DIGITS[q]
+				bias = puny_adapt(delta, handled + 1, handled == basic)
+				delta = 0
+				handled = handled + 1
+			}
+		}
+		delta = delta + 1
+		n = n + 1
+	}
+	out
+}
+def punycode_decode_points(t: text): list {
+	split_at = 0
+	for i in 0 ..< count(t) { if t[i] == "-" { split_at = i + 1 } }
+	output = []
+	if split_at > 0 { for i in 0 ..< split_at - 1 { c = ord(t[i]); if c >= 128 { raise "punycode: " + t[i] + " is no basic code point" }; output.add(c) } }
+	n = 128
+	i = 0
+	bias = 72
+	p = split_at
+	while p < count(t) {
+		old = i
+		w = 1
+		k = PUNY_BASE
+		while yes {
+			if p >= count(t) { raise "punycode: " + t + " ends inside a number" }
+			digit = PUNY_DIGITS.index_of(lower(t[p])) - 1
+			if digit < 0 { raise "punycode: " + t[p] + " is no punycode digit" }
+			p = p + 1
+			i = i + digit * w
+			th = puny_threshold(k, bias)
+			if digit < th { break }
+			w = w * (PUNY_BASE - th)
+			k = k + PUNY_BASE
+		}
+		bias = puny_adapt(i - old, count(output) + 1, old == 0)
+		n = n + i /! (count(output) + 1)
+		i = i % (count(output) + 1)
+		if n > 1114111 { raise "punycode: a code point past U+10FFFF" }
+		output = output[0 ..< i] + [n] + output[i ..< count(output)]
+		i = i + 1
+	}
+	output
+}
+punycode_decode(t: text): text := text_of_codepoints(punycode_decode_points(t))
+
+// labels on every dot IDNA counts: . U+3002 U+FF0E U+FF61
+idna_labels(domain: text): list := split(replace(replace(replace(domain, "。", "."), "．", "."), "｡", "."), ".")
+def domain_to_ascii(domain: text): text {
+	out = []
+	for label in idna_labels(domain) {
+		mapped = nfc(lower(label))
+		points = codepoint_numbers(mapped)
+		ascii = yes
+		for c in points { if c >= 128 { ascii = no } }
+		written = if ascii then mapped else "xn--" + punycode_encode(points)
+		if count(written) > 63 { raise "domain_to_ascii: the label " + label + " is longer than 63 characters" }
+		out.add(written)
+	}
+	join(out, ".")
+}
+def domain_to_unicode(domain: text): text {
+	out = []
+	for label in idna_labels(domain) {
+		low = lower(label)
+		out.add(if low.starts_with("xn--") then punycode_decode(low[4 ..< count(low)]) else nfc(low))
+	}
+	join(out, ".")
+}

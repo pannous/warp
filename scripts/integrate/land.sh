@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/integrate/land.sh --tree <worktree>: step 2 of landing the branches of retired sessions, after merge.sh's
 # tier 0 went green. Pushes exactly the tested hash to main, closes each merged card with its merge commit, deletes its
-# remote branch, then watches the push like any other (after-push.sh, in the background).
+# remote branch; the push starts after-push.sh like any other (the pre-push hook, on-push.sh).
 # --tree is required: a worker that ran land.sh bare from its own worktree landed the Integrator's tested batch
 # (warp-web-host, 2026-11-02); workers push with plain git.
 # A refused push (main moved) is tried again up to LAND_RETRIES times: when the commits pushed meanwhile leave the
@@ -55,7 +55,3 @@ while read -r key branch ref; do
 	todo done "$key" "$commit" >/dev/null && say "done $key"
 	git -C "$tree" push -q origin --delete "$branch" 2>/dev/null
 done < <(field card)
-
-log=$tree/data/integrate/after-push-${tested:0:10}.log
-nohup "$(dirname "$0")/after-push.sh" "$tested" >"$log" 2>&1 </dev/null &
-say "after-push.sh running in the background: $log"
