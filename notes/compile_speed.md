@@ -125,5 +125,9 @@ lints; a sibling branch) 3.7198e12 (+1.9%); 8225781320 (both) 3.7465e12 (+2.7%);
 - What is left grows no function of its own: the profiles spread it over runtime words (is_class_instance,
   holds_entries, slot_free, node_equal, GC). WARP_TIMES put idioms vs 41c1's +1.9 s in "used modules" (wall, GC
   included); the checked_tries pass itself is 0.16 s.
+- Suffix readers keyed by their first character (extension.warp read_suffix, one map get an operator round) took
+  2.13% more: 3.7227e12 -> 3.6433e12, below idioms. Each round had asked every suffix reader in turn, and read_percent
+  read a whole operator there (operator_at, aliases included), superscript_power scanned for raised terms: a hook on a
+  hot path keyed by what starts its form costs one lookup, a list of hooks costs each one's own scan. The drift is gone.
 - Not it: the map index's 64-slot scan. Home slots by first-name hash (data/drift/home-slot.patch) measured +0.08%,
   index_last already catches most lookups (card map-hash-index keeps the proper fix for its own sake).

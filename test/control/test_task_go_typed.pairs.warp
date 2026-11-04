@@ -1,0 +1,2 @@
+# A task is pending before await and done afterwards (notes/threads.md; decision N29).
+'use tasks; job = go { 3 * 4 }; [is_done(job), await job, is_done(job)]'	[no, 12, yes]

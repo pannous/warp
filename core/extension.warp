@@ -21,9 +21,9 @@ class Extension {
 	# functions reading what follows a decimal number, given the parser after it, the number as decimal_number wrote it
 	# and as the source did (`0.1f`, `1 month`), each ø where its form is not
 	number_suffix_readers: list = []
-	# functions reading what follows an operand, given the parser after it, the operand and the binding power the
-	# context needs (`x²`), each ø where its form is not or binds looser
-	suffix_readers: list = []
+	# the first character of what follows an operand → its reader, given the parser there, the operand and the binding
+	# power the context needs (`x²`), ø where its form is not or binds looser; one lookup an operator round
+	suffix_readers: map = {}
 	# functions reading a type declaration's body after its head, given the parser there, the type's name and its
 	# parameters (`type Opt = Some(int) | None`), each ø where its form is not
 	type_readers: list = []
@@ -100,8 +100,8 @@ claimed_once(maps: list): map := {
 	joined
 }
 # the Extension fields every row's entries join into one: lists as one list, maps as one map
-JOINED_LISTS = ["number_readers", "number_suffix_readers", "suffix_readers", "type_readers", "infix_readers", "prefix_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "commands", "host_exports"]
-JOINED_MAPS = ["atom_readers", "keyword_readers", "text_escape_readers", "value_settlers"]
+JOINED_LISTS = ["number_readers", "number_suffix_readers", "type_readers", "infix_readers", "prefix_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "commands", "host_exports"]
+JOINED_MAPS = ["atom_readers", "suffix_readers", "keyword_readers", "text_escape_readers", "value_settlers"]
 # every row joined as one row, once: a hot path (the parser's readers, the lints on every node) reads its typed field
 # and looks no field up by its name
 global joined_row = ø
@@ -177,7 +177,10 @@ with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
 # every starter word → the word settling its value
 extension_value_settlers(): map := hooks().value_settlers
 # what an extension reads after the operand, else ø
-read_suffix(p: Parser, operand: Node, min_power: int): Node := first_answer(hooks().suffix_readers, reader => reader(p, operand, min_power))
+read_suffix(p: Parser, operand: Node, min_power: int): Node := {
+	reader = hooks().suffix_readers.get(char_here(p))
+	if reader == ø then ø else reader(p, operand, min_power)
+}
 # the type an extension reads after a declaration's head, else ø
 read_type(p: Parser, name: Node, parameters: list): Node := first_answer(hooks().type_readers, reader => reader(p, name, parameters))
 # what an infix reader answers for an operator binding looser than the context: the operand ends before it

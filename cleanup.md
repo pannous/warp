@@ -131,3 +131,23 @@ Cover rendered CSS declarations and attributes before declaring text results; ke
 ## Library router signature slice
 
 Cover route matching and parameter outcomes, then annotate route helpers without narrowing their inputs or mixed return values. Verify the outcomes and smoke on merged main.
+
+## Library router response signatures
+
+Cover response header and reset outcomes, then declare non-narrowing result types and verify behavior before smoke.
+
+## Library signal value signatures
+
+Cover mixed signal values and watched variable reads before adding non-narrowing signatures; verify outcomes and merged-main smoke.
+
+## Library typed polling
+
+Cover changed and unchanged polled values, then declare the helper's generic result without narrowing listener behavior; verify direct outcomes and smoke on merged main.
+
+## Library typed tasks
+
+Cover waiting and completion for task and ordinary values, then type their shared helpers without narrowing the values they accept or return. Verify the outcomes and smoke against merged main.
+
+## Library task control signatures
+
+Cover public pause, resume and cancel outcomes before adding non-narrowing signatures to their helpers. Verify the same outcomes and merged-main smoke.

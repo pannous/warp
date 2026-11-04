@@ -1,0 +1,5 @@
+# Response headers and reset: notes/web_framework.md "Routes" (card web-route-header)
+'use router; status(418); header("Content-Type", "text/plain"); [answer_status, answer_content_type]'	[418, "text/plain"]
+'use router; header("X-Test", "yes"); answer_header_lines'	"\nX-Test: yes"
+'use router; status(418); header("Content-Type", "text/plain"); answer_reset(); [answer_status, answer_content_type, answer_header_lines]'	[200, "", ""]
+'use router; [status(418), header("X-Test", "yes"), answer_reset()]'	[418, "\nX-Test: yes", ""]
