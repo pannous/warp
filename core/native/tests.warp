@@ -24,8 +24,7 @@ CPU_SECONDS = 30
 WALL_SECONDS = 120
 RLIMIT_CPU = 0
 # 128 + SIGXCPU
-CPU_LIMIT_HIT = "152"
-TIME_STATUS = "time "
+CPU_LIMIT_HIT = 152
 FILE_MODE = 420
 # flock's LOCK_EX | LOCK_NB
 LOCKED_NOW = 6
@@ -112,7 +111,7 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 		for k in 0..slots {
 			child = child_at(children + k * CHILD_BYTES)
 			if child.pid > 0 and child.pid == ended {
-				run_ended(work, field(runs, child.run, NEWLINE), status_said(exit_status(word_at(status).value as i32)), child)
+				run_ended(work, field(runs, child.run, NEWLINE), status_said(exit_code(word_at(status).value as i32)), child)
 				done = done + 1
 			}
 			if child.pid > 0 and milliseconds_now() - child.started > WALL_SECONDS * 1000 {
@@ -149,11 +148,11 @@ run_ended(work: text, run: text, status: text, child: Child): nothing := {
 	close(child.lock)
 	child.pid = 0
 }
-# a run's exit status, or TIME_STATUS and why for one that used its CPU budget
-status_said(status: text): text := if same_text(status, CPU_LIMIT_HIT) then time_status("used its ", CPU_SECONDS, " s of CPU") else status
-time_status(before: text, seconds: int, after: text): text := joined(joined(joined(TIME_STATUS, before), text_of(seconds)), after)
-# waitpid's status as the exit status, 128 and the signal for a child a signal ended
-exit_status(status: i32): text := if status % 256 == 0 then text_of(status / 256 % 256) else text_of(128 + status % 128)
+# a run's exit code as its status, `time` and why for one that used its CPU budget
+status_said(code: i32): text := if code == CPU_LIMIT_HIT then time_status("used its ", CPU_SECONDS, " s of CPU") else text_of(code)
+time_status(before: text, seconds: int, after: text): text := joined(joined(joined("time ", before), text_of(seconds)), after)
+# waitpid's status as the exit code, 128 and the signal for a child a signal ended
+exit_code(status: i32): i32 := if status % 256 == 0 then status / 256 % 256 else 128 + status % 128
 
 # a child running the run `<id>\t<folder>`: this warp with `run` (or `self`) and the code, in the folder, its output
 # and errors into the run's files; the locks of the other slots closed in it
