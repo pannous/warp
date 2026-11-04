@@ -55,7 +55,8 @@ build starts at the seed.
 
 Every build is self-contained and measured: <store>/<hash>/<compiler>.record/ (a failed build's in its .failed/record/,
 self-check's stage two in <hash>/stage-two.record/) holds
-- inputs.txt: hash, baked hash, tree, commit and branch, uncommitted core/lib files, the seed (sha, kept in
+- inputs.txt: hash, baked hash, tree, the commit built (`<sha>+dirty` when the tree's inputs hold uncommitted changes,
+  never taken for that commit's build by vitals.py) and branch, uncommitted core/lib files, the seed (sha, kept in
   <store>/seeds/), the warp binary (sha, path), the sha of every input file; sources.tar.gz: those files themselves
 - build.log: the whole output
 - time: `/usr/bin/time -l` of the compile (CPU, wall, peak memory); rebuilds.log's `built` line carries its CPU

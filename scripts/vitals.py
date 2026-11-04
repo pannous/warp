@@ -205,7 +205,9 @@ def record_field(path, key):
 
 
 def build_history(record, landed):
-    """Each landing's CPU seconds and peak memory of building <record>, its fastest full build (rebakes skipped)."""
+    """Each landing's CPU seconds and peak memory of building <record>, its fastest full build (rebakes skipped), by
+    the commit the record says it built: a build of uncommitted edits says `<sha>+dirty` (rebuild.sh built_commit) and
+    is no landing's."""
     fastest = {}
     for folder in glob.glob(os.path.join(STORE, "*", record)):
         try:
