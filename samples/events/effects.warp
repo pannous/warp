@@ -13,5 +13,5 @@ basket(a, b) := price(a) + price(b)
 print "basket: \(basket(10, 20))"
 
 # the compiler knows what a function asks for
-total(net) := net * 2 ! Pure
+@pure total(net) := net * 2
 print "price asks for \(price.effects), total for \(effects of total)"
