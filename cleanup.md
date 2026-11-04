@@ -147,3 +147,7 @@ Cover changed and unchanged polled values, then declare the helper's generic res
 ## Library typed tasks
 
 Cover waiting and completion for task and ordinary values, then type their shared helpers without narrowing the values they accept or return. Verify the outcomes and smoke against merged main.
+
+## Library task control signatures
+
+Cover public pause, resume and cancel outcomes before adding non-narrowing signatures to their helpers. Verify the same outcomes and merged-main smoke.
