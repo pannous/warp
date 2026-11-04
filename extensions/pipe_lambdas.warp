@@ -1,0 +1,28 @@
+# Pipe lambdas (card pipe-lambda-extension)
+# `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, the parser
+# placed on the body after them (in a block also on the lines below); ø (nothing consumed) when no names between bars and a body follow
+pipe_parameters(p: Parser): Node := {
+	close = p.at + 1
+	while close < p.n and (" ,".contains(p.code[close]) or is_name_char(p.code[close])) { close += 1 }
+	names = p.code[p.at + 1 .. close].split(' ').join(",").split(',').filter(name => name)
+	body = spaces_end(p, close + 1)
+	# Ruby's `do |item|⏎ … end`, `{ |x|⏎ … }`: inside a block the body may start on the next line
+	body_below = is_at(p.code, body, '\n', p.n) and (p.group.grouped or p.group.stops_at_end)
+	if char_at(p, close) != '|' or count(names) == 0 or not is_name_start(names#1#1) or body >= p.n or ("\n;,)]}".contains(p.code[body]) and not body_below) { return ø }
+	p.at = body
+	if names.length == 1 then symbol(names#1) else listed(Bracket.Round, Separator.Comma, names.map(name => symbol(name)))
+}
+# A block of one statement as that statement
+single_statement_or_block(block: Node): Node := {
+	parts = group_parts(block)
+	if parts != ø and parts#3.length == 1 then parts#3#1 else block
+}
+# the lambda at a `|`: its body binds as after `=>`, it takes an assignment (`|x| total += x`); in a block, a body
+# below (`do |item|⏎  print item⏎end`) is the rest of the block
+read_pipe_lambda(p: Parser): Node := {
+	if not at_char(p, '|') { return ø }
+	parameters = pipe_parameters(p)
+	if parameters == ø { return ø }
+	if at_char(p, '\n') then keyed("->", parameters, single_statement_or_block(items_until(p, Bracket.Curly, ItemsEnd.Rest))) else keyed("->", parameters, expression(p, binding_powers("=>")#2))
+}
+pipe_lambdas_extension = Extension{name: "pipe_lambdas", prefix_readers: [read_pipe_lambda]}
