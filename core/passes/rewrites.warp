@@ -2030,7 +2030,7 @@ rule_spliced(template: Node, bound: map, at: Node): Node := {
 			item = parts[index]
 			rest = rest_hole_name(item)
 			inner = if is_group(item) and bracket_of(item) == "" then each_spliced(items_of(item), bound, at) else ø
-			items += if inner != ø then inner else if rest != ø and bound.has(rest) then items_of(bound[rest]) else [rule_spliced(item, bound, at)]
+			items += if inner != ø then inner else if rest != ø and bound.has(rest) then spread(bound[rest], template) else [rule_spliced(item, bound, at)]
 			index += 1
 		}
 	}
@@ -2041,6 +2041,9 @@ rule_spliced(template: Node, bound: map, at: Node): Node := {
 	placed(if is_block_of_rest(template) and #items > 1 then List(items, Bracket.Curly, Separator.Semicolon) else group_like(template, items), at)
 }
 
+# the items a rest hole's binding gives a template's group: a block of one statement (`{ print a }`, one_statement_kept)
+# among statements is that one statement, not its words
+spread(binding: Node, template: Node): list := if is_one_statement(binding) and separator_of(template) in [";", "\n"] then [as_phrase(items_of(binding))] else items_of(binding)
 # `{$b...}`: a block of a rest hole, whose statements a template gives back as statements
 is_block_of_rest(n: Node): bool := is_curly_group(n) and #n == 1 and rest_hole_name(n#1) != ø
 
