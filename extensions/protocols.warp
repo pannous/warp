@@ -14,6 +14,9 @@ protocol_self = "self"
 # the body marking a required word, Python's
 required_body = "pass"
 class Protocol { name: text; required: list; default_members: list }
+# the protocols every program knows without declaring them, each a built-in type's name: a class with its required
+# words is one too, beside the built-in values (decision map-protocol: a class with the map words is a map)
+built_in_protocols(): list := [Protocol("map", ["keys", "get", "has", "set", "remove"], [])]
 
 # `protocol shape {…}` opening a statement: the type declaration of its members, its name marked a protocol's
 read_protocol(p: Parser, word: text): Node := {
@@ -38,15 +41,20 @@ required_word(member: Node): text := if member is symbol then name_of(member) el
 # program, their tests and typed places resolved
 protocols_applied(program: Node): Node := {
 	statements = statements_in(program)
-	protocols = statements.map(protocol_of).filter(found => found != ø)
-	if #protocols == 0 { return program }
+	declared_protocols = statements.map(protocol_of).filter(found => found != ø)
 	kept = statements.filter(statement => protocol_of(statement) == ø)
 	functions = []
 	conforming = {}
-	for declared in protocols {
+	for declared in declared_protocols {
 		functions += declared.default_members.map(member => default_function(member, declared))
 		conforming[declared.name] = conforming_classes(kept, declared)
 	}
+	# a built-in protocol only where a class conforms to it: else its type stays the built-in one
+	for built_in in built_in_protocols() {
+		classes = conforming_classes(kept, built_in)
+		if #classes > 0 { conforming[built_in.name] = [built_in.name] + classes }
+	}
+	if #conforming == 0 { return program }
 	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming)))
 	separated(bracketed(resolved, ""), ";")
 }
@@ -81,7 +89,7 @@ conforming_classes(statements: list, protocol: Protocol): list := {
 }
 has_word(classes: map, name: text, word: text, typed: list): bool := {
 	declared = classes[name]
-	if declared.methods.any(method => defined_word(method) == word) or [word, name] in typed { return yes }
+	if declared.methods.any(method => unaliased(defined_word(method)) == unaliased(word)) or [word, name] in typed { return yes }
 	declared.parent in classes and has_word(classes, declared.parent, word, typed)
 }
 # [function, type] of a definition whose first parameter is typed, `area(q: sq) := …`, else ø
