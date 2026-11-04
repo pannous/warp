@@ -1,0 +1,234 @@
+// The standard library module fractions: `use fractions`, helpers over the core's exact rational kind (1/3 stays
+// exact; numerator(x), denominator(x), + - * / and comparisons are the core's). No Fraction class of its own.
+// parse_fraction("1 1/2") is 3/2; from_decimal("0.125") is 1/8; from_float(0.1) is 3602879701896397/36028797018963968
+// (the binary value exactly, as Python's Fraction(0.1)); limit_denominator(x, max) the closest fraction with a
+// denominator up to max (Python's exact semantics); mixed_text(3/2) is "1 1/2"; continued_fraction(x) the terms and
+// from_continued_fraction(terms) back; fraction_pow(x, k) an exact whole power.
+// Decisions (card lib-fractions):
+// - numerators and denominators are the core's 64-bit ints: a result that would leave that range is refused (never
+//   wrapped); from_float refuses a float whose exact value needs more (e.g. 1e30, 1e-30) and infinities and NaN
+// - parse_fraction takes "n", "n/d", "-n/d", "w n/d" and "-w n/d" (spaces around / allowed; in the mixed form
+//   0 <= n < d and the sign belongs to the whole); decimals go to from_decimal ("0.125", "-1.5e-3", "12.")
+// - continued_fraction uses floor terms (the first may be negative or 0, later ones are >= 1; Python's
+//   convention); from_continued_fraction refuses an empty list and a tail of value 0 (e.g. [1, 0]); a 0 term inside is allowed
+// - fraction_pow: 0 to a negative power is refused; it can retire once core-rational-power-exact makes ** exact
+// - printing is the core's (a ratio with a short decimal value prints as a decimal); mixed_text gives the ratio text
+// - a plain number on the left of an operator with a ratio works in the core already (2 + 1/3 is 7/3)
+use bits
+
+FRACTION_INT_DIGITS = 18
+
+def fraction_fail(message: text) {
+	raise (if message.ends_with(" a") or message.ends_with(" at") or message.ends_with(" ") then message + "." else message)
+}
+
+def fraction_check(name: text, x: any) {
+	if not (x is int or x is rational) { fraction_fail(name + " needs an exact number (an int or a ratio), not " + str(x)) }
+}
+
+// a * b, refused when it leaves the 64-bit range
+def fraction_times(a: int, b: int, name: text): int {
+	if a == 0 or b == 0 { return 0 }
+	p = a * b
+	if p /! b != a or p % b != 0 { fraction_fail(name + ": the result leaves the 64-bit range of the core's ints") }
+	p
+}
+
+def fraction_digits(name: text, source: text, digits: text): int {
+	if digits == "" { fraction_fail(name + ": no digits in " + source) }
+	if count(digits) > FRACTION_INT_DIGITS { fraction_fail(name + ": more than " + FRACTION_INT_DIGITS + " digits in " + source + " (the core's ints are 64-bit)") }
+	n = 0
+	for c in digits {
+		if not is_digit(c) { fraction_fail(name + ": " + c + " is not a digit in " + source) }
+		n = n * 10 + ord(c) - 48
+	}
+	n
+}
+
+// "n" or "n/d", n and d unsigned digit runs
+def fraction_simple(name: text, source: text, part: text): list {
+	slash = part.index_of("/")
+	if slash == 0 { return [fraction_digits(name, source, part.trim()), 1] }
+	n = fraction_digits(name, source, part[0 ..< slash - 1].trim())
+	d = fraction_digits(name, source, part[slash..].trim())
+	if d == 0 { fraction_fail(name + ": a zero denominator in " + source) }
+	[n, d]
+}
+
+global parse_fraction(source: text): any := {
+	t = source.trim()
+	if t == "" { fraction_fail("parse_fraction of an empty text") }
+	negative = no
+	if t.starts_with("-") or t.starts_with("+") { negative = t.starts_with("-"); t = t[1..].trim() }
+	if t.contains(".") or t.contains("e") { fraction_fail("parse_fraction: " + source + " is a decimal; use from_decimal") }
+	space = t.index_of(" ")
+	whole = 0
+	rest = t
+	mixed = no
+	if space > 0 {
+		head = t[0 ..< space - 1]
+		tail = t[space..].trim()
+		if not head.contains("/") and tail.contains("/") and not tail.starts_with("/") {
+			whole = fraction_digits("parse_fraction", source, head)
+			rest = tail
+			mixed = yes
+		}
+	}
+	if rest.count("/") > 1 { fraction_fail("parse_fraction: more than one / in " + source) }
+	parts = fraction_simple("parse_fraction", source, rest)
+	n = parts#1
+	d = parts#2
+	if mixed and n >= d { fraction_fail("parse_fraction: the mixed number " + source + " needs a proper fraction part (n < d)") }
+	value = fraction_times(whole, d, "parse_fraction") + n
+	if negative { value = -value }
+	value / d
+}
+
+global from_decimal(source: text): any := {
+	t = source.trim()
+	if t == "" { fraction_fail("from_decimal of an empty text") }
+	negative = no
+	if t.starts_with("-") or t.starts_with("+") { negative = t.starts_with("-"); t = t[1..] }
+	exponent = 0
+	e = t.lower().index_of("e")
+	if e > 0 {
+		et = t[e..]
+		eneg = et.starts_with("-")
+		if et.starts_with("-") or et.starts_with("+") { et = et[1..] }
+		exponent = fraction_digits("from_decimal", source, et)
+		if eneg { exponent = -exponent }
+		t = t[0 ..< e - 1]
+	}
+	dot = t.index_of(".")
+	whole = t
+	part = ""
+	if dot > 0 { whole = t[0 ..< dot - 1]; part = t[dot..] }
+	if whole == "" and part == "" { fraction_fail("from_decimal: no digits in " + source) }
+	digits = whole + part
+	n = fraction_digits("from_decimal", source, digits)
+	scale = exponent - count(part)
+	value = n
+	if scale >= 0 {
+		for i in 1 to scale { value = fraction_times(value, 10, "from_decimal") }
+	} else {
+		d = 1
+		for i in 1 to -scale { d = fraction_times(d, 10, "from_decimal") }
+		value = n / d
+	}
+	if negative then -value else value
+}
+
+global from_float(x: float): any := {
+	b = float_bits(x)
+	negative = b < 0
+	exponent = both_bits(shift_right(b, 52), 0x7ff)
+	fraction = low_bits(b, 52)
+	if exponent == 0x7ff { fraction_fail("from_float of " + str(x) + ": infinities and NaN have no fraction") }
+	m = if exponent == 0 then fraction else fraction + (1 << 52)
+	e = (if exponent == 0 then 1 else exponent) - 1075
+	if m == 0 { return 0 }
+	while m % 2 == 0 and e < 0 { m = m /! 2; e = e + 1 }
+	value = m
+	if e >= 0 {
+		for i in 1 to e { value = fraction_times(value, 2, "from_float") }
+	} else {
+		if -e > 62 { fraction_fail("from_float of " + str(x) + ": its exact denominator 2^" + (-e) + " leaves the 64-bit range of the core's ints") }
+		value = m / (1 << -e)
+	}
+	if negative then -value else value
+}
+
+global limit_denominator(x: any, max_denominator: int): any := {
+	fraction_check("limit_denominator", x)
+	if max_denominator < 1 { fraction_fail("limit_denominator needs a max_denominator of at least 1, not " + max_denominator) }
+	num = numerator(x)
+	den = denominator(x)
+	if den <= max_denominator { return x }
+	p0 = 0
+	q0 = 1
+	p1 = 1
+	q1 = 0
+	n = num
+	d = den
+	going = yes
+	while going {
+		a = n /! d
+		q2 = q0 + a * q1
+		if q2 > max_denominator {
+			going = no
+		} else {
+			p2 = p0 + a * p1
+			p0 = p1
+			q0 = q1
+			p1 = p2
+			q1 = q2
+			r = n - a * d
+			n = d
+			d = r
+		}
+	}
+	k = (max_denominator - q0) /! q1
+	if 2 * d * (q0 + k * q1) <= den { return p1 / q1 }
+	(p0 + k * p1) / (q0 + k * q1)
+}
+
+global mixed_text(x: any): text := {
+	fraction_check("mixed_text", x)
+	n = numerator(x)
+	d = denominator(x)
+	if d == 1 { return str(n) }
+	sign = if n < 0 then "-" else ""
+	a = abs(n)
+	whole = a /! d
+	r = a - whole * d
+	if whole == 0 { return sign + r + "/" + d }
+	sign + whole + " " + r + "/" + d
+}
+
+global continued_fraction(x: any): list := {
+	fraction_check("continued_fraction", x)
+	n = numerator(x)
+	d = denominator(x)
+	terms = []
+	while d != 0 {
+		a = n /! d
+		terms.add(a)
+		r = n - a * d
+		n = d
+		d = r
+	}
+	terms
+}
+
+global from_continued_fraction(terms: list): any := {
+	if count(terms) == 0 { fraction_fail("from_continued_fraction of an empty list") }
+	for t in terms { if not (t is int) { fraction_fail("from_continued_fraction needs whole-number terms, not " + str(t)) } }
+	k = count(terms)
+	value = terms#k
+	while k > 1 {
+		if value == 0 { fraction_fail("from_continued_fraction: a tail of value 0 to divide by in " + str(terms)) }
+		k = k - 1
+		value = terms#k + 1 / value
+	}
+	value
+}
+
+global fraction_pow(x: any, k: int): any := {
+	fraction_check("fraction_pow", x)
+	n = numerator(x)
+	d = denominator(x)
+	if k < 0 {
+		if n == 0 { fraction_fail("fraction_pow: 0 to the negative power " + k) }
+		t = n
+		n = d
+		d = t
+		k = -k
+	}
+	pn = 1
+	pd = 1
+	for i in 1 to k {
+		pn = fraction_times(pn, n, "fraction_pow")
+		pd = fraction_times(pd, d, "fraction_pow")
+	}
+	pn / pd
+}
