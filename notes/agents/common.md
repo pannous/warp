@@ -169,7 +169,9 @@ before asking a question). After a context swap, this file and your role file be
   re-merge (they passed on your change; the new commits passed their own), only the smoke test, and right after it
   merge and push in one `&&` chain, so main cannot move again in between (2026-11-01: a landing looped 1.5 h). The chain may end with one more
   merge of origin/main without its own smoke, only when it merges cleanly and touches none of your files; a conflict
-  means smoke again. At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
+  means smoke again. Its unsmoked commits touch no compiler input: no lib/*.warp, core/ or extensions/, only notes/,
+  test/, samples/, web/, wiki/ and scripts/ (2026-11-04: a lib-only `: list` in lib/matrix.warp, 050e032656, came in
+  so and broke the module prebuild for every tree). At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
   main right away (user 2026-10-26). Then `todo done <card> <commit>`. The full suite runs
   only at rare intervals, in the background.
