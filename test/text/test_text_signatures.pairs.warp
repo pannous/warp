@@ -1,0 +1,5 @@
+// Public text helpers: notes/stdlib.md and lib/text.warp
+use text; snake_case("Hello World")	"hello_world"
+use text; is_numeric("-12.5")	yes
+use text; is_numeric("hello")	no
+use text; wrap("one two three", 7)	"one two\nthree"
