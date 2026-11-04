@@ -52,7 +52,7 @@ value_listened(read: function, listener: function): int := {
 	at = count(polled_values)
 	timer_every(SYSTEM_VALUE_POLL, () => value_polled(at, read, listener))
 }
-value_polled(at: int, read: function, listener: function) := {
+value_polled(at: int, read: function, listener: function): any := {
 	value = read()
 	old = polled_values#at
 	if value != old {
