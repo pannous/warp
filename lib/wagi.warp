@@ -5,6 +5,7 @@
 // A route's `status 418` and `header "name" "value"` (card wagi-build) are lib/router.warp's answer state: the answer
 // carries them. Not yet: request bodies (stdin).
 use router
+use url
 
 wagi_variable(name: any) := {
 	for entry in split(wasi_environment(), chr(0)) {
@@ -25,26 +26,11 @@ wagi_query(query: any) := {
 }
 
 // a query's or form's name or value as sent: `+` a space, `%XX` its byte, the bytes read as UTF-8 ("caf%C3%A9" is "café")
-url_decoded(t: any) := {
-	if not (t.contains("%") or t.contains("+")) { return t }
-	sent = bytes(t)
-	decoded = []
-	at = 1
-	while at <= count(sent) {
-		if sent#at == PERCENT_BYTE and at + 2 <= count(sent) {
-			decoded = decoded + [hex_value(sent#(at + 1)) * 16 + hex_value(sent#(at + 2))]
-			at = at + 3
-		} else {
-			decoded = decoded + [if sent#at == PLUS_BYTE then SPACE_BYTE else sent#at]
-			at = at + 1
-		}
-	}
-	utf8_text(decoded)
-}
+// a query component, percent-decoded with + as a space: lib/url.warp's query_decode (card lib-audit-bugfixes)
+url_decoded(t: any) := if not (t.contains("%") or t.contains("+")) then t else query_decode(t)
 PERCENT_BYTE = 37
 PLUS_BYTE = 43
 SPACE_BYTE = 32
-hex_value(byte: int) := if byte >= 97 then byte - 87 else if byte >= 65 then byte - 55 else byte - 48
 // the text of UTF-8 bytes: a lead byte's high bits say how many continuation bytes follow, each giving 6 bits
 utf8_text(bytes: list) := {
 	out = ""
