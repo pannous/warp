@@ -138,16 +138,17 @@ text_escape_at(source: any, at: int, n: int): list? := {
 }
 # every word an extension takes a glued block for
 extension_block_words(): list := extension_list("block_words")
-# the core passes with each extension's passes before and after the one they name, rows in order
-with_extension_passes(core: list): list := {
-	before = named_passes(core, "passes_before")
-	after = named_passes(core, "passes")
-	concatenated(core.map(pass => passes_at(before, pass) + [pass] + passes_at(after, pass)))
+# a stage's core passes with each extension's passes before and after the one they name, rows in order
+with_extension_passes(stage: list, known: list): list := {
+	before = named_passes(known, "passes_before")
+	after = named_passes(known, "passes")
+	concatenated(stage.map(pass => passes_at(before, pass) + [pass] + passes_at(after, pass)))
 }
-# every extension's [core pass name, its pass] of the field, refused loudly where the name is no core pass
-named_passes(core: list, field: text): list := {
+# every extension's [core pass name, its pass] of the field, refused loudly where the name is no pass of any stage
+# (known: the pure passes and the used stage's, passes.warp every_pass)
+named_passes(known: list, field: text): list := {
 	pairs = concatenated(EXTENSIONS.map(extension => extension[field].keys.map(name => [name, extension[field][name]])))
-	for pair in pairs { if not core.any(pass => "${pass}" == pair#1) { raise "an extension's pass names " + pair#1 + ", which is no core pass" } }
+	for pair in pairs { if not known.any(pass => "${pass}" == pair#1) { raise "an extension's pass names " + pair#1 + ", which is no core pass" } }
 	pairs
 }
 passes_at(pairs: list, pass: any): list := pairs.filter(pair => pair#1 == "${pass}").map(pair => pair#2)
