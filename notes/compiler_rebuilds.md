@@ -62,6 +62,10 @@ self-check's stage two in <hash>/stage-two.record/) holds
 - profile.txt, sample.gz, perf.map: the function profile of the whole run (WARP_PROFILE=perfmap and macOS sample every
   10 ms through scripts/profile.sh -a, from scripts/build-slot.sh WARP_BUILD_RECORD): no CPU cost, a few % wall.
 So a build's time and hotspots are read from its record, never by building again; a lib-only rebake is recorded too.
+A compiler's first run after it lands in the store is cold and reads about 3% more instructions retired (idioms
+2bc2e14adc9fac6f: 3.76e12 first, then 3.6495e12 three times within 0.003%). So one record alone is not a comparison:
+to compare two compilers, run each on the same fixed source, discard one warm-up run, and compare the runs after it
+(card compile-cost-drift, 2026-11-04).
 Records start with build-keeps (2026-10-31); older store entries have only their one-line .inputs.
 
 ## The inputs hash (scripts/compiler-inputs.sh <lib> [<rust fingerprint>])
