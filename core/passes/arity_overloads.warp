@@ -182,7 +182,7 @@ passed_count(callee: text, index: int, called: map): int? := called.get(paramete
 declared_arity(callee: text, index: int): int? := {
 	for line in lines_of(typed_lines, callee) {
 		if index <= #line.signature.parameters {
-			count = function_type_arity(line.signature.parameters[index].type_name)
+			count = function_type_arity(line.signature.parameters#index.type_name)
 			if count != ø { return count }
 		}
 	}
