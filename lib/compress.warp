@@ -34,8 +34,8 @@ class Huffman { counts: list; symbols: list }
 def huffman_of(lengths: list): Huffman {
 	counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 	for n in lengths { counts[n] = counts[n] + 1 }
-	open = 1
-	for n in 1 to 15 { open = open * 2 - counts[n]; if open < 0 { raise "inflate: an over-subscribed Huffman code (corrupt input)" } }
+	spare = 1
+	for n in 1 to 15 { spare = spare * 2 - counts[n]; if spare < 0 { raise "inflate: an over-subscribed Huffman code (corrupt input)" } }
 	symbols = []
 	for n in 1 to 15 { for s in 0 ..< count(lengths) { if lengths[s] == n { symbols.add(s) } } }
 	Huffman(counts, symbols)
@@ -105,12 +105,12 @@ def inflate_dynamic(r: BitReader) {
 	if lengths[256] == 0 { raise "inflate: a dynamic block without an end-of-block code" }
 	inflate_codes(r, huffman_of(lengths[0 ..< literal_count]), huffman_of(lengths[literal_count ..< count(lengths)]))
 }
-// inflate the raw DEFLATE stream starting at byte `start`; the reader ends after its last block (byte aligned)
+// inflate the raw DEFLATE stream starting at byte `start`; the reader ends after its final block (byte aligned)
 def inflate_from(input: list, start: int): BitReader {
 	r = BitReader(input, start, 0, 0, [])
-	last = 0
-	while last == 0 {
-		last = next_bit(r)
+	final_block = 0
+	while final_block == 0 {
+		final_block = next_bit(r)
 		kind = take_bits(r, 2)
 		if kind == 0 { inflate_stored(r) }
 		else if kind == 1 { inflate_codes(r, huffman_of(fixed_lengths()), huffman_of([5 for i in 0 ..< 30])) }
@@ -194,11 +194,11 @@ def deflate_stored(input: list): list {
 	offset = 0
 	while yes {
 		size = min(65535, count(input) - offset)
-		last = if offset + size >= count(input) then 1 else 0
-		out.add(last); out.add(size % 256); out.add(size /! 256); out.add((65535 - size) % 256); out.add((65535 - size) /! 256)
+		final_block = if offset + size >= count(input) then 1 else 0
+		out.add(final_block); out.add(size % 256); out.add(size /! 256); out.add((65535 - size) % 256); out.add((65535 - size) /! 256)
 		for i in offset ..< offset + size { out.add(input[i]) }
 		offset = offset + size
-		if last == 1 { return out }
+		if final_block == 1 { return out }
 	}
 	out
 }
