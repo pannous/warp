@@ -31,7 +31,7 @@ def next_bit(r: BitReader): int {
 }
 take_bits(r: BitReader, n: int): int := { v = 0; weight = 1; for i in 0 ..< n { v = v + next_bit(r) * weight; weight = weight * 2 }; v }
 class Huffman { counts: list; symbols: list }
-def huffman_of(lengths: list): Huffman {
+huffman_of(lengths: list): Huffman := {
 	counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 	for n in lengths { counts[n] = counts[n] + 1 }
 	spare = 1
@@ -106,7 +106,7 @@ def inflate_dynamic(r: BitReader) {
 	inflate_codes(r, huffman_of(lengths[0 ..< literal_count]), huffman_of(lengths[literal_count ..< count(lengths)]))
 }
 // inflate the raw DEFLATE stream starting at byte `start`; the reader ends after its final block (byte aligned)
-def inflate_from(input: list, start: int): BitReader {
+inflate_from(input: list, start: int): BitReader := {
 	r = BitReader(input, start, 0, 0, [])
 	final_block = 0
 	while final_block == 0 {
