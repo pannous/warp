@@ -263,3 +263,5 @@ Polling signature slice landed on main at `517d472b554458315d79437709709cecbd36c
 Task audit: `WARP_NO_WINDOW=1 WARP_LIB=/Volumes/Worktrees/library-typed/lib /Users/me/dev/bin/warp` on the new `test/control/test_task_completion_typed.pairs.warp` case returned `[no, yes, 7, yes, "hi"]` before changes. Next type completion and await helpers with bool and generic results as appropriate, rerun the direct outcome, format, merge and smoke. Default: preserve arbitrary values with `any`.
 
 A separate direct sound audit, `use sound; [beat(1), beats(2), bar(1), bars(2), dB(0)]`, failed with `sound is defined 2 times, with 0 and 1 parameters; pass a lambda that calls the one you mean, e.g. x => sound(x) at 1:5`; a board issue creation was started for the unexpected overload diagnostic. Avoid treating sound as audited until this is resolved.
+
+Task completion helpers now declare `task_awaited(any): any`, `task_value(Task): any`, `is_done(any): bool` and `task_finished(Task): bool`; the direct outcome remains `[no, yes, 7, yes, "hi"]`. Next format, merge main and smoke, then land this slice. The other task helpers and broader signature audit remain.
