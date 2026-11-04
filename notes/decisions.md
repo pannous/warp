@@ -845,4 +845,4 @@ remove the core's stale Rust-twin comments, move lib/ file helpers out of the pa
 all operator declarations (`(infix|prefix|suffix|postfix|circumfix)? operator $op := body`), the parser's own atoms as
 rows of the atom_readers table. "If you see other patterns on the way that can be improved, don't hesitate to
 implement them as well." Plan and review checklist: notes/parser_cleanup.md.
-- after-push-cron (supervisor 2026-11-04): the */2 after-push cron, off since its RED at 18:15 (empty WARP_BINARY after a failed lib/ rsync), goes back on only once the cause is fixed and a hand run is green.
+- after-push-cron (supervisor 2026-11-04, superseded): the */2 cron is gone (user); the pre-push hook starts after-push.sh on every push (9befcabbda). The 18:15 RED (empty WARP_BINARY after a failed lib/ rsync) is still fixed at its cause.
