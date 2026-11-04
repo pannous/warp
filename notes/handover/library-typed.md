@@ -353,3 +353,5 @@ Calendar signature slice landed on main at `6df8d28aee`: two public cases passed
 Time formatting results: `format_date`, `format_time`, and `format_duration` now declare text; `weekday` and `days_between` declare int. The two public outcomes passed before and after, with inputs and existing tests unchanged. Next format, merge main, smoke and land this slice; continue the wider precise signature audit.
 
 Time formatting slice landed on main at `5f03122a63`: the two public outcomes passed before and after, formatting made no changes, and merged-main smoke printed Hello. No existing tests or input domains changed. Continue auditing remaining precise signatures and the tracked compiler interactions; generic-only annotations remain intentionally omitted. The after-push installer reported run 25623 already active and taking the newest tip.
+
+2026-11-04 continuation: direct public parsing and Instant formatting returned `[86400000, "1970-01-01T00:00:00.5Z", "1970-01-01T00:00:00.123Z"]` before changes. Added public outcome coverage; next run it, declare precise results where safe, repeat and smoke. Default: preserve inputs and existing tests.
