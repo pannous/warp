@@ -32,6 +32,7 @@ use "scoped_words.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
 use "of_lookups.warp"
+use "match_phrases.warp"
 use "checked_tries.warp"
 use "text_lints.warp"
 EXTENSIONS = [
@@ -71,6 +72,7 @@ EXTENSIONS = [
 	checked_tries_extension
 	iteration_inlining_extension
 	of_lookups_extension
+	match_phrases_extension
 	text_lints_extension
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 	Extension{name: "big_numbers", runtime: "big_numbers.warp"}

@@ -268,40 +268,18 @@ is_match_head(n: Node): bool := match n {
 	_: no
 }
 
-match_of(rest: Node, n: Node, variants: map): Node := match rest {
-	List(parts, Bracket.None, Separator.Space): { if #parts == 2 then match_block(parts#1, parts#2, n, variants) else n }
-	_: n
-}
-
-# `match x {…}` among a list's parts, as in the call `print(match x {…})` read as `(print match x {…})`
-parts_matched(parts: list, variants: map): list := {
-	if #parts < 3 { return parts }
-	if parts#1 == symbol("match") {
-		lowered = match_block(parts#2, parts#3, ø, variants)
-		if lowered != ø { return [lowered] + parts_matched(parts[3..], variants) }
-	}
-	[parts#1] + parts_matched(parts[1..], variants)
-}
-
-list_match(n: Node, parts: list, bracket: Node, separator: Node, variants: map): Node := {
-	if not parts.any(part => part == symbol("match")) { return n }
-	List(parts_matched(parts, variants), bracket, separator)
-}
-
+# a match among other parts is regrouped as a statement's first (extensions/match_phrases.warp)
 node_match(n: Node, variants: map): Node := match n {
-	List(parts, Bracket.None, Separator.Space): spaced_match(parts, n, Bracket.None, variants)
+	List(parts, Bracket.None, Separator.Space): spaced_match(parts, n, variants)
 	# a block of the one statement: `{ match word {…} }`
-	List(parts, Bracket.Curly, Separator.Space): spaced_match(parts, n, Bracket.Curly, variants)
-	List(parts, bracket, separator): list_match(n, parts, bracket, separator, variants)
+	List(parts, Bracket.Curly, Separator.Space): spaced_match(parts, n, variants)
 	_: n
 }
 
-spaced_match(parts: list, n: Node, bracket: Node, variants: map): Node := {
+spaced_match(parts: list, n: Node, variants: map): Node := {
 	if #parts == 2 and is_match_head(parts#1) { return match_block(parts#1#2, parts#2, n, variants) }
-	# `match n {…}` as a statement, `match (n {…})` as a value
 	if #parts == 3 and parts#1 == symbol("match") { return match_block(parts#2, parts#3, n, variants) }
-	if #parts == 2 and parts#1 == symbol("match") { return match_of(parts#2, n, variants) }
-	list_match(n, parts, bracket, Separator.Space, variants)
+	n
 }
 
 node_matches(program: Node): Node := {

@@ -1,0 +1,32 @@
+# A match among other parts, `"is " + match x {…}`, `print match x {…}` (how `print(match x {…})` reads),
+# `[match x {…}, 5]`, and `match (x {…})`: regrouped as the phrase `match x {…}` of its own, which the core's match
+# (node_matches.warp) lowers as a statement's. Runs right before node_matches.
+match_symbol = symbol("match")
+
+match_phrases(program: Node): Node := bottom_up(program, regrouped_matches)
+
+regrouped_matches(n: Node): Node := match n {
+	List(parts, Bracket.None, Separator.Space): spaced_regrouped(n, parts)
+	List(parts, Bracket.Curly, Separator.Space): spaced_regrouped(n, parts)
+	List(parts, bracket, separator): grouped_in(n, parts)
+	_: n
+}
+# a statement `match x {…}` is the core's already; `match (x {…})` becomes one
+spaced_regrouped(n: Node, parts: list): Node := {
+	if #parts == 2 and parts#1 == match_symbol and is_subject_block(parts#2) { return group_like(n, [match_symbol] + items_of(parts#2)) }
+	if #parts == 3 and parts#1 == match_symbol { return n }
+	grouped_in(n, parts)
+}
+is_subject_block(n: Node): bool := match n {
+	List(items, Bracket.None, Separator.Space): #items == 2 and is_curly_group(items#2)
+	_: no
+}
+grouped_in(n: Node, parts: list): Node := if parts.any(part => part == match_symbol) then group_like(n, matches_grouped(parts)) else n
+# each `match x {…}` among the parts as one phrase; a `match` before no block stays a word
+matches_grouped(parts: list): list := {
+	if #parts < 3 { return parts }
+	if parts#1 == match_symbol and is_curly_group(parts#3) { return [List(parts[0 ..< 3], Bracket.None, Separator.Space)] + matches_grouped(parts[3 ..]) }
+	[parts#1] + matches_grouped(parts[1 ..])
+}
+
+match_phrases_extension = Extension{name: "match_phrases", passes_before: {"node_matches": match_phrases}}
