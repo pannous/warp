@@ -137,7 +137,7 @@ task_value(x: Task): any := {
 	x.value
 }
 // `await any jobs`: the value of the first to be done
-task_awaited_any(xs) := {
+task_awaited_any(xs: any): any := {
 	tasks_run_while(() => not xs.any(is_done), ø)
 	task_awaited(xs.filter(is_done)#1)
 }
