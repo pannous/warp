@@ -14,11 +14,11 @@ format(template, values) := {
 	result
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
-words(t) := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
-lines(t: text) := split(t, "\n")
+words(t): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
+lines(t: text): list := split(t, "\n")
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
 // of any script: letters of "x، ب٣" is ['x' 'ب']
-letters(t) := [c for c in chars(t) if is_unicode_letter(c)]
+letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
 // whether c is a letter of any script, cased or not (Unicode's letter categories): `q`, `é`, `ا`, `名`; no digit, mark
 // or punctuation. is_alpha stays ASCII's a–z and A–Z
 is_unicode_letter(c): bool := {
@@ -39,9 +39,9 @@ letter_range_before(code: int): int := {
 }
 capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
 center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
-title(t) := join([capitalize(w) for w in words(t)], " ")
+title(t): text := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
-slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
+slug(t): text := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
 truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text): list {
@@ -79,11 +79,11 @@ is_palindrome(t): bool := { s = lower(join([c for c in t if is_alphanumeric(c)],
 word_count(t): int := count(words(t))
 // "helloWorld", "Hello World", "hello-world" → "hello_world"
 snake_case(t): text := { out = ""; for c in t { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out and last(out) != "_" { out = out + "_" } }; out }
-kebab_case(t) := join(split(snake_case(t), "_"), "-")
+kebab_case(t): text := join(split(snake_case(t), "_"), "-")
 // "hello_world" → "helloWorld"
-camel_case(t) := { parts = [p for p in split(snake_case(t), "_") if p]; if parts is empty then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
+camel_case(t): text := { parts = [p for p in split(snake_case(t), "_") if p]; if parts is empty then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
 // each line indented by n spaces
-indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
+indent(t, n): text := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
 is_numeric(t): bool := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p is empty { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
@@ -93,12 +93,12 @@ wrap(t, width): text := { out = []; line = ""; for w in words(t) { if line is em
 // a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
 // then `c.peek()` is '1'; `at` counts the characters read (an index)
 class Cursor { source: text; at = 0
-	at_end() := at >= count(source)
+	at_end(): bool := at >= count(source)
 	peek() := source[at]
 	advance() := { taken = source[at]; at += 1; taken }
-	looking_at(part) := source[at : min(at + count(part), count(source))] == part
-	skip(part) := { if looking_at(part) { at += count(part); return true }; false }
+	looking_at(part): bool := source[at : min(at + count(part), count(source))] == part
+	skip(part): bool := { if looking_at(part) { at += count(part); return true }; false }
 	take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
-	skip_while(ok) := count(take_while(ok))
+	skip_while(ok): int := count(take_while(ok))
 	rest() := source[at : count(source)]
 }

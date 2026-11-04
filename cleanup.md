@@ -151,3 +151,7 @@ Cover waiting and completion for task and ordinary values, then type their share
 ## Library task control signatures
 
 Cover public pause, resume and cancel outcomes before adding non-narrowing signatures to their helpers. Verify the same outcomes and merged-main smoke.
+
+# library-typed calendar day helpers
+
+Cover public day calculations, then annotate precise integer results without narrowing inputs; verify outcomes and smoke on merged main.

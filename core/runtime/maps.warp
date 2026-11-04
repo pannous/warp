@@ -10,9 +10,11 @@ use "nodes.warp"
 use "show.warp"
 use "text.warp"
 use "types.warp"
-# a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry); a class instance `Point{x:1}`
-# is its class's struct, whose fields read as such a map (instance_entries: a new one at each call, for iteration,
-# printing and comparison); any other key `n:20` is the map of itself: keys(n:20) is [n]
+# map is a protocol
+# NodeMap is implements map as a curly list of `name:value` keys eg {a:1, b:{c:2}}
+# (Marked.Map and Marked.Entry); 
+# a class instance `Point{x:1}` is its class's struct, whose fields read as such a map 
+# (instance_entries: a new one at each call, for iteration, printing and comparison); 
 fields_of(m: Node): Node := {
 	if marked_kind(m) != Marked.Instance { return m }
 	entries = instance_entries(m)

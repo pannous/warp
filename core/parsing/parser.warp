@@ -149,23 +149,45 @@ def operator_statement(words: list): OperatorStatement? {
 	if not (words#1 in FIXITY_WORDS) { return operator_pattern(words, define) }
 	start = if words#1 != "operator" and define > 1 and words#2 == "operator" then 2 else 1
 	keyword = words#start == "operator"
-	statement = OperatorStatement{fixity: FIXITY_WORDS[words#1], keyword: keyword, spelling: "", head: words[start .. define], body: words[define + 1 .. words.length]}
+	head = words[start .. define]
+	body = words[define + 1 .. words.length]
+	fixity = if words#1 == "operator" then given_fixity(head, body) else FIXITY_WORDS[words#1]
+	statement = OperatorStatement{fixity: fixity, keyword: keyword, spelling: "", head: head, body: body}
 	statement.spelling = defined_spelling(statement)
 	statement
+}
+// `operator` without a fixity word (one of the two words does, card operator-word-optional): the fixity its parameters
+// give, `⊕(a, b)` infix and `∆(x)` prefix; else a body saying `it` or naming a function, `operator √ := sqrt`, prefix;
+// else infix, `operator × := *`, `operator ≈ := approximately`
+def given_fixity(head: list, body: list): Fixity {
+	written = head.join(" ")
+	if written.contains("(") { return if written.contains(",") then Fixity.Infix else Fixity.Prefix }
+	if body.any(says_it) { return Fixity.Prefix }
+	if #body == 1 and is_plain_name(body#1) and not is_operator_spelling(body#1) { return Fixity.Prefix }
+	Fixity.Infix
+}
+// whether a word of code holds the name `it` whole, `it*it`, `f(it)`
+def says_it(word: text): bool {
+	at = 0
+	while at + 1 < word.length {
+		if word[at .. at + 2] == "it" and (at == 0 or not is_name_char(word[at - 1])) and (at + 2 == word.length or not is_name_char(word[at + 2])) { return true }
+		at += 1
+	}
+	false
 }
 // `a ⊕ b := …`: an infix operator declared by a pattern of two plain names around its glyph
 def operator_pattern(words: list, define: int): OperatorStatement? {
 	if define != 3 or not is_operator_glyph(words#2) or not is_plain_name(words#1) or not is_plain_name(words#3) { return ø }
 	OperatorStatement{fixity: Fixity.Infix, keyword: no, spelling: words#2, head: words[0 .. 3], body: words[4 .. words.length]}
 }
-// the operator a statement defines: its one glyph (`operator ⊕ := …`), or for infix a word or glyph with its parameters,
-// `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`; a built-in word, `infix operator
-// as(n: any, e: enum) := …`, is no new operator but an overload of it (operator_method_definition)
+// the operator a statement defines: its one glyph (`operator ⊕ := …`), or a word or glyph with its parameters,
+// `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`, `prefix ∆(x) := …`; a built-in word,
+// `infix operator as(n: any, e: enum) := …`, is no new operator but an overload of it (operator_method_definition)
 def defined_spelling(statement: OperatorStatement): text {
 	if #statement.head == 0 or statement.fixity == Fixity.Circumfix { return "" }
 	first = statement.head#1
 	if #statement.head == 1 and is_operator_glyph(first) { return first }
-	if statement.fixity != Fixity.Infix { return "" }
+	if statement.fixity != Fixity.Infix and not first.contains("(") { return "" }
 	named = is_name_start(first#1)
 	end = if named then name_end(first, 0, first.length) else 0
 	if not named { while end < first.length and first[end] != '(' { end += 1 } }
@@ -176,9 +198,10 @@ def defined_spelling(statement: OperatorStatement): text {
 // `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
 // function, `√x` is sqrt(x) (the pre-scan made the spelling an operator: aliases_among)
 class OperatorAlias { spelling: text; target: text }
-// A prefix alias names a function by the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
+// A prefix alias names a function by the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`;
+// either word declares one, `prefix √ := sqrt` as `operator √ := sqrt`
 def alias_of(statement: OperatorStatement?): OperatorAlias? {
-	if statement == ø or not statement.keyword or #statement.head != 1 or #statement.body != 1 { return ø }
+	if statement == ø or #statement.head != 1 or #statement.body != 1 { return ø }
 	target = statement.body#1
 	prefix = statement.fixity == Fixity.Prefix
 	if (statement.fixity == Fixity.Infix or prefix) and (is_operator_spelling(target) or (prefix and is_plain_name(target))) then OperatorAlias{spelling: statement.head#1, target: target} else ø

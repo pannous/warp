@@ -1,0 +1,2 @@
+# Public wall-clock Instant, as documented in lib/time.warp and commit 07d1405bf1.
+'use time; [now is Instant, now.ms > 0]'	[yes, yes]
