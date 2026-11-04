@@ -13,10 +13,10 @@ def declared_operator_at(p: Parser): DeclaredOperator? := longest_spelled_at(p, 
 
 # `√16`: a declared prefix operator and its operand; its glyph is beyond ASCII (is_operator_glyph), the cheap test first
 def read_declared_prefix(p: Parser): Node := {
-	if peek(p.code, p.at, p.n) <= '~' { return ø }
+	if char_here(p) <= '~' { return ø }
 	operator = declared_operator_at(p)
 	if operator == ø or operator.fixity != Fixity.Prefix { return ø }
-	p.at = p.at + operator.glyph.length
+	p.at += operator.glyph.length
 	skip_spaces(p)
 	operator_call(operator.glyph, [expression(p, operator.level)])
 }
@@ -24,12 +24,12 @@ def read_declared_prefix(p: Parser): Node := {
 # `a ⊕ b`, `n‼`: a declared infix or suffix operator after the operand; one binding looser than the context ends the
 # operand, unless a built-in operator of the glyph binds; a glyph beyond ASCII or a word, the cheap test first
 def read_declared_infix(p: Parser, left: Node, min_power: int): Node := {
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	if c <= '~' and not is_name_start(c) { return ø }
 	operator = declared_operator_at(p)
 	if operator == ø or operator.fixity == Fixity.Prefix { return ø }
 	if operator.level < min_power or is_glued_call(p, operator.glyph) { return if operator_at(p).length == 0 then OPERAND_ENDS else ø }
-	p.at = p.at + operator.glyph.length
+	p.at += operator.glyph.length
 	if operator.fixity == Fixity.Suffix { return operator_call(operator.glyph, [left]) }
 	skip_blanks(p)
 	operator_call(operator.glyph, [left, expression(p, operator.level + 1)])
@@ -125,16 +125,16 @@ def operator_declaration(p: Parser, word: text, statement: OperatorStatement): N
 	glyph = statement.spelling
 	if glyph == "" { return ø }
 	infix = statement.fixity == Fixity.Infix
-	p.at = p.at + word.length
+	p.at += word.length
 	skip_spaces(p)
 	if statement.keyword and word != "operator" {
 		p.at += "operator".length
 		skip_spaces(p)
 	}
-	p.at = p.at + glyph.length
-	declared = if is_at(p.code, p.at, '(', p.n) then expression(p, binding_powers(":=")#1 + 1) else ø
+	p.at += glyph.length
+	declared = if at_char(p, '(') then expression(p, binding_powers(":=")#1 + 1) else ø
 	skip_spaces(p)
-	p.at = p.at + 2
+	p.at += 2
 	skip_spaces(p)
 	body = expression(p, 0)
 	parameters = if not infix then [symbol("it")] else if declared == ø then ø else group_items(declared)
@@ -161,14 +161,14 @@ def holds_top_level_comma(code: text, at: int, n: int): bool {
 		} else if c == '"' or c == '\'' {
 			quote = "" + c
 		} else if c == '(' or c == '[' or c == '{' {
-			depth = depth + 1
+			depth += 1
 		} else if c == ')' or c == ']' or c == '}' {
 			if depth == 1 { return false }
-			depth = depth - 1
+			depth -= 1
 		} else if c == ',' and depth == 1 {
 			return true
 		}
-		at = at + 1
+		at += 1
 	}
 	false
 }

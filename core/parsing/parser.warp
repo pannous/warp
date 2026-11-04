@@ -19,6 +19,23 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
 class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
+// What stands at the parser's position (card parser-checklist-idioms): its character, the one k further, the one at
+// any offset, each a line break past the end; whether the character or a text stands there
+def char_here(p: Parser): text := peek(p.code, p.at, p.n)
+def char_ahead(p: Parser, k: int): text := peek(p.code, p.at + k, p.n)
+def char_at(p: Parser, at: int): text := peek(p.code, at, p.n)
+def at_char(p: Parser, c: text): bool := is_at(p.code, p.at, c, p.n)
+def at_text(p: Parser, written: text): bool := starts_at(p.code, written, p.at, p.n)
+// one character on
+def advance(p: Parser) { p.at += 1 }
+// the reader's node, read with the holder's field (a Parser flag, a GroupContext's) set to value, as it was after
+def with_field(holder: any, field: text, value: any, reader: function): any := {
+	outer = holder[field]
+	holder[field] = value
+	read = reader()
+	holder[field] = outer
+	read
+}
 
 // The view of a source's tree, as the pipeline hands it on
 def tree(source: text): View := view_of(parsed(source))
@@ -97,7 +114,7 @@ def prelude_bang_words(): list {
 // The width of the bang word at the parser's position (`is!`), else 0
 def bang_word_at(p: Parser): int {
 	end = name_end(p.code, p.at, p.n)
-	if end == p.at or not is_at(p.code, end, '!', p.n) or is_at(p.code, end + 1, '=', p.n) { return 0 }
+	if end == p.at or char_at(p, end) != '!' or char_at(p, end + 1) == '=' { return 0 }
 	word = p.code[p.at .. end] + "!"
 	if p.bangs contains word or prelude_bang_words() contains word then end + 1 - p.at else 0
 }
@@ -107,7 +124,7 @@ def bang_word_at(p: Parser): int {
 BLOCK_COLON_WORDS = ["then", "else", "do"]
 def word_names_key(p: Parser, word: text): bool {
 	after = p.at + word.length
-	count(word) > 0 and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
+	count(word) > 0 and not BLOCK_COLON_WORDS.contains(word) and char_at(p, after) == ':' and char_at(p, after + 1) != ':' and char_at(p, after + 1) != '='
 }
 
 // The blank-separated words of the statement at the parser's position
@@ -337,7 +354,7 @@ def longest_spelled_at(p: Parser, candidates: list, spelling: function): any {
 	longest_length = 0
 	for candidate in candidates {
 		spelled = spelling(candidate)
-		here = starts_at(p.code, spelled, p.at, p.n) and not (is_name_start(spelled#1) and is_at_name_char(p, p.at + spelled.length))
+		here = at_text(p, spelled) and not (is_name_start(spelled#1) and is_at_name_char(p, p.at + spelled.length))
 		if here and (longest == ø or spelled.length > longest_length) {
 			longest = candidate
 			longest_length = spelled.length
@@ -449,7 +466,7 @@ def words_ahead_end(p: Parser, words: list, first_end: int): int {
 		start = spaces_end(p, end)
 		if start == end or not starts_at(p.code, word, start, p.n) { return 0 }
 		end = start + word.length
-		following = peek(p.code, end, p.n)
+		following = char_at(p, end)
 		if is_name_char(following) or following == '-' { return 0 }
 	}
 	end
@@ -484,7 +501,7 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 	while true {
 		skip_blanks(p)
 		if closes_block(p) {
-			if keyword_at(p, "end") and not rest { p.at = p.at + 3 }
+			if keyword_at(p, "end") and not rest { p.at += 3 }
 			break
 		}
 		if p.at >= p.n {
@@ -493,7 +510,7 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		}
 		c = p.code[p.at]
 		if c == closer {
-			p.at = p.at + 1
+			advance(p)
 			break
 		}
 		stray = c == ')' or c == ']' or c == '}'
@@ -536,7 +553,7 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		}
 		found += [[statement, after] for statement in statements_of(item)]
 		if dedent { break }
-		if p.at == before { p.at = p.at + 1 }
+		if p.at == before { advance(p) }
 	}
 	p.group = outer
 	grouped(found, bracket)
@@ -585,7 +602,7 @@ def method_given(method: Node, f: Node): Node := match method {
 def heads_block(p: Parser, found: list): bool {
 	if found.length == 0 or is_block(found#(found.length)#1) or found#(found.length)#2 != Separator.Space { return false }
 	first = found.length
-	while first > 1 and found#(first - 1)#2 == Separator.Space { first = first - 1 }
+	while first > 1 and found#(first - 1)#2 == Separator.Space { first -= 1 }
 	found#first#1 is symbol and BLOCK_HEADS.has(name_of(found#first#1)) and body_follows(p)
 }
 // whether the statement goes on to a body, `{` or `:` outside brackets and texts before its end: without one a block
@@ -596,19 +613,19 @@ def body_follows(p: Parser): bool {
 	while at < p.n {
 		c = p.code[at]
 		if c == '"' or c == '\'' {
-			at = at + 1
-			while at < p.n and p.code[at] != c { at = at + 1 }
+			at += 1
+			while at < p.n and p.code[at] != c { at += 1 }
 		} else if depth == 0 and (c == '{' or c == ':') {
 			return true
 		} else if c == '(' or c == '[' {
-			depth = depth + 1
+			depth += 1
 		} else if c == ')' or c == ']' {
 			if depth == 0 { return false }
-			depth = depth - 1
+			depth -= 1
 		} else if depth == 0 and (c == '\n' or c == ';' or c == '}') {
 			return false
 		}
-		at = at + 1
+		at += 1
 	}
 	false
 }
@@ -627,10 +644,10 @@ def headed_phrase(p: Parser): Node := {
 }
 // `on every day at 9:30 {…}`: in a block head, where a colon ends the head, a time glued as digits:digits stays one
 // value (decision prefix-keyword-condition) where the block follows it; `if 2:3` keeps its colon body
-def glued_time_at(p: Parser, left: Node): bool := p.header and left is int and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n)) and block_after_digits(p, p.at + 1)
+def glued_time_at(p: Parser, left: Node): bool := p.header and left is int and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(char_ahead(p, 1)) and block_after_digits(p, p.at + 1)
 def block_after_digits(p: Parser, at: int): bool := {
-	while at < p.n and is_digit(p.code[at]) { at = at + 1 }
-	peek(p.code, blank_end(p, at), p.n) == '{'
+	while at < p.n and is_digit(p.code[at]) { at += 1 }
+	char_at(p, blank_end(p, at)) == '{'
 }
 def follows_clause_word(found: list): bool := found.length > 0 and ends_with_clause_word(found#(found.length)#1)
 
@@ -647,7 +664,7 @@ def line_and_column(code: text, at: int): text {
 	start = 0
 	for i in 0 ..< at {
 		if code[i] == '\n' {
-			line = line + 1
+			line += 1
 			start = i + 1
 		}
 	}
@@ -659,20 +676,17 @@ def line_indent(p: Parser): int {
 	at = p.at
 	indent = 0
 	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') {
-		at = at - 1
-		if p.code[at] == '\t' or p.spaces { indent = indent + 1 }
+		at -= 1
+		if p.code[at] == '\t' or p.spaces { indent += 1 }
 	}
 	indent
 }
 
 // The items of the lines indented below, the parser at the line they end before
 def lines_below(p: Parser): Node := {
-	outer = p.indent
-	p.indent = line_indent(p)
-	block = items_until(p, Bracket.None, ItemsEnd.Source)
-	p.indent = outer
+	block = with_field(p, "indent", line_indent(p), () => items_until(p, Bracket.None, ItemsEnd.Source))
 	// the line break after the block still separates the next statement
-	while p.at > 0 and is_blank(p.code[p.at - 1]) { p.at = p.at - 1 }
+	while p.at > 0 and is_blank(p.code[p.at - 1]) { p.at -= 1 }
 	block
 }
 
@@ -683,7 +697,7 @@ def indented_block(p: Parser): Node := {
 	newline = skip_blanks(p)
 	p.spaces = outer_spaces or p.code[p.at - line_blanks(p) .. p.at].contains(" ")
 	// Allman style: the header's `{…}` block opening the next line at its indent, `if c` / `{ … }`, `def f(x)` / `{ … }`
-	if newline and line_indent(p) == p.indent and is_at(p.code, p.at, '{', p.n) {
+	if newline and line_indent(p) == p.indent and at_char(p, '{') {
 		p.spaces = outer_spaces
 		return atom(p)
 	}
@@ -710,7 +724,7 @@ def skip_end_line(p: Parser) {
 	newline = skip_blanks(p)
 	for closer in INDENTED_BLOCK_ENDS {
 		if newline and keyword_at(p, closer) and line_indent(p) == p.indent and line_ends_after(p, p.at + closer.length) {
-			p.at = p.at + closer.length
+			p.at += closer.length
 			return
 		}
 	}
@@ -719,7 +733,7 @@ def skip_end_line(p: Parser) {
 
 def line_blanks(p: Parser): int {
 	at = p.at
-	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') { at = at - 1 }
+	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') { at -= 1 }
 	p.at - at
 }
 
@@ -728,7 +742,7 @@ def ends_line(p: Parser, at: int): bool := line_ends_after(p, at)
 
 // The body after `:` or `do`: the block indented below when the line ends, else the rest of the line
 def colon_body(p: Parser, width: int): Node := {
-	p.at = p.at + width
+	p.at += width
 	if only_blanks_before_newline(p) {
 		block = indented_block(p)
 		if block != ø { return block }
@@ -742,11 +756,11 @@ def separator(p: Parser, closer: text, newline: bool): Separator {
 	if p.at >= p.n or p.code[p.at] == closer or closes_block(p) { return Separator.None }
 	c = p.code[p.at]
 	if c == ',' {
-		p.at = p.at + 1
+		advance(p)
 		return Separator.Comma
 	}
 	if c == ';' {
-		p.at = p.at + 1
+		advance(p)
 		return if only_blanks_before_newline(p) then Separator.Newline else Separator.Semicolon
 	}
 	if newline then Separator.Newline else Separator.Space
@@ -848,8 +862,8 @@ def prints(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 ==
 def skip_blanks(p: Parser): bool {
 	newline = line_breaks_after(p, p.at)
 	p.at = p.resumes[p.at]
-	if peek(p.code, p.at, p.n) == '\\' and line_continuation_length(p) > 0 {
-		p.at = p.at + line_continuation_length(p)
+	if char_here(p) == '\\' and line_continuation_length(p) > 0 {
+		p.at += line_continuation_length(p)
 		return skip_blanks(p)
 	}
 	newline
@@ -866,7 +880,7 @@ def skip_spaces(p: Parser) {
 	p.at = blank_end(p, p.at)
 	continuation = line_continuation_length(p)
 	if continuation > 0 {
-		p.at = p.at + continuation
+		p.at += continuation
 		skip_spaces(p)
 	}
 }
@@ -875,27 +889,27 @@ def skip_spaces(p: Parser) {
 // line: a method call or `|>` starting the next line (`numbers⏎    .map(square)`), `else` starting it, or the line
 // ending in then/else (`if c then⏎ a⏎ else⏎ b`); else 0
 def line_continuation_length(p: Parser): int {
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	// `1 + \` at a line's end continues the statement on the next line (was the symbol `\`, the line its own statement)
 	if c == '\\' {
 		at = p.at + 1
-		while at < p.n and (p.code[at] == ' ' or p.code[at] == '\t' or p.code[at] == '\r') { at = at + 1 }
+		while at < p.n and (p.code[at] == ' ' or p.code[at] == '\t' or p.code[at] == '\r') { at += 1 }
 		if at >= p.n or p.code[at] != '\n' { return 0 }
-		while at < p.n and is_blank(p.code[at]) { at = at + 1 }
+		while at < p.n and is_blank(p.code[at]) { at += 1 }
 		return at - p.at
 	}
 	if c == '\n' or c == '\r' {
 		at = p.at
-		while at < p.n and is_blank(p.code[at]) { at = at + 1 }
-		next = peek(p.code, at + 1, p.n)
-		starts_method = is_at(p.code, at, '.', p.n) and is_name_char(next) and not is_digit(next)
-		starts_pipeline = is_at(p.code, at, '|', p.n) and next == '>'
+		while at < p.n and is_blank(p.code[at]) { at += 1 }
+		next = char_at(p, at + 1)
+		starts_method = char_at(p, at) == '.' and is_name_char(next) and not is_digit(next)
+		starts_pipeline = char_at(p, at) == '|' and next == '>'
 		ends_in_branch_word = ["then", "else"] contains word_before(p)
 		return if starts_method or starts_pipeline or keyword_at_position(p, "else", at) or ends_in_branch_word then at - p.at else 0
 	}
 	if c != '\\' { return 0 }
 	end = spaces_end(p, p.at + 1)
-	if is_at(p.code, end, '\r', p.n) { end = end + 1 }
+	if char_at(p, end) == '\r' { end += 1 }
 	if is_at(p.code, end, '\n', p.n) then end + 1 - p.at else 0
 }
 
@@ -903,12 +917,12 @@ def line_continuation_length(p: Parser): int {
 def expression(p: Parser, min_power: int): Node := continued(p, prefixed(p), min_power)
 
 // The head of `if`, `while` or `for`: a `{` after it opens the body, so `f(x) {` calls f rather than defining it
-def header_expression(p: Parser, min_power: int): Node := {
-	outer = p.header
-	p.header = true
-	head = expression(p, min_power)
-	p.header = outer
-	head
+def header_expression(p: Parser, min_power: int): Node := with_field(p, "header", true, () => expression(p, min_power))
+
+// what stands in `xs[…]`: a slice from the start, `xs[..3]`, else an expression
+def index_expression(p: Parser): Node := {
+	slice = slice_from_start(p)
+	if slice == ø then expression(p, 0) else slice
 }
 
 // `left` and the operators after it binding at least `min_power`
@@ -922,7 +936,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		applied = false
 		if tab_separates(p) { break }
 		skip_spaces(p)
-		c = peek(p.code, p.at, p.n)
+		c = char_here(p)
 		// `cd ~/notes`: a path after an operand is the next word, no operator
 		if starts_path(p) { return left }
 		if c == '@' and left != ø and min_power <= binding_powers("=")#2 {
@@ -951,31 +965,27 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		}
 		if (c == '+' or c == '-') and is_at(p.code, p.at + 1, c, p.n) and SUFFIX_POWER >= min_power {
 			op = p.code[p.at .. p.at + 2]
-			p.at = p.at + 2
+			p.at += 2
 			left = keyed(op, left, ø)
 		} else if c == '!' and SUFFIX_POWER >= min_power and bang_suffix_at(p) {
-			p.at = p.at + 1
+			advance(p)
 			# `x!!` is `x!`
-			if is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n) { p.at = p.at + 1 }
+			if at_char(p, '!') and char_ahead(p, 1) != '=' { advance(p) }
 			left = forced(left)
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
-			p.at = p.at + 1
+			advance(p)
 			skip_blanks(p)
-			outer_indexing = p.indexing
-			p.indexing = true
-			index = slice_from_start(p)
-			if index == ø { index = expression(p, 0) }
-			p.indexing = outer_indexing
+			index = with_field(p, "indexing", true, () => index_expression(p))
 			skip_blanks(p)
-			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
+			if at_char(p, ']') { advance(p) }
 			left = subscript(left, index)
 		} else if c == '(' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power and is_callee(left) {
-			p.at = p.at + 1
+			advance(p)
 			left = call_of([left] + spread(items_until(p, Bracket.Round, ItemsEnd.Closer)))
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
-			p.at = p.at + membership#1.length
+			p.at += membership#1.length
 			skip_blanks(p)
 			left = membership_test(left, membership#2, expression(p, MEMBERSHIP_POWERS#2))
 		} else if negated_at(p) {
@@ -984,21 +994,21 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			positive = NEGATED_SPELLINGS[written]
 			powers = if positive == "in" then MEMBERSHIP_POWERS else binding_powers(positive)
 			if powers#1 < min_power { break }
-			p.at = p.at + written.length
+			p.at += written.length
 			skip_blanks(p)
 			left = Key(ø, Op.Not, operation(left, positive, expression(p, powers#2)))
 		} else if down_to_at(p) > 0 {
 			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down
 			powers = binding_powers("to")
 			if powers#1 < min_power { break }
-			p.at = p.at + down_to_at(p)
+			p.at += down_to_at(p)
 			skip_blanks(p)
 			left = call_of([symbol("reverse"), Key(expression(p, powers#2), Op.To, left)])
 		} else if trailing_guard_at(p) != "" {
 			// `a = 2 if c`, `x++ while c`: guards the whole statement (left power 0)
 			if min_power > 0 { break }
 			word = trailing_guard_at(p)
-			p.at = p.at + word.length
+			p.at += word.length
 			skip_blanks(p)
 			left = guarded_statement(left, word, condition_expression(p))
 		} else {
@@ -1006,7 +1016,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			if op.length == 0 and free_infix_at(p, left) {
 				if fixity_level(Fixity.Infix) < min_power { break }
 				glyph = "$(c)"
-				p.at = p.at + 1
+				advance(p)
 				skip_blanks(p)
 				left = operator_call(glyph, [left, expression(p, fixity_level(Fixity.Infix) + 1)])
 				continue
@@ -1034,7 +1044,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			// one arrow, but `=>` binds as written: its body takes an assignment
 			if op#1 == "=>" { powers = binding_powers("=>") }
 			if op#1 == ":" and glued_time_at(p, left) {
-				p.at = p.at + 1
+				advance(p)
 				left = Key(left, Op.Colon, prefixed(p))
 				continue
 			}
@@ -1042,18 +1052,18 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			if powers#1 < min_power and not owns { break }
 			// `match -3 {…}`, `xs where #it > 1`, `where to#i == n`: after a clause word a glued `#` or `-`, or an
 			// operator word, starts its subject
-			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(peek(p.code, p.at + 1, p.n))
+			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(char_ahead(p, 1))
 			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			operator_start = p.at
-			p.at = p.at + op#1.length
+			p.at += op#1.length
 			// `f(n):` ending its line: the block indented below is its value
 			block = if op#1 == ":" and ends_line(p, p.at) then indented_block(p) else ø
 			if block != ø {
 				left = Key(left, Op.Colon, block)
 				continue
 			}
-			if op#1 == "." and peek(p.code, p.at, p.n) == "(" { raise dot_call_refused(left) }
+			if op#1 == "." and char_here(p) == "(" { raise dot_call_refused(left) }
 			skip_blanks(p)
 			if is_phrase_operator(op) {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
@@ -1063,7 +1073,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = call_of([symbol(HiddenWord.StoredValue as text), left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
 				left = piped(left, expression(p, powers#2))
-			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at, p.n) or ",;)]}".contains(peek(p.code, p.at, p.n)) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
+			} else if (op#2 == ".." or op#2 == "to") and (at_text(p, "=>") or ",;)]}".contains(char_here(p)) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
 				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`, `($as..., $bs...)`: a range without end; also a
 				// rule's rest hole before a comprehension's clause, `[$e... for $x in $xs]` (card sugar-comprehensions)
 				left = keyed(op#2, left, ø)
@@ -1137,13 +1147,13 @@ def closing_ends_of(code: text, n: int, openers: list): ClosingEnds := {
 			names_end = names_end or (word == "end" and names_word(code, at, end, n))
 			step = if member then 0 else if word == "end" then -1 else if openers contains word then 1 else 0
 			if step != 0 {
-				balance = balance + step
+				balance += step
 				word_starts += [at]
 				balances += [balance]
 			}
 			at = end
 		} else {
-			at = at + 1
+			at += 1
 		}
 	}
 	// a program naming a variable `end` closes no block with it: `if a == 0 then 1 else end` hands back the variable
@@ -1152,7 +1162,7 @@ def closing_ends_of(code: text, n: int, openers: list): ClosingEnds := {
 	index = lowest_from.length - 1
 	while index > 0 {
 		lowest_from[index - 1] = min(lowest_from[index - 1], lowest_from[index])
-		index = index - 1
+		index -= 1
 	}
 	ClosingEnds{word_starts: word_starts, balances: balances, lowest_from: lowest_from}
 }
@@ -1162,9 +1172,9 @@ def closing_ends_of(code: text, n: int, openers: list): ClosingEnds := {
 // else 2 end)` closes a block)
 def names_word(code: text, start: int, end: int, n: int): bool {
 	before = start - 1
-	while before >= 0 and is_blank(code[before]) { before = before - 1 }
+	while before >= 0 and is_blank(code[before]) { before -= 1 }
 	after = end
-	while after < n and is_blank(code[after]) { after = after + 1 }
+	while after < n and is_blank(code[after]) { after += 1 }
 	following = peek(code, after, n)
 	assigned = following == '=' and peek(code, after + 1, n) != '='
 	keyed = following == ':'
@@ -1243,16 +1253,16 @@ def condition_has_branch(p: Parser, at: int): bool {
 		} else if c == '{' and depth == 0 {
 			// a comparison, not is_blank: a `: bool` call is an Int to the analyzer (card bool-call-int)
 			spaced_brace_open = p.code[i - 1] == ' ' or p.code[i - 1] == '\t'
-			depth = depth + 1
+			depth += 1
 		} else if c == '(' or c == '[' or c == '{' {
-			depth = depth + 1
+			depth += 1
 		} else if c == ')' or c == ']' or c == '}' {
 			if depth == 0 { return false }
 			if c == '}' and depth == 1 and spaced_brace_open {
 				if not starts_at(p.code, "=>", blank_end(p, i + 1), p.n) { return true }
 				spaced_brace_open = false
 			}
-			depth = depth - 1
+			depth -= 1
 		} else if depth == 0 {
 			if starts_at(p.code, "=>", i, p.n) or c == '\n' or c == ';' { return false }
 			if c == 't' and not is_name_char(p.code[i - 1]) and keyword_at_position(p, "then", i) { return true }
@@ -1275,7 +1285,7 @@ def with_switch_cases(p: Parser, value: Node): Node {
 	if not opens_switch or not starts_atom_at(p, blank_end(p, p.at)) { return value }
 	skip_blanks(p)
 	parts = [value, argument(p, true)]
-	if is_at(p.code, blank_end(p, p.at), '{', p.n) {
+	if char_at(p, blank_end(p, p.at)) == '{' {
 		skip_blanks(p)
 		parts = parts + [atom(p)]
 	}
@@ -1294,9 +1304,9 @@ def owns_branches(left: Node, op: text, took_own_then: bool): bool := match left
 // The name before the parser's position and blanks, else ""
 def word_before(p: Parser): text {
 	end = p.at
-	while end > 0 and is_blank(p.code[end - 1]) { end = end - 1 }
+	while end > 0 and is_blank(p.code[end - 1]) { end -= 1 }
 	start = end
-	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
+	while start > 0 and is_name_char(p.code[start - 1]) { start -= 1 }
 	p.code[start .. end]
 }
 
@@ -1304,7 +1314,7 @@ def word_before(p: Parser): text {
 def names_block(p: Parser, word: text): bool := alias_spellings().infix_words.contains(word) and opens_block(p, word.length)
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
 def opens_block(p: Parser, width: int): bool {
-	is_at(p.code, blank_end(p, p.at + width), '{', p.n)
+	char_at(p, blank_end(p, p.at + width)) == '{'
 }
 
 // `is not`, `isn't` at the parser's position, else ""
@@ -1342,11 +1352,11 @@ UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "code
 // `alias contains = collection_contains`: an assignment's `=` (no `==`) after the blanks at `at`
 def assigned_at(p: Parser, at: int): bool {
 	sign = blank_end(p, at)
-	is_at(p.code, sign, '=', p.n) and not is_at(p.code, sign + 1, '=', p.n)
+	char_at(p, sign) == '=' and char_at(p, sign + 1) != '='
 }
 def operand_after(p: Parser, width: int): bool {
 	at = p.at + width
-	if not (is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n)) { return false }
+	if not (char_at(p, at) == ' ' or char_at(p, at) == '\t') { return false }
 	not "\n)]};,".contains(code_after(p, at))
 }
 
@@ -1360,10 +1370,10 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	marked = attribute_marked(left)
 	callable = marked is symbol or is_list_of(marked, "")
 	if not callable { return false }
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	if c == '{' and p.header { return false }
 	// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
-	if keyword_at(p, "for") and peek(p.code, p.at + 3, p.n) != ':' { return false }
+	if keyword_at(p, "for") and char_ahead(p, 3) != ':' { return false }
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and (if p.iterable then word_ends_header(p) else not word_begins_item(p))
 	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
 }
@@ -1373,7 +1383,7 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 def labelled_argument(p: Parser): Node := {
 	at = blank_end(p, p.at)
 	end = name_end(p.code, at, p.n)
-	if end == at or not label_words.contains(p.code[at .. end]) or not is_at(p.code, end, ':', p.n) or not " \t".contains(peek(p.code, end + 1, p.n)) { return ø }
+	if end == at or not label_words.contains(p.code[at .. end]) or char_at(p, end) != ':' or not " \t".contains(char_at(p, end + 1)) { return ø }
 	p.at = end + 1
 	skip_spaces(p)
 	Key(symbol(p.code[at .. end]), Op.Colon, expression(p, ARGUMENT_POWER))
@@ -1393,7 +1403,7 @@ def test_word_at(p: Parser, min_power: int): list {
 	if word == "" { return [] }
 	end = start + word.length
 	after = blank_end(p, end)
-	next = peek(p.code, after, p.n)
+	next = char_at(p, after)
 	following = p.code[after .. name_end(p.code, after, p.n)]
 	ends = not operand_follows_at(p, end) or next == '{' or next == ':' or word_operators().any(op => op#1 == following)
 	if ends then [end, word, after_is] else []
@@ -1406,21 +1416,21 @@ def tested(left: Node, word: text, after_is: bool): Node := spaced([left] + (if 
 def word_begins_item(p: Parser): bool {
 	if keyword_at(p, "for") or keyword_at(p, "end") or else_if_at(p) { return true }
 	at = p.at
-	while at < p.n and is_name_char(p.code[at]) { at = at + 1 }
+	while at < p.n and is_name_char(p.code[at]) { at += 1 }
 	if at == p.at { return false }
-	c = peek(p.code, at, p.n)
-	next = peek(p.code, at + 1, p.n)
+	c = char_at(p, at)
+	next = char_at(p, at + 1)
 	c == '{' or (c == ':' and not (next == ':' or next == '='))
 }
 
 // The word here is a loop header's last, the body follows it (`for i in 1 to count xs {…}`, `… do …`, `…:` or an
 // indented line): it is the argument of the word before rather than that word's body
 def word_ends_header(p: Parser): bool {
-	if not is_name_start(peek(p.code, p.at, p.n)) { return false }
+	if not is_name_start(char_here(p)) { return false }
 	start = p.at
 	p.at = name_end(p.code, p.at, p.n)
 	skip_spaces(p)
-	indented_line_follows = is_at(p.code, p.at, '\n', p.n) and " \t".contains(peek(p.code, p.at + 1, p.n))
+	indented_line_follows = at_char(p, '\n') and " \t".contains(char_ahead(p, 1))
 	ends = at_to_header_end(p) or keyword_at(p, "do") or indented_line_follows
 	p.at = start
 	ends
@@ -1430,18 +1440,12 @@ def word_ends_header(p: Parser): bool {
 def applies_otherwise(p: Parser, min_power: int): bool := min_power <= 60 or min_power == p.branch_power or unnamed_at(p)
 
 def unnamed_at(p: Parser): bool {
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	is_digit(c) or opens_text(c) or c == '(' or c == '[' or c == '{' or c == '-'
 }
 
 // The argument of a braceless call; `while i < count t {…}`: a block after an operand's argument is the body
-def argument(p: Parser, block_ends: bool): Node := {
-	outer = p.header
-	p.header = outer or block_ends
-	value = expression(p, ARGUMENT_POWER)
-	p.header = outer
-	value
-}
+def argument(p: Parser, block_ends: bool): Node := with_field(p, "header", p.header or block_ends, () => expression(p, ARGUMENT_POWER))
 
 // The operands a braceless call binds in: the right sides of `or` to `+`
 OPERAND_POWERS = [91, 141]
@@ -1455,10 +1459,10 @@ SLICE_FROM_START = [[":", ":"], ["…", "to"], ["...", "to"], ["..", ".."]]
 // `[:end]`, `[...last]`, `[..end]`, `[:]`: a slice from the start, `ø:end`, else ø with nothing read
 def slice_from_start(p: Parser): Node := {
 	for mark in SLICE_FROM_START {
-		if starts_at(p.code, mark#1, p.at, p.n) {
-			p.at = p.at + mark#1.length
+		if at_text(p, mark#1) {
+			p.at += mark#1.length
 			skip_blanks(p)
-			if is_at(p.code, p.at, ']', p.n) { return keyed(mark#2, ø, ø) }
+			if at_char(p, ']') { return keyed(mark#2, ø, ø) }
 			return keyed(mark#2, ø, expression(p, 0))
 		}
 	}
@@ -1471,7 +1475,7 @@ SUFFIX_POWER = 165
 // The `!` at the parser's position is the suffix `x!`, not a `!=` nor a prefix `!` of the operand after it: glued to
 // its operand and followed by a blank, an infix operator or `)` (`name! email?`, `x!+1`), or no operand follows
 def bang_suffix_at(p: Parser): bool {
-	next = peek(p.code, p.at + 1, p.n)
+	next = char_ahead(p, 1)
 	if next == '=' { return false }
 	glued = p.at > 0 and not is_blank(p.code[p.at - 1]) and " \t!+-*/%^<>)".contains(next)
 	glued or not operand_follows(p, 1)
@@ -1516,8 +1520,8 @@ def is_element(n: Node): bool := match n {
 // subtraction or sum: a binary operator is spaced evenly (decisions glued-negative, binary-operator-spacing); `a - 1`
 // and `a-1` compute, so does a sign inside an index, `xs[i -1]`
 def signed_item_at(p: Parser): bool {
-	if p.indexing or p.at == 0 or not is_blank(p.code[p.at - 1]) or not (is_at(p.code, p.at, '-', p.n) or is_at(p.code, p.at, '+', p.n)) { return false }
-	next = peek(p.code, p.at + 1, p.n)
+	if p.indexing or p.at == 0 or not is_blank(p.code[p.at - 1]) or not (at_char(p, '-') or at_char(p, '+')) { return false }
+	next = char_ahead(p, 1)
 	not is_blank(next) and not "=->+".contains(next)
 }
 // the signed item, written from the source's offset `sign_at` to the parser's position, marked with what was written
@@ -1525,7 +1529,7 @@ def signed_item_at(p: Parser): bool {
 def spaced_sign_marked(p: Parser, before: text, sign_at: int, item: Node): Node := attributed(SPACED_SIGN_MARK, listed(Bracket.Square, Separator.Space, [before, p.code[sign_at ..< p.at].trim()]), item)
 // `a *b`, `a* b`: an arithmetic or comparing operator spaced on one side only, which computes but reads as a sign or a
 // suffix; the analyzer warns (decision binary-operator-spacing, source_checks.warp uneven_spacing)
-def unevenly_spaced(p: Parser, at: int, glyph: text): bool := EVENLY_SPACED_OPERATORS contains glyph and at > 0 and is_blank(p.code[at - 1]) != is_blank(peek(p.code, at + glyph.length, p.n))
+def unevenly_spaced(p: Parser, at: int, glyph: text): bool := EVENLY_SPACED_OPERATORS contains glyph and at > 0 and is_blank(p.code[at - 1]) != is_blank(char_at(p, at + glyph.length))
 EVENLY_SPACED_OPERATORS = ["*", "/", "%", "^", "==", "!=", "<", ">", "<=", ">="]
 // the source written from the node's place to the offset `end`, "" for a node of no place
 def written_before(p: Parser, n: Node, end: int): text := {
@@ -1582,14 +1586,14 @@ def operator_at(p: Parser): list {
 DECLARING_WORDS = ["let", "var", "global", "export", "import", "const", "constant", "final", "mutable", "mut", "val", "static"]
 def declares_before(p: Parser): bool {
 	end = p.at
-	while end > 0 and is_blank(p.code[end - 1]) { end = end - 1 }
+	while end > 0 and is_blank(p.code[end - 1]) { end -= 1 }
 	start = end
-	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
+	while start > 0 and is_name_char(p.code[start - 1]) { start -= 1 }
 	word = p.code[start ..< end]
 	word in DECLARING_WORDS or (end < p.at and known_type(word, p.types))
 }
 // `=` alone (no `==`) right after `width` characters
-def assigns_after(p: Parser, width: int): bool := peek(p.code, p.at + width, p.n) == '=' and peek(p.code, p.at + width + 1, p.n) != '='
+def assigns_after(p: Parser, width: int): bool := char_ahead(p, width) == '=' and char_ahead(p, width + 1) != '='
 // an operator computing a value of its two sides, which has an element-wise form and a compound assignment: one
 // binding between `or` and `^` (binding_powers), but for the range, the pipe, the cast and the fallback there
 def computes(canonical: text): bool {
@@ -1599,16 +1603,16 @@ def computes(canonical: text): bool {
 // `.<`, `.*`: a `.` glued to a computing operator; a word's after a blank, `xs .and ys` (`x.is(y)` calls the method
 // is), and so `.$op`, a rule's hole of one
 def dotted_operator_at(p: Parser): list {
-	if peek(p.code, p.at, p.n) != '.' { return [] }
+	if char_here(p) != '.' { return [] }
 	spaced = p.at > 0 and is_blank(p.code[p.at - 1])
-	if is_name_start(peek(p.code, p.at + 1, p.n)) and not spaced { return [] }
-	if peek(p.code, p.at + 1, p.n) == '$' and spaced {
+	if is_name_start(char_ahead(p, 1)) and not spaced { return [] }
+	if char_ahead(p, 1) == '$' and spaced {
 		hole = operand_word_at_from(p, p.at + 1)
 		return if hole == "" then [] else ["." + hole, hole]
 	}
-	p.at = p.at + 1
+	advance(p)
 	inner = unassigned(spelled_operator_at(p))
-	p.at = p.at - 1
+	p.at -= 1
 	if inner.length > 0 and inner#1#1 != '.' and computes(inner#2) then ["." + inner#1, inner#2] else []
 }
 // the operator of a compound assignment the parser keeps, `*` of `*=` (`xs .*= 2`), else the spelled one
@@ -1621,14 +1625,14 @@ def unassigned(spelled: list): list {
 // the word at the parser's position, `$op` a rule's hole too, else ""
 def operand_word_at(p: Parser): text := operand_word_at_from(p, p.at)
 def operand_word_at_from(p: Parser, at: int): text {
-	start = if peek(p.code, at, p.n) == '$' then at + 1 else at
-	if not is_name_start(peek(p.code, start, p.n)) { return "" }
+	start = if char_at(p, at) == '$' then at + 1 else at
+	if not is_name_start(char_at(p, start)) { return "" }
 	p.code[at .. name_end(p.code, start, p.n)]
 }
 // The operator spelled at the parser's position as [written, canonical], else []
 // (each text read is a walk from its start, card text-costs: the character is read once and picks the candidates)
 def spelled_operator_at(p: Parser): list {
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	if is_name_start(c) {
 		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
 		word = word_operator_at(p, c)
@@ -1636,7 +1640,7 @@ def spelled_operator_at(p: Parser): list {
 		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
 		return aliased_operator_at(p)
 	}
-	if starts_at(p.code, "//", p.at, p.n) { return [] }
+	if at_text(p, "//") { return [] }
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
 	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
 	spelled_symbol = symbol_operator_at(p, c)
@@ -1654,7 +1658,7 @@ def word_operator_at(p: Parser, c: text): list {
 // word, `rewrite upto $n => …` (card hCz9o0)
 def heads_rule(p: Parser): bool {
 	start = p.at
-	while start > 0 and p.code[start - 1] != '\n' { start = start - 1 }
+	while start > 0 and p.code[start - 1] != '\n' { start -= 1 }
 	p.code[start .. p.at].trim() == "rewrite"
 }
 // The operator symbol at the parser's position as [written, canonical], the longest, else []
@@ -1662,7 +1666,7 @@ def heads_rule(p: Parser): bool {
 def symbol_operator_at(p: Parser, c: text): list {
 	for pair in symbol_operators() {
 		written = pair#1
-		if written#1 == c and starts_at(p.code, written, p.at, p.n) and (written != ">>" or operand_follows(p, 2)) and (written != "?." or not is_digit(peek(p.code, p.at + 2, p.n))) { return pair }
+		if written#1 == c and at_text(p, written) and (written != ">>" or operand_follows(p, 2)) and (written != "?." or not is_digit(char_ahead(p, 2))) { return pair }
 	}
 	[]
 }
@@ -1772,7 +1776,7 @@ CLASS_MARK = "class "
 // the name a text starts with, "" when none
 def name_starting(line: text): text {
 	stop = 0
-	while stop < #line and is_name_char(line[stop]) { stop = stop + 1 }
+	while stop < #line and is_name_char(line[stop]) { stop += 1 }
 	line[0 ..< stop]
 }
 
@@ -1824,14 +1828,14 @@ def mentions_word(code: text, word: text): bool {
 		before = parts#i
 		after = parts#(i + 1)
 		if not ends_in_name(before) and (#after == 0 or not is_name_char(after[0])) { return yes }
-		i = i + 1
+		i += 1
 	}
 	no
 }
 // whether the text ends in a name, its last run of name characters starting as a name does, not as a number (`3`)
 def ends_in_name(t: text): bool {
 	start = #t
-	while start > 0 and is_name_char(t[start - 1]) { start = start - 1 }
+	while start > 0 and is_name_char(t[start - 1]) { start -= 1 }
 	start < #t and is_name_start(t[start])
 }
 
@@ -1865,7 +1869,7 @@ def operator_method_head(p: Parser, declared: bool = false): Node {
 	op = operator_at(p)
 	if op.length == 0 or not (declared or METHOD_OPERATORS.contains(op#2)) { return ø }
 	open = p.at + op#1.length
-	if not is_at(p.code, open, '(', p.n) { return ø }
+	if char_at(p, open) != '(' { return ø }
 	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n)), p.n) { return ø }
 	p.at = open
 	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
@@ -1876,10 +1880,10 @@ def operator_method_head(p: Parser, declared: bool = false): Node {
 // superfluous; ø for any other statement starting with the word
 def operator_method_definition(p: Parser, word: text): Node {
 	start = p.at
-	p.at = p.at + word.length
+	p.at += word.length
 	skip_spaces(p)
 	if word != "operator" and keyword_at(p, "operator") {
-		p.at = p.at + 8
+		p.at += 8
 		skip_spaces(p)
 	}
 	head = operator_method_head(p, true)
@@ -1888,7 +1892,7 @@ def operator_method_definition(p: Parser, word: text): Node {
 		return ø
 	}
 	skip_spaces(p)
-	p.at = p.at + 2
+	p.at += 2
 	skip_spaces(p)
 	Key(head, Op.Define, expression(p, 0))
 }
@@ -1912,15 +1916,15 @@ UNCAUGHT_ERROR = HiddenWord.UncaughtError as text
 CAUGHT_ERROR = HiddenWord.CaughtError as text
 
 // `try` or `assert` followed by an operand
-def guard_word_at(p: Parser, word: text): bool := word in GUARD_MARKERS and " \t{:".contains(peek(p.code, p.at + word.length, p.n))
+def guard_word_at(p: Parser, word: text): bool := word in GUARD_MARKERS and " \t{:".contains(char_ahead(p, word.length))
 
 // `try X else Y`, `assert C else X`: the marker call `marker(X, Y)`; `try X catch e {e}` adds the caught name the
 // fallback reads, `r = try X` keeps X's Error as the value, `assert C` alone fails naming C as written
 def guarded(p: Parser, word: text): Node := {
 	marker = GUARD_MARKERS[word]
-	p.at = p.at + word.length
+	p.at += word.length
 	skip_spaces(p)
-	python_block = is_at(p.code, p.at, ':', p.n)
+	python_block = at_char(p, ':')
 	skip_python_colon(p)
 	start = p.at
 	guarded_part = guarded_phrase(p)
@@ -1983,8 +1987,8 @@ def reads_name(n: Node, name: text): bool := mentions(n, name) or has_hole(n, co
 
 // `try: x` as Python writes it; the block may start on the next line
 def skip_python_colon(p: Parser) {
-	if is_at(p.code, p.at, ':', p.n) {
-		p.at = p.at + 1
+	if at_char(p, ':') {
+		advance(p)
 		skip_blanks(p)
 	}
 }
@@ -1999,15 +2003,15 @@ def fallback_word_ahead(p: Parser): text {
 // `catch e`, `except ZeroDivisionError`, `except ValueError as e`: [the name the Error is bound to, the class it must
 // be], "" for none
 def caught_parts(p: Parser, fallback_word: text): list {
-	if not is_name_start(peek(p.code, p.at, p.n)) { return ["", ""] }
+	if not is_name_start(char_here(p)) { return ["", ""] }
 	first = word_at(p)
-	p.at = p.at + first.length
+	p.at += first.length
 	skip_spaces(p)
 	if keyword_at(p, "as") {
-		p.at = p.at + 2
+		p.at += 2
 		skip_spaces(p)
 		name = word_at(p)
-		p.at = p.at + name.length
+		p.at += name.length
 		skip_spaces(p)
 		return [name, first]
 	}
@@ -2016,16 +2020,16 @@ def caught_parts(p: Parser, fallback_word: text): list {
 
 // Either part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else print 3`)
 def guarded_phrase(p: Parser): Node := {
-	outer = p.group.in_branch
-	p.group.in_branch = true
-	phrase_parts = [expression(p, 0)]
+	parts = with_field(p.group, "in_branch", true, () => guarded_parts(p))
+	if parts.length == 1 then parts#1 else spaced(parts)
+}
+def guarded_parts(p: Parser): list := {
+	parts = [expression(p, 0)]
 	while true {
 		skip_spaces(p)
-		if fallback_word_ahead(p) or keyword_at(p, "finally") or not starts_atom(p) { break }
-		phrase_parts = phrase_parts + [expression(p, 0)]
+		if fallback_word_ahead(p) or keyword_at(p, "finally") or not starts_atom(p) { return parts }
+		parts += [expression(p, 0)]
 	}
-	p.group.in_branch = outer
-	if phrase_parts.length == 1 then phrase_parts#1 else spaced(phrase_parts)
 }
 
 // `… finally {Z}` after a guard: `(finally·N = guard; Z; finally·N)`, Z runs and the guard's value stays
@@ -2033,15 +2037,15 @@ def with_finally(p: Parser, guard: Node): Node := {
 	if not keyword_at_position(p, "finally", p.resumes[p.at]) { return guard }
 	p.at = p.resumes[p.at] + 7
 	skip_spaces(p)
-	cleanup = if is_at(p.code, p.at, ':', p.n) then colon_body(p, 1) else statement_words(p)
-	p.finally_blocks = p.finally_blocks + 1
+	cleanup = if at_char(p, ':') then colon_body(p, 1) else statement_words(p)
+	p.finally_blocks += 1
 	value = symbol("finally·" + str(p.finally_blocks))
 	listed(Bracket.Round, Separator.Semicolon, [Key(value, Op.Assign, guard), cleanup, value])
 }
 
 // An expression's start: a prefix operator and its operand, else an atom
 def prefixed(p: Parser): Node := {
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	if starts_path(p) { return path_literal(p) }
 	prefixed_operand = read_prefix(p)
 	if prefixed_operand != ø { return prefixed_operand }
@@ -2054,7 +2058,7 @@ def prefixed(p: Parser): Node := {
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
 	if form == "condition" {
-		p.at = p.at + word.length
+		p.at += word.length
 		skip_spaces(p)
 		return conditioned(CONTROL_WORDS[word], control_condition(word, condition_expression(p)), p)
 	}
@@ -2078,12 +2082,12 @@ def prefixed(p: Parser): Node := {
 	}
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else ø
 	if declared != ø { return declared }
-	if word == DATA_WORD and peek(p.code, p.at + word.length, p.n) == ' ' {
+	if word == DATA_WORD and char_ahead(p, word.length) == ' ' {
 		literal = data_literal(p)
 		if literal != ø { return literal }
 	}
 	if form == "not" or no_asks_emptiness(p, word) {
-		p.at = p.at + word.length
+		p.at += word.length
 		skip_spaces(p)
 		return Key(ø, Op.Not, expression(p, 105))
 	}
@@ -2095,9 +2099,9 @@ def prefixed(p: Parser): Node := {
 DATA_WORD = "data"
 def data_literal(p: Parser): Node := {
 	before = p.at
-	p.at = p.at + DATA_WORD.length
+	p.at += DATA_WORD.length
 	skip_spaces(p)
-	if "}]);,\n\r".contains(peek(p.code, p.at, p.n)) or operator_at(p).length > 0 or word_at(p) == "class" {
+	if "}]);,\n\r".contains(char_here(p)) or operator_at(p).length > 0 or word_at(p) == "class" {
 		p.at = before
 		return ø
 	}
@@ -2114,7 +2118,7 @@ def data_literal(p: Parser): Node := {
 def no_asks_emptiness(p: Parser, word: text): bool {
 	if word != "no" or not p.header or not operand_follows(p, 2) { return false }
 	after = blank_end(p, p.at + 2)
-	if "{:".contains(peek(p.code, after, p.n)) { return false }
+	if "{:".contains(char_at(p, after)) { return false }
 	follower = p.code[after .. name_end(p.code, after, p.n)]
 	not word_operators().any(pair => pair#1 == follower)
 }
@@ -2130,7 +2134,7 @@ PREFIX_POWER = 162
 DASH_GLYPHS = "‐‑‒–—―−"
 
 // The circumfix operator opening at the parser's position as [opening, closing, function], else []
-def circumfix_at(p: Parser): Circumfix? := p.circumfixes.find(circumfix => starts_at(p.code, circumfix.opening, p.at, p.n))
+def circumfix_at(p: Parser): Circumfix? := p.circumfixes.find(circumfix => at_text(p, circumfix.opening))
 // The glyph opens or closes a circumfix operator: `⌋` is no free symbol
 def is_circumfix_glyph(p: Parser, glyph: text): bool := p.circumfixes.any(circumfix => circumfix.opening == glyph or circumfix.closing == glyph)
 // Where the circumfix pair opened before `from` closes, past the pairs nested in it, else n
@@ -2163,15 +2167,15 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	if head != ø { return head }
 	alone = operator_value(p)
 	if alone != ø { return alone }
-	next = peek(p.code, p.at + 1, p.n)
+	next = char_ahead(p, 1)
 	reference = reference_prefix_length(p, c, next)
 	if reference > 0 {
-		p.at = p.at + reference
+		p.at += reference
 		return prefixed(p)
 	}
 	if (c == '-' or DASH_GLYPHS.contains(c)) and next != '>' and next != '-' {
 		sign = p.at
-		p.at = p.at + 1
+		advance(p)
 		skip_spaces(p)
 		operand = expression(p, 155)
 		// `-7` is the number, written where its sign is
@@ -2181,15 +2185,15 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	}
 	// `+5` is 5, `+x` x: a glued plus is the sign of its operand (it was the symbol '+' beside it)
 	if c == '+' and next != '+' and next != '=' and not is_blank(next) and operand_follows(p, 1) {
-		p.at = p.at + 1
+		advance(p)
 		return expression(p, 155)
 	}
 	if c == '!' or c == '¬' {
-		p.at = p.at + 1
+		advance(p)
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	if c == '#' and not is_blank(next) {
-		p.at = p.at + 1
+		advance(p)
 		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
 	circumfix = circumfix_at(p)
@@ -2205,9 +2209,9 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	// subject; a glued `<tag` stays a bracket
 	if c == '<' or c == '>' {
 		relation = if next == '=' then "" + c + "=" else "" + c
-		spacing = peek(p.code, p.at + relation.length, p.n)
+		spacing = char_ahead(p, relation.length)
 		if spacing == ' ' or spacing == '\t' {
-			p.at = p.at + relation.length
+			p.at += relation.length
 			skip_spaces(p)
 			return keyed(relation, ø, expression(p, binding_powers(relation)#2))
 		}
@@ -2216,7 +2220,7 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		parameters = pipe_parameters(p)
 		// the body binds as after `=>`: it takes an assignment, `|x| total += x`
 		// `do |item|⏎  print item⏎end`: the rest of the block is the body
-		body_below = parameters != ø and is_at(p.code, p.at, '\n', p.n)
+		body_below = parameters != ø and at_char(p, '\n')
 		if body_below { return keyed("->", parameters, single_statement_or_block(items_until(p, Bracket.Curly, ItemsEnd.Rest))) }
 		if parameters != ø { return keyed("->", parameters, expression(p, binding_powers("=>")#2)) }
 	}
@@ -2251,7 +2255,7 @@ def reference_prefix_length(p: Parser, c: text, next: text): int {
 MUT_WORD = "mut"
 def mutable_reference_at(p: Parser): bool {
 	end = name_end(p.code, p.at + 1, p.n)
-	p.code[p.at + 1 .. end] == MUT_WORD and is_spacing(peek(p.code, end, p.n))
+	p.code[p.at + 1 .. end] == MUT_WORD and is_spacing(char_at(p, end))
 }
 def is_spacing(c: text): bool := c == ' ' or c == '\t'
 
@@ -2259,14 +2263,14 @@ def is_spacing(c: text): bool := c == ' ' or c == '\t'
 // statement's start before a comma or `=`, gathers or spreads items
 def star_is_rest_or_spread(p: Parser): bool {
 	back = p.at - 1
-	while back >= 0 and is_spacing(p.code[back]) { back = back - 1 }
+	while back >= 0 and is_spacing(p.code[back]) { back -= 1 }
 	before = if back < 0 then '\n' else p.code[back]
 	if before == ',' or before == '(' or before == '[' { return true }
 	if not (before == '\n' or before == ';' or before == '{') { return false }
 	end = name_end(p.code, p.at + 1, p.n)
 	after = end
-	while is_spacing(peek(p.code, after, p.n)) { after = after + 1 }
-	peek(p.code, after, p.n) == ',' or (peek(p.code, after, p.n) == '=' and peek(p.code, end + 1, p.n) != '=')
+	while is_spacing(char_at(p, after)) { after += 1 }
+	char_at(p, after) == ',' or (char_at(p, after) == '=' and char_at(p, end + 1) != '=')
 }
 
 // `sorted(xs, >)`, `fold(xs, +)`, `[<, >=]`: an operator standing alone before a closing parenthesis or bracket or a
@@ -2274,10 +2278,10 @@ def star_is_rest_or_spread(p: Parser): bool {
 def operator_value(p: Parser): Node := {
 	found = operator_at(p)
 	if found.length == 0 { return ø }
-	next_char = peek(p.code, blank_end(p, p.at + found#1.length), p.n)
+	next_char = char_at(p, blank_end(p, p.at + found#1.length))
 	ends_rest = next_char == '}' and (found#2 == ".." or found#2 == "to")
 	if not (next_char == ')' or next_char == ',' or next_char == ']' or ends_rest) { return ø }
-	p.at = p.at + found#1.length
+	p.at += found#1.length
 	keyed(found#2, ø, ø)
 }
 
@@ -2287,7 +2291,7 @@ STAR_PREFIXES = [["...", "*"], ["**", "**"], ["*", "*"]]
 def starred_name(p: Parser): Node := {
 	for prefix in STAR_PREFIXES {
 		start = p.at + prefix#1.length
-		if starts_at(p.code, prefix#1, p.at, p.n) and is_name_start(peek(p.code, start, p.n)) {
+		if at_text(p, prefix#1) and is_name_start(char_at(p, start)) {
 			end = name_end(p.code, start, p.n)
 			p.at = end
 			return symbol(prefix#2 + p.code[start .. end])
@@ -2300,12 +2304,12 @@ def starred_name(p: Parser): Node := {
 // placed on the body after them (in a block also on the lines below); ø (nothing consumed) when no names between bars and a body follow
 def pipe_parameters(p: Parser): Node := {
 	close = p.at + 1
-	while close < p.n and (" ,".contains(p.code[close]) or is_name_char(p.code[close])) { close = close + 1 }
+	while close < p.n and (" ,".contains(p.code[close]) or is_name_char(p.code[close])) { close += 1 }
 	names = p.code[p.at + 1 .. close].split(' ').join(",").split(',').filter(name => name)
 	body = spaces_end(p, close + 1)
 	// Ruby's `do |item|⏎ … end`, `{ |x|⏎ … }`: inside a block the body may start on the next line
 	body_below = is_at(p.code, body, '\n', p.n) and (p.group.grouped or p.group.stops_at_end)
-	if peek(p.code, close, p.n) != '|' or count(names) == 0 or not is_name_start(names#1#1) or body >= p.n or ("\n;,)]}".contains(p.code[body]) and not body_below) { return ø }
+	if char_at(p, close) != '|' or count(names) == 0 or not is_name_start(names#1#1) or body >= p.n or ("\n;,)]}".contains(p.code[body]) and not body_below) { return ø }
 	p.at = body
 	if names.length == 1 then symbol(names#1) else listed(Bracket.Round, Separator.Comma, names.map(name => symbol(name)))
 }
@@ -2319,20 +2323,20 @@ def single_statement_or_block(block: Node): Node := {
 // `:post` (wiki/symbol.md): the symbol itself, written as the call symbol("post"), never evaluated
 def explicit_symbol_at(p: Parser): bool {
 	before = if p.at == 0 then ' ' else p.code[p.at - 1]
-	is_name_start(peek(p.code, p.at + 1, p.n)) and (is_blank(before) or "([{,=".contains(before))
+	is_name_start(char_ahead(p, 1)) and (is_blank(before) or "([{,=".contains(before))
 }
 
 // `return x`, `return` alone: ø; `return = 1` assigns a name
 def returned(p: Parser): Node := {
 	before = p.at
-	p.at = p.at + 6
+	p.at += 6
 	skip_spaces(p)
 	op = operator_at(p)
 	if op.length > 0 and binding_operators.contains(op#2) {
 		p.at = before
 		return atom(p)
 	}
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	value = ø
 	if not (c == '}' or c == ';' or c == '\n' or c == '\r') { value = continued(p, expression(p, 59), 0) }
 	// `return` alone is the word
@@ -2343,18 +2347,12 @@ def returned(p: Parser): Node := {
 CONDITION_POWER = 81
 // The condition of `if` and `while`: a braceless call takes a variable argument as in a branch (`if area certainly > 10
 // then`, `while square i < 10`)
-def condition_expression(p: Parser): Node := {
-	outer = p.branch_power
-	p.branch_power = CONDITION_POWER
-	value = header_expression(p, CONDITION_POWER)
-	p.branch_power = outer
-	value
-}
+def condition_expression(p: Parser): Node := with_field(p, "branch_power", CONDITION_POWER, () => header_expression(p, CONDITION_POWER))
 
 // Rust's `loop { … }` as `while true { … }`, ø when no block follows the word
 def endless_loop(p: Parser): Node := {
 	at = blank_end(p, p.at + 4)
-	if not is_at(p.code, at, '{', p.n) { return ø }
+	if char_at(p, at) != '{' { return ø }
 	p.at = at + 1
 	Key(Key(ø, Op.While, true), Op.Do, items_until(p, Bracket.Curly, ItemsEnd.Closer))
 }
@@ -2364,21 +2362,15 @@ def endless_loop(p: Parser): Node := {
 def conditioned(word: text, condition: Node, p: Parser): Node := {
 	skip_spaces(p)
 	body = ø
-	if is_at(p.code, p.at, ':', p.n) {
+	if at_char(p, ':') {
 		// `if c: x = 1 else: x = 2`: the body ends before the else
-		outer = p.group.in_branch
-		p.group.in_branch = word == "if"
-		body = colon_body(p, 1)
-		p.group.in_branch = outer
-	} else if is_at(p.code, p.at, '{', p.n) {
-		p.at = p.at + 1
+		body = with_field(p.group, "in_branch", word == "if", () => colon_body(p, 1))
+	} else if at_char(p, '{') {
+		advance(p)
 		body = items_until(p, Bracket.Curly, ItemsEnd.Closer)
 	} else if at_body_start(p) {
 		// `if a == 1 print "ok"`, `if (x < 0) return -1`, `while (i < 9) i++`: the statement on the condition's line
-		outer = p.group.in_branch
-		p.group.in_branch = word == "if"
-		body = statement_words(p)
-		p.group.in_branch = outer
+		body = with_field(p.group, "in_branch", word == "if", () => statement_words(p))
 	} else {
 		// `while m > 1` ending its line: the lines indented below; without
 		// them `while x-- > 0` is a loop without a body, its condition does the work; `while c do …` takes its body
@@ -2419,7 +2411,7 @@ def bare_control(n: Node, control: text): bool := match n {
 def command_with(nodes: list, tail: Node): Node := spaced(nodes[0 .. nodes.length - 1] + [tail])
 
 // `:` (no `:=`) or `{`: where a `to` header ends and its body starts
-def at_to_header_end(p: Parser): bool := (is_at(p.code, p.at, ':', p.n) and peek(p.code, p.at + 1, p.n) != '=') or is_at(p.code, p.at, '{', p.n)
+def at_to_header_end(p: Parser): bool := (at_char(p, ':') and char_ahead(p, 1) != '=') or at_char(p, '{')
 
 // A type word, its plural (`numbers`) or a type the source declares
 def known_type(word: text, types: list): bool := is_type_word(word) or plural_type_word(word) or types.contains(word)
@@ -2436,38 +2428,32 @@ def at_body_start(p: Parser): bool {
 def else_branch(p: Parser): list {
 	skip_spaces(p)
 	at = p.at
-	while at < p.n and is_blank(p.code[at]) { at = at + 1 }
+	while at < p.n and is_blank(p.code[at]) { at += 1 }
 	if at > p.at and p.code[p.at .. at].contains("\n") and keyword_at_position(p, "else", at) { p.at = at }
 	if else_if_at(p) {
-		p.at = p.at + word_at(p).length
+		p.at += word_at(p).length
 		skip_spaces(p)
 		return [conditioned("if", condition_expression(p), p)]
 	}
 	if not keyword_at(p, "else") { return [] }
-	p.at = p.at + 4
+	p.at += 4
 	skip_spaces(p)
-	if not is_at(p.code, p.at, ':', p.n) { return [branch(p, 74)] }
-	p.at = p.at + 1
+	if not at_char(p, ':') { return [branch(p, 74)] }
+	advance(p)
 	skip_spaces(p)
 	[branch(p, 0)]
 }
 
 // A branch of an if; `then print x, y` and `else print ord x` are the call print(…) of the expressions after it
 // A `then` or `else` branch is a statement: a braceless call there takes a variable, `then count xs`
-def branch(p: Parser, min_power: int): Node := {
-	outer = p.branch_power
-	p.branch_power = min_power
-	value = branch_assignment(p, branch_value(p, min_power), min_power)
-	p.branch_power = outer
-	value
-}
+def branch(p: Parser, min_power: int): Node := with_field(p, "branch_power", min_power, () => branch_assignment(p, branch_value(p, min_power), min_power))
 
 // `if c then s += 5 else s = 0` assigns in the branch, the value stopping at `else`
 def branch_assignment(p: Parser, target: Node, min_power: int): Node := {
 	skip_spaces(p)
 	op = operator_at(p)
 	if op.length == 0 or not assigning_operators.contains(op#2) { return target }
-	p.at = p.at + op#1.length
+	p.at += op#1.length
 	skip_spaces(p)
 	keyed(op#2, target, expression(p, min_power))
 }
@@ -2484,10 +2470,10 @@ def keyword_at_position(p: Parser, word: text, at: int): bool := starts_at(p.cod
 // `for x in xs {…}` or `for each x in xs {…}`: the loop variable, the iterable and the body, else ø, nothing read
 def looped(p: Parser): Node := {
 	before = p.at
-	p.at = p.at + 3
+	p.at += 3
 	skip_spaces(p)
 	if keyword_at(p, "each") and not keyword_at_position(p, "in", spaces_end(p, p.at + 4)) {
-		p.at = p.at + 4
+		p.at += 4
 	}
 	named = named_loop(p)
 	if named != ø { return named }
@@ -2502,7 +2488,7 @@ def looped(p: Parser): Node := {
 
 // `(i=0;i<n;i++)`: a group here whose top level holds a `;`
 def at_c_style_for_head(p: Parser): bool {
-	if not is_at(p.code, p.at, '(', p.n) { return false }
+	if not at_char(p, '(') { return false }
 	at = p.at
 	depth = 0
 	while at < p.n {
@@ -2511,14 +2497,14 @@ def at_c_style_for_head(p: Parser): bool {
 		if skipped > at {
 			at = skipped
 		} else if "([{".contains(c) {
-			depth = depth + 1
+			depth += 1
 		} else if ")]}".contains(c) {
 			if depth == 1 { return false }
-			depth = depth - 1
+			depth -= 1
 		} else if c == ';' and depth == 1 {
 			return true
 		}
-		at = at + 1
+		at += 1
 	}
 	false
 }
@@ -2532,7 +2518,7 @@ def c_style_for(p: Parser): Node := {
 	body = ø
 	if width > 0 {
 		body = colon_body(p, width)
-	} else if is_at(p.code, p.at, '{', p.n) {
+	} else if at_char(p, '{') {
 		body = atom(p)
 	} else {
 		body = indented_block(p)
@@ -2544,7 +2530,7 @@ def c_style_for(p: Parser): Node := {
 // `each x in xs {…}` is `for each x in xs {…}`, else ø, nothing read
 def each_loop(p: Parser): Node := {
 	before = p.at
-	p.at = p.at + 4
+	p.at += 4
 	skip_spaces(p)
 	named = named_loop(p)
 	if named == ø { p.at = before }
@@ -2557,7 +2543,7 @@ def named_loop(p: Parser): Node := {
 	if variable == ø { return ø }
 	skip_spaces(p)
 	if not keyword_at(p, "in") { return ø }
-	p.at = p.at + 2
+	p.at += 2
 	skip_spaces(p)
 	iterable = iterable_words(p)
 	skip_spaces(p)
@@ -2575,9 +2561,9 @@ def iterable_words(p: Parser): Node := {
 	while true {
 		skip_spaces(p)
 		start = p.at
-		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or comprehension_clause_at(p) or comprehension_filter_at(p) { break }
+		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(char_here(p)) or keyword_at(p, "if") or comprehension_clause_at(p) or comprehension_filter_at(p) { break }
 		// a rule's hole after the iterable is the loop's body, `for $i in 1 to $n $body` (card sugar-comprehensions)
-		if words.length == 1 and is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n)) {
+		if words.length == 1 and at_char(p, '$') and is_name_start(char_ahead(p, 1)) {
 			p.iterable = false
 			return first
 		}
@@ -2585,7 +2571,7 @@ def iterable_words(p: Parser): Node := {
 		if p.at == start { break }
 	}
 	p.iterable = false
-	ends_clause = in_comprehension(p) and (p.at >= p.n or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or keyword_at(p, "for") or keyword_at(p, "where"))
+	ends_clause = in_comprehension(p) and (p.at >= p.n or ITERABLE_ENDS.contains(char_here(p)) or keyword_at(p, "if") or keyword_at(p, "for") or keyword_at(p, "where"))
 	if words.length == 1 or not (at_loop_body(p) or ends_clause) {
 		p.at = after_first
 		return first
@@ -2597,8 +2583,8 @@ ITERABLE_ENDS = ";}]),"
 
 // A loop's body starts here: `{…}`, `: …`, `do …`, or the next line
 def at_loop_body(p: Parser): bool {
-	c = peek(p.code, p.at, p.n)
-	c == '{' or c == ':' or c == '\n' or starts_at(p.code, "//", p.at, p.n) or keyword_at(p, "do") or body_hole_at(p)
+	c = char_here(p)
+	c == '{' or c == ':' or c == '\n' or at_text(p, "//") or keyword_at(p, "do") or body_hole_at(p)
 }
 
 // In a list or braces, where a loop is a comprehension's clause: `[x * 2 for x in reverse xs]`
@@ -2613,7 +2599,7 @@ def comprehension_filter_at(p: Parser): bool := p.iterable and in_comprehension(
 // closer or the rule's `where`; in a comprehension the loop is an each clause (`[$c for $c in cases of $e]`), its
 // iterable ending there
 def body_hole_at(p: Parser): bool {
-	if in_comprehension(p) or not (is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n))) { return false }
+	if in_comprehension(p) or not (at_char(p, '$') and is_name_start(char_ahead(p, 1))) { return false }
 	after = spaces_end(p, name_end(p.code, p.at + 1, p.n))
 	after >= p.n or "\n;)}]".contains(p.code[after]) or keyword_at_position(p, "where", after)
 }
@@ -2627,7 +2613,7 @@ def ranged_loop(p: Parser): Node := {
 	body = ø
 	if width > 0 {
 		body = colon_body(p, width)
-	} else if is_at(p.code, p.at, '{', p.n) {
+	} else if at_char(p, '{') {
 		body = atom(p)
 	} else {
 		body = indented_block(p)
@@ -2641,9 +2627,9 @@ def ranged_loop(p: Parser): Node := {
 def loop_body(p: Parser): Node := {
 	width = body_word_width(p)
 	if width == 2 {
-		p.at = p.at + width
+		p.at += width
 		if closing_end_follows(p, END_BLOCK_OPENERS) { return end_block(p, false) }
-		p.at = p.at - width
+		p.at -= width
 	}
 	if width > 0 { return colon_body(p, width) }
 	block = indented_block(p)
@@ -2657,7 +2643,7 @@ def loop_body(p: Parser): Node := {
 }
 
 def body_word_width(p: Parser): int {
-	if is_at(p.code, p.at, ':', p.n) { return 1 }
+	if at_char(p, ':') { return 1 }
 	if keyword_at(p, "do") { return 2 }
 	0
 }
@@ -2666,7 +2652,7 @@ def body_word_width(p: Parser): int {
 def statement_words(p: Parser): Node := {
 	words = words_binding(p, 0)
 	// `for i in 1…3: print i, i*2` prints both
-	if words.length >= 2 and words#1 == PRINT and is_at(p.code, p.at, ',', p.n) { return print_call_from(p, one_expression(words[1:]), 0) }
+	if words.length >= 2 and words#1 == PRINT and at_char(p, ',') { return print_call_from(p, one_expression(words[1:]), 0) }
 	if words.length == 1 { return words#1 }
 	phrase(Bracket.None, words)
 }
@@ -2687,8 +2673,8 @@ def one_expression(words: list): Node := if words.length == 1 then words#1 else 
 // The call print(first, …): the arguments after `first` follow commas, each the words up to the next one
 def print_call_from(p: Parser, first: Node, min_power: int): Node := {
 	arguments = [first]
-	while is_at(p.code, p.at, ',', p.n) {
-		p.at = p.at + 1
+	while at_char(p, ',') {
+		advance(p)
 		skip_spaces(p)
 		arguments += [one_expression(words_binding(p, min_power))]
 	}
@@ -2702,33 +2688,33 @@ def else_if_at(p: Parser): bool := keyword_form(word_at(p)) == "else if"
 def starts_atom(p: Parser): bool := starts_atom_at(p, p.at)
 
 def starts_atom_at(p: Parser, at: int): bool {
-	c = peek(p.code, at, p.n)
-	is_name_start(c) or is_digit(c) or opens_text(c) or c == '(' or c == '[' or c == '{' or (c == '@' and is_name_start(peek(p.code, at + 1, p.n))) or starts_path_at(p, at)
+	c = char_at(p, at)
+	is_name_start(c) or is_digit(c) or opens_text(c) or c == '(' or c == '[' or c == '{' or (c == '@' and is_name_start(char_at(p, at + 1))) or starts_path_at(p, at)
 }
 
 // `x`, `k, v` or `(k, v)`: the names a loop gives each item, else ø
 def loop_variable(p: Parser): Node := {
 	bracket = Bracket.None
-	if is_at(p.code, p.at, '(', p.n) {
+	if at_char(p, '(') {
 		bracket = Bracket.Round
-		p.at = p.at + 1
+		advance(p)
 	}
 	names = []
 	while true {
 		skip_spaces(p)
 		// a rule's name hole `$item` stands for the name: `for $item in $xs {…}`
-		hole = if is_at(p.code, p.at, '$', p.n) then 1 else 0
-		if not is_name_start(peek(p.code, p.at + hole, p.n)) { return ø }
+		hole = if at_char(p, '$') then 1 else 0
+		if not is_name_start(char_ahead(p, hole)) { return ø }
 		end = name_end(p.code, p.at + hole, p.n)
 		names = names + [symbol(p.code[p.at .. end])]
 		p.at = end
 		skip_spaces(p)
-		if not is_at(p.code, p.at, ',', p.n) { break }
-		p.at = p.at + 1
+		if not at_char(p, ',') { break }
+		advance(p)
 	}
 	if bracket == Bracket.Round {
-		if not is_at(p.code, p.at, ')', p.n) { return ø }
-		p.at = p.at + 1
+		if not at_char(p, ')') { return ø }
+		advance(p)
 	}
 	if names.length == 1 { return names#1 }
 	listed(bracket, Separator.Comma, names)
@@ -2754,13 +2740,13 @@ def placed_at(p: Parser, n: Node, start: int): Node := {
 // a node keeps the column it is written at (core/extension.warp source_passes)
 def shifted(p: Parser, line_start: int, at: int): int {
 	columns = 0
-	for shift in p.shifts { if shift#1 > line_start and shift#1 <= at { columns = columns + shift#2 } }
+	for shift in p.shifts { if shift#1 > line_start and shift#1 <= at { columns += shift#2 } }
 	columns
 }
 // The offset in the parsed code of a written column of the line from `line_start`: shifted's inverse
 def code_offset(p: Parser, line_start: int, column: int): int {
 	at = line_start + column - 1
-	while at - line_start + shifted(p, line_start, at) > column - 1 { at = at - 1 }
+	while at - line_start + shifted(p, line_start, at) > column - 1 { at -= 1 }
 	at
 }
 
@@ -2852,7 +2838,7 @@ def number_atom(p: Parser): Node := {
 		if form != ø { return form }
 	}
 	// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
-	glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
+	glued_type = if char_here(p) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
 	if NUMBER_TYPE_WORDS.contains(glued_type) {
 		p.at += 1 + glued_type.length
 		return Key(written_number(written), Op.As, symbol(glued_type))
@@ -2868,16 +2854,16 @@ def number_atom(p: Parser): Node := {
 // `.5` is 0.5, `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case),
 // also a rule's `.$k`
 def dot_atom(p: Parser): Node := {
-	next = peek(p.code, p.at + 1, p.n)
+	next = char_ahead(p, 1)
 	if is_digit(next) { return decimal_value("0" + decimal_number(p)) }
 	if next == '.' { return starred_name(p) }
 	if not (is_name_start(next) or next == '$') { return ø }
-	p.at += 1
+	advance(p)
 	Key(ø, Op.Dot, atom(p))
 }
 // `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
 def unknown_entity(p: Parser): Node := {
-	if not is_at(p.code, p.at + 1, ':', p.n) or not is_alpha(peek(p.code, p.at + 2, p.n)) { return ø }
+	if char_ahead(p, 1) != ':' or not is_alpha(char_ahead(p, 2)) { return ø }
 	end = name_end(p.code, p.at + 2, p.n)
 	unknown = "" + p.code[p.at .. end]
 	p.at = end
@@ -2886,7 +2872,7 @@ def unknown_entity(p: Parser): Node := {
 // `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter. `$f(x)`, `$f(x) {…}`: a hole
 // applied reads as the name it stands for applied, its arguments read as a call's (typed_parameters): `$f($x)`
 def pattern_hole(p: Parser): Node := {
-	next = peek(p.code, p.at + 1, p.n)
+	next = char_ahead(p, 1)
 	if not (is_name_start(next) or is_digit(next)) { return ø }
 	end = symbol_end(p.code, p.at + 1, p.n)
 	hole = symbol(p.code[p.at .. end])
@@ -2895,7 +2881,7 @@ def pattern_hole(p: Parser): Node := {
 }
 // `@name` marks the atom after it (attribute); `@1` is the node whose @id is 1
 def at_atom(p: Parser): Node := {
-	next = peek(p.code, p.at + 1, p.n)
+	next = char_ahead(p, 1)
 	if is_name_start(next) { return attribute(p) }
 	if not is_digit(next) { return ø }
 	end = p.at + 1
@@ -2906,18 +2892,13 @@ def at_atom(p: Parser): Node := {
 }
 def group_atom(p: Parser): Node := {
 	c = p.code[p.at]
-	p.at += 1
-	outer = p.header
-	outer_iterable = p.iterable
-	p.header = outer and c == '('
-	p.iterable = outer_iterable and c == '('
-	group = if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)
-	p.header = outer
-	p.iterable = outer_iterable
+	advance(p)
+	round = c == '('
+	group = with_field(p, "header", p.header and round, () => with_field(p, "iterable", p.iterable and round, () => if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)))
 	// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
 	union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
 	if union == ø { return group }
-	p.at += 1
+	advance(p)
 	symbol(union + "?")
 }
 def truth_atom(p: Parser): Node := {
@@ -2928,7 +2909,7 @@ def truth_atom(p: Parser): Node := {
 }
 def exact_atom(p: Parser): Node := {
 	constant = "$(p.code[p.at])"
-	p.at += 1
+	advance(p)
 	exact_constant(constant)
 }
 // `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing); a closer ends the atoms. Every
@@ -2937,12 +2918,12 @@ def exact_atom(p: Parser): Node := {
 def character_atom(p: Parser, c: text): Node := {
 	if c == ')' or c == ']' or c == '}' or c == ';' { return ø }
 	if c == 'ø' or c == '∅' {
-		p.at += 1
+		advance(p)
 		return ø
 	}
 	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)
 	if opens_text(code_points("$(c)")#1) { return quoted(p) }
-	p.at += 1
+	advance(p)
 	if is_free_symbol(p, c) then symbol("$(c)") else c
 }
 
@@ -2952,7 +2933,7 @@ TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", 
 FALSE_GLYPHS = ["⊥", "❌", "✗"]
 TRUTH_GLYPH_STARTS = by_first_character(TRUE_GLYPHS + FALSE_GLYPHS, glyph => glyph)
 def truth_glyph_at(p: Parser): text {
-	for glyph in starting_here(TRUTH_GLYPH_STARTS, p, p.at) { if starts_at(p.code, glyph, p.at, p.n) { return glyph } }
+	for glyph in starting_here(TRUTH_GLYPH_STARTS, p, p.at) { if at_text(p, glyph) { return glyph } }
 	""
 }
 
@@ -2968,12 +2949,12 @@ def is_free_symbol(p: Parser, c: text): bool {
 }
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;
 // `[↯ ↯]` and `print ↯` read the glyph as a value
-def free_infix_at(p: Parser, left: Node): bool := left != ø and is_free_symbol(p, peek(p.code, p.at, p.n)) and operand_follows(p, 1) and not is_free_symbol(p, code_after(p, p.at + 1))
+def free_infix_at(p: Parser, left: Node): bool := left != ø and is_free_symbol(p, char_here(p)) and operand_follows(p, 1) and not is_free_symbol(p, code_after(p, p.at + 1))
 
 // The URL after its scheme word, up to a blank, a separator, a closer or a quote
 def url_text(p: Parser, scheme: text): text {
 	end = p.at
-	while end < p.n and not " \t\n\r;)]}>\"',«".contains(p.code[end]) { end = end + 1 }
+	while end < p.n and not " \t\n\r;)]}>\"',«".contains(p.code[end]) { end += 1 }
 	url = scheme + p.code[p.at .. end]
 	p.at = end
 	url
@@ -2985,23 +2966,23 @@ def url_text(p: Parser, scheme: text): text {
 def starts_path(p: Parser): bool := starts_path_at(p, p.at)
 
 def starts_path_at(p: Parser, at: int): bool {
-	c = peek(p.code, at, p.n)
+	c = char_at(p, at)
 	if at > 0 and is_operand_end(p.code[at - 1]) { return false }
 	if c == '.' {
-		dots = if is_at(p.code, at + 1, '.', p.n) then 2 else 1
-		after = peek(p.code, at + dots + 1, p.n)
-		return is_at(p.code, at + dots, '/', p.n) and (not ends_path(after) or not operand_follows_at(p, at + dots + 1))
+		dots = if char_at(p, at + 1) == '.' then 2 else 1
+		after = char_at(p, at + dots + 1)
+		return char_at(p, at + dots) == '/' and (not ends_path(after) or not operand_follows_at(p, at + dots + 1))
 	}
 	// `cd ~` alone; `a ~ b` stays the comparison
-	if c == '~' { return is_at(p.code, at + 1, '/', p.n) or not operand_follows_at(p, at + 1) }
-	if c == '/' { return starts_path_name(peek(p.code, at + 1, p.n)) and not operand_before(p, at) }
+	if c == '~' { return char_at(p, at + 1) == '/' or not operand_follows_at(p, at + 1) }
+	if c == '/' { return starts_path_name(char_at(p, at + 1)) and not operand_before(p, at) }
 	false
 }
 
 // The path at the parser's position, up to a blank, a closer or a separator, as a text
 def path_literal(p: Parser): text {
 	end = p.at
-	while end < p.n and not ends_path(p.code[end]) { end = end + 1 }
+	while end < p.n and not ends_path(p.code[end]) { end += 1 }
 	path = p.code[p.at .. end]
 	p.at = end
 	path
@@ -3014,7 +2995,7 @@ def starts_path_name(c: text): bool := is_name_start(c) or c == '.'
 // Whether an operand ends before the blanks before `start`
 def operand_before(p: Parser, start: int): bool {
 	at = start - 1
-	while at >= 0 and (p.code[at] == ' ' or p.code[at] == '\t') { at = at - 1 }
+	while at >= 0 and (p.code[at] == ' ' or p.code[at] == '\t') { at -= 1 }
 	at >= 0 and is_operand_end(p.code[at])
 }
 
@@ -3032,8 +3013,8 @@ def attribute(p: Parser): Node := {
 	name = p.code[p.at + 1 .. end]
 	p.at = end
 	if after_dot { return key }
-	if is_at(p.code, p.at, ':', p.n) and not is_at(p.code, p.at + 1, '=', p.n) {
-		p.at = p.at + 1
+	if at_char(p, ':') and char_ahead(p, 1) != '=' {
+		advance(p)
 		skip_spaces(p)
 		return Key(key, Op.Colon, atom(p))
 	}
@@ -3044,7 +3025,7 @@ def attribute(p: Parser): Node := {
 
 // The value of `@name(value)`, true for a bare `@name`
 def attribute_value(p: Parser): Node := {
-	if not is_at(p.code, p.at, '(', p.n) { return true }
+	if not at_char(p, '(') { return true }
 	group = atom(p)
 	parts = group_parts(group)
 	if parts != ø and #parts#3 == 1 then parts#3#1 else group
@@ -3054,7 +3035,7 @@ def attribute_value(p: Parser): Node := {
 // expression before it, else ø
 def trailing_attribute(p: Parser, marked: Node): Node := {
 	start = p.at
-	if not is_name_start(peek(p.code, p.at + 1, p.n)) { return ø }
+	if not is_name_start(char_ahead(p, 1)) { return ø }
 	end = name_end(p.code, p.at + 1, p.n)
 	name = p.code[p.at + 1 .. end]
 	p.at = end
@@ -3073,14 +3054,14 @@ VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "
 // `⅓` is the exact 1/3; digits glued after it multiply it
 def vulgar_fraction(p: Parser): Node := {
 	parts = VULGAR_FRACTIONS[p.code[p.at]]
-	p.at += 1
+	advance(p)
 	fraction = keyed("/", int(parts#1), int(parts#2))
-	if is_digit(peek(p.code, p.at, p.n)) then Key(fraction, Op.Mul, atom(p)) else fraction
+	if is_digit(char_here(p)) then Key(fraction, Op.Mul, atom(p)) else fraction
 }
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 def with_glued_factor(p: Parser, amount: Node): Node := {
-	c = peek(p.code, p.at, p.n)
+	c = char_here(p)
 	if not (is_name_start(c) or c == '(' or atom_reader(c) != ø) or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
 	}
@@ -3112,7 +3093,7 @@ def named(p: Parser): Node := {
 		if instruction != ø { return instruction }
 	}
 	if optional_mark_follows(p, word) {
-		p.at = p.at + 1
+		advance(p)
 		return symbol(word + "?")
 	}
 	// `list<int>`, `option<int>`: a type applied to type arguments, the type written in words; a declared `Box<T>`
@@ -3120,7 +3101,7 @@ def named(p: Parser): Node := {
 	type_arguments = if p.types.contains(word) then 0 else type_application_length(p, p.at)
 	if type_arguments > 0 {
 		arguments = p.code[p.at + 1 .. p.at + type_arguments - 1]
-		p.at = p.at + type_arguments
+		p.at += type_arguments
 		return symbol(type_application_name(word, arguments))
 	}
 	constant = if names_case(p, word.length) then "" else keyword_form(word.lower())
@@ -3131,24 +3112,24 @@ def named(p: Parser): Node := {
 	// `https://pannous.com`, `ssh://host`: a URL, the rest of which reads as one text
 	if p.code[p.at .. min(p.at + 3, p.n)] == "://" { return url_text(p, word) }
 	// the Java/C array type `int[]` is the list type `[int]`
-	if starts_at(p.code, "[]", p.at, p.n) and is_type_argument(word) {
-		p.at = p.at + 2
+	if at_text(p, "[]") and is_type_argument(word) {
+		p.at += 2
 		return listed(Bracket.Square, Separator.Space, [symbol(word)])
 	}
 	// Rust's turbofish `sum::<i32>()`, `collect::<Vec<i32>>()`: the type arguments say nothing warp needs, the call is
 	// `sum()`
-	turbofish = if starts_at(p.code, "::", p.at, p.n) then type_application_length(p, p.at + 2) else 0
+	turbofish = if at_text(p, "::") then type_application_length(p, p.at + 2) else 0
 	if turbofish > 0 { p.at = p.at + 2 + turbofish }
 	name = symbol(word)
 	// `x°`: a name glued to an atom an extension reads multiplies it, as `30°` (core/extension.warp atom_readers)
-	if atom_reader(peek(p.code, p.at, p.n)) != ø and not is_alpha(peek(p.code, p.at + 1, p.n)) { return Key(name, Op.Mul, atom(p)) }
+	if atom_reader(char_here(p)) != ø and not is_alpha(char_ahead(p, 1)) { return Key(name, Op.Mul, atom(p)) }
 	// `Point {x: 1}` with blanks constructs a declared type as the glued one does (open decision 41); a capitalized word
 	// of no declared type before a block of fields is the tagged object `Person:{…}` (card person-name)
 	declared = p.types.contains(word)
 	if (declared or is_capitalized(word)) and block_after_blanks(p, declared) { skip_spaces(p) }
-	if is_at(p.code, p.at, '{', p.n) {
+	if at_char(p, '{') {
 		if GLUED_BLOCK_WORDS.contains(word) or word in extension_block_words() { return name }
-		p.at = p.at + 1
+		advance(p)
 		// `Point{x: 1}` of a declared type constructs a point, any other `name{…}` stays the tagged block (D4)
 		return Key(name, if declared then Op.None else Op.Colon, braced_items(p))
 	}
@@ -3157,13 +3138,13 @@ def named(p: Parser): Node := {
 // the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
 // (`f(x) {…}`)
 def name_or_call(p: Parser, name: Node): Node := {
-	if not is_at(p.code, p.at, '(', p.n) { return name }
-	p.at = p.at + 1
+	if not at_char(p, '(') { return name }
+	advance(p)
 	written = items_until(p, Bracket.Round, ItemsEnd.Closer)
 	arguments = typed_parameters(written)
 	skip_spaces(p)
-	if is_at(p.code, p.at, '{', p.n) and not p.header {
-		p.at = p.at + 1
+	if at_char(p, '{') and not p.header {
+		advance(p)
 		body = items_until(p, Bracket.Curly, ItemsEnd.Closer)
 		// the head is the call f(x, y)
 		return call_of([call_of([name] + spread(arguments)), body])
@@ -3178,7 +3159,7 @@ OPTION_HEADS = ["option", "Option"]
 // The length of the type arguments `<int>`, `<list<int>>`, `<text, int>` at `start`, 0 unless every word in them
 // names a type (`i<n>` compares)
 def type_application_length(p: Parser, start: int): int {
-	if not is_at(p.code, start, '<', p.n) { return 0 }
+	if char_at(p, start) != '<' { return 0 }
 	depth = 0
 	words = []
 	// a word is the slice since the last other character, not built a character at a time
@@ -3187,9 +3168,9 @@ def type_application_length(p: Parser, start: int): int {
 		c = p.code[at]
 		if is_alphanumeric(c) or c == '_' or c == '?' { continue }
 		if c == '<' {
-			depth = depth + 1
+			depth += 1
 		} else if c == '>' {
-			depth = depth - 1
+			depth -= 1
 		} else if not ", ()".contains(c) {
 			return 0
 		}
@@ -3218,9 +3199,9 @@ def type_application_name(name: text, arguments: text): text {
 // `x:int?=ø`, `f(x:int?)`, the field `right? }`: the `?` after `word` marks it optional when a closer, `=`, a comment,
 // the next field or a declaration follows; a ternary `?` is followed by its branch instead
 def optional_mark_follows(p: Parser, word: text): bool {
-	if not is_at(p.code, p.at, '?', p.n) { return false }
+	if not at_char(p, '?') { return false }
 	after = p.at + 1
-	ends_optional_type(peek(p.code, after, p.n), peek(p.code, after + 1, p.n)) or closes_after_blanks(p, after) or next_field_follows(p, after) or declaration_follows(p, word, after) or result_body_follows(p, word, after)
+	ends_optional_type(char_at(p, after), char_at(p, after + 1)) or closes_after_blanks(p, after) or next_field_follows(p, after) or declaration_follows(p, word, after) or result_body_follows(p, word, after)
 }
 
 // `def f(x: int): list? {…}`: `word` follows a signature's `):` and spaces or tabs from `at` lead to a `{`, so it is
@@ -3228,13 +3209,13 @@ def optional_mark_follows(p: Parser, word: text): bool {
 def result_body_follows(p: Parser, word: text, at: int): bool {
 	colon = blank_before(p, p.at - word.length)
 	body = spaces_end(p, at)
-	body > at and is_at(p.code, body, '{', p.n) and colon > 0 and is_at(p.code, colon, ':', p.n) and blank_before(p, colon) >= 0 and is_at(p.code, blank_before(p, colon), ')', p.n)
+	body > at and char_at(p, body) == '{' and colon > 0 and char_at(p, colon) == ':' and blank_before(p, colon) >= 0 and char_at(p, blank_before(p, colon)) == ')'
 }
 
 // The position of the last character before `at` that is no blank, -1 at the source's start
 def blank_before(p: Parser, at: int): int {
 	before = at - 1
-	while before >= 0 and is_blank(p.code[before]) { before = before - 1 }
+	while before >= 0 and is_blank(p.code[before]) { before -= 1 }
 	before
 }
 
@@ -3244,15 +3225,15 @@ def ends_optional_type(next: text, after: text): bool := ")]},;\n\r".contains(ne
 // Spaces or tabs from `at`, then a comment or what ends an optional type
 def closes_after_blanks(p: Parser, at: int): bool {
 	end = spaces_end(p, at)
-	comment_starts = is_at(p.code, end, '/', p.n) and "/*".contains(peek(p.code, end + 1, p.n))
-	end > at and (comment_starts or ends_optional_type(peek(p.code, end, p.n), peek(p.code, end + 1, p.n)))
+	comment_starts = char_at(p, end) == '/' and "/*".contains(char_at(p, end + 1))
+	end > at and (comment_starts or ends_optional_type(char_at(p, end), char_at(p, end + 1)))
 }
 
 // Inside a type's body, spaces or tabs from `at`, then the next field `name:` (no `:=`, no `::`)
 def next_field_follows(p: Parser, at: int): bool {
 	start = spaces_end(p, at)
 	colon = name_end(p.code, start, p.n)
-	p.type_body and start > at and colon > start and is_at(p.code, colon, ':', p.n) and not "=:".contains(peek(p.code, colon + 1, p.n))
+	p.type_body and start > at and colon > start and char_at(p, colon) == ':' and not "=:".contains(char_at(p, colon + 1))
 }
 
 // After the type word `word`, spaces or tabs from `at`, then the definition `:=` or a declared name `i =`: `int? i = 3`
@@ -3262,7 +3243,7 @@ def declaration_follows(p: Parser, word: text, at: int): bool {
 	start = spaces_end(p, at)
 	name_after = name_end(p.code, start, p.n)
 	assigned = if name_after == start then start else spaces_end(p, name_after)
-	assigns = if is_at(p.code, assigned, ':', p.n) then peek(p.code, assigned + 1, p.n) == '=' else is_at(p.code, assigned, '=', p.n) and peek(p.code, assigned + 1, p.n) != '='
+	assigns = if char_at(p, assigned) == ':' then char_at(p, assigned + 1) == '=' else char_at(p, assigned) == '=' and char_at(p, assigned + 1) != '='
 	start > at and assigns and (name_after == start or is_type_word(word) or p.types.contains(word))
 }
 
@@ -3273,24 +3254,24 @@ def spaces_end(p: Parser, at: int): int := blanks_end(p.code, at, p.n)
 // the next line)
 def block_after_blanks(p: Parser, assignments: bool): bool {
 	at = blank_end(p, p.at)
-	if at == p.at or not is_at(p.code, at, '{', p.n) { return false }
+	if at == p.at or char_at(p, at) != '{' { return false }
 	first = at + 1
-	while first < p.n and is_blank(p.code[first]) { first = first + 1 }
-	if is_at(p.code, first, '}', p.n) { return true }
+	while first < p.n and is_blank(p.code[first]) { first += 1 }
+	if char_at(p, first) == '}' { return true }
 	end = name_end(p.code, first, p.n)
 	if end == first { return false }
 	after_name = blank_end(p, end)
-	c = peek(p.code, after_name, p.n)
-	following = peek(p.code, after_name + 1, p.n)
+	c = char_at(p, after_name)
+	following = char_at(p, after_name + 1)
 	(c == ':' and following != '=') or (assignments and c == '=' and following != '=')
 }
 
 // `wasm f64.floor`: a function body that is one wasm instruction (decision wasm-instruction-body), ø when no
 // `type.operation` follows
 def wasm_instruction_after(p: Parser): Node := {
-	if not is_at(p.code, p.at, ' ', p.n) { return ø }
+	if not at_char(p, ' ') { return ø }
 	type_end = name_end(p.code, p.at + 1, p.n)
-	if type_end == p.at + 1 or not is_at(p.code, type_end, '.', p.n) { return ø }
+	if type_end == p.at + 1 or char_at(p, type_end) != '.' { return ø }
 	end = name_end(p.code, type_end + 1, p.n)
 	if end == type_end + 1 { return ø }
 	name = p.code[p.at + 1 .. end]
@@ -3302,35 +3283,29 @@ def wasm_instruction_after(p: Parser): Node := {
 // A case of an enum, no constant: `Node.True`, `Node::Empty`, `None` in `enum Bracket { Round, None }`
 // `{empty: yes}`, `Kind = {Empty: 0}`, `class Cell{empty: bool}`: a word naming ø with a `:` glued to it is a name,
 // not with the definition `:=` nor the scope `::`
-def names_key(p: Parser): bool := peek(p.code, p.at, p.n) == ':' and not "=:".contains(peek(p.code, p.at + 1, p.n))
+def names_key(p: Parser): bool := char_here(p) == ':' and not "=:".contains(char_ahead(p, 1))
 
 def names_case(p: Parser, length: int): bool {
 	start = p.at - length
 	if p.enum_cases or (start > 0 and p.code[start - 1] == '.') { return true }
 	if not (start > 1 and p.code[start - 2 .. start] == "::") { return false }
 	scope = start - 2
-	while scope > 0 and is_name_char(p.code[scope - 1]) { scope = scope - 1 }
+	while scope > 0 and is_name_char(p.code[scope - 1]) { scope -= 1 }
 	scope < start - 2 and p.code[scope].upper() == p.code[scope] and p.code[scope].lower() != p.code[scope]
 }
 
 // The items of a `{…}` group, the parser after its `{`; after `enum Name` they are the enum's cases
-def braced_items(p: Parser): Node := {
-	outer = p.enum_cases
-	p.enum_cases = outer or enum_body_at(p)
-	block = items_until(p, Bracket.Curly, ItemsEnd.Closer)
-	p.enum_cases = outer
-	block
-}
+def braced_items(p: Parser): Node := with_field(p, "enum_cases", p.enum_cases or enum_body_at(p), () => items_until(p, Bracket.Curly, ItemsEnd.Closer))
 
 // The `{` just read follows `enum Name`
 def enum_body_at(p: Parser): bool {
 	end = p.at - 1
-	while end > 0 and is_blank(p.code[end - 1]) { end = end - 1 }
+	while end > 0 and is_blank(p.code[end - 1]) { end -= 1 }
 	start = end
-	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
+	while start > 0 and is_name_char(p.code[start - 1]) { start -= 1 }
 	if start == end { return false }
 	keyword_end = start
-	while keyword_end > 0 and is_blank(p.code[keyword_end - 1]) { keyword_end = keyword_end - 1 }
+	while keyword_end > 0 and is_blank(p.code[keyword_end - 1]) { keyword_end -= 1 }
 	keyword_end >= 4 and p.code[keyword_end - 4 .. keyword_end] == "enum" and (keyword_end == 4 or not is_name_char(p.code[keyword_end - 5]))
 }
 
@@ -3437,14 +3412,14 @@ DECLARED_TYPE_WORDS = type_words
 // each; `export` without a name after it stays a word
 def global_declaration(p: Parser, keyword: text): Node := {
 	at = blank_end(p, p.at + keyword.length)
-	if at == p.at + keyword.length or not is_name_start(peek(p.code, at, p.n)) { return ø }
+	if at == p.at + keyword.length or not is_name_start(char_at(p, at)) { return ø }
 	p.at = at
 	type_word = ø
 	while true {
 		end = name_end(p.code, p.at, p.n)
 		word = p.code[p.at .. end]
 		after = blank_end(p, end)
-		if not (DECLARATION_MODIFIERS contains word or DECLARED_TYPE_WORDS contains word) or not is_name_start(peek(p.code, after, p.n)) { break }
+		if not (DECLARATION_MODIFIERS contains word or DECLARED_TYPE_WORDS contains word) or not is_name_start(char_at(p, after)) { break }
 		if DECLARED_TYPE_WORDS contains word { type_word = word }
 		p.at = after
 	}
@@ -3453,8 +3428,8 @@ def global_declaration(p: Parser, keyword: text): Node := {
 	if is_key(declaration, Op.Define) { return declaration }
 	if type_word != ø { declaration = typed_default(declaration, symbol(type_word), declaration) }
 	names = [declaration]
-	while keyword == "global" and is_symbol(names#(names.length)) and is_at(p.code, p.at, ',', p.n) {
-		p.at = p.at + 1
+	while keyword == "global" and is_symbol(names#(names.length)) and at_char(p, ',') {
+		advance(p)
 		skip_spaces(p)
 		names = names + [atom(p)]
 	}
@@ -3485,24 +3460,20 @@ TYPE_BODY_STARTS = "{=:<"
 // `class V { x: int }`, `struct P {…}`, `type Point {…}` as ["type", name, body], else ø with nothing read
 def type_declaration(p: Parser, word: text): Node := {
 	if (p.at > 0 and p.code[p.at - 1] == '.') or not declares_type(p, word) { return ø }
-	outer = p.type_body
-	p.type_body = true
-	declaration = declared_type(p, word)
-	p.type_body = outer
-	declaration
+	with_field(p, "type_body", true, () => declared_type(p, word))
 }
 
 // `class:"btn"`, `type = "text"` are keys and `type(x)`, `type 3.5` the type of a value: a declaration names its type,
 // after `type` a capital name or a name with its body
 def declares_type(p: Parser, word: text): bool {
 	at = blank_end(p, p.at + word.length)
-	c = peek(p.code, at, p.n)
-	if (c == ':' or c == '=') and peek(p.code, at + 1, p.n) != '=' { return false }
+	c = char_at(p, at)
+	if (c == ':' or c == '=') and char_at(p, at + 1) != '=' { return false }
 	if word != "type" { return true }
 	if not is_name_start(c) { return false }
 	end = symbol_end(p.code, at, p.n)
 	after = blank_end(p, end)
-	body_follows = TYPE_BODY_STARTS.contains(peek(p.code, after, p.n)) and peek(p.code, after + 1, p.n) != '='
+	body_follows = TYPE_BODY_STARTS.contains(char_at(p, after)) and char_at(p, after + 1) != '='
 	c.upper() == c or body_follows or p.code[at .. end] == "of"
 }
 
@@ -3511,8 +3482,8 @@ def blank_end(p: Parser, from: int): int {
 	at = from
 	while true {
 		at = spaces_end(p, at)
-		following = peek(p.code, at + 1, p.n)
-		if not is_at(p.code, at, '/', p.n) or not (following == '*' or following == '#') { return at }
+		following = char_at(p, at + 1)
+		if char_at(p, at) != '/' or not (following == '*' or following == '#') { return at }
 		at = block_comment_end(p.code, at, following, p.n)
 	}
 }
@@ -3520,7 +3491,7 @@ def blank_end(p: Parser, from: int): int {
 // The name and `{fields}` of a type declaration; `class Dog extends Animal` carries its parent on the name, a bare
 // `class Marker` is marked and gets an empty body
 def declared_type(p: Parser, word: text): Node := {
-	p.at = p.at + word.length
+	p.at += word.length
 	skip_blanks(p)
 	word_end = symbol_end(p.code, p.at, p.n)
 	joined = joined_type_name(p, p.code[p.at .. word_end], word_end)
@@ -3531,10 +3502,10 @@ def declared_type(p: Parser, word: text): Node := {
 	p.at = end
 	parameters = type_parameters(p)
 	constructor = if CLASS_KEYWORDS.contains(word) then constructor_fields(p) else []
-	ends_statement = ";}\n".contains(peek(p.code, blank_end(p, p.at), p.n))
+	ends_statement = ";}\n".contains(char_at(p, blank_end(p, p.at)))
 	skip_blanks(p)
 	if keyword_at(p, "extends") {
-		p.at = p.at + 7
+		p.at += 7
 		skip_blanks(p)
 		end = symbol_end(p.code, p.at, p.n)
 		name = attributed("extends", symbol(p.code[p.at .. end]), name)
@@ -3542,11 +3513,11 @@ def declared_type(p: Parser, word: text): Node := {
 		skip_blanks(p)
 	}
 	// `class ParseError: Error` ending its line: the parent
-	if is_at(p.code, p.at, ':', p.n) {
+	if at_char(p, ':') {
 		parent_at = blank_end(p, p.at + 1)
 		parent_end = symbol_end(p.code, parent_at, p.n)
-		initial = peek(p.code, parent_at, p.n)
-		if parent_end > parent_at and initial.upper() == initial and initial.lower() != initial and ";\n".contains(peek(p.code, blank_end(p, parent_end), p.n)) {
+		initial = char_at(p, parent_at)
+		if parent_end > parent_at and initial.upper() == initial and initial.lower() != initial and ";\n".contains(char_at(p, blank_end(p, parent_end))) {
 			p.at = parent_end
 			return declared_type_node(attributed("extends", symbol(p.code[parent_at .. parent_end]), name), listed(Bracket.Curly, Separator.None, []))
 		}
@@ -3554,9 +3525,9 @@ def declared_type(p: Parser, word: text): Node := {
 	start = variants_start(p)
 	if start >= 0 { return sum_type(p, name, start, parameters) }
 	// `type Box[T]: { item: T }`
-	if is_at(p.code, p.at, ':', p.n) and peek(p.code, blank_end(p, p.at + 1), p.n) == '{' { p.at = blank_end(p, p.at + 1) }
-	if is_at(p.code, p.at, '{', p.n) {
-		p.at = p.at + 1
+	if at_char(p, ':') and char_at(p, blank_end(p, p.at + 1)) == '{' { p.at = blank_end(p, p.at + 1) }
+	if at_char(p, '{') {
+		advance(p)
 		body = items_until(p, Bracket.Curly, ItemsEnd.Closer)
 		fields = group_parts(body)
 		if fields != ø and fields#1 == "{" { body = class_body(constructor + fields#3, if #constructor > 0 then Separator.Semicolon else fields#2 as Separator, parameters) }
@@ -3574,17 +3545,17 @@ def class_body(fields: list, separator: Separator, parameters: list): Node := li
 // class's first fields, their val, var or let dropped
 CONSTRUCTOR_FIELD_WORDS = ["val", "var", "let"]
 def constructor_fields(p: Parser): list {
-	if not is_at(p.code, p.at, '(', p.n) { return [] }
-	p.at = p.at + 1
+	if not at_char(p, '(') { return [] }
+	advance(p)
 	fields = []
 	while p.at < p.n {
 		skip_blanks(p)
-		if is_at(p.code, p.at, ')', p.n) { p.at = p.at + 1; return fields }
+		if at_char(p, ')') { advance(p); return fields }
 		for word in CONSTRUCTOR_FIELD_WORDS { if keyword_at(p, word) { p.at = blank_end(p, p.at + word.length) } }
 		before = p.at
 		fields += [expression(p, 0)]
 		skip_blanks(p)
-		if is_at(p.code, p.at, ',', p.n) { p.at = p.at + 1 } else if p.at == before { return fields }
+		if at_char(p, ',') { advance(p) } else if p.at == before { return fields }
 	}
 	fields
 }
@@ -3596,8 +3567,8 @@ def declared_type_node(name: Node, body: Node): Node := type_node(name, typed_fi
 // after the `=` or `:` when the declaration lists alternatives one of which carries a payload, else -1
 def variants_start(p: Parser): int {
 	at = space_end(p.code, p.at, p.n)
-	sign = peek(p.code, at, p.n)
-	next = peek(p.code, at + 1, p.n)
+	sign = char_at(p, at)
+	next = char_at(p, at + 1)
 	if not ((sign == '=' and next != '=' and next != '>') or (sign == ':' and next != '=')) { return -1 }
 	start = at + 1
 	depth = 0
@@ -3609,22 +3580,22 @@ def variants_start(p: Parser): int {
 		c = p.code[at]
 		after_word = is_name_char(p.code[at - 1])
 		if depth == 0 and ";)]}".contains(c) { break }
-		if depth == 0 and c == '\n' and peek(p.code, space_end(p.code, at + 1, p.n), p.n) != '|' { break }
+		if depth == 0 and c == '\n' and char_at(p, space_end(p.code, at + 1, p.n)) != '|' { break }
 		if c == '(' and depth == 0 and after_word { payload = true }
 		if "([{".contains(c) {
-			depth = depth + 1
+			depth += 1
 		} else if ")]}".contains(c) {
-			depth = depth - 1
-		} else if c == '|' and depth == 0 and peek(p.code, at + 1, p.n) == '|' {
-			at = at + 1
+			depth -= 1
+		} else if c == '|' and depth == 0 and char_at(p, at + 1) == '|' {
+			at += 1
 		} else if c == '|' and depth == 0 {
 			alternatives = true
 			words = 0
 		} else if depth == 0 and is_name_char(c) and not after_word {
-			words = words + 1
+			words += 1
 			payload = payload or words > 1
 		}
-		at = at + 1
+		at += 1
 	}
 	if alternatives and payload then start else -1
 }
@@ -3632,18 +3603,18 @@ def variants_start(p: Parser): int {
 // `Box[T]`, `Pair<A, B>`: the names of a declared type's parameters, read
 def type_parameters(p: Parser): list {
 	names = []
-	if not (is_at(p.code, p.at, '[', p.n) or is_at(p.code, p.at, '<', p.n)) { return names }
+	if not (at_char(p, '[') or at_char(p, '<')) { return names }
 	closer = if p.code[p.at] == '[' then ']' else '>'
-	p.at = p.at + 1
+	advance(p)
 	while true {
 		p.at = space_end(p.code, p.at, p.n)
 		end = symbol_end(p.code, p.at, p.n)
 		if end == p.at { break }
 		names += [p.code[p.at .. end]]
 		p.at = space_end(p.code, end, p.n)
-		if is_at(p.code, p.at, ',', p.n) { p.at = p.at + 1 }
+		if at_char(p, ',') { advance(p) }
 	}
-	if is_at(p.code, p.at, closer, p.n) { p.at = p.at + 1 }
+	if at_char(p, closer) { advance(p) }
 	names
 }
 
@@ -3655,7 +3626,7 @@ def untyped(field: Node, parameters: list): Node := match field {
 
 def space_end(code: text, from: int, n: int): int {
 	at = from
-	while at < n and " \t\r\n".contains(code[at]) { at = at + 1 }
+	while at < n and " \t\r\n".contains(code[at]) { at += 1 }
 	at
 }
 
@@ -3672,14 +3643,14 @@ def sum_type(p: Parser, name: Node, start: int, parameters: list): Node := {
 		variant = p.code[p.at .. end]
 		p.at = end
 		payload = []
-		if is_at(p.code, p.at, '(', p.n) {
-			p.at = p.at + 1
+		if at_char(p, '(') {
+			advance(p)
 			group = items_until(p, Bracket.Round, ItemsEnd.Closer)
 			payload = if is_list_of(group, "(") then group_parts(group)#3 else [group]
 		}
 		// Elm's `Failure HttpError`: the payload's types after the name
 		skip_spaces(p)
-		while is_name_start(peek(p.code, p.at, p.n)) {
+		while is_name_start(char_here(p)) {
 			end = symbol_end(p.code, p.at, p.n)
 			payload += [symbol(p.code[p.at .. end])]
 			p.at = end
@@ -3687,7 +3658,7 @@ def sum_type(p: Parser, name: Node, start: int, parameters: list): Node := {
 		}
 		if payload.length == 0 { bare += [symbol(variant)] } else { classes += [variant_class(name, variant, payload, parameters)] }
 		after = space_end(p.code, p.at, p.n)
-		if peek(p.code, after, p.n) != '|' { break }
+		if char_at(p, after) != '|' { break }
 		p.at = after + 1
 	}
 	sum_type_of(name, bare, classes)
@@ -3701,18 +3672,18 @@ def enum_values_ahead(p: Parser): bool {
 	at = name_end(p.code, blank_end(p, p.at), p.n)
 	if at == blank_end(p, p.at) { return false }
 	at = space_end(p.code, at, p.n)
-	if not is_at(p.code, at, '{', p.n) { return false }
+	if char_at(p, at) != '{' { return false }
 	depth = 0
 	while at < p.n {
 		c = p.code[at]
 		if c == '(' and depth == 1 and is_name_char(p.code[at - 1]) { return true }
 		if "([{".contains(c) {
-			depth = depth + 1
+			depth += 1
 		} else if ")]}".contains(c) {
 			if depth == 1 { return false }
-			depth = depth - 1
+			depth -= 1
 		}
-		at = at + 1
+		at += 1
 	}
 	false
 }
@@ -3765,7 +3736,7 @@ def variant_class(type_name: Node, variant: text, payload: list, parameters: lis
 	fields = []
 	position = 0
 	for field in payload {
-		position = position + 1
+		position += 1
 		// `(T)` and `(radius: int)` arrive as groups of one
 		if is_list_of(field, "(") and #group_parts(field)#3 == 1 { field = group_parts(field)#3#1 }
 		if is_typed_field(field) {
@@ -3790,24 +3761,24 @@ def is_typed_field(node: Node): bool := match node {
 // point, an exponent
 def decimal_number(p: Parser): text {
 	written = digits_read(p)
-	after_point = peek(p.code, p.at + 1, p.n)
-	if is_at(p.code, p.at, '.', p.n) and after_point != '.' and not is_name_start(after_point) {
-		p.at = p.at + 1
+	after_point = char_ahead(p, 1)
+	if at_char(p, '.') and after_point != '.' and not is_name_start(after_point) {
+		advance(p)
 		written = written + "." + digits_read(p)
 	}
-	e = peek(p.code, p.at, p.n)
-	sign = peek(p.code, p.at + 1, p.n)
-	signed = (sign == '+' or sign == '-') and is_digit(peek(p.code, p.at + 2, p.n))
+	e = char_here(p)
+	sign = char_ahead(p, 1)
+	signed = (sign == '+' or sign == '-') and is_digit(char_ahead(p, 2))
 	if (e == 'e' or e == 'E') and (is_digit(sign) or signed) {
-		p.at = p.at + 1
-		if signed { p.at = p.at + 1 }
+		advance(p)
+		if signed { advance(p) }
 		exponent = digits_read(p)
 		// 1e3 is the exact integer 1000, like the literal it abbreviates
 		if written.contains(".") or sign == '-' { return written + "e" + (if sign == '-' then "-" else "") + exponent }
 		zeros = int(exponent)
 		while zeros > 0 {
 			written = written + "0"
-			zeros = zeros - 1
+			zeros -= 1
 		}
 	}
 	written
@@ -3818,7 +3789,7 @@ def overlined_digits(p: Parser): text {
 	period = ""
 	while p.at < p.n and p.code[p.at].ends_with("̅") and is_digit(p.code[p.at].replace("̅", "")) {
 		period = period + p.code[p.at].replace("̅", "")
-		p.at = p.at + 1
+		advance(p)
 	}
 	period
 }
@@ -3835,7 +3806,7 @@ def ten_to_the(count: int): int {
 	power = 1
 	while count > 0 {
 		power = power * 10
-		count = count - 1
+		count -= 1
 	}
 	power
 }
@@ -3846,13 +3817,13 @@ def digits_read(p: Parser): text {
 	copied = p.at
 	while p.at < p.n {
 		c = p.code[p.at]
-		if c == '_' and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n)) {
+		if c == '_' and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(char_ahead(p, 1)) {
 			parts += [p.code[copied .. p.at]]
 			copied = p.at + 1
 		} else if not is_digit(c) or c.ends_with("̅") {
 			return join(parts + [p.code[copied .. p.at]], "")
 		}
-		p.at = p.at + 1
+		advance(p)
 	}
 	join(parts + [p.code[copied .. p.at]], "")
 }
@@ -3898,25 +3869,25 @@ def template(written: text) {
 		} else if c == '\\' and text_escape_at(written, at, n) != ø {
 			escape = text_escape_at(written, at, n)
 			parts += [written[copied .. at], escape#1]
-			at = at + escape#2
+			at += escape#2
 			copied = at
 		} else if c == '\\' and code_escape(written, at, n) != ø {
 			coded = code_escape(written, at, n)
 			parts += [written[copied .. at], coded#1]
-			at = at + coded#2
+			at += coded#2
 			copied = at
 		} else if c == '\\' and at + 1 < n {
 			literal = escape_character(next)
 			holed = holed or literal == '$'
 			parts += [written[copied .. at], if literal == '$' then "$$" else literal]
-			at = at + 2
+			at += 2
 			copied = at
 		} else if c == '$' {
 			parts += [written[copied .. at], if is_alpha(next) or next == '_' then "$" else "$$"]
-			at = at + 1
+			at += 1
 			copied = at
 		} else {
-			at = at + 1
+			at += 1
 		}
 	}
 	if holed then join(parts + [written[copied .. n]], "") else ø
@@ -3934,20 +3905,20 @@ def unescaped(content: text, interpolates: bool): text {
 		c = content[at]
 		escaped = if at + 1 < content.length then content[at + 1] else ' '
 		if c != '\\' or at + 1 >= content.length {
-			at = at + 1
+			at += 1
 		} else if interpolates and text_escape_at(content, at, content.length) != ø {
 			escape = text_escape_at(content, at, content.length)
 			parts += [content[copied .. at], escape#1]
-			at = at + escape#2
+			at += escape#2
 			copied = at
 		} else if code_escape(content, at, content.length) != ø {
 			coded = code_escape(content, at, content.length)
 			parts += [content[copied .. at], coded#1]
-			at = at + coded#2
+			at += coded#2
 			copied = at
 		} else {
 			parts += [content[copied .. at], escape_character(escaped)]
-			at = at + 2
+			at += 2
 			copied = at
 		}
 	}
@@ -3962,7 +3933,7 @@ def code_escape(written: text, at: int, n: int): list? := {
 	}
 	if kind == 'u' and peek(written, at + 2, n) == '{' {
 		end = at + 3
-		while end < n and is_hex_digit(written[end]) { end = end + 1 }
+		while end < n and is_hex_digit(written[end]) { end += 1 }
 		if end > at + 3 and peek(written, end, n) == '}' { return [hex_value(written[at + 3 .. end]) as codepoint, end + 1 - at] }
 	}
 	ø

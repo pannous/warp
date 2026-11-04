@@ -4,7 +4,7 @@ read_percent(p: Parser, operand: Node, min_power: int): Node := {
 	op = operator_at(p)
 	if op.length == 0 or op#2 != "%" or binding_powers("%")#1 < min_power { return ø }
 	before = p.at
-	p.at = p.at + op#1.length
+	p.at += op#1.length
 	if not percent_ends(p) {
 		p.at = before
 		return ø
@@ -22,5 +22,5 @@ percent_extension = Extension{name: "percent", suffix_readers: [read_percent]}
 def percent_ends(p: Parser): bool := {
 	if line_ends_after(p, p.at) { return true }
 	next = code_after(p, p.at)
-	",;)]}=<>!".contains(next) or keyword_at_position(p, "of", p.resumes[p.at]) or ("+-*/^".contains(next) and is_blank(peek(p.code, p.resumes[p.at] + 1, p.n)))
+	",;)]}=<>!".contains(next) or keyword_at_position(p, "of", p.resumes[p.at]) or ("+-*/^".contains(next) and is_blank(char_at(p, p.resumes[p.at] + 1)))
 }
