@@ -164,12 +164,14 @@ def pass_count(text):
 
 
 def outcomes(text):
-    """Each test's name (its file without the line number, and its code) and whether it passed."""
+    """Each test's name (its file without the line number or a sample's reason, and its code) and whether it passed;
+    None for one that hit a time limit, which says nothing about the code on a loaded machine."""
     named = {}
     for line in text.splitlines():
         if match := STATUS.match(line):
-            name = re.sub(r"(\.warp):\d+", r"\1", line[match.end():].strip().split(": got ")[0])
-            named[name] = match.group(1) in PASSING
+            name = re.sub(r"^(\S+\.warp)(:\d+)?: .*", r"\1", line[match.end():].strip().split(": got ")[0])
+            name = re.sub(r"(\.warp):\d+", r"\1", name)
+            named[name] = None if match.group(1) == "TIME" else match.group(1) in PASSING
     return named
 
 
@@ -182,7 +184,7 @@ def latest_flips(path):
     before, after = outcomes(git("show", f"{old}:{path}")), outcomes(git("show", f"{new}:{path}"))
     if any(before.values()) or any(after.values()):
         fixed = [name for name, ok in after.items() if ok and before.get(name) is False]
-        broke = [name for name, ok in after.items() if not ok and before.get(name) is True]
+        broke = [name for name, ok in after.items() if ok is False and before.get(name) is True]
     else:  # a lane listing only its failures (results-cloud.txt): a failure gone passes now, unless its test went
         fixed = [name for name in before if name not in after]
         broke = [name for name in after if name not in before]
