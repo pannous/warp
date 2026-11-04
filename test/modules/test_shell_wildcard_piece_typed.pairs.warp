@@ -1,0 +1,2 @@
+# Shell wildcards (lib/shell.warp): literal and wildcard characters.
+'use shell; [wildcard_piece("*"), wildcard_piece("?"), wildcard_piece("."), wildcard_piece("a")]'	["[^/]*", "[^/]", "\\.", "a"]
