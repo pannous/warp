@@ -25,3 +25,41 @@ items(m: any): list := entries(m)
 setdefault(m: any, key: any, fallback: any): any := { if not m.has(key) { m[key] = fallback }; m.get(key) }
 // the last entry as [key value], removed from m in place (Python's dict.popitem)
 popitem(m: any): list := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }
+// maps inside maps merged key by key, b's value winning anywhere else (a list or a plain value replaces); a new map,
+// a and b unchanged: deep_merge({a:{x:1 y:2}}, {a:{y:3}}) is {a:{x:1 y:3}}
+deep_merge(a: any, b: any): any := {
+	out = merge({}, a)
+	for k in keys(b) { out[k] = if out.has(k) and is_map(out.get(k)) and is_map(b.get(k)) then deep_merge(out.get(k), b.get(k)) else b.get(k) }
+	out
+}
+is_map(x: any): bool := bracket_of(x) == "{"
+// the entries that f(key, value) holds for
+filter_entries(m: any, f: any): any := { out = {}; for k in keys(m) { if f(k, m.get(k)) { out[k] = m.get(k) } }; out }
+// the same values under the keys f gives (keys, map_keys, already lists the keys); a later entry wins a clash
+transform_keys(m: any, f: any): any := { out = {}; for k in keys(m) { out[f(k)] = m.get(k) }; out }
+// the value at the path, a list of keys of maps and 1-based positions of lists: get_path({a:[{b:5}]}, ["a", 1, "b"])
+// is 5; ø where the path leaves the data (a missing key, a position past the end, a step into a plain value)
+get_path(m: any, path: list): any := {
+	at = m
+	for step in path {
+		if is_map(at) { if not at.has(step) { return ø }; at = at.get(step) }
+		else if at is list and step is int { if step < 1 or step > count(at) { return ø }; at = at#step }
+		else { return ø }
+	}
+	at
+}
+// a new map (or list) with value at the path, the original unchanged; a missing key on the way becomes a new map,
+// a list's position must be one it has
+set_path(m: any, path: list, value: any): any := {
+	if count(path) == 0 { return value }
+	step = path#1
+	rest = path[1:]
+	if m is list and not is_map(m) {
+		if not (step is int) or step < 1 or step > count(m) { raise "set_path: no position " + str(step) + " in a list of " + str(count(m)) }
+		return [if i == step then set_path(m#i, rest, value) else m#i for i in 1 to count(m)]
+	}
+	out = if is_map(m) then merge({}, m) else {}
+	inner = if out.has(step) then out.get(step) else {}
+	out[step] = set_path(inner, rest, value)
+	out
+}
