@@ -1,0 +1,5 @@
+# the article is optional in a type test: x is a number is x is number (decision article-optional, card number-says)
+'x = 2; x is a number'	yes
+'x = 2; x is an int'	yes
+'x = "s"; x is a number'	no
+'a = 3; x = 3; x is a'	yes
