@@ -1,6 +1,5 @@
-// A task of a program on its own Worker (host.js startTask, src/host/tasks.rs natively): the function runs in a fresh instance
-// of the program's module, and its result (or failure) and printed output go back as JSON in the shared buffer the
-// starting program waits on with Atomics.wait.
+// A helper Worker of a program's pool (host-tasks.js addTaskWorker): it fetches and runs GPU jobs for the program's
+// Worker, which cannot await while it runs, and answers as JSON in the shared buffer it waits on with Atomics.wait.
 
 importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
@@ -9,7 +8,7 @@ let program;
 self.onmessage = ({ data }) => {
 	if (data.paintCanvas) return paintCanvasArrived(data.paintCanvas); // host-gpu.js, from the page
 	program = data.port;
-	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
+	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : gpuJobInto(data);
 	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)
 };
 
@@ -21,33 +20,6 @@ self.addEventListener("unhandledrejection", event => {
 	console.error("warp task Worker: a browser API failed without saying why", event.promise);
 });
 
-// a task's sounds and MIDI go to the page, which made this Worker (task-workers.js), straight: the program's Worker
-// may be waiting for the task
-addPageSoundWords(message => self.postMessage(message)); // host-tasks.js
-// the files a task writes go back with its result (host-tasks.js finishedTask), bytes as their numbers in its JSON
-let taskFiles = new Map();
-self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "string" ? content : { bytes: Array.from(content) });
-
-
-// the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
-function runTaskInto({ module, name, values, shared, arrays, captured, control, channels, files, voice, soundHandles, liveHandover }) {
-	Atomics.store(control, TASK_TAKEN_SLOT, 1);
-	Atomics.notify(control, TASK_TAKEN_SLOT);
-	let output = "";
-	self.takeWrittenFiles?.(files);
-	taskFiles = new Map();
-	self.joinVoice?.(voice);
-	self.joinSoundHandles(soundHandles); // host-tasks.js: the run's counter
-	self.liveHandover = liveHandover ?? {};
-	try {
-		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: sound => self.playSamples(sound) };
-		const record = runTask(module, hooks, [], name, values, arrays, captured, control, channels);
-		writeShared(shared, { ...record, value: taskTree(record.value), output, files: [...taskFiles] });
-	} catch (failure) {
-		console.error(failure);
-		writeShared(shared, { failure: `task ${taskName(name)}: its Worker failed: ${failure.message ?? failure}`, output });
-	}
-}
 
 // `users := fetch url` of a running program (host.js startFetch): the reply goes into shared memory, which the program
 // reads at its check points, and a message tells the program's Worker once it is back in its event loop
