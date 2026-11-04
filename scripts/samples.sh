@@ -14,7 +14,7 @@ WARP=${WARP:-$warp_binary}
 # a sample's budget is CPU time, which a loaded machine doesn't shrink (a 30 s wall clock timed out the sound samples
 # beside three builds, 11-03 and 11-04: harmony takes 11 s alone); the wall clock only ends a sample that waits forever
 CPU_SECONDS=30
-WALL_SECONDS=60
+WALL_SECONDS=120  # core/native/tests.warp keeps the same rule for `warp test`
 CPU_LIMIT_HIT=152  # 128 + SIGXCPU
 PARALLEL=${WARP_SAMPLES_PARALLEL:-1}  # user 2026-11-01: four warps at once, the sweep is the one test run beside 3 builds
 # a sample calling a C window library opens its window whatever WARP_NO_WINDOW says: not run, counted apart (until

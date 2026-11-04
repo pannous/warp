@@ -4,9 +4,9 @@
 # warp.wasm lists the cases into a work folder (extensions/commands/tests.warp test-list), each
 # run of a case's code is a child process of this warp (`warp run <code>`, `warp self <code>` for --self) in the test
 # file's folder with the value printed as data (WARP_VALUE_AS_DATA), its output, errors and exit status written beside
-# its code, and how long it took (<run>.ms); the children run in parallel, each in a slot of the machine's pool, one
-# past CASE_MILLISECONDS killed; then warp.wasm prints the verdicts, the cases over a second and the total (test-verdicts),
-# the exit status 1 when one failed
+# its code, and how long it took (<run>.ms); the children run in parallel, each in a slot of the machine's pool, each
+# with CPU_SECONDS of CPU, one still running after WALL_SECONDS killed (either a TIME, no failure); then warp.wasm
+# prints the verdicts, the cases over a second and the total (test-verdicts), the exit status 1 when one failed
 
 creat(path: pointer, mode: i32): i32 from "c"
 dup2(from: i32, to: i32): i32 from "c"
@@ -16,8 +16,16 @@ flock(descriptor: i32, operation: i32): i32 from "c"
 kill(child: i32, signal: i32): i32 from "c"
 usleep(microseconds: i32): i32 from "c"
 _exit(status: i32) from "c"
+setrlimit(resource: i32, limit: pointer): i32 from "c"
 
-CASE_MILLISECONDS = 30000
+# a case's budget is CPU time, which a loaded machine doesn't shrink; the wall clock only ends a case that waits
+# forever (scripts/samples.sh keeps the same rule)
+CPU_SECONDS = 30
+WALL_SECONDS = 120
+RLIMIT_CPU = 0
+# 128 + SIGXCPU
+CPU_LIMIT_HIT = "152"
+TIME_STATUS = "time "
 FILE_MODE = 420
 # flock's LOCK_EX | LOCK_NB
 LOCKED_NOW = 6
@@ -104,13 +112,13 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 		for k in 0..slots {
 			child = child_at(children + k * CHILD_BYTES)
 			if child.pid > 0 and child.pid == ended {
-				run_ended(work, field(runs, child.run, NEWLINE), exit_status(word_at(status).value as i32), child)
+				run_ended(work, field(runs, child.run, NEWLINE), status_said(exit_status(word_at(status).value as i32)), child)
 				done = done + 1
 			}
-			if child.pid > 0 and milliseconds_now() - child.started > CASE_MILLISECONDS {
+			if child.pid > 0 and milliseconds_now() - child.started > WALL_SECONDS * 1000 {
 				kill(child.pid, KILLED)
 				waitpid(child.pid, status, 0)
-				run_ended(work, field(runs, child.run, NEWLINE), "timeout", child)
+				run_ended(work, field(runs, child.run, NEWLINE), time_status("still running after ", WALL_SECONDS, " s"), child)
 				done = done + 1
 			}
 		}
@@ -141,6 +149,9 @@ run_ended(work: text, run: text, status: text, child: Child): nothing := {
 	close(child.lock)
 	child.pid = 0
 }
+# a run's exit status, or TIME_STATUS and why for one that used its CPU budget
+status_said(status: text): text := if same_text(status, CPU_LIMIT_HIT) then time_status("used its ", CPU_SECONDS, " s of CPU") else status
+time_status(before: text, seconds: int, after: text): text := joined(joined(joined(TIME_STATUS, before), text_of(seconds)), after)
 # waitpid's status as the exit status, 128 and the signal for a child a signal ended
 exit_status(status: i32): text := if status % 256 == 0 then text_of(status / 256 % 256) else text_of(128 + status % 128)
 
@@ -157,8 +168,12 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 	self = c_string(executable_path())
 	output = c_string(joined(id, ".out"))
 	errors = c_string(joined(id, ".err"))
+	budget = allocate(16)
+	long_at(budget).value = CPU_SECONDS
+	long_at(budget + 8).value = CPU_SECONDS
 	pid = fork()
 	if pid == 0 {
+		setrlimit(RLIMIT_CPU, budget)
 		for k in 0..slots {
 			other = child_at(children + k * CHILD_BYTES)
 			if other.pid != 0 { close(other.lock) }
