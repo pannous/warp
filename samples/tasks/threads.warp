@@ -2,13 +2,13 @@
 # Tasks on real threads: `go f(x)` runs f in a fresh instance of this program, natively on its own thread, in the
 # playground on a Worker. Values are copied in and out; `await` waits for a task, `try` catches its failure.
 
-work(ms) := { sleep(ms / 1000); ms }
+work(t) := { sleep(t); t }
 
 # three tasks of half a second each, at the same time
 started = clock()
-a = go work(500)
-b = go work(500)
-c = go work(500)
+a = go work(500ms)
+b = go work(500ms)
+c = go work(500ms)
 total = await a + await b + await c
 print "three tasks of 500 ms took " (clock() - started) " ms"
 
