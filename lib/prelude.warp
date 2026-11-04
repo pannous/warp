@@ -592,7 +592,8 @@ time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
 // time_parts(form, position): the calendar day of a position and the nanoseconds into it; a date has no clock
 time_days(form: int, position: int): int := if form == 1 then position else position /! 86400000000000
 time_nanos(form: int, position: int): int := if form == 1 then 0 else floor_mod(position, 86400000000000)
-floor_mod(n: int, divisor: int): int := n - n /! divisor * divisor
+// the remainder with the divisor's sign (Python's %): floor_mod(7, -3) is -2, floor_mod(-7, 3) is 2
+floor_mod(n: int, divisor: int): int := { r = n - n /! divisor * divisor; if r != 0 and (r < 0) != (divisor < 0) { r = r + divisor }; r }
 // Howard Hinnant's calendar over day numbers (days since 1970-01-01, proleptic Gregorian), the one warp copy of
 // rust-harness:src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on it.
 // civil_from_days: eras of 400 years from 0000-03-01, a year from March
@@ -938,7 +939,7 @@ fits_text_cut(value: any, pieces: list, bound: map): bool := {
 			rest = rest[#piece ..< #rest]
 		} else {
 			next = if i + 1 < #pieces then pieces#(i + 2) else ø
-			ends = if next == ø then #rest + 1 else if rest.contains(next) then rest.find(next) else 0
+			ends = if next == ø then #rest + 1 else if rest.contains(next) then rest.find(str(next)) else 0
 			if ends == 0 { return no }
 			part = rest[0 ..< ends - 1]
 			rest = rest[ends - 1 ..< #rest]
