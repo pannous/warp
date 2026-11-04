@@ -1,6 +1,7 @@
 // The standard library module math (notes/stdlib.md): `use math`, together with the C library libm.
 // Whole-number words declare int parameters, which their signatures show; the others take any number
 use reals
+use case_table
 
 // The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
 // of the operator it spells
@@ -16,8 +17,50 @@ operator ≠ := !=
 operator ≟ := ==
 operator ≡ := ==
 operator ﹦ := ==
-operator ≈ := approximately
-operator ⋍ := approximately
+// `a ≈ b` with tolerance 1e-9 (alike below); `a ~ b` (Op.Rough, tolerance 0.01) still lowers in core
+infix operator ≈(a: any, b: any) := alike(a, b, 0.000000001, no)
+infix operator ⋍(a: any, b: any) := alike(a, b, 0.000000001, no)
+// `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
+// pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
+// other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
+alike(a: any, b: any, tolerance: float, rough: bool) := {
+	if bracket_of(a) == "{" and bracket_of(b) == "{" {
+		return #a == #b and keys(a).all(k => b has k and alike(a[k], b[k], tolerance, rough))
+	}
+	if bracket_of(a) != ø and bracket_of(a) == bracket_of(b) {
+		return #a == #b and (1 to #a).all(i => alike(a#i, b#i, tolerance, rough))
+	}
+	if type(a) is key and type(b) is key {
+		keys_alike = alike(key_of(a), key_of(b), tolerance, rough)
+		return op_of(a) == op_of(b) and keys_alike and alike(value_of(a), value_of(b), tolerance, rough)
+	}
+	values_alike(a, b, tolerance, rough)
+}
+// `a ≈ b` and the looser `a ~ b` (notes/approximately.md): lib/prelude.warp alike walks lists, maps and pairs, the
+// two below compare the leaves; tolerance 1e-9 for ≈, 0.01 for ~
+// two leaves alike: a yes/no by truth, numbers within tolerance of either (or 1e-12 near zero), texts and characters
+// folded (lower case without accents), the rough ones trimmed of blanks and punctuation at both ends first
+values_alike(a: any, b: any, tolerance: float, rough: bool): bool := {
+	if a is bool or b is bool { return truthy(a) == truthy(b) }
+	if a is number and b is number { return numbers_alike(a as float, b as float, tolerance) }
+	if (a is text or a is char) and (b is text or b is char) { return text_alike(str(a), rough) == text_alike(str(b), rough) }
+	a == b
+}
+numbers_alike(a: float, b: float, tolerance: float): bool := {
+	d = abs(a - b)
+	d <= tolerance * abs(a) or d <= tolerance * abs(b) or d <= 0.000000000001
+}
+truthy(x: any): bool := if x then yes else no
+text_alike(t: text, rough: bool): text := case_fold(if rough then rough_trimmed(t) else t)
+rough_trimmed(t: text): text := {
+	first = 1; last = #t
+	while first <= last and is_rough_edge(t#first) { first += 1 }
+	while last >= first and is_rough_edge(t#last) { last -= 1 }
+	if first > last then "" else t[first - 1: last]
+}
+// a blank, a control character or ASCII punctuation
+is_rough_edge(c): bool := { code = ord(c); code <= 32 or (code < 127 and not is_ascii_alphanumeric(code)) }
+is_ascii_alphanumeric(code: int): bool := (code >= 48 and code <= 57) or (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
 operator ∧ := and
 operator ⋀ := and
 operator ∨ := or
