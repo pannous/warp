@@ -1,0 +1,3 @@
+# use text and use json together (the prelude's text-cut pattern called find with an untyped part): fix(lib), card lib-coverage-audit
+«use text; use json; [json_text({"a": [1, "x"]}), snake_case("helloWorld")] == ["{\\"a\\":[1,\\"x\\"]}", "hello_world"]»	true
+«use json; use text; use list; use map; use time; use file; use regex; json_text([1, 2])»	"[1,2]"

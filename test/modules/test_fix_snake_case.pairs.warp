@@ -1,0 +1,3 @@
+# snake_case: an acronym stays one word ("HTTPServer" gave "h_t_t_p_server") and non-ASCII letters are kept ("ÄpfelBaum" lost its Ä): fix(lib), card lib-coverage-audit
+«use text; [snake_case("HTTPServer"), snake_case("getHTTPResponseCode"), snake_case("ABC"), snake_case("version2Update"), snake_case("ÄpfelBaum"), snake_case("helloWorld"), snake_case("Hello World"), snake_case("a--b"), snake_case("")] == ["http_server", "get_http_response_code", "abc", "version2_update", "äpfel_baum", "hello_world", "hello_world", "a_b", ""]»	true
+«use text; [kebab_case("HTTPServer"), camel_case("HTTPServer"), kebab_case("straßeName")] == ["http-server", "httpServer", "straße-name"]»	true
