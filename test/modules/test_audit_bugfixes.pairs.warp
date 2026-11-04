@@ -1,0 +1,41 @@
+// card lib-audit-bugfixes (lib-consistency-audit items 4, 6, 9, 10): strict base64/hex decoding, hash and uuid on
+// encoding's hex helpers, markup's html_escaped escaping ', wagi's url_decoded as url's query_decode
+// 4: base64_decode raises with the character and its position; padding and whitespace
+'use encoding; base64_decode("Zm9vYmFy")'	"foobar"
+'use encoding; base64_decode("Zm9vYg==")'	"foob"
+'use encoding; base64_decode("Zm9vYg")'	"foob"
+'use encoding; base64_decode("Zm9v\\nYmE=")'	"fooba"
+'use encoding; base64_decode("")'	""
+'use encoding; base64_decode_bytes("/w==")'	[255]
+'use encoding; try { base64_decode("Zm9!") } catch e { e.message }'	"base64: ! at 4 is no base64 digit"
+'use encoding; try { base64_decode("Zm9v-_") } catch e { e.message }'	"base64: - at 5 is no base64 digit"
+'use encoding; try { base64_decode("Zg=") } catch e { e.message }'	"base64: the padding leaves 3 characters, no multiple of 4"
+'use encoding; try { base64_decode("Z===") } catch e { e.message }'	"base64: 3 = padding characters (at most 2)"
+'use encoding; try { base64_decode("Zg==Zg==") } catch e { e.message }'	"base64: Z at 5 follows the = padding"
+'use encoding; try { base64_decode("Zm9vY") } catch e { e.message }'	"base64: a final group of one digit"
+'use encoding; base64_decode(base64_encode("it\'s ü"))'	"it's ü"
+// 4: hex_decode and hex_decode_bytes raise on an odd count or a non-digit, either case accepted
+'use encoding; hex_decode("666F6f")'	"foo"
+'use encoding; hex_decode_bytes("FF00")'	[255, 0]
+'use encoding; hex_decode("")'	""
+'use encoding; try { hex_decode("abc") } catch e { e.message }'	"hex: 3 digits are an odd count"
+'use encoding; try { hex_decode_bytes("0g") } catch e { e.message }'	"hex: g at 2 is no hex digit"
+'use encoding; try { hex_decode("zz") } catch e { e.message }'	"hex: z at 1 is no hex digit"
+// 6: hash and uuid keep their hex names and results on encoding's helpers
+'use hash; [hex_digit("0"), hex_digit("a"), hex_digit("F"), hex_digit("x")]'	[0, 10, 15, -1]
+'use hash; hex_bytes("00ff10")'	[0, 255, 16]
+'use hash; bytes_hex([0, 15, 171, 255])'	"000fabff"
+'use hash; sha1("abc")'	"a9993e364706816aba3e25717850c26c9cd0d89d"
+'use hash; hmac("key", "The quick brown fox jumps over the lazy dog")'	"f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"
+'use uuid; [hex_digit(0), hex_digit(9), hex_digit(10), hex_digit(15)]'	["0", "9", "a", "f"]
+'use uuid; is_uuid(uuid())'	yes
+'use uuid; uuid_parsed("00112233-4455-6677-8899-aabbccddeeff")#16'	255
+// 9: markup's html_escaped escapes ' as html_escape does, in text and attributes
+'use markup; to_html(p{ "Tom\'s & <Jerry>" })'	"<p>Tom&#39;s &amp; &lt;Jerry&gt;</p>"
+'use markup; to_html(p{ title: "it\'s \\"x\\"", "a" })'	"<p title=\"it&#39;s &quot;x&quot;\">a</p>"
+'use markup; use html; html_escaped("a\'b<c>&\\"") == html_escape("a\'b<c>&\\"")'	yes
+// 10: wagi's url_decoded is url's query_decode: + as a space, UTF-8, a malformed % kept
+'use wagi; url_decoded("a%20b+c%C3%A9")'	"a b cé"
+'use wagi; url_decoded("plain")'	"plain"
+'use wagi; url_decoded("100%zz")'	"100%zz"
+'use wagi; use url; url_decoded("x%2By+z") == query_decode("x%2By+z")'	yes

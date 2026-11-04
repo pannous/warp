@@ -87,7 +87,7 @@ def tables_row(row: any, headers: list, size: int): list {
 def tables_align(options: map, i: int, header: any, numeric: bool): text {
 	choice = tables_option(options, "align", ø)
 	picked = if choice == ø then ø else if choice is text then choice else if choice is map then (if header in choice then choice[header] else ø) else (if i < count(choice) then choice[i] else ø)
-	if picked != ø then picked else if numeric then "right" else "left"
+	if picked != ø then str(picked) else if numeric then "right" else "left"
 }
 def tables_cap(options: map, i: int): int {
 	cap = tables_option(options, "max_width", ø)

@@ -1,0 +1,109 @@
+// lib/graphs.warp: traversals, paths, orders, components and spanning trees; expected values from
+// test/graphs/gen_graphs_tests.py (python references in insertion order, cross-checked with networkx), card lib-graphs
+// building: edge lists ([u, v] or [u, v, w]) and maps; nodes and neighbours in insertion order
+'use graphs; graph_nodes(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes))'	["a", "b", "c", "d", "e", "f"]
+'use graphs; graph_neighbors(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a")'	["b", "c"]
+'use graphs; graph_neighbors(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "b")'	["a", "c", "d"]
+'use graphs; graph_nodes(graph_of({"x": ["y", ["z", 3]], "w": []}, yes))'	["x", "y", "z", "w"]
+'use graphs; graph_neighbors(graph_of({"x": ["y", ["z", 3]]}, yes), "x")'	["y", "z"]
+'use graphs; graph_node_count(graph_of([[1, 2], [2, 3], [1, 3]], no))'	3
+'use graphs; graph_nodes(graph_of([[1, "1"]], yes))'	[1, "1"]
+'use graphs; try { bfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "zz") } catch e { e.message }'	"graphs: no node zz"
+// bfs, dfs, has_path and shortest_path, unreachable nodes included
+'use graphs; bfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a")'	["a", "b", "c", "d"]
+'use graphs; dfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a")'	["a", "b", "d", "c"]
+'use graphs; bfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "d")'	["d"]
+'use graphs; dfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "d")'	["d"]
+'use graphs; bfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "e")'	["e", "f"]
+'use graphs; dfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "e")'	["e", "f"]
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "d")'	["a", "b", "d"]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "d")'	yes
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "d", "a")'	[]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "d", "a")'	no
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "f")'	[]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "f")'	no
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "a")'	["a"]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "a")'	yes
+'use graphs; bfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a")'	["a", "b", "c", "d"]
+'use graphs; dfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a")'	["a", "b", "c", "d"]
+'use graphs; bfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "d")'	["d", "b", "c", "a"]
+'use graphs; dfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "d")'	["d", "b", "a", "c"]
+'use graphs; bfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "e")'	["e", "f"]
+'use graphs; dfs(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "e")'	["e", "f"]
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a", "d")'	["a", "b", "d"]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a", "d")'	yes
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "d", "a")'	["d", "b", "a"]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "d", "a")'	yes
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a", "f")'	[]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a", "f")'	no
+'use graphs; shortest_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a", "a")'	["a"]
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "a", "a")'	yes
+'use graphs; has_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "nowhere")'	no
+// dijkstra, dijkstra_path and a_star; ties, unreachable targets and negative weights
+'use graphs; dijkstra(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a")'	[["a", 0], ["b", 3], ["c", 1], ["d", 4]]
+'use graphs; dijkstra(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no), "d")'	[["a", 4], ["b", 1], ["c", 3], ["d", 0]]
+'use graphs; dijkstra_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "d")'	[["a", "c", "b", "d"], 4]
+'use graphs; dijkstra_path(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes), "a", "f")'	[[], ø]
+'use graphs; dijkstra_path(graph_of([["s", "x", 1], ["s", "y", 1], ["x", "t", 1], ["y", "t", 1]], yes), "s", "t")'	[["s", "x", "t"], 2]
+'use graphs; shortest_path(graph_of([["s", "x", 1], ["s", "y", 1], ["x", "t", 1], ["y", "t", 1]], yes), "s", "t")'	["s", "x", "t"]
+'use graphs; try { dijkstra(graph_of([[1, 2, 3], [2, 3, -1]], yes), 1) } catch e { e.message }'	"dijkstra: negative weight -1 on 2 -> 3"
+'use graphs; try { a_star(graph_of([[1, 2, -2]], yes), 1, 2, n => 0) } catch e { e.message }'	"a_star: negative weight -2 on 1 -> 2"
+'use graphs; dijkstra(graph_of([[1, 2, 1/2], [2, 3, 1/3]], yes), 1)'	[[1, 0], [2, 1/2], [3, 5/6]]
+'use graphs; (a_star(graph_of([[0, 1, 1], [0, 4, 1], [1, 2, 2], [1, 5, 1], [2, 3, 3], [2, 6, 1], [3, 7, 1], [4, 5, 2], [4, 8, 1], [5, 6, 3], [5, 9, 2], [6, 7, 1], [6, 10, 1], [7, 11, 2], [8, 9, 3], [8, 12, 1], [9, 10, 1], [9, 13, 1], [10, 11, 2], [10, 14, 1], [11, 15, 1], [12, 13, 1], [13, 14, 2], [14, 15, 3]], no), 0, 15, n => (3 - n % 4) + (3 - n / 4 as int)))#2'	8
+'use graphs; (dijkstra_path(graph_of([[0, 1, 1], [0, 4, 1], [1, 2, 2], [1, 5, 1], [2, 3, 3], [2, 6, 1], [3, 7, 1], [4, 5, 2], [4, 8, 1], [5, 6, 3], [5, 9, 2], [6, 7, 1], [6, 10, 1], [7, 11, 2], [8, 9, 3], [8, 12, 1], [9, 10, 1], [9, 13, 1], [10, 11, 2], [10, 14, 1], [11, 15, 1], [12, 13, 1], [13, 14, 2], [14, 15, 3]], no), 0, 15))#2'	8
+'use graphs; count((a_star(graph_of([[0, 1, 1], [0, 4, 1], [1, 2, 2], [1, 5, 1], [2, 3, 3], [2, 6, 1], [3, 7, 1], [4, 5, 2], [4, 8, 1], [5, 6, 3], [5, 9, 2], [6, 7, 1], [6, 10, 1], [7, 11, 2], [8, 9, 3], [8, 12, 1], [9, 10, 1], [9, 13, 1], [10, 11, 2], [10, 14, 1], [11, 15, 1], [12, 13, 1], [13, 14, 2], [14, 15, 3]], no), 0, 15, n => 0))#1) >= 7'	yes
+// topological_sort: insertion order among ready nodes, a cycle reported with its nodes
+'use graphs; topological_sort(graph_of([["shirt", "tie"], ["tie", "jacket"], ["pants", "shoes"], ["pants", "belt"], ["belt", "jacket"], ["shirt", "belt"], ["socks", "shoes"]], yes))'	["shirt", "tie", "pants", "belt", "jacket", "socks", "shoes"]
+'use graphs; try { topological_sort(graph_of([["a", "b"], ["b", "c"], ["c", "a"], ["x", "a"]], yes)) } catch e { e.message }'	"topological_sort: cycle b -> c -> a -> b"
+'use graphs; try { topological_sort(graph_of([[1, 1]], yes)) } catch e { e.message }'	"topological_sort: cycle 1 -> 1"
+'use graphs; try { topological_sort(graph_of([[1, 2]], no)) } catch e { e.message }'	"topological_sort: the graph is undirected"
+// connected_components (weak for directed graphs) and strongly_connected_components (iterative Tarjan)
+'use graphs; strongly_connected_components(graph_of([[1, 2], [2, 3], [3, 1], [3, 4], [4, 5], [5, 6], [6, 4], [7, 6], [7, 8], [8, 7], [9, 9]], yes))'	[[4, 5, 6], [1, 2, 3], [7, 8], [9]]
+'use graphs; connected_components(graph_of([[1, 2], [2, 3], [3, 1], [3, 4], [4, 5], [5, 6], [6, 4], [7, 6], [7, 8], [8, 7], [9, 9]], yes))'	[[1, 2, 3, 4, 5, 6, 7, 8], [9]]
+'use graphs; connected_components(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], no))'	[["a", "b", "c", "d"], ["e", "f"]]
+'use graphs; strongly_connected_components(graph_of([["a", "b", 4], ["a", "c", 1], ["c", "b", 2], ["b", "d", 1], ["c", "d", 5], ["e", "f", 1]], yes))'	[["d"], ["b"], ["c"], ["a"], ["f"], ["e"]]
+// kruskal_mst: union-find, weight ties broken by edge order; a forest for disconnected graphs
+'use graphs; kruskal_mst(graph_of([["a", "b", 7], ["a", "d", 5], ["b", "c", 8], ["b", "d", 9], ["b", "e", 7], ["c", "e", 5], ["d", "e", 15], ["d", "f", 6], ["e", "f", 8], ["e", "g", 9], ["f", "g", 11], ["x", "y", 1]], no))'	[["x", "y", 1], ["a", "d", 5], ["c", "e", 5], ["d", "f", 6], ["a", "b", 7], ["b", "e", 7], ["e", "g", 9]]
+'use graphs; mst_weight(kruskal_mst(graph_of([["a", "b", 7], ["a", "d", 5], ["b", "c", 8], ["b", "d", 9], ["b", "e", 7], ["c", "e", 5], ["d", "e", 15], ["d", "f", 6], ["e", "f", 8], ["e", "g", 9], ["f", "g", 11], ["x", "y", 1]], no)))'	40
+'use graphs; kruskal_mst(graph_of([[1, 2, 1], [2, 3, 1], [1, 3, 1]], no))'	[[1, 2, 1], [2, 3, 1]]
+'use graphs; try { kruskal_mst(graph_of([[1, 2]], yes)) } catch e { e.message }'	"kruskal_mst: the graph is directed"
+// random graphs, every algorithm against the references (and networkx)
+'use graphs; bfs(graph_of([[3, 5, 0], [0, 6, 4], [0, 2, 4], [0, 4, 1], [0, 0, 3], [3, 0, 1], [0, 1, 5]], yes), 3)'	[3, 5, 0, 6, 2, 4, 1]
+'use graphs; dfs(graph_of([[3, 5, 0], [0, 6, 4], [0, 2, 4], [0, 4, 1], [0, 0, 3], [3, 0, 1], [0, 1, 5]], yes), 3)'	[3, 5, 0, 6, 2, 4, 1]
+'use graphs; dijkstra(graph_of([[3, 5, 0], [0, 6, 4], [0, 2, 4], [0, 4, 1], [0, 0, 3], [3, 0, 1], [0, 1, 5]], yes), 3)'	[[3, 0], [5, 0], [0, 1], [6, 5], [2, 5], [4, 2], [1, 6]]
+'use graphs; connected_components(graph_of([[3, 5, 0], [0, 6, 4], [0, 2, 4], [0, 4, 1], [0, 0, 3], [3, 0, 1], [0, 1, 5]], yes))'	[[3, 5, 0, 6, 2, 4, 1]]
+'use graphs; strongly_connected_components(graph_of([[3, 5, 0], [0, 6, 4], [0, 2, 4], [0, 4, 1], [0, 0, 3], [3, 0, 1], [0, 1, 5]], yes))'	[[5], [6], [2], [4], [1], [0], [3]]
+'use graphs; bfs(graph_of([[6, 0, 1], [0, 8, 1], [4, 6, 1], [8, 1, 4], [4, 8, 5], [2, 1, 4], [3, 5, 0], [0, 3, 3]], no), 6)'	[6, 0, 4, 8, 3, 1, 5, 2]
+'use graphs; dfs(graph_of([[6, 0, 1], [0, 8, 1], [4, 6, 1], [8, 1, 4], [4, 8, 5], [2, 1, 4], [3, 5, 0], [0, 3, 3]], no), 6)'	[6, 0, 8, 1, 2, 4, 3, 5]
+'use graphs; dijkstra(graph_of([[6, 0, 1], [0, 8, 1], [4, 6, 1], [8, 1, 4], [4, 8, 5], [2, 1, 4], [3, 5, 0], [0, 3, 3]], no), 6)'	[[6, 0], [0, 1], [8, 2], [4, 1], [1, 6], [2, 10], [3, 4], [5, 4]]
+'use graphs; connected_components(graph_of([[6, 0, 1], [0, 8, 1], [4, 6, 1], [8, 1, 4], [4, 8, 5], [2, 1, 4], [3, 5, 0], [0, 3, 3]], no))'	[[6, 0, 4, 8, 3, 1, 5, 2]]
+'use graphs; mst_weight(kruskal_mst(graph_of([[6, 0, 1], [0, 8, 1], [4, 6, 1], [8, 1, 4], [4, 8, 5], [2, 1, 4], [3, 5, 0], [0, 3, 3]], no)))'	14
+'use graphs; bfs(graph_of([[5, 7, 4], [7, 5, 2], [3, 2, 5], [3, 1, 4], [4, 8, 3], [1, 1, 4], [6, 2, 2], [2, 7, 3], [0, 1, 4], [5, 5, 5], [7, 1, 0], [4, 7, 5], [1, 0, 5]], yes), 5)'	[5, 7, 1, 0]
+'use graphs; dfs(graph_of([[5, 7, 4], [7, 5, 2], [3, 2, 5], [3, 1, 4], [4, 8, 3], [1, 1, 4], [6, 2, 2], [2, 7, 3], [0, 1, 4], [5, 5, 5], [7, 1, 0], [4, 7, 5], [1, 0, 5]], yes), 5)'	[5, 7, 1, 0]
+'use graphs; dijkstra(graph_of([[5, 7, 4], [7, 5, 2], [3, 2, 5], [3, 1, 4], [4, 8, 3], [1, 1, 4], [6, 2, 2], [2, 7, 3], [0, 1, 4], [5, 5, 5], [7, 1, 0], [4, 7, 5], [1, 0, 5]], yes), 5)'	[[5, 0], [7, 4], [1, 4], [0, 9]]
+'use graphs; connected_components(graph_of([[5, 7, 4], [7, 5, 2], [3, 2, 5], [3, 1, 4], [4, 8, 3], [1, 1, 4], [6, 2, 2], [2, 7, 3], [0, 1, 4], [5, 5, 5], [7, 1, 0], [4, 7, 5], [1, 0, 5]], yes))'	[[5, 7, 1, 2, 4, 0, 3, 6, 8]]
+'use graphs; strongly_connected_components(graph_of([[5, 7, 4], [7, 5, 2], [3, 2, 5], [3, 1, 4], [4, 8, 3], [1, 1, 4], [6, 2, 2], [2, 7, 3], [0, 1, 4], [5, 5, 5], [7, 1, 0], [4, 7, 5], [1, 0, 5]], yes))'	[[1, 0], [5, 7], [2], [3], [8], [4], [6]]
+'use graphs; bfs(graph_of([[2, 5, 3], [3, 2, 1], [4, 0, 3], [0, 1, 2], [1, 5, 1], [3, 3, 3], [3, 4, 2], [1, 6, 3], [6, 4, 2], [5, 3, 2]], no), 2)'	[2, 5, 3, 1, 4, 0, 6]
+'use graphs; dfs(graph_of([[2, 5, 3], [3, 2, 1], [4, 0, 3], [0, 1, 2], [1, 5, 1], [3, 3, 3], [3, 4, 2], [1, 6, 3], [6, 4, 2], [5, 3, 2]], no), 2)'	[2, 5, 1, 0, 4, 3, 6]
+'use graphs; dijkstra(graph_of([[2, 5, 3], [3, 2, 1], [4, 0, 3], [0, 1, 2], [1, 5, 1], [3, 3, 3], [3, 4, 2], [1, 6, 3], [6, 4, 2], [5, 3, 2]], no), 2)'	[[2, 0], [5, 3], [3, 1], [4, 3], [0, 6], [1, 4], [6, 5]]
+'use graphs; connected_components(graph_of([[2, 5, 3], [3, 2, 1], [4, 0, 3], [0, 1, 2], [1, 5, 1], [3, 3, 3], [3, 4, 2], [1, 6, 3], [6, 4, 2], [5, 3, 2]], no))'	[[2, 5, 3, 1, 4, 0, 6]]
+'use graphs; mst_weight(kruskal_mst(graph_of([[2, 5, 3], [3, 2, 1], [4, 0, 3], [0, 1, 2], [1, 5, 1], [3, 3, 3], [3, 4, 2], [1, 6, 3], [6, 4, 2], [5, 3, 2]], no)))'	10
+'use graphs; bfs(graph_of([[5, 1, 0], [3, 4, 1], [2, 2, 0], [1, 3, 4], [2, 4, 4], [2, 1, 5], [4, 4, 5]], yes), 5)'	[5, 1, 3, 4]
+'use graphs; dfs(graph_of([[5, 1, 0], [3, 4, 1], [2, 2, 0], [1, 3, 4], [2, 4, 4], [2, 1, 5], [4, 4, 5]], yes), 5)'	[5, 1, 3, 4]
+'use graphs; dijkstra(graph_of([[5, 1, 0], [3, 4, 1], [2, 2, 0], [1, 3, 4], [2, 4, 4], [2, 1, 5], [4, 4, 5]], yes), 5)'	[[5, 0], [1, 0], [3, 4], [4, 5]]
+'use graphs; connected_components(graph_of([[5, 1, 0], [3, 4, 1], [2, 2, 0], [1, 3, 4], [2, 4, 4], [2, 1, 5], [4, 4, 5]], yes))'	[[5, 1, 3, 2, 4]]
+'use graphs; strongly_connected_components(graph_of([[5, 1, 0], [3, 4, 1], [2, 2, 0], [1, 3, 4], [2, 4, 4], [2, 1, 5], [4, 4, 5]], yes))'	[[4], [3], [1], [5], [2]]
+'use graphs; bfs(graph_of([[4, 3, 3], [3, 3, 0], [1, 0, 1], [3, 1, 0], [2, 4, 0], [0, 0, 4], [1, 4, 0]], no), 4)'	[4, 3, 2, 1, 0]
+'use graphs; dfs(graph_of([[4, 3, 3], [3, 3, 0], [1, 0, 1], [3, 1, 0], [2, 4, 0], [0, 0, 4], [1, 4, 0]], no), 4)'	[4, 3, 1, 0, 2]
+'use graphs; dijkstra(graph_of([[4, 3, 3], [3, 3, 0], [1, 0, 1], [3, 1, 0], [2, 4, 0], [0, 0, 4], [1, 4, 0]], no), 4)'	[[4, 0], [3, 0], [1, 0], [0, 1], [2, 0]]
+'use graphs; connected_components(graph_of([[4, 3, 3], [3, 3, 0], [1, 0, 1], [3, 1, 0], [2, 4, 0], [0, 0, 4], [1, 4, 0]], no))'	[[4, 3, 2, 1, 0]]
+'use graphs; mst_weight(kruskal_mst(graph_of([[4, 3, 3], [3, 3, 0], [1, 0, 1], [3, 1, 0], [2, 4, 0], [0, 0, 4], [1, 4, 0]], no)))'	1
+// a 10k-node chain: everything iterative, no recursion depth
+'use graphs; count(dfs(graph_of([[i, i + 1] for i in 1 to 9999], yes), 1))'	10000
+'use graphs; (bfs(graph_of([[i, i + 1] for i in 1 to 9999], yes), 1))#10000'	10000
+'use graphs; count(shortest_path(graph_of([[i, i + 1] for i in 1 to 9999], yes), 1, 10000))'	10000
+'use graphs; (dijkstra_path(graph_of([[i, i + 1] for i in 1 to 9999], yes), 1, 10000))#2'	9999
+'use graphs; (topological_sort(graph_of([[i, i + 1] for i in 1 to 9999], yes)))#10000'	10000
+'use graphs; count(strongly_connected_components(graph_of([[i, i + 1] for i in 1 to 9999], yes)))'	10000
+'use graphs; has_path(graph_of([[i, i + 1] for i in 1 to 9999], yes), 1, 10000)'	yes
+'use graphs; mst_weight(kruskal_mst(graph_of([[i, i + 1, i % 7] for i in 1 to 9999], no)))'	29994
