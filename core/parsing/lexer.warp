@@ -290,11 +290,6 @@ def symbol_end(source: text, from: int, n: int): int {
 	at
 }
 
-def digits_end(source: text, at: int, n: int): int {
-	while at < n and is_digit(source[at]) { at = at + 1 }
-	at
-}
-
 // After the spaces and tabs from `at` on
 def blanks_end(source: text, at: int, n: int): int {
 	while at < n and (source[at] == ' ' or source[at] == '\t') { at += 1 }
@@ -305,15 +300,6 @@ def blanks_end(source: text, at: int, n: int): int {
 def run_end(source: text, at: int, c: text, n: int): int {
 	while at < n and source[at] == c { at += 1 }
 	at
-}
-
-// `hh:mm` at `at`
-def clock_at(source: text, at: int, n: int): bool := digits(source, at, 2, n) and is_at(source, at + 2, ':', n) and digits(source, at + 3, 2, n)
-
-def digits(source: text, at: int, count: int, n: int): bool {
-	i = 0
-	while i < count and at + i < n and is_digit(source[at + i]) { i = i + 1 }
-	i == count
 }
 
 def is_at(source: text, at: int, c: text, n: int): bool := at < n and source[at] == c
