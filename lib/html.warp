@@ -1,6 +1,10 @@
 // The standard library module html: `use html`, the five special characters of HTML text as entities and back:
-// html_escape("a<b") is "a&lt;b"; html_unescape reads &amp; &lt; &gt; &quot; &apos; and numeric &#39; &#x27;
+// html_escape("a<b") is "a&lt;b"; html_unescape decodes character references as HTML does in text (card
+// lib-html-conformance): every named one of WHATWG's list (lib/html_entities.warp, the longest name that matches, the
+// legacy ones also without ;), numeric ones (&#39; &#x27;, the ; optional; 0, surrogates and past U+10FFFF are U+FFFD,
+// 0x80-0x9F the windows-1252 characters); anything else stays as written
 use text
+use html_entities
 
 HTML_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": chr(0xA0), "copy": "©", "reg": "®",
 	"trade": "™", "hellip": "…", "mdash": "—", "ndash": "–", "lsquo": "‘", "rsquo": "’", "ldquo": "“", "rdquo": "”",
@@ -25,19 +29,84 @@ def html_entity(name: text): any {
 		for c in name[1..] { if not is_digit(c) { return nil }; n = n * 10 + ord(c) - 48 }
 		return if count(name) > 1 then chr(n) else nil
 	}
-	HTML_NAMED.get(name)
+	// a name with or without its ; ("lt", "lt;"), from the whole list
+	html_named(name + ";") ?? html_named(name) ?? HTML_NAMED.get(name)
 }
 
 def html_unescape(t: text): text {
-	out = ""
-	rest = t
-	while rest.contains("&") {
-		at = rest.index_of("&")
-		out = out + rest[0 ..< at - 1]
-		rest = rest[at - 1..]
-		end = rest.index_of(";")
-		character = if end > 1 then html_entity(rest[1 ..< end - 1]) else nil
-		if character != nil { out = out + character; rest = rest[end..] } else { out = out + "&"; rest = rest[1..] }
+	if not t.contains("&") { return t }
+	// by code point: a combining mark after a reference's ; is no part of it
+	cs = ["" + p for p in t.codepoints]
+	n = count(cs)
+	parts = []
+	start = 0
+	i = 0
+	while i < n {
+		if cs[i] != "&" { i += 1; continue }
+		if i > start { parts.add(join(cs[start ..< i], "")) }
+		r = html_reference(cs, i + 1)
+		if count(r) == 0 { parts.add("&"); i += 1 } else { parts.add(r[0]); i = r[1] }
+		start = i
 	}
-	out + rest
+	if n > start { parts.add(join(cs[start ..< n], "")) }
+	join(parts, "")
 }
+// the reference after an & at place k of the code points: [its text, the place after it], [] for none
+def html_reference(cs: list, k: int): list {
+	n = count(cs)
+	if k >= n { return [] }
+	if cs[k] == "#" {
+		j = k + 1
+		hex = j < n and (cs[j] == "x" or cs[j] == "X")
+		if hex { j += 1 }
+		first = j
+		v = 0
+		going = yes
+		while going and j < n {
+			d = html_digit(cs[j], hex)
+			if d < 0 { going = no } else { v = min(v * (if hex then 16 else 10) + d, 0x110000); j += 1 }
+		}
+		if j == first { return [] }
+		if j < n and cs[j] == ";" { j += 1 }
+		return [html_code_point(v), j]
+	}
+	if not is_alphanumeric(cs[k]) { return [] }
+	// a name is a run of letters and digits: with its ; when one follows, else the longest legacy name (at most 6
+	// characters, no ;) the run starts with: &notit; is ¬ then it;
+	j = k
+	while j < n and j - k < 32 and is_alphanumeric(cs[j]) { j += 1 }
+	run = join(cs[k ..< j], "")
+	if j < n and cs[j] == ";" {
+		value = html_named(run + ";")
+		if value != nil { return [value, j + 1] }
+	}
+	length = min(6, j - k)
+	while length >= 2 {
+		value = html_named(join(cs[k ..< k + length], ""))
+		if value != nil { return [value, k + length] }
+		length -= 1
+	}
+	[]
+}
+// the characters of a named reference ("amp;", "amp"), nil for none: a search of lib/html_entities.warp's text
+html_named(name: text): any := {
+	parts = HTML_ENTITY_CODES.split(" " + name + "=")
+	if count(parts) < 2 { return nil }
+	join([chr(html_hex(h)) for h in parts[1].split(" ")[0].split(",")], "")
+}
+html_hex(h: text): int := { n = 0; for c in h { n = n * 16 + html_digit(c, yes) }; n }
+html_digit(c: text, hex: bool): int := {
+	o = ord(c)
+	if o >= 48 and o <= 57 { return o - 48 }
+	if hex and o >= 97 and o <= 102 { return o - 87 }
+	if hex and o >= 65 and o <= 70 { return o - 55 }
+	-1
+}
+// a numeric reference's character: 0, a surrogate or past U+10FFFF are U+FFFD, 0x80-0x9F as windows-1252 reads them
+html_code_point(v: int): text := {
+	if v == 0 or v > 0x10FFFF or (v >= 0xD800 and v <= 0xDFFF) { return chr(0xFFFD) }
+	if v >= 0x80 and v <= 0x9F { w = HTML_WINDOWS_1252[v - 0x80]; return chr(if w == 0 then v else w) }
+	chr(v)
+}
+HTML_WINDOWS_1252 = [0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0,
+	0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178]

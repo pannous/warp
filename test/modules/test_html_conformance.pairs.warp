@@ -1,0 +1,10 @@
+# html_unescape_named_full_table
+'use html; html_unescape("&notin; &ngE; &Abreve; &zwj;x")'	"∉ ≧̸ Ă ‍x"
+'use html; html_unescape("&ThickSpace;|&fjlig;")'	"  |fj"
+'use html; html_entity("ngE")'	"≧̸"
+# html_unescape_legacy_without_semicolon
+'use html; html_unescape("&notit; &ampx &copy2 &eacute")'	"¬it; &x ©2 é"
+'use html; html_unescape("&bogus; x&y &;")'	"&bogus; x&y &;"
+# html_unescape_numeric_spec
+'use html; html_unescape("&#65&#x41;&#0;&#xD800;&#x110000;&#128;&#x9F;")'	"AA���€Ÿ"
+'use html; html_unescape("&#99999999999999999999; &#x; &#")'	"� &#x; &#"
