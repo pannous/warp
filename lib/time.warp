@@ -43,7 +43,7 @@ weekday(ms): int := (day_number(ms) + 3) % 7 + 1
 today() := date_of(clock())
 add_days(ms, n) := ms + n * 86400000
 days_between(from, to): int := day_number(to) - day_number(from)
-two_digits(n): text := if n < 10 then "0" + n else "" + n
+two_digits(n): text := if n < 0 then "-" + two_digits(0 - n) else if n < 10 then "0" + n else "" + n
 // ISO 8601: 2026-10-07
 format_date(ms): text := {
 	d = date_of(ms)
