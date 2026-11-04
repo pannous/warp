@@ -44,7 +44,7 @@ def foreign_form(p: Parser, word: text): Node := {
 // Only blanks stand between the start of the statement and the parser's position
 def starts_statement(p: Parser): bool {
 	at = p.at - 1
-	while at >= 0 and " \t\r".contains(p.code[at]) { at = at - 1 }
+	while at >= 0 and " \t\r".contains(p.code[at]) { at -= 1 }
 	at < 0 or "\n;{".contains(p.code[at])
 }
 
@@ -90,7 +90,7 @@ def class_keyword_after(p: Parser, word: text): text {
 def ruby_fields(p: Parser, word: text): Node := {
 	start = p.at + word.length
 	end = start
-	while end < p.n and not "\n;}".contains(p.code[end]) { end = end + 1 }
+	while end < p.n and not "\n;}".contains(p.code[end]) { end += 1 }
 	names = p.code[start .. end].split(",").map(name => without_colon(name.trim()))
 	if not names.all(name => name and name_end(name, 0, name.length) == name.length) { return ø }
 	p.at = end
@@ -102,5 +102,5 @@ def without_colon(name: text): text := if name.starts_with(":") then name[1 .. n
 // `mixin Name {`: a name and a block after the blanks behind `word`
 def block_after_name(p: Parser, word: text): bool {
 	name = name_after_blanks(p, word)
-	count(name) > 0 and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)
+	count(name) > 0 and char_at(p, spaces_end(p, spaces_end(p, p.at + word.length) + name.length)) == '{'
 }

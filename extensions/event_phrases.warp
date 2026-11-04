@@ -16,10 +16,10 @@ event_phrases_extension = Extension{name: "event_phrases", keyword_readers: even
 # Rust twin: jumps.rs try_parse_emit
 def event_phrase(p: Parser, word: text): Node := {
 	before = p.at
-	p.at = p.at + word.length
+	p.at += word.length
 	skip_spaces(p)
 	phrase = [symbol(word)]
-	while is_name_start(peek(p.code, p.at, p.n)) or (phrase.length > 1 and "0123456789\"'".contains(peek(p.code, p.at, p.n))) {
+	while is_name_start(char_here(p)) or (phrase.length > 1 and "0123456789\"'".contains(char_here(p))) {
 		if operator_at(p).length > 0 {
 			p.at = before
 			return ø

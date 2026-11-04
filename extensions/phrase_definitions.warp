@@ -10,9 +10,9 @@ phrase_definitions_extension = Extension{name: "phrase_definitions", keyword_rea
 # Rust twin: functions.rs try_parse_to_definition, phrase_result_type, phrase_redefinition
 def to_definition(p: Parser): Node := {
 	before = p.at
-	p.at = p.at + 2
+	p.at += 2
 	skip_spaces(p)
-	if not is_name_start(peek(p.code, p.at, p.n)) {
+	if not is_name_start(char_here(p)) {
 		p.at = before
 		return ø
 	}
@@ -24,7 +24,7 @@ def to_definition(p: Parser): Node := {
 	while true {
 		skip_spaces(p)
 		if at_to_header_end(p) { break }
-		if not is_name_start(peek(p.code, p.at, p.n)) {
+		if not is_name_start(char_here(p)) {
 			p.at = before
 			return ø
 		}
@@ -34,10 +34,10 @@ def to_definition(p: Parser): Node := {
 			result_type = phrase_result_type(p)
 			if result_type != "" { break }
 		}
-		if is_at(p.code, p.at, '{', p.n) { shapes += [[word, atom(p)]] }
+		if at_char(p, '{') { shapes += [[word, atom(p)]] }
 		words += [word]
 	}
-	if is_at(p.code, p.at, ':', p.n) { p.at = p.at + 1 }
+	if at_char(p, ':') { advance(p) }
 	skip_spaces(p)
 	body = definition_body(p)
 	parameters = phrase_slots(words, body, p.types).map(parameter => shaped(parameter, shapes))
@@ -63,7 +63,7 @@ def header_word(p: Parser): text {
 def phrase_result_type(p: Parser): text {
 	after_as = p.at
 	skip_spaces(p)
-	if is_name_start(peek(p.code, p.at, p.n)) {
+	if is_name_start(char_here(p)) {
 		result_type = header_word(p)
 		skip_spaces(p)
 		if at_to_header_end(p) or keyword_at(p, "do") { return result_type }
@@ -75,7 +75,7 @@ def phrase_result_type(p: Parser): text {
 # A definition's body: a `{…}` block, the rest of the statement, or the lines indented below
 # Rust twin: blocks.rs parse_definition_body
 def definition_body(p: Parser): Node := {
-	if is_at(p.code, p.at, '{', p.n) { return atom(p) }
+	if at_char(p, '{') { return atom(p) }
 	if not only_blanks_before_newline(p) { return statement_words(p) }
 	block = indented_block(p)
 	if block == ø { raise "a definition needs a body: `to name params: body`" }
@@ -106,18 +106,18 @@ def phrase_slots(words: list, body: Node, types: list): list {
 		word = words#at
 		if phrase_prepositions.contains(word) {
 			preposition = word
-			at = at + 1
+			at += 1
 			continue
 		}
 		noun = [word]
 		if phrase_articles.contains(word) and in_slot(words, at + 1) and (known_type(words#(at + 1), types) or not mentions(body, word)) {
 			noun = []
 			while in_slot(words, at + 1) and not phrase_articles.contains(words#(at + 1)) {
-				at = at + 1
+				at += 1
 				noun += [words#at]
 			}
 		}
-		at = at + 1
+		at += 1
 		# `a full name` of `class full name`: the nouns together are the type, and the slot's name
 		head = if #noun > 1 and known_type(noun.join("-"), types) then noun.join("-") else noun#(#noun)
 		slot = if known_type(head, types) then Key(symbol(head), Op.Colon, symbol(head)) else symbol(head)
@@ -168,7 +168,7 @@ def phrase_redefinition(p: Parser, name: text, parameters: list): text {
 			if not (before is symbol and current is symbol) { return "" }
 			classes += ["class " + name_of(before), "class " + name_of(current)]
 		}
-		at = at + 1
+		at += 1
 	}
 	if #classes == 0 { return "" }
 	name + " is defined twice; declare " + classes.join(" and ") + " to dispatch on them"

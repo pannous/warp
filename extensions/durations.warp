@@ -44,7 +44,7 @@ def time_unit_at(p: Parser, at: int): list? := {
 	unit = time_unit_named(p.code[at .. end])
 	if unit == ø { return ø }
 	after = run_end(p.code, end, ' ', p.n)
-	starts_entry = is_at(p.code, after, ':', p.n) or (is_at(p.code, after, '=', p.n) and not is_at(p.code, after + 1, '=', p.n))
+	starts_entry = char_at(p, after) == ':' or (char_at(p, after) == '=' and char_at(p, after + 1) != '=')
 	if starts_entry then ø else [unit, end]
 }
 

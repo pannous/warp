@@ -2,8 +2,8 @@
 # (C's `0.1l` is the litre instead; Rust twin: numbers.rs literal_type_suffix)
 FLOAT_SUFFIXES = "fFdD"
 read_float_suffix(p: Parser, written: text, literal: text): Node := {
-	if not FLOAT_SUFFIXES.contains(peek(p.code, p.at, p.n)) or is_name_char(peek(p.code, p.at + 1, p.n)) { return ø }
-	p.at = p.at + 1
+	if not FLOAT_SUFFIXES.contains(char_here(p)) or is_name_char(char_ahead(p, 1)) { return ø }
+	advance(p)
 	Key(written_number(written), Op.As, symbol("float"))
 }
 float_suffixes_extension = Extension{name: "float_suffixes", number_suffix_readers: [read_float_suffix]}
