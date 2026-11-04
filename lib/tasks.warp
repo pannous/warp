@@ -65,7 +65,7 @@ global running_task = ø
 global failed_tasks = []
 global task_sleep_said = no
 // the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
-task_go(first: function) := {
+task_go(first: function): Task := {
 	task = Task(clock(), first)
 	task.context = task_context()
 	task_queue = task_queue + [task]
@@ -137,7 +137,7 @@ task_value(x: Task): any := {
 	x.value
 }
 // `await any jobs`: the value of the first to be done
-task_awaited_any(xs) := {
+task_awaited_any(xs: any): any := {
 	tasks_run_while(() => not xs.any(is_done), ø)
 	task_awaited(xs.filter(is_done)#1)
 }
@@ -151,7 +151,7 @@ task_value_within(x: Task, ms, fallback: function) := {
 is_done(x: any): bool := if x is Task then task_finished(x) else yes
 task_finished(x: Task): bool := x.done
 // a task named name ends without a result: an await or read of it raises; one done already keeps its value
-task_cancelled(x, name: text) := {
+task_cancelled(x: any, name: text): any := {
 	if x is Task and not x.done { task_ended(x, name) }
 	ø
 }
@@ -165,7 +165,7 @@ task_stopped(x, name: text) := {
 	warning("stop pauses " + name + "; to end it: cancel " + name)
 	task_paused(x)
 }
-task_paused(x) := {
+task_paused(x: any): any := {
 	if x is Task and not x.paused { task_held(x) }
 	ø
 }
@@ -181,7 +181,7 @@ task_cancelled_then(x, handler: function) := {
 	if x is Task { x.cancel_handlers += [handler] }
 	ø
 }
-task_resumed(x) := {
+task_resumed(x: any): any := {
 	if x is Task { x.paused = no }
 	ø
 }
