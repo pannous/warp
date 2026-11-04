@@ -1,0 +1,297 @@
+// The standard library module graphs (card lib-graphs): `use graphs`, not baked. Graphs over int or text nodes,
+// directed or undirected, weighted (default weight 1) or not, plus the classic algorithms, all iterative (explicit
+// stacks and queues, no recursion), so chains of 10k+ nodes work.
+// Order: nodes keep their insertion order (first appearance in the edges), neighbours keep edge insertion order;
+// every result follows that order. Equal priorities in dijkstra/a_star settle in PriorityQueue heap order
+// (deterministic for the same input); a path keeps the predecessor that first reached its best distance.
+// Node identity is its str() plus int-vs-text kind, so 1 and "1" are different nodes. Maps given to graph_of have
+// text keys (warp map keys), so their nodes are texts.
+use collections
+
+class Graph { directed = false; nodes = []; index = {}; adjacency = []; edge_list = [] }
+
+graph_key(n) := { if n is text { "t:" + n } else { "v:" + str(n) } }
+graph_find(g, n) := { k = graph_key(n); if k in g.index { g.index[k] } else { 0 } }
+graph_id(g, n) := { i = graph_find(g, n); if i == 0 { raise "graphs: no node " + str(n) }; i }
+
+graph_new(directed) := { g = Graph(); g.directed = directed; g }
+graph_add_node(g, n) := {
+	i = graph_find(g, n)
+	if i == 0 { g.nodes.add(n); g.adjacency.add([]); i = count(g.nodes); g.index[graph_key(n)] = i }
+	i
+}
+graph_add_edge(g, u, v, w) := {
+	i = graph_add_node(g, u)
+	j = graph_add_node(g, v)
+	g.adjacency#i = g.adjacency#i + [[j, w]]
+	if not g.directed and i != j { g.adjacency#j = g.adjacency#j + [[i, w]] }
+	g.edge_list.add([u, v, w])
+	g
+}
+// edges: a list of [u, v] or [u, v, weight], or a map u -> list of v or of [v, weight]
+graph_of(edges, directed) := {
+	g = graph_new(directed)
+	if edges is map {
+		for u in edges.keys {
+			graph_add_node(g, u)
+			for e in edges[u] { if e is list { graph_add_edge(g, u, e#1, e#2) } else { graph_add_edge(g, u, e, 1) } }
+		}
+	} else {
+		for e in edges { if count(e) >= 3 { graph_add_edge(g, e#1, e#2, e#3) } else { graph_add_edge(g, e#1, e#2, 1) } }
+	}
+	g
+}
+graph_nodes(g) := g.nodes
+graph_edges(g) := g.edge_list
+graph_neighbors(g, n) := [g.nodes#(e#1) for e in g.adjacency#(graph_id(g, n))]
+graph_node_count(g) := count(g.nodes)
+
+// breadth-first order from start
+bfs(g, start) := {
+	s = graph_id(g, start)
+	seen = [false for x in g.nodes]
+	seen#s = true
+	order = []
+	q = Deque()
+	q.push_back(s)
+	while not q.is_empty() {
+		i = q.pop_front()
+		order.add(g.nodes#i)
+		for e in g.adjacency#i { j = e#1; if not seen#j { seen#j = true; q.push_back(j) } }
+	}
+	order
+}
+// depth-first preorder from start, neighbours tried in insertion order (as the recursive version would)
+dfs(g, start) := {
+	s = graph_id(g, start)
+	seen = [false for x in g.nodes]
+	order = []
+	stack = [s]
+	while count(stack) > 0 {
+		i = stack.pop()
+		if not seen#i {
+			seen#i = true
+			order.add(g.nodes#i)
+			adj = g.adjacency#i
+			k = count(adj)
+			while k >= 1 { j = (adj#k)#1; if not seen#j { stack.add(j) }; k = k - 1 }
+		}
+	}
+	order
+}
+has_path(g, a, b) := { if graph_find(g, a) == 0 or graph_find(g, b) == 0 { return false }; graph_id(g, b) in [graph_id(g, x) for x in bfs(g, a)] }
+graph_walk_back(g, prev, t) := {
+	path = []
+	i = t
+	while i != 0 { path.add(g.nodes#i); i = prev#i }
+	path.reverse()
+}
+// fewest edges from a to b (BFS); [] when b is unreachable
+shortest_path(g, a, b) := {
+	s = graph_id(g, a)
+	t = graph_id(g, b)
+	prev = [0 for x in g.nodes]
+	seen = [false for x in g.nodes]
+	seen#s = true
+	q = Deque()
+	q.push_back(s)
+	while not q.is_empty() {
+		i = q.pop_front()
+		if i == t { return graph_walk_back(g, prev, t) }
+		for e in g.adjacency#i { j = e#1; if not seen#j { seen#j = true; prev#j = i; q.push_back(j) } }
+	}
+	[]
+}
+graph_check_weights(g, who) := { for e in g.edge_list { if e#3 < 0 { raise who + ": negative weight " + str(e#3) + " on " + str(e#1) + " -> " + str(e#2) } } }
+// the core of dijkstra and a_star: [dist, prev, done] over node numbers; target 0 means all nodes
+graph_search(g, s, t, h, who) := {
+	graph_check_weights(g, who)
+	n = count(g.nodes)
+	dist = [ø for x in g.nodes]
+	prev = [0 for x in g.nodes]
+	done = [false for x in g.nodes]
+	dist#s = 0
+	q = PriorityQueue()
+	q.push_with(s, h(g.nodes#s))
+	going = true
+	while going and not q.is_empty() {
+		i = q.pop()
+		if not done#i {
+			done#i = true
+			if i == t { going = false } else {
+				for e in g.adjacency#i {
+					j = e#1
+					d = dist#i + e#2
+					if not done#j and (dist#j == ø or d < dist#j) { dist#j = d; prev#j = i; q.push_with(j, d + h(g.nodes#j)) }
+				}
+			}
+		}
+	}
+	[dist, prev, done]
+}
+graph_zero(n) := 0
+// distances from source to every reachable node: a list of [node, distance] in node order
+dijkstra(g, source) := {
+	r = graph_search(g, graph_id(g, source), 0, graph_zero, "dijkstra")
+	dist = r#1
+	[[g.nodes#i, dist#i] for i in 1 to count(g.nodes) if dist#i != ø]
+}
+graph_path_result(g, r, t) := { if (r#3)#t { [graph_walk_back(g, r#2, t), (r#1)#t] } else { [[], ø] } }
+// the cheapest path from a to b: [path, cost], or [[], ø] when unreachable
+dijkstra_path(g, a, b) := graph_path_result(g, graph_search(g, graph_id(g, a), graph_id(g, b), graph_zero, "dijkstra"), graph_id(g, b))
+// A* with heuristic(node) (admissible: never more than the true remaining cost): [path, cost] or [[], ø]
+a_star(g, a, b, heuristic) := graph_path_result(g, graph_search(g, graph_id(g, a), graph_id(g, b), heuristic, "a_star"), graph_id(g, b))
+
+// Kahn's order (ready nodes in insertion order); a cycle raises "topological_sort: cycle a -> b -> a"
+topological_sort(g) := {
+	if not g.directed { raise "topological_sort: the graph is undirected" }
+	n = count(g.nodes)
+	indeg = [0 for x in g.nodes]
+	for adj in g.adjacency { for e in adj { indeg#(e#1) = indeg#(e#1) + 1 } }
+	ready = PriorityQueue()
+	for i in 1 to n { if indeg#i == 0 { ready.push(i) } }
+	order = []
+	while not ready.is_empty() {
+		i = ready.pop()
+		order.add(g.nodes#i)
+		for e in g.adjacency#i { j = e#1; indeg#j = indeg#j - 1; if indeg#j == 0 { ready.push(j) } }
+	}
+	if count(order) < n {
+		// walk back along edges among the leftover nodes until one repeats: that loop is a cycle
+		left = [indeg#i > 0 for i in 1 to n]
+		into = [0 for x in g.nodes]
+		for i in 1 to n { if left#i { for e in g.adjacency#i { if left#(e#1) and into#(e#1) == 0 { into#(e#1) = i } } } }
+		i = 1
+		while not left#i { i = i + 1 }
+		pos = [0 for x in g.nodes]
+		walk = []
+		while pos#i == 0 { walk.add(i); pos#i = count(walk); i = into#i }
+		loop = walk[pos#i - 1:]
+		loop = loop.reverse()
+		names = [str(g.nodes#k) for k in loop] + [str(g.nodes#(loop#1))]
+		raise "topological_sort: cycle " + names.join(" -> ")
+	}
+	order
+}
+// components ignoring direction (weakly connected for a directed graph), each in BFS order, ordered by first node
+connected_components(g) := {
+	n = count(g.nodes)
+	both = [[e#1 for e in adj] for adj in g.adjacency]
+	if g.directed { for i in 1 to n { for e in g.adjacency#i { both#(e#1) = both#(e#1) + [i] } } }
+	comp = [0 for x in g.nodes]
+	result = []
+	for s in 1 to n {
+		if comp#s == 0 {
+			part = []
+			comp#s = s
+			q = Deque()
+			q.push_back(s)
+			while not q.is_empty() {
+				i = q.pop_front()
+				part.add(g.nodes#i)
+				for j in both#i { if comp#j == 0 { comp#j = s; q.push_back(j) } }
+			}
+			result.add(part)
+		}
+	}
+	result
+}
+// iterative Tarjan: components in Tarjan's completion order (reverse topological order of the condensation),
+// each listed in node order
+strongly_connected_components(g) := {
+	n = count(g.nodes)
+	num = [0 for x in g.nodes]
+	low = [0 for x in g.nodes]
+	on = [false for x in g.nodes]
+	next = [1 for x in g.nodes]
+	stack = []
+	result = []
+	counter = 0
+	for s in 1 to n {
+		if num#s == 0 {
+			calls = [s]
+			counter = counter + 1
+			num#s = counter
+			low#s = counter
+			stack.add(s)
+			on#s = true
+			while count(calls) > 0 {
+				i = calls#count(calls)
+				adj = g.adjacency#i
+				if next#i <= count(adj) {
+					j = (adj#(next#i))#1
+					next#i = next#i + 1
+					if num#j == 0 {
+						counter = counter + 1
+						num#j = counter
+						low#j = counter
+						stack.add(j)
+						on#j = true
+						calls.add(j)
+					} else if on#j and num#j < low#i { low#i = num#j }
+				} else {
+					calls.pop()
+					if count(calls) > 0 { p = calls#count(calls); if low#i < low#p { low#p = low#i } }
+					if low#i == num#i {
+						members = []
+						going = true
+						while going { k = stack.pop(); on#k = false; members.add(k); if k == i { going = false } }
+						result.add([g.nodes#k for k in members.sort()])
+					}
+				}
+			}
+		}
+	}
+	result
+}
+// Kruskal with union-find (path halving, union by size): the forest's edges [u, v, w] by weight, ties in edge order
+
+kruskal_mst(g) := {
+	if g.directed { raise "kruskal_mst: the graph is directed" }
+	parent = [i for i in 1 to count(g.nodes)]
+	size = [1 for x in g.nodes]
+	es = g.edge_list
+	// a stable sort by weight: insertion sort over positions (merge-free, fine for moderate edge counts)
+	order = graph_sort_by_weight(es)
+	tree = []
+	for k in order {
+		e = es#k
+		a = graph_id(g, e#1)
+		b = graph_id(g, e#2)
+		while parent#a != a { parent#a = parent#(parent#a); a = parent#a }
+		while parent#b != b { parent#b = parent#(parent#b); b = parent#b }
+		if a != b {
+			if size#a < size#b { t = a; a = b; b = t }
+			parent#b = a
+			size#a = size#a + size#b
+			tree.add(e)
+		}
+	}
+	tree
+}
+// a stable bottom-up merge sort of edge positions by weight
+graph_sort_by_weight(es) := {
+	order = [k for k in 1 to count(es)]
+	n = count(order)
+	width = 1
+	while width < n {
+		merged = []
+		lo = 1
+		while lo <= n {
+			mid = lo + width
+			hi = lo + 2 * width
+			if mid > n + 1 { mid = n + 1 }
+			if hi > n + 1 { hi = n + 1 }
+			i = lo
+			j = mid
+			while i < mid or j < hi {
+				if j >= hi or (i < mid and (es#(order#i))#3 <= (es#(order#j))#3) { merged.add(order#i); i = i + 1 } else { merged.add(order#j); j = j + 1 }
+			}
+			lo = hi
+		}
+		order = merged
+		width = width * 2
+	}
+	order
+}
+mst_weight(tree) := { s = 0; for e in tree { s = s + e#3 }; s }
