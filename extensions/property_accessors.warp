@@ -165,3 +165,5 @@ property_accessors(program: Node): Node := {
 	brought = property_modules.filter(module => module != prelude_module and module in needed and module not in uses)
 	separated(bracketed(brought.map(module => plain_node(parsed("use " + module))) + rewritten, ""), ";")
 }
+# a pass of the used stage, before the type modules are reached (card leaves-core)
+property_accessors_extension = Extension{name: "property_accessors", passes_before: {"with_type_module_uses": property_accessors}}

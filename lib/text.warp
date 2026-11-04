@@ -1,5 +1,6 @@
 // The standard library module text (notes/stdlib.md): standard functions of every program, `repeat(t, 2)` or `t.repeat(2)`, no `use` needed (`use text` only for the qualified `text.repeat(t, 2)`)
 use list
+use letter_ranges
 repeat(t: text, n: int) := t * n
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
 pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
@@ -15,9 +16,27 @@ format(template, values) := {
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
 words(t) := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
 lines(t: text) := split(t, "\n")
-// the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15);
-// a letter with a case beyond ASCII too (é, Ω), not yet the caseless scripts (card unicode-letters)
-letters(t) := [c for c in chars(t) if is_alpha(c) or upper(c) != lower(c)]
+// the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
+// of any script: letters of "x، ب٣" is ['x' 'ب']
+letters(t) := [c for c in chars(t) if is_unicode_letter(c)]
+// whether c is a letter of any script, cased or not (Unicode's letter categories): `q`, `é`, `ا`, `名`; no digit, mark
+// or punctuation. is_alpha stays ASCII's a–z and A–Z
+is_unicode_letter(c) := {
+	code = ord(c)
+	if code < 128 { return is_alpha(c) }
+	at = letter_range_before(code)
+	at >= 0 and code <= letter_ranges[at * 2 + 1]
+}
+// the last letter range (lib/letter_ranges.warp) starting at or before code, by halving; -1 when none does
+letter_range_before(code: int): int := {
+	low = 0
+	high = count(letter_ranges) /! 2
+	while low < high {
+		middle = (low + high) /! 2
+		if letter_ranges[middle * 2] <= code { low = middle + 1 } else { high = middle }
+	}
+	low - 1
+}
 capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
 center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
 title(t) := join([capitalize(w) for w in words(t)], " ")

@@ -1,4 +1,4 @@
-# a824d89f53 2026-11-03 08:35 180/238 75.6%
+# 6dde37dae9 2026-11-04 03:36 174/238 73.1%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
@@ -71,7 +71,7 @@ ok   samples/gpu/domain_warp.warp
 ok   samples/gpu/gpu_arrays.warp
 ok   samples/gpu/gpu_map.warp
 ok   samples/gpu/gpu_million.warp
-ok   samples/gpu/gpu_visualizer.warp
+ran  samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
@@ -112,7 +112,7 @@ FAIL samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
 ok   samples/lists/sieve.warp
-FAIL samples/lists/sieve_idiomatic.warp
+ok   samples/lists/sieve_idiomatic.warp
 ok   samples/lists/sorting.warp
 ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/typed_lists.warp
@@ -171,16 +171,16 @@ ran  samples/servers/route_headers.warp
 ran  samples/servers/server.warp
 ran  samples/servers/worker.warp
 ok   samples/signals/signal_fields.warp
-ok   samples/sound/arrangement.warp
-ok   samples/sound/filters.warp
+ran  samples/sound/arrangement.warp
+ran  samples/sound/filters.warp
 ok   samples/sound/gpu_visualizer_warp.warp
-ok   samples/sound/harmony.warp
+ran  samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ran  samples/sound/midi.warp
-ok   samples/sound/music.warp
+ran  samples/sound/music.warp
 ok   samples/sound/play_mp3.warp
-ok   samples/sound/rhythm.warp
-ok   samples/sound/signal_graph.warp
+ran  samples/sound/rhythm.warp
+ran  samples/sound/signal_graph.warp
 ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp

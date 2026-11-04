@@ -59,3 +59,8 @@ def duration_text(length: list): text {
 }
 
 def counted_unit(amount: int, unit: text): text := if amount == 1 then "1 " + unit else "$(amount) $(unit)s"
+# the end of the digits from `at` on (from the lexer, card lexer-helpers-to-extensions)
+digits_end(source: text, at: int, n: int): int := {
+	while at < n and is_digit(source[at]) { at += 1 }
+	at
+}

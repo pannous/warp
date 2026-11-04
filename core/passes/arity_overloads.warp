@@ -161,8 +161,48 @@ arity_overloads(program: Node): Node := {
 	overload_classes = declared_classes(program)
 	overload_bases = declared_bases(program)
 	overloaded = overloaded_arities(program)
-	typed_overloads(if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program)))
+	if #overloaded == 0 { return typed_overloads(program) }
+	resolved_program = resolved(program, overloaded, called_parameters(program))
+	refused_overload_values(resolved_program, overloaded, arities_described)
+	typed_overloads(resolved_program)
 }
+
+# A function defined more than once named as a value, `xs.map(quoted)`, `g = quoted`: its definitions are variants by
+# now and the name means none of them, refused naming them and the lambda that says which; inside a definition or a
+# lambda, a parameter or variable of the name is its own (`sum = hi + lo`, `for tested in …`), at the top too
+refused_overload_values(program: Node, overloaded: map, described: function) := refuse_overload_values(program, shadowed(overloaded, names_bound(program, [])), described)
+refuse_overload_values(n: Node, overloaded: map, described: function) := {
+	call = definition_call(n)
+	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + names_bound(value_of(n), []) else []
+	bound = bound + loop_variables(n)
+	if #bound > 0 { overloaded = shadowed(overloaded, bound) }
+	if #overloaded == 0 { return ø }
+	for part in value_parts(n) {
+		if part is symbol and overloaded.has(name_of(part)) { raise overload_value_refusal(name_of(part), overloaded[name_of(part)], described, part) }
+	}
+	for part in parts_of(n) { refuse_overload_values(part, overloaded, described) }
+	ø
+}
+# the parts of n standing for values: not the head of a call or a phrase, a method's name, a label or an assigned name
+value_parts(n: Node): list := match n {
+	Key(left, Op.Dot, right): [left]
+	Key(left, Op.Colon, right): [right]
+	Key(left, Op.Assign, right): [right]
+	Key(left, Op.Define, right): []
+	Key(left, op, right): [left, right]
+	List(items, Bracket.Round, Separator.None): items[1 ..]
+	List(items, Bracket.None, Separator.Space): items[1 ..]
+	List(items, Bracket.Curly, Separator.Space): items[1 ..]
+	List(items, bracket, separator): items
+	_: []
+}
+overload_value_refusal(name: text, variants: list, described: function, at: Node): text := name + " is defined " + "${#variants}" + " times, " + described(variants) + "; pass a lambda that calls the one you mean, e.g. x => " + name + "(x)" + place_text(written_at(at), "")
+arities_described(spans: list): text := "with " + and_listed(spans.map(span_text).sort()) + " parameters"
+types_described(variants: list): text := "for " + and_listed(variants.map(types_text))
+types_text(types: list): text := "(" + types.join(", ") + ")"
+span_text(span: list): text := if span#2 < 0 then "${span#1} or more" else if span#1 == span#2 then "${span#1}" else "${span#1} to ${span#2}"
+# `a`, `a and b`, `a, b and c`
+and_listed(words: list): text := if #words < 2 then words.join("") else words[0 ..< #words - 1].join(", ") + " and " + words.last
 
 # --- by parameter types (card pure-lane-refuses) ---
 # `f(a: int) := 1; f(a: text) := 2` are the variants f·int and f·text, in a program or across the files it uses; a
@@ -595,6 +635,7 @@ typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
 	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
+	refused_overload_values(resolved, overloaded, types_described)
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
