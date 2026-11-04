@@ -1,0 +1,2 @@
+# Source: notes/stdlib.md time module and lib/time.warp calendar documentation
+'use time; [day_number(172800000), days_from_date(1970, 1, 2), add_days(0, 2)]'	[2, 1, 172800000]
