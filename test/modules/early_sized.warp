@@ -1,0 +1,3 @@
+# a fixture of test_value_read_early: a value whose function names a word of a module used after this one
+size = sized(0)
+sized(n) := if n > 0 then area(n) else 1
