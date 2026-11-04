@@ -24,6 +24,8 @@ rewrite finish $x => $awaited where $awaited = awaited_operand($x)
 // `shared n = 0` (wiki/async.md): one value every task sees; cooperative tasks run in one instance, so it is the
 // a global of the main level as a `linear` array is, its `+=` atomic as any step is
 rewrite (shared $d) => global: $d
+// after a condition return a value: a task that waits until the condition holds, then gives the value
+rewrite (after $c return $x) => task_when(() => $c, () => $x)
 // a cancelled task yields no result (decision stopped-no-result): reading or awaiting it raises "job was cancelled"
 rewrite cancel $x => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
 rewrite $x.cancel() => task_cancelled($x, $n) where statement and $x is symbol and $n = spelled($x)
@@ -71,6 +73,9 @@ task_go(first: function): Task := {
 	task_queue = task_queue + [task]
 	task
 }
+// the task of `after`: each turn it checks the condition, giving the others their turn until it holds
+task_when(holds: function, value: function): Task := task_go(() => task_polled(holds, value))
+task_polled(holds: function, value: function) := if holds() then value() else task_sleep(1, () => task_polled(holds, value))
 // a sleep's amount in ms: a duration's, a plain number's seconds (as sleep)
 sleep_ms_of(amount) := (if amount is Time then amount.amount else amount) * 1000
 // the rest of the running task, due once it slept that long (ms)

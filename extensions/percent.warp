@@ -15,7 +15,7 @@ read_percent(p: Parser, operand: Node, min_power: int): Node := {
 	skip_blanks(p)
 	keyed("*", percent, expression(p, binding_powers("%")#2))
 }
-percent_extension = Extension{name: "percent", suffix_readers: [read_percent]}
+percent_extension = Extension{name: "percent", suffix_readers: {"%": read_percent}}
 
 # what follows a % on its line leaves it no operand: the line's end, a separator, a closing bracket, a comparison, `of`,
 # an operator standing apart (`10% + 1`; `7 % -3` takes the glued -3)
