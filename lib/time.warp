@@ -74,7 +74,10 @@ format_duration(ms): text := {
 	join(parts, " ")
 }
 is_leap_year(year): bool := year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-days_in_month(year, month): int := if month == 2 then (if is_leap_year(year) then 29 else 28) else if month == 4 or month == 6 or month == 9 or month == 11 then 30 else 31
+days_in_month(year, month): int := {
+	if not (month is int) or month < 1 or month > 12 { raise "days_in_month: the month " + str(month) + " is not 1 to 12" }
+	if month == 2 then (if is_leap_year(year) then 29 else 28) else if month == 4 or month == 6 or month == 9 or month == 11 then 30 else 31
+}
 
 // Time zones (card time-zones-warp; Rust twin: rust-harness:src/time/calendar.rs Zone, rust-harness:src/wasm_emitter/time/time_zones.rs): the
 // offset a zone has at an instant under the Europe and United States daylight saving rules, and the instant a wall
@@ -229,7 +232,7 @@ pattern_parts(pattern: text): list := {
 	}
 	parts
 }
-padded(n: int, width: int): text := { t = str(n); while #t < width { t = "0" + t }; t }
+padded(n: int, width: int): text := { t = str(abs(n)); sign = if n < 0 then "-" else ""; while #t + #sign < width { t = "0" + t }; sign + t }
 // the time (an Instant or milliseconds since 1970) written in the pattern: format_pattern(0, "d MMM yyyy") is "1 Jan 1970"
 format_pattern(time: any, pattern: text): text := {
 	ms = if time is Instant then time.ms else time
