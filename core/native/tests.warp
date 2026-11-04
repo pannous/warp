@@ -27,6 +27,9 @@ KILLED = 9
 EXEC_FAILED = 127
 POLL_MICROSECONDS = 5000
 SLOT_WAIT_MICROSECONDS = 20000
+# how often a run says on stderr how far it got: a long run, or one waiting for a slot every other `warp test` holds,
+# is never silent
+PROGRESS_MILLISECONDS = 60000
 MAX_SLOTS = 256
 # a slot's child: its pid (0 for a free slot), its run's line, when it started, its slot's lock
 struct Child { pid: i32; run: i64; started: i64; lock: i32 }
@@ -77,6 +80,7 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 	next = 0
 	done = 0
 	status = allocate(4)
+	reported = milliseconds_now()
 	while done < total {
 		for k in 0..slots {
 			child = child_at(children + k * CHILD_BYTES)
@@ -111,7 +115,22 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 			}
 		}
 		if ended <= 0 { usleep(POLL_MICROSECONDS) }
+		if milliseconds_now() - reported > PROGRESS_MILLISECONDS {
+			complain(progress_line(done, total, running_count(children, slots), slots))
+			reported = milliseconds_now()
+		}
 	}
+}
+# `warp test: 812 of 4561 runs done, 3 running`; none running: every slot of the shared pool is another run's
+progress_line(done: int, total: int, running: i32, slots: i32): text := {
+	line = joined(joined(joined(joined(joined("warp test: ", text_of(done)), " of "), text_of(total)), " runs done, "), joined(text_of(running), " running"))
+	if running > 0 { return line }
+	joined(line, joined(joined(", waiting for one of the ", text_of(slots)), " test slots every `warp test` shares (~/.cache/warp/test-slots)"))
+}
+running_count(children: pointer, slots: i32): i32 := {
+	running = 0 as i32
+	for k in 0..slots { if child_at(children + k * CHILD_BYTES).pid > 0 { running = running + 1 } }
+	running
 }
 child_at(address: pointer): Child := address
 # a run's status and milliseconds written, its slot freed
