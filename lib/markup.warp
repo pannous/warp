@@ -54,7 +54,7 @@ export page_render(value: any) := {
 // markup (decision html-render-mode; the emitter's _start)
 export page_of(value: any): any := if html_is_page(value) then page_render(value) else ø
 // an element, or a group of nothing but elements (`{div{…}}`, `[li{…} li{…}]`)
-html_is_page(value: any) := html_is_element(value) or (html_is_group(value) and #html_elements_in(value) > 0 and #html_elements_in(value) == #value)
+html_is_page(value: any): bool := html_is_element(value) or (html_is_group(value) and #html_elements_in(value) > 0 and #html_elements_in(value) == #value)
 export page_event(n: int, detail: any) := {
 	action = page_handlers#n
 	action(detail)
@@ -236,7 +236,7 @@ html_options(listed: any, chosen: any) := {
 }
 
 // `html{ title: "Shop" description: "…" meta: { author: "Ann" } }`: facts about the page, for its head (card html-meta)
-html_is_page_fact(item: any) := {
+html_is_page_fact(item: any): bool := {
 	if not (item is pair) { return false }
 	let name = html_name(item)
 	let value = html_content(item)
@@ -253,14 +253,14 @@ html_page_fact(name: any, value: any) := {
 }
 
 // does a block of pairs name any of `names`
-html_names_any(value: any, names: any) := {
+html_names_any(value: any, names: any): bool := {
 	for item in html_items(value) { if item is pair and contains(names, html_name(item)) { return true } }
 	false
 }
 
 // the items of an element's block, or its one item; a line of pairs (`form{ method:"post" action:"/t"` before more
 // lines) is its pairs, attributes among them
-html_items(content: any) := {
+html_items(content: any): list := {
 	if content == ø { return [] }
 	if not html_is_group(content) or html_is_element(content) { return [content] }
 	var items = []
@@ -398,7 +398,7 @@ html_child_elements(element: any) := {
 }
 
 // an element's items that are no attributes
-html_child_items(element: any) := {
+html_child_items(element: any): list := {
 	let tag = html_name(element)
 	var items = []
 	for item in html_items(html_content(element)) { if not html_is_attribute(item, tag) { items.add(item) } }
@@ -406,7 +406,7 @@ html_child_items(element: any) := {
 }
 
 // the elements an item shows: itself, or those of a group
-html_elements_in(item: any) := {
+html_elements_in(item: any): list := {
 	if html_is_element(item) { return [item] }
 	var elements = []
 	if html_is_group(item) { for part in item { for child in html_elements_in(part) { elements.add(child) } } }
@@ -433,7 +433,7 @@ style_combinator(node: any) := if contains(keys(style_combinators), str(node.op)
 
 style_body(body: any) := bracketed(style_items(if style_is_block(body) then body else [body]), "{")
 
-style_is_block(node: any) := not (node is pair) and str(node.bracket) == "{"
+style_is_block(node: any): bool := not (node is pair) and str(node.bracket) == "{"
 
 // the items of a block: rules with their selectors as texts, declarations with their lengths as texts; selector
 // words wait for their block (`ul li`, `h1, h2`)
@@ -509,7 +509,7 @@ style_joined(pending: any, last: any, last_joiner: any) := {
 style_rule(selector: any, body: any) := key(selector, ":", style_body(body))
 
 // `color: theme`: a property name and a value that is no block
-style_is_declaration(node: any) := node is pair and str(node.op) == ":" and (node.key is symbol or node.key is text) and not style_is_block(node.value)
+style_is_declaration(node: any): bool := node is pair and str(node.op) == ":" and (node.key is symbol or node.key is text) and not style_is_block(node.value)
 
 // `#done = "red"`, `.done: "red"`: a class or id selector and a value that is no block, nor the one declaration the
 // parser chains onto it (`.done{color:red}` reads `.done:color:red`)
