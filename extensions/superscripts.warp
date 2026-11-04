@@ -1,6 +1,6 @@
 # Superscript powers (card parser-rows, decision core-is-self): `x²`, `x⁻¹`, `2ⁿ⁺¹` read after an operand; the lexer
 # keeps the superscript characters (lexer.warp SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS), names may hold raised letters
-superscripts_extension = Extension{name: "superscripts", suffix_readers: [superscript_power]}
+superscripts_extension = Extension{name: "superscripts", suffix_readers: reading_rows(("⁻⁺" + SUPERSCRIPT_DIGITS + SUPERSCRIPT_LETTERS).chars(), superscript_power)}
 
 # `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
 # the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø

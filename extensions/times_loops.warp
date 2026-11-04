@@ -6,7 +6,7 @@ read_times(p: Parser, count: Node, min_power: int): Node := {
 	skip_spaces(p)
 	operator_call("times", [count, repeated(p)])
 }
-times_loops_extension = Extension{name: "times_loops", suffix_readers: [read_times]}
+times_loops_extension = Extension{name: "times_loops", suffix_readers: {"t": read_times}}
 
 # `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
 # Rust twin: suffixes.rs try_parse_control_suffix

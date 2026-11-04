@@ -49,7 +49,6 @@ result = (square numbers)
 	|> sum
 
 # Partial application
-def add(a, b) := a + b
 increment = add(1, _)  # partial: increment(x) = add(1, x)
 
 # Closures

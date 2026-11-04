@@ -74,7 +74,18 @@ insert(xs: list, at: int, x) := list_insert(xs, at, x)
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
-clear(xs: list): same as xs from emitter
+// Python's xs.clear() and m.clear(): x emptied in place, so every alias sees it
+clear(x: any): any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
+// Python's xs.pop(i) and m.pop(k): the item at the 0-based position i (-1 the last) or the value of the key k, removed
+// from x in place, so every alias sees it
+pop(x: any, k: any): any := {
+	if x is map { v = x.get(k); x.remove(k); return v }
+	p = popped_position(x, k)
+	v = x#p
+	for i in p to count(x) - 1 { x#i = x#(i + 1) }
+	x.pop()
+	v
+}
 number(x): number from emitter
 // the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
 list_become(place, fresh): same as place from emitter

@@ -1,0 +1,3 @@
+# First completed task retains its value (notes/threads.md; decision N29).
+'use tasks; jobs = [go { 7 }, go { 9 }]; await any jobs'	7
+'use tasks; jobs = [go { "first" }, go { "second" }]; await any jobs'	"first"
