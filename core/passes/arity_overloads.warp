@@ -163,7 +163,7 @@ arity_overloads(program: Node): Node := {
 	overloaded = overloaded_arities(program)
 	if #overloaded == 0 { return typed_overloads(program) }
 	resolved_program = resolved(program, overloaded, called_parameters(program))
-	refuse_overload_values(resolved_program, overloaded, spans => "with " + and_listed(spans.map(span_text)) + " parameters")
+	refuse_overload_values(resolved_program, overloaded, arities_described)
 	typed_overloads(resolved_program)
 }
 
@@ -195,6 +195,9 @@ value_parts(n: Node): list := match n {
 	_: []
 }
 overload_value_refusal(name: text, variants: list, described: function, at: Node): text := name + " is defined " + "${#variants}" + " times, " + described(variants) + "; pass a lambda that calls the one you mean, e.g. x => " + name + "(x)" + place_text(written_at(at), "")
+arities_described(spans: list): text := "with " + and_listed(spans.map(span_text)) + " parameters"
+types_described(variants: list): text := "for " + and_listed(variants.map(types_text))
+types_text(types: list): text := "(" + types.join(", ") + ")"
 span_text(span: list): text := if span#2 < 0 then "${span#1} or more" else if span#1 == span#2 then "${span#1}" else "${span#1} to ${span#2}"
 # `a`, `a and b`, `a, b and c`
 and_listed(words: list): text := if #words < 2 then words.join("") else words[0 ..< #words - 1].join(", ") + " and " + words.last
@@ -630,7 +633,7 @@ typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
 	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
-	refuse_overload_values(resolved, overloaded, variants => "for " + and_listed(variants.map(types => "(" + types.join(", ") + ")")))
+	refuse_overload_values(resolved, overloaded, types_described)
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
