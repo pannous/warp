@@ -1,0 +1,11 @@
+"--- a
++++ b
+@@ -1,4 +1,4 @@
+-host = localhost
++host = example.com
+ port = 8080
+-debug = yes
+-workers = 2
++debug = no
++workers = 8
+similarity 0.8"

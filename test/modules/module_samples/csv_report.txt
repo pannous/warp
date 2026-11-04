@@ -1,0 +1,5 @@
+"| region | units |
+| :----- | ----: |
+| north  |    17 |
+| south  |    16 |
+| east   |     4 |"

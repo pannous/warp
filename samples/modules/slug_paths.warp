@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+# Blog titles as slugs, each the path of its post's markdown file (slugs, path)
+use slugs
+use path
+titles = ["Crème Brûlée: A Recipe!", "Why HTTPServer Beats  the Rest", "Größe & Gewicht", "10 Tips for parseURL2Text"]
+posts = "content/posts/2026"
+join([path_join(posts, slugify(ascii_fold_german(t)) + ".md") + "  " + "#" + to_snake(ascii_fold(t)) for t in titles], "\n")
