@@ -8,8 +8,8 @@
 // Decisions and simplifications:
 // - raw HTML, block or inline, is escaped as text, never passed through: a Markdown text can't inject markup
 // - text is escaped by lib/html's html_escape, apostrophes kept as CommonMark writes them
-// - tabs are expanded to 4-column stops before parsing (the spec keeps some tabs inside code)
-// - punctuation for flanking is ASCII punctuation; Unicode whitespace is the ASCII kind and U+00A0
+// - tabs are expanded to 4-column stops in a line's leading indentation and block markers, kept as tabs after
+// - punctuation for flanking is ASCII and Unicode P/S by main blocks (md_unicode_punct); whitespace the ASCII kind and U+00A0
 // - named entities are lib/html's table (HTML_NAMED); an unknown name stays literal text
 use html
 
@@ -31,12 +31,19 @@ md_expand_tabs(line: text): text := {
 	if not ("\t" in line) { return line }
 	out = ""
 	column = 0
+	prefix = yes
+	while line.ends_with("\t") { line = line[0..<#line - 1] + " " }
+	if not ("\t" in line) { return line }
 	for c in line {
-		if c == "\t" { pad = 4 - column % 4; out += " " * pad; column += pad }
+		if prefix and not (("" + c) in MD_TAB_PREFIX) { prefix = no }
+		if c == "\t" and prefix { pad = 4 - column % 4; out += " " * pad; column += pad }
 		else { out += c; column += 1 }
 	}
 	out
 }
+// tabs are expanded only in a line's leading run of space and block markers (indentation, > and list markers); a
+// tab after it is content and stays one (spec 1-3, 13); a trailing tab is a space
+MD_TAB_PREFIX = " \t>-*+.)#0123456789"
 md_indent(line: text): int := { n = 0; while n < #line and line#(n + 1) == " " { n += 1 }; n }
 md_blank(line: text): bool := line.trim() == ""
 md_after(line: text, n: int): text := if n >= #line then "" else line[n..<#line]
@@ -174,8 +181,10 @@ md_blocks(lines: list, st: map): list := {
 					s = md_after(md_unindent(l), 1)
 					inner += [if s.starts_with(" ") then s[1..<#s] else s]
 					i += 1
-				} else if not md_blank(l) and #inner > 0 and not md_blank(inner#(#inner)) and not md_interrupts(l) and md_indent(l) < 4 + 0 * 1 and md_lazy_ok(inner) {
-					inner += [l]
+				} else if not md_blank(l) and #inner > 0 and not md_blank(inner#(#inner)) and not md_interrupts(l) and md_lazy_ok(inner) {
+					// a lazy line continues the quote's paragraph only: indented it is no code (spec 238), === no
+					// setext underline (spec 93), so it goes in escaped
+					inner += [if md_setext_level(l) == 1 then "\\" + l.trim() else l]
 					i += 1
 				} else { going = no }
 			}
@@ -202,13 +211,16 @@ md_blocks(lines: list, st: map): list := {
 			i += 1
 			level = 0
 			while i <= n and level == 0 and not md_blank(lines#i) and not md_table_starts(lines, i) and (md_indent(lines#i) >= 4 or not md_interrupts(lines#i) or (md_setext_level(lines#i) == 2 and md_is_break(lines#i))) {
-				if md_setext_level(lines#i) > 0 { level = md_setext_level(lines#i) } else { body += [md_after(lines#i, md_indent(lines#i))] }
+				// an underline under nothing but link reference definitions is paragraph text (spec 216)
+				if md_setext_level(lines#i) > 0 and md_trim_end(md_take_definitions(body.join("\n"), st)) != "" { level = md_setext_level(lines#i) } else { body += [md_after(lines#i, md_indent(lines#i))] }
 				i += 1
 			}
 			text = md_trim_end(md_take_definitions(body.join("\n"), st))
+			// only definitions: a block of its own that writes nothing, so a blank line before it makes a list loose (spec 317)
 			if level > 0 and text != "" { blocks += [{"kind": "h", "level": level, "text": text}] }
 			else if level > 0 { blocks += [{"kind": "p", "text": lines#(i - 1).trim()}] }
 			else if text != "" { blocks += [{"kind": "p", "text": text}] }
+			else { blocks += [{"kind": "defs"}] }
 		}
 		if count_before >= 0 and #blocks > count_before { blocks#(#blocks)["blank"] = blank; blank = no }
 	}
@@ -248,6 +260,15 @@ md_list(lines: list, i: int, st: map): list := {
 				else if md_indent(l) >= width { content += [md_after(l, width)]; i += 1 }
 				else if not md_blank(content#(#content)) and not md_interrupts(l) and md_lazy_ok(content) and not md_list_marker(l).has("mark") { content += [l]; i += 1 }
 				else { inside = no }
+			}
+			// an empty item, blank lines, then an item of the same list: the list goes on, loose (spec 315)
+			if m["empty"] and #content == 1 and content#1 == "" and i <= n and md_blank(lines#i) {
+				b = i
+				while b <= n and md_blank(lines#b) { b += 1 }
+				if b <= n {
+					next = md_list_marker(lines#b)
+					if next.has("mark") and next["mark"] == first["mark"] and next["ordered"] == first["ordered"] and not md_is_break(lines#b) { loose = yes; i = b }
+				}
 			}
 			// trailing blank lines belong between items
 			trailing = 0
@@ -396,7 +417,8 @@ md_label_end(t: text, at: int): int := {
 md_label(t: text): text := {
 	out = ""
 	space = no
-	for c in t.trim().lower() {
+	// case folding: ß and ẞ fold to ss (spec 540)
+	for c in t.trim().lower().replace("ß", "ss") {
 		if c == " " or c == "\n" or c == "\t" { space = yes }
 		else { if space and out != "" { out += " " }; space = no; out += c }
 	}
@@ -641,7 +663,10 @@ MD_INLINE_SPECIAL = "\\`&<![]*_~\n"
 md_trim_end(t: text): text := { while t.ends_with(" ") { t = t[0..<#t - 1] }; t }
 md_times(c: text, n: int): text := { out = ""; for i in 1 to n { out += c }; out }
 md_white(c: text): bool := c == " " or c == "\n" or c == "\t" or c == chr(0xA0)
-md_punct(c: text): bool := c in MD_PUNCTUATION
+// Unicode punctuation and symbols (P and S, spec 354) by their main blocks: Latin-1's, general punctuation,
+// currency, letterlike to dingbats, CJK punctuation, fullwidth ASCII punctuation
+md_punct(c: text): bool := c in MD_PUNCTUATION or md_unicode_punct(ord(c))
+md_unicode_punct(o: int): bool := (o >= 0xA1 and o <= 0xBF and o != 0xAA and o != 0xB2 and o != 0xB3 and o != 0xB5 and o != 0xB9 and o != 0xBA and o != 0xBC and o != 0xBD and o != 0xBE) or o == 0xD7 or o == 0xF7 or (o >= 0x2010 and o <= 0x2027) or (o >= 0x2030 and o <= 0x205E) or (o >= 0x20A0 and o <= 0x20C0) or (o >= 0x2100 and o <= 0x214F and o != 0x2102 and o != 0x2107 and not (o >= 0x210A and o <= 0x2113) and o != 0x2115 and not (o >= 0x2119 and o <= 0x211D) and o != 0x2124 and o != 0x2126 and o != 0x2128 and not (o >= 0x212A and o <= 0x212D) and not (o >= 0x212F and o <= 0x2139) and not (o >= 0x213C and o <= 0x213F) and not (o >= 0x2145 and o <= 0x2149) and o != 0x214E) or (o >= 0x2190 and o <= 0x2BFF) or (o >= 0x3001 and o <= 0x3003) or (o >= 0x3008 and o <= 0x3020) or (o >= 0xFF01 and o <= 0xFF0F) or (o >= 0xFF1A and o <= 0xFF20) or (o >= 0xFF3B and o <= 0xFF40) or (o >= 0xFF5B and o <= 0xFF65)
 md_html(h: text): map := {"kind": "html", "text": h}
 md_flush(tokens: list, plain: text): list := { if plain != "" { tokens.add({"kind": "text", "text": plain}) }; tokens }
 md_code_close(t: text, at: int, run: int): int := {
@@ -723,12 +748,15 @@ md_close_bracket(tokens: list, t: text, k: int, st: map): list := {
 	inner = tokens[opener..<#tokens]
 	md_emphasis(inner, 1)
 	content = md_written(inner)
+	// an image inside an image's text gives its alt as plain text (spec 574)
+	alt = html_unescape(md_strip_tags(md_written([if x["kind"] == "html" and x.get("plain") != ø then {"kind": "text", "text": x["plain"]} else x for x in inner])))
 	attribute_title = if title == ø then "" else " title=\"" + md_escape(title) + "\""
-	h = if o["image"] then "<img src=\"" + md_url(destination) + "\" alt=\"" + md_escape(html_unescape(md_strip_tags(content))) + "\"" + attribute_title + " />" else "<a href=\"" + md_url(destination) + "\"" + attribute_title + ">" + content + "</a>"
+	h = if o["image"] then "<img src=\"" + md_url(destination) + "\" alt=\"" + md_escape(alt) + "\"" + attribute_title + " />" else "<a href=\"" + md_url(destination) + "\"" + attribute_title + ">" + content + "</a>"
 	kept = tokens[0..<opener - 1]
 	// links hold no links: earlier [ openers become literal
 	if not o["image"] { for x in kept { if x["kind"] == "open" and not x["image"] { x["active"] = no } } }
-	[kept + [md_html(h)], after]
+	kept.add(if o["image"] then {"kind": "html", "text": h, "plain": alt} else md_html(h))
+	[kept, after]
 }
 md_literal_opener(tokens: list, opener: int): list := {
 	o = tokens#opener
