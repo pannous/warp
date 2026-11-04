@@ -1,0 +1,27 @@
+# card lib-stats-scan: quantile, percentile (linear interpolation, numpy default / R type 7), cumulative_sum
+
+# cumulative_sum_is_scan_with_plus
+'cumulative_sum([1 2 3 4])'	[1 3 6 10]
+'cumulative_sum([1.5 2.5])'	[1.5 4]
+'count(cumulative_sum([]))'	0
+'scan([1 2 3], 1, (a, b) => a * b)'	[1 2 6]
+
+# quantile_interpolates_linearly
+'quantile([3 1 2], 0.5)'	2
+'quantile([1 2 3 4], 0.5)'	2.5
+'quantile([10 20 30 40 50], 0.1)'	14
+'quantile([4 1 3 2], 0)'	1
+'quantile([4 1 3 2], 1)'	4
+'quantile([7], 0.3)'	7
+
+# percentile_takes_percent
+'percentile([1 2 3 4 5], 25)'	2
+'percentile([10 20 30 40], 90)'	37
+'percentile([5 1 3], 50)'	3
+
+# refuses_rather_than_guesses
+'quantile([], 0.5)'	error
+'quantile([1 2], 1.5)'	error
+'quantile([1 2], -0.1)'	error
+'percentile([1 2], 101)'	error
+'percentile([], 50)'	error
