@@ -593,7 +593,8 @@ statement_types(statement: Node, program_types: map, self_types: map, classes: m
 	parameters = if defined_word(statement) != ø and is_called_name(key_of(statement)) then items_of(key_of(statement))[1..] else []
 	taken = parameters.map(parameter_name)
 	for name in program_types.keys { if program_types[name] != "" and name not in taken { known[name] = program_types[name] } }
-	for parameter in parameters.filter(parameter => is_key(parameter, Op.Colon) and type_named(value_of(parameter)) != ø) { known[parameter_name(parameter)] = type_named(value_of(parameter)) }
+	# a parameter typed any is known only at run time, as an untyped one
+	for parameter in parameters.filter(parameter => is_key(parameter, Op.Colon) and type_named(value_of(parameter)) != ø and type_named(value_of(parameter)) != "any") { known[parameter_name(parameter)] = type_named(value_of(parameter)) }
 	if defined_word(statement) != ø and defined_word(statement) in self_types { known["self"] = self_types[defined_word(statement)] }
 	known
 }

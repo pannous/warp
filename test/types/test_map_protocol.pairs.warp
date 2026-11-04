@@ -14,3 +14,6 @@
 # its own fields stay fields, and a hashed map stays as it was
 'class Pairs { ks: list; vs: list; keys() := ks; get(k) := 0; has(k) := no; set(k, v) := ø; remove(k) := ø }; p = Pairs{ks: ["a"], vs: [1]}; p.ks'	['a']
 'm = {a: 1}; m["b"] = 2; [keys(m), "a" in m, get_or(m, "z", 3)]'	[['a', 'b'], yes, 3]
+# conformance is structural: such a class is a map, and a place typed map takes it as it takes a hashed map
+'class Pairs { ks: list; vs: list; keys() := ks; get(k) := vs#(ks.index_of(k)); has(k) := k in ks; set(k, v) := { ks = ks + [k]; vs = vs + [v] }; remove(k) := ø }; p = Pairs{ks: ["a", "b"], vs: [1, 2]}; [p is map, {a: 1} is map, 3 is map]'	[yes, yes, no]
+'class Pairs { ks: list; vs: list; keys() := ks; get(k) := vs#(ks.index_of(k)); has(k) := k in ks; set(k, v) := { ks = ks + [k]; vs = vs + [v] }; remove(k) := ø }; p = Pairs{ks: ["a", "b"], vs: [1, 2]}; f(m: map) := keys(m); [f(p), f({c: 3})]'	[['a', 'b'], ['c']]
