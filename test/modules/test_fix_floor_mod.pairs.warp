@@ -1,0 +1,2 @@
+# floor_mod: the remainder takes the divisor's sign (Python's %): fix(lib), card lib-coverage-audit
+«[floor_mod(7, 3), floor_mod(-7, 3), floor_mod(7, -3), floor_mod(-7, -3), floor_mod(0, 5), floor_mod(6, 3), floor_mod(-6, 3), floor_mod(-1, 86400)] == [1, 2, -2, -1, 0, 0, 0, 86399]»	true

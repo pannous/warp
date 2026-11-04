@@ -1,0 +1,8 @@
+# coverage audit (card lib-coverage-audit): lib/list and lib/map words that had no or one test line
+
+«use list; [lower_bound([1, 3, 3, 5], 3), lower_bound([1, 3], 0), lower_bound([1, 3], 9), lower_bound([], 1), binary_search([1, 3, 5], 3), binary_search([1, 3, 5], 4), binary_search([], 1), index_where([5, 8, 9], x => x > 6), index_where([1], x => x > 6), index_where([], x => yes)] == [2, 1, 3, 1, 2, 0, 0, 2, 0, 0]»	true
+«use list; [unique([3, 1, 3, 2, 1]), unique([]), unique(["😀", "😀"]), take([1, 2, 3], 2), take([1, 2], 5), take([], 1), take([1, 2], 0), drop([1, 2, 3], 1), drop([1], 5), flatten([[1, [2]], [], [3]]), flatten([])] == [[3, 1, 2], [], ["😀"], [1, 2], [1, 2], [], [], [2, 3], [], [1, [2], 3], []]»	true
+«use list; attempt(f) := try { str(f()) } catch e { "" + e }; [chunk([1, 2, 3, 4, 5], 2), chunk([], 3), attempt(() -> chunk([1], 0)), product([2, 3, 4]), product([]), tally(["a", "b", "a"])] == [[[1, 2], [3, 4], [5]], [], "chunk needs a size of at least 1, not 0", 24, 1, {"a": 2, "b": 1}]»	true
+«use map; [is_map({"a": 1}), is_map([1]), is_map("x"), is_map({}), get_or({"a": 1}, "a", 0), get_or({"a": 1}, "b", 0), get_or({}, "b", nil)] == [yes, no, no, yes, 1, 0, nil]»	true
+«use map; m = {"a": 1}; r1 = setdefault(m, "a", 5); r2 = setdefault(m, "b", 7); [r1, r2, m] == [1, 7, {"a": 1, "b": 7}]»	true
+«use map; [get_path({"a": {"b": [10, 20]}}, ["a", "b"]), get_path({"a": 1}, ["x", "y"]), pick({"a": 1, "b": 2}, ["a", "z"]), omit({"a": 1, "b": 2}, ["a"]), invert({"a": 1, "b": 2})] == [[10, 20], nil, {"a": 1}, {"b": 2}, {1: "a", 2: "b"}]»	true
