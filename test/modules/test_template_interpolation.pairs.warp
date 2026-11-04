@@ -1,0 +1,125 @@
+# mustache spec interpolation: No Interpolation
+'use template; mustache("Hello from {Mustache}!\n", {})'	"Hello from {Mustache}!\n"
+
+# mustache spec interpolation: Basic Interpolation
+'use template; mustache("Hello, {{subject}}!\n", {"subject": "world"})'	"Hello, world!\n"
+
+# mustache spec interpolation: No Re-interpolation
+'use template; mustache("{{template}}: {{planet}}", {"template": "{{planet}}", "planet": "Earth"})'	"{{planet}}: Earth"
+
+# mustache spec interpolation: HTML Escaping
+'use template; mustache("These characters should be HTML escaped: {{forbidden}}\n", {"forbidden": "& \\" < >"})'	"These characters should be HTML escaped: &amp; &quot; &lt; &gt;\n"
+
+# mustache spec interpolation: Triple Mustache
+'use template; mustache("These characters should not be HTML escaped: {{{forbidden}}}\n", {"forbidden": "& \\" < >"})'	"These characters should not be HTML escaped: & \" < >\n"
+
+# mustache spec interpolation: Ampersand
+'use template; mustache("These characters should not be HTML escaped: {{&forbidden}}\n", {"forbidden": "& \\" < >"})'	"These characters should not be HTML escaped: & \" < >\n"
+
+# mustache spec interpolation: Basic Integer Interpolation
+'use template; mustache("\\"{{mph}} miles an hour!\\"", {"mph": 85})'	"\"85 miles an hour!\""
+
+# mustache spec interpolation: Triple Mustache Integer Interpolation
+'use template; mustache("\\"{{{mph}}} miles an hour!\\"", {"mph": 85})'	"\"85 miles an hour!\""
+
+# mustache spec interpolation: Ampersand Integer Interpolation
+'use template; mustache("\\"{{&mph}} miles an hour!\\"", {"mph": 85})'	"\"85 miles an hour!\""
+
+# mustache spec interpolation: Basic Decimal Interpolation
+'use template; mustache("\\"{{power}} jiggawatts!\\"", {"power": 1.21})'	"\"1.21 jiggawatts!\""
+
+# mustache spec interpolation: Triple Mustache Decimal Interpolation
+'use template; mustache("\\"{{{power}}} jiggawatts!\\"", {"power": 1.21})'	"\"1.21 jiggawatts!\""
+
+# mustache spec interpolation: Ampersand Decimal Interpolation
+'use template; mustache("\\"{{&power}} jiggawatts!\\"", {"power": 1.21})'	"\"1.21 jiggawatts!\""
+
+# mustache spec interpolation: Basic Null Interpolation
+'use template; mustache("I ({{cannot}}) be seen!", {"cannot": nil})'	"I () be seen!"
+
+# mustache spec interpolation: Triple Mustache Null Interpolation
+'use template; mustache("I ({{{cannot}}}) be seen!", {"cannot": nil})'	"I () be seen!"
+
+# mustache spec interpolation: Ampersand Null Interpolation
+'use template; mustache("I ({{&cannot}}) be seen!", {"cannot": nil})'	"I () be seen!"
+
+# mustache spec interpolation: Basic Context Miss Interpolation
+'use template; mustache("I ({{cannot}}) be seen!", {})'	"I () be seen!"
+
+# mustache spec interpolation: Triple Mustache Context Miss Interpolation
+'use template; mustache("I ({{{cannot}}}) be seen!", {})'	"I () be seen!"
+
+# mustache spec interpolation: Ampersand Context Miss Interpolation
+'use template; mustache("I ({{&cannot}}) be seen!", {})'	"I () be seen!"
+
+# mustache spec interpolation: Dotted Names - Basic Interpolation
+'use template; mustache("\\"{{person.name}}\\" == \\"{{#person}}{{name}}{{/person}}\\"", {"person": {"name": "Joe"}})'	"\"Joe\" == \"Joe\""
+
+# mustache spec interpolation: Dotted Names - Triple Mustache Interpolation
+'use template; mustache("\\"{{{person.name}}}\\" == \\"{{#person}}{{{name}}}{{/person}}\\"", {"person": {"name": "Joe"}})'	"\"Joe\" == \"Joe\""
+
+# mustache spec interpolation: Dotted Names - Ampersand Interpolation
+'use template; mustache("\\"{{&person.name}}\\" == \\"{{#person}}{{&name}}{{/person}}\\"", {"person": {"name": "Joe"}})'	"\"Joe\" == \"Joe\""
+
+# mustache spec interpolation: Dotted Names - Arbitrary Depth
+'use template; mustache("\\"{{a.b.c.d.e.name}}\\" == \\"Phil\\"", {"a": {"b": {"c": {"d": {"e": {"name": "Phil"}}}}}})'	"\"Phil\" == \"Phil\""
+
+# mustache spec interpolation: Dotted Names - Broken Chains
+'use template; mustache("\\"{{a.b.c}}\\" == \\"\\"", {"a": {}})'	"\"\" == \"\""
+
+# mustache spec interpolation: Dotted Names - Broken Chain Resolution
+'use template; mustache("\\"{{a.b.c.name}}\\" == \\"\\"", {"a": {"b": {}}, "c": {"name": "Jim"}})'	"\"\" == \"\""
+
+# mustache spec interpolation: Dotted Names - Initial Resolution
+'use template; mustache("\\"{{#a}}{{b.c.d.e.name}}{{/a}}\\" == \\"Phil\\"", {"a": {"b": {"c": {"d": {"e": {"name": "Phil"}}}}}, "b": {"c": {"d": {"e": {"name": "Wrong"}}}}})'	"\"Phil\" == \"Phil\""
+
+# mustache spec interpolation: Dotted Names - Context Precedence
+'use template; mustache("{{#a}}{{b.c}}{{/a}}", {"a": {"b": {}}, "b": {"c": "ERROR"}})'	""
+
+# mustache spec interpolation: Dotted Names are never single keys
+'use template; mustache("{{a.b}}", {"a.b": "c"})'	""
+
+# mustache spec interpolation: Dotted Names - No Masking
+'use template; mustache("{{a.b}}", {"a.b": "c", "a": {"b": "d"}})'	"d"
+
+# mustache spec interpolation: Implicit Iterators - Basic Interpolation
+'use template; mustache("Hello, {{.}}!\n", "world")'	"Hello, world!\n"
+
+# mustache spec interpolation: Implicit Iterators - HTML Escaping
+'use template; mustache("These characters should be HTML escaped: {{.}}\n", "& \\" < >")'	"These characters should be HTML escaped: &amp; &quot; &lt; &gt;\n"
+
+# mustache spec interpolation: Implicit Iterators - Triple Mustache
+'use template; mustache("These characters should not be HTML escaped: {{{.}}}\n", "& \\" < >")'	"These characters should not be HTML escaped: & \" < >\n"
+
+# mustache spec interpolation: Implicit Iterators - Ampersand
+'use template; mustache("These characters should not be HTML escaped: {{&.}}\n", "& \\" < >")'	"These characters should not be HTML escaped: & \" < >\n"
+
+# mustache spec interpolation: Implicit Iterators - Basic Integer Interpolation
+'use template; mustache("\\"{{.}} miles an hour!\\"", 85)'	"\"85 miles an hour!\""
+
+# mustache spec interpolation: Interpolation - Surrounding Whitespace
+'use template; mustache("| {{string}} |", {"string": "---"})'	"| --- |"
+
+# mustache spec interpolation: Triple Mustache - Surrounding Whitespace
+'use template; mustache("| {{{string}}} |", {"string": "---"})'	"| --- |"
+
+# mustache spec interpolation: Ampersand - Surrounding Whitespace
+'use template; mustache("| {{&string}} |", {"string": "---"})'	"| --- |"
+
+# mustache spec interpolation: Interpolation - Standalone
+'use template; mustache("  {{string}}\n", {"string": "---"})'	"  ---\n"
+
+# mustache spec interpolation: Triple Mustache - Standalone
+'use template; mustache("  {{{string}}}\n", {"string": "---"})'	"  ---\n"
+
+# mustache spec interpolation: Ampersand - Standalone
+'use template; mustache("  {{&string}}\n", {"string": "---"})'	"  ---\n"
+
+# mustache spec interpolation: Interpolation With Padding
+'use template; mustache("|{{ string }}|", {"string": "---"})'	"|---|"
+
+# mustache spec interpolation: Triple Mustache With Padding
+'use template; mustache("|{{{ string }}}|", {"string": "---"})'	"|---|"
+
+# mustache spec interpolation: Ampersand With Padding
+'use template; mustache("|{{& string }}|", {"string": "---"})'	"|---|"

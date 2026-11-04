@@ -1,0 +1,35 @@
+# mustache spec partials: Basic Behavior
+'use template; mustache("\\"{{>text}}\\"", {}, {"text": "from partial"})'	"\"from partial\""
+
+# mustache spec partials: Failed Lookup
+'use template; mustache("\\"{{>text}}\\"", {}, {})'	"\"\""
+
+# mustache spec partials: Context
+'use template; mustache("\\"{{>partial}}\\"", {"text": "content"}, {"partial": "*{{text}}*"})'	"\"*content*\""
+
+# mustache spec partials: Recursion
+'use template; mustache("{{>node}}", {"content": "X", "nodes": [{"content": "Y", "nodes": []}]}, {"node": "{{content}}<{{#nodes}}{{>node}}{{/nodes}}>"})'	"X<Y<>>"
+
+# mustache spec partials: Nested
+'use template; mustache("{{>outer}}", {"a": "hello", "b": "world"}, {"outer": "*{{a}} {{>inner}}*", "inner": "{{b}}!"})'	"*hello world!*"
+
+# mustache spec partials: Surrounding Whitespace
+'use template; mustache("| {{>partial}} |", {}, {"partial": "\t|\t"})'	"| \t|\t |"
+
+# mustache spec partials: Inline Indentation
+'use template; mustache("  {{data}}  {{> partial}}\n", {"data": "|"}, {"partial": ">\n>"})'	"  |  >\n>\n"
+
+# mustache spec partials: Standalone Line Endings
+'use template; mustache("|\r\n{{>partial}}\r\n|", {}, {"partial": ">"})'	"|\r\n>|"
+
+# mustache spec partials: Standalone Without Previous Line
+'use template; mustache("  {{>partial}}\n>", {}, {"partial": ">\n>"})'	"  >\n  >>"
+
+# mustache spec partials: Standalone Without Newline
+'use template; mustache(">\n  {{>partial}}", {}, {"partial": ">\n>"})'	">\n  >\n  >"
+
+# mustache spec partials: Standalone Indentation
+'use template; mustache("\\\\\n {{>partial}}\n/\n", {"content": "<\n->"}, {"partial": "|\n{{{content}}}\n|\n"})'	"\\\n |\n <\n->\n |\n/\n"
+
+# mustache spec partials: Padding Whitespace
+'use template; mustache("|{{> partial }}|", {"boolean": yes}, {"partial": "[]"})'	"|[]|"
