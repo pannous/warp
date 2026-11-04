@@ -1,0 +1,14 @@
+# coverage audit 2, batch 3 (ranked 81-160): text and prelude predicates, edge cases
+«[is_integer("12"), is_integer("-3"), is_integer(""), is_integer("1.5"), is_integer("+4"), is_integer("-")] == [true, true, false, false, false, false]»	true
+«[is_digit_text("5"), is_digit_text("55"), is_digit_text(""), is_letter_text("ab"), is_letter_text(""), is_letter_text("1"), is_letter_text("a")] == [true, false, false, false, false, false, true]»	true
+«[is_digit("5"), is_digit("a")] == [true, false]»	true
+«use text; [remove_suffix("file.txt", ".txt"), remove_suffix("a", ""), remove_suffix("x", "xyz"), remove_suffix("😀😀", "😀")] == ["file", "a", "x", "😀"]»	true
+«use text; [truncate("hello world", 5), truncate("hi", 5), truncate("hello", 5), truncate("😀😀😀", 2)] == ["hell…", "hi", "hello", "😀…"]»	true
+«use text; [is_blank(""), is_blank("  " + chr(9)), is_blank(" a ")] == [true, true, false]»	true
+«use text; [is_palindrome("A man, a plan, a canal: Panama"), is_palindrome(""), is_palindrome("ab"), is_palindrome("été")] == [true, true, false, true]»	true
+«use text; [pad_left("7", 3), pad_left("1234", 3), pad_left("", 2), pad_left("é", 3)] == ["  7", "1234", "  ", "  é"]»	true
+«use text; [capitalize("hello"), capitalize(""), capitalize("élan"), capitalize("HELLO"), capitalize("1a")] == ["Hello", "", "Élan", "HELLO", "1a"]»	true
+«use text; lines("a" + chr(10) + "b") == ["a", "b"] and lines("a" + chr(10)) == ["a", ""]»	true
+«use regex; [find_all("a1b22c333", "[0-9]+"), find_all("abc", "[0-9]"), find_all("", "x")] == [["1", "22", "333"], [], []]»	true
+«[to_base(255, 16), to_base(255, 16, true), to_base(0, 2), to_base(-10, 2), to_base(35, 36)] == ["ff", "FF", "0", "-1010", "z"]»	true
+«[floor_mod(7, 3), floor_mod(-7, 3), floor_mod(7, -3), floor_mod(-7, -3)] == [1, 2, -2, -1]»	true
