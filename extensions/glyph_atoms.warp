@@ -78,4 +78,10 @@ read_exact_word(p: Parser, word: text): Node := {
 	p.at -= word.length
 	ø
 }
-glyph_atoms_extension = Extension{name: "glyph_atoms", atom_readers: joined_maps([reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), {"\\": unknown_entity}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom)]), number_suffix_readers: [read_repeating_decimal], keyword_readers: reading_rows(["ε", "Ε", "ω", "Ω"], read_exact_word)}
+# `3½` after a whole number: the mixed number 3 + ½, 3.5 (decision mixed-number-glyph); `2.5½` names none, refused
+read_mixed_number(p: Parser, written: text, literal: text): Node := {
+	if not VULGAR_FRACTIONS.has(char_here(p)) { return ø }
+	if literal.contains(".") or literal.contains("e") { raise "`" + literal + char_here(p) + "` at " + line_and_column(p.code, p.at) + ": a mixed number is whole before its fraction, 2½" }
+	Key(written_number(written), Op.Add, vulgar_fraction(p))
+}
+glyph_atoms_extension = Extension{name: "glyph_atoms", atom_readers: joined_maps([reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), {"\\": unknown_entity}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom)]), number_suffix_readers: [read_repeating_decimal, read_mixed_number], keyword_readers: reading_rows(["ε", "Ε", "ω", "Ω"], read_exact_word)}
