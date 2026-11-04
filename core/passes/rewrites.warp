@@ -212,7 +212,7 @@ own_rules_applied(program: Node, source: text): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_signatures = definitions_signatures(program)
-	rule_enums = enums_in(program, {})
+	rule_enums = declarations_found(program, declared_enum, {})
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
@@ -274,7 +274,7 @@ sugar_rules(bindings: list, modules: list): list := rules_unbound_by(modules.fla
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
 enums_declared(program: Node): Node := {
-	rule_enums = enums_in(program, {})
+	rule_enums = declarations_found(program, declared_enum, {})
 	program
 }
 

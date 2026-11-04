@@ -47,18 +47,14 @@ is_other_arm(pattern: Node): bool := is_name(pattern) and default_arms contains 
 # an arm `pattern: result` or `pattern => result` (read as `->`); `n: digits => e`, read `n: (digits => e)` as digits is
 # no type word, is the arm of the pattern `n: digits`, a hole typed by a class of characters (lib/prelude.warp)
 character_class_words = ["digit", "digits", "letter", "letters", "hex"]
-arm_pattern(arm: Node): Node := match arm {
-	Key(pattern, Op.Colon, Key(Symbol(word), Op.Arrow, result)): if word in character_class_words then Key(pattern, Op.Colon, symbol(word)) else pattern
-	Key(pattern, Op.Colon, result): pattern
-	Key(pattern, Op.Arrow, result): pattern
-	_: arm
-}
-
-arm_result(arm: Node): Node := match arm {
-	Key(pattern, Op.Colon, Key(Symbol(word), Op.Arrow, result)): if word in character_class_words then result else value_of(arm)
-	Key(pattern, Op.Colon, result): result
-	Key(pattern, Op.Arrow, result): result
-	_: arm
+arm_pattern(arm: Node): Node := arm_parts(arm)#1
+arm_result(arm: Node): Node := arm_parts(arm)#2
+# [pattern, result] of an arm; a bare value is both
+arm_parts(arm: Node): list := match arm {
+	Key(pattern, Op.Colon, Key(Symbol(word), Op.Arrow, result)): if word in character_class_words then [Key(pattern, Op.Colon, symbol(word)), result] else [pattern, value_of(arm)]
+	Key(pattern, Op.Colon, result): [pattern, result]
+	Key(pattern, Op.Arrow, result): [pattern, result]
+	_: [arm, arm]
 }
 
 # `1`, "a", 'c', ø, yes, an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
@@ -256,7 +252,6 @@ guarded_arm(arms: list, subject: Node, variants: map, guard: Node): Node := {
 	chosen(test, value, arm_chain(arms[1..], subject, variants))
 }
 
-chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
 
 matched(subject: Node, arms: list, n: Node, variants: map): Node := {
 	if #arms == 0 { return n }
@@ -387,6 +382,6 @@ named_arm(arm: Node, patterns: map): Node := match arm {
 node_matches(program: Node): Node := {
 	patterns = named_patterns_of(program)
 	if patterns { program = bottom_up(without_named_patterns(program), n => with_named_patterns(n, patterns)) }
-	variants = case_names_of(enums_in(program, {}))
+	variants = case_names_of(declarations_found(program, declared_enum, {}))
 	bottom_up(program, n => node_match(n, variants))
 }

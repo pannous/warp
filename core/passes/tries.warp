@@ -15,9 +15,7 @@ use "../analysis/words.warp"
 applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `{n}`, a block of one item
 braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
-try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semicolon)
 try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
-chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, yes_branch), Op.Else, no_branch)
 
 try_name(role: text, number: int): Node := fresh_name("try·" + role, number)
 
@@ -30,7 +28,7 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	# the caught Error's name is a handler's place, `e: error`, where it raises no more (decision errors-one-rule)
 	caught = try_assigned(Key(binding, Op.Colon, symbol("error")), applied_to("caught_error", [finished, result]))
 	otherwise = if binding == ø then braced(fallback) else List([caught, fallback], Bracket.Curly, Separator.Semicolon)
-	try_statements([ran, chosen_branch(succeeded, braced(result), otherwise)])
+	statements([ran, chosen(succeeded, braced(result), otherwise)])
 }
 
 is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
@@ -40,7 +38,7 @@ is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 divided(dividend: Node, op: Op, divisor: Node, fallback: Node, number: int): Node := {
 	held = try_name("divisor", number)
 	quotient = guarded_try(Key(dividend, op, held), fallback, ø, number)
-	try_statements([try_assigned(held, divisor), chosen_branch(Key(held, Op.Eq, 0), braced(fallback), braced(quotient))])
+	statements([try_assigned(held, divisor), chosen(Key(held, Op.Eq, 0), braced(fallback), braced(quotient))])
 }
 
 is_written_list(n: Node): bool := match n {
@@ -54,7 +52,7 @@ indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
 	held = try_name("list", number)
 	at = try_name("index", number)
 	within = Key(Key(at, Op.Ge, 1), Op.And, Key(at, Op.Le, applied_to("count", [held])))
-	try_statements([try_assigned(held, written), try_assigned(at, index), chosen_branch(within, braced(Key(held, Op.Hash, at)), braced(fallback))])
+	statements([try_assigned(held, written), try_assigned(at, index), chosen(within, braced(Key(held, Op.Hash, at)), braced(fallback))])
 }
 
 # the value under try, its fallback, the catch binding or ø
@@ -92,7 +90,7 @@ handled_form(n: Node): Node := match n {
 
 # `assert c else m`, `check c`: 1 when c holds, else it raises m; not `asserted`,
 # emitter.warp's, as the compiler's files share one namespace
-assertion(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
+assertion(condition: Node, message: Node): Node := chosen(condition, braced(1), braced(applied_to(raise_word, [message])))
 
 # parser.warp reads `try x else y` as `try·else(x, y)`, `try x catch e { y }` as `try·else(x, {y}, e)` and
 # `assert c else m` as `assert·else(c, m)`

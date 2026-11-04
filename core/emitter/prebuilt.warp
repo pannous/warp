@@ -218,7 +218,7 @@ def runtime_part(id: int, name: text = ""): list {
 	place = section_place(module.runtime_image.wasm, id, name)
 	module.runtime_image.wasm[place#1 ..< place#2]
 }
-def with_entries(content: list, more: list): list {
+def with_section_entries(content: list, more: list): list {
 	count = uleb_read(content, 0)
 	uleb(count#1 + #more) + content[count#2 ..] + concatenated(more)
 }
@@ -267,10 +267,10 @@ def runtime_subsection(id: int): list {
 	}
 	uleb(0)
 }
-def runtime_names(id: int, more: list): list { subsection(id, with_entries(runtime_subsection(id), more)) }
+def runtime_names(id: int, more: list): list { subsection(id, with_section_entries(runtime_subsection(id), more)) }
 # the runtime's local names, each function's moved by runtime_shift, then more
 def shifted_locals(content: list, more: list): list {
-	if runtime_shift() == 0 and not shaken() and not drops_imports() { return with_entries(content, more) }
+	if runtime_shift() == 0 and not shaken() and not drops_imports() { return with_section_entries(content, more) }
 	count = uleb_read(content, 0)
 	at = count#2
 	entries = []
@@ -302,15 +302,15 @@ def prepended_bytes(functions: list): list {
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
-	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), library_types() + class_types + function_types + c_import_types()))
+	types = section(section_ids.type, with_section_entries(runtime_part(section_ids.type), library_types() + class_types + function_types + c_import_types()))
 	c_entries = c_import_entries(module.runtime_image.types + linked_function_count() + #classes + #functions)
-	declared = section(section_ids.function, with_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f))) + stub_types()))
+	declared = section(section_ids.function, with_section_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f))) + stub_types()))
 	own_globals = module.global_order[#module.runtime_image.globals ..]
-	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
+	globals = section(section_ids.globals, with_section_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
 	codes = section(section_ids.code, prepended_code(functions))
 	# the exports and names by the shaken numbering, or behind the host words dropped
 	for f in functions { f.index -= dropped() }
-	texts = section(section_ids.data, with_entries(runtime_part(section_ids.data), library_segments() + text_segments()))
+	texts = section(section_ids.data, with_section_entries(runtime_part(section_ids.data), library_segments() + text_segments()))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	parts = [types, section(section_ids.import, host_imports(c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
 		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(module.runtime_image.data + linked_text_count() + #module.texts)), codes, texts]
@@ -957,7 +957,7 @@ def own_body(f: Function, at: int): list {
 }
 # the import section's content: the host words kept, then the program's C functions
 def host_imports(c_entries: list): list {
-	if not drops_imports() { return with_entries(runtime_part(section_ids.import), c_entries) }
+	if not drops_imports() { return with_section_entries(runtime_part(section_ids.import), c_entries) }
 	entries = runtime_import_entries()
 	kept = range_list(#entries).filter(i => kept_imports.has(i)).map(i => entries[i]#1 + uleb(entries[i]#2))
 	uleb(#kept + #c_entries) + concatenated(kept) + concatenated(c_entries)
