@@ -37,6 +37,8 @@ use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
 use "text_lints.warp"
+use "effects.warp"
+use "primitive.warp"
 EXTENSIONS = [
 	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
@@ -78,6 +80,9 @@ EXTENSIONS = [
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
+	effects_extension
+	# extensions/primitive.warp, which the compiler uses itself: its attribute `@primitive`
+	Extension{name: "primitive", attributes: [PRIMITIVE_ATTRIBUTE]}
 	Extension{name: "commands", commands: command_words(), runs: extension_command}
 	Extension{name: "big_numbers", runtime: "big_numbers.warp"}
 ]

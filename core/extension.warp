@@ -69,6 +69,8 @@ class Extension {
 	# functions given each node of the program as written and the program, each diagnosing what it finds (source_checks.warp,
 	# beside the core's own lints)
 	lints: list = []
+	# the attributes it reads past plain_node, each noting the names it marks (walk.warp marked): `@pure` of `@pure f(x) := …`
+	attributes: list = []
 	# the command words it answers (`warp help`), and runs: the function running one, given its word
 	commands: list = []
 	runs: any = ø
@@ -100,7 +102,7 @@ claimed_once(maps: list): map := {
 	joined
 }
 # the Extension fields every row's entries join into one: lists as one list, maps as one map
-JOINED_LISTS = ["number_readers", "number_suffix_readers", "type_readers", "infix_readers", "prefix_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "commands", "host_exports"]
+JOINED_LISTS = ["number_readers", "number_suffix_readers", "type_readers", "infix_readers", "prefix_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "attributes", "commands", "host_exports"]
 JOINED_MAPS = ["atom_readers", "suffix_readers", "keyword_readers", "text_escape_readers", "value_settlers"]
 # every row joined as one row, once: a hot path (the parser's readers, the lints on every node) reads its typed field
 # and looks no field up by its name

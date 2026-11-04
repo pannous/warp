@@ -1,0 +1,6 @@
+# an effect annotation bounds what a function does (decision effect-annotations, card effect-word-parameter)
+'@io loud(t) := { print t; 3 }; loud("a")'	3
+'@pure twice(x) := x * 2; @pure quad(x) := twice(twice(x)); quad(2)'	8
+'@pure shout(t) := print t; shout("a")'	error	an @pure function that prints is refused
+'@pure deep(t) := shout(t); shout(t) := print t; deep("a")'	error	so through the functions it calls
+'@ffi f(x) := { print x; 1 }; f(2)'	error	IO an @ffi function leaves out
