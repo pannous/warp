@@ -1,12 +1,10 @@
 # `try x else y` and `try x catch e { y }` (card pure-runs):
 # x runs inside ran·without·error, which says whether it finished (a runtime error deep inside throws the wasm tag
-# the try catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch are checked
-# before they happen: a division by 0 directly under `try`, an index out of a list written in place.
+# the try catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch (a division by 0,
+# an index out of a list written in place) extensions/checked_tries.warp checks before they happen.
 #   try x else y        → (try·finished = ran·without·error({try·value = x});
 #                          if try·finished and not is_error(try·value) then {try·value} else {y})
 #   try x catch e { y } → … else {e = caught_error(try·finished, try·value); y}
-#   try a / b else y    → (try·divisor = b; if try·divisor == 0 then {y} else {…a / try·divisor…})
-#   try [1 2]#i else y  → (try·list = [1 2]; try·index = i; if 1 <= try·index <= count(try·list) then … else {y})
 # Each try's names carry its number (try·value·3), so two tries of a function keep their own kinds.
 use "walk.warp"
 use "../parsing/phrase_blocks.warp"
@@ -31,40 +29,11 @@ guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	statements([ran, chosen(succeeded, braced(result), otherwise)])
 }
 
-is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
-
-# To do give one-line summaries to all functions where the meaning is not immediately clear from the context and name 
-# todo number: int  Generalize to other numbers 
-divided(dividend: Node, op: Op, divisor: Node, fallback: Node, number: int): Node := {
-	held = try_name("divisor", number)
-	quotient = guarded_try(Key(dividend, op, held), fallback, ø, number)
-	statements([try_assigned(held, divisor), chosen(Key(held, Op.Eq, 0), braced(fallback), braced(quotient))])
-}
-
-is_written_list(n: Node): bool := match n {
-	List(written, Bracket.Square, separator): yes
-	Text(t): yes
-	_: no
-}
-
-# TODO this doesn't seem to belong to tries but to index.warp Which doesn't exist yet but should collect all the a[index] a#position syntax?  (card index-syntax-module)
-indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
-	held = try_name("list", number)
-	at = try_name("index", number)
-	within = Key(Key(at, Op.Ge, 1), Op.And, Key(at, Op.Le, applied_to("count", [held])))
-	statements([try_assigned(held, written), try_assigned(at, index), chosen(within, braced(Key(held, Op.Hash, at)), braced(fallback))])
-}
-
 # the value under try, its fallback, the catch binding or ø
 lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 	number = fresh_number()
 	match value {
 		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded_try(value, fallback, binding, number) }
-		Key(left, op, right): {
-			if binding == ø and is_division(op) { return divided(left, op, right, fallback, number) }
-			if binding == ø and op == Op.Hash and is_written_list(left) { return indexed(left, right, fallback, number) }
-			guarded_try(value, fallback, binding, number)
-		}
 		# `try { x } …`: a block of one statement guards the statement (held as a value, `{x}` would be data)
 		List(statements, Bracket.Curly, separator): {
 			if #statements == 1 and not is_key(statements#1, Op.Colon) { return guarded_try(statements#1, fallback, binding, number) }
@@ -88,15 +57,10 @@ handled_form(n: Node): Node := match n {
 	_: n
 }
 
-# `assert c else m`, `check c`: 1 when c holds, else it raises m; not `asserted`,
-# emitter.warp's, as the compiler's files share one namespace
-assertion(condition: Node, message: Node): Node := chosen(condition, braced(1), braced(applied_to(raise_word, [message])))
-
-# parser.warp reads `try x else y` as `try·else(x, y)`, `try x catch e { y }` as `try·else(x, {y}, e)` and
-# `assert c else m` as `assert·else(c, m)`
+# parser.warp reads `try x else y` as `try·else(x, y)`, `try x catch e { y }` as `try·else(x, {y}, e)` (and
+# `assert c else m` as `assert·else(c, m)`, extensions/checked_tries.warp's)
 try_form(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
-		if #parts == 3 and parts#1 == symbol(HiddenWord.AssertElse as text) { return assertion(parts#2, parts#3) }
 		if #parts < 3 or parts#1 != symbol(HiddenWord.TryElse as text) { return n }
 		if #parts == 3 { return lowered_try(parts#2, parts#3, ø) }
 		if #parts == 4 and is_name(parts#4) { return lowered_try(parts#2, parts#3, parts#4) }

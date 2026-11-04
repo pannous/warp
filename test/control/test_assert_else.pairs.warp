@@ -1,0 +1,4 @@
+# `assert c else m`: nothing when c holds, else it raises m
+'assert 2 > 1 else "too small"; 5'	5
+'f(n) := { assert n > 0 else "negative"; n * 2 }; f(4)'	8
+'try { assert 1 > 2 else "too small" } catch e { e.message }'	"too small"
