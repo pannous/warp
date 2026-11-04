@@ -1,0 +1,12 @@
+# a function defined more than once, passed where the call fixes how many arguments it gets, is the lambda calling it:
+# [1, 2].map(quoted) means [1, 2].map(x => quoted(x)), dispatched at each call (decision function-redefinition-error A)
+'scaled(x) := x * 2; scaled(x, y) := x * y; [1, 2].map(scaled)'	[2, 4]
+'scaled(x) := x * 2; scaled(x, y) := x * y; [1, 2, 3].fold(1, scaled)'	6
+'scaled(x) := x * 2; scaled(x, y) := x * y; [1, 2, 3].filter(n => scaled(n) > 2)'	[2, 3]
+'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; [1, 2].map(quoted)'	[10, 20]
+'quoted(t: text) := "<" + t + ">"; quoted(n: int) := n * 10; ["a", "b"].map(quoted)'	["<a>", "<b>"]
+'twice(x) := x * 5; twice(x, y) := x * y; [1, 2].map(twice)'	[5, 10]
+'scaled(x) := x * 2; scaled(x, y) := x * y; apply(f, x) := f(x); apply(scaled, 3)'	6
+'scaled(x) := x * 2; scaled(x, y) := x * y; both(f) := f(2, 3); both(scaled)'	6
+# with no call to say how many, the name means none of them: refused, naming the definitions and the lambda
+'scaled(x) := x * 2; scaled(x, y) := x * y; g = scaled; g(3)'	error
