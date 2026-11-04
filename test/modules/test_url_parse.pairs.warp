@@ -20,5 +20,5 @@
 'use url; [cidr_contains("2001:db8::/32", "2001:db8:ffff::1"), cidr_contains("2001:db8::/32", "2001:db9::1"), cidr_contains("2001:db8::/32", "10.0.0.1"), cidr_contains("::1/128", "::1")]'	[yes, no, no, yes]
 
 # is_email_pragmatic
-'use url; [is_email("ada@example.com"), is_email("first.last+tag@sub.example.org"), is_email("o'"'"'brien@example.ie"), is_email("a@b.co")]'	[yes, yes, yes, yes]
+'use url; [is_email("ada@example.com"), is_email("first.last+tag@sub.example.org"), is_email("o\'brien@example.ie"), is_email("a@b.co")]'	[yes, yes, yes, yes]
 'use url; [is_email("plain"), is_email("a@b"), is_email("a..b@example.com"), is_email(".a@example.com"), is_email("a@-example.com"), is_email("a@example..com"), is_email("a@b@c.com"), is_email("a b@example.com"), is_email("@example.com")]'	[no, no, no, no, no, no, no, no, no]
