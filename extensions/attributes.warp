@@ -1,0 +1,57 @@
+# Attributes (card parser-forms-to-extensions): `@name`, `@name(value)` mark the atom after them, `@name: value` is a
+# meta entry, `x @parallel` marks the expression before it; `@1` is the node whose @id is 1
+# `@name` marks the atom after it (attribute); `@1` is the node whose @id is 1
+at_atom(p: Parser): Node := {
+	next = char_ahead(p, 1)
+	if is_name_start(next) { return attribute(p) }
+	if not is_digit(next) { return ø }
+	end = p.at + 1
+	while end < p.n and is_digit(p.code[end]) { end += 1 }
+	reference = symbol(p.code[p.at .. end])
+	p.at = end
+	reference
+}
+# `@name` or `@name(value)` marks the atom after it: `@version(2) @draft tee{a:1}`; `@name: value` is the meta entry
+# `@name`, never a field; after a dot, `p.@name` names the meta key itself
+attribute(p: Parser): Node := {
+	after_dot = p.at > 0 and p.code[p.at - 1] == '.'
+	end = name_end(p.code, p.at + 1, p.n)
+	key = symbol(p.code[p.at .. end])
+	name = p.code[p.at + 1 .. end]
+	p.at = end
+	if after_dot { return key }
+	if at_char(p, ':') and char_ahead(p, 1) != '=' {
+		advance(p)
+		skip_spaces(p)
+		return Key(key, Op.Colon, atom(p))
+	}
+	value = attribute_value(p)
+	skip_spaces(p)
+	attributed(name, value, atom(p))
+}
+# The value of `@name(value)`, true for a bare `@name`
+attribute_value(p: Parser): Node := {
+	if not at_char(p, '(') { return true }
+	group = atom(p)
+	parts = group_parts(group)
+	if parts != ø and #parts#3 == 1 then parts#3#1 else group
+}
+# `ys = xs.map(f) @parallel`: an `@name` or `@name(value)` with nothing after it on the statement marks the
+# expression before it, else ø
+trailing_attribute(p: Parser, marked: Node): Node := {
+	start = p.at
+	if not is_name_start(char_ahead(p, 1)) { return ø }
+	end = name_end(p.code, p.at + 1, p.n)
+	name = p.code[p.at + 1 .. end]
+	p.at = end
+	value = attribute_value(p)
+	skip_spaces(p)
+	if p.at < p.n and not "\n\r;,)]}".contains(p.code[p.at]) {
+		p.at = start
+		return ø
+	}
+	attributed(name, value, marked)
+}
+# `ys = xs.map(f) @parallel` after an operand binding no looser than an assignment
+read_trailing_attribute(p: Parser, operand: Node, min_power: int): Node := if operand != ø and at_char(p, '@') and min_power <= binding_powers("=")#2 then trailing_attribute(p, operand) else ø
+attributes_extension = Extension{name: "attributes", atom_readers: {"@": at_atom}, suffix_readers: [read_trailing_attribute]}

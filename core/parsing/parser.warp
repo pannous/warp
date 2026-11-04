@@ -939,13 +939,6 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		c = char_here(p)
 		// `cd ~/notes`: a path after an operand is the next word, no operator
 		if starts_path(p) { return left }
-		if c == '@' and left != ø and min_power <= binding_powers("=")#2 {
-			marked = trailing_attribute(p, left)
-			if marked != ø {
-				left = marked
-				continue
-			}
-		}
 		continued = read_infix(p, left, min_power)
 		if continued != ø {
 			if continued == OPERAND_ENDS { break }
@@ -2806,7 +2799,7 @@ def bare_atom(p: Parser): Node := {
 // The atoms by their first character: each reader reads its atom at the parser's position, or answers ø unmoved when
 // the character starts none of its forms; extensions add theirs (core/extension.warp atom_readers), a character two
 // rows claim is refused loudly
-def core_atom_rows(): list := [reading_rows("0123456789".chars(), number_atom), reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), reading_rows(["\"", "'", "«"], p => quoted(p)), {".": dot_atom, "\\": unknown_entity, "*": starred_name, "$": pattern_hole, "@": at_atom, "(": group_atom, "[": group_atom, "{": group_atom}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom)]
+def core_atom_rows(): list := [reading_rows("0123456789".chars(), number_atom), reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), reading_rows(["\"", "'", "«"], p => quoted(p)), {".": dot_atom, "\\": unknown_entity, "*": starred_name, "$": pattern_hole, "(": group_atom, "[": group_atom, "{": group_atom}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom)]
 def reading_rows(characters: list, reader: function): map {
 	rows = {}
 	for c in characters { rows["$(c)"] = reader }
@@ -2878,17 +2871,6 @@ def pattern_hole(p: Parser): Node := {
 	hole = symbol(p.code[p.at .. end])
 	p.at = end
 	name_or_call(p, hole)
-}
-// `@name` marks the atom after it (attribute); `@1` is the node whose @id is 1
-def at_atom(p: Parser): Node := {
-	next = char_ahead(p, 1)
-	if is_name_start(next) { return attribute(p) }
-	if not is_digit(next) { return ø }
-	end = p.at + 1
-	while end < p.n and is_digit(p.code[end]) { end += 1 }
-	reference = symbol(p.code[p.at .. end])
-	p.at = end
-	reference
 }
 def group_atom(p: Parser): Node := {
 	c = p.code[p.at]
@@ -3004,50 +2986,6 @@ EXACT_CONSTANTS = ["ⅈ", "ε", "ω"]
 // no node of its own in warp yet (card node-more-cases): the number view, read as written
 def exact_constant(word: text): Node := opaque(["number", word])
 
-// `@name` or `@name(value)` marks the atom after it: `@version(2) @draft tee{a:1}`; `@name: value` is the meta entry
-// `@name`, never a field; after a dot, `p.@name` names the meta key itself
-def attribute(p: Parser): Node := {
-	after_dot = p.at > 0 and p.code[p.at - 1] == '.'
-	end = name_end(p.code, p.at + 1, p.n)
-	key = symbol(p.code[p.at .. end])
-	name = p.code[p.at + 1 .. end]
-	p.at = end
-	if after_dot { return key }
-	if at_char(p, ':') and char_ahead(p, 1) != '=' {
-		advance(p)
-		skip_spaces(p)
-		return Key(key, Op.Colon, atom(p))
-	}
-	value = attribute_value(p)
-	skip_spaces(p)
-	attributed(name, value, atom(p))
-}
-
-// The value of `@name(value)`, true for a bare `@name`
-def attribute_value(p: Parser): Node := {
-	if not at_char(p, '(') { return true }
-	group = atom(p)
-	parts = group_parts(group)
-	if parts != ø and #parts#3 == 1 then parts#3#1 else group
-}
-
-// `ys = xs.map(f) @parallel`: an `@name` or `@name(value)` with nothing after it on the statement marks the
-// expression before it, else ø
-def trailing_attribute(p: Parser, marked: Node): Node := {
-	start = p.at
-	if not is_name_start(char_ahead(p, 1)) { return ø }
-	end = name_end(p.code, p.at + 1, p.n)
-	name = p.code[p.at + 1 .. end]
-	p.at = end
-	value = attribute_value(p)
-	skip_spaces(p)
-	if p.at < p.n and not "\n\r;,)]}".contains(p.code[p.at]) {
-		p.at = start
-		return ø
-	}
-	attributed(name, value, marked)
-}
-
 // The Unicode vulgar fractions, each the numerator and denominator its NFKD decomposition writes (½ is 1⁄2)
 VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
 
@@ -3087,7 +3025,6 @@ def named(p: Parser): Node := {
 		referenced = function_reference(p)
 		if referenced != ø { return referenced }
 	}
-	if word == "enum" and enum_values_ahead(p) { return enum_with_values(p) }
 	if word == "wasm" {
 		instruction = wasm_instruction_after(p)
 		if instruction != ø { return instruction }
@@ -3522,8 +3459,9 @@ def declared_type(p: Parser, word: text): Node := {
 			return declared_type_node(attributed("extends", symbol(p.code[parent_at .. parent_end]), name), listed(Bracket.Curly, Separator.None, []))
 		}
 	}
-	start = variants_start(p)
-	if start >= 0 { return sum_type(p, name, start, parameters) }
+	// a type an extension reads from its head, the sum type `= A(T) | B` (core/extension.warp type_readers)
+	read = read_type(p, name, parameters)
+	if read != ø { return read }
 	// `type Box[T]: { item: T }`
 	if at_char(p, ':') and char_at(p, blank_end(p, p.at + 1)) == '{' { p.at = blank_end(p, p.at + 1) }
 	if at_char(p, '{') {
@@ -3563,43 +3501,6 @@ def constructor_fields(p: Parser): list {
 // A type declaration, its fields typed
 def declared_type_node(name: Node, body: Node): Node := type_node(name, typed_fields(body))
 
-// `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the position
-// after the `=` or `:` when the declaration lists alternatives one of which carries a payload, else -1
-def variants_start(p: Parser): int {
-	at = space_end(p.code, p.at, p.n)
-	sign = char_at(p, at)
-	next = char_at(p, at + 1)
-	if not ((sign == '=' and next != '=' and next != '>') or (sign == ':' and next != '=')) { return -1 }
-	start = at + 1
-	depth = 0
-	alternatives = false
-	payload = false
-	words = 0
-	at = start
-	while at < p.n {
-		c = p.code[at]
-		after_word = is_name_char(p.code[at - 1])
-		if depth == 0 and ";)]}".contains(c) { break }
-		if depth == 0 and c == '\n' and char_at(p, space_end(p.code, at + 1, p.n)) != '|' { break }
-		if c == '(' and depth == 0 and after_word { payload = true }
-		if "([{".contains(c) {
-			depth += 1
-		} else if ")]}".contains(c) {
-			depth -= 1
-		} else if c == '|' and depth == 0 and char_at(p, at + 1) == '|' {
-			at += 1
-		} else if c == '|' and depth == 0 {
-			alternatives = true
-			words = 0
-		} else if depth == 0 and is_name_char(c) and not after_word {
-			words += 1
-			payload = payload or words > 1
-		}
-		at += 1
-	}
-	if alternatives and payload then start else -1
-}
-
 // `Box[T]`, `Pair<A, B>`: the names of a declared type's parameters, read
 def type_parameters(p: Parser): list {
 	names = []
@@ -3630,87 +3531,6 @@ def space_end(code: text, from: int, n: int): int {
 	at
 }
 
-// The sum type `Name = A(T) | B | C(x: int)` (card sum-types): the type without fields, its variants without payload
-// by name, then a class extending it for each variant with a payload
-def sum_type(p: Parser, name: Node, start: int, parameters: list): Node := {
-	p.at = start
-	bare = []
-	classes = []
-	while true {
-		p.at = space_end(p.code, p.at, p.n)
-		end = symbol_end(p.code, p.at, p.n)
-		if end == p.at { raise "a variant of " + view_of(name)#2 + " needs a name" }
-		variant = p.code[p.at .. end]
-		p.at = end
-		payload = []
-		if at_char(p, '(') {
-			advance(p)
-			group = items_until(p, Bracket.Round, ItemsEnd.Closer)
-			payload = if is_list_of(group, "(") then group_parts(group)#3 else [group]
-		}
-		// Elm's `Failure HttpError`: the payload's types after the name
-		skip_spaces(p)
-		while is_name_start(char_here(p)) {
-			end = symbol_end(p.code, p.at, p.n)
-			payload += [symbol(p.code[p.at .. end])]
-			p.at = end
-			skip_spaces(p)
-		}
-		if payload.length == 0 { bare += [symbol(variant)] } else { classes += [variant_class(name, variant, payload, parameters)] }
-		after = space_end(p.code, p.at, p.n)
-		if char_at(p, after) != '|' { break }
-		p.at = after + 1
-	}
-	sum_type_of(name, bare, classes)
-}
-
-// The sum type of its bare variants by name, then the classes of the variants with a payload
-def sum_type_of(name: Node, bare: list, classes: list): Node := listed(Bracket.None, Separator.Semicolon, [declared_type_node(attributed("variants", spaced(bare), name), listed(Bracket.Curly, Separator.None, []))] + classes)
-
-// `enum Shape { Circle(r), Rect(w, h), Dot }` follows `enum`: its braced cases, one with values
-def enum_values_ahead(p: Parser): bool {
-	at = name_end(p.code, blank_end(p, p.at), p.n)
-	if at == blank_end(p, p.at) { return false }
-	at = space_end(p.code, at, p.n)
-	if char_at(p, at) != '{' { return false }
-	depth = 0
-	while at < p.n {
-		c = p.code[at]
-		if c == '(' and depth == 1 and is_name_char(p.code[at - 1]) { return true }
-		if "([{".contains(c) {
-			depth += 1
-		} else if ")]}".contains(c) {
-			if depth == 1 { return false }
-			depth -= 1
-		}
-		at += 1
-	}
-	false
-}
-
-// `enum Shape { Circle(r), Rect(w, h), Dot }`, Swift's `case circle(radius: Double)` lines: each case with values a
-// class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
-def enum_with_values(p: Parser): Node := {
-	p.at = blank_end(p, p.at)
-	end = name_end(p.code, p.at, p.n)
-	name = symbol(p.code[p.at .. end])
-	p.at = space_end(p.code, end, p.n) + 1
-	cases = braced_items(p)
-	bare = []
-	classes = []
-	for case in case_rows(cases).map(without_case_word) {
-		parts = group_parts(case)
-		if parts != ø and #parts#3 > 0 and is_symbol(parts#3#1) {
-			classes += [variant_class(name, name_of(parts#3#1), parts#3[1:], [])]
-		} else if is_symbol(case) {
-			bare += [case]
-		} else {
-			raise "a case of enum " + name_of(name) + " is a name with optional values"
-		}
-	}
-	sum_type_of(name, bare, classes)
-}
-
 // The cases of an enum body, a line of several cases `Add, Sub, Mul` among lines of cases each a case
 def case_rows(cases: Node): list {
 	rows = []
@@ -3725,35 +3545,6 @@ def case_rows(cases: Node): list {
 def without_case_word(case: Node): Node := {
 	words = group_parts(case)
 	if words != ø and words#1 == "" and #words#3 == 2 and words#3#1 == symbol("case") then words#3#2 else case
-}
-
-// The words of the built-in types a variant's payload names: `rgb(int, int, int)` gives types, `rgb(r, g, b)` fields
-BUILTIN_TYPE_WORDS = DECLARED_TYPE_WORDS + ["list", "map", "any", "real", "rational", "exact", "long", "double", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"]
-
-// A variant with a payload: the class extending the sum type, its fields in order (an unnamed one is `value`, several
-// `value1`, `value2`…, a lowercase name that is no type a field of any value)
-def variant_class(type_name: Node, variant: text, payload: list, parameters: list): Node := {
-	fields = []
-	position = 0
-	for field in payload {
-		position += 1
-		// `(T)` and `(radius: int)` arrive as groups of one
-		if is_list_of(field, "(") and #group_parts(field)#3 == 1 { field = group_parts(field)#3#1 }
-		if is_typed_field(field) {
-			fields += [field]
-		} else if is_symbol(field) and name_of(field)#1.lower() == name_of(field)#1 and not BUILTIN_TYPE_WORDS.contains(name_of(field)) {
-			fields += [Key(field, Op.Colon, symbol("any"))]
-		} else {
-			field_name = if payload.length == 1 then "value" else "value" + position
-			fields += [Key(symbol(field_name), Op.Colon, field)]
-		}
-	}
-	declared_type_node(attributed("extends", type_name, symbol(variant)), listed(Bracket.Curly, Separator.Semicolon, fields.map(field => untyped(field, parameters))))
-}
-
-def is_typed_field(node: Node): bool := match node {
-	Key(name, Op.Colon, kind): yes
-	_: no
 }
 
 
