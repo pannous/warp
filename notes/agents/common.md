@@ -171,7 +171,7 @@ before asking a question). After a context swap, this file and your role file be
   merge of origin/main without its own smoke, only when it merges cleanly and touches none of your files; a conflict
   means smoke again. Its unsmoked commits touch no compiler input: no lib/*.warp, core/ or extensions/, only notes/,
   test/, samples/, web/, wiki/ and scripts/ (2026-11-04: a lib-only `: list` in lib/matrix.warp, 050e032656, came in
-  so and broke the module prebuild for every tree). At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
+  so and broke the module prebuild for every tree). The push itself starts `scripts/integrate/after-push.sh` (pre-push hook, on-push.sh): it installs the
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
   main right away (user 2026-10-26). Then `todo done <card> <commit>`. The full suite runs
   only at rare intervals, in the background.

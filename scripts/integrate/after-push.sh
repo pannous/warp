@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # scripts/integrate/after-push.sh [--if-moved] [<commit>, default origin/main]: keeps the compilers beside ~/dev/bin/warp
-# in step with main (user: "main should be immediately synchronized with the binary"). The pusher runs it in the
-# background right after its push (notes/agents/common.md "Done"); a cron runs it with --if-moved every 2 minutes as the
-# safety net, which returns at once when main is the tip handled last. In its own tree at main's tip: the compilers of
+# in step with main (user: "main should be immediately synchronized with the binary"). Every push to main starts it,
+# through the pre-push hook (on-push.sh); --if-moved returns at once when main is the tip handled last. In its own tree at main's tip: the compilers of
 # its lib (scripts/rebuild.sh both: the pusher's smoke build of the same inputs, in the store, is reused), hello through
 # them, both moved beside the binary (in two stages when they must be built: the native warp first, with the last
 # install's compilers, then the compilers beside it), the user's checkout pulled; then promote-self.sh and tiers 1-2 (gate.sh) of what
