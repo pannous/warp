@@ -198,3 +198,86 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 		}
 	}
 }
+
+// Date patterns (card lib-date-patterns): format_pattern(time, "yyyy-MM-dd HH:mm") and parse_pattern(text, pattern), UTC.
+// A run of one letter is a field: yyyy year, yy its last two digits, MMMM month name, MMM its first three letters,
+// MM month 01-12, M 1-12, dd day 01-31, d 1-31, EEEE weekday name, EEE its first three letters, HH hour 00-23, H 0-23,
+// mm minute, ss second, SSS millisecond; any other character, and text in 'single quotes', is itself
+MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+PATTERN_LETTERS = "yMdEHmsS"
+// the pattern as its parts: a field as [letter, run length], literal text as a text
+pattern_parts(pattern: text): list := {
+	parts = []
+	i = 1
+	while i <= #pattern {
+		c = pattern#i
+		if c == '\'' {
+			close = i + 1
+			while close <= #pattern and pattern#close != '\'' { close += 1 }
+			parts += [if close == i + 1 then "'" else pattern[i: close - 1]]
+			i = close + 1
+		} else if PATTERN_LETTERS.contains(str(c)) {
+			run = 1
+			while i + run <= #pattern and pattern#(i + run) == c { run += 1 }
+			parts += [[str(c), run]]
+			i += run
+		} else {
+			parts += [str(c)]
+			i += 1
+		}
+	}
+	parts
+}
+padded(n: int, width: int): text := { t = str(n); while #t < width { t = "0" + t }; t }
+// the time (an Instant or milliseconds since 1970) written in the pattern: format_pattern(0, "d MMM yyyy") is "1 Jan 1970"
+format_pattern(time: any, pattern: text): text := {
+	ms = if time is Instant then time.ms else time
+	d = date_of(ms)
+	s = (ms % 86400000) /! 1000
+	fields = {"y": d.year, "M": d.month, "d": d.day, "H": s /! 3600, "m": s % 3600 /! 60, "s": s % 60, "S": ms % 1000}
+	pattern_parts(pattern).map(part => if part is list then field_text(part#1, part#2, fields, ms) else str(part)).join("")
+}
+field_text(letter: text, run: int, fields: map, ms: int): text := {
+	if letter == "E" { name = WEEKDAY_NAMES#(weekday(ms) as int); return if run >= 4 then name else name[0: 3] }
+	if letter == "M" and run >= 3 { name = MONTH_NAMES#(fields["M"] as int); return if run >= 4 then name else name[0: 3] }
+	if letter == "y" and run == 2 { return padded(fields["y"] % 100, 2) }
+	padded(fields[letter], run)
+}
+// the milliseconds since 1970 a text written in the pattern names (UTC; missing fields 1970-01-01 00:00:00.000); a text
+// that does not follow the pattern raises, naming where: parse_pattern("2026-11-04 14:05", "yyyy-MM-dd HH:mm")
+parse_pattern(t: text, pattern: text): int := {
+	values = {"y": 1970, "M": 1, "d": 1, "H": 0, "m": 0, "s": 0, "S": 0}
+	at = 0
+	for part in pattern_parts(pattern) {
+		if not (part is list) {
+			part = str(part)
+			if t[at: at + #part] != part { pattern_mismatch(t, pattern, at, "'" + part + "'") }
+			at += #part
+		} else if part#1 == "M" and part#2 >= 3 {
+			found = (1 to 12).filter(i => lower(t[at: at + #pattern_month(i, part#2)]) == lower(pattern_month(i, part#2)))
+			if #found == 0 { pattern_mismatch(t, pattern, at, "a month name") }
+			values["M"] = found#1
+			at += #pattern_month(found#1, part#2)
+		} else if part#1 == "E" {
+			found = (1 to 7).filter(i => lower(t[at: at + #pattern_weekday(i, part#2)]) == lower(pattern_weekday(i, part#2)))
+			if #found == 0 { pattern_mismatch(t, pattern, at, "a weekday name") }
+			at += #pattern_weekday(found#1, part#2)
+		} else {
+			// a field of 1 letter takes as many digits as follow, else exactly its run
+			width = if part#2 == 1 then digits_at(t, at) else part#2
+			if width == 0 or digits_at(t, at) < width { pattern_mismatch(t, pattern, at, str(part#2) + " digits") }
+			n = int(t[at: at + width])
+			values[part#1] = if part#1 == "y" and part#2 == 2 then 2000 + n else n
+			at += width
+		}
+	}
+	if at != #t { pattern_mismatch(t, pattern, at, "the end") }
+	if values["M"] < 1 or values["M"] > 12 or values["d"] < 1 or values["d"] > days_in_month(values["y"], values["M"]) { raise "parse_pattern: " + t + " names no date" }
+	days_from_date(values["y"], values["M"], values["d"]) * 86400000 + ((values["H"] * 60 + values["m"]) * 60 + values["s"]) * 1000 + values["S"]
+}
+pattern_month(i: int, run: int): text := if run >= 4 then MONTH_NAMES#i else MONTH_NAMES#i[0: 3]
+pattern_weekday(i: int, run: int): text := if run >= 4 then WEEKDAY_NAMES#i else WEEKDAY_NAMES#i[0: 3]
+// how many digits follow at the 0-based position
+digits_at(t: text, at: int): int := { n = 0; while at + n < #t and is_digit(t#(at + n + 1)) { n += 1 }; n }
+pattern_mismatch(t: text, pattern: text, at: int, expected: text) := raise "parse_pattern: \"" + t + "\" does not match \"" + pattern + "\": " + expected + " expected at character " + str(at + 1)
