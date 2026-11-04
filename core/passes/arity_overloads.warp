@@ -163,7 +163,7 @@ arity_overloads(program: Node): Node := {
 	overloaded = overloaded_arities(program)
 	if #overloaded == 0 { return typed_overloads(program) }
 	resolved_program = resolved(program, overloaded, called_parameters(program))
-	refused_overload_values(resolved_program, overloaded, arities_described)
+	refused_overload_values(resolved_program, without_bare_calls(overloaded), arities_described)
 	typed_overloads(resolved_program)
 }
 
@@ -183,8 +183,12 @@ refuse_overload_values(n: Node, overloaded: map, described: function) := {
 	for part in parts_of(n) { refuse_overload_values(part, overloaded, described) }
 	ø
 }
-# the parts of n standing for values: not the head of a call or a phrase, a method's name, a label or an assigned name
-value_parts(n: Node): list := match n {
+# a name defined with no parameters too, `f() := 3; f(x) := x`, is that one's call where it stands bare (`f + 1`,
+# `save sound as: …`), never refused
+without_bare_calls(overloaded: map): map := without_keys(overloaded, overloaded.keys.filter(name => overloaded[name].any(span => span#1 == 0)))
+# the parts of n standing for values: not the head of a call or a phrase, a method's name, a label or an assigned
+# name, nor the module a `use agent` or `tone from sound` names
+value_parts(n: Node): list := if is_import(n) or is_foreign_line(n) then [] else match n {
 	Key(left, Op.Dot, right): [left]
 	Key(left, Op.Colon, right): [right]
 	Key(left, Op.Assign, right): [right]
