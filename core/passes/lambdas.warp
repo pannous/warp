@@ -172,8 +172,10 @@ newly_bound(n: Node, found: list): list := match n {
 	Key(target, Op.Assign, value): bound_target(target, found)
 	_: found
 }
-# [x] of `for x in xs {…}` and of a comprehension `[x * 2 for x in xs]`, else none
+# [x] of `for x in xs {…}`, else none; a comprehension `[x * 2 for x in xs]` holds its loop as an item, whose x is the
+# whole comprehension's
 loop_variables(n: Node): list := match n {
+	List(parts, Bracket.Square, separator): iteration_variables(parts) + parts.flat_map(loop_variables)
 	List(parts, bracket, separator): iteration_variables(parts)
 	_: []
 }
