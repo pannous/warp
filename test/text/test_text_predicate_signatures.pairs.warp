@@ -1,0 +1,3 @@
+// Public text helpers: notes/stdlib.md and lib/text.warp
+use text; [is_blank(" \t"), is_upper("ABC"), is_lower("abc")]	[yes, yes, yes]
+use text; [is_palindrome("Never odd or even"), word_count("one two"), is_unicode_letter("名")]	[yes, 2, yes]
