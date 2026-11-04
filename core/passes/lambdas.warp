@@ -189,7 +189,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {} }
+class Lowering { arities: map; lambdas_lifted: list; callable_fields: map = {}; function_values: map = {}; globals: map = {}; function_positions: map = {} }
 
 ## the walk
 
@@ -203,8 +203,6 @@ lowered_branches(branches: Node, locals: list, lowering: Lowering): Node := {
 # closures; `locals` the variables and parameters in scope; quoted code stays as written
 lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 	if is_quote(n) { return n }
-	inlined = inlined_call(n, locals, lowering)
-	if inlined != ø { return lowered_lambdas(inlined, locals, lowering) }
 	iteration = iteration_of(n)
 	if iteration != ø {
 		looped = iteration_over(iteration, locals, lowering)
@@ -427,48 +425,6 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 
 ## the pass
 
-## functions that are one iteration
-
-# `sum(xs) := fold(xs, 0, +)`: a function whose body is one iteration over its first
-# parameter, each parameter read once and the function not called in it, else ø. Its calls are its body, so the loop
-# runs where it is called and fuses with the list given (`sum(xs .* 2)`), whatever the function is named
-class InlinedFunction { names: list; body: Node }
-iteration_function(parts: Definition): InlinedFunction? := {
-	names = parts.parameters.map(parameter_name)
-	body = parts.body
-	iteration = iteration_of(body)
-	if iteration == ø or #names == 0 or iteration.source != symbol(names#1) or mentions(body, parts.name) { return ø }
-	if not names.all(name => mention_count(body, name) == 1) { return ø }
-	InlinedFunction(names, body)
-}
-
-mention_count(n: Node, name: text): int := {
-	if n is symbol { return if name_of(n) == name then 1 else 0 }
-	count = 0
-	for part in parts_of(n) { count += mention_count(part, name) }
-	count
-}
-
-# a value read the same in every round of a loop: a name, a literal, a lambda or a bare operator
-is_steady(n: Node): bool := n is symbol or n is number or n is text or is_lambda(n) or operator_function(n) != ø
-
-# the call of a function that is one iteration as its body on the arguments, else ø; the list may be any code (the
-# loop reads it once), the others steady and free of the body's own names
-inlined_call(n: Node, locals: list, lowering: Lowering): Node? := match n {
-	List(call, Bracket.Round, Separator.None): {
-		if #call == 0 or not (call#1 is symbol) or name_of(call#1) in locals or name_of(call#1) not in lowering.inlined { return ø }
-		function = lowering.inlined[name_of(call#1)]
-		names = function.names
-		arguments = arguments_of(call)
-		body = function.body
-		if #arguments != #names or not arguments[1 ..].all(is_steady) { return ø }
-		if arguments.any(argument => mentioned_names(argument, []).any(name => name not in names and mentions(body, name))) { return ø }
-		for i in 1 to #names { body = renamed(body, names#i, arguments#i) }
-		body
-	}
-	_: ø
-}
-
 ## shared captures
 
 # A variable of a scope that a lambda in it changes, `n += 1` or `n = 5`, is shared (P124, decision
@@ -682,11 +638,6 @@ lambdas(program: Node): Node := {
 	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)
 	# a parameter holding a function, declared so or given one, is called spaced too: `f x` as `f(x)`
 	for name in function_parameters.keys { lowering.function_values[name] = yes }
-	for statement in written {
-		parts = definition_of(statement)
-		function = if parts == ø then ø else iteration_function(parts)
-		if function != ø { lowering.inlined[parts.name] = function }
-	}
 	# a global is no lambda's capture: it reads and changes the one global, as a function does
 	globals = global_variables(block_of(written))
 	lowering.globals = globals

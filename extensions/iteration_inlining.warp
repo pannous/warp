@@ -1,0 +1,69 @@
+# A function whose body is one iteration over its first parameter, each parameter read once and the function not
+# called in it, `total(xs) := fold(xs, 0, +)`: its calls become its body, so the loop runs where it is called and fuses
+# with the list given (`total(xs .* 2)` is one loop), whatever the function is named. Runs right before lambdas, which
+# makes the loops; a variable or parameter of the function's name keeps its own calls (scoped_words.warp).
+
+class InlinedFunction { names: list; body: Node }
+iteration_function(parts: Definition): InlinedFunction? := {
+	names = parts.parameters.map(parameter_name)
+	body = sole_statement(parts.body)
+	iteration = iteration_of(body)
+	if iteration == ø or #names == 0 or iteration.source != symbol(names#1) or mentions(body, parts.name) { return ø }
+	if not names.all(name => mention_count(body, name) == 1) { return ø }
+	InlinedFunction(names, body)
+}
+# a block of one statement as that statement: by now every definition's body is a block
+sole_statement(body: Node): Node := if is_curly_group(body) and #body == 1 then body#1 else body
+
+mention_count(n: Node, name: text): int := {
+	if n is symbol { return if name_of(n) == name then 1 else 0 }
+	count = 0
+	for part in parts_of(n) { count += mention_count(part, name) }
+	count
+}
+
+# a value read the same in every round of a loop: a name, a literal, a lambda or a bare operator
+is_steady(n: Node): bool := n is symbol or n is number or n is text or is_lambda(n) or operator_function(n) != ø
+
+# the call of a function that is one iteration as its body on the arguments, else ø; the list may be any code (the
+# loop reads it once), the others steady and free of the body's own names
+inlined_call(n: Node, functions: map): Node? := match n {
+	List(call, Bracket.Round, Separator.None): {
+		if #call == 0 or not (call#1 is symbol) or not functions.has(name_of(call#1)) { return ø }
+		function = functions[name_of(call#1)]
+		names = function.names
+		arguments = arguments_of(call)
+		body = function.body
+		if #arguments != #names or not arguments[1 ..].all(is_steady) { return ø }
+		if arguments.any(argument => mentioned_names(argument, []).any(name => name not in names and mentions(body, name))) { return ø }
+		for i in 1 to #names { body = renamed(body, names#i, arguments#i) }
+		body
+	}
+	_: ø
+}
+
+# the program's functions that are one iteration, by name; one sharing its name with a top-level variable is none
+iteration_functions(statements: list): map := {
+	variables = statements.filter(statement => definition_of(statement) == ø).fold([], (found, statement) => names_bound(statement, found))
+	functions = {}
+	for statement in statements {
+		parts = definition_of(statement)
+		function = if parts == ø or parts.name in variables then ø else iteration_function(parts)
+		if function != ø { functions[parts.name] = function }
+	}
+	functions
+}
+
+iteration_inlining(program: Node): Node := {
+	functions = iteration_functions(statements_in(program))
+	if #functions.keys == 0 { return program }
+	inlined_calls(program, functions)
+}
+inlined_calls(n: Node, functions: map): Node := words_rewritten(n, part => inlined_or_kept(part, functions), functions.keys)
+# an inlined body may call another such function
+inlined_or_kept(n: Node, functions: map): Node := {
+	inlined = inlined_call(n, functions)
+	if inlined == ø then n else inlined_calls(inlined, functions)
+}
+
+iteration_inlining_extension = Extension{name: "iteration_inlining", passes_before: {"lambdas": iteration_inlining}}
