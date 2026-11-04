@@ -19,15 +19,18 @@ class Queue { items = []
 	poll() := dequeue()
 	shift() := dequeue()
 }
-alias ArrayDeque = Deque
-alias VecDeque = Deque
-alias deque = Deque
+alias ArrayDeque => Deque
+alias VecDeque => Deque
+alias deque => Deque
 class Deque { items = []
 	push_back(x) := items.add(x)
 	push_front(x) := { items = [x] + items }
-	pop_back() := items.pop()
-	pop_front() := { first = items#1; items = items[1:]; first }
+	pop_back() := { if count(items) == 0 { raise "pop_back of an empty deque" }; items.pop() }
+	pop_front() := { if count(items) == 0 { raise "pop_front of an empty deque" }; first = items#1; items = items[1:]; first }
+	peek_front() := { if count(items) == 0 { raise "peek_front of an empty deque" }; items#1 }
+	peek_back() := { if count(items) == 0 { raise "peek_back of an empty deque" }; items#count(items) }
 	size() := count(items)
+	is_empty() := count(items) == 0
 	append(x) := push_back(x)
 	appendleft(x) := push_front(x)
 	pop() := pop_back()
@@ -37,10 +40,10 @@ class Deque { items = []
 	pollLast() := pop_back()
 	pollFirst() := pop_front()
 }
-alias HashSet = Set
-alias TreeSet = Set
-alias LinkedHashSet = Set
-alias frozenset = Set
+alias HashSet => Set
+alias TreeSet => Set
+alias LinkedHashSet => Set
+alias frozenset => Set
 class Set { items = []
 	init(xs = []) := { for x in xs { if not (x in items) { items.add(x) } } }
 	add(x) := { if not (x in items) { items.add(x) } }
@@ -49,6 +52,15 @@ class Set { items = []
 	size() := count(items)
 	contains(x) := x in items
 	delete(x) := remove(x)
+	is_empty() := count(items) == 0
+	// the set algebra (card lib-data-structures): new sets, the receiver's elements first, in their order
+	union(other) := { merged = items; for x in other.items { if not (x in merged) { merged = merged + [x] } }; Set(merged) }
+	intersection(other) := Set([x for x in items if x in other.items])
+	difference(other) := Set([x for x in items if not (x in other.items)])
+	symmetric_difference(other) := Set([x for x in items if not (x in other.items)] + [x for x in other.items if not (x in items)])
+	is_subset(other) := { for x in items { if not (x in other.items) { return false } }; true }
+	is_superset(other) := other.is_subset(this)
+	equals(other) := count(items) == count(other.items) and is_subset(other)
 }
 class Counter { keys = []; counts = []
 	init(xs = []) := { for x in xs { add(x) } }
@@ -56,7 +68,71 @@ class Counter { keys = []; counts = []
 	get(x) := { i = keys.index_of(x); if i { counts#i } else { 0 } }
 	most_common() := { best = 1; for i in 1 to count(counts) { if counts#i > counts#best { best = i } }; keys#best }
 }
+// A binary min-heap (card lib-data-structures): pop and peek give the smallest priority first; push(x) uses x as its own
+// priority, push_with(x, priority) a separate one (two names: one name of two arities trips core-use-overloaded-name).
+// Equal priorities come out in no promised order. pop and peek of an empty queue are refused
+alias MinHeap => PriorityQueue
+alias heapq => PriorityQueue
+class PriorityQueue { values = []; priorities = []
+	init(xs = []) := { for x in xs { push(x) } }
+	push(x) := push_with(x, x)
+	push_with(x, priority) := {
+		values.add(x)
+		priorities.add(priority)
+		i = count(values)
+		while i > 1 and priorities#(i / 2 as int) > priorities#i { swap(i, i / 2 as int); i = i / 2 as int }
+	}
+	pop() := {
+		if count(values) == 0 { raise "pop of an empty priority queue" }
+		top = values#1
+		n = count(values)
+		swap(1, n)
+		values.pop()
+		priorities.pop()
+		n = n - 1
+		i = 1
+		going = true
+		while going {
+			least = i
+			l = 2 * i
+			r = 2 * i + 1
+			if l <= n and priorities#l < priorities#least { least = l }
+			if r <= n and priorities#r < priorities#least { least = r }
+			if least == i { going = false } else { swap(i, least); i = least }
+		}
+		top
+	}
+	peek() := { if count(values) == 0 { raise "peek of an empty priority queue" }; values#1 }
+	size() := count(values)
+	is_empty() := count(values) == 0
+	swap(a, b) := { t = values#a; values#a = values#b; values#b = t; p = priorities#a; priorities#a = priorities#b; priorities#b = p }
+}
+// A least-recently-used cache of at most capacity entries (card lib-data-structures): put adds or replaces and makes the
+// key the most recent, evicting the least recent when full; get gives the value (ø for a missing key) and refreshes it;
+// keys() lists the keys least recent first. Keys stay their own values (parallel lists, not map's text keys)
+alias LruCache => LRUCache
+class LRUCache { capacity = 1; keys = []; values = []
+	init(n) := { if n <= 0 { raise "LRUCache needs capacity > 0" }; capacity = n }
+	has(k) := k in keys
+	get(k) := {
+		i = keys.index_of(k)
+		if i == 0 { return ø }
+		v = values#i
+		touch(i)
+		v
+	}
+	put(k, v) := {
+		i = keys.index_of(k)
+		if i { values#i = v; touch(i) } else {
+			if count(keys) >= capacity { keys = keys[1:]; values = values[1:] }
+			keys.add(k)
+			values.add(v)
+		}
+	}
+	touch(i) := { k = keys#i; v = values#i; keys = keys[0:i - 1] + keys[i:] + [k]; values = values[0:i - 1] + values[i:] + [v] }
+	size() := count(keys)
+}
 // warp maps keep insertion order: an ordered map is a map
-alias OrderedDict = OrderedMap
-alias LinkedHashMap = OrderedMap
+alias OrderedDict => OrderedMap
+alias LinkedHashMap => OrderedMap
 OrderedMap() := {}

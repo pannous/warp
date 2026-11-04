@@ -33,37 +33,27 @@ def write_string(s: string) {
 	s.to_utf8()
 }
 
-# GC types (wasm-gc): every warp class is a GC struct, its own type a nullable reference
-type Node: gc struct {
-	tag: i32
-	value: i64
-	left: ref Node? right: ref Node?
+# GC types (wasm-gc): every warp class is a GC struct, a missing child ø
+class Node {
+	tag: int
+	value: int
+	left: Node?
+	right: Node?
 }
 
 # Create GC object
-tree = Node {
-	tag: 1
-	value: 42
-	left: Node { tag: 2 value: 8 left: None right: None }
-	right: None
-}
+tree = Node(1, 42, Node(2, 8, ø, ø), ø)
 
-# Interface types (WIT)
-trait calculator {
-	add: (i32, i32) -> i32
-	sub: (i32, i32) -> i32
-	mul: (i32, i32) -> i32
+# Interface types (WIT): what a calculator offers, as a class whose methods become the component's exports
+class Calculator {
+	add(a: int, b: int) := a + b
+	sub(a: int, b: int) := a - b
+	mul(a: int, b: int) := a * b
 }
+calculator = Calculator()
 
-# Component model: the world of this program as a component; `warp build --wit` writes it as WIT, `warp build
-# --component` builds the component, which other programs use with `use name.wasm`. Its code calls what the world
-# imports as `host.time()`; warp's host serves a component's `host` import (print, time, read)
-component my_component {
-	import host: {
-		print: (string) -> ()
-		time: () -> i64
-	}
-	export api: calculator
-}
+# Component model: `warp build --wit` writes this program's world as WIT, `warp build --component` builds the
+# component, which other programs use with `use name.wasm`; what it imports from its host (print, time, read) is
+# plain warp here: print and clock()
 
-[add(2, 3), compute(3.0, 4.0), round_trip("wasm ✓"), tree.value + tree.left.value]
+[add(2, 3), compute(3.0, 4.0), round_trip("wasm ✓"), tree.value + tree.left.value, calculator.mul(6, 7)]

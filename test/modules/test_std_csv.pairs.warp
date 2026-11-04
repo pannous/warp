@@ -1,0 +1,20 @@
+# csv_rows_reads_rfc_4180
+'use csv; csv_rows("a,b\nc,d")'	[["a", "b"], ["c", "d"]]
+'use csv; csv_rows("a,b\r\nc,d\r\n")'	[["a", "b"], ["c", "d"]]
+'use csv; csv_rows("\\"x,y\\",z")'	[["x,y", "z"]]
+'use csv; csv_rows("\\"say \\"\\"hi\\"\\"\\",b")'	[["say \"hi\"", "b"]]
+'use csv; csv_rows("\\"line\nbreak\\",b\nc,d")'	[["line\nbreak", "b"], ["c", "d"]]
+'use csv; csv_rows("a,,c")'	[["a", "", "c"]]
+'use csv; csv_rows("é,ü")'	[["é", "ü"]]
+'use csv; csv_rows("")'	[]
+
+# csv_maps_reads_the_header
+'use csv; csv_maps("name,age\nAda,36\nBob,7")[1]["age"]'	"7"
+'use csv; count(csv_maps("name,age\nAda,36\nBob,7"))'	2
+'use csv; csv_maps("a,b\n1,\\"x,y\\"")[0]["b"]'	"x,y"
+
+# csv_text_quotes_only_when_needed
+'use csv; csv_text([["a", "b"], ["1", "2"]])'	"a,b\r\n1,2\r\n"
+'use csv; csv_text([["x,y", "say \\"hi\\"", "line\nbreak", "plain"]])'	"\"x,y\",\"say \"\"hi\"\"\",\"line\nbreak\",plain\r\n"
+'use csv; csv_text([{name: "Ada", age: 36}], ["name", "age"])'	"name,age\r\nAda,36\r\n"
+'use csv; rows = [["a,1", "say " + chr(34) + "hi", "n\nl", "c\r\nr"], ["", "é"]]; csv_rows(csv_text(rows)) == rows'	true

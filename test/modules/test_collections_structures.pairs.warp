@@ -1,0 +1,34 @@
+# PriorityQueue, Deque peeks, LRUCache, Set algebra (lib/collections.warp, card lib-data-structures)
+# Set lines first build a Queue: a Set as a program's first instance fails with "the call remove(…) (no owner)"
+# (card core-set-first-instance)
+
+# PriorityQueue: a binary min-heap
+'use collections; xs = [(i * 37) % 101 for i in 1 to 100]; q = PriorityQueue(xs); out = []; while q.size() > 0 { x = q.pop(); out.add(x) }; out == sort(xs)'	yes
+'use collections; q = PriorityQueue(); q.push(5); q.push(2); q.push(9); [q.peek(), q.size()]'	[2, 3]
+'use collections; q = PriorityQueue(); q.push_with("late", 9); q.push_with("soon", 1); q.push_with("mid", 5); [q.pop(), q.pop(), q.pop()]'	["soon", "mid", "late"]
+'use collections; q = PriorityQueue(); q.is_empty()'	yes
+'use collections; q = PriorityQueue(); q.pop()'	error	pop of an empty priority queue
+'use collections; q = PriorityQueue(); q.peek()'	error	peek of an empty priority queue
+'use collections; q = MinHeap([3, 1]); q.pop()'	1
+
+# Deque: both ends
+'use collections; d = Deque(); d.push_back(2); d.push_front(1); d.push_back(3); [d.peek_front(), d.peek_back(), d.size()]'	[1, 3, 3]
+'use collections; d = Deque(); d.push_back(1); d.push_back(2); d.push_front(0); [d.pop_front(), d.pop_back(), d.pop_front(), d.is_empty()]'	[0, 2, 1, yes]
+'use collections; d = Deque(); d.pop_front()'	error	pop_front of an empty deque
+'use collections; d = Deque(); d.pop_back()'	error	pop_back of an empty deque
+'use collections; d = Deque(); d.peek_front()'	error	peek_front of an empty deque
+'use collections; d = Deque(); d.peek_back()'	error	peek_back of an empty deque
+
+# LRUCache: get refreshes, put evicts the least recent
+'use collections; c = LRUCache(2); c.put("a", 1); c.put("b", 2); c.put("c", 3); [c.has("a"), c.get("b"), c.get("c")]'	[no, 2, 3]
+'use collections; c = LRUCache(2); c.put("a", 1); c.put("b", 2); c.get("a"); c.put("c", 3); [c.has("a"), c.has("b"), c.keys]'	[yes, no, ['a', 'c']]
+'use collections; c = LRUCache(2); c.put("a", 1); c.put("b", 2); c.put("a", 10); c.put("c", 3); [c.get("a"), c.has("b"), c.size()]'	[10, no, 2]
+'use collections; c = LRUCache(3); c.put(1, "x"); c.get(2) == ø'	yes
+'use collections; LRUCache(0)'	error	LRUCache needs capacity > 0
+
+# Set algebra
+'use collections; Queue([]); a = Set([1, 2, 3]); b = Set([2, 3, 4]); [a.union(b).items, a.intersection(b).items, a.difference(b).items, a.symmetric_difference(b).items]'	[[1, 2, 3, 4], [2, 3], [1], [1, 4]]
+'use collections; Queue([]); a = Set([1, 2, 3]); b = Set([2, 3, 4]); a.symmetric_difference(b).equals(a.union(b).difference(a.intersection(b)))'	yes
+'use collections; Queue([]); a = Set([1, 2, 3]); b = Set([3, 5]); a.union(b).equals(b.union(a)) and a.intersection(b).equals(b.intersection(a))'	yes
+'use collections; Queue([]); a = Set([1, 2, 3]); [Set([2, 3]).is_subset(a), a.is_subset(Set([2, 3])), a.is_superset(Set([1])), a.is_subset(a), a.has(2), a.has(7)]'	[yes, no, yes, yes, yes, no]
+'use collections; Queue([]); a = Set([1, 2]); a.intersection(Set([3])).is_empty() and a.difference(a).size() == 0'	yes

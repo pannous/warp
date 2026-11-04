@@ -1,0 +1,21 @@
+# semver_reads_a_version
+'use semver; v = semver("1.2.3-rc.1+build.5"); [v.major, v.minor, v.patch, v.prerelease, v.build]'	[1, 2, 3, ["rc", "1"], ["build", "5"]]
+'use semver; version_text(semver("v10.20.30-alpha-x.0+001"))'	"10.20.30-alpha-x.0+001"
+'use semver; try { semver("1.2") } catch e { e.message }'	"not a semantic version: 1.2"
+
+# semver_compare_follows_section_11
+'use semver; semver_sort(["1.0.0", "1.0.0-rc.1", "1.0.0-beta.11", "1.0.0-beta.2", "1.0.0-beta", "1.0.0-alpha.beta", "1.0.0-alpha.1", "1.0.0-alpha"])'	["1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0"]
+'use semver; [semver_compare("1.0.0", "2.0.0"), semver_compare("2.1.0", "2.0.9"), semver_compare("1.10.0", "1.9.0")]'	[-1, 1, 1]
+'use semver; semver_compare("1.0.0+a", "1.0.0+b")'	0
+'use semver; semver_compare("1.0.0-alpha", "1.0.0")'	-1
+'use semver; semver_compare("1.0.0-1", "1.0.0-a")'	-1
+
+# satisfies_npm_ranges
+'use semver; [satisfies("1.2.3", "^1.2.3"), satisfies("1.9.9", "^1.2.3"), satisfies("2.0.0", "^1.2.3"), satisfies("1.2.2", "^1.2.3")]'	[yes, yes, no, no]
+'use semver; [satisfies("0.2.5", "^0.2.3"), satisfies("0.3.0", "^0.2.3"), satisfies("0.0.3", "^0.0.3"), satisfies("0.0.4", "^0.0.3")]'	[yes, no, yes, no]
+'use semver; [satisfies("1.2.9", "~1.2.3"), satisfies("1.3.0", "~1.2.3"), satisfies("1.2.2", "~1.2.3")]'	[yes, no, no]
+'use semver; [satisfies("1.5.0", "1.x"), satisfies("2.0.0", "1.x"), satisfies("1.2.7", "1.2.x"), satisfies("1.3.0", "1.2.X"), satisfies("9.9.9", "*")]'	[yes, no, yes, no, yes]
+'use semver; [satisfies("1.5.0", ">=1.2.0 <2.0.0"), satisfies("2.0.0", ">=1.2.0 <2.0.0"), satisfies("1.1.9", ">=1.2.0 <2.0.0")]'	[yes, no, no]
+'use semver; [satisfies("1.2.3", "=1.2.3"), satisfies("1.2.3", "1.2.3"), satisfies("1.2.4", "1.2.3"), satisfies("1.2.4", ">1.2.3"), satisfies("1.2.3", "<=1.2.3")]'	[yes, yes, no, yes, yes]
+'use semver; [satisfies("1.2.7", "1.2.7 || >=2.0.0 <3.0.0"), satisfies("2.5.0", "1.2.7 || >=2.0.0 <3.0.0"), satisfies("3.0.0", "1.2.7 || >=2.0.0 <3.0.0")]'	[yes, yes, no]
+'use semver; [satisfies("2.0.0-rc.1", "^1.2.3"), satisfies("1.2.4-beta", "^1.2.3"), satisfies("1.2.4-beta", ">=1.2.4-alpha")]'	[no, no, yes]

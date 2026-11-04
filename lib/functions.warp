@@ -1,0 +1,47 @@
+// The standard library module functions: `use functions`, functions over functions: memoize(f) remembers f's results by
+// argument, retry(f, attempts, delay) calls f until it succeeds, waiting delay ms, then twice as long, before each retry;
+// throttle(f, ms) and debounce(f, ms) limit by the wall clock how often f runs
+use time
+
+// f with its results kept: f runs once per argument (equal arguments share a result; several values: pass a list)
+def memoize(f: function): function {
+	arguments = []
+	results = []
+	x => {
+		i = arguments.index_of(x)
+		if i > 0 then results#i else { result = f(x); arguments.add(x); results.add(result); result }
+	}
+}
+
+// f() up to attempts times, the first success its value; the waits delay ms, 2 delay, 4 delay …; when every attempt
+// fails, the last one's error is raised again
+def retry(f: function, attempts: int, delay: number): any {
+	wait = delay
+	attempt = 1
+	done = no
+	result = ø
+	while not done and attempt < attempts {
+		try { result = f(); done = yes } catch e { sleep_ms(wait); wait = wait * 2; attempt = attempt + 1 }
+	}
+	if done then result else f()
+}
+
+// rate limits by the wall clock, natively and in a page: throttle(f, ms) calls f at most once in each ms, debounce(f, ms)
+// only after ms without calls (the leading edge: the first call of a burst runs, the rest of it is dropped); a dropped
+// call answers the last result
+def throttle(f: function, ms: number): function {
+	last = [-1, ø]
+	x => {
+		at = wall_clock_ms()
+		if last#1 < 0 or at - last#1 >= ms { last = [at, f(x)] }
+		last#2
+	}
+}
+def debounce(f: function, ms: number): function {
+	last = [-1, -1, ø]
+	x => {
+		at = wall_clock_ms()
+		if last#1 < 0 or at - last#1 >= ms { last = [at, at, f(x)] } else { last = [at, last#2, last#3] }
+		last#3
+	}
+}

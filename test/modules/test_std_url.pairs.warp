@@ -1,0 +1,18 @@
+# url_encode_percent_encodes_utf8
+'use url; url_encode("é")'	"%C3%A9"
+'use url; url_encode("a b&c/d")'	"a%20b%26c%2Fd"
+'use url; url_encode("AZaz09-_.~")'	"AZaz09-_.~"
+'use url; url_encode("🌍")'	"%F0%9F%8C%8D"
+'use url; url_decode("%C3%A9")'	"é"
+'use url; url_decode("%c3%a9")'	"é"
+'use url; url_decode("a+b%20c")'	"a+b c"
+'use url; url_decode("100%")'	"100%"
+'use url; url_decode(url_encode("héllo wörld 🌍?&="))'	"héllo wörld 🌍?&="
+
+# query_map_and_query_text
+'use url; query_map("a=1&b=x+y")["b"]'	"x y"
+'use url; query_map("?q=caf%C3%A9&flag")["q"]'	"café"
+'use url; query_map("?q=caf%C3%A9&flag")["flag"]'	""
+'use url; query_map("x=a=b")["x"]'	"a=b"
+'use url; query_text({a: "1", b: "x y"})'	"a=1&b=x%20y"
+'use url; query_map(query_text({k: "é&=+"}))["k"]'	"é&=+"

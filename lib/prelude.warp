@@ -147,44 +147,44 @@ type Char = codepoint
 type Real = real
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
-alias warn = warning
-alias tuple = list
+alias warn => warning
+alias tuple => list
 // decision nat-and-int: a fraction is a rational
 type fraction = rational
-alias keys = map_keys
-alias values = map_values
-alias contains = collection_contains
-alias has = collection_contains
-alias includes = collection_contains
-alias get = map_get_or
+alias keys => map_keys
+alias values => map_values
+alias contains => collection_contains
+alias has => collection_contains
+alias includes => collection_contains
+alias get => map_get_or
 // P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
-alias index_of = collection_position
+alias index_of => collection_position
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
 // `t.graphemes`, `t.codepoints` are the lists
-alias characters = chars
-alias glyphs = chars
-alias graphemes = chars
-alias codepoints = code_point_list
-alias uppercase = upper
-alias lowercase = lower
+alias characters => chars
+alias glyphs => chars
+alias graphemes => chars
+alias codepoints => code_point_list
+alias uppercase => upper
+alias lowercase => lower
 // the text builtin trim, Python's strip
-alias strip = trim
-alias reversed = reverse
-alias size = count
-alias len = count
-alias length = count
-alias sorted = sort
-alias clone = copy
-alias ordinal = ord
-alias codepoint = ord
-alias isdigit = is_digit
-alias average = mean
-alias is_letter = is_alpha
-alias isalpha = is_alpha
-alias is_alnum = is_alphanumeric
-alias isalnum = is_alphanumeric
-alias is_whitespace = is_space
-alias isspace = is_space
+alias strip => trim
+alias reversed => reverse
+alias size => count
+alias len => count
+alias length => count
+alias sorted => sort
+alias clone => copy
+alias ordinal => ord
+alias codepoint => ord
+alias isdigit => is_digit
+alias average => mean
+alias is_letter => is_alpha
+alias isalpha => is_alpha
+alias is_alnum => is_alphanumeric
+alias isalnum => is_alphanumeric
+alias is_whitespace => is_space
+alias isspace => is_space
 // C's put words, as print: puts and putf answer 0 as C's puts does, puti and putl their number
 puts(t) := { print t; 0 }
 puti(n: int) := { print n; n }
@@ -496,7 +496,7 @@ task_context_back(context) := ø
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)
 random_until(a, b) := if a is int and b is int then a + random_below(b - a) else random_fraction(a, b)
-random_between(a, b) := if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b)
+random_between(a, b) := { if a > b { raise "random_between needs lo <= hi" }; if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b) }
 // random(x) by the value's type (card random-dispatches): of a list one of its elements, of a whole number n one of 0…n-1,
 // of a fraction a float from 0 up to it
 random_element(xs) := xs#(random_below(count(xs)) + 1)

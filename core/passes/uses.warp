@@ -38,9 +38,26 @@ used_in(program: Node, folder: text): any := {
 	separated(bracketed(brought#1 + kept, ""), ";")
 }
 
-# `alias deque = Deque` (wiki/alias.md): the program's alias lines taken out, each alias naming its word wherever the
+# `alias deque => Deque` (wiki/alias.md): the program's alias lines taken out, each alias naming its word wherever the
 # program declares nothing of that name
 alias_keyword = "alias"
+# `twice => double` or `double <= twice`, an alias line after its keyword: [the new name, the word it names]; a plain
+# `twice = double` says no direction and is refused (decision alias-arrows); [] for any other text, a WGSL `alias int =
+# i32;` in a text (lib/compute_toys.warp)
+alias_pair(written: text): list := {
+	sides = alias_sides(written, "=>")
+	if #sides == 0 { sides = alias_sides(written, "<=").reverse() }
+	if #sides > 0 { return sides }
+	plain = alias_sides(written, "=")
+	if #plain == 2 { raise "`alias " + written + "`: " + alias_direction_fix(plain#1, plain#2) }
+	[]
+}
+# the two plain names an arrow stands between, else []
+alias_sides(written: text, arrow: text): list := {
+	sides = written.split(arrow).map(side => side.trim())
+	if #sides == 2 and is_plain_name(sides#1) and is_plain_name(sides#2) then sides else []
+}
+alias_direction_fix(name: text, word: text): text := "an alias says its direction with => or <=: alias " + name + " => " + word
 with_own_aliases(program: Node): Node := {
 	statements = statements_in(program)
 	aliases = statements.map(word_alias).filter(pair => pair != ø)

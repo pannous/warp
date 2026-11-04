@@ -14,6 +14,9 @@ foreign_words = [["auto", "var"]]
 # `7 div 2` (Pascal) → `7 /! 2`: floor division is `/!` (decision floor-division)
 floor_division = "/!"
 floor_division_words = ["div"]
+# `alias acos = arc_cosine` → `alias acos => arc_cosine`: an alias says its direction (decision alias-arrows)
+alias_word = "alias"
+alias_arrow = "=>"
 
 # every hint of the scanned lines, in the order of the source
 hints_of(lines: list): list := {
@@ -59,6 +62,7 @@ word_at(cs: list, i: int): text := {
 # the hint on a word: a counted type, another language's word, a floor division word; ø when none
 word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
 	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
+	if word == alias_word and starts_statement(cs, i) { return alias_arrow_hint(cs, i + #word, number) }
 	for pair in foreign_words {
 		if word == pair[0] and starts_statement(cs, i) and is_word_character(character_after_blanks(cs, i + #word)) and is_blank_character(at(cs, i + #word)) {
 			return Hint(number, i, word, pair[1], word + " is " + pair[1])
@@ -91,6 +95,23 @@ counted_type_hint(line: Scanned, cs: list, i: int, word: text, number: int) := {
 	Hint(number, i, piece(cs, i, end - i), count + " " + word + "s", word + "[n] is n " + word + "s")
 }
 
+# the `=` of `alias name = word` (from index i, after the keyword) as the arrow; `alias = 3`, `==` and `=>` stay
+alias_arrow_hint(cs: list, i: int, number: int) := {
+	at_name = i + blanks_after(cs, i)
+	name = word_at(cs, at_name)
+	if #name == 0 { return ø }
+	sign = at_name + #name + blanks_after(cs, at_name + #name)
+	if at(cs, sign) != "=" or at(cs, sign + 1) in ["=", ">"] { return ø }
+	Hint(number, sign, "=", alias_arrow, "an alias says its direction: " + alias_arrow)
+}
+
+# the number of blanks right after index i, from it on
+blanks_after(cs: list, i: int): int := {
+	n = 0
+	while is_blank_character(at(cs, i + n)) { n += 1 }
+	n
+}
+
 # the number of blanks right before index i
 blanks_before(cs: list, i: int): int := {
 	n = 0
@@ -100,11 +121,7 @@ blanks_before(cs: list, i: int): int := {
 
 character_before_blanks(cs: list, i: int): text := at(cs, i - 1 - blanks_before(cs, i))
 
-character_after_blanks(cs: list, i: int): text := {
-	k = i
-	while is_blank_character(at(cs, k)) { k += 1 }
-	at(cs, k)
-}
+character_after_blanks(cs: list, i: int): text := at(cs, i + blanks_after(cs, i))
 
 # the word at index i starts a statement: at the line's start or after `;` or `{`
 starts_statement(cs: list, i: int): bool := {

@@ -1,0 +1,48 @@
+# path_join, dirname, basename, extension, stem, normalize_path, relative_path, glob_match, text only (card lib-path-helpers)
+'use path; path_join("a", "b")'	"a/b"
+'use path; path_join("a/", "b")'	"a/b"
+'use path; path_join("a", "/b")'	"/b"
+'use path; path_join("", "b")'	"b"
+'use path; dirname("a/b/c")'	"a/b"
+'use path; dirname("c")'	"."
+'use path; dirname("/c")'	"/"
+'use path; dirname("/")'	"/"
+'use path; dirname("a/b/")'	"a"
+'use path; basename("a/b.txt")'	"b.txt"
+'use path; basename("a/b/")'	"b"
+'use path; basename("/")'	""
+'use path; basename("")'	""
+'use path; extension("a/b.tar.gz")'	".gz"
+'use path; stem("a/b.tar.gz")'	"b.tar"
+'use path; extension("~/.bashrc")'	""
+'use path; stem(".bashrc")'	".bashrc"
+'use path; extension("README")'	""
+'use path; extension("x/.config.json")'	".json"
+'use path; normalize_path("a/./b//../c/")'	"a/c"
+'use path; normalize_path("/../x")'	"/x"
+'use path; normalize_path("/")'	"/"
+'use path; normalize_path("")'	"."
+'use path; normalize_path("./")'	"."
+'use path; normalize_path("../a/../..")'	"../.."
+'use path; normalize_path("//usr///lib/")'	"/usr/lib"
+'use path; relative_path("a/b", "a/c/d")'	"../c/d"
+'use path; relative_path("/usr/lib", "/usr/lib")'	"."
+'use path; relative_path("/", "/etc/hosts")'	"etc/hosts"
+'use path; relative_path("/a/b/c", "/")'	"../../.."
+'use path; relative_path("/..", "/x")'	"x"
+'use path; try relative_path("../a", "b") else "refused"'	"refused"
+'use path; try relative_path("/a", "b") else "refused"'	"refused"
+'use path; glob_match("*.txt", "notes.txt")'	yes
+'use path; glob_match("*.txt", "dir/notes.txt")'	no
+'use path; glob_match("file?.md", "file1.md")'	yes
+'use path; glob_match("file?.md", "file10.md")'	no
+'use path; glob_match("[a-c]x[!0-9]", "bxy")'	yes
+'use path; glob_match("[a-c]x[!0-9]", "bx5")'	no
+'use path; glob_match("**/*.warp", "lib/deep/path.warp")'	yes
+'use path; glob_match("**/*.warp", "path.warp")'	yes
+'use path; glob_match("src/**/test.warp", "src/a/b/test.warp")'	yes
+'use path; glob_match("src/**/test.warp", "src/test.warp")'	yes
+'use path; glob_match("src/**/test.warp", "lib/a/test.warp")'	no
+'use path; glob_match("lib/**", "lib/a/b.warp")'	yes
+'use path; glob_match("lib/**", "src/a.warp")'	no
+'use path; glob_match("", "")'	yes

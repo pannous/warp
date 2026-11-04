@@ -1358,7 +1358,7 @@ def counts_units(left: Node): bool := left is symbol and UNIT_WORDS.contains(nam
 UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "codepoint", "codepoints", "grapheme", "graphemes"]
 
 // An operand follows `width` characters on: blanks, then no end of the expression
-// `alias contains = collection_contains`: an assignment's `=` (no `==`) after the blanks at `at`
+// `contains = …`: an assignment's `=` (no `==`) after the blanks at `at`
 def assigned_at(p: Parser, at: int): bool {
 	sign = blank_end(p, at)
 	char_at(p, sign) == '=' and char_at(p, sign + 1) != '='
@@ -1384,8 +1384,10 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
 	if keyword_at(p, "for") and char_ahead(p, 3) != ':' { return false }
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and (if p.iterable then word_ends_header(p) else not word_begins_item(p))
-	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
+	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c) or hole_at(p))
 }
+// a rule's hole `$t` here, which stands where a name does: `$x is a $t` reads as `x is a number` does
+def hole_at(p: Parser): bool := char_here(p) == '$' and is_name_start(char_ahead(p, 1))
 
 // `r = move 1 from: 10 to: 3`: a label word with a colon and a blank after it labels the argument after them, also
 // where the call is an operand (decision labels-calls); ø where no label stands
