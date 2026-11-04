@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+# The free slots of a 9:00-17:00 workday between meetings, at least 30 minutes each (intervals, time durations)
+use intervals
+use time
+at(h: int, m: int) := Instant(h * 3600000 + m * 60000)
+day = extent(at(9, 0), at(17, 0))
+meetings = [extent(at(13, 0), at(14, 0)), extent(at(9, 30), at(10, 15)), extent(at(10, 0), at(11, 0)), extent(at(16, 40), at(17, 0))]
+least = parse_duration("30m")
+slots = subtract_intervals(day, meetings).filter(s => s.hi - s.lo >= least)
+join([format_time(s.lo.ms)[0: 5] + "-" + format_time(s.hi.ms)[0: 5] + " (" + format_duration_long(s.hi - s.lo) + ")" for s in slots], "\n")
