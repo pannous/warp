@@ -272,7 +272,6 @@ function startWorker(restarts = 0) {
 				pending.frame++;
 				slept(pending, data.milliseconds);
 			}
-			if (data.type === "tasks inline") pending.tasksInline = data.reason;
 			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
@@ -600,7 +599,7 @@ function printedChunk(run, chunk) {
 function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 	clearTimeout(run.timer);
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: ${run.tasksInline ?? "the program may not terminate"}`), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), milliseconds);
 }
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 

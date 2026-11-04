@@ -231,7 +231,7 @@ function compilerHostWords(exports) {
 
 // the files programs write, over the served ones, for the page's life and kept in its IndexedDB (host-files.js
 // writtenFiles), as natively they stay on disk from run to run
-const programFiles = { ...newOverlay(), written: writtenFiles, kept: (path, bytes) => { keepWrittenFile(path, bytes); self.taskWrote?.(path, bytes); }, forgotten: forgetKeptFile };
+const programFiles = { ...newOverlay(), written: writtenFiles, kept: (path, bytes) => { keepWrittenFile(path, bytes); }, forgotten: forgetKeptFile };
 
 // the code as the file while `work` runs, the file's own content back after it
 function withSource(code, file, work) {
