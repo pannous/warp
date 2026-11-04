@@ -68,7 +68,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	own = own_build(source)
 	# (the standard modules it names words of without their `use`, as if it said them)
 	timed("implicit uses")
-	source = with_implicit_uses(source, word_index_file(), folder)
+	source = with_implicit_uses(source, folder)
 	timed("c functions, runtime, linking")
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
 	foreign = c_functions_of(source, library_folder)

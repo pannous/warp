@@ -59,6 +59,8 @@ class Extension {
 	# functions lowering a match's arms past the core's (cases, values, types, `_`), given the arms, the subject and the
 	# enum variants, each giving arms the core lowers (`n if n > 5 => e` as an arm `_`)
 	arm_lowerings: list = []
+	# functions finding the standard modules a source uses without saying it, given the source and its folder
+	implicit_uses: list = []
 	# the command words it answers (`warp help`), and runs: the function running one, given its word
 	commands: list = []
 	runs: any = ø
@@ -129,6 +131,8 @@ with_text_passes(program: Node): Node := {
 	for pass in extension_list("text_passes") { passed = pass(passed) }
 	passed
 }
+# the standard modules the source uses without saying it, as the extensions find them
+implicit_modules_of(source: text, folder: text = "."): list := concatenated(extension_list("implicit_uses").map(find => find(source, folder)))
 # a match's arms through every extension's arm lowerings, in row order
 with_arm_lowerings(arms: list, subject: Node, variants: map): list := {
 	lowered = arms
