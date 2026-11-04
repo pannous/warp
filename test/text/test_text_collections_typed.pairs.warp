@@ -1,0 +1,5 @@
+# Text collections and repetition: notes/stdlib.md and lib/text.warp
+'use text; words("one  two")'	["one", "two"]
+'use text; lines("a\nb")'	['a', 'b']
+'use text; letters("a1 b!")'	['a', 'b']
+'use text; repeat("ab", 2)'	"abab"
