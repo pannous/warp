@@ -33,7 +33,10 @@ RECENTLY_DONE = 8
 FLIPS_SHOWN = 8  # named tests per lane that started or stopped passing
 CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/cards.jsonl")  # one line per snapshot of the board's columns
 STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build records (notes/compiler_rebuilds.md)
-BUILDS = [("warp.wasm, built by the seed", "warp.record"), ("self-compile: warp.wasm compiles itself", "warp-self.record")]
+# (name, record, whether one compiler, the seed, runs many of them: its first run is cold; warp-self's compiler is the
+# record's own warp.wasm, run once, so its records are alike)
+BUILDS = [("warp.wasm, built by the seed", "warp.record", True),
+          ("self-compile: warp.wasm compiles itself", "warp-self.record", False)]
 
 
 def component(path):
@@ -206,24 +209,34 @@ def record_field(path, key):
         return next((line.split() for line in lines if line.split()[1:2] == [key] or line.split()[:1] == [key]), None)
 
 
-def build_history(record, landed):
-    """Each landing's CPU seconds and peak memory of building <record>, its fastest full build (rebakes skipped), by
-    the commit the record says it built: a build of uncommitted edits says `<sha>+dirty` (rebuild.sh built_commit) and
-    is no landing's."""
-    fastest = {}
+def build_history(record, by_seed, landed):
+    """Each landing's instructions retired (in 10^12), peak memory and CPU seconds of building <record>, its leanest
+    full build (rebakes skipped), by the commit the record says it built: a build of uncommitted edits says
+    `<sha>+dirty` (rebuild.sh built_commit) and is no landing's. Instructions, as CPU seconds swing with the machine's
+    load and cores; <by_seed>: a seed's first build is left out, a compiler's cold first run reads ~3% more
+    (notes/compiler_rebuilds.md)."""
+    builds = []
     for folder in glob.glob(os.path.join(STORE, "*", record)):
         try:
             commit = record_field(os.path.join(folder, "inputs.txt"), "commit")[1]
+            seed = (record_field(os.path.join(folder, "inputs.txt"), "seed") or [None, None])[1]
             with open(os.path.join(folder, "build.log")) as log:
                 if commit not in landed or "rebak" in log.read():
                     continue
-            cpu = sum(float(record_field(os.path.join(folder, "time"), key)[1]) for key in ("user", "sys"))
-            peak = int(record_field(os.path.join(folder, "time"), "maximum")[0]) // 2**20
+            timing = os.path.join(folder, "time")
+            instructions = int(record_field(timing, "instructions")[0])
+            cpu = sum(float(record_field(timing, key)[1]) for key in ("user", "sys"))
+            peak = int(record_field(timing, "maximum")[0]) // 2**20
+            builds.append((os.path.getmtime(timing), seed, commit, instructions, peak, cpu))
         except (OSError, TypeError, ValueError, IndexError):
             continue
-        if commit not in fastest or cpu < fastest[commit][2]:
-            fastest[commit] = [landed[commit], commit[:10], round(cpu, 1), peak]
-    return sorted(fastest.values())
+    seen_seeds, leanest = set(), {}
+    for _, seed, commit, instructions, peak, cpu in sorted(builds):
+        cold = by_seed and seed is not None and seed not in seen_seeds
+        seen_seeds.add(seed)
+        if not cold and (commit not in leanest or instructions < leanest[commit][2] * 1e12):
+            leanest[commit] = [landed[commit], commit[:10], round(instructions / 1e12, 3), peak, round(cpu, 1)]
+    return sorted(leanest.values())
 
 
 def pushes_since():
@@ -291,13 +304,13 @@ def card_counts():
 
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, "origin/main").splitlines()}
-data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, landed)] for name, record in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))
 first, last = rows[0], rows[-1]
 core = lambda row: sum(row[3][:-1])
 latest = "; ".join(f"{name} {points[-1][2]}/{points[-1][3]}" for name, _, points, _ in data["tiers"] if points)
-builds = "; ".join(f"{record} {points[-1][2]} s" for _, record, points in data["builds"] if points)
+builds = "; ".join(f"{record} {points[-1][2]} T instructions ({points[-1][4]} s CPU)" for _, record, points in data["builds"] if points)
 print(f"{latest}; {builds}; core {core(first)} -> {core(last)}, extensions {first[3][-1]} -> {last[3][-1]}, "
       f"lib {first[6]} -> {last[6]}, test {first[7]} -> {last[7]} over {len(rows)} commits: {OUT}")
