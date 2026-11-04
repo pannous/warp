@@ -155,3 +155,7 @@ Cover public pause, resume and cancel outcomes before adding non-narrowing signa
 # library-typed calendar day helpers
 
 Cover public day calculations, then annotate precise integer results without narrowing inputs; verify outcomes and smoke on merged main.
+
+## Library typed shell helpers
+
+Cover documented directory detection and wildcard conversion, then annotate precise results without changing accepted inputs. Verify outcomes and module prebuild before landing.
