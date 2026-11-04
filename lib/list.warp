@@ -30,6 +30,13 @@ interleave(a: any, b: any): list := { out = []; for i in 1 to max(count(a), coun
 dedupe(xs: any): list := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
 // the running results of f: scan([1, 2, 3], 0, (a, b) => a + b) is [1 3 6]
 scan(xs: any, start: any, f: any): list := { out = []; acc = start; for x in xs { acc = f(acc, x); out = out + [acc] }; out }
+// the running sums: cumulative_sum([1, 2, 3]) is [1 3 6]
+cumulative_sum(xs: any): list := scan(xs, 0, (a, b) => a + b)
+// the q-quantile, q from 0 to 1, interpolating linearly between the sorted neighbours (numpy's default, R's type 7);
+// an element itself when q lands on one, so quantile([1, 2, 3], 0.5) is 2 and quantile([1, 2], 0.5) is 1.5
+quantile(xs: any, q: any): number := { if count(xs) == 0 { raise "quantile of an empty list" }; if q < 0 or q > 1 { raise "quantile " + str(q) + " is not between 0 and 1" }; s = sort(xs); h = q * (count(s) - 1); i = int(h); lo = s#(i + 1); hi = s#min(i + 2, count(s)); lo + (h - i) * (hi - lo) }
+// the p-th percentile, p from 0 to 100: percentile(xs, 90) is quantile(xs, 0.9)
+percentile(xs: any, p: any): number := { if p < 0 or p > 100 { raise "percentile " + str(p) + " is not between 0 and 100" }; quantile(xs, p / 100) }
 take_while(xs: any, f: any): list := { out = []; for x in xs { if not f(x) { break }; out = out + [x] }; out }
 drop_while(xs: any, f: any): list := { out = []; dropping = true; for x in xs { if not (dropping and f(x)) { dropping = false; out = out + [x] } }; out }
 // the index (from 0, like xs[i]) of the greatest element, the first of equal ones
