@@ -67,7 +67,7 @@ def written_tree(written: text, uses: text = ""): Node := {
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
 	statements = source_operator_statements(source)
-	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), scans: extension_scans(source + uses), aliases: by_first_character(aliases_among(statements) + aliases_among(math_operator_statements())), circumfixes: circumfixes_among(statements) + circumfixes_among(math_operator_statements()), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
+	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), scans: extension_scans(source + uses), aliases: by_first_character(aliases_among(statements) + aliases_among(math_operator_statements()), alias => alias.spelling), circumfixes: circumfixes_among(statements) + circumfixes_among(math_operator_statements()), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
 	items_until(p, Bracket.None, ItemsEnd.Source)
 }
 
@@ -120,27 +120,26 @@ def statement_end(p: Parser): int {
 }
 // (infix|prefix|suffix|postfix|circumfix)? operator $op := body
 // One operator statement as written (decision one-operator-reader): `operator × := *`, `prefix operator √ := sqrt`,
-// `infix operator ⊕(a, b) := a + 2*b`, `circumfix operator ⌊ ⌋ := floor` and the pattern `a ⊕ b := a * b`. `written` is
-// what stands before its operator ("prefix operator", "operator", "" for the pattern), `head` the words up to `:=`,
-// `body` those after it; `spelling` the operator the statement defines ("" when none: a built-in word, an overload)
-class OperatorStatement { fixity: Fixity; written: text; spelling: text; head: list; body: list }
+// `infix operator ⊕(a, b) := a + 2*b`, `circumfix operator ⌊ ⌋ := floor` and the pattern `a ⊕ b := a * b`. `keyword`:
+// the word `operator` stands in it (no for `prefix ∆ := …` and the pattern), `head` the words up to `:=`, `body` those
+// after it; `spelling` the operator the statement defines ("" when none: a built-in word, an overload)
+class OperatorStatement { fixity: Fixity; keyword: bool; spelling: text; head: list; body: list }
 def operator_statement(words: list): OperatorStatement? {
 	position = words.index_of(":=")
 	if position < 2 { return ø }
 	// the offset of `:=`, where the head ends
 	define = position - 1
 	if not (words#1 in FIXITY_WORDS) { return operator_pattern(words, define) }
-	fixity = FIXITY_WORDS[words#1]
 	start = if words#1 != "operator" and define > 1 and words#2 == "operator" then 2 else 1
-	head = words[start .. define]
-	statement = OperatorStatement{fixity: fixity, written: words[0 .. start].join(" "), spelling: "", head: head, body: words[define + 1 .. words.length]}
+	keyword = words#start == "operator"
+	statement = OperatorStatement{fixity: FIXITY_WORDS[words#1], keyword: keyword, spelling: "", head: words[start .. define], body: words[define + 1 .. words.length]}
 	statement.spelling = defined_spelling(statement)
 	statement
 }
 // `a ⊕ b := …`: an infix operator declared by a pattern of two plain names around its glyph
 def operator_pattern(words: list, define: int): OperatorStatement? {
 	if define != 3 or not is_operator_glyph(words#2) or not is_plain_name(words#1) or not is_plain_name(words#3) { return ø }
-	OperatorStatement{fixity: Fixity.Infix, written: "", spelling: words#2, head: words[0 .. 3], body: words[4 .. words.length]}
+	OperatorStatement{fixity: Fixity.Infix, keyword: no, spelling: words#2, head: words[0 .. 3], body: words[4 .. words.length]}
 }
 // the operator a statement defines: its one glyph (`operator ⊕ := …`), or for infix a word or glyph with its parameters,
 // `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`; a built-in word, `infix operator
@@ -150,32 +149,35 @@ def defined_spelling(statement: OperatorStatement): text {
 	first = statement.head#1
 	if #statement.head == 1 and is_operator_glyph(first) { return first }
 	if statement.fixity != Fixity.Infix { return "" }
-	end = if is_name_start(first#1) then name_end(first, 0, first.length) else 0
-	if not is_name_start(first#1) { while end < first.length and first[end] != '(' { end = end + 1 } }
+	named = is_name_start(first#1)
+	end = if named then name_end(first, 0, first.length) else 0
+	if not named { while end < first.length and first[end] != '(' { end += 1 } }
 	word = first[0 .. end]
-	operator = (is_name_start(first#1) and word != "operator") or is_operator_glyph(word)
+	operator = (named and word != "operator") or is_operator_glyph(word)
 	if operator and (end == first.length or first[end] == '(') and word_operator(word) == ø then word else ""
 }
 // `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
-// function, `√x` is sqrt(x): [spelling, target], else [] (the pre-scan made the spelling an operator: aliases_among).
+// function, `√x` is sqrt(x) (the pre-scan made the spelling an operator: aliases_among)
+class OperatorAlias { spelling: text; target: text }
+// `circumfix operator ⌊ ⌋ := floor`: `⌊x⌋` is floor(x)
+class Circumfix { opening: text; closing: text; function: text }
 // A prefix alias names a function by the whole word: `prefix operator ∆ := it*it` defines ∆, aliases no `it*it`
-def alias_of(statement: OperatorStatement?): list {
-	if statement == ø or #statement.head != 1 or #statement.body != 1 { return [] }
+def alias_of(statement: OperatorStatement?): OperatorAlias? {
+	if statement == ø or not statement.keyword or #statement.head != 1 or #statement.body != 1 { return ø }
 	target = statement.body#1
-	prefix = statement.written == "prefix operator"
-	if (statement.written == "operator" or prefix) and (is_operator_spelling(target) or (prefix and is_plain_name(target))) then [statement.head#1, target] else []
+	prefix = statement.fixity == Fixity.Prefix
+	if (statement.fixity == Fixity.Infix or prefix) and (is_operator_spelling(target) or (prefix and is_plain_name(target))) then OperatorAlias{spelling: statement.head#1, target: target} else ø
 }
-// `circumfix operator ⌊ ⌋ := floor`: [opening, closing, function], else []
-def circumfix_of(statement: OperatorStatement?): list {
-	if statement == ø or statement.written != "circumfix operator" or #statement.head != 2 or #statement.body != 1 { return [] }
-	[statement.head#1, statement.head#2, statement.body#1]
+def circumfix_of(statement: OperatorStatement?): Circumfix? {
+	if statement == ø or not statement.keyword or statement.fixity != Fixity.Circumfix or #statement.head != 2 or #statement.body != 1 { return ø }
+	Circumfix{opening: statement.head#1, closing: statement.head#2, function: statement.body#1}
 }
 // a statement that only spells: an alias or a circumfix, applied by the pre-scan
-def only_spells(statement: OperatorStatement?): bool := alias_of(statement).length > 0 or circumfix_of(statement).length > 0
+def only_spells(statement: OperatorStatement?): bool := alias_of(statement) != ø or circumfix_of(statement) != ø
 // The operator a statement declares, as a list of it, else []: its spelling, unless the statement only spells
 def operator_declared(statement: OperatorStatement?): list := if statement == ø or statement.spelling == "" or only_spells(statement) then [] else [declared_of(statement.spelling, statement.fixity)]
 // An alias spelling a function, `√` of sqrt, no operator
-def spells_function(alias: list): bool := is_name_start(alias#2#1) and not is_operator_spelling(alias#2)
+def spells_function(alias: OperatorAlias): bool := is_name_start(alias.target#1) and not is_operator_spelling(alias.target)
 // the operator statements among statements, read once
 def operator_statements(statements: list): list := statements.filter(statement => statement.contains(":=")).map(statement => operator_statement(blank_words(statement))).filter(statement => statement != ø)
 def source_operator_statements(source: text): list := if source.contains(":=") then operator_statements(code_statements(source)) else []
@@ -186,9 +188,9 @@ def math_operator_statements(): list {
 	if math_statements == ø { math_statements = operator_statements(code_statements_of("math")) }
 	math_statements
 }
-// [spelling, target] of each alias, [opening, closing, function] of each circumfix among statements
-def aliases_among(statements: list): list := statements.map(alias_of).filter(alias => alias.length > 0)
-def circumfixes_among(statements: list): list := statements.map(circumfix_of).filter(pair => pair.length > 0)
+// the aliases and the circumfixes among statements
+def aliases_among(statements: list): list := statements.map(alias_of).filter(alias => alias != ø)
+def circumfixes_among(statements: list): list := statements.map(circumfix_of).filter(circumfix => circumfix != ø)
 // A library's code statements by its name ("math"), split once a compile for every scanner of them: splitting math's
 // text for its operators, its aliases and its circumfixes each was a tenth of a small program's compile
 global library_code_statements = {}
@@ -313,19 +315,18 @@ def longest_first(pairs: list): list {
 }
 // The canonical name of the operator an alias spells, else ""
 def canonical_operator(target: text): text := symbol_operator(target) ?? word_operator(target) ?? ALIAS_TARGET_NAMES.get(target) ?? ""
-// The alias written at the parser's position as [spelling, target], a word one as a whole word, the longest, else []
-def alias_at(p: Parser): list := longest_spelled_at(p, starting_here(p.aliases, p, p.at), alias => alias#1) ?? []
-// Spellings (or [spelling, …] entries) by the character each starts with, in their order: a position tries only those
+// The alias written at the parser's position, a word one as a whole word, the longest, else ø
+def alias_at(p: Parser): OperatorAlias? := longest_spelled_at(p, starting_here(p.aliases, p, p.at), alias => alias.spelling)
+// Spellings (or entries, each spelled as `spelling` gives) by the character each starts with, in their order: a position tries only those
 // that can be written there (trying every alias at every token was 55% of a parse, card compiler-parse-timing)
-def by_first_character(entries: list): map {
+def by_first_character(entries: list, spelling: function): map {
 	starting = {}
 	for entry in entries {
-		first = "$(spelling_of(entry)[0])"
+		first = "$(spelling(entry)[0])"
 		starting[first] = (starting.get(first) ?? []) + [entry]
 	}
 	starting
 }
-def spelling_of(entry: any): text := if entry is list then entry#1 else entry
 // the entries of such an index that start with the character at `at`
 def starting_here(index: map, p: Parser, at: int): list := if at >= p.n then [] else index.get("$(p.code[at])") ?? []
 def aliases_starting(p: Parser, c: text): list := p.aliases.get("$(c)") ?? []
@@ -348,8 +349,8 @@ def longest_spelled_at(p: Parser, candidates: list, spelling: function): any {
 // block after it stays a name: `div {…}` is the html tag, `7 div 2` the floor division
 def aliased_operator_at(p: Parser): list {
 	alias = alias_at(p)
-	canonical = if alias.length == 0 then "" else canonical_operator(alias#2)
-	if count(canonical) == 0 or (is_name_start(alias#1#1) and opens_block(p, alias#1.length)) then [] else [alias#1, canonical]
+	canonical = if alias == ø then "" else canonical_operator(alias.target)
+	if count(canonical) == 0 or (is_name_start(alias.spelling#1) and opens_block(p, alias.spelling.length)) then [] else [alias.spelling, canonical]
 }
 // A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `contains`)
 def is_operator_spelling(word: text): bool {
@@ -1310,7 +1311,7 @@ def opens_block(p: Parser, width: int): bool {
 // Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)`, `x isn't 4`
 // `not (x is 4)`, Python's `x not in xs` `not (x in xs)`
 NEGATED_SPELLINGS = {"nand": "and", "¬&": "and", "⊼": "and", "is not": "is", "isn't": "is", "isn’t": "is", "not in": "in", "∉": "in"}
-NEGATED_STARTS = by_first_character(NEGATED_SPELLINGS.keys)
+NEGATED_STARTS = by_first_character(NEGATED_SPELLINGS.keys, word => word)
 def negated_at(p: Parser): text := starting_here(NEGATED_STARTS, p, p.at).find(written => keyword_at(p, written)) ?? ""
 
 // how tightly `x in xs` binds on its left and right
@@ -1328,7 +1329,7 @@ def membership_at(p: Parser): list {
 	if keyword_form(word) == "contains" and operand_after(p, word.length) and not assigned_at(p, p.at + word.length) { return [word, word] }
 	// `x ∈ xs`, `xs ∋ x`: an alias of a membership word
 	alias = alias_at(p)
-	if alias.length > 0 and (alias#2 == "in" or keyword_form(alias#2) == "contains") { return alias }
+	if alias != ø and (alias.target == "in" or keyword_form(alias.target) == "contains") { return [alias.spelling, alias.target] }
 	[]
 }
 
@@ -1382,7 +1383,7 @@ def labelled_argument(p: Parser): Node := {
 // `is` stood before it], else []; the word ends the condition where no operand follows it, or a block, a colon or an
 // operator word does
 TEST_WORDS = ["empty", "missing", "absent", "unknown", "undefined", "failed"]
-TEST_WORD_STARTS = by_first_character(TEST_WORDS)
+TEST_WORD_STARTS = by_first_character(TEST_WORDS, word => word)
 NOT_POWER = 105
 def test_word_at(p: Parser, min_power: int): list {
 	if min_power > NOT_POWER { return [] }
@@ -2129,38 +2130,32 @@ PREFIX_POWER = 162
 DASH_GLYPHS = "‐‑‒–—―−"
 
 // The circumfix operator opening at the parser's position as [opening, closing, function], else []
-def circumfix_at(p: Parser): list {
-	for pair in p.circumfixes { if starts_at(p.code, pair#1, p.at, p.n) { return pair } }
-	[]
-}
+def circumfix_at(p: Parser): Circumfix? := p.circumfixes.find(circumfix => starts_at(p.code, circumfix.opening, p.at, p.n))
 // The glyph opens or closes a circumfix operator: `⌋` is no free symbol
-def is_circumfix_glyph(p: Parser, glyph: text): bool {
-	for pair in p.circumfixes { if pair#1 == glyph or pair#2 == glyph { return true } }
-	false
-}
+def is_circumfix_glyph(p: Parser, glyph: text): bool := p.circumfixes.any(circumfix => circumfix.opening == glyph or circumfix.closing == glyph)
 // Where the circumfix pair opened before `from` closes, past the pairs nested in it, else n
-def circumfix_closing(p: Parser, pair: list, from: int): int {
+def circumfix_closing(p: Parser, circumfix: Circumfix, from: int): int {
 	depth = 0
 	for at in from ..< p.n {
-		if starts_at(p.code, pair#2, at, p.n) {
+		if starts_at(p.code, circumfix.closing, at, p.n) {
 			if depth == 0 { return at }
-			depth = depth - 1
-		} else if starts_at(p.code, pair#1, at, p.n) { depth = depth + 1 }
+			depth -= 1
+		} else if starts_at(p.code, circumfix.opening, at, p.n) { depth += 1 }
 	}
 	p.n
 }
 // `‖x‖`, `⌊x⌋` bracket a whole expression like parentheses and call their function with it: `‖3-5‖*2` is 4
-def circumfixed(p: Parser, pair: list): Node := {
-	opened = p.at + pair#1.length
-	closing = circumfix_closing(p, pair, opened)
-	if closing >= p.n { raise "Missing closing " + pair#2 }
+def circumfixed(p: Parser, circumfix: Circumfix): Node := {
+	opened = p.at + circumfix.opening.length
+	closing = circumfix_closing(p, circumfix, opened)
+	if closing >= p.n { raise "Missing closing " + circumfix.closing }
 	whole = p.n
 	p.at = opened
 	p.n = closing
 	inner = expression(p, 0)
 	p.n = whole
-	p.at = closing + pair#2.length
-	call_of([symbol(pair#3), inner])
+	p.at = closing + circumfix.closing.length
+	call_of([symbol(circumfix.function), inner])
 }
 
 def prefixed_by_symbol(p: Parser, c: text): Node := {
@@ -2198,13 +2193,13 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
 	circumfix = circumfix_at(p)
-	if circumfix.length > 0 { return circumfixed(p, circumfix) }
+	if circumfix != ø { return circumfixed(p, circumfix) }
 	// `√x`, `∛x`: a glyph spelling a function calls it (lib/math.warp `prefix operator √ := sqrt`)
 	spelled = alias_at(p)
-	if spelled.length > 0 and spells_function(spelled) {
-		p.at = p.at + spelled#1.length
+	if spelled != ø and spells_function(spelled) {
+		p.at += spelled.spelling.length
 		skip_spaces(p)
-		return call_of([symbol(spelled#2), expression(p, PREFIX_POWER)])
+		return call_of([symbol(spelled.target), expression(p, PREFIX_POWER)])
 	}
 	// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
 	// subject; a glued `<tag` stays a bracket
@@ -2810,124 +2805,144 @@ def decimal_value(written: text): Node := {
 	if #shown.split(".")#2 > DECIMAL_PLACES_IN_INT then opaque(["number", shown]) else float(written)
 }
 
-// A number, text, name or bracketed group
+// A number, text, name or bracketed group: a name reads at once, any other atom by the row of its first character
+// (decision atoms-as-rows), else as the character it is
 def bare_atom(p: Parser): Node := {
 	if p.at >= p.n { return ø }
 	c = p.code[p.at]
-	if is_digit(c) {
-		// a number form an extension reads, `0xff`, `2024-01-31` (core/extension.warp number_readers)
-		for reader in number_readers() {
-			form = reader(p)
-			if form != ø { return form }
-		}
-		number_start = p.at
-		written = decimal_number(p)
-		// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
-		literal = p.code[number_start .. p.at]
-		for reader in number_suffix_readers() {
-			form = reader(p, written, literal)
-			if form != ø { return form }
-		}
-		// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
-		glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
-		if NUMBER_TYPE_WORDS.contains(glued_type) {
-			p.at = p.at + 1 + glued_type.length
-			return Key(written_number(written), Op.As, symbol(glued_type))
-		}
-		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
-		// i64 a float (card int-beyond)
-		// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
-		if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
-		period = overlined_digits(p)
-		if period != "" and written.contains(".") { return repeating_decimal(written, period) }
-		if written.contains(".") { return with_glued_factor(p, decimal_value(written)) }
-		return with_glued_factor(p, whole_number(written))
+	if is_name_start(c) { return named_atom(p) }
+	reader = atom_reader_of(c)
+	start = p.at
+	read = if reader == ø then ø else reader(p)
+	// a reader that moved read its atom, ø too; one answering ø unmoved leaves the character to character_atom
+	if read != ø or p.at != start then read else character_atom(p, c)
+}
+// The atoms by their first character: each reader reads its atom at the parser's position, or answers ø unmoved when
+// the character starts none of its forms; extensions add theirs (core/extension.warp atom_readers), a character two
+// rows claim is refused loudly
+def core_atom_rows(): list := [reading_rows("0123456789".chars(), number_atom), reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), reading_rows(["\"", "'", "«"], p => quoted(p)), {".": dot_atom, "\\": unknown_entity, "*": starred_name, "$": pattern_hole, "@": at_atom, "(": group_atom, "[": group_atom, "{": group_atom}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom)]
+def reading_rows(characters: list, reader: function): map {
+	rows = {}
+	for c in characters { rows["$(c)"] = reader }
+	rows
+}
+global atom_rows = ø
+// the reader of the atom a character starts, else ø
+def atom_reader_of(c: text): any {
+	if atom_rows == ø { atom_rows = claimed_once(core_atom_rows() + EXTENSIONS.map(extension => extension.atom_readers)) }
+	atom_rows.get("$(c)")
+}
+// a name, or a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
+def named_atom(p: Parser): Node := {
+	loop = if keyword_at(p, "for") then looped(p) else if keyword_at(p, "each") then each_loop(p) else ø
+	if loop != ø then loop else named(p)
+}
+def number_atom(p: Parser): Node := {
+	// a number form an extension reads, `0xff`, `2024-01-31` (core/extension.warp number_readers)
+	for reader in number_readers() {
+		form = reader(p)
+		if form != ø { return form }
 	}
-	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
-	if opens_text(c) { return quoted(p) }
-	// `.5` is 0.5
-	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return decimal_value("0" + decimal_number(p)) }
-	// a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
-	if keyword_at(p, "for") {
-		loop = looped(p)
-		if loop != ø { return loop }
+	number_start = p.at
+	written = decimal_number(p)
+	// a number with a suffix an extension reads, `0.1f`, `1 month` (core/extension.warp number_suffix_readers)
+	literal = p.code[number_start .. p.at]
+	for reader in number_suffix_readers() {
+		form = reader(p, written, literal)
+		if form != ø { return form }
 	}
-	if keyword_at(p, "each") {
-		loop = each_loop(p)
-		if loop != ø { return loop }
+	// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
+	glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
+	if NUMBER_TYPE_WORDS.contains(glued_type) {
+		p.at += 1 + glued_type.length
+		return Key(written_number(written), Op.As, symbol(glued_type))
 	}
-	// `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
-	if c == '\\' and is_at(p.code, p.at + 1, ':', p.n) and is_alpha(peek(p.code, p.at + 2, p.n)) {
-		end = name_end(p.code, p.at + 2, p.n)
-		unknown = "" + p.code[p.at .. end]
-		p.at = end
-		return unknown
-	}
+	// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
+	// i64 a float (card int-beyond)
+	// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
+	if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
+	period = overlined_digits(p)
+	if period != "" and written.contains(".") { return repeating_decimal(written, period) }
+	with_glued_factor(p, if written.contains(".") then decimal_value(written) else whole_number(written))
+}
+// `.5` is 0.5, `...xs` spreads xs; Swift's `.north`, a member of the type the context expects (a match arm's case),
+// also a rule's `.$k`
+def dot_atom(p: Parser): Node := {
+	next = peek(p.code, p.at + 1, p.n)
+	if is_digit(next) { return decimal_value("0" + decimal_number(p)) }
+	if next == '.' { return starred_name(p) }
+	if not (is_name_start(next) or next == '$') { return ø }
+	p.at += 1
+	Key(ø, Op.Dot, atom(p))
+}
+// `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
+def unknown_entity(p: Parser): Node := {
+	if not is_at(p.code, p.at + 1, ':', p.n) or not is_alpha(peek(p.code, p.at + 2, p.n)) { return ø }
+	end = name_end(p.code, p.at + 2, p.n)
+	unknown = "" + p.code[p.at .. end]
+	p.at = end
+	unknown
+}
+// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter. `$f(x)`, `$f(x) {…}`: a hole
+// applied reads as the name it stands for applied, its arguments read as a call's (typed_parameters): `$f($x)`
+def pattern_hole(p: Parser): Node := {
+	next = peek(p.code, p.at + 1, p.n)
+	if not (is_name_start(next) or is_digit(next)) { return ø }
+	end = symbol_end(p.code, p.at + 1, p.n)
+	hole = symbol(p.code[p.at .. end])
+	p.at = end
+	name_or_call(p, hole)
+}
+// `@name` marks the atom after it (attribute); `@1` is the node whose @id is 1
+def at_atom(p: Parser): Node := {
+	next = peek(p.code, p.at + 1, p.n)
+	if is_name_start(next) { return attribute(p) }
+	if not is_digit(next) { return ø }
+	end = p.at + 1
+	while end < p.n and is_digit(p.code[end]) { end += 1 }
+	reference = symbol(p.code[p.at .. end])
+	p.at = end
+	reference
+}
+def group_atom(p: Parser): Node := {
+	c = p.code[p.at]
+	p.at += 1
+	outer = p.header
+	outer_iterable = p.iterable
+	p.header = outer and c == '('
+	p.iterable = outer_iterable and c == '('
+	group = if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)
+	p.header = outer
+	p.iterable = outer_iterable
+	// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
+	union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
+	if union == ø { return group }
+	p.at += 1
+	symbol(union + "?")
+}
+def truth_atom(p: Parser): Node := {
 	truth = truth_glyph_at(p)
-	if truth != "" {
-		p.at = p.at + truth.length
-		return not FALSE_GLYPHS.contains(truth)
-	}
-	if is_name_start(c) { return named(p) }
-	starred = starred_name(p)
-	if starred != ø { return starred }
-	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
-	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
-		end = symbol_end(p.code, p.at + 1, p.n)
-		hole = symbol(p.code[p.at .. end])
-		p.at = end
-		// `$f(x)`, `$f(x) {…}`: a hole applied reads as the name it stands for applied, its arguments read as a call's
-		// (typed_parameters): `$f($x)`
-		return name_or_call(p, hole)
-	}
-	if EXACT_CONSTANTS.contains("$(c)") {
-		p.at = p.at + 1
-		return exact_constant("$(c)")
-	}
-	if c == '@' and is_name_start(peek(p.code, p.at + 1, p.n)) { return attribute(p) }
-	// Swift's `.north`, a member of the type the context expects (a match arm's case), also a rule's `.$k`
-	if c == '.' and (is_name_start(peek(p.code, p.at + 1, p.n)) or peek(p.code, p.at + 1, p.n) == '$') {
-		p.at = p.at + 1
-		return Key(ø, Op.Dot, atom(p))
-	}
-	// `@1`: the node whose @id is 1
-	if c == '@' and is_digit(peek(p.code, p.at + 1, p.n)) {
-		end = p.at + 1
-		while end < p.n and is_digit(p.code[end]) { end = end + 1 }
-		reference = symbol(p.code[p.at .. end])
-		p.at = end
-		return reference
-	}
-	if c == '(' or c == '[' or c == '{' {
-		p.at = p.at + 1
-		outer = p.header
-		outer_iterable = p.iterable
-		p.header = outer and c == '('
-		p.iterable = outer_iterable and c == '('
-		group = if c == '{' then braced_items(p) else items_until(p, c as Bracket, ItemsEnd.Closer)
-		p.header = outer
-		p.iterable = outer_iterable
-		// `(int or text)?`: an optional union, the one type word `int or text?` (a member ø joins is the union's)
-		union = if c == '(' and #group == 1 and optional_mark_follows(p, "") then union_spelling(group#1) else ø
-		if union != ø {
-			p.at = p.at + 1
-			return symbol(union + "?")
-		}
-		return group
-	}
-	// an atom an extension reads, `°C` (core/extension.warp atom_readers)
-	reader = atom_reader(c)
-	if reader != ø { return reader(p) }
-	// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing)
-	if c == 'ø' or c == '∅' or c == ')' or c == ']' or c == '}' or c == ';' {
-		if c == 'ø' or c == '∅' { p.at = p.at + 1 }
+	if truth == "" { return ø }
+	p.at += truth.length
+	not FALSE_GLYPHS.contains(truth)
+}
+def exact_atom(p: Parser): Node := {
+	constant = "$(p.code[p.at])"
+	p.at += 1
+	exact_constant(constant)
+}
+// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing); a closer ends the atoms. Every
+// other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
+// (card unicode-glyphs)
+def character_atom(p: Parser, c: text): Node := {
+	if c == ')' or c == ']' or c == '}' or c == ';' { return ø }
+	if c == 'ø' or c == '∅' {
+		p.at += 1
 		return ø
 	}
 	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)
 	if opens_text(code_points("$(c)")#1) { return quoted(p) }
-	// every other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
-	// (card unicode-glyphs)
-	p.at = p.at + 1
+	p.at += 1
 	if is_free_symbol(p, c) then symbol("$(c)") else c
 }
 
@@ -2935,7 +2950,7 @@ def bare_atom(p: Parser): Node := {
 // (card keyword-glyphs)
 TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", "🗸", "🗹"]
 FALSE_GLYPHS = ["⊥", "❌", "✗"]
-TRUTH_GLYPH_STARTS = by_first_character(TRUE_GLYPHS + FALSE_GLYPHS)
+TRUTH_GLYPH_STARTS = by_first_character(TRUE_GLYPHS + FALSE_GLYPHS, glyph => glyph)
 def truth_glyph_at(p: Parser): text {
 	for glyph in starting_here(TRUTH_GLYPH_STARTS, p, p.at) { if starts_at(p.code, glyph, p.at, p.n) { return glyph } }
 	""
@@ -2948,8 +2963,8 @@ FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '�
 def is_free_symbol(p: Parser, c: text): bool {
 	glyph = "$(c)"
 	// a declared operator calls as declared: `prefix operator ∆` makes `print ∆ 5` print ∆(5), no free infix
-	if glyph.length != 1 or aliases_starting(p, glyph).any(alias => alias#1 == glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or owned_glyph(p, glyph) { return false }
-	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2) and not aliases_starting(p, glyph).any(alias => alias#1 == glyph)
+	if glyph.length != 1 or aliases_starting(p, glyph).any(alias => alias.spelling == glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or owned_glyph(p, glyph) { return false }
+	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2)
 }
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;
 // `[↯ ↯]` and `print ↯` read the glyph as a value
@@ -3056,9 +3071,9 @@ def trailing_attribute(p: Parser, marked: Node): Node := {
 VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
 
 // `⅓` is the exact 1/3; digits glued after it multiply it
-def vulgar_fraction(p: Parser, glyph: text): Node := {
-	p.at = p.at + 1
-	parts = VULGAR_FRACTIONS[glyph]
+def vulgar_fraction(p: Parser): Node := {
+	parts = VULGAR_FRACTIONS[p.code[p.at]]
+	p.at += 1
 	fraction = keyed("/", int(parts#1), int(parts#2))
 	if is_digit(peek(p.code, p.at, p.n)) then Key(fraction, Op.Mul, atom(p)) else fraction
 }

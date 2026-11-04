@@ -127,7 +127,7 @@ def operator_declaration(p: Parser, word: text, statement: OperatorStatement): N
 	infix = statement.fixity == Fixity.Infix
 	p.at = p.at + word.length
 	skip_spaces(p)
-	if statement.written != word {
+	if statement.keyword and word != "operator" {
 		p.at += "operator".length
 		skip_spaces(p)
 	}

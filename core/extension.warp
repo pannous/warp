@@ -80,6 +80,17 @@ joined_maps(maps: list): map := {
 	for entries in maps { for key in entries.keys { joined[key] = entries[key] } }
 	joined
 }
+# every map of rows as one map, refused loudly when two claim one key
+claimed_once(maps: list): map := {
+	joined = {}
+	for rows in maps {
+		for key in rows.keys {
+			if joined.has(key) { raise "two rows claim `" + key + "`" }
+			joined[key] = rows[key]
+		}
+	}
+	joined
+}
 # every extension's entries of one Extension field, joined once: its lists as one list, its maps as one map
 extension_list(field: text): list := extension_table(field, concatenated)
 extension_map(field: text): map := extension_table(field, joined_maps)
