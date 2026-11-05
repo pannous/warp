@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
+- middot-scalars: `x·y` of two numbers multiplies (via dot), test_rewrite_engine:160 [12, 12] stands; your 2026-10-26 note at lib/math.warp:9 said · no longer multiplies. Undo: make · on scalars a refusal, test line changes.
 
 ## Parked
 - class-text (sound notes), unit plurals, def-first (b), note tests: discuss later (user).

@@ -4,6 +4,7 @@
 // time and its updates in the browser (page·html). A key named after an HTML element is an element; inside it a key
 // named after an attribute with a plain value is an attribute (`style: { fontSize: 12 }` inline CSS), anything else a
 // child in order.
+use html
 global html_elements = ["html", "head", "body", "title", "meta", "link", "style", "script", "base",
 	"header", "footer", "main", "nav", "section", "article", "aside", "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6",
 	"a", "em", "strong", "b", "i", "u", "small", "code", "pre", "blockquote", "br", "hr", "img", "figure", "figcaption",
@@ -366,9 +367,8 @@ html_plain(value: any): text := if value is text then value else str(value)
 
 html_is_true(value: any): bool := value == true or (value is number and value != 0)
 
-// the same five escapes as lib/html.warp's html_escape, ' as &#39; included (card lib-audit-bugfixes); a copy, not a
-// call: `use html` here does not reach html_escape (markup loads implicitly, card lib-audit-bugfixes note)
-html_escaped(text: any): text := replace(replace(replace(replace(replace(html_plain(text), "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#39;")
+// lib/html.warp's five escapes, ' as &#39; included, of any value's plain text (card core-use-in-tag-module)
+html_escaped(text: any): text := html_escape(html_plain(text))
 
 // `js{…}` is the element script
 html_tag(name: any) := if name == "js" then "script" else name
