@@ -1,0 +1,5 @@
+// card lib-template-yaml-conformance: mustache spec behaviour beyond the per-file tests
+# template_dotted_names_through_contexts
+'use template; mustache("{{#a}}{{b.c}}{{/a}}", {"a": {"x": 1}, "b": {"c": "deep"}})'	"deep"
+# template_standalone_lines_with_delimiters
+'use template; mustache("|\\n{{=<% %>=}}\\n<%x%>\\n|", {"x": "y"})'	"|\ny\n|"
