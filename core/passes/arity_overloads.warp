@@ -225,7 +225,7 @@ refuse_overload_values(n: Node, overloaded: map, described: function) := {
 # a name defined with no parameters too, `f() := 3; f(x) := x`, or a builtin word taking none, the host's `random`, is
 # that one's call where it stands bare (`f + 1`, `random < 1`), never refused
 without_bare_calls(overloaded: map): map := without_keys(overloaded, overloaded.keys.filter(name => overloaded[name].any(span => span#1 == 0) or builtin_takes_nothing(name)))
-builtin_takes_nothing(name: text): bool := lines_of(typed_lines + foreign_math_lines, unaliased(name)).any(line => #line.signature.parameters == 0) or (host_words.has(name) and #host_words[name]#1 == 0)
+builtin_takes_nothing(name: text): bool := lines_of(typed_lines + foreign_math_lines, unaliased(name)).any(line => #line.signature.parameters == 0) or (host_words().has(name) and #host_words()[name]#1 == 0)
 # the parts of n where a value is demanded: the bare name assigned, `g = twice`, an argument of a call no call fixes
 # the arity of (passed_lambdas took the others), an element of a list or a value of a map literal; a name anywhere
 # else (a phrase, a `use`, a condition) is left alone

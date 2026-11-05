@@ -1,6 +1,6 @@
 # The standard modules a source uses without saying it (decision implicit-standard-words): the one module defining a
 # word the program names free (never a member's, `c.pi`) that neither it, the prelude nor a module it uses defines,
-# by the index `warp rebuild` writes beside the prebuilt modules (write_word_index); a module's `global` word is its
+# by the library index `warp rebuild` writes beside the prebuilt modules (library.warp); a module's `global` word is its
 # own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
 # how a program writes an indexed word: a glyph operator's function by its glyph, operator_± as ±, also one the
 # aliases declare (lib/aliases.warp `declared: yes`), operator_· as ·
@@ -14,7 +14,7 @@ mentions_indexed(source: text, word: text): bool := {
 	if spelled != word then source.contains(spelled) else mentions_word(source, spelled)
 }
 implicit_modules(source: text, folder: text = "."): list := {
-	index = word_index(word_index_file())
+	index = library_index_section("word")
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
@@ -36,16 +36,16 @@ implicit_modules(source: text, folder: text = "."): list := {
 	free = free_words(program)
 	modules = []
 	# (the module a `use` names is no word of it: `use hash` beside color's hash)
-	for word in candidates.filter(word => word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math and ((word in free and not only_rules_lead(word, index[word])) or leads_statement(program, word, index[word]))) {
-		named = word in free and not only_rules_lead(word, index[word])
-		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
+	for word in candidates.filter(word => word not in used and word not in own and word not in bound and word not in prelude_names and word not in known and not is_declared_word(word) and word not in runtime_words_of_math and ((word in free and not only_rules_lead(word, defining_modules(word))) or leads_statement(program, word, defining_modules(word)))) {
+		named = word in free and not only_rules_lead(word, defining_modules(word))
+		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else defining_modules(word)
 		# a word only leading a statement brings the module whose rule goes on with it, else none: `on alarm {…}` is the
 		# core's event, `on every 1 second {…}` timers'
 		if not named { definers = definers.filter(module => rule_fits(module, word, program)) }
 		if not named and #definers == 0 { continue }
 		if #definers > 1 { definers = base_definers(definers_taking(word, definers, program)) }
 		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
-		if #definers == 0 { raise word + " is defined by " + index[word].join(" and ") + ", none taking these arguments: say which, " + index[word].map(module => "`use " + module + "`").join(" or ") }
+		if #definers == 0 { raise word + " is defined by " + defining_modules(word).join(" and ") + ", none taking these arguments: say which, " + defining_modules(word).map(module => "`use " + module + "`").join(" or ") }
 		if definers#1 not in modules and definers#1 not in used {
 			modules += definers
 			diagnose(call_of("implicit_use", [symbol(word), symbol(definers#1)]), nodes_in(program).find(n => n == symbol(word)) ?? program)

@@ -674,24 +674,15 @@ with_implicit_uses(source: text, folder: text = "."): text := {
 	implicitly_used = implicit_modules_of(source, folder)
 	source + implicitly_used.map(module => "\nuse " + module).join("")
 }
-# word → the standard modules defining it, read from the index `warp rebuild` writes (a line `word<TAB>module …`
-# each); none before the first rebuild
-global word_indices = {}
-word_index(file: text): map := {
-	if file not in word_indices {
-		index = {}
-		for line in (file_text(file) ?? "").split("\n") {
-			fields = line.split("\t")
-			if #fields == 2 { index[fields#1] = fields#2.split(" ") }
-		}
-		word_indices[file] = index
-	}
-	word_indices[file]
+# the standard modules defining a word, from the library index (library.warp library_index_section "word")
+defining_modules(word: text): list := {
+	found = library_index_section("word").get(word)
+	if found == ø then [] else found.split(" ")
 }
-# the index of the words each standard module defines but the prelude, as word_index reads it: a word of letters
+# the words each standard module defines but the prelude, each with its modules joined by spaces: a word of letters
 # (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
-word_index_text(): text := {
+module_word_definers(): map := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude") {
 		source = file_text(std_module_path(module)) ?? ""
@@ -702,7 +693,9 @@ word_index_text(): text := {
 			}
 		}
 	}
-	definers.keys.map(word => word + "\t" + definers[word].join(" ")).join("\n")
+	joined = {}
+	for word in definers.keys { joined[word] = definers[word].join(" ") }
+	joined
 }
 # the word each `rewrite` line of a source starts its pattern with: `stored` of `rewrite stored $name: [$kind] => …`
 # (none of a pattern starting with a hole, `rewrite $p => …`)
