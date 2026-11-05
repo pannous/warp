@@ -16,22 +16,60 @@ $ todo list
 [ ] 3. call Ada
 2 open, 1 done
 $ todo frobnicate
-usage: add <title> | done <id> | list | clear
-$ todo --color list
-cli: unknown option --color
-usage: todo [-h] [--file FILE] [words ...]
+cli: unknown command frobnicate (add, done, list, clear)
+usage: todo [-h] [--file FILE] {add,done,list,clear} ...
 
-positional arguments:
-  words                 add <title> | done <id> | list | clear
+commands:
+  add                   add a todo
+  done                  mark a todo done
+  list                  show the todos
+  clear                 remove every todo
 
 options:
   -h, --help            show this help
   -f, --file FILE       the JSON file of the todos (else warp_todo_demo.json in $TMPDIR)
-$ todo --help
-usage: todo [-h] [--file FILE] [words ...]
+$ todo --color list
+cli: unknown option --color
+usage: todo [-h] [--file FILE] {add,done,list,clear} ...
+
+commands:
+  add                   add a todo
+  done                  mark a todo done
+  list                  show the todos
+  clear                 remove every todo
+
+options:
+  -h, --help            show this help
+  -f, --file FILE       the JSON file of the todos (else warp_todo_demo.json in $TMPDIR)
+$ todo done two
+cli: id wants an int, not two
+usage: todo [-h] [--file FILE] {add,done,list,clear} ...
+
+commands:
+  add                   add a todo
+  done                  mark a todo done
+  list                  show the todos
+  clear                 remove every todo
+
+options:
+  -h, --help            show this help
+  -f, --file FILE       the JSON file of the todos (else warp_todo_demo.json in $TMPDIR)
+$ todo add --help
+usage: todo add [-h] [title ...]
 
 positional arguments:
-  words                 add <title> | done <id> | list | clear
+  title
+
+options:
+  -h, --help            show this help
+$ todo --help
+usage: todo [-h] [--file FILE] {add,done,list,clear} ...
+
+commands:
+  add                   add a todo
+  done                  mark a todo done
+  list                  show the todos
+  clear                 remove every todo
 
 options:
   -h, --help            show this help

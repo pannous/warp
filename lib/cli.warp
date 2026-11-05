@@ -10,6 +10,9 @@
 // help        one line for the help text
 // parse_args(spec, argv) gives a map of every option's value, "help" yes when -h or --help was given (then nothing
 // is checked: show cli_help(program, spec)); a mistake raises "cli: …". `--` ends the options: the rest are positionals.
+// choices     the values allowed: anything else is an error, and the help shows them as {a,b,c}
+// Commands: parse_commands(globals, {add: spec, list: {help: "…", options: spec}}, argv), help by cli_commands_help
+// and cli_command_text (below).
 // Like python's argparse, except: no prefix abbreviations (--verb for --verbose is unknown), kinds are named, not
 // functions, a value starting with - needs the = form (--name=-x; a negative number needs none), and positionals
 // may come between options (argparse's parse_intermixed_args)
@@ -30,8 +33,13 @@ def cli_short(spec: list, letter: text): any {
 	for o in spec { if "short" in o and o["short"] == letter { return o } }
 	ø
 }
-// a value text as the option's kind wants it
+// a value text as the option's kind wants it, one of its choices when it has them
 def cli_value(o: map, t: text): any {
+	v = cli_converted(o, t)
+	if "choices" in o and not (v in o["choices"]) { raise "cli: " + cli_shown(o) + " is one of " + join([str(c) for c in o["choices"]], ", ") + ", not " + t }
+	v
+}
+def cli_converted(o: map, t: text): any {
 	kind = cli_kind(o)
 	if kind == "int" {
 		if not is_digits(if t.starts_with("-") then t[1..] else t) or t == "" or t == "-" { raise "cli: " + cli_shown(o) + " wants an int, not " + t }
@@ -51,7 +59,9 @@ def cli_start(spec: list): map {
 	result
 }
 
-def parse_args(spec: list, argv: list): map {
+parse_args(spec: list, argv: list): map := cli_parse(spec, argv, no, [])
+// stop: the options end at the first positional, which with all after it goes into rest (parse_commands)
+def cli_parse(spec: list, argv: list, stop: bool, rest_out: list): map {
 	result = cli_start(spec)
 	positionals = []
 	given = []
@@ -60,8 +70,12 @@ def parse_args(spec: list, argv: list): map {
 	while i < count(argv) {
 		a = argv[i]
 		i += 1
-		if options_end or not cli_dashed(a) { positionals = positionals + [a] }
-		else if a == "--" { options_end = yes }
+		if stop and (options_end or not cli_dashed(a)) {
+			for x in argv[i - 1..] { rest_out.add(x) }
+			i = count(argv)
+		}
+		else if options_end or not cli_dashed(a) { positionals = positionals + [a] }
+		else if a == "--" { options_end = yes; if stop { for x in argv[i..] { rest_out.add(x) }; i = count(argv) } }
 		else if a == "--help" or a == "-h" { result["help"] = yes; return result }
 		else if a.starts_with("--") {
 			body = a[2..]
@@ -140,28 +154,61 @@ def parse_args(spec: list, argv: list): map {
 
 // an option's column, its help from column 25 as argparse aligns it (on the next line when the option is long)
 cli_pad(part: text): text := "  " + part + (if count(part) < 22 then " " * (22 - count(part)) else "\n" + " " * 24)
+// one help line: the option and its text, no trailing blanks when it has none
+cli_line(part: text, text: text): text := if text == "" then "  " + part else cli_pad(part) + text
 // the help text: a usage line, then one line per option
 def cli_help(program: text, spec: list): text {
 	usage = "usage: " + program + " [-h]"
 	lines = ["", "options:", "  -h, --help            show this help"]
 	for o in spec {
-		metavar = upper(o["name"])
+		metavar = if "choices" in o then "{" + join([str(c) for c in o["choices"]], ",") + "}" else upper(o["name"])
 		if cli_is(o, "positional") {
-			usage = usage + " " + (if cli_is(o, "many") then "[" + o["name"] + " ...]" else o["name"])
+			shown = if "choices" in o then metavar else o["name"]
+			usage = usage + " " + (if cli_is(o, "many") then "[" + shown + " ...]" else shown)
 		} else {
 			value = if cli_is_flag(o) then "" else " " + metavar
 			part = (if "short" in o then "-" + o["short"] + ", " else "") + "--" + o["name"] + value
 			if cli_is_flag(o) { part = part + ", --no-" + o["name"] }
-			text = if "help" in o then o["help"] else ""
-			if "default" in o and not cli_is_flag(o) { text = text + " (default " + str(o["default"]) + ")" }
-			if cli_is(o, "required") { text = text + " (required)" }
-			lines = lines + [cli_pad(part) + text]
+			notes = [if "help" in o then o["help"] else "", if "default" in o and not cli_is_flag(o) then "(default " + str(o["default"]) + ")" else "", if cli_is(o, "required") then "(required)" else ""]
+			lines = lines + [cli_line(part, join([n for n in notes if n != ""], " "))]
 			usage = usage + " " + (if cli_is(o, "required") then "" else "[") + "--" + o["name"] + value + (if cli_is(o, "required") then "" else "]")
 		}
 	}
 	pos = [o for o in spec if cli_is(o, "positional")]
 	if count(pos) > 0 {
-		lines = ["", "positional arguments:"] + [cli_pad(o["name"]) + (if "help" in o then o["help"] else "") for o in pos] + lines
+		lines = ["", "positional arguments:"] + [cli_line(o["name"], if "help" in o then o["help"] else "") for o in pos] + lines
 	}
 	usage + "\n" + join(lines, "\n")
 }
+
+// --- commands, git style: `prog [globals] command [its options]`
+// commands is a map: name -> its spec (a list), or {help: "one line", options: spec}
+cli_command_spec(c: any): list := if c is list then c else c["options"]
+cli_command_help(c: any): text := if c is map and "help" in c then c["help"] else ""
+cli_names(commands: map): text := join(keys(commands), ", ")
+
+// parse_commands(globals, {add: spec, list: spec}, argv): the globals' values and the command's, together in one map
+// with "command" its name (ø with help: yes for -h before any command); `prog add -h` is help: yes, command: "add"
+def parse_commands(globals: list, commands: map, argv: list): map {
+	rest = []
+	result = cli_parse(globals, argv, yes, rest)
+	result["command"] = ø
+	if result["help"] { return result }
+	if count(rest) == 0 { raise "cli: missing command (" + cli_names(commands) + ")" }
+	name = rest[0]
+	if not (name in commands) { raise "cli: unknown command " + name + " (" + cli_names(commands) + ")" }
+	own = parse_args(cli_command_spec(commands[name]), rest[1..])
+	for k in keys(own) { result[k] = own[k] }
+	result["command"] = name
+	result
+}
+
+// the help of a program with commands: its globals, then each command with its one line
+def cli_commands_help(program: text, globals: list, commands: map): text {
+	names = "{" + join(keys(commands), ",") + "}"
+	top = cli_help(program, globals).split("\n")
+	lines = [top[0] + " " + names + " ...", "", "commands:"] + [cli_line(n, cli_command_help(commands[n])) for n in keys(commands)]
+	join(lines + top[1..], "\n")
+}
+// the help of one command: `prog add -h`
+cli_command_text(program: text, commands: map, name: text): text := cli_help(program + " " + name, cli_command_spec(commands[name]))
