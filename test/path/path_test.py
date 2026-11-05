@@ -15,7 +15,7 @@ os.unlink(fh.name); shutil.rmtree(tmp, ignore_errors=True)
 BY_DESIGN = {'normalize_path("//")': "a leading // is one / (POSIX leaves // implementation-defined)",
              'dirname("//a")': "a leading // is one /", 'basename(".")': "posixpath.basename keeps .",
              'stem(".")': "the stem of . is . (as basename)", 'glob_match("*", "")': "fnmatch: * matches the empty text"}
-HELD = {'extension("a.")': "pathlib: a trailing dot is no suffix; lib gives .", 'stem("a.")': "pathlib: a.; lib gives a"}
+HELD = {}
 ok, tot, fails = collections.Counter(), collections.Counter(), []
 known = collections.Counter()
 for (g, e, w, r), o in zip(cases, out + ["MISSING"] * len(cases)):

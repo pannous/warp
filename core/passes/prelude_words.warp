@@ -180,7 +180,8 @@ is_open(written: text): bool := {
 }
 
 # the words a node mentions as symbols, each once (a map as the set: an 89 KB program has tens of thousands); a map
-# literal's key, `{reduce: 1}`, names no word, so it brings no library word or module of the name
+# literal's key, `{reduce: 1}`, names no word, so it brings no library word or module of the name, but a key glued to
+# a block, `if yes { twice{n+=1} }`, may be the word's call (phrase_blocks.warp glued_block_call)
 symbol_words(n: Node): list := {
 	found = {}
 	waiting = [n]
@@ -192,7 +193,7 @@ symbol_words(n: Node): list := {
 		else if is_named_type(part) { found[declared_type_name(value_of(part)#2)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
 		else if part is key { waiting += [key_of(part), value_of(part)] }
-		else if is_group(part) { for item in part { waiting += [if is_curly_group(part) and is_map_entry(item) and key_of(item) is symbol then value_of(item) else item] } }
+		else if is_group(part) { for item in part { waiting += [if is_curly_group(part) and is_map_entry(item) and key_of(item) is symbol and not is_block_argument(value_of(item)) then value_of(item) else item] } }
 	}
 	found.keys
 }
