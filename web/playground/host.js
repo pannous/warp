@@ -403,30 +403,51 @@ function stopListening(holder) {
 	holder.stopTimers?.();
 }
 
-// a program built separately (`warp build --separate`) imports its runtime words, memory, error tag and hooks table
-// from runtime.wasm (beside warp.wasm, build.sh): an instance of it for each run, with the run's host words, as the
-// native harness links it (src/run/wasm_reader.rs link_runtime; notes/runtime_linking.md "Separate modules")
+// a program using standard modules imports its runtime words, memory and error tag from runtime.wasm and their words
+// from modules/<name>.wasm (beside warp.wasm, build.sh), which import theirs the same way: one instance of each for a
+// run, with the run's host words, each module's `warp/start` run before what imports it, as the native warp links
+// them (core/native/driver.warp instances_linked; notes/runtime_linking.md "Load-time linking")
 const RUNTIME_MODULE = "warp_runtime";
-const RUNTIME_URL = "runtime.wasm";
-let runtime; // {module, descriptors}, compiled at the first such program
+const LINKED_MODULE_PREFIX = "warp/";
+const MODULE_START = "warp/start";
+const compiledLibraries = new Map(); // by file: {module, descriptors}, compiled once per worker
+// (a deployed site has no compiler folder: its runtime and modules beside the page)
+function libraryUrl(file) { return typeof COMPILER_FOLDER === "undefined" ? file : `../../${COMPILER_FOLDER}/${file}`; }
+function libraryFile(name) {
+	if (name === RUNTIME_MODULE) return "runtime.wasm";
+	return name.startsWith(LINKED_MODULE_PREFIX) ? `modules/${name.slice(LINKED_MODULE_PREFIX.length)}.wasm` : null;
+}
 // imports read from the bytes (imports.js importDescriptors): Safari's WebAssembly.Module.imports throws for GC signatures
-function withRuntime(bytes, imports) {
-	if (!importDescriptors(bytes).some(entry => entry.module === RUNTIME_MODULE)) return imports;
-	if (!runtime) {
-		const runtimeBytes = getSync(RUNTIME_URL, 0, true);
-		runtime = { module: new WebAssembly.Module(runtimeBytes), descriptors: importDescriptors(runtimeBytes) };
+function withRuntime(bytes, imports) { return withLinkedInstances(importDescriptors(bytes), imports, new Map()); }
+// (proxies, never copies: an import object may answer only through get, as withWasi's does)
+function withLinkedInstances(descriptors, imports, instances) {
+	const linked = {};
+	for (const name of new Set(descriptors.map(entry => entry.module))) {
+		const file = libraryFile(name);
+		if (file) linked[name] = linkedInstance(name, file, imports, instances);
 	}
-	const instance = new WebAssembly.Instance(runtime.module, withUnlinkedTrapping(runtime.descriptors, imports));
-	return { ...imports, [RUNTIME_MODULE]: instance.exports };
+	return new Proxy(imports, { get: (modules, module) => linked[module] ?? modules[module] });
+}
+function linkedInstance(name, file, imports, instances) {
+	if (instances.has(name)) return instances.get(name);
+	if (!compiledLibraries.has(file)) {
+		const bytes = getSync(libraryUrl(file), 0, true);
+		compiledLibraries.set(file, { module: new WebAssembly.Module(bytes), descriptors: importDescriptors(bytes) });
+	}
+	const { module, descriptors } = compiledLibraries.get(file);
+	const exports = new WebAssembly.Instance(module, withUnlinkedTrapping(descriptors, withLinkedInstances(descriptors, imports, instances))).exports;
+	instances.set(name, exports);
+	exports[MODULE_START]?.();
+	return exports;
 }
 // runtime.wasm declares every host word: one this page does not give fails when reached, not at instantiation
 function withUnlinkedTrapping(descriptors, imports) {
-	const completed = { ...imports };
+	const stubs = {};
 	for (const { module: library, name, kind } of descriptors) {
-		if (kind !== "function" || completed[library]?.[name]) continue;
-		completed[library] = { ...completed[library], [name]: () => { throw new Error(`${library}.${name} is not linked in the browser`); } };
+		if (kind !== "function" || imports[library]?.[name]) continue;
+		(stubs[library] ??= {})[name] = () => { throw new Error(`${library}.${name} is not linked in the browser`); };
 	}
-	return completed;
+	return new Proxy(imports, { get: (modules, module) => module in stubs ? { ...modules[module], ...stubs[module] } : modules[module] });
 }
 
 // the one export a program with timers fires them by, timer_fired(id: int) (host-timers.js, driver.js timerFired)
