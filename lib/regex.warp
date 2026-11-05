@@ -3,8 +3,14 @@
 // `"abc" matches "a.c"` where regex is used (the parser scans a used module's operators), and `matches(s, p)`
 infix operator matches(subject: any, pattern: any) := std_pure("regex", "matches", [subject, pattern])
 first_match(subject: any, pattern: any): any := std_pure("regex", "first", [subject, pattern])
-find_all(subject: any, pattern: any): list := std_pure("regex", "all", [subject, pattern])
-replace_all(subject: any, pattern: any, replacement: any): text := std_pure("regex", "replace", [subject, pattern, replacement])
+// the host answers a malformed pattern with an error value ("regex (a: Unmatched ( or \\("): raised here, before the
+// declared list or text would refuse it as "not a list" (card regex-malformed-message)
+def regex_raised(answer: any): any {
+	if answer is error { raise answer }
+	answer
+}
+find_all(subject: any, pattern: any): list := regex_raised(std_pure("regex", "all", [subject, pattern]))
+replace_all(subject: any, pattern: any, replacement: any): text := regex_raised(std_pure("regex", "replace", [subject, pattern, replacement]))
 // Capture groups (card lib-regex-groups-tempfiles), through the host's replace and its $1 … $9: every match replaced by
 // its groups between marker characters, read back in order, so each match keeps its context (^, \b) exactly as find_all
 // sees it. The native host is POSIX extended regex: at most 9 groups, no named groups (a group that took no part is "")
