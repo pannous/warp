@@ -1,0 +1,4 @@
+// a Set made empty or from a list keeps adding without duplicates when collections compiles from source (card linked-collections-unicode)
+'use collections; s = Set(); s.add(1); s.add(1); s.add(2); s.size()'	2
+'use collections; s = Set([1 2 2 3]); s.add(4); s.add(1); s.items'	[1, 2, 3, 4]
+'use collections; s = Set([]); s.add("a"); s.has("a")'	yes
