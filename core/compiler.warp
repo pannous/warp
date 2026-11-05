@@ -77,11 +77,12 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	if #unknown > 0 { throw outside_the_core + "no C signature for " + unknown.join(", ") + ": declare it with a foreign line, `name(x: i32): i32 from 'library'`" }
 	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)
 	prepend_runtime(library_runtime ?? runtime_bytes())
-	linking = (links ?? library_runtime == ø) and prepended()
+	# (the compiler's own build compiles the modules it uses in: it runs with no modules beside it)
+	linking = (links ?? (library_runtime == ø and not own)) and prepended()
 	images = if linking then linked_libraries(source) else []
 	# a program using linked modules runs as its own module beside theirs and runtime.wasm's, importing their words
-	# (L5c, card wasm-module-linking); the compiler's own build keeps them spliced in (it runs with no modules beside it)
-	separately = separate_module_wanted or (#images > 0 and not own and library_runtime == ø)
+	# (L5c, card wasm-module-linking)
+	separately = separate_module_wanted or (#images > 0 and library_runtime == ø)
 	# (linked, a module's words are called as its linked form made them)
 	if separately or module_written != "" { for image in images { with_linked_kinds(image, read_bytes(linked_module_file(image.name))) } }
 	relocate_program(separately)
