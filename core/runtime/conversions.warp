@@ -187,7 +187,17 @@ int_text(n: int): text := {
 	}
 	out
 }
-char_text(c: char): text := code_point_text(code_of(c))
+# the text of a character; an ASCII one's text is made once and shared, as the small ints are (no text is changed in
+# place): node_text of an operator's or bracket's spelling made one at every call, 8% of the allocations compiling
+# compiler.warp (card char-text-new)
+global ascii_texts = []
+char_text(c: char): text := {
+	code = code_of(c)
+	if code >= Utf8.TwoBytesFrom { return code_point_text(code) }
+	if #ascii_texts == 0 { ascii_texts = new_list(Utf8.TwoBytesFrom) }
+	if is_null(ascii_texts#(code + 1)) { ascii_texts#(code + 1) = code_point_text(code) }
+	unboxed_text(ascii_texts#(code + 1))
+}
 # a code point's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
 code_point_text(code: int): text := {
 	n = code

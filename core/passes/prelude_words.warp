@@ -689,14 +689,14 @@ word_index(file: text): map := {
 	word_indices[file]
 }
 # the index of the words each standard module defines but the prelude, as word_index reads it: a word of letters
-# (`red`, `minute`), no operator or made name; also the word leading a rule of the module that means nothing else
+# (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 word_index_text(): text := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude") {
 		source = file_text(std_module_path(module)) ?? ""
 		for word in definition_slices(source).map(slice => slice#1) + rule_heads(source).filter(word => not has_meaning(word)) {
-			if word is text and #word > 0 and is_name_start(word[0]) and not word.contains(name_joiner) {
+			if word is text and #word > 0 and is_name_start(word[0]) and not is_made_name(word) {
 				known = definers.get(word) ?? []
 				if module not in known { definers[word] = known + [module] }
 			}
