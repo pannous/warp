@@ -403,10 +403,7 @@ code_heads(n: Node, written: any): map := {
 	heads
 }
 own_heads_of(code: Node, heads: map) := {
-	if code is key {
-		heads[key_head(code)] = yes
-		if defines_spaced_head(code) { own_heads_of(head_spread(code), heads) }
-	} else if is_group(code) {
+	if code is key { heads[key_head(code)] = yes } else if is_group(code) {
 		heads[group_head(code, "")] = yes
 		if #code > 0 and code#1 is symbol { heads[group_head(code, name_of(code#1))] = yes }
 	} else { heads[atom_head] = yes }
@@ -1696,6 +1693,10 @@ is_parenthesized(pattern: Node): bool := is_group(pattern) and bracket_of(patter
 # a rule whose phrase pattern matches runs of a phrase
 matches_runs(rule: Rule): bool := not rule.whole and is_run_pattern(rule.pattern)
 
+# a rule tried on the whole node: one not matching runs, or a run rule spelling a definition at a definition with a
+# spaced head, which spreads into the phrase it matches (head_spread)
+tried_whole(rule: Rule, n: Node): bool := not matches_runs(rule) or (defines_last(rule.pattern) and defines_spaced_head(n))
+
 # a pattern of words without a rest: it matches runs of a phrase
 is_run_pattern(pattern: Node): bool := match pattern {
 	List(words, Bracket.None, Separator.Space): not words.any(word => rest_hole_name(word) != ø)
@@ -1724,7 +1725,7 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 		n = if key_of(n) == opaque_symbol then with_changed_members(n, member => at_place(member, Place.Member, rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
 	for index in 0 ..< #rules {
-		if rules[index].place == Place.Anywhere and not matches_runs(rules[index]) {
+		if rules[index].place == Place.Anywhere and tried_whole(rules[index], n) {
 			result = rule_applied(rules[index], origins[index], n)
 			if result != ø { return rewritten_again(result, rules, origins) }
 		}
