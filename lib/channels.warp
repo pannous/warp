@@ -53,3 +53,9 @@ message_listened(name, handler: function): int := {
 	listener = machine_channel(name)#2
 	timer_every(MESSAGE_POLL, () => { while channel_pending(listener) > 0 { handler(channel_next(listener)) } })
 }
+
+// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
+channel_listen(listener: int, name: node) from host
+channel_pending(listener: int): int from host
+channel_next(listener: int): node from host
+channel_send(name: node, value: node) from host

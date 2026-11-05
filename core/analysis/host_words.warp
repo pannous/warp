@@ -1,33 +1,11 @@
-# The host words a compiled program may import from the module "host": name → [parameter kinds, result kinds], the kinds
-# int, float, i32 and node (a $Node reference); a third item names the module when it is another (WASI's).
-host_words = {
-	draw_shape: [[ValueKind.Int, ValueKind.Float, ValueKind.Float, ValueKind.Float, ValueKind.Float, ValueKind.Int], []]
-	draw_show: [[ValueKind.Int, ValueKind.Int], []]
-	draw_shader: [[ValueKind.Node], []]
-	gpu_compute: [[ValueKind.Node, ValueKind.Node, ValueKind.Int], [ValueKind.Node]]
-	gpu_render: [[ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Node], [ValueKind.Node]]
-	text_coverage: [[ValueKind.Node, ValueKind.Int], [ValueKind.Node]]
-	gpu_compute_linear: [[ValueKind.Node, ValueKind.Int, ValueKind.Int], [ValueKind.Int]]
-	gpu_map_linear: [[ValueKind.Node, ValueKind.Int, ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Int], [ValueKind.Int]]
-	gpu_reduce_linear: [[ValueKind.Node, ValueKind.Int, ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Int], [ValueKind.Int]]
-	fetch_start: [[ValueKind.Int, ValueKind.Node], []]
-	fetch_reply: [[ValueKind.Int], [ValueKind.Node]]
-	serve_routes: [[ValueKind.Int, ValueKind.Node], [ValueKind.Node]]
-	response_header: [[ValueKind.Node, ValueKind.Node], []]
+# The core's host words a compiled program may import from the module "host": name → [parameter kinds, result kinds],
+# the kinds int, float, i32 and node (a $Node reference); a third item names the module when it is another (WASI's).
+# A library declares its own as lines `draw_show(width: int, height: int) from host` (lib/draw.warp), which
+# builtin_signatures.warp host_words joins to these
+core_host_words = {
 	std_pure: [[ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
 	std_io: [[ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
-	channel_listen: [[ValueKind.Int, ValueKind.Node], []]
-	channel_pending: [[ValueKind.Int], [ValueKind.Int]]
-	channel_next: [[ValueKind.Int], [ValueKind.Node]]
-	clipboard_text: [[], [ValueKind.Node]]
-	page_path: [[], [ValueKind.Node]]
-	notify: [[ValueKind.Node], []]
-	channel_send: [[ValueKind.Node, ValueKind.Node], []]
-	dispatch_event: [[ValueKind.Node, ValueKind.Node], []]
 	guarded_call: [[ValueKind.I32, ValueKind.Node], [ValueKind.Node]]
-	paint: [[ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Node], []]
-	save_picture: [[ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Node], []]
-	sound_samples: [[ValueKind.Node, ValueKind.Int, ValueKind.Int, ValueKind.Int], []]
 	run_block: [[ValueKind.Node, ValueKind.Node, ValueKind.Node, ValueKind.Node], [ValueKind.Node]]
 	parse_code: [[ValueKind.Node], [ValueKind.Node]]
 	eval_code: [[ValueKind.Node], [ValueKind.Node]]
@@ -43,10 +21,8 @@ host_words = {
 	random_seed: [[ValueKind.Int], []]
 	clock: [[], [ValueKind.Int]]
 	local_offset: [[ValueKind.Int], [ValueKind.Int]]
-	signal_listen: [[ValueKind.Int, ValueKind.Int, ValueKind.Int], []]
 	system_value: [[ValueKind.CText], [ValueKind.Int]]
 	set_system_value: [[ValueKind.CText, ValueKind.Int], []]
-	key_held: [[ValueKind.Int], [ValueKind.Int]]
 	exit: [[ValueKind.Int], []]
 	# WASI's words the runtime calls (runtime/extended/wasi.warp): addresses and counts as i32, an error code back
 	args_sizes_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
