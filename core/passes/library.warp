@@ -130,11 +130,12 @@ def library_path(path: text): text {
 # modules/index.tsv: what a compile has to know of the standard library before a program's uses are resolved, a cache
 # derived from lib/ by `warp rebuild` beside the modules it prebuilt (notes/library_zero_bake.md L2): the words taking
 # a block last, the global words, classes and tags of the top modules, the words each module defines (implicit uses),
-# the words each module's rules need, the host lines, and each module's source hash. A line `<section>\t<key>\t<value>`,
+# the words each module's rules need, the host lines, each module's source hash, lib/aliases.warp's entries and the
+# sugar's files. A line `<section>\t<key>\t<value>`,
 # read once a compile (scanning the modules' texts was the compiler's baked tables, or ~5 ms of a small compile).
 # Without one (the seed's build, a fresh lib/) a section is scanned off lib/ where it runs
 LIBRARY_INDEX = "index.tsv"
-INDEX_SECTIONS = ["block", "global", "class", "tag", "word", "needs", "host", "hash"]
+INDEX_SECTIONS = ["block", "global", "class", "tag", "word", "needs", "host", "hash", "alias", "sugar"]
 # the modules beside the runtime a compile runs behind, as the modules it links (compiler.warp linked_libraries)
 index_file(): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + LIBRARY_INDEX
 global index_sections_held = ø
@@ -163,6 +164,21 @@ index_section_scanned(section: text): map := match section {
 	"needs": scanned_rule_needs()
 	"host": host_lines_in(library_on_disk())
 	"hash": module_hashes()
+	"alias": alias_entries_scanned()
+	"sugar": sugar_modules_scanned()
+}
+# lib/aliases.warp's entries, each word with its fields as the index holds them (parser.warp alias_rows)
+alias_entries_scanned(): map := {
+	entries = {}
+	for row in table_rows(source_parse(run_library() + "/" + ALIAS_FILE, library_on_disk()[ALIAS_FILE])) { entries[row#1] = alias_fields_written(row#1, row#2) }
+	entries
+}
+ALIAS_FILE = "aliases.warp"
+# the sugar's rule files, extensions/sugar/<name>.warp each by its path without .warp (rewrites.warp sugar_module_names)
+sugar_modules_scanned(): map := {
+	found = {}
+	for path in library_on_disk().keys { if path.starts_with(sugar_folder) and path.ends_with(module_extension) { found[path[0 ..< #path - #module_extension]] = "" } }
+	found
 }
 global library_on_disk_held = ø
 library_on_disk(): map := {
