@@ -43,10 +43,10 @@ unique_lines(path: text) := unique(file_lines(path))
 // so a text's own lines are `grep("^a", text.split("\n"))`
 grep(pattern: text, source: any): list := [line for line in (if source is list then source else file_lines(source)) if line matches pattern]
 // whether the path is a folder: one that lists
-is_folder(path: text) := list_files(path) is list
+is_folder(path: text): bool := list_files(path) is list
 // `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches the wildcards * and ?, sorted, hidden
 // folders skipped (find itself searches a list)
-find_files(folder: text, pattern: text) := sort(paths_named(folder, wildcard_regex(pattern)))
+find_files(folder: text, pattern: text): list := sort(paths_named(folder, wildcard_regex(pattern)))
 paths_named(folder: text, wanted: text): list := {
 	found = []
 	for name in list_files(folder) {
@@ -57,8 +57,8 @@ paths_named(folder: text, wanted: text): list := {
 	found
 }
 // `*.json` → `^[^/]*\.json$`: a wildcard pattern as the regular expression of the names it matches
-wildcard_regex(pattern: text) := "^" + [wildcard_piece(c) for c in pattern].join("") + "$"
-wildcard_piece(c: text) := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
+wildcard_regex(pattern: text): text := "^" + [wildcard_piece(c) for c in pattern].join("") + "$"
+wildcard_piece(c: text): text := if c == "*" then "[^/]*" else if c == "?" then "[^/]" else if c in ".+^$()[]{}|\\" then "\\" + c else c
 // the bytes of a file or of all files below a folder, as du counts them (size itself is a list's)
 file_size(path: text): int := if is_folder(path) then sum([file_size(path.remove_suffix("/") + "/" + name) for name in list_files(path)]) else count(read_bytes(path))
 // `info ./a.txt` → {size: 20, modified: 1760536980000, kind: "file"}, modified in milliseconds as clock() counts

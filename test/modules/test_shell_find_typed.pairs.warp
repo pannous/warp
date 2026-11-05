@@ -1,0 +1,2 @@
+# Shell file search (lib/shell.warp): matching paths.
+'use shell; find_files("../fixtures/unix/configs", "*.json")'	["../fixtures/unix/configs/a.json", "../fixtures/unix/configs/sub/b.json"]
