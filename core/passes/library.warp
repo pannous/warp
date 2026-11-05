@@ -28,8 +28,12 @@ def use_library(folder: text) { given_library = folder }
 # built compiler: uses.warp's module_text writes them in where library_sources() stands when it compiles the compiler,
 # so a compiler needs no lib/ on any disk (decision built-in-lib). A compiler built by one that bundles none yet (an
 # older seed) calls library_sources below and reads them where it runs
-# lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
-UNBUNDLED_FOLDERS = ["compiler", "data"]
+# lib/'s folders the bundle leaves out: core's link and extensions/, the compiler itself, which is compiled in, and the
+# files a build makes; of those, the folders the compiler reads as data while it runs: the sugar's rules, the uncertain
+# extension's operator rows (card library-removal-core L1: the extensions' source was 487 KB of the bundle, and their
+# parses beside it, the library baked a second time)
+UNBUNDLED_FOLDERS = ["compiler", "data", "extensions"]
+BUNDLED_DATA_FOLDERS = ["extensions/sugar", "extensions/uncertain"]
 LIBRARY_FILES = library_sources()
 # (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
@@ -89,6 +93,12 @@ def library_texts(library: text, within: text): map {
 		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
+		}
+	}
+	if within == "" {
+		for folder in BUNDLED_DATA_FOLDERS {
+			data = library_texts(library, folder + "/")
+			for path in data.keys { found[path] = data[path] }
 		}
 	}
 	found
