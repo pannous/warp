@@ -18,3 +18,4 @@ $ todo list
 $ todo frobnicate
 usage: add <title> | done <id> | list | clear
 stored: [{"id":1,"title":"buy milk","done":false},{"id":2,"title":"write the report","done":true},{"id":3,"title":"call Ada","done":false}]
+demo file removed: yes

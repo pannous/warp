@@ -6,7 +6,7 @@ use json
 use os
 use file
 
-store = (env("TMPDIR") ?? "/tmp") + "/warp_todo_demo.json"
+store = temp_folder() + "/warp_todo_demo.json"
 
 load(): list := if exists(store) then parse_json(read(store)) else []
 keep(items: list) := write(store, to_json(items))
@@ -58,4 +58,5 @@ if count(args) > 0 {
 		command(words)
 	}
 	print("stored: " + read(store))
+	print("demo file removed: " + str(delete_file(store)))
 }
