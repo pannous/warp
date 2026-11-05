@@ -1,0 +1,51 @@
+$ settings set theme dark
+user.theme = dark
+$ settings set editor vim
+user.editor = vim
+$ settings -s project set indent tabs
+project.indent = tabs
+$ settings get theme
+dark
+$ settings get font -d mono
+mono (default)
+$ settings --scope=project list
+indent = tabs
+$ settings list --format keys
+theme editor
+$ settings list --format=json
+{"theme":"dark","editor":"vim"}
+$ settings unset editor
+removed user.editor
+$ settings list
+theme = dark
+$ settings list --format yaml
+cli: --format is one of lines, keys, json, not yaml
+$ settings -s team list
+cli: --scope is one of user, project, not team
+$ settings remove theme
+cli: unknown command remove (set, get, unset, list)
+$ settings 
+cli: missing command (set, get, unset, list)
+$ settings list --help
+usage: settings list [-h] [--format {lines,keys,json}]
+
+options:
+  -h, --help            show this help
+  --format {lines,keys,json}
+                        (default lines)
+$ settings --help
+usage: settings [-h] [--file FILE] [--scope {user,project}] {set,get,unset,list} ...
+
+commands:
+  set                   set a key to a value
+  get                   show one key
+  unset                 remove a key
+  list                  show every key
+
+options:
+  -h, --help            show this help
+  -f, --file FILE       the JSON file of the settings (else warp_settings_demo.json in $TMPDIR)
+  -s, --scope {user,project}
+                        which settings (default user)
+stored: {"user":{"theme":"dark"},"project":{"indent":"tabs"}}
+demo file removed: yes

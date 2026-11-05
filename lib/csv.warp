@@ -41,6 +41,7 @@ def csv_rows(t: text): list {
 			field += t[start - 1 ..< i - 1]
 		}
 	}
+	if quoted { raise "csv: unclosed quote" }
 	if count(row) > 0 or field != "" { row.add(field); rows.add(row) }
 	rows
 }
@@ -58,9 +59,9 @@ def csv_maps(t: text): list {
 }
 
 csv_needs_quotes(f: text): bool := f.contains(",") or f.contains("\"") or f.contains("\n") or f.contains("\r")
-csv_field(value: any): text := { f = str(value); if csv_needs_quotes(f) then "\"" + replace(f, "\"", "\"\"") + "\"" else f }
+csv_field(value: any): text := { f = str(value); if f.contains("\"") then "\"" + replace(f, "\"", "\"\"") + "\"" else if f.contains(",") or f.contains("\n") or f.contains("\r") then "\"" + f + "\"" else f }
 csv_line(row: list): text := join([csv_field(f) for f in row], ",")
 // rows of values as CSV text, lines ending in CRLF (RFC 4180)
-csv_text(rows: list): text := join([csv_line(row) + "\r\n" for row in rows], "")
+csv_text(rows: list): text := if rows.count == 0 then "" else join([csv_line(row) for row in rows], "\r\n") + "\r\n"
 // maps as CSV text under the header row
 csv_text(maps: list, header: list): text := csv_text([header] + [[m[k] for k in header] for m in maps])
