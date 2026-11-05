@@ -2971,6 +2971,8 @@ def named(p: Parser): Node := {
 	name = symbol(word)
 	// `x°`: a name glued to an atom an extension reads multiplies it, as `30°` (core/extension.warp atom_readers)
 	if atom_reader(char_here(p)) != ø and not is_alpha(char_ahead(p, 1)) { return Key(name, Op.Mul, atom(p)) }
+	// a signature's result type, `def hz(xs): Hz {…}`, is no construction: its block is the body
+	if result_body_follows(p, word, p.at) { return name }
 	// `Point {x: 1}` with blanks constructs a declared type as the glued one does (open decision 41); a capitalized word
 	// of no declared type before a block of fields is the tagged object `Person:{…}` (card person-name)
 	declared = p.types.contains(word)
