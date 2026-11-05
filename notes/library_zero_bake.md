@@ -196,4 +196,13 @@ The emitter must guarantee these for L3–L5:
   seed-compiles).
 - L3: warp.signature goes right after the wasm header (a custom section may be first), so reading a signature costs
   a few KB, not the whole module.
-- Before L3: measure the prelude's 108 untyped words linked as boxed code (hello, compiler.warp, a numeric sample).
+- Measured before L3 (2026-11-05): the prelude's untyped parameters compiled as nodes, as a linked prelude would
+  take them (a switch in emitter/functions.warp call_values, never committed; data/boxed-measurement.patch of the
+  worktree). The emitter types a function by its first call's argument kinds (call_values), not the analyzer's slots.
+  Instructions retired, compile and run:
+  - hello: 5.148 G either way.
+  - compiler.warp, built both ways, compiling compiler.warp: 3006.0 G vs 3006.2 G (+0.008%); the build +460 bytes.
+  - a numeric loop, 200 000 rounds of fourth_root, round_to, pixel_channel and is_digit: 9.59 G vs 10.51 G (+9.5%;
+    about +20% of its run, the compile being ~5.1 G).
+  So L4 stays small: typed overloads only for the prelude's numeric words a hot loop calls (fourth_root, round_to,
+  pixel_channel, is_digit and the like, random_*, mean); the compiler itself doesn't feel it.

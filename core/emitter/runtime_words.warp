@@ -185,7 +185,7 @@ program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same_node", 
 intrinsics = {baked_segment: 1, with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, memory_f32: 1, memory_set_f32: 2, memory_i32: 1, memory_u32: 1, memory_set_i32: 2, memory_i64: 1, memory_f64: 1, memory_grown: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, meta_with_attributes: 2, meta_attributes: 1, same_text: 2, same_list: 2, same_node: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1, instance_float: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name, and those the extensions' runtimes give
@@ -293,14 +293,6 @@ def plain_part_test(code: list, field: int): list { payload(code, gc_type(gc.rat
 def ratio_part(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
 # the $Limbs array of an Int $Node holding a $BigInt
 def limbs_of(code: list): list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
-# `shown_big_int(n)`: a big int's text, a function made at its first call whose code is written last (as closure_text):
-# big_ints.warp's big_int_text when the program makes big ints (big_int_of compiled), else a trap, so
-# that a program printing only plain ints carries neither big_int_text nor the $Limbs and $BigInt types
-shown_big_int_name = "shown_big_int"
-shown_big_int_code(f: Function): any := {
-	f.code = [op.unreachable]
-	if "BigInt" in module.made { f.code = call_values(module.runtime["big_int_text"], [TypedCode(ValueKind.Node, [op.local_get, 0])]).code }
-}
 # `made_case(Made.BigInt, big_int_sum(a, b))` in a runtime word: once the program makes values of that kind
 # (module.made), the return of the call where one of its arguments holds such a value; before that nothing, so a
 # program making none carries neither the call nor the words it reaches (a shown value no time's text). Its function

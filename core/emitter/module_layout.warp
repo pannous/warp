@@ -120,26 +120,22 @@ def module_bytes(functions: list): list {
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	if #module.imports == 0 { imported = [] }
 	exports = program_exports(functions)
-	tables = []
-	if module.prebuilding {
-		exports = runtime_exports(functions)
-		tables = section(section_ids.table, vector([[funcref_byte, 0] + uleb(#module.dispatchers)]))
-	}
+	if module.prebuilding { exports = runtime_exports(functions) }
 	exported = section(section_ids.export, vector(exports))
-	elements = element_section(closure_entries_declared(functions.map(f => [f.name, f.index])))
+	elements = element_section(references_declared(functions.map(f => [f.name, f.index])))
 	# the texts' bytes: a passive segment each, which array.new_data reads
 	segments = section(section_ids.data_count, uleb(#module.texts))
 	texts = section(section_ids.data, vector(text_segments()))
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#module.gc_order + #module.imports + #functions)])) }
-	parts = [types, imported, declared, tables, memory, tags, globals, exported, elements, segments, codes, texts]
+	parts = [types, imported, declared, memory, tags, globals, exported, elements, segments, codes, texts]
 	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
 	wasm_header + concatenated(parts) + names_section(functions) + marks + c_functions_custom_section() + runtime_sections(functions)
 }
-# runtime.wasm's exports: memory, every function and global by its name, the error tag, the table of hooks
+# runtime.wasm's exports: memory, every function and global by its name, the error tag
 def runtime_exports(functions: list): list {
-	exports = [name_bytes("memory") + [export_memory_byte, 0], name_bytes(error_tag_name) + [export_tag_byte, 0], name_bytes(hooks_table) + [export_table_byte, 0]]
-	taken = ["memory", error_tag_name, hooks_table]
+	exports = [name_bytes("memory") + [export_memory_byte, 0], name_bytes(error_tag_name) + [export_tag_byte, 0]]
+	taken = ["memory", error_tag_name]
 	for f in functions {
 		if f.name not in taken {
 			exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
@@ -163,7 +159,7 @@ def runtime_sections(functions: list): list {
 	if not module.relocating { return [] }
 	own_globals = module.global_order[(if module.prebuilding then 0 else #module.runtime_image.globals) ..]
 	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #module.texts].map(uleb))
-	names = vector(module.dispatchers.map(f => name_bytes(f.name))) + vector(module.left_out.keys.map(name_bytes))
+	names = vector(module.left_out.keys.map(name_bytes))
 	# each global with its int type's mark, 0 for none: `red = … as Color` read by a program linking color is a Color
 	globals = vector(own_globals.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2)) + uleb(module.global_marks.get(name) ?? 0)))
 	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)) + signature_bytes(f.signature)))
@@ -266,11 +262,11 @@ def section_place(wasm: list, id: int, name: text = ""): list? {
 	ø
 }
 # the data segments: each text's bytes once, in the order text_segment numbered them
-# the closure entries the code refers to (ref.func), of these [name, index]: declared, as wasm wants such a function,
-# in one declarative element segment, none without them
+# the functions the code refers to (ref.func: closure entries, class words), of these [name, index]: declared, as wasm
+# wants such a function, in one declarative element segment, none without them
 declarative_segment = 3
-def closure_entries_declared(functions: list): list {
-	entries = functions.filter(f => f#1.starts_with(closure_entry_prefix))
+def references_declared(functions: list): list {
+	entries = functions.filter(f => f#1.starts_with(closure_entry_prefix) or f#1.starts_with(class_word_prefix))
 	if #entries == 0 then [] else [[declarative_segment, 0] + vector(entries.map(f => uleb(f#2)))]
 }
 def element_section(segments: list): list := if #segments == 0 then [] else section(section_ids.element, vector(segments))

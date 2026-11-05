@@ -48,13 +48,15 @@ made_case kind made, since no program decides any more what it makes.
 - **Imports**: the full host-word list, declared up front in a fixed order (module and field names as today), so a
   program's host words never shift the runtime. A program's own C imports (FFI) go after them and shift the runtime's
   function indices: those are rewritten through the call-site list below.
-- **Functions**: the runtime words in a fixed order, then the hooks. Every `call` and `ref.func` operand is a padded
+- **Functions**: the runtime words in a fixed order. Every `call` and `ref.func` operand is a padded
   5-byte LEB128 (a valid non-minimal encoding), so an index changes in place without moving code.
-- **Hooks**: the functions whose code depends on the program (today's made_late: closure·call·N for each arity,
-  closure_text, shown_big_int, instance_set, instance_entries, instance_field_at, instance_place, is_class_instance,
-  the text·shown dispatcher). In runtime.wasm each is a stub with its final signature: its parameters, `i32.const slot`,
-  `call_indirect` of its own type on table 0. Prepending replaces a stub's body with the program's code; a separately
-  linked program fills the exported funcref table `hooks` at its start (closure·call for arities 0…hook_arities, 8).
+- **No hooks** (2026-11-05, card wasm-module-linking): a runtime word that reaches program code goes through the
+  value itself. A closure's item 0 is a Closure struct {funcref entry, text shown}, called by call_ref on its fixed
+  type closure_call_type_N; an instance's data field is its class's descriptor, a Class node (the class name as a
+  symbol, then funcrefs entries, field_at, place, set, construct, show, float, call), so instance_set, instance_place,
+  text·shown and the others call the class's own words through it. A class's identity is its descriptor (ref.eq),
+  never its struct type, which canonicalizes across modules. The descriptor is a global `descriptor·<Class>`, made at
+  its first use. No table, no stubs: one runtime build serves a prepended and a linked program alike.
 - **Left out**: a word outside the core on its own (an enum's method naming the program's enum: Separator·text) is not
   in runtime.wasm; warp.runtime names it, a program compiles it as today.
 - **Globals**: the runtime's (runtime/walks.warp and the others) first, at fixed indices; a program's after them.
@@ -64,12 +66,11 @@ made_case kind made, since no program decides any more what it makes.
   behind the runtime's (first_text_segment); a linked one declares the runtime's as empty segments, so its code is
   the same (until mod-imports-used maps them away).
 - **Tag**: the error tag, index 0, exported.
-- **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag, the table `hooks`.
+- **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag.
 - **Custom sections**:
   - `name`, as the emitter writes it today (functions, locals, types, fields, globals).
   - `warp.runtime`, the layout, binary so a compile reads it in milliseconds with no parser and no cache (user: "read
-    from the WebAssembly modules"): five ulebs G, imports, functions, globals, text segments; the hooks' names in
-    table-slot order; the left words' names; the globals, each [name, kind]; the words, each [name, index, vector of
+    from the WebAssembly modules"): five ulebs G, imports, functions, globals, text segments; the left words' names; the globals, each [name, kind]; the words, each [name, index, vector of
     parameter kinds, result kind, vector of parameters, declared result]. A parameter is [name, type name, flags (rest
     1, a default 2), the default packed (pack) if flagged]; what a call needs (named arguments, defaults, rest), so a
     prepended compile neither lowers nor reads the runtime's sources (card runtime-lowering-scope). A name is a uleb length and its UTF-8 bytes, a list a uleb count and its entries, a
@@ -100,8 +101,7 @@ made_case kind made, since no program decides any more what it makes.
 - A linked name keeps all its variants (card module-export-arity): draw's own show() beside the show(x) builder the
   host calls, which the layout names by index, not by name. A program's call takes the variant whose count of values
   fits (prebuilt.warp linked_variant); one that none takes is refused naming theirs, never bound to another.
-- Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
-  go into the program's dispatcher; module code calls the runtime's hook stubs.
+- A module's class (units) carries its own words in its descriptor, so module code and program code call them alike.
 - Built (2026-10-28): `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder> [runtime.wasm]`
   (core/compiler.warp write_module: compile() given runtime.wasm, `module.relocating`); every `warp rebuild` writes
   modules/<name>.wasm beside warp.wasm (std_module_names), rebuild.sh keeps them in the
@@ -118,17 +118,13 @@ made_case kind made, since no program decides any more what it makes.
   runtime.wasm (warp.module's trailer: own_from, closures, classes, builds).
 - Closures (2026-10-28): a module's closure numbers are relocatable operands (kind closures, i64.const padded); its
   trailer lists each closure [target, captured, shown text]; a link numbers them first, as `<module>·<target>` at the
-  module's index, so the program's dispatchers (runtime hooks) call them; lifted lambdas are never bound by name.
+  module's index, so the closure's entry calls them; lifted lambdas are never bound by name.
   list, text, shell and matrix link. test/modules gives the same
   results linked and from source. Measured: `use units; 3m + 2m` 0.64 s -> 0.56 s: the program still lowers the
   module's reached definitions (checked_program, 70 of 84 samples); declared: 0.36 s, 46 samples.
 - Open: the module's prelude words are its own copy
   (they should be the prelude module's, space 2+k); classes from warp.declarations into module.classes before late_code;
   late_code once all modules are bound.
-
-## Hooks (runtime words calling program code: a class's text(), ==)
-One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
-the stubs call through an exported funcref table the program fills at start. One runtime build serves both.
 
 ## Separate modules (card runtime-separate-modules; owner: separate-modules)
 The same runtime.wasm, not copied into the program but instantiated once and imported, as a page or an AOT build
@@ -137,9 +133,9 @@ the function index space anyway, so the program numbers only its own functions, 
 - **Program module** (`warp build` writes it as x.mod.wasm, extensions/commands/separate_module.warp linked_bytes): the canonical types first
   (canonical_type_entries(), so its node, text and list types are the runtime's), then its class structs. Every
   runtime word it calls is a function import `warp_runtime.<word>` with the word's type (instead of compiling the
-  word); runtime globals it reads are global imports; memory, the error tag and the `hooks` table are imported too.
-  Its texts stay in its own passive segment (array.new_data is per module). Its start code fills `hooks` with
-  ref.func of its hook bodies (table.set by the index the warp.runtime section names).
+  word); runtime globals it reads are global imports; memory and the error tag are imported too.
+  Its texts stay in its own passive segment (array.new_data is per module). Its closure entries and class words are
+  declared by an element segment, as ref.func needs.
 - **Library modules** the same way: each imports `warp_runtime`, exports its words; a program imports them as
   `warp_module.<module>.<word>`, so `use sound` costs an instantiate, not a compile.
 - **Hosts**: wasmtime (src/run): instantiate runtime.wasm once per store (from its .cwasm), then the program with a
@@ -147,7 +143,7 @@ the function index space anyway, so the program numbers only its own functions, 
   `WebAssembly.instantiate(program, { warp_runtime: runtime.exports, warp_host })`.
 - **Trimming** the shared runtime against one program's imports is where wasm-metadce fits (roots: the imported
   names); a runtime shared by several programs stays whole.
-- **Check**: hello and a class with text() (a hook) built separately print the same as built prepended.
+- **Check**: hello and a class with text() built separately print the same as built prepended.
 - **State** (2026-10-28): `warp build x.warp` writes x.full.wasm (prepended), x.wasm (that one trimmed) and x.mod.wasm
   (linked) from one compile: the harness passes the .mod.wasm path as the compile's sixth argument, compiler.warp
   writes linked_bytes(module.order) of the compile it just made (separate_module). The program's code is the same in
