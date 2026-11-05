@@ -213,6 +213,24 @@ The emitter must guarantee these for L3–L5:
     about +20% of its run, the compile being ~5.1 G).
   So L4 stays small: typed overloads only for the prelude's numeric words a hot loop calls (fourth_root, round_to,
   pixel_channel, is_digit and the like, random_*, mean); the compiler itself doesn't feel it.
+- L4 (L4b; L4a, typed overloads, left out: the prelude is reached from source, typed by its calls, so they buy
+  nothing until it links): the compiler bakes no library. lib/ is read from disk, once a file a compile (library.warp
+  library_text, file_source); LIBRARY_FILES/PARSES/SLICES/RULES, their readers and the comment blanking are gone.
+  warp.wasm 4.05 MB → 2.14 MB. What a bake had hidden, each found by scripts/profile.sh (paired runs, own and
+  callee time) and moved, never baked back but for one:
+  - the sugar's rules, parsed every compile (~0.3 s): the one bake left, SUGAR_RULES (rewrites.warp), by file with
+    its source hash; `baked-current`/`rebake` keep it current.
+  - cutting the prelude and the type modules into definitions (~70 ms): their spans are the index's section `slice`
+    (prelude_words.warp spans_of), used while the text is the file the index was written of.
+  - a used module parsed whole for its `use` lines; the prelude's statements all split for them; a used module cut
+    for the words it defines (implicit uses): use lines read off the lines a use may start (parser.warp
+    use_candidates), a linked module's uses off its signature (modules_used_by), its words off the index.
+  - parses of the prelude's reached definitions taken from its signature cost more than parsing the few reached.
+  Trust: the index and the sugar bake are trusted as rule_needs_by_module trusts the index, hashed only under
+  WARP_LIB (a lib/ edited since the build); djb2 in warp is ~1.3 K instructions a byte (by byte_at; 3.3 K over
+  source.bytes), so the host's sha256 (card signature-sha256) would make the hash free everywhere.
+  Paired against main (instructions retired): hello 5.20 G → 5.14 G (−1.1%; under WARP_LIB 5.15 → 5.03), `use units`
+  17.82 G → 17.03 G (−4.4%); compiler.warp compiling itself 2577.6 G → 2526.3 G (−2.0%).
 - L5 (wasm-module-linking): points 1 (closure funcref), 3 (Instance), 2 (class descriptors) landed; L5c programs and
   modules import their modules' words (notes/runtime_linking.md "Load-time linking"); L5d the playground links them
   too; L5e the splice path and .splice.wasm are gone, a module's image lives in its warp.signature.

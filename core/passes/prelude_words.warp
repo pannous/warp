@@ -23,21 +23,13 @@ slice_origins(files: list): map := {
 		source = file_text(path) ?? ""
 		line = 1
 		at = 0
-		for span in slice_spans(source) {
+		for span in spans_of(source) {
 			line += #source[at ..< span#2].split("\n") - 1
 			at = span#2
 			found[source[span#2 ..< span#3]] = [working_relative(path), line]
 		}
 	}
 	found
-}
-# [file, line] of a bundled file's slice by its key, `<file> <start>`, from the baked text: no file read once the
-# compiler is built, and only the slices a program reaches (all of the prelude's took 35 MB to compile hello)
-baked_origin(key: text, files: list): list := {
-	within = key.split(" ")#1
-	start = key.split(" ")#2 as int
-	path = files.filter(file => library_path(file) == within)#1
-	[working_relative(path), #LIBRARY_FILES[within][0 ..< start].split("\n")]
 }
 # the place of each definition of a used file, as brought from it
 note_file_origins(file: text, source: text) := {
@@ -47,19 +39,41 @@ note_file_origins(file: text, source: text) := {
 # source → its slices: the passes ask for each library module's slices per call and argument, cut once
 global source_slices = {}
 definition_slices(source: text): list := {
-	if not source_slices.has(source) { source_slices[source] = slices_of(source) }
+	if not source_slices.has(source) { source_slices[source] = spans_of(source).map(span => [span#1, source[span#2 ..< span#3]]) }
 	source_slices[source]
 }
-# the baked slices when source is a bundled module's very text (as library.warp source_parse), cut otherwise (a
-# WARP_LIB edit, a program)
-slices_of(source: text): list := {
-	for within in LIBRARY_SLICES.keys { if LIBRARY_FILES.get(within) == source { return unbaked_slices(LIBRARY_SLICES[within], source) } }
-	slices_cut(source)
+# [name, start, end] of each slice of the source (slice_spans), once a text: a module every compile reads off the
+# library index while source is its text as the index was written, cut otherwise: cutting the prelude and the type
+# modules was ~70 ms of a small compile (notes/library_zero_bake.md L4)
+global source_spans = {}
+spans_of(source: text): list := {
+	if not source_spans.has(source) {
+		module = indexed_module(source)
+		source_spans[source] = if module != ø then indexed_spans(library_index_section("slice").get(module) ?? "") else slice_spans(source)
+	}
+	source_spans[source]
 }
-# [name, text] of each function definition in source: a line starting with a name and its parameters, with the
-# indented or closing lines below it
-slices_cut(source: text): list := slice_spans(source).map(span => [span#1, source[span#2 ..< span#3]])
-# [name, start, end] of each slice, by code point: what slices_cut cuts and the compiler bakes (LIBRARY_SLICES)
+# the module of sliced_modules whose file the source is, as the library index was written of it: its length the
+# index's, and under WARP_LIB (a lib/ edited since the build) its hash too, as rule_needs_by_module trusts the index
+# (hashing the prelude and the type modules was ~25 ms a compile); ø for any other text
+indexed_module(source: text): text? := {
+	for module in sliced_modules() {
+		hash = library_index_section("hash").get(module) ?? ""
+		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (warp_lib() == ø or hash == source_hash(source)) { return module }
+	}
+	ø
+}
+# the modules every compile cuts: the prelude and the type modules
+sliced_modules(): list := ["prelude"] + type_modules
+# each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
+sliced_modules_scanned(): map := {
+	found = {}
+	for module in sliced_modules() { found[module] = slice_spans(file_text(std_module_path(module)) ?? "").map(span => "${span#1} ${span#2} ${span#3}").join(";") }
+	found
+}
+indexed_spans(spans: text): list := spans.split(";").filter(span => span != "").map(span => span.split(" ")).map(span => [span#1, span#2 as int, span#3 as int])
+# [name, start, end] of each definition in source, by code point: a line starting with a name and its parameters,
+# with the indented or closing lines below it
 slice_spans(source: text): list := {
 	spans = []
 	name = ""
@@ -80,43 +94,6 @@ slice_spans(source: text): list := {
 	if name { spans += [[name, start, at - 1]] }
 	spans
 }
-# the slices of a baked line per slice, `name start end`
-unbaked_slices(baked: text, source: text): list := baked.split("\n").filter(line => line != "").map(line => line.split(" ")).map(span => [span#1, source[(span#2 as int) ..< (span#3 as int)]])
-# every bundled module's slices, baked in beside its text and parse (uses.warp module_text writes them in where
-# library_slices() stands); a compiler built by one that bakes none cuts them where it runs
-LIBRARY_SLICES = library_slices()
-library_slices(within: text = ""): map := {}
-# a bundled top-level module's slice parsed, by `<file> <start>`: a program reaching a module's definition parses none
-# of it, the module's slices cut from its baked parse (LIBRARY_PARSES, uses.warp slices_cut) when its first is reached
-# (card modules-prebuilt, slice-parses-rederive); ø for a slice of other text, a WARP_LIB edit's, parsed where reached
-global module_slices = {}
-slice_parse(key: text?): any := {
-	if key == ø { return ø }
-	within = key.split(" ")#1
-	if not module_slices.has(within) {
-		packed = LIBRARY_PARSES.get(within)
-		module_slices[within] = if packed == ø then {} else slices_cut(within, LIBRARY_FILES[within], unpack(packed))
-	}
-	module_slices[within].get(key)
-}
-# each slice text of the bundled files → its key, `<file> <start>` (a slice keyed by its place, not
-# its text, keeps the texts out of the compiler a second time)
-slice_keys(paths: list): map := {
-	keys = {}
-	for path in paths {
-		within = library_path(path)
-		source = LIBRARY_FILES.get(within)
-		spans = LIBRARY_SLICES.get(within)
-		if source != ø and spans != ø {
-			for line in spans.split("\n").filter(line => line != "") {
-				span = line.split(" ")
-				keys[source[(span#2 as int) ..< (span#3 as int)]] = slice_key(within, span#2)
-			}
-		}
-	}
-	keys
-}
-slice_key(within: text, start: text): text := within + " " + start
 # `export f(…) := …` in a library: a word a host calls back (timers' timer_fired), kept whenever the module is used and
 # exported under its name (decision host-callback-exports)
 export_word = "export"
@@ -325,7 +302,7 @@ called_only(program: Node): Node := {
 # those the program doesn't call after all dropped once the passes ran (called_only)
 with_reached(program: Node, module: text, in_front: bool, files: list = [], linked: list = []): Node := {
 	# [name, text, parse, identity] of each definition: a linked module's from its signature, its head line and parse
-	# (signature.warp), else a slice of the text, parsed when reached
+	# (signature.warp), declared only; else a slice of the text, parsed when reached
 	given = linked.map(slice => [slice#1, slice#2, slice#3, slice#4 + " " + slice#1 + " " + slice#2]) + definition_slices(module).map(slice => [slice#1, slice#2, ø, slice#2])
 	module_names = given.map(slice => slice#1)
 	# a program's function named as a library word is the program's own (decision library-words-lexical): the program's
@@ -367,24 +344,21 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	wanted = exported + program_words + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
 	uses = ø
 	origins = {}
-	keys = slice_keys(files)
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and slice#5 not in reached {
-				key = if slice#4 == ø then keys.get(slice#2) else ø
-				baked = slice#4 ?? slice_parse(key)
-				if baked == ø and uses == ø { uses = use_lines(module) }
-				slice_node = early_sugared(baked ?? plain_node(parsed(slice#2, uses)))
+				if slice#4 == ø and uses == ø { uses = use_lines(module) }
+				slice_node = early_sugared(slice#4 ?? plain_node(parsed(slice#2, uses)))
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
 				else if slice#4 != ø { slice_node = declared_only(slice_node) }
 				slice_node = with_own_locals(slice_node, program_globals)
 				reached[slice#5] = statements_in(slice_node)
 				if slice#4 == ø {
-					if key == ø and #origins == 0 { origins = slice_origins(files) }
-					origin = if key != ø then baked_origin(key, files) else origins.get(slice#2)
+					if #origins == 0 { origins = slice_origins(files) }
+					origin = origins.get(slice#2)
 					if origin != ø { defined_origins[slice#1] = origin }
 				}
 				wanted += words_within(slice_node) + lowering_words(slice_node)
@@ -655,7 +629,7 @@ global_word_modules(program: Node, own: any, used: list): list := {
 	modules
 }
 # the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
-runtime_words_of_math = bundled_module("math.warp").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
+runtime_words_of_math = library_text("math.warp").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
 # a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
 # read once a module: a rule word asks it at each call site it tries (extensions/rules/rule_words.warp module_named)
@@ -673,7 +647,7 @@ names_no_module(name: text): bool := name in use_modes or is_c_library(name)
 # the names the prelude defines, read once
 global prelude_definition_names = ø
 prelude_definitions(): list := {
-	if prelude_definition_names == ø { prelude_definition_names = definition_slices(bundled_module("prelude.warp")).map(slice => slice#1) }
+	if prelude_definition_names == ø { prelude_definition_names = definition_slices(library_text("prelude.warp")).map(slice => slice#1) }
 	prelude_definition_names
 }
 # (an implicit use is always the standard module, never a same-named file beside the program: only an explicit
@@ -742,9 +716,7 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	is_unknown = word => word not in own and word not in bound and word not in prelude_names and not is_declared_word(word)
 	calls = nodes_in(program).filter(n => is_group(n) and (bracket_of(n) == "(" or bracket_of(n) == "") and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
 	if #calls == 0 { return program }
-	modules = bundled_slices()
 	classes = declared_classes_modules()
-	definitions = definitions_by_name([prelude_slices] + modules.values)
 	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	wanted = []
 	# each called word's definition heads, parsed once a word and only for an argument naming an unknown word
@@ -755,10 +727,10 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 		for i in 0 ..< #arguments {
 			words = symbol_words(arguments[i]).filter(is_unknown)
 			if #words == 0 { continue }
-			if not heads.has(name) { heads[name] = (definitions.get(name) ?? []).map(definition_text_head) }
+			if not heads.has(name) { heads[name] = definitions_of(name, prelude_slices).map(definition_text_head) }
 			for type in parameter_types(heads[name], i) {
 				module = classes.get(type) ?? ""
-				defines = word => modules[module].any(slice => slice#1 == word)
+				defines = word => module in defining_modules(word)
 				if module and module not in wanted and module not in used and words.any(defines) { wanted += [module] }
 			}
 		}
@@ -769,22 +741,11 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 # ": `use units` defines it" (decision expected-type-names); "" when none or several do. Never the prelude: every
 # program has it, so a `use prelude` fixes nothing (`animation: pop 400ms` names a CSS keyframes, not its pop)
 module_hint(word: text): text := {
-	modules = bundled_slices()
-	definers = modules.keys.filter(module => module != "prelude" and modules[module].any(slice => slice#1 == word))
+	definers = defining_modules(word)
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
-# module name → the slices of each module at the top of lib/, `units` → lib/units.warp's
-bundled_slices(): map := {
-	modules = {}
-	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = definition_slices(LIBRARY_FILES[path]) } }
-	modules
-}
-# name → the texts of its definitions in these lists of slices, the first written first
-definitions_by_name(slice_lists: list): map := {
-	definitions = {}
-	for slices in slice_lists { for slice in slices { definitions[slice#1] = (definitions.get(slice#1) ?? []) + [slice#2] } }
-	definitions
-}
+# the texts of the word's definitions, the prelude's first, then those of each module defining it (library index)
+definitions_of(word: text, prelude_slices: list): list := (prelude_slices + defining_modules(word).flat_map(module => definition_slices(file_text(std_module_path(module)) ?? ""))).filter(slice => slice#1 == word).map(slice => slice#2)
 # the head of a definition's text, `sleep(duration: Time)` of `sleep(duration: Time) := …`
 definition_text_head(definition: text): Node? := definition_head_of(statements_in(plain_node(parsed(definition)))#1)
 # the types written for parameter `at` (from 0) of each definition head, `[Time]` of `sleep(duration: Time)`
@@ -947,12 +908,12 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 			signature = linked_signature(name_of(used))
 			source = if signature == ø then used_module_text(name_of(used)) else ""
 			if signature != ø {
-				inner = used_module_sources(signature.uses.map(module => plain_node(parsed("use " + module))), folder, seen)
+				inner = used_module_sources(use_statements(signature.uses), folder, seen)
 				sources += inner#1
 				seen = inner#2
 				linked += inner#3 + signature.slices
 			} else if source != "" {
-				inner = used_module_sources(flat_statements(source_parse(std_module_path(name_of(used)), source)), folder, seen)
+				inner = used_module_sources(use_statements(used_modules(source)), folder, seen)
 				sources += inner#1 + [source]
 				seen = inner#2
 				linked += inner#3
@@ -963,3 +924,6 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 	}
 	[sources, seen, linked]
 }
+# `use <module>` of each module, as a program's statements say them (a module's own read off its use lines, no parse
+# of all of it)
+use_statements(modules: list): list := modules.map(module => plain_node(parsed("use " + module)))

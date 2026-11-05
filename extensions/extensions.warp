@@ -41,7 +41,7 @@ use "text_lints.warp"
 use "effects.warp"
 use "primitive.warp"
 EXTENSIONS = [
-	Extension{name: "uncertain", operator_rows: bundled_module("extensions/uncertain/operators.warp")}
+	Extension{name: "uncertain", operator_rows: library_text("extensions/uncertain/operators.warp")}
 	gpu_lists_extension
 	degrees_extension
 	glyph_atoms_extension

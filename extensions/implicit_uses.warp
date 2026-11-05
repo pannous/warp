@@ -25,8 +25,9 @@ implicit_modules(source: text, folder: text = "."): list := {
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
 	used = used_module_sources(flat_statements(program), folder, [])#2
+	# (a word of a module it uses, by the index: the candidates are its words)
 	known = {}
-	for module in used { for slice in definition_slices(used_module_text(module)) { known[slice#1] = yes } }
+	for word in candidates { if defining_modules(word).any(module => module in used) { known[word] = yes } }
 	# a file used by its path defines words too: the colors package's mix(a, b, t) is no use of sound's mix
 	for file in flat_statements(program).map(s => file_used(s, folder)).filter(file => file != ø) {
 		for slice in definition_slices(file_text(file) ?? "") { known[slice#1] = yes }
