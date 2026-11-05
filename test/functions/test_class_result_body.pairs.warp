@@ -1,0 +1,7 @@
+// card core-def-class-return-local: a signature's result type before its block is no construction of the class
+'class Hz { cs: list }; def hz(xs: list): Hz { counts = 0; Hz(xs) }; hz([1, 1]).cs'	[1, 1]
+'class Hz { cs: list }; def hz(xs: list): Hz { Hz(xs) }; hz([2]).cs'	[2]
+// a variable named data is a word in a call, as anywhere but before a quoted item
+'zf(xs, b) := b; data = [1]; zf(data, 7)'	7
+'def zf(xs: list, b: int): bool { yes }; data = [1]; zf(data, 0)'	yes
+'f(x) := x; f(data a+b).op'	'+'
