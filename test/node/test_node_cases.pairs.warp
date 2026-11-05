@@ -23,3 +23,5 @@
 
 # a_patterns_op_is_spelled_as_text
 'n = parse("a+1"); match n { Key(l, op, r): op as text, _: 0 }'	'+'
+# a lowercase local never shadows a Capitalized constructor: Key(…) with a local key builds the key (card key-shadows-constructor)
+'f() := { key = 3; n = Key(3, Op.Add, 4); [key, key_of(n), value_of(n)] }; f()'	[3, 3, 4]
