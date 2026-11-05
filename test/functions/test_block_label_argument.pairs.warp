@@ -1,0 +1,7 @@
+# a block given by the label of its parameter is its lazy body, as a positional block is (card block-label-parameter)
+
+'r(x, f: block) := f(); r 1 f: { 7 }'	7
+'r(x, f: block) := f(); r(1, f: { 7 })'	7
+'r(f: block) := f(); r f: { 7 }'	7
+'react(x, finishes: block) := x + finishes(); react 1 finishes: { 41 }'	42
+'run_two(body: block) := { body(); body() }; n = 0; run_two body: { n += 1 }; n'	2
