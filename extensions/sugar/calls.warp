@@ -10,6 +10,8 @@ rewrite map($f, $xs) => map($xs, $f) where $f is function and not $xs is functio
 # a function before an empty `()`, spaced or not, is called with nothing: `f ()` is f() (user decision calls-arguments)
 rewrite ($f ()) => $f() where $f is function
 rewrite ($f $x) => $f($x) where $f takes one
+# `3 then twice` is no pipe (decision then-not-pipe): a function after `then` is refused naming `|>`
+rewrite $x then $f => $refused where $f is function and $refused = then_not_pipe($x, $f)
 # backward application (decision postfix-words): a phrase of exactly two items, a value then a library word of one
 # typed value, is its call, `16 sqrt` is sqrt(16), `-7 abs` abs(-7); a function first keeps the prefix meaning above
 rewrite ($x $f) => $f($x) where not $x is function and $f takes one

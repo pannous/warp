@@ -37,9 +37,11 @@ exact_json(value: any, classes: any): text := json_written(value, yes)
 json_refusal(source, problem): text := "" + source + " is no json: " + problem
 // the place of the first character after spaces and comments from at on; a character other than / starts no
 // comment, so it returns before slicing (card lib-perf-bench)
+json_space(c: text): bool := c == " " or c == "\t" or c == "\n" or c == "\r"
+json_number_char(c: text): bool := is_digit(c) or c == "+" or c == "-" or c == "." or c == "e" or c == "E"
 json_skipped(source: text, at: int): int := {
 	while at <= #source {
-		if source#at in JSON_SPACE { at += 1 }
+		if json_space(source#at) { at += 1 }
 		else if source#at != "/" { return at }
 		else if source[at - 1..<at + 1] == "//" { while at <= #source and source#at != "\n" { at += 1 } }
 		else if source[at - 1..<at + 1] == "/*" {
@@ -58,7 +60,7 @@ json_read(source: text, at: int): list := {
 	if first == "{" { return json_object_read(source, at + 1) }
 	if first == "[" { return json_array_read(source, at + 1) }
 	if first == "\"" or first == "'" { return json_text_read(source, at + 1, first) }
-	if first in JSON_NUMBER_CHARACTERS { return json_number_read(source, at) }
+	if json_number_char(first) { return json_number_read(source, at) }
 	word = json_word_read(source, at)
 	if word#1 in JSON_LITERALS { return [JSON_LITERALS[word#1], word#2] }
 	raise json_refusal(source, "unexpected " + first)
@@ -83,7 +85,7 @@ json_array_read(source: text, at: int): list := {
 	at = json_skipped(source, at)
 	while at <= #source and source#at != "]" {
 		item = json_read(source, at)
-		items += [item#1]
+		items.add(item#1)
 		at = json_after_item(source, item#2, "]")
 	}
 	if at > #source { raise json_refusal(source, "no closing ]") }
@@ -98,7 +100,11 @@ json_after_item(source: text, at: int, closing: text): int := {
 }
 // a run of plain characters joins the text as one slice, not character by character (card lib-perf-bench)
 json_text_read(source: text, at: int, quote: text): list := {
-	read = ""
+	// no-escape fast path: one slice, no builder (card lib-json-read-perf)
+	start0 = at
+	while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+	if at <= #source and source#at == quote { return [source[start0 - 1..<at - 1], at + 1] }
+	read = source[start0 - 1..<at - 1]
 	while at <= #source and source#at != quote {
 		if source#at == "\\" {
 			escaped = source#(at + 1)
@@ -124,8 +130,22 @@ json_text_read(source: text, at: int, quote: text): list := {
 }
 // a number: a whole one exactly, however long, one with a fraction or an exponent a float
 json_number_read(source: text, at: int): list := {
+	// integer fast path: accumulate while scanning; fall through for fraction/exponent/extra (card lib-json-read-perf)
 	end = at
-	while end <= #source and source#end in JSON_NUMBER_CHARACTERS { end += 1 }
+	if end <= #source and (source#end == "-" or source#end == "+") { end += 1 }
+	start = end
+	n = 0
+	while end <= #source and is_digit(source#end) {
+		n = n * 10 + ord(source#end) - 48
+		end += 1
+	}
+	if end > start and (end > #source or not json_number_char(source#end)) {
+		if end - start > 1 and source#start == "0" { raise json_refusal(source, "a bad number " + source[at - 1..<end - 1]) }
+		if source#at == "-" { return [0 - n, end] }
+		return [n, end]
+	}
+	end = at
+	while end <= #source and json_number_char(source#end) { end += 1 }
 	digits = source[at - 1..<end - 1]
 	if not json_number_valid(digits) { raise json_refusal(source, "a bad number " + digits) }
 	fractional = "." in digits or "e" in digits or "E" in digits
@@ -161,9 +181,14 @@ json_number_valid(digits: text): bool := {
 	at > n
 }
 whole_number(digits: text): int := {
+	at = 1
 	negative = digits#1 == "-"
+	if negative or digits#1 == "+" { at = 2 }
 	n = 0
-	for digit in digits { if digit != "-" and digit != "+" { n = n * 10 + ord(digit) - 48 } }
+	while at <= #digits {
+		n = n * 10 + ord(digits#at) - 48
+		at += 1
+	}
 	if negative then 0 - n else n
 }
 // a \uXXXX escape at the backslash: [its text, the place after]; the 4 hex digits (either case) are read by code point,

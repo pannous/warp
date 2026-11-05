@@ -532,6 +532,12 @@ definition_start(source: text, word: text): any := {
 	}
 	ø
 }
+# `3 then twice` (decision then-not-pipe): `then` is only the branch word, the pipe is `|>`; ø after `if c`, whose
+# branch may be a function (`if wanted then float_pi`)
+then_not_pipe(value: Node, function: Node): Node := {
+	if is_key(value, Op.If) or is_key(value, Op.While) { return ø }
+	throw "`${spelled(value)} then ${spelled(function)}` is no pipe: `then` is only the branch word, pipe with `${spelled(value)} |> ${spelled(function)}`"
+}
 # `twice.description`: a word a function has none of, the compile refused with the word it means
 misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
@@ -716,6 +722,7 @@ rule_words = {
 	law_check: law_check,
 	leading_unit: leading_unit,
 	misnamed: misnamed,
+	then_not_pipe: then_not_pipe,
 	module_help: module_help,
 	module_named: module_named,
 	module_word_help: module_word_help,
