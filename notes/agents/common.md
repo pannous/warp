@@ -175,6 +175,9 @@ before asking a question). After a context swap, this file and your role file be
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
   main right away (user 2026-10-26). Then `todo done <card> <commit>`. The full suite runs
   only at rare intervals, in the background.
+- Express mode (user 2026-11-05): a phase lands as soon as its smoke (+ self-check and gate for core/) is green;
+  never wait for slower tests. The next phase starts at once, branched from that tip; what the slower tests find is
+  fixed forward as new commits, never by rewriting the landed phase. Only a red smoke on the merge stops the next phase.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
 - Never retire holding a card: done, or `todo release <card> "done: …; left: …; branch: …"`.
 - After the push remove your worktree and branches (local and remote). Deleting merged/stale things needs no
