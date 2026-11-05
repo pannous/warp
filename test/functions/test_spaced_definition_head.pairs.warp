@@ -1,0 +1,10 @@
+# decision spaced-definition-head: a definition head's parentheses are optional at a statement's start
+'square x := x*x; square 3'	9
+'add a b := a + b; add(2, 3)'	5
+'square x := x*x; [square 2, square(4)]'	[4, 16]
+'f(x) := x + 1; f 2'	3
+'y = 2; z := y * 3; z'	6
+'xs = [1, 2]; count xs'	2
+# only at a statement's start: inside a list item or an operand no definition
+'[a b := 1]'	error
+'y = square x := 3'	error
