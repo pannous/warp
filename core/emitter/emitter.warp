@@ -976,6 +976,8 @@ def interned_symbol(body: Body, word: text): TypedCode {
 # `kept·<global>` makes it at its first call (until then the global holds a node of another kind) and gives it, so a
 # use is that call, not the making written out again (card main-constant-tables); right also in a fresh instance whose
 # main never ran (a host's task)
+# whether the compile wants the module whole, runtime and all; no when it links it apart (compiler.warp linked_bytes)
+global whole_module_wanted = yes
 global kept_functions = {}
 def kept_once(name: text, index: list, making: function): TypedCode {
 	if not kept_functions.has(name) {
@@ -1669,7 +1671,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }
-			module_bytes(module.order)
+			if whole_module_wanted then module_bytes(module.order) else []
 		}
 	} catch refusal {
 		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
