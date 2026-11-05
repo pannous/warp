@@ -8,8 +8,14 @@ declared_operators_extension = Extension{name: "declared_operators", prescans: {
 
 # the operators this parse knows
 declared_in(p: Parser): list := p.scans.get(OPERATORS_SCAN) ?? []
-# The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø
-def declared_operator_at(p: Parser): DeclaredOperator? := longest_spelled_at(p, declared_in(p), operator => operator.glyph)
+# The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø; a
+# longer built-in or alias spelling there wins (maximal munch): `a··b` beside a declared `·` is `··`
+def declared_operator_at(p: Parser): DeclaredOperator? := {
+	operator = longest_spelled_at(p, declared_in(p), operator => operator.glyph)
+	if operator == ø { return ø }
+	spelled = operator_at(p)
+	if count(spelled) > 0 and spelled#1.length > operator.glyph.length then ø else operator
+}
 
 # `√16`: a declared prefix operator and its operand; its glyph is beyond ASCII (is_operator_glyph), the cheap test first
 def read_declared_prefix(p: Parser): Node := {

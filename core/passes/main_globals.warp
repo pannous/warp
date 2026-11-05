@@ -14,9 +14,10 @@ counting_operators = ["++", "--"]
 in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
 # the operators a changed target is reached through: `xs#i`, `p.x`, the declared `k: int`
 target_operators = ["#", ".", ":"]
-# a name the compiler makes, `match·bound`, `index·3`, which the program never wrote: never the user's to decide
+# a name the compiler makes, `match·bound`, `index·3`, which the program never wrote: never the user's to decide; an
+# operator's function, operator_· of `x·y`, the program writes by its glyph
 made_name_mark = "·"
-is_made_name(name: text): bool := name.contains(made_name_mark)
+is_made_name(name: text): bool := name.contains(made_name_mark) and not name.starts_with(OPERATOR_FUNCTION_PREFIX)
 # a name only the compiler binds in the body, a match arm's `t = match·bound#"t"`: each value it gets reads a made name
 bound_by_compiler(body: Node, name: text): bool := {
 	values = assigned_values(body, name)

@@ -98,7 +98,7 @@ zero_fill(count: int, filler: Node): list := {
 list_sum(xs: list, computed: Node): Node := computed
 # The indexes of the big maps looked up last (maps.warp map_index; card rebuild-speed), one per slot: the entries
 # indexed and the table (each wrapped as a list's node), how many entries the table covers (ø or -1: the slot is free)
-# and when the slot was last looked up, by the count of lookups. An index stays right while entries are only added at
+# and whether it was looked up since the clock hand last passed it (1, else 0). An index stays right while entries are only added at
 # the end (the next lookup takes them on) or replaced by one of the same name (field_with); any other change in place
 # (map_without, node_set_at, list_pop) forgets that index alone. Four slots were too few: the emitter looks up more big
 # maps (its functions, runtime words, globals, kinds) between two lookups of its texts, whose index was made anew each time
@@ -108,11 +108,13 @@ global index_entries = []
 global index_tables = []
 global index_covered = []
 global index_used = []
-global index_clock = 0
+# the slot least_recent_slot looked at last: it sweeps the slots as a clock, giving a slot looked up since a second chance
+# (the second-chance clock, where a count of lookups per slot boxed a new int at every lookup)
+global index_hand = 0
 # the slot index_slot found last: a run of lookups in one map (a parser's fields, read again and again) finds it first
 global index_last = 0
 slot_free(slot: int): bool := is_null(index_covered#slot) or unboxed_int(index_covered#slot) < 0
-holds_entries(slot: int, entries: list): bool := not slot_free(slot) and same_list(unboxed_list(index_entries#slot), entries)
+holds_entries(slot: int, entries: list): bool := not is_null(index_entries#slot) and same_list(unboxed_list(index_entries#slot), entries) and not slot_free(slot)
 # the slot holding these entries' index, 0 for none
 index_slot(entries: list): int := {
 	if index_last > 0 and holds_entries(index_last, entries) { return index_last }
@@ -124,29 +126,50 @@ index_slot(entries: list): int := {
 	}
 	for slot in 1 to index_slots() {
 		if holds_entries(slot, entries) {
-			index_last = slot
-			return slot
+			index_last = slot_moved_forward(slot)
+			return index_last
 		}
 	}
 	0
 }
-# the slot a new map's index takes: a free one, else the one looked up least recently
+# a slot found by the search swapped halfway to the front, so the maps looked up most sit where the search starts
+# (it compared each slot in turn: 5% of compiling compiler.warp); its new place
+slot_moved_forward(slot: int): int := {
+	to = max_int(int_quotient(slot, 2), 1)
+	swapped(index_entries, slot, to)
+	swapped(index_tables, slot, to)
+	swapped(index_covered, slot, to)
+	swapped(index_used, slot, to)
+	to
+}
+swapped(items: list, a: int, b: int): int := {
+	held = items#a
+	items#a = items#b
+	items#b = held
+	0
+}
+# the slot a new map's index takes: the next free one or one not looked up since the hand last passed it, the hand
+# clearing the mark of each it passes (within two turns one is found)
 least_recent_slot(): int := {
-	slot = 1
-	for candidate in 2 to index_slots() {
-		if not slot_free(slot) and (slot_free(candidate) or unboxed_int(index_used#candidate) < unboxed_int(index_used#slot)) { slot = candidate }
+	for turn in 1 to 2 * index_slots() {
+		index_hand = int_remainder(index_hand, index_slots()) + 1
+		if slot_free(index_hand) or unboxed_int(index_used#index_hand) == 0 { return index_hand }
+		index_used#index_hand = 0
 	}
-	slot
+	index_hand
 }
 slot_table(slot: int): list := unboxed_list(index_tables#slot)
 slot_covered(slot: int): int := unboxed_int(index_covered#slot)
+# a slot holding the entries' index, marked looked up; written only when it changed: a lookup that found the index
+# as it was wrapped the lists anew at every lookup
 hold_index(slot: int, entries: list, covered: int, table: list): int := {
-	index_clock += 1
 	index_last = slot
-	index_used#slot = index_clock
-	index_entries#slot = list_node(Kind.List, entries)
-	index_tables#slot = list_node(Kind.List, table)
-	index_covered#slot = covered
+	index_used#slot = 1
+	if not holds_entries(slot, entries) or slot_covered(slot) != covered or not same_list(slot_table(slot), table) {
+		index_entries#slot = list_node(Kind.List, entries)
+		index_tables#slot = list_node(Kind.List, table)
+		index_covered#slot = covered
+	}
 	0
 }
 # the index of these entries forgotten, after a change in place an index cannot follow; the other maps keep theirs

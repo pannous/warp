@@ -197,11 +197,6 @@ json_hex_at(source: text, at: int): list := {
 	[n, join([chr(points[i]) for i in 4 ..< count(points)], "")]
 }
 json_hex4(code: int): text := join([HEX_DIGITS[(code /! (16 ** k)) % 16] for k in [3, 2, 1, 0]], "")
-hex_value(digits: text): int := {
-	n = 0
-	for digit in digits.lower() { n = n * 16 + HEX_DIGITS.find(digit) - 1 }
-	n
-}
 // a bare word, a JSON5 key or a literal: up to a space or a character of JSON's syntax
 json_word_read(source: text, at: int): list := {
 	end = at
