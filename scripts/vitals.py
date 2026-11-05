@@ -231,15 +231,16 @@ def build_history(record, by_seed, landed):
             instructions = int(record_field(timing, "instructions")[0])
             cpu = sum(float(record_field(timing, key)[1]) for key in ("user", "sys"))
             peak = int(record_field(timing, "maximum")[0]) // 2**20
-            builds.append((os.path.getmtime(timing), seed, commit, instructions, peak, cpu))
+            megabytes = os.path.getsize(folder.removesuffix(".record") + ".wasm") / 1e6
+            builds.append((os.path.getmtime(timing), seed, commit, instructions, peak, cpu, megabytes))
         except (OSError, TypeError, ValueError, IndexError):
             continue
     seen_seeds, leanest = set(), {}
-    for _, seed, commit, instructions, peak, cpu in sorted(builds):
+    for _, seed, commit, instructions, peak, cpu, megabytes in sorted(builds):
         cold = by_seed and seed is not None and seed not in seen_seeds
         seen_seeds.add(seed)
         if not cold and (commit not in leanest or instructions < leanest[commit][2] * 1e12):
-            leanest[commit] = [landed[commit], commit[:10], round(instructions / 1e12, 3), peak, round(cpu, 1)]
+            leanest[commit] = [landed[commit], commit[:10], round(instructions / 1e12, 3), peak, round(cpu, 1), round(megabytes, 2)]
     return sorted(leanest.values())
 
 
