@@ -124,7 +124,10 @@ json_number_read(source: text, at: int): list := {
 	while end <= #source and source#end in JSON_NUMBER_CHARACTERS { end += 1 }
 	digits = source[at - 1..<end - 1]
 	fractional = "." in digits or "e" in digits or "E" in digits
-	[if fractional then float(digits) else whole_number(digits), end]
+	// two returns, not one `if … then float else int` inside the list, which typed every number a float (card
+	// samples-dogfood-apps: a todo id read back from JSON refused `next_id(…): int`)
+	if fractional { return [float(digits), end] }
+	[whole_number(digits), end]
 }
 whole_number(digits: text): int := {
 	negative = digits#1 == "-"

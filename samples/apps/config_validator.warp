@@ -1,0 +1,79 @@
+#!/usr/bin/env warp
+# A service config in TOML checked against a JSON Schema: every problem named by its JSON Pointer, then the
+# defaults filled in and the result shown as JSON (toml, json, json_tools)
+use toml
+use json
+use json_tools
+
+schema = json("{
+	\"type\": \"object\",
+	\"required\": [\"service\", \"server\", \"database\"],
+	\"additionalProperties\": false,
+	\"properties\": {
+		\"service\": {\"type\": \"string\", \"minLength\": 3, \"pattern\": \"^[a-z][a-z0-9-]*$\"},
+		\"server\": {
+			\"type\": \"object\",
+			\"required\": [\"port\"],
+			\"properties\": {
+				\"host\": {\"type\": \"string\"},
+				\"port\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 65535},
+				\"workers\": {\"type\": \"integer\", \"minimum\": 1}
+			}
+		},
+		\"database\": {
+			\"type\": \"object\",
+			\"required\": [\"url\"],
+			\"properties\": {
+				\"url\": {\"type\": \"string\", \"pattern\": \"^postgres://\"},
+				\"pool\": {\"type\": \"integer\", \"minimum\": 1, \"maximum\": 100}
+			}
+		},
+		\"features\": {\"type\": \"array\", \"items\": {\"enum\": [\"metrics\", \"tracing\", \"cache\"]}, \"uniqueItems\": true}
+	}
+}")
+
+defaults = {server: {host: "0.0.0.0", workers: 4}, database: {pool: 10}, features: []}
+
+good = "service = \"billing-api\"
+features = [\"metrics\", \"cache\"]
+
+[server]
+port = 8080
+
+[database]
+url = \"postgres://db.internal/billing\"
+pool = 20
+"
+
+bad = "service = \"Billing API\"
+debug = true
+features = [\"metrics\", \"metrics\", \"telepathy\"]
+
+[server]
+port = 70000
+workers = 0
+
+[database]
+url = \"mysql://db.internal/billing\"
+"
+
+broken = "service = \"x\"\n[server\nport = 1\n"
+
+check(name: text, source: text) := {
+	print("== " + name)
+	config = try { parse_toml(source) } catch e { print("not TOML: " + e.message); ø }
+	if config != ø {
+		problems = json_validate(config, schema)
+		if count(problems) == 0 {
+			print("valid; with defaults:")
+			print(to_json(json_merge_patch(defaults, config)))
+		} else {
+			print(str(count(problems)) + " problems:")
+			for problem in problems { print("  " + problem) }
+		}
+	}
+}
+
+check("good.toml", good)
+check("bad.toml", bad)
+check("broken.toml", broken)
