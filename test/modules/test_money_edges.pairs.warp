@@ -1,0 +1,21 @@
+// lib/money.warp edges (card lib-money-time-edges): odd allocations, refusals, mixed currencies, parse/format round-trips
+'use money; [p.minor for p in money_allocate(Money(2, "EUR"), [1, 1, 1, 1, 1])]'	[1, 1, 0, 0, 0]
+'use money; [p.minor for p in money_allocate(Money(-2, "EUR"), [1, 1, 1])]'	[-1, -1, 0]
+'use money; [p.minor for p in money_allocate(Money(101, "EUR"), [1/7, 6/7])]'	[14, 87]
+'use money; [p.minor for p in money_allocate(Money(10, "KWD"), [3, 0, 3])]'	[5, 0, 5]
+'use money; [p.minor for p in money_split(Money(0, "EUR"), 4)]'	[0, 0, 0, 0]
+'use money; [p.minor for p in money_allocate(Money(5, "EUR"), [1, 0.5])]'	[3, 2]
+'use money; try { money_allocate(Money(5, "EUR"), [-1/2, 1]) } catch e { e.message }'	"money: a negative ratio -1/2"
+'use money; try { money_of(1, "EUR") - money_of(1, "JPY") } catch e { e.message }'	"money: EUR - JPY mixes currencies; convert one first"
+'use money; try { money_of(1, "EUR") < money_of(1, "USD") } catch e { e.message }'	"money: EUR compared with USD mixes currencies; convert one first"
+'use money; try { money_add(money_of(1, "EUR"), 1) } catch e { e.message }'	"money: + needs two Money amounts, not 1"
+'use money; [money_parse(money_format(Money(m, "EUR"), s)).minor for m in [1, 9, 10, 99, 100, -1, 100000] for s in ["en", "de"]]'	[1, 1, 9, 9, 10, 10, 99, 99, 100, 100, -1, -1, 100000, 100000]
+'use money; money_parse(money_format(Money(-7, "BHD"), "de")).text()'	"BHD -0.007"
+'use money; try { money_parse("") } catch e { e.message }'	"money_parse:  names no currency; pass {currency: …}"
+'use money; try { money_parse("€") } catch e { e.message }'	"money_parse: € is no amount"
+'use money; try { money_parse("€1,2,3", {style: "de"}) } catch e { e.message }'	"money_parse: €1,2,3 is no amount"
+'use money; try { money_parse("€abc") } catch e { e.message }'	"money_parse: €abc is no amount"
+'use money; try { money_parse("1", {currency: "EUR", style: "fr"}) } catch e { e.message }'	"money_parse: the style is en or de, not fr"
+'use money; try { money_format(Money(1, "EUR"), "fr") } catch e { e.message }'	"money_format: the style is en or de, not fr"
+'use money; try { money_of("1.5.0", "EUR") } catch e { e.message }'	"money: 1.5.0 is no decimal amount"
+'use money; try { money_of("", "EUR") } catch e { e.message }'	"money:  is no decimal amount"
