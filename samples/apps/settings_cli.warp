@@ -1,0 +1,88 @@
+#!/usr/bin/env warp
+# A settings tool, git config style: keys kept as JSON in a file (cli choices, json, os, file)
+#   warp samples/apps/settings_cli.warp set theme dark   |   get theme   |   list --format keys   |   unset theme
+# without arguments it plays a short session in a fresh file under $TMPDIR
+use json
+use os
+use file
+use cli
+
+options = [
+	{name: "file", short: "f", help: "the JSON file of the settings (else warp_settings_demo.json in $TMPDIR)"},
+	{name: "scope", short: "s", choices: ["user", "project"], default: "user", help: "which settings"}
+]
+commands = {
+	set: {help: "set a key to a value", options: [{name: "key", positional: yes}, {name: "value", positional: yes}]},
+	get: {help: "show one key", options: [{name: "key", positional: yes}, {name: "default", short: "d", default: ""}]},
+	unset: {help: "remove a key", options: [{name: "key", positional: yes}]},
+	list: {help: "show every key", options: [{name: "format", choices: ["lines", "keys", "json"], default: "lines"}]}
+}
+# a mistake on the command line is shown as its message, never a trace
+parsed(argv: list): map := try { parse_commands(options, commands, argv) } catch e { print(e.message); {help: no, command: ø} }
+
+given = if count(args) > 0 then parsed(args) else {help: no, command: ø}
+store = given.get("file") ?? temp_folder() + "/warp_settings_demo.json"
+
+load(): map := if exists(store) then parse_json(read(store)) else {user: {}, project: {}}
+keep(all: map) := write(store, to_json(all))
+
+set_key(scope: text, key: text, value: text) := {
+	all = load()
+	all[scope][key] = value
+	keep(all)
+	print(scope + "." + key + " = " + value)
+}
+
+get_key(scope: text, key: text, fallback: text) := {
+	these = load()[scope]
+	if key in these { print(these[key]) }
+	else if fallback != "" { print(fallback + " (default)") }
+	else { print("no " + scope + "." + key) }
+}
+
+unset_key(scope: text, key: text) := {
+	all = load()
+	these = all[scope]
+	if key in these {
+		rest = {}
+		for k in keys(these) { if k != key { rest[k] = these[k] } }
+		all[scope] = rest
+		keep(all)
+		print("removed " + scope + "." + key)
+	} else { print("no " + scope + "." + key) }
+}
+
+list_keys(scope: text, format: text) := {
+	these = load()[scope]
+	if format == "json" { print(to_json(these)) }
+	else if format == "keys" { print(join(keys(these), " ")) }
+	else { for k in keys(these) { print(k + " = " + these[k]) } }
+}
+
+command(o: map) := {
+	verb = o["command"]
+	scope = o["scope"]
+	if verb == "set" { set_key(scope, o["key"], o["value"]) }
+	else if verb == "get" { get_key(scope, o["key"], o["default"]) }
+	else if verb == "unset" { unset_key(scope, o["key"]) }
+	else if verb == "list" { list_keys(scope, o["format"]) }
+}
+
+# one parsed command line: the help, or the command it names (nothing after a mistake)
+act(o: map) := {
+	if not o["help"] { if o["command"] != ø { command(o) } }
+	else if o["command"] == ø { print(cli_commands_help("settings", options, commands)) }
+	else { print(cli_command_text("settings", commands, o["command"])) }
+}
+
+if count(args) > 0 {
+	act(given)
+} else {
+	keep({user: {}, project: {}})
+	for argv in [["set", "theme", "dark"], ["set", "editor", "vim"], ["-s", "project", "set", "indent", "tabs"], ["get", "theme"], ["get", "font", "-d", "mono"], ["--scope=project", "list"], ["list", "--format", "keys"], ["list", "--format=json"], ["unset", "editor"], ["list"], ["list", "--format", "yaml"], ["-s", "team", "list"], ["remove", "theme"], [], ["list", "--help"], ["--help"]] {
+		print("$ settings " + join(argv, " "))
+		act(parsed(argv))
+	}
+	print("stored: " + read(store))
+	print("demo file removed: " + str(delete_file(store)))
+}

@@ -41,6 +41,7 @@ def csv_rows(t: text): list {
 			field += t[start - 1 ..< i - 1]
 		}
 	}
+	if quoted { raise "csv: unclosed quote" }
 	if count(row) > 0 or field != "" { row.add(field); rows.add(row) }
 	rows
 }

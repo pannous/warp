@@ -1,0 +1,9 @@
+# a local counted by literal steps (decision nat-and-int: values proven small stay i64) counts right
+«def f(n: int): int { i = 0; while i < n { i = i + 1 }; i }; f(1000)»	1000
+«def f(n: int): int { i = 10; while i > n { i -= 3 }; i }; f(0)»	-2
+«def f(s: text): int { at = 0; found = 0; while at < s.length { if s[at] == 'a' { found += 1 }; at = at + 1 }; found }; f("banana")»	3
+«def f(n: int): int { i = 0; j = 0; while i < n { j = i + 2; i = j }; i }; f(7)»	8
+# a local also given a non-int value stays a node
+«def f(n: int) { i = 0; while i < n { i = i + 1 }; i = "done"; i }; f(3)»	'done'
+# a local that doubles is no counter: it grows past 64 bits
+«def f(n: int) { x = 1; i = 0; while i < n { x = x + x; i += 1 }; x }; f(70)»	1180591620717411303424
