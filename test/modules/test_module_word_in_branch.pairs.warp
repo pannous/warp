@@ -1,0 +1,6 @@
+// card pi-unknown-name: a module's word brings its module wherever it stands, also in a ternary's branches
+'b = yes ? pi : 4; b'	π
+'b = no ? 4 : tau; b'	2π
+'b = (no ? 1 : pi) + 1; b'	4.141592653589793
+// a colon key outside a ternary still binds its name: the program's own pi
+'pi: int = 3; yes ? pi : 4'	3
