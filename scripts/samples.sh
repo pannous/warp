@@ -12,7 +12,9 @@ source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/results-header.sh"
 WARP=${WARP:-$warp_binary}
 # a sample's budget is CPU time, which a loaded machine doesn't shrink (a 30 s wall clock timed out the sound samples
-# beside three builds, 11-03 and 11-04: harmony takes 11 s alone); the wall clock only ends a sample that waits forever
+# beside three builds, 11-03 and 11-04: harmony takes 11 s alone); the wall clock only ends a sample that waits forever,
+# WALL_SECONDS stretched by the runnable processes per core (load 40 on 10 cores gave a sample a quarter of one, so its
+# 30 s of CPU outlasted 120 s: the nightly of 11-05)
 CPU_SECONDS=30
 WALL_SECONDS=120  # core/native/tests.warp keeps the same rule for `warp test`
 CPU_LIMIT_HIT=152  # 128 + SIGXCPU
@@ -35,21 +37,28 @@ mkdir -p "$results/out"
 # 122 at 08:12 was the installed one's, the trees' own went 131 to 132)
 [ -f "$tree/lib/warp.wasm" ] && export WARP_LIB=${WARP_LIB:-$tree/lib}
 
+wall_seconds() {
+	local load cores
+	load=$(LC_ALL=C uptime | sed -E 's/.*load averages?: *([0-9.]+).*/\1/')
+	cores=$(getconf _NPROCESSORS_ONLN)
+	awk -v wall="$WALL_SECONDS" -v load="$load" -v cores="$cores" 'BEGIN { share = load / cores; printf "%d", wall * (share > 1 ? share : 1) }'
+}
 # one <sample>: its line of the results
 one() {
-	local out=$results/out/$(echo "$1" | tr / _)
+	local out=$results/out/$(echo "$1" | tr / _) wall
 	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
-	(cd "$tree" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_PORT=$SERVER_PORT timeout "$WALL_SECONDS" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
+	wall=$(wall_seconds)
+	(cd "$tree" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
 	first=$(grep -av '^wasm-rt warning\|^warning: ' "$out.err" | grep -am1 . | tr '\t' ' ' | cut -c1-200)
-	[ $status -eq 124 ] && { verdict=TIME; first="still running after ${WALL_SECONDS} s"; }
+	[ $status -eq 124 ] && { verdict=TIME; first="still running after ${wall} s"; }
 	[ $status -eq $CPU_LIMIT_HIT ] && { verdict=TIME; first="used its ${CPU_SECONDS} s of CPU"; }
 	grep -q "$EXPECTED_FAILURE" "$tree/$1" && verdict=EXP
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
-export -f one
+export -f one wall_seconds
 export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE
 
 report=$results/report.txt
