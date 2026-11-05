@@ -1,6 +1,7 @@
 // The standard library module text (notes/stdlib.md): standard functions of every program, `repeat(t, 2)` or `t.repeat(2)`, no `use` needed (`use text` only for the qualified `text.repeat(t, 2)`)
 use list
 use letter_ranges
+use slugs
 repeat(t: text, n: int) := if n < 0 then raise "repeat needs a count of at least 0, not " + str(n) else t * n
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
 pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
@@ -41,7 +42,7 @@ capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
 center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
 title(t): text := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
-slug(t): text := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
+slug(t): text := slugify(t)
 truncate(t, width) := if width < 1 then raise "truncate needs a width of at least 1, not " + str(width) else if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text): list {
@@ -87,31 +88,12 @@ remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] els
 remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0: count(t) - count(suffix)] else t
 is_palindrome(t): bool := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
 word_count(t): int := count(words(t))
-// "helloWorld", "Hello World", "hello-world" → "hello_world"
-// lower_snake words: a capital starts a word after a lower letter or digit, and an acronym ends before its last
-// capital when a lower letter follows ("HTTPServer" → "http_server", "helloWorld" → "hello_world")
-snake_case(t): text := {
-	out = ""
-	cs = chars(t)
-	n = count(cs)
-	for i in 1 to n {
-		c = cs#i
-		if is_alphanumeric(c) or is_unicode_letter(c) {
-			if is_upper(c) and out != "" and last(out) != "_" {
-				previous = cs#(i - 1)
-				following = if i < n then cs#(i + 1) else ""
-				if is_lower(previous) or is_digit(previous) or (is_upper(previous) and following != "" and is_lower(following)) { out = out + "_" }
-			}
-			out = out + lower(c)
-		} else if out != "" and last(out) != "_" {
-			out = out + "_"
-		}
-	}
-	out
-}
-kebab_case(t): text := join(split(snake_case(t), "_"), "-")
+// "helloWorld", "Hello World", "hello-world" → "hello_world"; one implementation in slugs (acronyms stay whole:
+// "HTTPServer" → "http_server")
+snake_case(t): text := to_snake(t)
+kebab_case(t): text := to_kebab(t)
 // "hello_world" → "helloWorld"
-camel_case(t): text := { parts = [p for p in split(snake_case(t), "_") if p]; if parts is empty then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
+camel_case(t): text := to_camel(t)
 // each line indented by n spaces
 indent(t, n): text := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
