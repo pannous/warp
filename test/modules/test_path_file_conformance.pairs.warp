@@ -1,0 +1,7 @@
+// card lib-path-file-conformance: path and file words against python's posixpath, pathlib and os
+# path_dot_names_have_no_extension
+'use path; [extension(".."), stem(".."), extension("a/.."), extension("a.tar.gz"), stem(".bashrc")]'	["", "..", "", ".gz", ".bashrc"]
+# file_exists_of_empty_path
+'use file; exists("")'	no
+# file_append_and_glob_without_host_words
+'use file; d = "/tmp/warp-pathfile-test"; write(d + "/a.txt", "a"); write(d + "/b.txt", "b"); write(d + "/.c.txt", "c"); append_file(d + "/a.txt", "z"); [read(d + "/a.txt"), glob(d + "/*.txt")]'	["az", ["/tmp/warp-pathfile-test/a.txt", "/tmp/warp-pathfile-test/b.txt"]]
