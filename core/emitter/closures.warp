@@ -88,20 +88,22 @@ dispatcher_argument(i: int): text := "argument" + (i + 1)
 dispatcher(arity: int): any := {
 	made_late(closure_call_prefix + arity, ValueKind.Node, ["closure"] + range_list(arity).map(dispatcher_argument))
 }
-# a function over closures whose code is written once the program's closures are known, made at its first call
+# a function whose code is written once the module's closures and classes are known, made at its first call; behind
+# runtime.wasm a runtime word of that name is runtime.wasm's (the closure calls and late words, written there once)
 made_late(name: text, result: ValueKind, parameters: list): any := {
+	if prepended() and name in module.runtime { return module.runtime[name] }
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
-	f = if is_runtime_hook(name) then runtime_hook(name, parameters) else added_function(name, parameters.map(p => ValueKind.Node), result, parameters)
+	f = added_function(name, parameters.map(p => ValueKind.Node), result, parameters)
 	f.code = [op.unreachable]
 	module.dispatchers += [f]
 	f
 }
-# the runtime's words whose code the program decides (late_code), each its result and parameters: with the closure
-# calls runtime.wasm's hooks
+# the runtime's words over closures and instances (late_code), each its result and parameters: written once in
+# runtime.wasm, calling through the value's entry or descriptor
 late_words = {closure_text: [ValueKind.Text, ["closure"]], instance_set: [ValueKind.Int, ["m", "name", "value"]],
 	instance_entries: [ValueKind.Node, ["m"]], instance_field_at: [ValueKind.Node, ["m", "index"]], instance_place: [ValueKind.Int, ["m", "name"]],
-	is_class_instance: [ValueKind.Bool, ["m"]], shown_big_int: [ValueKind.Text, ["n"]], instance_show: [ValueKind.Node, ["m"]], instance_float: [ValueKind.Node, ["m"]]}
+	is_class_instance: [ValueKind.Bool, ["m"]], instance_show: [ValueKind.Node, ["m"]], instance_float: [ValueKind.Node, ["m"]]}
 late_word(name: text): any := made_late(name, late_words[name]#1, late_words[name]#2)
 # the text its entry holds
 closure_text_code(f: Function): any := { f.code = entry_field([op.local_get, 0], 1) }
@@ -122,47 +124,35 @@ function_name(target: text): text := {
 }
 # the code of a function made late (made_late), once the program's closures and classes are known
 late_code(f: Function): int := {
-	if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name == instance_place_name { instance_place_code(f) } else if f.name == is_class_instance_name { is_class_instance_code(f) } else if f.name == instance_show_name { instance_show_code(f) } else if f.name == instance_float_name { instance_float_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
+	if f.name == closure_text_name { closure_text_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name == instance_place_name { instance_place_code(f) } else if f.name == is_class_instance_name { is_class_instance_code(f) } else if f.name == instance_show_name { instance_show_code(f) } else if f.name == instance_float_name { instance_float_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
 	0
 }
-# a class value called, `make(c, xs) := c(xs#1, xs#2)` of `make(P, [3, "a"])`: the instance `P(3, "a")` makes, for each
-# class of at least that many fields, built from the dispatcher's arguments as positional_instance builds a call's
-def class_value_calls(f: Function, arity: int): list {
-	scope = new_body(f)
-	# a runtime hook's signature names no parameters: its locals in their order, the closure, then the arguments
-	parameters = ["closure"] + range_list(arity).map(dispatcher_argument)
-	for name in parameters { if name not in scope.names { local_index(scope, name, ValueKind.Node) } }
-	code = []
-	for class_name in module.classes.keys.filter(name => #module.classes[name].keys >= arity) {
-		named = runtime_call("names_class", [TypedCode(ValueKind.Node, [op.local_get, 0]), text_value_of(class_name)])
-		code += named.code + [op.if, no_value] + boxed(positional_instance(scope, class_name, parameters[1 ..].map(name => symbol(name)))) + [op.return, op.end]
-	}
-	f.locals = scope.kinds[#parameters ..]
-	# behind one test that the closure is a type value at all: a closure call of any other value skips the chain
-	if count(code) == 0 then code else runtime_call("names_a_type", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code + [op.if, no_value] + code + [op.end]
-}
-# an instance called, `room(signal)`, `A(1)(2)`: the program's call taking it first (trait Callable), its method or
+# an instance called, `room(signal)`, `A(1)(2)`: its module's call taking it first (trait Callable), its method or
 # function `call(self, …)`
 callable_words = ["call", "call·method"]
-def instance_calls(closure: list, arity: int): list {
-	named = callable_words.filter(name => name in module.functions and #module.functions[name].signature.parameters == arity + 1)
-	if not named { return [] }
-	values = [TypedCode(ValueKind.Node, closure)] + range_list(arity).map(j => TypedCode(ValueKind.Node, [op.local_get] + uleb(j + 1)))
-	kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + boxed(call_values(module.functions[named#1], values)) + [op.return, op.end]
-}
-# a value called that is no closure fails in not_a_function; a closure's entry is called by reference, one of another
-# arity fails in wrong_number_of_arguments
+# a value called: a class value, `make(c, xs) := c(xs#1, xs#2)` of `make(P, [3, "a"])`, constructs by its descriptor
+# (`P(3, "a")`); an instance calls its descriptor's call; a closure's entry is called by reference; any other value fails
+# in not_a_function, a closure or instance's call of another arity in wrong_number_of_arguments
 dispatcher_code(f: Function): any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
+	wrong_arity = dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable]
+	arguments = parameters_code(#f.kinds)
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
-	code += class_value_calls(f, arity)
-	code += instance_calls(closure, arity)
-	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
+	# a type value's value is its class's descriptor, ø of a type that is no class
+	type_value = as_node(closure) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(Marked.TypeValue) + [op.i64_eq]
+	described = as_node(closure) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 2])
+	construct = described + gc_code(gc_ops.ref_cast, [gc_type(gc.class)]) + gc_code(gc_ops.struct_get, [gc_type(gc.class), slot_field("construct")])
+	values = node(Kind.List, vector_code(range_list(arity).map(i => [op.local_get] + uleb(i + 1))))
+	constructed = closure + values + construct + gc_code(gc_ops.ref_cast, [gc_type(closure_call_type_prefix + 1)]) + [op.call_ref] + relocatable(relocated.types, gc_type(closure_call_type_prefix + 1))
+	code += type_value + [op.if, no_value] + described + gc_code(gc_ops.ref_test, [gc_type(gc.class)]) + [op.if, no_value] + constructed + [op.return, op.end] + not_a_function + [op.end]
 	call_type = gc_type(closure_call_type_prefix + arity)
+	# an instance: its descriptor's call, of this arity
+	called = descriptor_of(closure) + gc_code(gc_ops.ref_cast, [gc_type(gc.class)]) + gc_code(gc_ops.struct_get, [gc_type(gc.class), slot_field("call")])
+	instance = called + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end] + called + gc_code(gc_ops.ref_test, [call_type]) + [op.i32_eqz, op.if, no_value] + wrong_arity + [op.end] + arguments + called + gc_code(gc_ops.ref_cast, [call_type]) + [op.call_ref] + relocatable(relocated.types, call_type) + [op.return]
+	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + is_described(closure) + [op.if, no_value] + instance + [op.end] + not_a_function + [op.end]
 	entry = entry_field(closure, 0)
-	code += entry + gc_code(gc_ops.ref_test, [call_type]) + [op.i32_eqz, op.if, no_value] + dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable, op.end]
-	arguments = concatenated(range_list(#f.kinds).map(i => [op.local_get] + uleb(i)))
+	code += entry + gc_code(gc_ops.ref_test, [call_type]) + [op.i32_eqz, op.if, no_value] + wrong_arity + [op.end]
 	f.code = code + arguments + entry + gc_code(gc_ops.ref_cast, [call_type]) + [op.call_ref] + relocatable(relocated.types, call_type)
 }
