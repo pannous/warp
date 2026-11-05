@@ -1386,6 +1386,8 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and (if p.iterable then word_ends_header(p) else not word_begins_item(p))
 	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c) or hole_at(p))
 }
+// whether an argument, no operator or guard word, stands here: `x 1`, `x -1`, not `x - 1` or `x and y` (continued)
+def argument_here(p: Parser): bool := (operator_at(p).length == 0 or signed_item_at(p)) and trailing_guard_at(p) == ""
 // a rule's hole `$t` here, which stands where a name does: `$x is a $t` reads as `x is a number` does
 def hole_at(p: Parser): bool := char_here(p) == '$' and is_name_start(char_ahead(p, 1))
 
@@ -2184,6 +2186,10 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		advance(p)
 		skip_spaces(p)
 		operand = expression(p, 155)
+		// a word's argument is the minus's operand too, `-f x` is -(f x), as an operator's operand takes it (decision
+		// negated-call); a list's items stay apart, `[-x 1]`
+		skip_spaces(p)
+		if p.group.bracket != Bracket.Square and argument_here(p) and applies(p, operand, OPERAND_POWERS#2) { operand = spaced([operand, argument(p, not applies_otherwise(p, OPERAND_POWERS#2))]) }
 		// `-7` is the number, written where its sign is
 		// 9223372036854775808 reads as the int -2^63 where ints are 64 bits: `-9223372036854775808` is that int itself
 		if operand is number { return placed_at(p, if operand is int and operand == -9223372036854775807 - 1 then operand else 0 - operand, sign) }
