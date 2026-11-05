@@ -111,8 +111,11 @@ A standard module `<name>` is modules/<name>.wasm, compiled once behind runtime.
 
 **Types.** canonical_type_entries() first, each fixed GC type in its own singleton group in the runtime's order,
 so every module's shared types are the same. Then the module's own class structs (one rec group) and its function
-types. No exported function names a class struct in its type: an instance crosses as $Node, $Instance or anyref
-and is cast inside.
+types. A library's own classes may cross the boundary typed. They sit in their own rec group, whose exact shape
+(field order and types, supertypes, finality) warp.signature carries. Every importer emits that group identically,
+so the two canonicalize to one type. A program class extending one goes in a later group, with the library struct
+as its supertype. Only a program's own classes never appear in a module's signature: they cross as $Node,
+$Instance or anyref and are cast inside.
 
 **Exports.**
 - Every word under its written name. A word with several arity variants exports each as `<name>/<arity>`. The plain
