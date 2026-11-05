@@ -124,6 +124,9 @@ $Instance or anyref and are cast inside.
 - A start function `warp/start` that runs the module's global initializers. The host calls it once, after linking
   and before the program's main.
 - `export f(…)` words (host callbacks) keep their names.
+- Each lifted lambda as `warp/closure/<n>`, numbered as the module's closure list. The program's closure
+  dispatcher calls it by number, as the splice path numbers `<module>·<target>` today.
+- Each class method as `Class.method`, which the program's text()/== hook dispatchers call.
 
 **`warp.signature`** is a custom section holding one warp-notation value, readable by the compiler's own parser:
 ```
@@ -131,7 +134,8 @@ $Instance or anyref and are cast inside.
   words: { name: [ { parameters: [[name, type, default?, rest?]…], result: type, block_last: yes?, export: name } … ] },
   classes: { Name: { parent: P?, fields: [[name, type]…], methods: { name: [variant…] } } },
   globals: { name: type }, aliases: { alias: word }, operators: { "±": { power: [140, 141], function: name } },
-  foreign_types: { … }, host: { word: [parameters, result] }, rules: <packed rules>, tags: [ … ] }
+  foreign_types: { … }, host: { word: [parameters, result] }, rules: <packed rules>, tags: [ … ],
+  closures: [[n, target, captured, shown]…] }
 ```
 `warp.module` (the binary layout: kinds, closures, relocations for the splicing path) stays until L5 removes the
 splice. The parse-time union of all modules' `aliases`, `operators`, `block_last` words, `words`→module, `classes`
