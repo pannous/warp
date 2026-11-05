@@ -349,13 +349,24 @@ parse_duration(t: text): int := {
 		unit_start = at
 		while at <= #t and is_letter(t#at) { at += 1 }
 		unit = t[unit_start - 1: at - 1]
-		if not DURATION_UNITS.has(unit) { raise "parse_duration: \"" + t + "\": unknown unit \"" + unit + "\" after " + str(n) + " (d, h, m, s or ms)" }
+		if unit == "" {
+			// a word after blanks is the unit the writer meant: name it rather than calling the unit missing
+			w = at
+			while w <= #t and t#w == ' ' { w += 1 }
+			word_end = w
+			while word_end <= #t and is_letter(t#word_end) { word_end += 1 }
+			unit = t[w - 1: word_end - 1]
+			if unit == "" { duration_refused(t, "a unit is missing after " + str(n) + " (d, h, m, s or ms)") }
+			if DURATION_UNITS.has(unit) { duration_refused(t, "the unit " + unit + " must follow " + str(n) + " without a blank (like 5" + unit + ")") }
+		}
+		if not DURATION_UNITS.has(unit) { duration_refused(t, "unknown unit \"" + unit + "\" after " + str(n) + " (d, h, m, s or ms)") }
 		total += n * DURATION_UNITS[unit]
 		units += 1
 	}
 	if units == 0 { raise "parse_duration: \"" + t + "\" names no duration (like 1h30m, 2d 4h, 500ms)" }
 	total
 }
+duration_refused(t: text, why: text) := raise "parse_duration: \"" + t + "\": " + why
 // the long form: 5400000 → "1 hour 30 minutes", 0 → "0 seconds", 1500 → "1 second 500 milliseconds"
 format_duration_long(ms: int): text := {
 	if ms == 0 { return "0 seconds" }
@@ -369,7 +380,8 @@ counted(n: int, word: text): text := str(n) + " " + word + (if n == 1 then "" el
 // ISO 8601 durations of days and times → milliseconds: "PT1H30M", "P2DT4H", "P1W", "PT0.5S"; years and months have no
 // fixed length, so P1Y and P1M raise, as does any other text
 parse_iso_duration(t: text): int := {
-	if #t < 2 or t#1 != 'P' { raise "parse_iso_duration: \"" + t + "\" does not start with P (like PT1H30M)" }
+	if #t < 2 { raise "parse_iso_duration: \"" + t + "\" is incomplete (like PT1H30M)" }
+	if t#1 != 'P' { raise "parse_iso_duration: \"" + t + "\" does not start with P (like PT1H30M)" }
 	total = 0
 	in_time = no
 	at = 2
@@ -378,7 +390,8 @@ parse_iso_duration(t: text): int := {
 		if t#at == 'T' { if in_time { iso_refused(t, "a second T") }; in_time = yes; at += 1; continue }
 		start = at
 		while at <= #t and (is_digit(t#at) or t#at == '.') { at += 1 }
-		if at == start or at > #t { iso_refused(t, "a number and its designator expected at character " + str(start)) }
+		if at == start { iso_refused(t, "a number and its designator expected at character " + str(start)) }
+		if at > #t { iso_refused(t, "a designator is missing after " + t[start - 1: at - 1]) }
 		n = float(t[start - 1: at - 1])
 		d = t#at
 		at += 1
