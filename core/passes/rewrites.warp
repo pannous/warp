@@ -201,10 +201,10 @@ own_rules_applied(program: Node, source: text): Node := {
 	needs = rule_needs_by_module()
 	taken = std_module_names.filter(module => needs.has(module) and needs[module].split(" ").any(word => mentioned.has(word)))
 	# (a rule of the whole program, `where program`, comes with the module's others)
-	for module in taken { module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program or needed_words(rule).any(word => mentioned.has(word))) }
+	for module in taken { module_rules += rules_of_module(module).filter(rule => rule.place == Place.Program or needed_words(rule).any(word => mentioned.has(word))) }
 	# and with a module using its module: lib/storage.warp's stored values written through by lib/signals.warp's rule
 	for module in taken.flat_map(modules_used_by).filter(module => needs.has(module) and module not in taken) {
-		module_rules += module_rules_of(std_module_path(module), module).filter(rule => rule.place == Place.Program)
+		module_rules += rules_of_module(module).filter(rule => rule.place == Place.Program)
 	}
 	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
 	rules += unbound_rules(module_rules, program)
@@ -559,6 +559,12 @@ first_alphabetic_word(written: text): text := {
 	""
 }
 
+# a standard module's rules: its file's, then those the compiler keeps for it, which run code at compile time (a
+# whole-program rule, one reading $program): extensions/rules/modules/<module>.warp, so the module itself carries none
+# (decision library-zero-bake-plan 1b)
+module_rule_paths(module: text): list := [std_module_path(module), run_library() + COMPILE_TIME_RULES + module + module_extension]
+COMPILE_TIME_RULES = "/extensions/rules/modules/"
+rules_of_module(module: text): list := module_rule_paths(module).flat_map(path => module_rules_of(path, module))
 # the rules of the module at `path`, of its baked parse when it is the bundled one
 module_rules_of(path: text, module: text): list := {
 	source = file_text(path) ?? ""
@@ -704,8 +710,7 @@ rule_needs_by_module(): map := if #STD_RULE_NEEDS > 0 and warp_lib() == ø then 
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {
-		source = file_text(std_module_path(module))
-		needs = if source == ø then [] else rule_needs(source)
+		needs = module_rule_paths(module).flat_map(path => rule_needs(file_text(path) ?? ""))
 		if #needs > 0 { found[module] = needs.join(" ") }
 	}
 	found
@@ -924,17 +929,19 @@ is_condition(condition: Node): bool := {
 	literal_comparisons.any(op => is_key(condition, op)) and is_number_literal(wanted)
 }
 
-# `routed($program)`: a call of a word of lib/rule_words.warp, run at compile time (decision computed-hole)
+# `routed($program)`: a call of a word of extensions/rules/rule_words.warp, run at compile time (decision computed-hole)
 is_rule_word_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and is_rule_word(name_of(n#1))
-# a word of lib/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
+# a word of extensions/rules/rule_words.warp: one this compiler has, or, when a rule names a word it lacks (an older seed building a
 # newer compiler, card rule-whose), one the library's file defines, read only then
 is_rule_word(word: text): bool := rule_words.has(word) or library_rule_word_names().has(word)
+# the rule words' file under lib/, read only by a compiler lacking a word a rule names
+RULE_WORDS_FILE = "/extensions/rules/rule_words.warp"
 global library_rule_words = ø
 global library_registry_text = ""
 library_rule_word_names(): map := {
 	if library_rule_words == ø {
 		library_rule_words = {}
-		for cut in definition_slices(used_module_text("rule_words")) {
+		for cut in definition_slices(file_text(run_library() + RULE_WORDS_FILE) ?? "") {
 			library_rule_words[cut#1] = yes
 			if cut#1 == "rule_words" { library_registry_text = cut#2 }
 		}
@@ -950,7 +957,7 @@ registered_in_library(word: text): bool := {
 global skipped_rule_words = {}
 skipped_rule_word(word: text): any := {
 	if not skipped_rule_words.has(word) {
-		cause = if registered_in_library(word) then "is not in this compiler (an older seed)" else "is defined in lib/rule_words.warp but missing from its rule_words map"
+		cause = if registered_in_library(word) then "is not in this compiler (an older seed)" else "is defined in extensions/rules/rule_words.warp but missing from its rule_words map"
 		warn "the rule word " + word + " " + cause + ": its rules are skipped"
 		skipped_rule_words[word] = yes
 	}

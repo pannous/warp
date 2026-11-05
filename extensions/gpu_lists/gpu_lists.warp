@@ -1,5 +1,5 @@
 # GPU lists `[f32]`, `[i32]`, `[u32]` (decision gpu-bound-floats) as an extension: runtime.warp's words, the GPU
-# library's words a program calls (lib/wgsl.warp packs a GPU list where it is made), the place and cell type a host
+# library's words a program calls (extensions/rules/wgsl.warp packs a GPU list where it is made), the place and cell type a host
 # reads them by (web/playground/host-gpu.js, lib/native/warp_node.h warp_cells); list kind 2 in extensions/runtime.warp
 # the cells: four bytes each, as WGSL's storage arrays hold them
 GpuCell = {F32: 0, I32: 1, U32: 2}

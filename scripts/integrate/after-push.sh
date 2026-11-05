@@ -8,7 +8,8 @@
 # changed since the tip installed before. What goes red becomes a card in Now naming the commits pushed since (a red
 # smoke test: urgent). One run at a time (a lock): a second one returns, and the running one loops while main moved
 # past what it handled, installing the newest tip first. The slow tiers never hold an install: `--slow` runs them in a
-# tree of their own (started by each install, which stops the one still running on an older tip), and installs the
+# tree of their own (started by each install; one still running on an older tip finishes, and the new one returns),
+# and installs the
 # warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
 # git acts on the trees named by -C, never on a caller's repository (a hook's GIT_DIR, on-push.sh)
@@ -44,22 +45,16 @@ mkdir -p "$state"
 # taking that lock over installs the tip again
 interrupted() { local holder; holder=$(cat "$state/lock/pid" 2>/dev/null) && ! kill -0 "$holder" 2>/dev/null; }
 [ -n "$if_moved" ] && [ "$(main_tip)" = "$(handled)" ] && ! interrupted && exit 0
-kill_tree() { # kill_tree <pid>: the process and all it started, the parent first (it would act on a killed child's failure)
-	local children child
-	children=$(pgrep -P "$1")
-	kill "$1" 2>/dev/null
-	for child in $children; do kill_tree "$child"; done
-}
 # the lock holds the runner's pid: a dead runner's (a reboot, a kill) is taken over. The install lane's runner takes the
-# newest tip when it ends; the slow lane's is stopped, so the slow tiers run on the newest install, never queued behind
+# newest tip when it ends; the slow lane's finishes its older tip (user 2026-11-05: stopping it for every push meant
+# the slow tiers almost never finished), and the next install after it starts the slow tiers on the newest tip
 lock=$state/lock
 if ! mkdir "$lock" 2>/dev/null; then
 	holder=$(cat "$lock/pid" 2>/dev/null)
 	if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
-		[ -z "$slow" ] && { say "run $holder is going: it takes the newest tip when it ends"; exit 0; }
-		say "slow tiers of run $holder stopped for a newer install"
-		kill_tree "$holder"
-		while kill -0 "$holder" 2>/dev/null; do sleep 1; done
+		[ -z "$slow" ] && say "run $holder is going: it takes the newest tip when it ends"
+		[ -n "$slow" ] && say "slow tiers of run $holder go on: the next install after them starts the newest"
+		exit 0
 	fi
 	rm -rf "$lock" && mkdir "$lock" 2>/dev/null || exit 0
 fi

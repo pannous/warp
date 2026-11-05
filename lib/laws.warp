@@ -1,4 +1,2 @@
 # A law (notes/laws.md): `law square(-x) == square(x)` and a named one, `law name:` with a `for x: int` line each, are
-# tried for a few ints of each variable at run time (lib/rule_words.warp law_check), a value one fails for raised. The
-# rule takes the law as written (`where raw`), before lib/units' rules take its c for the speed of light
-rewrite (law $law) => $check where raw and statement and $check = law_check($law, $program)
+# tried for a few ints of each variable at run time (extensions/rules/rule_words.warp law_check), a value one fails for raised.

@@ -1,0 +1,4 @@
+# lib/laws.warp's rules that run code at compile time, its whole program or a rule word of extensions/rules/rule_words.warp:
+# the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
+# The rule takes the law as written (`where raw`), before lib/units' rules take its c for the speed of light
+rewrite (law $law) => $check where raw and statement and $check = law_check($law, $program)

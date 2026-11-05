@@ -20,8 +20,6 @@ rewrite on every $period: $body => timer_every($period, () => $body)
 // an empty block, `{}`, reads as a map, which no block hole takes
 rewrite on every $period {} => timer_every($period, () => ø)
 rewrite on every $count $unit {} => timer_every($count $unit, () => ø)
-// the page shows main's last expression anew after each firing (lib/rule_words.warp page_valued)
-rewrite $p => $q where program and $q = page_valued($p)
 
 // the handlers of the program's timers, a timer's id its position
 global timer_handlers = []

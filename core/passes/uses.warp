@@ -344,8 +344,21 @@ call_head(n: Node): any := {
 	if n#1 is symbol then (if bracket_of(n) == "(" then n else ø) else call_head(n#1)
 }
 
-# lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
-std_module_path(name: text): text := run_library() + "/" + name + module_extension
+# lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one), or
+# extensions/rules/<name>.warp, a module only the compiler uses: its rule words, run at compile time (decision
+# library-zero-bake-plan 1b). It stays a module: brought in as its own file, its words reached, as from lib/ (an
+# include of it as the compiler's own code typed the emitter's values anew: shown_text refused)
+std_module_path(name: text): text := run_library() + (if compiler_modules().has(name) then COMPILER_MODULES else "/") + name + module_extension
+COMPILER_MODULES = "/extensions/rules/"
+global compiler_module_names = ø
+compiler_modules(): map := {
+	if compiler_module_names == ø {
+		compiler_module_names = {}
+		listed = try list_files(run_library() + COMPILER_MODULES) else []
+		if type(listed) is list { for file in listed { if file.ends_with(module_extension) { compiler_module_names[file[0 ..< #file - #module_extension]] = yes } } }
+	}
+	compiler_module_names
+}
 
 # what a `use` statement names, ø for another statement
 use_target(statement: Node): any := {
