@@ -105,8 +105,8 @@ elif wants 2; then
 	if [[ -z $files ]]; then echo "tier 2 (pure warp test of the changed tests): none changed since $base"
 	else
 		targets=$files; ((folders)) && targets=$(dirname $files | sort -u)
-		# warp test takes folders: the changed files are copied into one of their own (relative lib resolution: in the tree)
-		if ((! folders)); then rm -rf "$logs/tests" && mkdir -p "$logs/tests" && cp $files "$logs/tests/"; targets=$logs/tests; fi
+		# the files where they lie: warp test runs a file's pairs in its own folder, so a test's relative paths
+		# (../fixtures/…) hold (a copy into one folder of their own failed test_shell_find_typed, 11-05)
 		timeout 2400 "$warp" test $targets > "$logs/tests.log" 2>&1; status=$?
 		echo "tier 2 (pure warp test of $(echo "$files" | wc -l) changed test files$( ((folders)) && echo ", whole folders")): $( ((status == 0)) && echo ok || echo RED) $(since $t2): $(tail -1 "$logs/tests.log")"
 		((status == 0)) || { grep '^✗' "$logs/tests.log" | head -10 | cut -c1-200; red 2; }

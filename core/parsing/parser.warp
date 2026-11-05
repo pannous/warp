@@ -237,9 +237,9 @@ ALIAS_TARGET_NAMES = {"approximately": "≈", "<-": STORE_OPERATOR}
 
 // The parser's spellings: its own operators and keyword forms, with lib/aliases.warp's (card alias-mechanism,
 // notes/aliases.md: one entry per canonical word, `add { operator: "+", aliases: [plus] }`), made the first time a
-// parse asks; reading the table sees the parser's own spellings only. The table is built into the compiler when it is
-// compiled (module_source), never read from a lib/ when it runs 
-ALIAS_TABLE = bundled_module("aliases.warp")
+// parse asks; reading the table sees the parser's own spellings only. Its rows come from the library index, each
+// entry's fields read off once by `warp rebuild` (alias_rows): parsing the table at every run was a sixth of a small
+// program's compile (card speed-module-rules)
 // operator symbols and words: [spelling, operator] pairs, the symbols longest first; forms: keyword_form's; canonical:
 // each alias with its entry's word (`plus` → add); infix words: the table's (`mod`, `upto`)
 // powers: each operator's [left, right] binding power, its row's `power` (binding_powers); declared: the operators a
@@ -253,35 +253,61 @@ def alias_spellings(): Spellings := {
 	}
 	spelling_tables
 }
-// the alias table's parse, baked in with the table (LIBRARY_PARSES): parsing it at every run was a sixth of a small
-// program's compile (card speed-module-rules)
-def alias_table_tree(): Node := source_parse(run_library() + "/aliases.warp", ALIAS_TABLE)
+// lib/aliases.warp's entries, each [word, its fields by name]
+def alias_rows(): list := {
+	entries = library_index_section("alias")
+	entries.keys.map(word => [word, alias_fields_read(entries[word])])
+}
+// a table's entries as alias_rows gives them, read off its parse (an extension's rows, the index's scan)
+def table_rows(table: Node): list := statements_in(table).map(row => [spelling_text(row#1), alias_fields(row#2)])
+// an entry's fields by name, `{ operator: "+", aliases: [plus] }` {operator: "+", aliases: ["plus"]}
+def alias_fields(fields: Node): map {
+	found = {}
+	for field in items_of(fields) { found["${name_of(key_of(field))}"] = spelling_text(value_of(field)) }
+	found
+}
+// an entry's fields as the index holds them, `operator:+ aliases:[plus,minus]`, and back; a field
+// spelling a blank or comma would be cut, so the index refuses it
+def alias_fields_written(word: text, fields: map): text := fields.keys.map(name => name + ":" + alias_value_written(word, fields[name])).join(" ")
+def alias_value_written(word: text, value: any): text {
+	written = if value is list then "[" + value.join(",") + "]" else "${value}"
+	inner = if value is list then value.join("") else written
+	if inner.contains(" ") or inner.contains(",") { raise "lib/aliases.warp: the entry " + word + " spells " + written + ", with a blank or comma the library index can't hold" }
+	written
+}
+def alias_fields_read(written: text): map {
+	fields = {}
+	for pair in written.split(" ").filter(pair => pair) {
+		name = pair.split(":")#1
+		value = pair[#name + 1 ..]
+		fields[name] = if value.starts_with("[") then value[1 ..< #value - 1].split(",").filter(item => item) else value
+	}
+	fields
+}
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
 	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: [], powers: copied(STRUCTURE_POWERS), declared: []}
 }
 def aliased_spellings(): Spellings := {
 	tables = own_spellings()
-	for table in [alias_table_tree()] + extension_operator_rows().map(rows => source_parse("extension rows", rows)) {
-		for row in statements_in(table) { add_alias_entry(tables, spelling_text(row#1), row#2) }
-	}
+	for row in alias_rows() + extension_operator_rows().flat_map(rows => table_rows(source_parse("extension rows", rows))) { add_alias_entry(tables, row#1, row#2) }
 	tables.operator_symbols = longest_first(tables.operator_symbols)
 	tables
 }
 // The spellings an entry gives: a symbol alias spells the entry's operator (its `operator`, else the entry itself), a
 // word alias its word (also infix with `infix: yes`, also a keyword form when the word is one)
-def add_alias_entry(tables: Spellings, word: text, fields: Node) {
-	target = alias_field(fields, "operator") ?? word
-	written_infix = alias_field(fields, "infix") == "yes"
+def add_alias_entry(tables: Spellings, word: text, fields: map) {
+	target = fields.get("operator") ?? word
+	written_infix = fields.get("infix") == "yes"
 	if written_infix { add_infix_word(tables, word, target) }
-	if alias_field(fields, "declared") == "yes" { tables.declared += [target] }
-	power = alias_power(fields)
+	if fields.get("declared") == "yes" { tables.declared += [target] }
+	power = if fields.has("power") then fields["power"].map(level => int(level)) else ø
 	if power != ø {
 		tables.powers[target] = power
 		# an operator row named by its symbol spells it (an extension's `"±" { power: … }`)
 		if not is_name_start(word#1) and spelled_by(tables.operator_symbols, word) == ø { tables.operator_symbols += [[word, target]] }
 	}
-	for spelling in alias_field(fields, "aliases") ?? [] {
+	for spelling in fields.get("aliases") ?? [] {
 		tables.canonical[spelling] = word
 		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
 		else if written_infix { add_infix_word(tables, spelling, target) }
@@ -291,16 +317,6 @@ def add_alias_entry(tables: Spellings, word: text, fields: Node) {
 def add_infix_word(tables: Spellings, word: text, target: text) {
 	tables.operator_words += [[word, target]]
 	tables.infix_words += [word]
-}
-// An entry's field as written, `operator: "+"` gives "+", `aliases: [plus]` ["plus"], else ø
-def alias_field(fields: Node, name: text): any {
-	for field in items_of(fields) { if name_of(key_of(field)) == name { return spelling_text(value_of(field)) } }
-	ø
-}
-// An entry's binding powers, `power: [140, 141]`, else ø
-def alias_power(fields: Node): list? {
-	for field in items_of(fields) { if name_of(key_of(field)) == "power" { return items_of(value_of(field)).map(level => int(level)) } }
-	ø
 }
 // A spelling as text, each of a list's
 def spelling_text(n: Node): any := match n {
