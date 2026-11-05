@@ -34,5 +34,4 @@ Spec: wiki/trait.md ("Protocol and default class"). One general mechanism, exten
   instance read element by element into its rows), and every argument of the module's words (not the required ones)
   goes through matrix·listed: a list passes as it is.
 - `Matrix x = rows` keeps the list; `matrix default Dense` makes it Dense(rows).
-- Known: instance names are program-wide by name (card instance-names): a top-level `m = Diag(…)` breaks a library
-  function's parameter m when the module is compiled from source.
+
