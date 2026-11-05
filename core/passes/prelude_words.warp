@@ -191,10 +191,12 @@ symbol_words(n: Node): list := {
 		else if is_named_type(part) { found[declared_type_name(value_of(part)#2)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
 		else if part is key { waiting += [key_of(part), value_of(part)] }
-		else if is_group(part) { for item in part { waiting += [item] } }
+		else if is_group(part) { for item in part { waiting += [if is_curly_group(part) and is_map_entry(item) then value_of(item) else item] } }
 	}
 	found.keys
 }
+# `reduce: 1` in a map literal `{reduce: 1}`: its key names no word, so it brings no library word or module of the name
+is_map_entry(item: Node): bool := is_key(item, Op.Colon) and key_of(item) is symbol
 
 # the words a class's body mentions but its own fields and methods: `class C{pi = 3; f() := pi * r}` names no library pi
 # a type named with no body, a field's `x: Int` (sugar.warp typed_fields): it uses the type, as a prelude alias
