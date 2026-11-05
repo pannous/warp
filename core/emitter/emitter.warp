@@ -92,6 +92,7 @@ runtime_space = 0
 own_space = 1
 # the closure arities runtime.wasm holds a closure·call hook for, 0 to these, each of a fixed function type
 hook_arities = 8
+# (gc_names lists them by name, closure_call_type_0 to _8: a literal, as scripts/node_layout.warp reads it)
 closure_call_type_prefix = "closure_call_type_"
 # `try`: while one runs (try_depth above 0) a runtime error throws the
 # tag warp_error(i32), which the try's try_table catches; otherwise it traps as before
@@ -128,8 +129,16 @@ gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 
 # supertype (instances.warp); $Class, a class's descriptor (instances.warp class_slots); the closure calls' function types, (closure, argument…) to a node. Each the same in every
 # module, so one module's instances and closures pass into another's code
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
+<<<<<<< HEAD
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]], ["Closure", ["entry", "shown"]], ["Instance", ["kind", "data", "value", "extra"]],
 	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call"]]] + range_list(hook_arities + 1).map(arity => [closure_call_type_prefix + arity, []])
+||||||| a01f087e72
+	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]], ["Closure", ["entry", "shown"]], ["Instance", ["kind", "data", "value", "extra"]]] + range_list(hook_arities + 1).map(arity => [closure_call_type_prefix + arity, []])
+=======
+	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]], ["Closure", ["entry", "shown"]], ["Instance", ["kind", "data", "value", "extra"]],
+	["closure_call_type_0", []], ["closure_call_type_1", []], ["closure_call_type_2", []], ["closure_call_type_3", []], ["closure_call_type_4", []],
+	["closure_call_type_5", []], ["closure_call_type_6", []], ["closure_call_type_7", []], ["closure_call_type_8", []]]
+>>>>>>> origin/main
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 # a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
 references = {text: [99, gc.text], list: [99, gc.list], node: [110], time: [110]}

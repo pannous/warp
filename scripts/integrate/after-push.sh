@@ -99,9 +99,9 @@ copy_compilers() {
 			cp "$from/$part" "$folder/$part.new" && mv "$folder/$part.new" "$folder/$part" || return 1
 		done
 	done
-	# the prebuilt standard modules programs link to (a module missing or older than its text is compiled from source)
+	# the prebuilt standard modules programs link to and the library index a compile reads (a module missing or older than its text is compiled from source)
 	mkdir -p "$folder/modules"
-	for part in "$from"/modules/*.wasm; do
+	for part in "$from"/modules/*.wasm "$from"/modules/index.tsv; do
 		[ -f "$part" ] || continue
 		name=modules/$(basename "$part")
 		cp "$part" "$folder/$name.new" && mv "$folder/$name.new" "$folder/$name" || return 1

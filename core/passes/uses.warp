@@ -95,9 +95,7 @@ module_text(n: Node): any := {
 	if is_baking(n, "library_sources", "LIBRARY_FILES") { return baked_literal("LIBRARY_FILES", library_texts(run_library(), "")) }
 	if is_baking(n, "library_parses", "LIBRARY_PARSES") { return baked_literal("LIBRARY_PARSES", packed_parses(library_texts(run_library(), ""))) }
 	if is_baking(n, "library_slices", "LIBRARY_SLICES") { return baked_literal("LIBRARY_SLICES", baked_slices(library_texts(run_library(), ""))) }
-	if is_baking(n, "std_rule_needs", "STD_RULE_NEEDS") { return baked_literal("STD_RULE_NEEDS", scanned_rule_needs()) }
 	if is_baking(n, "library_rules", "LIBRARY_RULES") { return baked_literal("LIBRARY_RULES", packed_rules(library_texts(run_library(), ""))) }
-	if is_baking(n, "block_heads", "BLOCK_HEADS") { return baked_literal("BLOCK_HEADS", block_heads_in(library_texts(run_library(), ""))) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
@@ -185,7 +183,7 @@ write_baked_current(file: text) := {
 # baked table joins here
 baked_tables(): list := {
 	files = library_texts(run_library(), "")
-	[["LIBRARY_FILES", LIBRARY_FILES, files], ["BLOCK_HEADS", BLOCK_HEADS, block_heads_in(files)], ["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(files)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(files)], ["LIBRARY_RULES", LIBRARY_RULES, packed_rules(files)], ["STD_RULE_NEEDS", STD_RULE_NEEDS, scanned_rule_needs()]]
+	[["LIBRARY_FILES", LIBRARY_FILES, files], ["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(files)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(files)], ["LIBRARY_RULES", LIBRARY_RULES, packed_rules(files)]]
 }
 # a baked table as the code of its read: one segment of its own (baked_segment_text) that `rebake` can write anew
 baked_literal(name: text, table: map): Node := List([symbol("unbaked_table"), List([symbol("baked_segment"), baked_segment_text(name, table)], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)

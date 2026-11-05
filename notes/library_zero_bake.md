@@ -186,6 +186,14 @@ The emitter must guarantee these for L3–L5:
 - L2 decided (a): index.warp is a cache of the union, derived by `warp modules` from the signatures in the same step,
   each module's source hash beside it (reading the 45 modules, 15 MB, at each compile was too dear). L2a: block heads,
   rule needs, words/classes/tags by module, host words; L2b: alias and operator tables, sugar_module_names.
+- L2a landed (aa5cbdf430): modules/index.tsv (library.warp LIBRARY_INDEX, library_index_section): sections block,
+  global, class, tag, word (absorbs words.tsv), needs, host, hash (djb2 of each module's file, `<length>-<hash>`: the
+  host's sha256 takes no module-long text from the compiler). Written first by the runtime and modules steps
+  (write_library_index), so no step reads an earlier build's; a missing index is scanned off lib/ per section. tsv, not
+  warp notation: `warp parse` of the same index as a 40 KB .warp is 0.47 s against 0.31 s for a whole hello compile,
+  the tsv split ~1 ms. BLOCK_HEADS and STD_RULE_NEEDS no longer baked. The seed compiles compiler.warp with its own
+  bundled pre-1b rule_words, so word_index/word_index_file stay in prelude_words.warp until the next seed (card
+  seed-compiles).
 - L3: warp.signature goes right after the wasm header (a custom section may be first), so reading a signature costs
   a few KB, not the whole module.
 - Before L3: measure the prelude's 108 untyped words linked as boxed code (hello, compiler.warp, a numeric sample).

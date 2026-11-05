@@ -41,8 +41,8 @@ rewrite (val $d) => $own where $own = declared_local($d)
 # in place (sound's play_blocks fills one a block at a time)
 rewrite (linear $d) => global: $d
 
-# `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which parser.warp
-# bundled_declarations reads off the module's text); as code, the definition itself
+# `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which the library index
+# reads off the module's text, parser.warp declarations_scanned); as code, the definition itself
 rewrite global: $d => $d where $d is definition
 
 # `x is a 100 element array` would declare x as the list of 100 zeros (card gap-element-array): parked as esoteric

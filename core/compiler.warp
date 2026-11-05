@@ -89,7 +89,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	found = checked_facts(known)
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
 	timed("emit")
-	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, c_functions), emitter_kinds(program))
+	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), c_functions), emitter_kinds(program))
 	timed("emit done")
 	# a linked module whose words won't take the program's values: said, and the program compiled with its source
 	if made is text and #module.linked_images > 0 {
@@ -98,7 +98,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 		relinked = #diagnosed
 		program = checked_program(foreign#1, folder, prelude_source)
 		checked_facts(relinked)
-		made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, with_used_c_functions(foreign#2)), emitter_kinds(program))
+		made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), with_used_c_functions(foreign#2)), emitter_kinds(program))
 	}
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
 	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
@@ -122,9 +122,6 @@ checked_facts(known: int): list := {
 # the standard modules the source uses, each prebuilt beside runtime.wasm (`warp rebuild`) and linked behind it
 # when its text is the bundled one; any other compiles from its source (a WARP_LIB edit, a module not prebuilt)
 MODULES_FOLDER = "modules"
-# which standard module defines which word, beside the prebuilt modules (prelude_words.warp word_index)
-WORD_INDEX = "words.tsv"
-word_index_file(): text := library_folder + "/" + MODULES_FOLDER + "/" + WORD_INDEX
 linked_libraries(source: text): list := {
 	if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { return [] }
 	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
@@ -177,7 +174,9 @@ runtime_bytes(): list := {
 # runtime.wasm, the runtime words compiled once (emitter/prebuilt.warp), written beside warp.wasm by `warp rebuild`
 RUNTIME_WASM = "runtime.wasm"
 write_runtime(file: text) := {
-	made = runtime_wasm_module(lowered_runtime_words(), host_words)
+	# the library index first: a runtime's host words are lib/'s as it lies now, never an earlier build's
+	write_library_index(folder_of(file) + "/" + MODULES_FOLDER)
+	made = runtime_wasm_module(lowered_runtime_words(), host_words())
 	if made is text { raise made }
 	write_bytes(file, with_call_sites(made))
 }
@@ -201,6 +200,7 @@ spliced_file(file: text): text := file.remove_suffix(".wasm") + SPLICED_SUFFIX
 # refuse and stays compiled from source with the program; any other refusal fails the rebuild, naming the module and
 # why (decision prebuild-fails-loudly)
 write_modules(folder: text, runtime_file: text) := {
+	write_library_index(folder)
 	refused = []
 	for name in std_module_names {
 		file = folder + "/" + name + ".wasm"
@@ -211,7 +211,6 @@ write_modules(folder: text, runtime_file: text) := {
 			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
 		}
 	}
-	write(folder + "/" + WORD_INDEX, word_index_text())
 	if #refused > 0 { raise "standard modules that don't prebuild: " + refused.join("; ") }
 }
 # where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:

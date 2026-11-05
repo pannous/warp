@@ -51,10 +51,8 @@ def parsed(source: text, uses: text = ""): Node := {
 
 // The words that take a block last, as `if` does (user 2026-10-29: derived from the signature): a function whose last
 // parameter is `body: block` (`once(body: block)`), a rewrite rule whose pattern ends in a `: block` hole (`rewrite
-// whenever $c $body: block`). Baked in by uses.warp module_text; a compiler built by one that bakes none reads them
-// off its library where it runs
-BLOCK_HEADS = block_heads()
-def block_heads(within: text = ""): map := block_heads_in(LIBRARY_FILES)
+// whenever $c $body: block`), read off the library index (library.warp library_index_section)
+def is_block_head(word: text): bool := library_index_section("block").has(word)
 def block_heads_in(files: map): map {
 	heads = {}
 	for path in files.keys {
@@ -613,13 +611,13 @@ def method_given(method: Node, f: Node): Node := match method {
 }
 
 // `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
-// `whenever x > y {…}`, `on change x: n += 1`: the words after a block head (BLOCK_HEADS) starting the statement are
+// `whenever x > y {…}`, `on change x: n += 1`: the words after a block head (is_block_head) starting the statement are
 // its head, as `if`'s condition is, up to its body, `{…}` or `: …` (a block); not the body once it was read
 def heads_block(p: Parser, found: list): bool {
 	if found.length == 0 or is_block(found#(found.length)#1) or found#(found.length)#2 != Separator.Space { return false }
 	first = found.length
 	while first > 1 and found#(first - 1)#2 == Separator.Space { first -= 1 }
-	found#first#1 is symbol and BLOCK_HEADS.has(name_of(found#first#1)) and body_follows(p)
+	found#first#1 is symbol and is_block_head(name_of(found#first#1)) and body_follows(p)
 }
 // whether the statement goes on to a body, `{` or `:` outside brackets and texts before its end: without one a block
 // head is an ordinary call, the program's own `twice square 3` of a twice(f, x) beside the prelude's twice(body: block)
@@ -648,7 +646,7 @@ def body_follows(p: Parser): bool {
 def head_item(p: Parser): Node := if body_word_width(p) == 1 then listed(Bracket.Curly, Separator.Semicolon, [colon_body(p, 1)]) else header_expression(p, CONDITION_POWER)
 // `alarm = whenever t > 30 {…}`, `h = on change x: n += 1`: an assigned block head with its body takes its whole head
 // up to the body, as the statement it would start does (decision prefix-keyword-condition)
-def block_head_at(p: Parser): bool := BLOCK_HEADS.has(p.code[p.at .. name_end(p.code, p.at, p.n)]) and body_follows(p)
+def block_head_at(p: Parser): bool := is_block_head(p.code[p.at .. name_end(p.code, p.at, p.n)]) and body_follows(p)
 def headed_phrase(p: Parser): Node := {
 	words = [prefixed(p)]
 	while not is_block(words#(words.length)) {
@@ -1737,29 +1735,22 @@ def is_operator_glyph(glyph: text): bool {
 // The blank-separated words of a statement
 def blank_words(statement: text): list := statement.replace("\t", " ").split(" ").filter(word => word)
 
-// What the bundled modules at the top of lib/ declare for every program, read off their text once a run: "words",
+// What the modules at the top of lib/ declare for every program, from the library index (library.warp): "words",
 // word → the module declaring it global, `global play(file: text) := …` (decision bizarre-global: a program naming it
 // uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
 // expected-type-names: a parameter typed Time finds its values there); "tags", tag → its module, each text of a global
 // list, `global html_elements = ["div", …]` of markup (decision html-render-mode: a program writing `div{…}` uses it)
-global module_declarations = ø
-def bundled_declarations(): map {
-	if module_declarations == ø {
-		module_declarations = declarations_scanned()
-	}
-	module_declarations
-}
-def global_words(): map := bundled_declarations()["words"]
-def declared_classes_modules(): map := bundled_declarations()["classes"]
-def declarations_scanned(): map {
+def global_words(): map := library_index_section("global")
+def declared_classes_modules(): map := library_index_section("class")
+def declarations_scanned(files: map): map {
 	words = {}
 	classes = {}
 	tags = {}
-	for path in LIBRARY_FILES.keys {
+	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
 			listing = no
-			for line in LIBRARY_FILES[path].split("\n") {
+			for line in files[path].split("\n") {
 				if listing {
 					for tag in quoted_texts(line) { tags[tag] = module }
 					listing = not line.contains("]")
@@ -1778,7 +1769,7 @@ def declarations_scanned(): map {
 	}
 	{"words": words, "classes": classes, "tags": tags}
 }
-def declared_tags(): map := bundled_declarations()["tags"]
+def declared_tags(): map := library_index_section("tag")
 // the texts quoted in a line of a list, `"a", "b",` → ["a", "b"]: every other piece between its quotes
 def quoted_texts(line: text): list {
 	pieces = line.split("\"")
