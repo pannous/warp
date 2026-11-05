@@ -153,7 +153,8 @@ methods_lifted(program: Node): Node := {
 			owners = owners_taking(classes, liftable, name, count)
 			# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 			# call (list.warp's tally(xs) beside a class's tally(x))
-			falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
+			# (a module's method routed only as a word of another module's falls back to nothing it reaches)
+			falls_back = name in routes and (is_library_word(name) or name in functions or (not names_syntax(name) and module_routing(classes, liftable, name, operator_methods) == ø)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
 			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
 		}
 	}
