@@ -1,0 +1,63 @@
+#!/usr/bin/env warp
+# A report on a batch of links, as a crawler's first pass sees them (url)
+#   each link parsed into its parts, grouped by host, its query read as a map, relative links resolved
+#   against the page they came from, and a search link built back with its values percent-encoded
+use url
+
+page = "https://shop.example.com/catalog/shoes/index.html"
+links = [
+	"https://shop.example.com/cart?item=42&qty=2",
+	"../hats/?color=red+blue&size=m",
+	"/search?q=caf%C3%A9%20au%20lait",
+	"https://user@docs.example.org:8443/guide#install",
+	"sale.html#top",
+	"http://shop.example.com/catalog/./shoes/../boots/",
+	"mailto:help@example.com",
+	"https://cdn.example.net/img/logo.png?v=3"
+]
+
+# a link as the page means it: relative ones resolved against the page
+absolute = [resolve_url(page, link) for link in links]
+
+print("links on " + page + ":")
+for i in 0 ..< count(links) {
+	kind = if parse_url(links[i]).scheme == nil then "relative" else "absolute"
+	print("  " + kind + "  " + links[i])
+	print("      -> " + absolute[i])
+}
+
+# hosts and how many links each has, in first-seen order
+hosts = []
+for link in absolute { h = parse_url(link).host; if h != nil and not (h in hosts) { hosts = hosts + [h] } }
+print("hosts:")
+for h in hosts {
+	these = [l for l in absolute if parse_url(l).host == h]
+	print("  " + h + ": " + str(count(these)) + " link" + (if count(these) == 1 then "" else "s"))
+}
+no_host = [l for l in absolute if parse_url(l).host == nil]
+print("  (no host): " + join(no_host, ", "))
+
+print("queries:")
+for link in absolute {
+	u = parse_url(link)
+	if u.query != nil {
+		fields = query_map(u.query)
+		print("  " + u.path + "  " + join([k + " = " + fields[k] for k in keys(fields)], ", "))
+	}
+}
+
+print("ports and fragments:")
+for link in absolute {
+	u = parse_url(link)
+	if u.port != nil or u.fragment != nil {
+		print("  " + u.host + (if u.port != nil then ":" + str(u.port) else "") + (if u.fragment != nil then "  #" + u.fragment else ""))
+	}
+}
+
+# a search link built back: the values encoded, parsed again to the same map
+wanted = {q: "warp & wasm", lang: "de", page: "2"}
+built = "https://shop.example.com/search?" + query_text(wanted)
+print("built: " + built)
+print("round trip: " + str(query_map(parse_url(built).query) == wanted))
+print("encoded: " + url_encode("Grüße, 100%") + "  decoded: " + url_decode(url_encode("Grüße, 100%")))
+print("malformed kept: " + url_decode("100%zz"))

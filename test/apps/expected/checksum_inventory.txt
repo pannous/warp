@@ -1,0 +1,16 @@
+manifest of 3 files:
+  readme.txt  15 bytes  sha256 b9bd98d05020…  crc32 4168398330
+  notes.txt  18 bytes  sha256 93e7f286e52c…  crc32 520320620
+  data.csv  15 bytes  sha256 970f9a8e919c…  crc32 541711722
+empty text sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+same content, same digest: yes
+$ verify (untouched)
+ok       readme.txt
+ok       notes.txt
+ok       data.csv
+$ verify (notes edited, data.csv deleted, todo.txt added)
+ok       readme.txt
+changed  notes.txt (18 -> 31 bytes)
+missing  data.csv
+new      todo.txt
+demo files removed: yes

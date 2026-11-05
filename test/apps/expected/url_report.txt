@@ -1,0 +1,34 @@
+links on https://shop.example.com/catalog/shoes/index.html:
+  absolute  https://shop.example.com/cart?item=42&qty=2
+      -> https://shop.example.com/cart?item=42&qty=2
+  relative  ../hats/?color=red+blue&size=m
+      -> https://shop.example.com/catalog/hats/?color=red+blue&size=m
+  relative  /search?q=caf%C3%A9%20au%20lait
+      -> https://shop.example.com/search?q=caf%C3%A9%20au%20lait
+  absolute  https://user@docs.example.org:8443/guide#install
+      -> https://user@docs.example.org:8443/guide#install
+  relative  sale.html#top
+      -> https://shop.example.com/catalog/shoes/sale.html#top
+  absolute  http://shop.example.com/catalog/./shoes/../boots/
+      -> http://shop.example.com/catalog/boots/
+  absolute  mailto:help@example.com
+      -> mailto:help@example.com
+  absolute  https://cdn.example.net/img/logo.png?v=3
+      -> https://cdn.example.net/img/logo.png?v=3
+hosts:
+  shop.example.com: 5 links
+  docs.example.org: 1 link
+  cdn.example.net: 1 link
+  (no host): mailto:help@example.com
+queries:
+  /cart  item = 42, qty = 2
+  /catalog/hats/  color = red blue, size = m
+  /search  q = café au lait
+  /img/logo.png  v = 3
+ports and fragments:
+  docs.example.org:8443  #install
+  shop.example.com  #top
+built: https://shop.example.com/search?q=warp%20%26%20wasm&lang=de&page=2
+round trip: yes
+encoded: Gr%C3%BC%C3%9Fe%2C%20100%25  decoded: Grüße, 100%
+malformed kept: 100%zz
