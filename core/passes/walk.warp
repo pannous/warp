@@ -248,7 +248,8 @@ children(n: Node, f: function): Node := match n {
 		if same_node(walked_left, left) and same_node(walked_right, right) then n else Key(walked_left, op, walked_right)
 	}
 	List(items, bracket, separator): {
-		walked = items_walked(items, (bracket == Bracket.None and separator == Separator.Space) or (bracket == Bracket.Round and separator == Separator.None), f)
+		if is_quote(n) or is_spliced_quote(n) { return n }
+		walked = items_walked(items, is_spaced(n), f)
 		if same_items(walked, items) then n else List(walked, bracket, separator)
 	}
 	_: n

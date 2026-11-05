@@ -1,10 +1,10 @@
 # Quoted code (extension, the emitter's part; card quotes-templates-serializer): `data e` as a node, the fields of a
 # code view (line, column, comment). `data e`, glued `data(e)`: e as written, a node (Rust's blocks.rs as_data,
 # written_quote); `parse("a + 1")` is `as_code(data a + 1)`. Which nodes are quotes is the core's (walk.warp is_quote)
-# `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
-# its place, else 0
+# `print data (a + 1)`: a `data` after the head of a line quotes the item after it; its place, else 0. In a call,
+# `f(data, 7)`, data is a word: the parser groups `f(data e)`'s quote itself (parser.warp data_literal)
 inline_quote_at(n: Node): int := {
-	if not ((bracket_of(n) == "" and separator_of(n) == " ") or (bracket_of(n) == "(" and separator_of(n) == "")) { return 0 }
+	if not is_spaced(n) { return 0 }
 	for i in 2..<#n { if n#i == quote_symbol { return i } }
 	0
 }
