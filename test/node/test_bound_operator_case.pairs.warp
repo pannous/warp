@@ -1,0 +1,6 @@
+# a match binds a key's operator as its case, whatever operator the key carries (card match-binds-operator)
+'n = parse("a*b"); match n { Key(l, op, r): op == Op.Mul, _: no }'	yes
+'n = parse("a + b"); match n { Key(l, op, r): op == Op.Add, _: no }'	yes
+'n = parse("a - b"); match n { Key(l, op, r): [op as text, op == Op.Sub], _: 0 }'	['-', yes]
+'n = parse("x := 1"); match n { Key(l, op, r): op == Op.Define, _: no }'	yes
+'k(n) := match n { Key(l, op, r): op as text, _: "" }; [k(parse("a+b")), k(parse("a<=b")), k(parse("a and b")), k(parse("x ?? y"))]'	['+', "<=", "and", "??"]

@@ -185,9 +185,18 @@ spelling_functions(enum_name: text): list := {
 	cases_by_spelling = symbol(spelled_function(enum_name, "cases"))
 	every_case = List(cases.map(case => Key(spelling(enum_name, case), Op.Colon, qualified_case(enum_name, case))), Bracket.Curly, Separator.Comma)
 	to_case = chosen(is_spelling, call_of("map_get_or", [cases_by_spelling, value, value]), value)
-	[Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text?", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + comparing_functions(enum_name)
+	[Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text?", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + coded_functions(enum_name) + comparing_functions(enum_name)
 }
 
+# `Op·by_code = key·cases(Op·cases)` and `Op·coded(spelled) := Op·by_code#(key·op_code(spelled) + 1)`: the case of a
+# key's operator by its code, as Op·case gives it of the operator's spelling (node_matches.warp coded_readers)
+coded_functions(enum_name: text): list := {
+	if enum_name not in coded_readers.values { return [] }
+	by_code = symbol(spelled_function(enum_name, "by_code"))
+	code = call_of("key·op_code", [symbol(spelled_value)])
+	[Key(by_code, Op.Assign, call_of("key·cases", [symbol(spelled_function(enum_name, "cases"))])),
+		spelling_function(enum_name, "coded", ø, Key(by_code, Op.Hash, Key(code, Op.Add, 1)))]
+}
 # `Op·is(spelled, case_written, case_spelled)`, `Op·same(spelled, other_spelled)`: two cases compare as they are, a case
 # and a text as spellings
 comparing_functions(enum_name: text): list := {
@@ -206,7 +215,7 @@ comparing_functions(enum_name: text): list := {
 
 # whether the enum, `op: Op`, a case of it, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
 is_spelling_needed(n: Node, enum_name: text, declared: map): bool := match n {
-	Symbol(name): required_type(name) == enum_name or name in ["text", "case", "is", "same"].map(word => spelled_function(enum_name, word))
+	Symbol(name): required_type(name) == enum_name or name in ["text", "case", "coded", "is", "same"].map(word => spelled_function(enum_name, word))
 	Key(left, op, right): {
 		if left == opaque_symbol { return no }
 		if spelled_enum_of(n, declared) == enum_name { return yes }
