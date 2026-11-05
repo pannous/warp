@@ -263,12 +263,21 @@ is_type_declaration(statement: Node): bool := match statement {
 }
 
 # the module rules none of whose words the program binds itself: a program's own word keeps its meaning
-unbound_rules(module_rules: list, program: Node): list := if #module_rules == 0 then [] else rules_unbound_by(module_rules, rule_bindings(program))
+unbound_rules(module_rules: list, program: Node): list := {
+	if #module_rules == 0 { return [] }
+	bindings = rule_bindings(program)
+	statements = statements_in(program)
+	module_rules.filter(rule => is_unbound(rule, bindings) or spells_definition_in(rule, statements))
+}
+# a rule spelling a definition, `unit $name := $value`, keeps the definitions it matches, though their spaced head
+# (`unit hand := 4inch`, decision spaced-definition-head) binds its first word as the program's function
+spells_definition_in(rule: Rule, statements: list): bool := defines_last(rule.pattern) and statements.any(statement => rule_matches(rule.pattern, statement, {}))
 # [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
 # all the sugar steps of a program (card speed-module-cache)
 rule_bindings(program: Node): list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
 # (a class's method binds no word of the program: `in(u)` of a class keeps `for x in xs`)
-rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function)))
+rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => is_unbound(rule, bindings))
+is_unbound(rule: Rule, bindings: list): bool := not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function))
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (rule_bindings: a
 # program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it
@@ -1974,7 +1983,7 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	# the node it marks
 	if is_attribute(code) and not is_attribute(pattern) { return rule_matches(pattern, attribute_marked(code), bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
-	if is_group(pattern) and defines_last(pattern) and defines_spaced_head(code) { return rule_matches(pattern, head_spread(code), bound) }
+	if defines_last(pattern) and defines_spaced_head(code) { return rule_matches(pattern, head_spread(code), bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
@@ -1983,7 +1992,7 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 # a definition the parser gave its spaced words as a call head (decision spaced-definition-head: `unit hand := 4inch`
 # is unit(hand) := 4inch), as written for a pattern spelling it spaced, `unit $name := $value` (the phrase unit,
 # $name := $value): a used module's rule sees the form the program wrote
-defines_last(pattern: Node): bool := bracket_of(pattern) == "" and separator_of(pattern) == " " and is_key(items_of(pattern)[#pattern - 1], Op.Define)
+defines_last(pattern: Node): bool := is_group(pattern) and bracket_of(pattern) == "" and separator_of(pattern) == " " and is_key(items_of(pattern)[#pattern - 1], Op.Define)
 defines_spaced_head(code: Node): bool := is_key(code, Op.Define) and is_called_head(key_of(code))
 head_spread(definition: Node): Node := {
 	words = items_of(key_of(definition))
