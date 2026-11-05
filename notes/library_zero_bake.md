@@ -197,3 +197,6 @@ The emitter must guarantee these for L3–L5:
 - L3: warp.signature goes right after the wasm header (a custom section may be first), so reading a signature costs
   a few KB, not the whole module.
 - Before L3: measure the prelude's 108 untyped words linked as boxed code (hello, compiler.warp, a numeric sample).
+- L5 (wasm-module-linking): points 1 (closure funcref), 3 (Instance), 2 (class descriptors) landed; L5c programs and
+  modules import their modules' words (notes/runtime_linking.md "Load-time linking"). warp.module's content moves
+  into warp.signature with L5e (agreed with warp-sugar).

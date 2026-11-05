@@ -126,6 +126,17 @@ made_case kind made, since no program decides any more what it makes.
   (they should be the prelude module's, space 2+k); classes from warp.declarations into module.classes before late_code;
   late_code once all modules are bound.
 
+- Load-time linking (2026-11-05, L5c, card wasm-module-linking): a program whose uses link runs as its own module
+  (linked_bytes), importing warp_runtime and each module word it calls from `warp/<m>` by name, each module global
+  from its owner as `global/<name>`; the native driver instantiates runtime.wasm and the modules once per run. Every
+  module's linked form links the modules it uses the same way (`warp rebuild` writes all spliced forms, then the
+  linked forms dependencies first). Each module's class group is emitted whole, in one canonical order (by name, a
+  parent before its children), in the module and in every importer, so the struct types are one type; class identity
+  is the module's descriptor (its descriptor·<Class> word). A word's kinds come from the linked form's warp.words
+  section (the spliced form, compiled apart, may infer others: sound's text·real). The compiler's own build keeps its
+  modules spliced. Until 2026-11-05 nothing linked at all: the bundle's comment blanking made the text compare fail
+  silently, and a plain `warp x.warp` compile had no runtime argument; an unlinked prebuilt module now warns.
+
 ## Separate modules (card runtime-separate-modules; owner: separate-modules)
 The same runtime.wasm, not copied into the program but instantiated once and imported, as a page or an AOT build
 combines modules natively. Nothing is rewritten: a program's runtime words are imports, and imports come first in
