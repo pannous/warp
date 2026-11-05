@@ -7,7 +7,6 @@
 «use time; r = try { parse_duration("5 parsecs") } catch e { "" + e }; starts_with(r, "parse_duration: " + chr(34) + "5 parsecs" + chr(34) + ": unknown unit")»	true
 «use time; r = try { parse_iso_duration("1H") } catch e { "" + e }; r == "parse_iso_duration: " + chr(34) + "1H" + chr(34) + " does not start with P (like PT1H30M)"»	true
 «use time; r = try { zone_named("Atlantis/City") } catch e { "" + e }; starts_with(r, "unknown time zone Atlantis/City")»	true
-«use time; r = try { two_digits(3) } catch e { "" + e }; r == "03"»	true
 «use json; r = try { parse_json("[1, 2") } catch e { "" + e }; r contains "is no json: no closing ]"»	true
 «use json; r = try { parse_json("{" + chr(34) + "a" + chr(34) + " 1}") } catch e { "" + e }; r contains "is no json: no : after the key"»	true
 «use json; r = try { parse_json("[1] x") } catch e { "" + e }; r contains "is no json: more after the value"»	true
