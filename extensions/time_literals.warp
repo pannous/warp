@@ -6,7 +6,7 @@ read_time_literal(p: Parser): Node := {
 	p.at += length
 	opaque(["data", p.code[p.at - length .. p.at]])
 }
-time_literals_extension = Extension{name: "time_literals", number_readers: [read_time_literal]}
+time_literals_extension = Extension{name: "time_literals", number_readers: [read_time_literal], runtime: "times/runtime.warp"}
 
 # The length of the RFC 3339 / RFC 9557 time literal at `at`: `2024-01-31`, `2024-01-31T10:00:30.5+01:00`,
 # `2024-01-31T10:00[Europe/Berlin]`; 0 if none starts there

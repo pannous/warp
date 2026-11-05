@@ -1,10 +1,10 @@
 # Durations: their months, days and nanoseconds unpacked, shown and ordered
-use "../intrinsics.warp"
-use "../conversions.warp"
-use "../instructions.warp"
-# An extended part: only runtime/extended.warp loads it (and times.warp)
-use "../arithmetic.warp"
-use "../floats.warp"
+use "../../compiler/runtime/intrinsics.warp"
+use "../../compiler/runtime/conversions.warp"
+use "../../compiler/runtime/instructions.warp"
+# the time extension's runtime part: only extensions/times/runtime.warp loads it
+use "../../compiler/runtime/arithmetic.warp"
+use "../../compiler/runtime/floats.warp"
 ## durations (card duration-warp): a
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
 ## bits, its nanoseconds in its box. The words below the unpacking ones take the three
