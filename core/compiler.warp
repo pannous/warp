@@ -120,9 +120,11 @@ checked_facts(known: int): list := {
 }
 
 # the standard modules the source uses, each prebuilt beside runtime.wasm (`warp rebuild`) and linked behind it
-# when its text is the bundled one; any other compiles from its source (a WARP_LIB edit, a module not prebuilt)
+# when its signature's source hash is its file's (signature.warp); any other compiles from its source, said in one
+# line when it was prebuilt (a WARP_LIB edit; a module that calls C is not prebuilt, its file left empty)
 MODULES_FOLDER = "modules"
 linked_libraries(source: text): list := {
+	linked_signatures = {}
 	if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { return [] }
 	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
 	images = []
@@ -132,14 +134,16 @@ linked_libraries(source: text): list := {
 	while at < #names {
 		name = names[at]
 		at += 1
-		bundled = LIBRARY_FILES.get(name + module_extension)
+		wasm = try read_bytes(folder + name + SPLICED_SUFFIX) else ø
 		# (the prelude is every program's own, its words reached as it reaches them)
-		if name != "prelude" and bundled != ø and bundled == (file_text(std_module_path(name)) ?? "") {
-			for inner in used_modules(bundled) { if inner not in names { names += [inner] } }
-			wasm = try read_bytes(folder + name + SPLICED_SUFFIX) else ø
-			# (a module not prebuilt was said by the rebuild, its file left empty; one prebuilt but not linkable is said here)
-			image = if wasm == ø or #wasm == 0 then ø else library_image_of(name, wasm)
-			if image is text { warn name + ".wasm not linked: " + image + "; compiled from source" } else if image != ø { images += [image] }
+		if name != "prelude" and wasm != ø and #wasm > 0 {
+			signature = module_signature(name, wasm)
+			image = if signature == ø then "no " + SIGNATURE_SECTION + " (built before it)" else if signature.source != source_hash(try read(std_module_path(name)) else "") then "lib/" + name + ".warp differs from the text it was built of" else library_image_of(name, wasm)
+			if image is text { warn name + ".wasm not linked: " + image + "; compiled from source" } else {
+				images += [image]
+				linked_signatures[name] = signature
+				for inner in signature.uses { if inner not in names { names += [inner] } }
+			}
 		}
 	}
 	images
@@ -189,8 +193,8 @@ write_runtime(file: text) := {
 write_module(name: text, runtime_file: text, file: text) := {
 	spliced = compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file))
 	if spliced is text { throw spliced }
-	write_bytes(spliced_file(file), spliced)
-	write_bytes(file, linked_bytes(module.order, MODULE_START))
+	write_bytes(spliced_file(file), with_signature(spliced, name))
+	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name))
 }
 MODULE_START = "warp/start"
 SPLICED_SUFFIX = ".splice.wasm"

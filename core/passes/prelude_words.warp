@@ -323,8 +323,11 @@ called_only(program: Node): Node := {
 # module's in front of the program, the prelude's after it. The words the program (a used
 # module's definitions in front of it too) will say once the sugar rewrote it are reached too (sugar_words_of), and
 # those the program doesn't call after all dropped once the passes ran (called_only)
-with_reached(program: Node, module: text, in_front: bool, files: list = []): Node := {
-	module_names = definition_slices(module).map(slice => slice#1)
+with_reached(program: Node, module: text, in_front: bool, files: list = [], linked: list = []): Node := {
+	# [name, text, parse, identity] of each definition: a linked module's from its signature, its head line and parse
+	# (signature.warp), else a slice of the text, parsed when reached
+	given = linked.map(slice => [slice#1, slice#2, slice#3, slice#4 + " " + slice#1 + " " + slice#2]) + definition_slices(module).map(slice => [slice#1, slice#2, ø, slice#2])
+	module_names = given.map(slice => slice#1)
 	# a program's function named as a library word is the program's own (decision library-words-lexical): the program's
 	# calls it takes reach it, under its own name, any other call and every library body the library's word, so
 	# round_to's round stays math's beside a program's round(x), and round(2.345, 2) is round_to; a module brought in
@@ -345,15 +348,16 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
 	program_globals = statements_in(program).filter(is_global_declaration).map(declared_name).filter(name => name != ø and name not in module_names)
-	# [name, text, the name written] of each slice: a replaced one under its library_word, for an alias's call
-	slices = definition_slices(module).map(slice => if kept(slice) then slice + [slice#1] else [library_word(slice#1), slice#2, slice#1])
-	# the statements of each reached slice, by its text
+	# [name, text, the name written, parse, identity] of each slice: a replaced one under its library_word, for an
+	# alias's call
+	slices = given.map(slice => [if kept(slice) then slice#1 else library_word(slice#1), slice#2, slice#1, slice#3, slice#4])
+	# the statements of each reached slice, by its identity
 	reached = {}
-	declared = if in_front then linked_slices() else {}
 	if in_front { own_words_unlinked(own_names) }
 	# (a linked module's classes and globals, the prelude's Cell of its closures too)
 	program_words = symbol_words(program)
 	foreign = foreign_types(module)
+	for signature in linked_signatures.values { for type in signature.foreign.keys { foreign[type] = signature.foreign[type] } }
 	if program_words.any(word => word in foreign) { hint_foreign_types(program, foreign, own_names) }
 	exported = slices.filter(is_exported_slice).map(slice => slice#1)
 	for name in exported { exported_names[name] = yes }
@@ -365,26 +369,28 @@ with_reached(program: Node, module: text, in_front: bool, files: list = []): Nod
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
-			if slice#1 == word and slice#2 not in reached {
-				key = keys.get(slice#2)
-				baked = slice_parse(key)
+			if slice#1 == word and slice#5 not in reached {
+				key = if slice#4 == ø then keys.get(slice#2) else ø
+				baked = slice#4 ?? slice_parse(key)
 				if baked == ø and uses == ø { uses = use_lines(module) }
 				slice_node = early_sugared(baked ?? plain_node(parsed(slice#2, uses)))
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
-				else if slice#2 in declared { slice_node = declared_only(slice_node) }
+				else if slice#4 != ø { slice_node = declared_only(slice_node) }
 				slice_node = with_own_locals(slice_node, program_globals)
-				reached[slice#2] = statements_in(slice_node)
-				if key == ø and #origins == 0 { origins = slice_origins(files) }
-				origin = if key != ø then baked_origin(key, files) else origins.get(slice#2)
-				if origin != ø { defined_origins[slice#1] = origin }
+				reached[slice#5] = statements_in(slice_node)
+				if slice#4 == ø {
+					if key == ø and #origins == 0 { origins = slice_origins(files) }
+					origin = if key != ø then baked_origin(key, files) else origins.get(slice#2)
+					if origin != ø { defined_origins[slice#1] = origin }
+				}
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
 	}
 	if #reached == 0 { return program }
 	brought = []
-	for slice in slices { if slice#2 in reached { brought += reached[slice#2] } }
+	for slice in slices { if slice#5 in reached { brought += reached[slice#5] } }
 	# a value the program reaches, `online := system_value("online") != 0`, holds before the program reads it; a
 	# function goes where the module wants its definitions (card prelude-definition-reachability)
 	values = brought.filter(goes_in_front)
@@ -924,24 +930,33 @@ called_words(n: Node): list := {
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(flat_statements(program), folder, [])
 	for source in sources#1 { for d in c_declarations_in(source) { used_c_functions[d#1] = d } }
-	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(std_module_path))
+	if #sources#1 == 0 and #sources#3 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(std_module_path), sources#3)
 }
-# [the sources of the standard modules the statements use, each after those it uses, the module names seen]
+# [the sources of the standard modules the statements use, each after those it uses, the module names seen, the
+# slices of the linked ones (signature.warp), whose text is never read]
 used_module_sources(statements: any, folder: text, seen: any): list := {
 	sources = []
+	linked = []
 	for statement in statements {
 		used = use_target(statement)
 		if used is symbol and file_used(statement, folder) == ø and name_of(used) not in seen {
 			seen += [name_of(used)]
-			source = used_module_text(name_of(used))
-			if source != "" {
+			signature = linked_signature(name_of(used))
+			source = if signature == ø then used_module_text(name_of(used)) else ""
+			if signature != ø {
+				inner = used_module_sources(signature.uses.map(module => plain_node(parsed("use " + module))), folder, seen)
+				sources += inner#1
+				seen = inner#2
+				linked += inner#3 + signature.slices
+			} else if source != "" {
 				inner = used_module_sources(flat_statements(source_parse(std_module_path(name_of(used)), source)), folder, seen)
 				sources += inner#1 + [source]
 				seen = inner#2
+				linked += inner#3
 			} else if not names_no_module(name_of(used)) {
 				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program or in lib/; a package is used by its path, use \"packages/" + name_of(used) + "/" + name_of(used) + ".warp\""
 			}
 		}
 	}
-	[sources, seen]
+	[sources, seen, linked]
 }
