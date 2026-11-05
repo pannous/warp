@@ -39,7 +39,7 @@ held_as(subjects: map, name: text, enum_name: text): map := {
 assigned_enum(value: Node, enums: map): text := match value {
 	Key(owner, Op.Dot, case): if is_name(owner) and name_of(owner) in enums then name_of(owner) else ""
 	List(parts, Bracket.Round, Separator.None): {
-		named = spelled_enums.filter(enum_name => #parts == 2 and parts#1 == symbol(spelled_function(enum_name, "case")))
+		named = spelled_enums.filter(enum_name => #parts == 2 and (parts#1 == symbol(spelled_function(enum_name, "case")) or parts#1 == symbol(spelled_function(enum_name, "coded"))))
 		if #named == 1 then named#1 else ""
 	}
 	_: ""

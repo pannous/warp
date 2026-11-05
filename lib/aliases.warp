@@ -25,6 +25,7 @@ power { operator: "^", symbol: Op.Pow, aliases: ["**"], power: [160, 159] }
 # the operators only a declaration gives meaning (lib/prelude.warp `infix operator ↑`), bound as tight as ^
 "↑" { declared: yes, power: [160, 159] }
 "↓" { declared: yes, power: [160, 159] }
+"·" { declared: yes, power: [160, 159] }
 "··" { declared: yes, power: [160, 159] }
 count { prefix-operator: "#", symbol: Op.Hash, aliases: [size, len, length] }
 # a class's position(p) is `b#p` and its index(i), `b[i]`, the parser's b#(i+1) (extensions/class_methods.warp)
