@@ -1860,6 +1860,26 @@ def code_statements(source: text): list {
 }
 
 def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: fixity_level(fixity)}
+// `square x := x*x`, `add a b := a + b` (decision spaced-definition-head): at a statement's start, plain names before
+// `:=` are a definition's head without its parentheses, square(x) := x*x; `f x` elsewhere stays a call
+def spaced_definition(p: Parser): Node {
+	if not at_statement_start(p) { return ø }
+	line = p.code[p.at .. statement_end(p)]
+	if not line.contains(" := ") { return ø }
+	head = line.split(" := ")#1
+	names = blank_words(head)
+	// (no keyword: `def f x := …` stays the def rule's)
+	if names.length < 2 or not names.all(name => is_plain_name(name) and keyword_form(name) == "") or names#1 == "def" { return ø }
+	p.at += head.length + 4
+	skip_spaces(p)
+	Key(call_of(names.map(name => symbol(name))), Op.Define, expression(p, 0))
+}
+// whether only blanks stand between the parser and its statement's start: the input's, a line's, after `;` or `{`
+def at_statement_start(p: Parser): bool {
+	before = p.at - 1
+	while before >= 0 and (p.code[before] == ' ' or p.code[before] == '\t') { before -= 1 }
+	before < 0 or p.code[before] == '\n' or p.code[before] == ';' or p.code[before] == '{'
+}
 def is_plain_name(word: text): bool := word.length > 0 and name_end(word, 0, word.length) == word.length
 
 def is_at_name_char(p: Parser, at: int): bool := at < p.n and is_name_char(p.code[at])
@@ -2087,6 +2107,8 @@ def prefixed(p: Parser): Node := {
 	phrase = if keyword_reader == ø then ø else keyword_reader(p, word)
 	// a reader that moved on read its statement, if only to nothing (a declaration a prescan applied)
 	if phrase != ø or p.at != word_start { return phrase }
+	spaced = spaced_definition(p)
+	if spaced != ø { return spaced }
 	if word in FIXITY_WORDS {
 		// an alias the pre-scan applied
 		if only_spells(operator_statement(statement_words_at(p))) { return skip_statement(p) }
