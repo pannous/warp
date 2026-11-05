@@ -194,7 +194,7 @@ global ascii_texts = []
 char_text(c: char): text := {
 	code = code_of(c)
 	if code >= Utf8.TwoBytesFrom { return code_point_text(code) }
-	if not ascii_texts { ascii_texts = new_list(Utf8.TwoBytesFrom) }
+	if #ascii_texts == 0 { ascii_texts = new_list(Utf8.TwoBytesFrom) }
 	if is_null(ascii_texts#(code + 1)) { ascii_texts#(code + 1) = code_point_text(code) }
 	unboxed_text(ascii_texts#(code + 1))
 }
