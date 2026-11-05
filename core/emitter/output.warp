@@ -90,3 +90,12 @@ def unboxed_to_show(given: TypedCode, result: ValueKind): TypedCode {
 }
 kinds_shown_unboxed = [ValueKind.Text, ValueKind.List, ValueKind.Char, ValueKind.Bool]
 def runtime_call(name: text, values: list): TypedCode { call_values(module.runtime[name], values) }
+# a runtime word the value always needs, not one a run reaches only for values past the core (a ratio, a big int): in a
+# build that leaves out its extension, a warning where it is written, as a run that gets there traps (`took / 100` of
+# two ints is an exact ratio: warp test trapped; card after-push-tiers-1-2-1105). Not a refusal: a library the build
+# brings may hold such a word no run of it calls (math.warp percent)
+def needed_call(name: text, values: list): TypedCode {
+	warning = name + " traps here, its extension is left out of this build (decision extension-row-optional)" + module.emitting_at
+	if cut_names.has(name) and not module.warned.has(warning) { module.warned[warning] = yes; warn warning }
+	runtime_call(name, values)
+}

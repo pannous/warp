@@ -802,8 +802,12 @@ def shake_runtime(wanted: bool) { module.shakes_runtime = wanted }
 # left_out_runtime_words): one reached is kept as a trapping stub, and nothing it calls is reached through it. A global,
 # as a Module field more fails the seed's compile
 global cut_positions = {}
+# those words by name, for needed_call
+global cut_names = {}
 def cut_runtime_words(names: list) {
 	cut_positions = {}
+	cut_names = {}
+	for name in names { cut_names[name] = yes }
 	if module.runtime_image == ø { return }
 	for name in names { if module.runtime_image.words.has(name) { cut_positions[module.runtime_image.words[name]#1 - module.runtime_image.imports] = yes } }
 }
