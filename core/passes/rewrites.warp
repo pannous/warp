@@ -394,7 +394,10 @@ code_heads(n: Node, written: any): map := {
 	heads
 }
 own_heads_of(code: Node, heads: map) := {
-	if code is key { heads[key_head(code)] = yes } else if is_group(code) {
+	if code is key {
+		heads[key_head(code)] = yes
+		if is_spaced_definition(code) { own_heads_of(head_spread(code), heads) }
+	} else if is_group(code) {
 		heads[group_head(code, "")] = yes
 		if #code > 0 and code#1 is symbol { heads[group_head(code, name_of(code#1))] = yes }
 	} else { heads[atom_head] = yes }
@@ -1971,7 +1974,7 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	# the node it marks
 	if is_attribute(code) and not is_attribute(pattern) { return rule_matches(pattern, attribute_marked(code), bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
-	if is_group(pattern) and defines_last(pattern) and is_key(code, Op.Define) and is_called_head(key_of(code)) { return rule_matches(pattern, head_spread(code), bound) }
+	if is_group(pattern) and defines_last(pattern) and is_spaced_definition(code) { return rule_matches(pattern, head_spread(code), bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
@@ -1981,6 +1984,7 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 # is unit(hand) := 4inch), as written for a pattern spelling it spaced, `unit $name := $value` (the phrase unit,
 # $name := $value): a used module's rule sees the form the program wrote
 defines_last(pattern: Node): bool := bracket_of(pattern) == "" and separator_of(pattern) == " " and is_key(items_of(pattern)[#pattern - 1], Op.Define)
+is_spaced_definition(code: Node): bool := is_key(code, Op.Define) and is_called_head(key_of(code))
 head_spread(definition: Node): Node := {
 	words = items_of(key_of(definition))
 	rule_phrase(words[0 ..< #words - 1] + [placed(Key(words[#words - 1], Op.Define, value_of(definition)), definition)])
