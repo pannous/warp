@@ -88,19 +88,18 @@ function_word(n: Node): text? := match n {
 # statically holds (`self` its method's class, `c = Counter()` Counter, `xs = []` list)
 class Routing { classes: map; names: list; methods: list; known: map }
 
-# the methods the last lift routed, which a module being built keeps in its warp.signature (prebuilt.warp image_fields)
-global lifted_routes = []
-# whether a linked module's lift routed the method, which a program lifting its classes again routes alike, so both
-# name it the same (`union·Set`, else `union`) whatever else either sees; ø for a method of no linked class alone
-linked_routing(classes: map, names: list, method: text): bool? := {
+# whether a module's class routes the method, decided by what holds whatever else a compile reaches: a word of the
+# library (its index, the runtime, a typed line), an operator, a word of the syntax, a position word. A module being
+# built and a program linking it lift its classes alike, so both name a method the same (`union·Set`); ø for a
+# method a class of the program's own declares too, routed by all the program reaches
+module_routing(classes: map, names: list, method: text, operator_methods: list): bool? := {
 	linked = concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
 	owners = owners_of(classes, names, method)
-	if #owners == 0 or not owners.all(owner => owner in linked) { return ø }
-	linked_signatures.values.any(signature => method in signature.routes)
+	if #owners == 0 or not (module.relocating or owners.all(owner => owner in linked)) { return ø }
+	is_library_word(method) or library_index_section("word").has(method) or method in operator_methods or names_syntax(method) or method in position_words
 }
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
-	lifted_routes = []
 	top_statements = statements_in(program)
 	classes = {}
 	for top_statement in top_statements {
@@ -132,8 +131,7 @@ methods_lifted(program: Node): Node := {
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and 1 in taken_counts(classes, liftable, method))
-	routes = methods.filter(method => linked_routing(classes, liftable, method) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
-	lifted_routes = routes
+	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
 	entry_words = []
 	for method in operator_methods {

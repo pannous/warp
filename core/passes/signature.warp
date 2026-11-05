@@ -6,7 +6,7 @@
 # ~0.3 s). The first section behind the header, so a reader reads its bytes first. `warp signature <m>` shows it as
 # warp text
 SIGNATURE_SECTION = "warp.signature"
-class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; routes: list; runtime: list }
+class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list }
 
 # the signature of the standard module `name` as lib/ lies now, a node; with the fields of its image (prebuilt.warp
 # image_fields) when its compile wrote them
@@ -34,7 +34,7 @@ module_signature(name: text, wasm: list): ModuleSignature? := {
 	fields = {}
 	for entry in items_of(unpack(utf8_text(wasm[place#1 ..< place#2]))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", slice#3, module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), routes: listed(fields, "routes").map(method => "${method}"), runtime: listed(fields, "runtime"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", slice#3, module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"))
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])
