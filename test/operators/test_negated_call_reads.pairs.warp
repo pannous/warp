@@ -1,0 +1,11 @@
+# decision negated-call: a minus binds weaker than a word's application, `-f x` is -(f x)
+'-floor 2.5'	-2
+'y = -sqrt 16; y'	-4
+'2 * -abs 3'	-6
+'x = 5; -x 1'	[-5, 1]
+'x = 2; [-x 1]'	[-2, 1]
+'-2 * 3'	-6
+'x = 5; y = 2; -x - y'	-7
+'x = 5; -x * 2'	-10
+'x = -1; -x == 1'	yes
+'xs = [1, 2]; -count xs'	-2
