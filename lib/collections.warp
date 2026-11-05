@@ -68,6 +68,24 @@ class Counter { keys = []; counts = []
 	get(x) := { i = keys.index_of(x); if i { counts#i } else { 0 } }
 	most_common() := { best = 1; for i in 1 to count(counts) { if counts#i > counts#best { best = i } }; keys#best }
 }
+// A map kept as two lists, its keys in the order first set and their values (decision map-protocol): no hashing, any
+// value a key. It has the map words, so it is a map: keys(m), m["k"], m.k, k in m, for k in m and lib/map.warp's words
+// reach it. `map default ListMap` makes Map{…} and map{…} build one: ListMap(m) takes the entries of the map m
+class ListMap { ks = []; vs = []
+	init(m = {}) := { for k in keys(m) { set(k, m.get(k)) } }
+	keys() := ks
+	get(k) := { i = ks.index_of(k); if i { vs#i } else { ø } }
+	has(k) := k in ks
+	set(k, v) := { i = ks.index_of(k); if i { vs#i = v } else { ks.add(k); vs.add(v) } }
+	remove(k) := {
+		i = ks.index_of(k)
+		if i == 0 { return ø }
+		v = vs#i
+		ks = ks[:i - 1] + ks[i:]
+		vs = vs[:i - 1] + vs[i:]
+		v
+	}
+}
 // A binary min-heap (card lib-data-structures): pop and peek give the smallest priority first; push(x) uses x as its own
 // priority, push_with(x, priority) a separate one (two names: one name of two arities trips core-use-overloaded-name).
 // Equal priorities come out in no promised order. pop and peek of an empty queue are refused
