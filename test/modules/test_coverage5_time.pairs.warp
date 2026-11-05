@@ -1,0 +1,10 @@
+# coverage audit 2, batch 5: time zones, patterns and durations (UTC milliseconds or seconds as documented), edge cases
+«use time; z = zone_named("Europe/Berlin"); z.name == "Europe/Berlin" and z.standard == 3600 and zone_named("UTC").standard == 0»	true
+«use time; r = try { zone_named("Mars/Base") } catch e { "" + e }; r == "unknown time zone Mars/Base: not in the time zone rules (lib/time.warp time_zones)"»	true
+«use time; [format_pattern(0, "d MMM yyyy"), format_pattern(-1, "yyyy-MM-dd HH:mm:ss.SSS"), format_pattern(951782400000, "EEE dd/MM/yy")] == ["1 Jan 1970", "1969-12-31 23:59:59.999", "Tue 29/02/00"]»	true
+«use time; [format_duration(0), format_duration(5430000), format_duration(86400000), format_duration(90061000)] == ["0ms", "1h 30m 30s", "1d", "1d 1h 1m 1s"]»	true
+«use time; [format_iso_duration(0), format_iso_duration(90061000), format_iso_duration(1500), format_iso_duration(-1000)] == ["PT0S", "P1DT1H1M1S", "PT1.5S", "-PT1S"]»	true
+«use time; now().ms > 1700000000000»	true
+«use time; z = zone_named("Europe/Berlin"); [zone_instant(z, 1704067200, Disambiguation.Reject), zone_instant(z, 1719792000, Disambiguation.Reject)] == [1704063600, 1719784800]»	true
+«use time; z = zone_named("Europe/Berlin"); [zone_instant(z, 1711850400, Disambiguation.Earlier), zone_instant(z, 1711850400, Disambiguation.Later), zone_instant(z, 1729994400, Disambiguation.Earlier), zone_instant(z, 1729994400, Disambiguation.Later)] == [1711843200, 1711846800, 1729987200, 1729990800]»	true
+«use time; z = zone_named("Europe/Berlin"); r = try { zone_instant(z, 1711850400, Disambiguation.Reject) } catch e { "" + e }; starts_with(r, "that wall time does not exist in Europe/Berlin")»	true

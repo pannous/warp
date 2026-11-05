@@ -64,6 +64,7 @@ json_object_read(source: text, at: int): list := {
 	object = {}
 	at = json_skipped(source, at)
 	while at <= #source and source#at != "}" {
+		if source#at == "[" or source#at == "{" { raise json_refusal(source, "a key expected, not " + source#at) }
 		key = if source#at == "\"" or source#at == "'" then json_text_read(source, at + 1, source#at) else json_word_read(source, at)
 		at = json_skipped(source, key#2)
 		if at > #source or source#at != ":" { raise json_refusal(source, "no : after the key " + key#1) }
@@ -123,11 +124,38 @@ json_number_read(source: text, at: int): list := {
 	end = at
 	while end <= #source and source#end in JSON_NUMBER_CHARACTERS { end += 1 }
 	digits = source[at - 1..<end - 1]
+	if not json_number_valid(digits) { raise json_refusal(source, "a bad number " + digits) }
 	fractional = "." in digits or "e" in digits or "E" in digits
 	// two returns, not one `if … then float else int` inside the list, which typed every number a float (card
 	// samples-dogfood-apps: a todo id read back from JSON refused `next_id(…): int`)
 	if fractional { return [float(digits), end] }
 	[whole_number(digits), end]
+}
+// JSON's number, with JSON5's leading + and a fraction without digits on one side (+1, .5, 1.): one sign, digits, no
+// leading zero, an exponent's sign only after its e (-, ++1, 1+2, 012 are none, JSONTestSuite)
+json_number_valid(digits: text): bool := {
+	at = 1
+	n = #digits
+	if at <= n and (digits#at == "-" or digits#at == "+") { at += 1 }
+	whole = at
+	while at <= n and is_digit(digits#at) { at += 1 }
+	if at - whole > 1 and digits#whole == "0" { return no }
+	some = at > whole
+	if at <= n and digits#at == "." {
+		at += 1
+		fraction = at
+		while at <= n and is_digit(digits#at) { at += 1 }
+		some = some or at > fraction
+	}
+	if not some { return no }
+	if at <= n and (digits#at == "e" or digits#at == "E") {
+		at += 1
+		if at <= n and (digits#at == "-" or digits#at == "+") { at += 1 }
+		exponent = at
+		while at <= n and is_digit(digits#at) { at += 1 }
+		if at == exponent { return no }
+	}
+	at > n
 }
 whole_number(digits: text): int := {
 	negative = digits#1 == "-"
