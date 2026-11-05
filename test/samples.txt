@@ -1,14 +1,14 @@
-# 24a0fc71ce 2026-11-05 20:11 199/260 76.5%
+# f639aae225 2026-11-06 00:20 210/260 80.8%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
+ok   samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
 ok   samples/advanced/snake.warp
 ok   samples/apps/checksum_inventory.warp
 ok   samples/apps/comment_board.warp
 ok   samples/apps/config_validator.warp
-ok   samples/apps/deadlines.warp
 ok   samples/apps/dependency_resolver.warp
 ok   samples/apps/inventory_report.warp
 ok   samples/apps/invoice_report.warp
@@ -30,6 +30,7 @@ ok   samples/errors/raise_error.warp
 ok   samples/errors/try_catch.warp
 ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
+ok   samples/events/arrow_keys.warp
 ok   samples/functions/ackermann.warp
 ok   samples/functions/block_arguments.warp
 ok   samples/functions/fibonacci.warp
@@ -86,13 +87,19 @@ ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
 ok   samples/gpu/northern_lights.warp
+ok   samples/gpu/ocean.warp
 ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
+ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
+ok   samples/graphics/paint_text.warp
+ok   samples/graphics/shader_brush.warp
+ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
+ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/phrases.warp
@@ -152,8 +159,10 @@ ok   samples/objects/data_structures.warp
 ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/dijkstra.warp
 ok   samples/objects/json_parser.warp
+ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
+ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/music.warp
@@ -163,11 +172,13 @@ ok   samples/sound/signal_graph.warp
 ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp
-ok   samples/sound/sound_patterns.warp
+ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
+ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
+ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
 ok   samples/system/crontab.warp
 ok   samples/system/unix_commands.warp
@@ -210,21 +221,14 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: outside the core: the unknown name query
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/particles.warp: incompatible import type for `warp/draw::show`
 FAIL samples/advanced/test.warp: outside the core: the call array(…)
-FAIL samples/events/arrow_keys.warp: outside the core: the unknown name use
+FAIL samples/apps/deadlines.warp: no field ms
 FAIL samples/events/effects.warp: outside the core: a function value in .
 FAIL samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
 FAIL samples/functions/functions.warp: outside the core: a call of reduce with 3 arguments
-FAIL samples/gpu/fluid_smear_dsl.warp: outside the core: the unknown name use
-FAIL samples/gpu/fluid_smear.warp: outside the core: the unknown name use
-FAIL samples/gpu/ocean.warp: outside the core: the unknown name use
-FAIL samples/gpu/watercolor.warp: outside the core: the unknown name use
-FAIL samples/graphics/finger_paint.warp: outside the core: the unknown name use
-FAIL samples/graphics/paint_text.warp: incompatible import type for `warp/draw::show`
-FAIL samples/graphics/shader_brush.warp: outside the core: the unknown name use
-FAIL samples/graphics/shader_trails.warp: outside the core: the unknown name use
-FAIL samples/graphics/window_size.warp: incompatible import type for `warp/draw::show`
+FAIL samples/gpu/fluid_smear_dsl.warp: outside the core: the call operator_·(…)
+FAIL samples/gpu/fluid_smear.warp: outside the core: the call operator_·(…)
+FAIL samples/gpu/watercolor.warp: outside the core: the unknown name view
 FAIL samples/hello/natural.warp: outside the core: the unknown name one
 TIME samples/lists/dot.warp: used its 30 s of CPU
 FAIL samples/modules/javascript.warp: outside the core: the call randomUUID(…)
@@ -235,13 +239,9 @@ FAIL samples/numbers/measurements.warp: outside the core: the unknown name certa
 FAIL samples/objects/references.warp: outside the core: the field members of a int
 FAIL samples/python/numpy_matrix.warp: no C function Py_IsInitialized in its library, or the library not found
 FAIL samples/python/python_modules.warp: no C function Py_IsInitialized in its library, or the library not found
-FAIL samples/signals/signal_fields.warp: outside the core: the unknown name use
-FAIL samples/sound/gpu_visualizer_warp.warp: outside the core: the unknown name use
 FAIL samples/sound/midi.warp: the host word midi.send is not in warp yet
-TIME samples/sound/sound_pipes.warp: used its 30 s of CPU
-FAIL samples/sound/visualizer.warp: incompatible import type for `warp/draw::show`
+FAIL samples/sound/sound_patterns.warp: outside the core: the operator while with nothing before it
 FAIL samples/storage/orm_units.warp: hint: m is units's fix: use units
-FAIL samples/storage/orm.warp: hint: stored is storage's fix: use storage
 FAIL samples/text/uniscript_text.warp: packages/uniscript/uniscript.warp: no such file to use
 FAIL samples/wasm/component_reflection.warp: outside the core: the unknown name demo
 FAIL samples/wasm/import_compiled.warp: no module, library or package named shapes: no shapes.warp beside the program or in lib/; a package is used by its path, use "…"
@@ -249,7 +249,7 @@ FAIL samples/web/component_binding.warp: outside the core: the call html_escape(
 FAIL samples/web/computed_tags.warp: outside the core: the call html_escape(…) at lib/markup.warp:371 (in html_escaped)
 FAIL samples/web/counter.warp: outside the core: the call html_escape(…) at lib/markup.warp:371 (in html_escaped)
 FAIL samples/web/form_submit.warp: outside the core: the call html_escape(…) at lib/markup.warp:371 (in html_escaped)
-FAIL samples/web/hello_div.warp: outside the core: the unknown name use
+FAIL samples/web/hello_div.warp: outside the core: the call html_escape(…) at lib/markup.warp:371 (in html_escaped)
 FAIL samples/web/html_dsl.warp: outside the core: the call html_escape(…) at lib/markup.warp:371 (in html_escaped)
 FAIL samples/web/html.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:496 (in style_as_written)
 FAIL samples/web/keyframes.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:496 (in style_as_written)
