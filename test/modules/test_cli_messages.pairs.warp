@@ -1,0 +1,16 @@
+// lib/cli.warp: warp's own messages, --help and the help text, positional slots (card lib-cli-args)
+'use cli; try { parse_args([{name: "out"}], ["--zz"])["help"] } catch e { e.message }'	"cli: unknown option --zz"
+'use cli; try { parse_args([{name: "out", short: "o"}], ["-x"])["help"] } catch e { e.message }'	"cli: unknown option -x"
+'use cli; try { parse_args([{name: "out"}], ["--out"])["help"] } catch e { e.message }'	"cli: --out needs a value"
+'use cli; try { parse_args([{name: "out", short: "o"}], ["-o"])["help"] } catch e { e.message }'	"cli: -o needs a value"
+'use cli; try { parse_args([{name: "out", required: yes}], [])["help"] } catch e { e.message }'	"cli: missing required --out"
+'use cli; try { parse_args([{name: "n", kind: "int"}], ["--n=x"])["help"] } catch e { e.message }'	"cli: --n wants an int, not x"
+'use cli; try { parse_args([{name: "v", kind: "flag"}], ["--v=1"])["help"] } catch e { e.message }'	"cli: --v takes no value"
+'use cli; try { parse_args([{name: "file", positional: yes}], [])["help"] } catch e { e.message }'	"cli: missing file"
+'use cli; try { parse_args([], ["a"])["help"] } catch e { e.message }'	"cli: unexpected a"
+'use cli; parse_args([{name: "out", required: yes}], ["--help"])'	{help: yes, out: ø}
+'use cli; parse_args([{name: "out"}], ["-h", "--zz"])["help"]'	yes
+'use cli; parse_args([{name: "src", positional: yes}, {name: "rest", positional: yes, many: yes}, {name: "dst", positional: yes}], ["a", "b", "c", "d"])'	{help: no, src: "a", rest: ["b", "c"], dst: "d"}
+'use cli; parse_args([{name: "mode", positional: yes, default: "list"}], [])'	{help: no, mode: "list"}
+'use cli; parse_args([{name: "n", kind: "int", positional: yes, many: yes}], ["1", "-2", "30"])'	{help: no, n: [1, -2, 30]}
+'use cli; cli_help("todo", [{name: "verbose", short: "v", kind: "flag", help: "talk more"}, {name: "file", default: "todo.json", help: "the store"}, {name: "words", positional: yes, many: yes, help: "the command"}])'	"usage: todo [-h] [--verbose] [--file FILE] [words ...]\n\npositional arguments:\n  words                 the command\n\noptions:\n  -h, --help            show this help\n  -v, --verbose, --no-verbose\n                        talk more\n  --file FILE           the store (default todo.json)"
