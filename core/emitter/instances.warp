@@ -305,10 +305,15 @@ def instance_place_code(f: Function) {
 	f.code = each_class_field(find, extra) + [op.i64_const, 0]
 }
 # is_class_instance(m): whether m is an instance of a class the program makes, a struct (an AST key without an
-# operator is marked as an instance too): a test of each class's struct, not of the open $Instance (subtype_prefix)
+# operator is marked as an instance too): a test of each class's struct, not of the open $Instance (subtype_prefix).
+# Every map lookup asks it, mostly of maps and lists: a node's kind other than a key's answers before the class tests
+# run, which cost 7.6% of compiling compiler.warp (card tests-class)
 def is_class_instance_code(f: Function) {
 	tests = made_classes().map(class_name => [op.local_get, 0] + gc_code(gc_ops.ref_test, [class_struct_index(class_name)]))
-	f.code = if #tests == 0 then [op.i32_const, 0] else tests#1 + concatenated(tests[1 ..].map(test => test + [op.i32_or]))
+	if #tests == 0 { f.code = [op.i32_const, 0]; return }
+	not_a_node = [op.local_get, 0] + gc_code(gc_ops.ref_test, [gc_type(gc.node)]) + [op.i32_eqz, op.if, no_value, op.i32_const, 0, op.return, op.end]
+	not_a_key = kind_code_of([op.local_get, 0]) + [op.i64_const] + sleb(Kind.Key) + [op.i64_ne, op.if, no_value, op.i32_const, 0, op.return, op.end]
+	f.code = not_a_node + not_a_key + tests#1 + concatenated(tests[1 ..].map(test => test + [op.i32_or]))
 }
 # instance_show(m): the text m's class shows it as by its show() (decision show-hook), ø when the program's classes
 # give none (class_methods.warp show·shown)
