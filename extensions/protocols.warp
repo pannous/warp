@@ -42,7 +42,13 @@ required_word(member: Node): text := if member is symbol then name_of(member) el
 protocols_applied(program: Node): Node := {
 	statements = statements_in(program)
 	declared_protocols = statements.map(protocol_of).filter(found => found != ø)
-	kept = statements.filter(statement => protocol_of(statement) == ø)
+	defaults = {}
+	for statement in statements {
+		named = default_named(statement)
+		if named != ø { defaults[named#1] = named#2 }
+	}
+	written = statements.filter(statement => protocol_of(statement) == ø and default_named(statement) == ø)
+	kept = written.map(statement => default_class_built(statement, defaults))
 	functions = []
 	conforming = {}
 	for declared in declared_protocols {
@@ -54,10 +60,34 @@ protocols_applied(program: Node): Node := {
 		classes = conforming_classes(kept, built_in)
 		if #classes > 0 { conforming[built_in.name] = [built_in.name] + classes }
 	}
-	if #conforming == 0 { return program }
+	if #conforming == 0 and #defaults == 0 and kept == written { return program }
 	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming)))
 	separated(bracketed(resolved, ""), ";")
 }
+
+# `map default ListMap` of a built-in protocol: [map, ListMap], the protocol and the class its Map{…} builds from
+# then on (decision lowercase-protocols: a protocol's capitalized name is its default class); else ø
+# (the early sugar has made it `map ?? ListMap`, extensions/sugar/defaults.warp, which as a statement means nothing else)
+default_named(statement: Node): list? := {
+	if not (is_key(statement, Op.Coalesce) and built_in_named(key_of(statement)) and value_of(statement) is symbol) { return ø }
+	[name_of(key_of(statement)).lower(), name_of(value_of(statement))]
+}
+built_in_named(n: Node): bool := n is symbol and built_in_protocols().any(built_in => built_in.name == name_of(n).lower())
+# `Map{a: 1}` and `map{a: 1}`: the protocol's default class built of the entries, the hashed map itself unless a
+# `map default` names a class, which is then called with it (`ListMap({a: 1})`); `Map x = v` the same of v. An entry
+# `map: {…}` of a written map stays one (Map{…} is built there too)
+default_class_built(n: Node, defaults: map): Node := {
+	if is_group(n) and bracket_of(n) == "{" { return children(n, item => if is_key(item, Op.Colon) and key_of(item) is symbol and not is_capitalized(name_of(key_of(item))) then Key(key_of(item), Op.Colon, default_class_built(value_of(item), defaults)) else default_class_built(item, defaults)) }
+	if is_key(n, Op.Colon) and built_in_named(key_of(n)) and holds_entries(value_of(n)) { return built_by_default(key_of(n), default_class_built(value_of(n), defaults), defaults) }
+	if is_group(n) and bracket_of(n) == "" and #n == 2 and built_in_named(n#1) and is_key(n#2, Op.Assign) and key_of(n#2) is symbol { return Key(key_of(n#2), Op.Assign, built_by_default(n#1, default_class_built(value_of(n#2), defaults), defaults)) }
+	children(n, part => default_class_built(part, defaults))
+}
+built_by_default(protocol: Node, value: Node, defaults: map): Node := {
+	name = name_of(protocol).lower()
+	if name in defaults then call_of(defaults[name], [value]) else value
+}
+# a written map: a curly list of `name: value` entries
+holds_entries(n: Node): bool := is_group(n) and bracket_of(n) == "{" and #n > 0 and items_of(n).all(item => is_key(item, Op.Colon))
 
 # `perimeter() := 2 * area()` of a protocol: `perimeter(self) := 2 * self.area()`, each word of the protocol its
 # value's

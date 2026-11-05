@@ -1245,7 +1245,9 @@ instance_names_in(program: Node, nodes: list): map := {
 	found = {}
 	if #classes == 0 { return found }
 	types = assigned_types_in(nodes, classes)
-	for name in types.keys { if types[name] in classes { found[name] = yes } }
+	# self, a constructor's `self = A()`, also names a dispatcher's value, any value, whose in-place fallback
+	# `self.remove(k)` the list and map rules lower (card set-method)
+	for name in types.keys { if types[name] in classes and name != "self" { found[name] = yes } }
 	found
 }
 
