@@ -1,0 +1,6 @@
+# a radix literal is the 64 bits it writes (card wasm-rebake-trap): past 63 bits it is the negative int of that
+# bit pattern, as sha512's constants mean, never a big int
+'0xffff_ffff_ffff_ffff'	-1
+'0x8000000000000000'	-9223372036854775808
+'0b1000000000000000000000000000000000000000000000000000000000000001'	-9223372036854775807
+'0x7fff_ffff_ffff_ffff'	9223372036854775807
