@@ -1,0 +1,6 @@
+// lib/json.warp parse_json: a whole number reads back as an int, one with a fraction or an exponent as a float (samples/apps/todo_cli.warp)
+'use json; type(parse_json("7")) == type(7)'	yes
+'use json; type(parse_json("[1, 2.5]")[0]) == type(1)'	yes
+'use json; type(parse_json("[1, 2.5]")[1]) == type(parse_json("2.5"))'	yes
+'use json; f(n: int): int := n + 1; f(parse_json("[41]")[0])'	42
+'use json; parse_json("[-3, 1e2]")'	[-3, 100]

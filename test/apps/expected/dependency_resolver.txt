@@ -1,0 +1,8 @@
+app 1.0.0
+http 1.3.0
+log 1.4.7
+tls 0.9.4
+web 2.1.3
+install order: log, tls, http, web, app
+conflict: no tls fits ^2.0.0
+topological_sort: cycle b -> c -> a -> b
