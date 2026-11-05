@@ -10,9 +10,11 @@ read_radix_number(p: Parser): Node := {
 }
 radix_numbers_extension = Extension{name: "radix_numbers", number_readers: [read_radix_number]}
 
-# The digits of a number in `base` (`_` between digits), read
-# Rust twin: literals.rs read_number_value, its 0x and 0b branches
+# The digits of a number in `base` (`_` between digits), read as the 64 bits they write: `0xffff_ffff_ffff_ffff` is
+# -1. Each digit's bits are shifted in, so no product grows past 64 bits: the compiler's own build carries no big
+# numbers (decision extension-row-optional) and reads such literals in lib/hash.warp (card wasm-rebake-trap)
 def radix_value(p: Parser, base: int): int {
+	digit_bits = if base == 16 then 4 else 1
 	value = 0
 	while p.at < p.n {
 		c = p.code[p.at]
@@ -20,7 +22,7 @@ def radix_value(p: Parser, base: int): int {
 		if not separates {
 			digit = digit_value(c)
 			if digit >= base { return value }
-			value = value * base + digit
+			value = (value << digit_bits) + digit
 		}
 		advance(p)
 	}

@@ -1,7 +1,7 @@
 # A value of kind Node (card pure-node-values): `Node` is the type of any
 # node, so `n: Node`, `f(…): Node` and `x: Node = v` hold any value; `Node.Key` is the case Key; after the matches took
 # their patterns apart (node_matches.warp), `Key(a, op, b)` builds the key, `List(items, bracket, separator)` the list,
-# unless the program gives Key or List a meaning of its own. Op, Bracket and Separator are node.warp's enums whose cases
+# `Text(t)`, `Symbol(name)`, … each case its node (case_builders), unless the program gives the case's name a meaning of its own. Op, Bracket and Separator are node.warp's enums whose cases
 # are spelled as a node carries them (decision enum-case, card pure-op-cases): `print Op.Add` prints Add, `Op.Add as
 # text` is "+", `"+" as Op` is Add, and a case equals its spelling, `Op.Add == "+"`. A program naming them, or building
 # keys and lists, gets their declarations and the spelling functions `Op·text(c)` and `Op·case(t)`.
@@ -79,14 +79,24 @@ held_text(enum_name: text, value: Node): Node := {
 	applied(spelled_function(enum_name, "text"), value)
 }
 
-# `Key(a, op, b)` → key·node(a, Op·text(op), b), the library word key under a name no program writes, so a local `key`
-# stays a value (card key-shadows-constructor); `List(xs, bracket, separator)` → separated(bracketed(xs, bracket), separator),
-# the bracket and separator spelled
+# the word building each case a match takes apart from its parts, the inverse of its readers (node_matches.warp
+# case_readers): a number, character or text is its own node; the others under a name no program writes, so a local
+# `key`, `symbol` or `list` stays a value (cards key-shadows-constructor, text-refused)
+case_builders = {"Number": "itself", "Char": "itself", "Text": "itself", "Symbol": "symbol·node", "Key": "key·node", "List": "list·node"}
+
+# `Key(a, op, b)` → key·node(a, Op·text(op), b), `Text(t)` → t: the parts in their readers' order, a spelled part
+# (op_of, bracket_of, separator_of) spelled
 construction(parts: list, n: Node, builds: map, declared: map): Node := {
-	if #parts != 4 or not (parts#1 is symbol) or name_of(parts#1) not in builds { return n }
-	if name_of(parts#1) == "Key" { return call_of("key·node", [parts#2, spelled_text("Op", parts#3, declared), parts#4]) }
-	bracketed_items = call_of("bracketed", [parts#2, spelled_text("Bracket", parts#3, declared)])
-	call_of("separated", [bracketed_items, spelled_text("Separator", parts#4, declared)])
+	if not (parts#1 is symbol) or name_of(parts#1) not in builds { return n }
+	case = name_of(parts#1)
+	readers = case_readers[case]
+	if #parts - 1 != #readers { return n }
+	arguments = []
+	for i in 1 to #readers {
+		reader = readers#i
+		arguments += [if spelled_readers.has(reader) then spelled_text(spelled_readers[reader], parts#(i + 1), declared) else parts#(i + 1)]
+	}
+	if case_builders[case] == "itself" then arguments#1 else call_of(case_builders[case], arguments)
 }
 
 # `"+" as Op` → Op.Add, `t as Op` → Op·case(t); an index as it is, for plain_enums.warp
@@ -298,7 +308,7 @@ node_cases(program: Node): Node := {
 	program = taking_spelled_enums(program)
 	scope = scope_of(program)
 	builds = {}
-	for case in ["Key", "List"] { if not (binds_value(scope, case) or binds_as(scope, case, Meaning.Function)) { builds[case] = yes } }
+	for case in case_builders.keys { if not (binds_value(scope, case) or binds_as(scope, case, Meaning.Function)) { builds[case] = yes } }
 	declared = declarations_found(program, declared_enum, {})
 	with_spelled_enums(bottom_up(program, n => node_value(n, builds, declared, scope)), declared)
 }
