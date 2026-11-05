@@ -1,0 +1,961 @@
+[
+[
+"join",
+"path_join(\"a\", \"b\")",
+"a/b",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a/\", \"b\")",
+"a/b",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a\", \"/b\")",
+"/b",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"\", \"b\")",
+"b",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a\", \"\")",
+"a/",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"/\", \"a\")",
+"/a",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a//\", \"b\")",
+"a//b",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a\", \"b/\")",
+"a/b/",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a/b\", \"../c\")",
+"a/b/../c",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"\", \"\")",
+"",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"/a\", \"b/c\")",
+"/a/b/c",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"ä\", \"ö.txt\")",
+"ä/ö.txt",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\".\", \"a\")",
+"./a",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a\", \".\")",
+"a/.",
+"posixpath.join"
+],
+[
+"join",
+"path_join(\"a\", \"~/b\")",
+"a/~/b",
+"posixpath.join"
+],
+[
+"normalize",
+"normalize_path(\"a/./b//../c/\")",
+"a/c",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"/../x\")",
+"/x",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"../a/../..\")",
+"../..",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"\")",
+".",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\".\")",
+".",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"/\")",
+"/",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"//\")",
+"//",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"///a\")",
+"/a",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"a/b/..\")",
+"a",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"a/..\")",
+".",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"/a/b/../../..\")",
+"/",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"./a\")",
+"a",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"a//b\")",
+"a/b",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"a/b/./\")",
+"a/b",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"../\")",
+"..",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"/./\")",
+"/",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"..\")",
+"..",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"ä/../ö\")",
+"ö",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\".hidden/./x\")",
+".hidden/x",
+"posixpath.normpath"
+],
+[
+"normalize",
+"normalize_path(\"a/../../b\")",
+"../b",
+"posixpath.normpath"
+],
+[
+"relative",
+"relative_path(\"a/b\", \"a/c/d\")",
+"../c/d",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"a\", \"a\")",
+".",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"a/b\", \"a\")",
+"..",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"a\", \"a/b\")",
+"b",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"/a/b\", \"/a/c\")",
+"../c",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"/\", \"/a\")",
+"a",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"/a\", \"/\")",
+"..",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"a/b/\", \"a/b/c\")",
+"c",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"a/./b\", \"a/b/c\")",
+"c",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"x\", \"y\")",
+"../y",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"\", \"a\")",
+"a",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"a\", \"\")",
+"..",
+"posixpath.relpath(to, from)"
+],
+[
+"relative",
+"relative_path(\"ä/b\", \"ä/c\")",
+"../c",
+"posixpath.relpath(to, from)"
+],
+[
+"basename",
+"basename(\"a/b.txt\")",
+"b.txt",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"a/b.txt\")",
+"a",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"a/b.txt\")",
+".txt",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"a/b.txt\")",
+"b",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"a/b/\")",
+"b",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"a/b/\")",
+"a",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"a/b/\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"a/b/\")",
+"b",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"/\")",
+"",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"/\")",
+"/",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"/\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"/\")",
+"",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"\")",
+"",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"\")",
+"",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"c\")",
+"c",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"c\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"c\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"c\")",
+"c",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"/c\")",
+"c",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"/c\")",
+"/",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"/c\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"/c\")",
+"c",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"a.tar.gz\")",
+"a.tar.gz",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"a.tar.gz\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"a.tar.gz\")",
+".gz",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"a.tar.gz\")",
+"a.tar",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\".bashrc\")",
+".bashrc",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\".bashrc\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\".bashrc\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\".bashrc\")",
+".bashrc",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"a.\")",
+"a.",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"a.\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"a.\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"a.\")",
+"a.",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"..\")",
+"..",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"..\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"..\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"..\")",
+"..",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\".\")",
+"",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\".\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\".\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\".\")",
+"",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"a/b/c\")",
+"c",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"a/b/c\")",
+"a/b",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"a/b/c\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"a/b/c\")",
+"c",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\".x.y\")",
+".x.y",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\".x.y\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\".x.y\")",
+".y",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\".x.y\")",
+".x",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"a..b\")",
+"a..b",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"a..b\")",
+".",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"a..b\")",
+".b",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"a..b\")",
+"a.",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"dir.d/file\")",
+"file",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"dir.d/file\")",
+"dir.d",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"dir.d/file\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"dir.d/file\")",
+"file",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"ünï/cödé.md\")",
+"cödé.md",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"ünï/cödé.md\")",
+"ünï",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"ünï/cödé.md\")",
+".md",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"ünï/cödé.md\")",
+"cödé",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"a/b.txt/\")",
+"b.txt",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"a/b.txt/\")",
+"a",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"a/b.txt/\")",
+".txt",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"a/b.txt/\")",
+"b",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"//a\")",
+"a",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"//a\")",
+"//",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"//a\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"//a\")",
+"a",
+"pathlib stem"
+],
+[
+"basename",
+"basename(\"x/.git\")",
+".git",
+"pathlib name"
+],
+[
+"dirname",
+"dirname(\"x/.git\")",
+"x",
+"pathlib parent"
+],
+[
+"extension",
+"extension(\"x/.git\")",
+"",
+"pathlib suffix"
+],
+[
+"stem",
+"stem(\"x/.git\")",
+".git",
+"pathlib stem"
+],
+[
+"glob_match",
+"glob_match(\"a/*.txt\", \"a/b.txt\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"*.txt\", \"a/b.txt\")",
+false,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"a/**\", \"a/b/c\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"**/a\", \"a\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"**/c\", \"a/b/c\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"a/?.txt\", \"a/b.txt\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"a/?.txt\", \"a/bb.txt\")",
+false,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"[ab].md\", \"a.md\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"[!ab].md\", \"c.md\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"[a-c]x\", \"bx\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"*\", \".hidden\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"*.gz\", \"a.tar.gz\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"a/*/c\", \"a/b/c\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"a/*/c\", \"a/b/d/c\")",
+false,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"ä*\", \"äb\")",
+true,
+"pathlib full_match"
+],
+[
+"glob_match",
+"glob_match(\"*\", \"\")",
+false,
+"pathlib full_match"
+],
+[
+"files",
+"write(\"TMP/a.txt\", \"hello\"); read(\"TMP/a.txt\")",
+"hello",
+"open().read"
+],
+[
+"files",
+"write(\"TMP/u.txt\", \"ünï 🌍\\nline\"); read(\"TMP/u.txt\")",
+"ünï 🌍\nline",
+"open().read"
+],
+[
+"files",
+"write(\"TMP/e.txt\", \"\"); read(\"TMP/e.txt\")",
+"",
+"open().read"
+],
+[
+"files",
+"write(\"TMP/o.txt\", \"one\"); write(\"TMP/o.txt\", \"two\"); read(\"TMP/o.txt\")",
+"two",
+"open('w') truncates"
+],
+[
+"files",
+"append_file(\"TMP/p.txt\", \"a\"); append_file(\"TMP/p.txt\", \"b\"); read(\"TMP/p.txt\")",
+"ab",
+"open('a')"
+],
+[
+"bytes",
+"write_bytes(\"TMP/b.bin\", [0, 1, 255, 10]); read_bytes(\"TMP/b.bin\")",
+[
+0,
+1,
+255,
+10
+],
+"open('rb')"
+],
+[
+"bytes",
+"write_bytes(\"TMP/z.bin\", []); read_bytes(\"TMP/z.bin\")",
+[],
+"open('rb')"
+],
+[
+"bytes",
+"write(\"TMP/t.txt\", \"é\"); read_bytes(\"TMP/t.txt\")",
+[
+195,
+169
+],
+"utf-8 bytes"
+],
+[
+"exists",
+"exists(\"TMP\")",
+true,
+"os.path.exists"
+],
+[
+"exists",
+"exists(\"TMP/nope\")",
+false,
+"os.path.exists"
+],
+[
+"exists",
+"write(\"TMP/x.txt\", \"x\"); exists(\"TMP/x.txt\")",
+true,
+"os.path.exists"
+],
+[
+"exists",
+"exists(\"\")",
+false,
+"os.path.exists"
+],
+[
+"exists",
+"write(\"TMP/.dot\", \"x\"); exists(\"TMP/.dot\")",
+true,
+"os.path.exists"
+],
+[
+"list_files",
+"write(\"TMP/l/b.txt\", \"1\"); write(\"TMP/l/a.md\", \"2\"); write(\"TMP/l/.h\", \"3\"); list_files(\"TMP/l\").sort",
+[
+".h",
+"a.md",
+"b.txt"
+],
+"os.listdir"
+],
+[
+"glob",
+"write(\"TMP/g/a.txt\", \"1\"); write(\"TMP/g/b.txt\", \"2\"); write(\"TMP/g/c.md\", \"3\"); glob(\"TMP/g/*.txt\")",
+[
+"TMP/g/a.txt",
+"TMP/g/b.txt"
+],
+"glob.glob sorted"
+],
+[
+"glob",
+"write(\"TMP/h/x1\", \"1\"); write(\"TMP/h/x22\", \"2\"); glob(\"TMP/h/x?\")",
+[
+"TMP/h/x1"
+],
+"glob.glob sorted"
+],
+[
+"glob",
+"glob(\"TMP/none/*.zz\")",
+[],
+"glob.glob"
+]
+]

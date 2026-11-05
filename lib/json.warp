@@ -1,6 +1,9 @@
 // The standard library module json (notes/stdlib.md section 7): `use json`. Warp data is a superset of JSON, read and
-// written here in warp, alike under every host: parse reads JSON5 too (comments, single quotes, trailing commas, bare
-// keys), and `json(t)` is json.parse(t) without `use json`; `x.json` is the JSON text of any value, to_json(x), also
+// written here in warp, alike under every host: parse reads JSON5 too, and leniently on purpose (decided on card
+// lib-path-file-conformance, test/json/README.md): JSON5 numbers (+1, .5, 1.), unknown escapes read as the
+// character (\x is x), raw control characters in strings (a tab, a line break), comments, single quotes, trailing
+// commas, bare keys and numeric bare keys ({1: 1}); and `json(t)` is json.parse(t) without `use json`; `x.json`
+// is the JSON text of any value, to_json(x), also
 // without `use json` (`{a: 1}.json` is {"a":1}), code in the JsonLogic shape (`1+1` is {"+":[1,1]})
 rewrite parse($input, $type) => $result where $type is type and $result = typed_json($input, $type, $program)
 
