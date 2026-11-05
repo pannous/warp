@@ -1,0 +1,7 @@
+# card lib-markdown-commonmark-3: raw HTML passed through by default; backslash keeps < literal
+'use markdown; markdown_html("<a><bab><c2c>\n")'	'<p><a><bab><c2c></p>\n'
+'use markdown; markdown_html("<div>\n*foo*\n\n*bar*\n")'	'<div>\n*foo*\n<p><em>bar</em></p>\n'
+'use markdown; markdown_html("foo <?php echo $a; ?>\n")'	'<p>foo <?php echo $a; ?></p>\n'
+'use markdown; markdown_html("foo <a href=\"&ouml;\">\n")'	'<p>foo <a href="&ouml;"></p>\n'
+'use markdown; markdown_html("\\<br/> not a tag\n")'	'<p>&lt;br/&gt; not a tag</p>\n'
+'use markdown; markdown_html("<del>*foo*</del>\n")'	'<p><del><em>foo</em></del></p>\n'
