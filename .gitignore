@@ -75,6 +75,8 @@ notes/OLD/
 *.bak
 **/*.bak
 test/web/task.txt
+# the sounds the sound tests render beside themselves (test/web save sound as: …)
+test/**/*.wav
 
 samples/tune.mid
 
