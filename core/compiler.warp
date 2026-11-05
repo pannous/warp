@@ -60,8 +60,8 @@ left_out_runtime_words(kept: list): list := {
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
 # runtime.wasm, a library module behind it, its operands relocatable (write_module), linking the modules it uses when
-# `links` (its linked form) or compiling them in (its spliced form)
-compile(source: text, folder: text, library_runtime: any = ø, links: bool = library_runtime == ø): any := {
+# `links` (its linked form) or compiling them in (its spliced form); a program links them
+compile(source: text, folder: text, library_runtime: any = ø, links: any = ø): any := {
 	fresh_module()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
@@ -77,11 +77,13 @@ compile(source: text, folder: text, library_runtime: any = ø, links: bool = lib
 	if #unknown > 0 { throw outside_the_core + "no C signature for " + unknown.join(", ") + ": declare it with a foreign line, `name(x: i32): i32 from 'library'`" }
 	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)
 	prepend_runtime(library_runtime ?? runtime_bytes())
-	linking = links and prepended()
+	linking = (links ?? library_runtime == ø) and prepended()
 	images = if linking then linked_libraries(source) else []
 	# a program using linked modules runs as its own module beside theirs and runtime.wasm's, importing their words
 	# (L5c, card wasm-module-linking); the compiler's own build keeps them spliced in (it runs with no modules beside it)
 	separately = separate_module_wanted or (#images > 0 and not own and library_runtime == ø)
+	# (linked, a module's words are called as its linked form made them)
+	if separately or module_written != "" { for image in images { with_linked_kinds(image, read_bytes(linked_module_file(image.name))) } }
 	relocate_program(separately)
 	shake_runtime(library_runtime == ø and not separately)
 	cut_runtime_words(if own then left_out_runtime_words(COMPILER_BUILD_EXTENSIONS) else [])
@@ -130,7 +132,7 @@ checked_facts(known: int): list := {
 # when its text is the bundled one; any other compiles from its source (a WARP_LIB edit, a module not prebuilt)
 MODULES_FOLDER = "modules"
 linked_libraries(source: text): list := {
-	folder = if module_written != "" then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
+	folder = linked_modules_folder()
 	images = []
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole; a
 	# module written links those it uses, never itself
@@ -159,13 +161,19 @@ linked_libraries(source: text): list := {
 }
 # the images, each behind those of the modules it uses: a word, class or global any two carry (sound's copy of
 # units') is the first's, the module that declares it
-dependencies_first(images: list): list := {
+dependencies_first(images: list): list := in_dependency_order(images.map(image => image.name)).map(name => images.filter(image => image.name == name)#1)
+# the modules named, each behind those of them it uses
+in_dependency_order(names: list): list := {
 	ordered = []
-	for image in images { ordered = with_dependencies(image, images, ordered) }
+	for name in names { ordered = with_dependencies(name, names, ordered, []) }
 	ordered
 }
-with_dependencies(image: LibraryImage, images: list, ordered: list): list := {
-	if ordered.any(placed => placed.name == image.name) { return ordered }
+# (two modules using each other: the one met first goes first)
+with_dependencies(name: text, names: list, ordered: list, visiting: list): list := {
+	if name in ordered or name in visiting { return ordered }
+	for inner in used_modules(LIBRARY_FILES.get(name + module_extension) ?? "") { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
+	ordered + [name]
+}
 	for inner in used_modules(LIBRARY_FILES.get(image.name + module_extension) ?? "") {
 		found = images.filter(other => other.name == inner)
 		if #found > 0 { ordered = with_dependencies(found#1, images, ordered) }
@@ -226,6 +234,10 @@ write_spliced_module(name: text, runtime_file: text, file: text) := {
 	if spliced is text { throw spliced }
 	write_bytes(spliced_file(file), spliced)
 }
+# a module's linked form, beside its spliced form
+linked_module_file(name: text): text := linked_modules_folder() + name + ".wasm"
+# where the modules a compile links are: beside runtime.wasm, or where the module written goes
+linked_modules_folder(): text := if module_written != "" then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 # the module a compile writes in its linked form, and the folder of the images it links: its own never linked
 global module_written = ""
 global module_written_folder = ""
@@ -236,7 +248,7 @@ write_linked_module(name: text, runtime_file: text, file: text) := {
 	try { made = compile(module_source(name), library_folder, read_bytes(runtime_file), yes) } catch refusal { made = refusal }
 	module_written = ""
 	if made is text { throw made }
-	write_bytes(file, linked_bytes(module.order, MODULE_START))
+	write_bytes(file, linked_bytes(module.order, MODULE_START, yes))
 }
 MODULE_START = "warp/start"
 SPLICED_SUFFIX = ".splice.wasm"
@@ -257,8 +269,8 @@ write_modules(folder: text, runtime_file: text) := {
 			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
 		}
 	}
-	# then each linked form, behind every image it may link
-	for name in std_module_names {
+	# then each linked form, behind every image it may link and every linked form it imports from
+	for name in in_dependency_order(std_module_names) {
 		file = folder + "/" + name + ".wasm"
 		if #read_bytes(spliced_file(file)) > 0 {
 			try { write_linked_module(name, runtime_file, file) } catch refusal { refused += [name + ".wasm (linked): " + refusal] }

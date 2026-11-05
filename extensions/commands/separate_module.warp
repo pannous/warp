@@ -84,7 +84,7 @@ def value_types_end(content: list, at: int): int {
 # (imported from `warp/<module>` by name), its own functions; the fixed GC types, the runtime's function types used,
 # each linked module's class group as that module declares it, its own classes, its own function types; its texts
 # behind the runtime's and the linked modules' segments (card wasm-module-linking, L5c)
-def linked_bytes(functions: list, entry: text = "main"): list {
+def linked_bytes(functions: list, entry: text = "main", words_listed: bool = no): list {
 	calls = relocated_operands(functions, relocated.calls)
 	called = range_list(#module.imports + module.runtime_image.functions).filter(index => calls.has(index))
 	words = linked_words_called(calls)
@@ -129,7 +129,32 @@ def linked_bytes(functions: list, entry: text = "main"): list {
 	for f in functions { f.index = numbering[f.index] }
 	parts = [types, imports, declared, globals, section(section_ids.export, vector(program_exports(functions, entry, numbering, own_globals))), elements, section(section_ids.data_count, uleb(#module.texts)), codes, texts]
 	names = vector(functions.map(f => index_name(f.index, f.name)))
-	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
+	listed = if words_listed then words_section(functions) else []
+	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks() + listed
+}
+# a linked module's words as this compile made them, each its name, parameter kinds and result kind: what a program
+# importing one calls it as (its spliced form, compiled apart, may hold a word of other kinds: sound's text·real)
+words_section_name = "warp.words"
+def words_section(functions: list): list := section(section_ids.custom, name_bytes(words_section_name) + vector(functions.map(f => name_bytes(f.name) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)))))
+# the image's words given the kinds its linked form (the module's <name>.wasm) made them of; a word it lacks keeps
+# its own (the import of one fails at load, naming it)
+def with_linked_kinds(image: LibraryImage, linked: list) {
+	place = section_place(linked, section_ids.custom, words_section_name)
+	if place == ø { throw image.name + ".wasm has no " + words_section_name + " section: warp rebuild writes it anew" }
+	reader = ByteReader(linked, place#1)
+	kinds = {}
+	for i in 0..<read_number(reader) {
+		name = read_name(reader)
+		parameters = []
+		for j in 0..<read_number(reader) { parameters += [read_kind(reader)] }
+		kinds[name] = [parameters, read_kind(reader)]
+	}
+	for word in image.functions {
+		if kinds.has(word.name) {
+			word.kinds = kinds[word.name]#1
+			word.result = kinds[word.name]#2
+		}
+	}
 }
 # the instance a linked module's items are imported from (core/native/driver.warp instance_path)
 def module_import_name(image: LibraryImage): text := "warp/" + image.name
