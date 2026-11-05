@@ -79,11 +79,12 @@ held_text(enum_name: text, value: Node): Node := {
 	applied(spelled_function(enum_name, "text"), value)
 }
 
-# `Key(a, op, b)` → key(a, Op·text(op), b); `List(xs, bracket, separator)` → separated(bracketed(xs, bracket),
-# separator), the bracket and separator spelled
+# `Key(a, op, b)` → key·node(a, Op·text(op), b), the library word key under a name no program writes, so a local `key`
+# stays a value (card key-shadows-constructor); `List(xs, bracket, separator)` → separated(bracketed(xs, bracket), separator),
+# the bracket and separator spelled
 construction(parts: list, n: Node, builds: map, declared: map): Node := {
 	if #parts != 4 or not (parts#1 is symbol) or name_of(parts#1) not in builds { return n }
-	if name_of(parts#1) == "Key" { return call_of("key", [parts#2, spelled_text("Op", parts#3, declared), parts#4]) }
+	if name_of(parts#1) == "Key" { return call_of("key·node", [parts#2, spelled_text("Op", parts#3, declared), parts#4]) }
 	bracketed_items = call_of("bracketed", [parts#2, spelled_text("Bracket", parts#3, declared)])
 	call_of("separated", [bracketed_items, spelled_text("Separator", parts#4, declared)])
 }
