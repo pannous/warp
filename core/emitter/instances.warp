@@ -223,10 +223,11 @@ def each_class_declaring(field: text, access: function): list {
 	}
 	code
 }
+def as_eq(value: list): list := value + gc_code(gc_ops.ref_cast_null, []) + [eq_type]
 # whether the value is an instance of the class itself: its struct, and its descriptor the class's
 def of_class(value: list, class_name: text): list {
 	struct_index = class_struct_index(class_name)
-	same = value + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, 1]) + gc_code(gc_ops.ref_cast_null, []) + [eq_type] + descriptor_global(class_name) + [op.ref_eq]
+	same = as_eq(value + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, 1])) + as_eq(descriptor_global(class_name)) + [op.ref_eq]
 	value + gc_code(gc_ops.ref_test, [struct_index]) + [op.if] + value_type(ValueKind.Bool) + same + [op.else, op.i32_const, 0, op.end]
 }
 # whether the name (parameter 1, a text node) is this field's: its byte count first, then its bytes (a lookup tests
