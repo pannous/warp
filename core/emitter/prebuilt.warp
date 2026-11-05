@@ -473,7 +473,6 @@ def bind_library_words() {
 	for image in module.linked_images {
 		for name in image.c_functions { program_import(name) }
 		for entry in image.classes {
-			if entry#1 == instance_struct() { gc_type(instance_struct()) }
 			if entry#1 not in module.class_structs { refuse("the program declares no class struct " + entry#1 + " of the linked module " + image.name) }
 			if struct_written(entry#1) != entry#2 { refuse("the class struct " + entry#1 + " of the linked module " + image.name + ", " + entry#2 + ", is " + struct_written(entry#1) + " in the program") }
 			gc_type(entry#1)
