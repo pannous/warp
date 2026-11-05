@@ -266,12 +266,12 @@ is_type_declaration(statement: Node): bool := match statement {
 unbound_rules(module_rules: list, program: Node): list := {
 	if #module_rules == 0 { return [] }
 	bindings = rule_bindings(program)
-	statements = statements_in(program)
-	module_rules.filter(rule => is_unbound(rule, bindings) or spells_definition_in(rule, statements))
+	parts = if module_rules.any(rule => defines_last(rule.pattern)) then nodes_in(program) else []
+	module_rules.filter(rule => is_unbound(rule, bindings) or spells_definition_in(rule, parts))
 }
 # a rule spelling a definition, `unit $name := $value`, keeps the definitions it matches, though their spaced head
 # (`unit hand := 4inch`, decision spaced-definition-head) binds its first word as the program's function
-spells_definition_in(rule: Rule, statements: list): bool := defines_last(rule.pattern) and statements.any(statement => rule_matches(rule.pattern, statement, {}))
+spells_definition_in(rule: Rule, parts: list): bool := defines_last(rule.pattern) and parts.any(part => rule_matches(rule.pattern, part, {}))
 # [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
 # all the sugar steps of a program (card speed-module-cache)
 rule_bindings(program: Node): list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
