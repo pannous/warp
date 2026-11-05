@@ -1,0 +1,10 @@
+as of 2026-11-05: 6 deadlines, 2 overdue
+
+deadline          due         status     remaining  days
+----------------  ----------  --------  ----------  ----
+Tax return        2026-10-31  overdue   5d 12h ago    -5
+Conference talk   2026-11-06  due soon     21h 30m     1
+Rent              2026-11-07  due soon      1d 12h     2
+Passport renewal  2026-12-01  later        25d 12h    26
+Invoice #42       2026-11-04  overdue      19h ago    -1
+Car service       2027-01-15  later        70d 12h    71
