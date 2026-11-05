@@ -100,6 +100,40 @@ lib/prelude.warp on disk (one file, about 3 ms to parse per compile, to be measu
 
 node-wasm-type comes after 5.
 
+## The module interface (L3 writes it, L5 links by it; a draft to agree before either lands)
+A standard module `<name>` is modules/<name>.wasm, compiled once behind runtime.wasm (`warp module <name>`).
+
+**Imports.**
+- Everything of the runtime comes from module `warp_runtime` under the runtime's warp names, as a separate program
+  module imports it today (`warp build`'s x.mod.wasm): its words, its globals, `memory`, the error tag `warp_error`
+  and the table `hooks`.
+- Another standard module's word comes from module `warp/<other>`.
+
+**Types.** canonical_type_entries() first, each fixed GC type in its own singleton group in the runtime's order,
+so every module's shared types are the same. Then the module's own class structs (one rec group) and its function
+types. No exported function names a class struct in its type: an instance crosses as $Node, $Instance or anyref
+and is cast inside.
+
+**Exports.**
+- Every word under its written name. A word with several arity variants exports each as `<name>/<arity>`. The plain
+  name is the one variant a program without an arity calls, as linked_variant chooses today.
+- Its globals under their names.
+- A start function `warp/start` that runs the module's global initializers. The host calls it once, after linking
+  and before the program's main.
+- `export f(…)` words (host callbacks) keep their names.
+
+**`warp.signature`** is a custom section holding one warp-notation value, readable by the compiler's own parser:
+```
+{ source: "<sha-256 of lib/<name>.warp>", uses: [other modules],
+  words: { name: [ { parameters: [[name, type, default?, rest?]…], result: type, block_last: yes?, export: name } … ] },
+  classes: { Name: { parent: P?, fields: [[name, type]…], methods: { name: [variant…] } } },
+  globals: { name: type }, aliases: { alias: word }, operators: { "±": { power: [140, 141], function: name } },
+  foreign_types: { … }, host: { word: [parameters, result] }, rules: <packed rules>, tags: [ … ] }
+```
+`warp.module` (the binary layout: kinds, closures, relocations for the splicing path) stays until L5 removes the
+splice. The parse-time union of all modules' `aliases`, `operators`, `block_last` words, `words`→module, `classes`
+and `tags` is gathered from these sections or kept in an index file; L2 measures which (question (a)).
+
 ## Load-time linking: the probe (data/wasm-linking/: L.wat, P.wat, run.mjs)
 Dynamic linking of separately compiled wasm GC modules works in wasmtime 49.0.2 (`--preload`, with gc,
 function-references and exceptions) and in Node 26 / V8 14.6 (no flags). All 17 checks pass:
