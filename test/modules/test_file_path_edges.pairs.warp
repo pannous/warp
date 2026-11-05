@@ -1,0 +1,21 @@
+// lib/file and lib/path edges as observed (card lib-file-path-edges): missing and empty paths, relative and absolute
+// read failures, lines beside file_lines on a trailing newline, a few join/normalize corners. Documents, renames nothing.
+# missing_paths
+'use file; exists(temp_folder() + "/warp_fpe_never_there.txt")'	no
+'use file; try { read(temp_folder() + "/warp_fpe_never_there.txt") } catch e { "caught" }'	"caught"
+'use file; delete_file(temp_folder() + "/warp_fpe_never_there.txt")'	no
+# empty_path
+'use file; exists("")'	no
+'use file; delete_file("")'	no
+# relative_and_absolute_read_failures_name_the_path
+'use file; try { read("warp_fpe_no_such_relative.txt") } catch e { str(e).contains("warp_fpe_no_such_relative.txt") }'	yes
+'use file; try { read("/warp_fpe_no_such_absolute.txt") } catch e { str(e).contains("/warp_fpe_no_such_absolute.txt") }'	yes
+'use file; try { list_files(temp_folder() + "/warp_fpe_no_folder") } catch e { "caught" }'	"caught"
+# trailing_newline: shell's file_lines drops one final newline; with or without it the lines are the same
+'use file; use shell; p = temp_folder() + "/warp_fpe_lines_1.txt"; write(p, "a\nb\n"); r = file_lines(p); delete_file(p); r'	["a", "b"]
+'use file; use shell; p = temp_folder() + "/warp_fpe_lines_2.txt"; write(p, "a\nb"); r = file_lines(p); delete_file(p); r'	["a", "b"]
+'use file; p = temp_folder() + "/warp_fpe_empty.txt"; write(p, ""); r = read(p); delete_file(p); r'	""
+# join_and_normalize_corners
+'use path; [path_join("a", ""), path_join("", "b"), path_join("a/", "b"), path_join("a", "/b")]'	["a/", "b", "a/b", "/b"]
+'use path; [normalize_path("a/./b/../c"), normalize_path("/.."), normalize_path(""), normalize_path("a//b/"), normalize_path("../a")]'	["a/c", "/", ".", "a/b", "../a"]
+'use path; [dirname("/"), dirname("a"), basename(""), basename("/"), extension(""), stem("")]'	["/", ".", "", "", "", ""]
