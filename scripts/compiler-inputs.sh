@@ -27,12 +27,15 @@ done
 [ -d "$lib/compiler" ] || { echo "compiler-inputs.sh: no compiler/ in $lib" >&2; exit 1; }
 # a hash without the seed is no tree's: refused, never a quiet wrong hash (2026-10-30)
 [ -f "${WARP_SEED-}" ] || { echo "compiler-inputs.sh: WARP_SEED names no seed (${WARP_SEED-unset}); rebuild.sh sets it, by hand: WARP_SEED=~/dev/bin/warp-seed.wasm" >&2; exit 1; }
+# `env LC_ALL=C cmd`, never bash's `LC_ALL=C cmd`: in a subshell, bash restoring its locale after the command calls
+# Homebrew libintl's setlocale, CoreFoundation in a forked child, which segfaults now and then (39 bash crash reports
+# 11-01..05, all in reset_locale_vars; promote-self RED 07:40 11-05). env changes only the command's environment
 modules() {
-	if [ -n "$baked" ]; then (cd "$lib" && LC_ALL=C ls "${BAKED[@]}" 2>/dev/null); return; fi
-	{ (cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||'); printf '%s\n' "${BAKED[@]}" | grep -v '\.warp$'; } | LC_ALL=C sort
+	if [ -n "$baked" ]; then (cd "$lib" && env LC_ALL=C ls "${BAKED[@]}" 2>/dev/null); return; fi
+	{ (cd "$lib" && find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||'); printf '%s\n' "${BAKED[@]}" | grep -v '\.warp$'; } | env LC_ALL=C sort
 }
 files() {
-	(cd "$lib" && find -H compiler extensions -path compiler/native -prune -o -type f ! -name '.*' -print | LC_ALL=C sort)
+	(cd "$lib" && find -H compiler extensions -path compiler/native -prune -o -type f ! -name '.*' -print | env LC_ALL=C sort)
 	modules
 }
 [ -n "$listed" ] && files >&2
