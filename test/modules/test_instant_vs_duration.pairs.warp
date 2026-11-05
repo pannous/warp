@@ -1,0 +1,9 @@
+// lib/time.warp Instant vs duration (decision instant-vs-duration, Interviewer REVISION 2026-11-05): a duration
+// compares the time of day (with a warning "did you mean 9 AM?"), an Instant's calendar fields
+'use time; use units; t = Instant(parse_date("2026-11-05T15:30:00Z")); t > 9h'	true
+'use time; use units; t = Instant(parse_date("2026-11-05T15:30:00Z")); t > 17h'	false
+'use time; use units; t = Instant(parse_date("2026-11-05T15:30:00Z")); t < 17h'	true
+'use time; t = Instant(parse_date("2026-11-05T15:30:00Z")); t > Instant(0)'	true
+'use time; t = Instant(parse_date("2026-11-05T15:30:45Z")); [t.year, t.month, t.day, t.hour, t.minute, t.second]'	[2026, 11, 5, 15, 30, 45]
+'use time; clock_words(9 * 3600000)'	"9 AM"
+'use time; clock_words(17 * 3600000 + 30 * 60000)'	"5:30 PM"
