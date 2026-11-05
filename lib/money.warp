@@ -8,6 +8,8 @@
 // money_format(m, "en") is "€1,234.56" and money_format(m, "de") "1.234,56 €". No exchange rates.
 // Amounts are 64-bit ints inside: a sum or product past ±2^63 raises instead of wrapping
 
+use math
+
 // ISO 4217: code, minor units, the symbol written (the code itself where English uses no other)
 MONEY_CURRENCIES = [["AED", 2, "AED"], ["ARS", 2, "ARS"], ["AUD", 2, "A$"], ["BGN", 2, "BGN"], ["BHD", 3, "BHD"], ["BRL", 2, "R$"], ["CAD", 2, "CA$"], ["CHF", 2, "CHF"], ["CLF", 4, "CLF"], ["CLP", 0, "CLP"], ["CNY", 2, "CN¥"], ["COP", 2, "COP"], ["CZK", 2, "CZK"], ["DKK", 2, "DKK"], ["EGP", 2, "EGP"], ["EUR", 2, "€"], ["GBP", 2, "£"], ["HKD", 2, "HK$"], ["HUF", 2, "HUF"], ["IDR", 2, "IDR"], ["ILS", 2, "₪"], ["INR", 2, "₹"], ["IQD", 3, "IQD"], ["ISK", 0, "ISK"], ["JOD", 3, "JOD"], ["JPY", 0, "¥"], ["KRW", 0, "₩"], ["KWD", 3, "KWD"], ["LYD", 3, "LYD"], ["MXN", 2, "MX$"], ["MYR", 2, "MYR"], ["NGN", 2, "NGN"], ["NOK", 2, "NOK"], ["NZD", 2, "NZ$"], ["OMR", 3, "OMR"], ["PHP", 2, "PHP"], ["PKR", 2, "PKR"], ["PLN", 2, "PLN"], ["RON", 2, "RON"], ["RUB", 2, "RUB"], ["SAR", 2, "SAR"], ["SEK", 2, "SEK"], ["SGD", 2, "SGD"], ["THB", 2, "THB"], ["TND", 3, "TND"], ["TRY", 2, "TRY"], ["TWD", 2, "NT$"], ["UAH", 2, "UAH"], ["USD", 2, "$"], ["UYI", 0, "UYI"], ["UYW", 4, "UYW"], ["VND", 0, "₫"], ["XAF", 0, "FCFA"], ["XOF", 0, "F CFA"], ["ZAR", 2, "ZAR"]]
 MONEY_LIMIT = 4611686018427387904
@@ -18,7 +20,6 @@ def currency_info(code: text): list {
 }
 currency_minor_units(code: text): int := currency_info(code)[1]
 currency_symbol(code: text): text := currency_info(code)[2]
-money_gcd(a: int, b: int): int := { x = a; y = b; while y != 0 { t = x % y; x = y; y = t }; x }
 money_ten(n: int): int := { p = 1; for i in 0 ..< n { p = p * 10 }; p }
 
 // --- exact int arithmetic that refuses to wrap
@@ -119,7 +120,7 @@ def money_allocate(m: any, ratios: list): list {
 	if count(ratios) == 0 { raise "money: allocate needs at least one ratio" }
 	pairs = [money_ratio(r) for r in ratios]
 	common = 1
-	for p in pairs { if p[0] < 0 { raise "money: a negative ratio " + str(p[0]) + "/" + str(p[1]) }; common = money_product(common, p[1] /! money_gcd(common, p[1])) }
+	for p in pairs { if p[0] < 0 { raise "money: a negative ratio " + str(p[0]) + "/" + str(p[1]) }; common = money_product(common, p[1] /! gcd(common, p[1])) }
 	weights = [money_product(p[0], common /! p[1]) for p in pairs]
 	total = 0
 	for w in weights { total = money_sum(total, w) }
