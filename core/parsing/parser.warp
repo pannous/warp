@@ -278,9 +278,9 @@ def alias_value_written(word: text, value: any): text {
 def alias_fields_read(written: text): map {
 	fields = {}
 	for pair in written.split(" ").filter(pair => pair) {
-		at = pair.find(":")
-		value = pair[at + 1 ..]
-		fields[pair[0 ..< at]] = if value.starts_with("[") then value[1 ..< #value - 1].split(",").filter(item => item) else value
+		name = pair.split(":")#1
+		value = pair[#name + 1 ..]
+		fields[name] = if value.starts_with("[") then value[1 ..< #value - 1].split(",").filter(item => item) else value
 	}
 	fields
 }
