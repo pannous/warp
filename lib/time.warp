@@ -18,7 +18,16 @@ wall_clock_ms(): int := {
 // milliseconds added or taken away, and its text in RFC 3339 (print, `"at " + now`)
 class Instant {
 	ms: int
-	compare(other) := ms - other.ms
+	// another Instant: the earlier first. A duration (`now > 9.hours`, `now > 17h`) compares the matching part
+	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
+	compare(other) := if other is Instant then ms - other.ms else instant_part_compare(ms, other)
+	// its calendar fields, UTC: now.year, now.month, now.day, now.hour, now.minute, now.second
+	year() := date_of(ms).year
+	month() := date_of(ms).month
+	day() := date_of(ms).day
+	hour(): int := ms % 86400000 /! 3600000
+	minute(): int := ms % 3600000 /! 60000
+	second(): int := ms % 60000 /! 1000
 	minus(other) := if other is Instant then ms - other.ms else Instant(ms - milliseconds_of(other))
 	plus(duration) := Instant(ms + milliseconds_of(duration))
 	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
@@ -27,6 +36,27 @@ class Instant {
 // a duration as milliseconds: a plain number is one already; lib/units overloads it for its quantities, `2 seconds`
 // and `1h` counted in ms, one of another dimension a DimensionError
 milliseconds_of(duration: any) := duration
+// a duration (`now > 9.hours`) compared with the matching part, with a warning: a bare duration is mostly a clock
+// time meant; a plain number is milliseconds since 1970
+instant_part_compare(ms, other) := {
+	if other is number { return ms - other }
+	// a lib/units duration quantity, counted in whole milliseconds
+	d = int(milliseconds_of(other))
+	if d < 86400000 { warning("comparing an Instant with the duration " + other + " compares the time of day: did you mean " + clock_words(d) + "?") }
+	else { warning("comparing an Instant with the duration " + other + " compares the day of the month") }
+	instant_part(ms, d) - d
+}
+// the matching part of an Instant's milliseconds for a duration of d ms: the time of day under a day, else the day of
+// the month counted from 1 (`now >= 15 days`: the 15th or later)
+instant_part(ms, d) := if d < 86400000 then ms % 86400000 else date_of(ms).day * 86400000
+// "9 AM", "5 PM", "12 AM", "9:30 AM": the clock time a duration since midnight names
+clock_words(d): text := {
+	minutes = d % 86400000 /! 60000
+	h = minutes /! 60
+	m = minutes % 60
+	shown = if h % 12 == 0 then 12 else h % 12
+	"" + shown + (if m == 0 then "" else ":" + two_digits(m)) + (if h < 12 then " AM" else " PM")
+}
 // ".692", ".69", ".5", or nothing on a whole second
 millis_fraction(millis): text := {
 	if millis == 0 then return ""
