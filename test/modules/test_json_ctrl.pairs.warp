@@ -1,0 +1,95 @@
+// card lib-json-ctrl-and-builders: to_json escapes U+0000..U+001F per RFC 8259 (short escapes, else lowercase \u00xx
+// as python's json.dumps(ensure_ascii=False)), a CRLF grapheme as \r\n, DEL as itself; expected from python; round trips
+'use json; to_json(chr(0)) == "\\"\\\\u0000\\""'	yes
+'use json; x = chr(0); json(to_json(x)) == x'	yes
+'use json; to_json(chr(1)) == "\\"\\\\u0001\\""'	yes
+'use json; x = chr(1); json(to_json(x)) == x'	yes
+'use json; to_json(chr(2)) == "\\"\\\\u0002\\""'	yes
+'use json; x = chr(2); json(to_json(x)) == x'	yes
+'use json; to_json(chr(3)) == "\\"\\\\u0003\\""'	yes
+'use json; x = chr(3); json(to_json(x)) == x'	yes
+'use json; to_json(chr(4)) == "\\"\\\\u0004\\""'	yes
+'use json; x = chr(4); json(to_json(x)) == x'	yes
+'use json; to_json(chr(5)) == "\\"\\\\u0005\\""'	yes
+'use json; x = chr(5); json(to_json(x)) == x'	yes
+'use json; to_json(chr(6)) == "\\"\\\\u0006\\""'	yes
+'use json; x = chr(6); json(to_json(x)) == x'	yes
+'use json; to_json(chr(7)) == "\\"\\\\u0007\\""'	yes
+'use json; x = chr(7); json(to_json(x)) == x'	yes
+'use json; to_json(chr(8)) == "\\"\\\\b\\""'	yes
+'use json; x = chr(8); json(to_json(x)) == x'	yes
+'use json; to_json(chr(9)) == "\\"\\\\t\\""'	yes
+'use json; x = chr(9); json(to_json(x)) == x'	yes
+'use json; to_json(chr(10)) == "\\"\\\\n\\""'	yes
+'use json; x = chr(10); json(to_json(x)) == x'	yes
+'use json; to_json(chr(11)) == "\\"\\\\u000b\\""'	yes
+'use json; x = chr(11); json(to_json(x)) == x'	yes
+'use json; to_json(chr(12)) == "\\"\\\\f\\""'	yes
+'use json; x = chr(12); json(to_json(x)) == x'	yes
+'use json; to_json(chr(13)) == "\\"\\\\r\\""'	yes
+'use json; x = chr(13); json(to_json(x)) == x'	yes
+'use json; to_json(chr(14)) == "\\"\\\\u000e\\""'	yes
+'use json; x = chr(14); json(to_json(x)) == x'	yes
+'use json; to_json(chr(15)) == "\\"\\\\u000f\\""'	yes
+'use json; x = chr(15); json(to_json(x)) == x'	yes
+'use json; to_json(chr(16)) == "\\"\\\\u0010\\""'	yes
+'use json; x = chr(16); json(to_json(x)) == x'	yes
+'use json; to_json(chr(17)) == "\\"\\\\u0011\\""'	yes
+'use json; x = chr(17); json(to_json(x)) == x'	yes
+'use json; to_json(chr(18)) == "\\"\\\\u0012\\""'	yes
+'use json; x = chr(18); json(to_json(x)) == x'	yes
+'use json; to_json(chr(19)) == "\\"\\\\u0013\\""'	yes
+'use json; x = chr(19); json(to_json(x)) == x'	yes
+'use json; to_json(chr(20)) == "\\"\\\\u0014\\""'	yes
+'use json; x = chr(20); json(to_json(x)) == x'	yes
+'use json; to_json(chr(21)) == "\\"\\\\u0015\\""'	yes
+'use json; x = chr(21); json(to_json(x)) == x'	yes
+'use json; to_json(chr(22)) == "\\"\\\\u0016\\""'	yes
+'use json; x = chr(22); json(to_json(x)) == x'	yes
+'use json; to_json(chr(23)) == "\\"\\\\u0017\\""'	yes
+'use json; x = chr(23); json(to_json(x)) == x'	yes
+'use json; to_json(chr(24)) == "\\"\\\\u0018\\""'	yes
+'use json; x = chr(24); json(to_json(x)) == x'	yes
+'use json; to_json(chr(25)) == "\\"\\\\u0019\\""'	yes
+'use json; x = chr(25); json(to_json(x)) == x'	yes
+'use json; to_json(chr(26)) == "\\"\\\\u001a\\""'	yes
+'use json; x = chr(26); json(to_json(x)) == x'	yes
+'use json; to_json(chr(27)) == "\\"\\\\u001b\\""'	yes
+'use json; x = chr(27); json(to_json(x)) == x'	yes
+'use json; to_json(chr(28)) == "\\"\\\\u001c\\""'	yes
+'use json; x = chr(28); json(to_json(x)) == x'	yes
+'use json; to_json(chr(29)) == "\\"\\\\u001d\\""'	yes
+'use json; x = chr(29); json(to_json(x)) == x'	yes
+'use json; to_json(chr(30)) == "\\"\\\\u001e\\""'	yes
+'use json; x = chr(30); json(to_json(x)) == x'	yes
+'use json; to_json(chr(31)) == "\\"\\\\u001f\\""'	yes
+'use json; x = chr(31); json(to_json(x)) == x'	yes
+'use json; to_json("a" + chr(0) + "b") == "\\"a\\\\u0000b\\""'	yes
+'use json; x = "a" + chr(0) + "b"; json(to_json(x)) == x'	yes
+'use json; to_json("a" + chr(7) + "b") == "\\"a\\\\u0007b\\""'	yes
+'use json; x = "a" + chr(7) + "b"; json(to_json(x)) == x'	yes
+'use json; to_json("a" + chr(11) + "b") == "\\"a\\\\u000bb\\""'	yes
+'use json; x = "a" + chr(11) + "b"; json(to_json(x)) == x'	yes
+'use json; to_json("a" + chr(27) + "b") == "\\"a\\\\u001bb\\""'	yes
+'use json; x = "a" + chr(27) + "b"; json(to_json(x)) == x'	yes
+'use json; to_json("a" + chr(31) + "b") == "\\"a\\\\u001fb\\""'	yes
+'use json; x = "a" + chr(31) + "b"; json(to_json(x)) == x'	yes
+'use json; to_json("\\r\\n") == "\\"\\\\r\\\\n\\""'	yes
+'use json; x = "\\r\\n"; json(to_json(x)) == x'	yes
+'use json; to_json("x\\r\\ny") == "\\"x\\\\r\\\\ny\\""'	yes
+'use json; x = "x\\r\\ny"; json(to_json(x)) == x'	yes
+'use json; to_json("\\r\\n\\r\\n") == "\\"\\\\r\\\\n\\\\r\\\\n\\""'	yes
+'use json; x = "\\r\\n\\r\\n"; json(to_json(x)) == x'	yes
+'use json; to_json("\\n\\r") == "\\"\\\\n\\\\r\\""'	yes
+'use json; x = "\\n\\r"; json(to_json(x)) == x'	yes
+'use json; to_json(chr(127)) == "\\"" + chr(127) + "\\""'	yes
+'use json; x = chr(127); json(to_json(x)) == x'	yes
+'use json; to_json("a" + chr(127) + "\\n") == "\\"a" + chr(127) + "\\\\n\\""'	yes
+'use json; x = "a" + chr(127) + "\\n"; json(to_json(x)) == x'	yes
+'use json; to_json(chr(0) + chr(769)) == "\\"\\\\u0000́\\""'	yes
+'use json; to_json(chr(27) + "[0m é😀") == "\\"\\\\u001b[0m é😀\\""'	yes
+'use json; x = chr(27) + "[0m é😀"; json(to_json(x)) == x'	yes
+'use json; to_json("long line one with a tab\\there and a bell" + chr(7) + " then crlf\\r\\nend " + chr(31)) == "\\"long line one with a tab\\\\there and a bell\\\\u0007 then crlf\\\\r\\\\nend \\\\u001f\\""'	yes
+'use json; x = "long line one with a tab\\there and a bell" + chr(7) + " then crlf\\r\\nend " + chr(31); json(to_json(x)) == x'	yes
+'use json; xs = ["a" + chr(0) + "b", "a" + chr(7) + "b", "a" + chr(11) + "b", "a" + chr(27) + "b", "a" + chr(31) + "b", "\\r\\n", "x\\r\\ny", "\\r\\n\\r\\n", "\\n\\r", chr(127), "a" + chr(127) + "\\n", chr(27) + "[0m é😀", "long line one with a tab\\there and a bell" + chr(7) + " then crlf\\r\\nend " + chr(31)]; json(to_json(xs)) == xs'	yes
+'use json; m = {"k" + chr(1): "v\\r\\n"}; to_json(m)'	"{\"k\\u0001\":\"v\\r\\n\"}"

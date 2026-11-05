@@ -1,14 +1,16 @@
 // The standard library module csv (RFC 4180): `use csv`, CSV text as rows of texts and back, or with its header row as
 // maps: csv_rows("a,b\n1,\"x,y\"") is [["a", "b"], ["1", "x,y"]]; quoted fields keep commas, doubled quotes and line
-// breaks; lines end in LF or CRLF; csv_text quotes a field only when it holds a comma, a quote, CR or LF
+// breaks; lines end in LF or CRLF; a leading UTF-8 BOM is dropped; csv_text quotes a field only when it holds a comma, a quote, CR or LF
 
 def csv_rows(t: text): list {
+	if t.starts_with(chr(0xFEFF)) { t = t[1..<#t] } // a UTF-8 byte order mark is no part of the first field
 	rows = []
 	row = []
 	field = ""
 	quoted = no
 	cs = [c for c in t]
 	i = 0
+	// a CRLF is one character of the text
 	while i < count(cs) {
 		c = cs[i]
 		if quoted {

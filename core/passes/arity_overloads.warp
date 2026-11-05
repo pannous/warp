@@ -124,35 +124,18 @@ remember_calls(n: Node, called: map, counted_in: function): map := {
 	called
 }
 
-# `bottom_up(n, phrase)` of phrase overloaded by arity: the argument is the variant taking as many arguments as the
-# called function calls that parameter with
-passed_variants(n: Node, overloaded: map, called: map): Node := {
-	if not (is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol) { return n }
-	callee = name_of(n#1)
-	arguments = items_of(n)[1 ..]
-	passed = (1 to #arguments).map(index => passed_variant(arguments#index, parameter_key(callee, index), overloaded, called))
-	group_like(n, [n#1] + passed)
-}
-
-passed_variant(argument: Node, key: text, overloaded: map, called: map): Node := {
-	if not (argument is symbol and name_of(argument) in overloaded and key in called) { return argument }
-	count = called[key]
-	fitting = overloaded[name_of(argument)].filter(span => span_takes(span, count))
-	if #fitting == 1 then symbol(overload_variant_name(name_of(argument), fitting#1#2)) else argument
-}
-
 overloaded_phrase(n: Node, overloaded: map): Node := if is_curly_group(n) and #n > 1 and n#1 is symbol and name_of(n#1) in overloaded then phrase_block(n) else n
 # top-down, so a definition is renamed by its own parameters and a method call counts its receiver
-resolved(n: Node, overloaded: map, called: map): Node := {
+resolved(n: Node, overloaded: map): Node := {
 	call = definition_call(n)
 	if call != ø and name_of(call#1) in overloaded {
-		return Key(renamed_target(key_of(n), overload_variant_name(name_of(call#1), arity_of(call)#2)), Op.Define, resolved(value_of(n), overloaded, called))
+		return Key(renamed_target(key_of(n), overload_variant_name(name_of(call#1), arity_of(call)#2)), Op.Define, resolved(value_of(n), overloaded))
 	}
 	match n {
-		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded, called), Op.Dot, variant_call(children(method, x => resolved(x, overloaded, called)), overloaded, 1))
+		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded), Op.Dot, variant_call(children(method, x => resolved(x, overloaded)), overloaded, 1))
 		# a one-line block calling an overloaded word, `{sum [1 2]}`, is its phrase, as typed_resolved reads it (card
 		# prelude-word-in-block); a class's fields, `{name text}`, stay as they are
-		_: children(variant_call(passed_variants(overloaded_phrase(n, overloaded), overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
+		_: children(variant_call(overloaded_phrase(n, overloaded), overloaded, 0), x => resolved(x, overloaded))
 	}
 }
 
@@ -160,10 +143,69 @@ arity_overloads(program: Node): Node := {
 	program = result_overloads(program)
 	overload_classes = declared_classes(program)
 	overload_bases = declared_bases(program)
+	defined_twice = defined_more_than_once(program)
+	if #defined_twice > 0 { program = passed_lambdas(program, shadowed(defined_twice, names_bound(program, [])), called_parameters(program)) }
 	overloaded = overloaded_arities(program)
 	if #overloaded == 0 { return typed_overloads(program) }
-	resolved_program = resolved(program, overloaded, called_parameters(program))
+	resolved_program = resolved(program, overloaded)
+	refused_overload_values(resolved_program, without_bare_calls(overloaded), arities_described)
 	typed_overloads(resolved_program)
+}
+
+# A function defined more than once passed where the call says how many arguments it gets, `xs.map(quoted)` (map
+# calls it with one) or `apply(scaled, 3)` (apply calls its f(x)), is the lambda calling it, `x => quoted(x)`, so each
+# call takes the variant fitting it (decision function-redefinition-error, option A); a parameter or variable of the
+# name is its own
+passed_lambdas(n: Node, names: map, called: map): Node := {
+	bound = bound_at(n)
+	if #bound > 0 { names = shadowed(names, bound) }
+	if #names == 0 { return n }
+	match n {
+		Key(receiver, Op.Dot, method): Key(passed_lambdas(receiver, names, called), Op.Dot, children(lambda_arguments(method, names, called, 1), x => passed_lambdas(x, names, called)))
+		_: children(lambda_arguments(n, names, called, 0), x => passed_lambdas(x, names, called))
+	}
+}
+# the call with each argument naming one of `names` the lambda of as many parameters as the callee calls it with;
+# `receivers` arguments stand before the dot
+lambda_arguments(call: Node, names: map, called: map, receivers: int): Node := {
+	if not (is_group(call) and bracket_of(call) == "(" and #call > 1 and call#1 is symbol) { return call }
+	callee = name_of(call#1)
+	arguments = items_of(call)[1 ..]
+	group_like(call, [call#1] + (1 to #arguments).map(index => lambda_argument(arguments#index, names, passed_count(callee, index + receivers, called))))
+}
+lambda_argument(argument: Node, names: map, count: int?): Node := if argument is symbol and names.has(name_of(argument)) and count != ø then lambda_calling(name_of(argument), count) else argument
+lambda_calling(name: text, count: int): Node := {
+	parameters = (1 to count).map(index => symbol("argument" + name_joiner + "${index}"))
+	Key(if count == 1 then parameters#1 else List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, call_of(name, parameters))
+}
+# how many arguments the callee calls its parameter at `index` with: its body's calls (called_parameters), or the
+# parameter's function type, `f: (any) -> any` of the library's map
+passed_count(callee: text, index: int, called: map): int? := called.get(parameter_key(callee, index)) ?? declared_arity(unaliased(callee), index)
+declared_arity(callee: text, index: int): int? := {
+	for line in lines_of(typed_lines, callee) {
+		if index <= #line.signature.parameters {
+			count = function_type_arity(line.signature.parameters#index.type_name)
+			if count != ø { return count }
+		}
+	}
+	ø
+}
+# the functions the program defines more than once, by arity or by type
+defined_more_than_once(program: Node): map := {
+	counts = {}
+	for n in nodes_in(program) {
+		call = definition_call(n)
+		if call != ø { counts[name_of(call#1)] = (counts.get(name_of(call#1)) ?? 0) + 1 }
+	}
+	twice = {}
+	for name in counts.keys { if counts[name] > 1 { twice[name] = yes } }
+	twice
+}
+# the names n binds for its parts: a definition's parameters and variables, a lambda's, a loop's
+bound_at(n: Node): list := {
+	call = definition_call(n)
+	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + pattern_names(key_of(n)) + names_bound(value_of(n), []) else []
+	bound + loop_variables(n)
 }
 
 # A function defined more than once named as a value, `xs.map(quoted)`, `g = quoted`: its definitions are variants by
@@ -171,9 +213,7 @@ arity_overloads(program: Node): Node := {
 # lambda, a parameter or variable of the name is its own (`sum = hi + lo`, `for tested in …`), at the top too
 refused_overload_values(program: Node, overloaded: map, described: function) := refuse_overload_values(program, shadowed(overloaded, names_bound(program, [])), described)
 refuse_overload_values(n: Node, overloaded: map, described: function) := {
-	call = definition_call(n)
-	bound = if call != ø then items_of(call)[1 ..].map(parameter_name) + names_bound(value_of(n), []) else if is_key(n, Op.Arrow) then parameters_of(key_of(n)) + names_bound(value_of(n), []) else []
-	bound = bound + loop_variables(n)
+	bound = bound_at(n)
 	if #bound > 0 { overloaded = shadowed(overloaded, bound) }
 	if #overloaded == 0 { return ø }
 	for part in value_parts(n) {
@@ -182,20 +222,24 @@ refuse_overload_values(n: Node, overloaded: map, described: function) := {
 	for part in parts_of(n) { refuse_overload_values(part, overloaded, described) }
 	ø
 }
-# the parts of n standing for values: not the head of a call or a phrase, a method's name, a label or an assigned name
+# a name defined with no parameters too, `f() := 3; f(x) := x`, or a builtin word taking none, the host's `random`, is
+# that one's call where it stands bare (`f + 1`, `random < 1`), never refused
+without_bare_calls(overloaded: map): map := without_keys(overloaded, overloaded.keys.filter(name => overloaded[name].any(span => span#1 == 0) or builtin_takes_nothing(name)))
+builtin_takes_nothing(name: text): bool := lines_of(typed_lines + foreign_math_lines, unaliased(name)).any(line => #line.signature.parameters == 0) or (host_words.has(name) and #host_words[name]#1 == 0)
+# the parts of n where a value is demanded: the bare name assigned, `g = twice`, an argument of a call no call fixes
+# the arity of (passed_lambdas took the others), an element of a list or a value of a map literal; a name anywhere
+# else (a phrase, a `use`, a condition) is left alone
 value_parts(n: Node): list := match n {
-	Key(left, Op.Dot, right): [left]
-	Key(left, Op.Colon, right): [right]
 	Key(left, Op.Assign, right): [right]
-	Key(left, Op.Define, right): []
-	Key(left, op, right): [left, right]
+	Key(left, Op.Define, right): { if left is symbol then [right] else [] }
 	List(items, Bracket.Round, Separator.None): items[1 ..]
-	List(items, Bracket.None, Separator.Space): items[1 ..]
-	List(items, Bracket.Curly, Separator.Space): items[1 ..]
-	List(items, bracket, separator): items
+	List(items, Bracket.Round, Separator.Comma): items
+	List(items, Bracket.None, Separator.Comma): items
+	List(items, Bracket.Square, separator): { if separator == Separator.Space then [] else items }
+	List(items, Bracket.Curly, separator): { if separator == Separator.Space then [] else items.filter(item => is_key(item, Op.Colon)).map(value_of) }
 	_: []
 }
-overload_value_refusal(name: text, variants: list, described: function, at: Node): text := name + " is defined " + "${#variants}" + " times, " + described(variants) + "; pass a lambda that calls the one you mean, e.g. x => " + name + "(x)" + place_text(written_at(at), "")
+overload_value_refusal(name: text, variants: list, described: function, at: Node): text := written_word(name) + " is defined " + "${#variants}" + " times, " + described(variants) + "; pass a lambda that calls the one you mean, e.g. x => " + written_word(name) + "(x)" + place_text(written_at(at), "")
 arities_described(spans: list): text := "with " + and_listed(spans.map(span_text).sort()) + " parameters"
 types_described(variants: list): text := "for " + and_listed(variants.map(types_text))
 types_text(types: list): text := "(" + types.join(", ") + ")"
@@ -472,13 +516,7 @@ function_type_arity(type: text): int? := {
 	if #arrows == 0 { return ø }
 	head = type.split(arrows#1)#1.trim()
 	if head.starts_with("(") and head.ends_with(")") { head = head[1 ..< #head - 1].trim() }
-	if head == "" { return 0 }
-	depth = 0
-	count = 1
-	for c in head {
-		if c == '(' { depth += 1 } else if c == ')' { depth -= 1 } else if c == ',' and depth == 0 { count += 1 }
-	}
-	count
+	if head == "" then 0 else #outer_parts(head)
 }
 
 # the sum of the arguments' fits, ø when one does not fit
@@ -634,6 +672,7 @@ typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
 	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
+	refused_overload_values(resolved, overloaded, types_described)
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))

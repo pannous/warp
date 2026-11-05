@@ -7,7 +7,8 @@
 //   local-date, local-time, the text as written with a space between date and time made a T: lib/time's Instant
 //   holds only milliseconds of an offset date-time, so a local date or time, or an offset, would be lost in it
 // - to_toml writes a whole float with .0 so it reads back a float; a map in an array of maps becomes [[array]] tables
-// - errors name the line: "toml line 3: duplicate key a"
+// - errors name the line: "toml line 3: duplicate key a"; dates are checked against the calendar (no 2100-02-29),
+//   offsets to 23:59, a carriage return only before a line feed
 
 TOML_BARE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
 TOML_DIGITS = "0123456789"
@@ -24,6 +25,8 @@ global parse_toml(source: text): map := {
 	current_path = ""
 	source = st["src"]
 	n = #source
+	// a carriage return is allowed only before a line feed (TOML 1.0)
+	if chr(13) in source { st["at"] = source.find(chr(13)); toml_fail(st, "a carriage return without a line feed") }
 	while true {
 		toml_skip_blank(st, yes)
 		if st["at"] > n { break }
@@ -377,7 +380,7 @@ toml_date(st: map, token: text): map := {
 	date = token[0..<10]
 	month = toml_whole(date[5..<7])
 	day = toml_whole(date[8..<10])
-	if month < 1 or month > 12 or day < 1 or day > 31 { toml_fail(st, "no such date " + date) }
+	if month < 1 or month > 12 or day < 1 or day > toml_month_days(toml_whole(date[0..<4]), month) { toml_fail(st, "no such date " + date) }
 	if #token == 10 { return toml_tagged("local-date", date) }
 	t = token#11
 	if t != "T" and t != "t" { toml_fail(st, "no date-time " + token) }
@@ -389,10 +392,15 @@ toml_date(st: map, token: text): map := {
 	if after > #rest { return toml_tagged("local-date-time", written) }
 	zone = rest[after - 1..<#rest]
 	if zone == "Z" or zone == "z" { return toml_tagged("offset-date-time", written) }
-	if #zone == 6 and (zone#1 == "+" or zone#1 == "-") and toml_all_digits(zone[1..<3]) and zone#4 == ":" and toml_all_digits(zone[4..<6]) {
+	if #zone == 6 and (zone#1 == "+" or zone#1 == "-") and toml_all_digits(zone[1..<3]) and zone#4 == ":" and toml_all_digits(zone[4..<6]) and toml_whole(zone[1..<3]) <= 23 and toml_whole(zone[4..<6]) <= 59 {
 		return toml_tagged("offset-date-time", written)
 	}
 	toml_fail(st, "no offset date-time " + token)
+}
+// the days of a month, February 29 in a leap year
+toml_month_days(year: int, month: int): int := {
+	if month == 2 { return if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) then 29 else 28 }
+	if month == 4 or month == 6 or month == 9 or month == 11 then 30 else 31
 }
 toml_local_time(st: map, token: text): map := {
 	toml_check_time(st, token[0..<8])
@@ -412,7 +420,8 @@ toml_fraction_end(st: map, t: text, at: int): int := {
 	if at == start { toml_fail(st, "no digits after . in " + t) }
 	at
 }
-toml_whole(digits: text): int := { n = 0; for d in digits { n = n * 10 + ord(d) - 48 }; n }
+// any, not int: an int result wraps a whole number past 64 bits (card core-int-result-wraps-bignum)
+toml_whole(digits: text): any := { n = 0; for d in digits { n = n * 10 + ord(d) - 48 }; n }
 
 // integers: decimal (no leading zeros), 0x 0o 0b; _ only between digits. floats: a fraction, an exponent, inf, nan
 toml_number(st: map, token: text): any := {

@@ -56,6 +56,10 @@ def git(*args):
     return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True, check=True).stdout
 
 
+# main read once: a fetch during the run must not mix two tips (KeyError in PARENTS)
+TIP = git("rev-parse", "origin/main").strip()
+
+
 def lines_at(commit):
     totals = collections.Counter()
     wanted = [f for f in git("ls-tree", "-r", "--name-only", commit).splitlines() if component(f)]
@@ -93,7 +97,7 @@ def first_parent_changes(*revisions):
 def history_graph():
     """main's whole history, parents before children: each commit's parents and its ancestors as a bitset of indices."""
     order, parents, ancestors = [], {}, {}
-    for line in git("rev-list", "--topo-order", "--reverse", "--parents", "origin/main").splitlines():
+    for line in git("rev-list", "--topo-order", "--reverse", "--parents", TIP).splitlines():
         sha, *its_parents = line.split()
         parents[sha] = its_parents
         ancestors[sha] = 1 << len(order)
@@ -135,10 +139,10 @@ ORDER_INDEX = {sha: index for index, sha in enumerate(ORDER)}
 # parent), so the atomic commits carry their own lines and a merge only its resolution (merges resolving nothing are
 # left out). Every commit since main's first-parent state before SINCE counts once, so the running totals end at the
 # tip's (checked below).
-base = git("rev-list", "-1", "--first-parent", "--before=" + SINCE, "origin/main").strip()
-whole_changes = first_parent_changes(f"{base}..origin/main")
+base = git("rev-list", "-1", "--first-parent", "--before=" + SINCE, TIP).strip()
+whole_changes = first_parent_changes(f"{base}..{TIP}")
 commits = git("log", "--topo-order", "--reverse", "--format=%H\t%P\t%ad\t%s", "--date=iso-strict",
-              f"{base}..origin/main").splitlines()
+              f"{base}..{TIP}").splitlines()
 totals = lines_at(base)
 rows = []
 for line in commits:
@@ -149,7 +153,7 @@ for line in commits:
         continue
     rows.append([date[:16].replace("T", " "), sha[:10], subject[:140], group_sums(totals) + [totals[EXTENSIONS]],
                  sum(group_sums(change)), change[EXTENSIONS], totals["lib"], totals["test"]])
-tip = lines_at("origin/main")
+tip = lines_at(TIP)
 drift = sorted(name for name in set(tip) | set(totals) if tip[name] != totals[name])
 if drift:
     print("vitals: atomic commits sum to other totals than main's tip (merge resolutions): " +
@@ -180,7 +184,7 @@ def outcomes(text):
 
 def latest_flips(path):
     """The tests the newest run of a lane passes and the run before failed, and the other way round."""
-    runs = git("log", "-2", "--format=%H %ad", "--date=iso-strict", "origin/main", "--", path).splitlines()
+    runs = git("log", "-2", "--format=%H %ad", "--date=iso-strict", TIP, "--", path).splitlines()
     if len(runs) < 2:
         return None
     (new, date), (old, _) = (run.split(" ") for run in runs)
@@ -196,7 +200,7 @@ def latest_flips(path):
 
 def tier_history(path):
     points = []
-    for line in git("log", "--reverse", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, "origin/main", "--", path).splitlines():
+    for line in git("log", "--reverse", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP, "--", path).splitlines():
         sha, date = line.split(" ")
         counts = pass_count(git("show", f"{sha}:{path}"))
         if counts and counts[1]:
@@ -258,7 +262,7 @@ def hourly_pace():
     """Pushes to main and the commits reaching it (by commit date), per hour, every hour since SINCE."""
     hour = lambda date: date[:13].replace("T", " ")
     commits_per_hour = collections.Counter(hour(d) for d in git("log", "--format=%cd", "--date=iso-strict",
-                                                                 "--since=" + SINCE, "origin/main").split())
+                                                                 "--since=" + SINCE, TIP).split())
     landings_per_hour = collections.Counter(pushes_since())
     first = datetime.datetime.strptime(min(commits_per_hour), "%Y-%m-%d %H")
     hours = []
@@ -303,7 +307,7 @@ def card_counts():
 
 
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
-          git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, "origin/main").splitlines()}
+          git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP).splitlines()}
 data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:

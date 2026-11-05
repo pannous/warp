@@ -63,7 +63,9 @@ def parse_url(t: text): map {
 		at = first_of(rest, "/")
 		authority = if at >= 0 then rest[0 ..< at] else rest
 		rest = if at >= 0 then rest[at..] else ""
-		at = first_of(authority, "@")
+		// the userinfo ends at the last @: a host holds none (http://a@b@c is user a@b at c)
+		at = -1
+		for k in 0 ..< count(authority) { if authority[k] == "@" { at = k } }
 		if at >= 0 {
 			userinfo = authority[0 ..< at]
 			authority = authority[at + 1..]

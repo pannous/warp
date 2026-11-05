@@ -73,9 +73,12 @@ rerun_if_changed() {
 	exec "$0" "${arguments[@]}"
 }
 
-red() { # red <what: detail> [--urgent]: one card per kind of failure (its key from <what>), noted again per failing tip
+# red <what: detail> [--urgent]: one card per kind of failure and day (after-push-<what>-<MMDD>), noted again per failing
+# tip. The prefix and the day keep it off a real card of the same name (a 22:15 "native warp" RED landed on the
+# native-harness card native-warp, 2026-11-04) and off an old day's RED of the same kind
+red() {
 	local key text="main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)"
-	key=$(echo "${1%%:*}" | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')
+	key=after-push-$(echo "${1%%:*}" | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')-$(date +%m%d)
 	if todo show "$key" 2>/dev/null | head -1 | grep -qv '^\[Done\]\|Archived'; then
 		todo note "$key" "$text" >/dev/null
 	else
