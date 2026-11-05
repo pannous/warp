@@ -75,8 +75,9 @@ notes/OLD/
 *.bak
 **/*.bak
 test/web/task.txt
-# the sounds the sound tests render beside themselves (test/web save sound as: …)
+# what tests write beside themselves (a case runs in its file's folder): the sounds they render, the files they write
 test/**/*.wav
+test/**/*_written.*
 
 samples/tune.mid
 
