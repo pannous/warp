@@ -1,0 +1,3 @@
+// card test-failure-triage (Supervisor's decision): a dot ending a name starts no extension, as pathlib has it
+# path_trailing_dot_no_extension
+'use path; [extension("a."), stem("a."), extension("dir/b.."), stem("dir/b.."), extension("a.b"), stem("a.b")]'	["", "a.", "", "b..", ".b", "a"]

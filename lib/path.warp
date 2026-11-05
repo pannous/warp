@@ -22,10 +22,11 @@ basename(p: text): text := {
 }
 // the last part's suffix from its last dot, the dot included: ".gz" of "a.tar.gz", "" of ".bashrc" (a leading dot
 // names a dotfile, no extension) and of "README"
-// . and .. are no file names: no extension, the stem the name itself
-extension(p: text): text := { name = basename(p); at = last_dot(name); if at <= 1 or name == ".." then "" else name[at - 1:] }
+// . and .. are no file names: no extension, the stem the name itself; a dot ending the name starts no extension
+// (pathlib): "a." has none and stem "a."
+extension(p: text): text := { name = basename(p); at = last_dot(name); if at <= 1 or at == #name or name == ".." then "" else name[at - 1:] }
 // the last part without its extension: "a.tar" of "a.tar.gz", ".bashrc" of ".bashrc"; stem + extension is basename
-stem(p: text): text := { name = basename(p); at = last_dot(name); if at <= 1 or name == ".." then name else name[0: at - 1] }
+stem(p: text): text := { name = basename(p); at = last_dot(name); if at <= 1 or at == #name or name == ".." then name else name[0: at - 1] }
 last_dot(name: text): int := { dots = (1 to #name).filter(i => name#i == '.'); if #dots == 0 then 0 else dots.last }
 // . parts and repeated or trailing slashes dropped, a .. taking back the part before it; at the root of an absolute
 // path a .. stays there, a relative path keeps the .. it cannot take back: "a/./b//../c/" is "a/c", "/../x" "/x",
