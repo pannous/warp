@@ -2,8 +2,8 @@
 # computed): `where $names = path_parameters($path)` binds the hole to the word's result, a node or a list of nodes
 # (a rest hole's items), `where routed($program)` holds when the word gives yes. Each word takes the code its rule's
 # holes bound, `$program` the whole program, and runs inside the compiler.
-# warp functions as one WGSL shader (lib/prelude.warp paint rules) are lib/wgsl.warp's words
-use wgsl
+# warp functions as one WGSL shader (lib/prelude.warp paint rules) are extensions/rules/wgsl.warp's words
+use "wgsl.warp"
 
 # the mark of a program's function named as a library word, its own (core/passes/prelude_words.warp own_word)
 own_mark = "·own"
@@ -279,7 +279,7 @@ signaled(program: Node): any := {
 	}
 	separated(bracketed(written, ""), ";")
 }
-# the program with each list it makes for the GPU (lib/wgsl.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
+# the program with each list it makes for the GPU (extensions/rules/wgsl.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
 # creating form packed (same-scope flow only, decision gpu-bound-floats)
 gpu_lists_packed(program: Node): any := {
 	statements = level_statements(program)
@@ -497,7 +497,6 @@ comment_above(source: text, word: text): text := {
 	""
 }
 defines_function(line: text, word: text): bool := ["fun ", "def "].any(keyword => line.starts_with(keyword + word + "(") or line.starts_with(keyword + word + " ")) or ((line.starts_with(word + "(") or line.starts_with(word + " ")) and (line.contains(":=") or line.contains("=>")))
-is_comment_line(line: text): bool := line.starts_with("//") or line == "#" or line.starts_with("# ")
 comment_text(line: text): text := line[(if line.starts_with("//") then 2 else 1) ..].trim()
 # `area(width: int, height: int) := width * height`: the function's definition as code to paste (decision
 # reflection-definition); ø when the program defines no such function

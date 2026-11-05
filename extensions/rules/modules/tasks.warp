@@ -1,0 +1,4 @@
+# lib/tasks.warp's rules that run code at compile time, its whole program or a rule word of extensions/rules/rule_words.warp:
+# the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
+// a program that starts tasks runs them all before it ends, its value kept
+rewrite $p => $q where program and $q = tasked($p)

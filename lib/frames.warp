@@ -7,9 +7,6 @@ HEADLESS_FRAME_HEIGHT = 135
 rewrite listen(data frame, $listener, $once) => frame_listened($listener, $once)
 // `on exit {…}` runs once the program and its frames are done, the program's value kept
 rewrite listen(data exit, $listener, $once) => exit_listened($listener, $once)
-// the program ended by its frames, then by its exit listeners (lib/rule_words.warp framed, exited)
-rewrite $p => $q where program and $q = framed($p)
-rewrite $p => $q where program and $q = exited($p)
 
 frame_listened(listener: function, once: bool): int := listen(data frame, listener, once)
 exit_listened(listener: function, once: bool): int := listen(data exit, listener, once)

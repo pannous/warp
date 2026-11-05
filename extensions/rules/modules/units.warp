@@ -1,0 +1,3 @@
+# lib/units.warp's rules that run code at compile time, its whole program or a rule word of extensions/rules/rule_words.warp:
+# the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
+rewrite $p => $q where program and $q = units_shown($p, [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, min])

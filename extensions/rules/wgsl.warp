@@ -5,9 +5,9 @@
 # its element-wise math, `p.x` `p.xz` its components. The program values the shader reads are paint's `values`, whose
 # struct the host appends (web/playground/host-gpu.js uniformLayout), so a frame changes them without a new shader.
 # A form WGSL has none of is refused, naming it; the Rust era's twin: rust-harness:src/lowering/foreign/gpu_maps/kernels.rs
-# The compiler runs these words as rule words (lib/rule_words.warp); they read the program through its reflection
+# The compiler runs these words as rule words (extensions/rules/rule_words.warp); they read the program through its reflection
 # words (function_definition, body_of …).
-use rule_words
+use "rule_words.warp"
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUES_NAME = "values"
@@ -774,7 +774,7 @@ wgsl_loop(n: Node, scope: WgslScope, depth: int) := {
 
 # --- GPU lists (decision gpu-bound-floats; extensions/gpu_lists/runtime.warp): a list the program makes for the GPU is
 # packed as f32 cells from its creation, which the GPU's library reads and writes where they are. lib/prelude.warp's
-# rule packs the creating forms of the program's (lib/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
+# rule packs the creating forms of the program's (extensions/rules/rule_words.warp gpu_lists_packed), `xs: [f32] = …` asks for one outright
 GPU_LIST_WORDS = ["gpu_compute"]
 # the names found once a program: name → [GPU uses, assignments, other mentions, its creating form or ø]
 class GpuLists { program: Node; uses: map }

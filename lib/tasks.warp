@@ -1,6 +1,6 @@
 // The standard module tasks (decision N29, card go-cooperative): `go {…}` is a cooperative task, no thread: it starts
 // when main yields (its sleep, an await, a channel's receive, main's end) and gives the others their turn at its own
-// sleeps, natively and in a page alike, its block split there (lib/rule_words.warp task_steps); `go x` of an expression its value.
+// sleeps, natively and in a page alike, its block split there (extensions/rules/rule_words.warp task_steps); `go x` of an expression its value.
 // `await job` runs the tasks until it is done and gives its value, `await all jobs` their values, `await any`/`first`
 // the first done's, `await job within t or d` its value if done within t, else d.
 // A task keeps what a module holds per task (task_context: sound's voice), its starter's when it was started
@@ -47,8 +47,6 @@ rewrite on $x.stop $body: block => task_paused_then($x, () => $body)
 rewrite on $x.stop: $body => task_paused_then($x, () => $body)
 rewrite on $x.cancel $body: block => task_cancelled_then($x, () => $body)
 rewrite on $x.cancel: $body => task_cancelled_then($x, () => $body)
-// a program that starts tasks runs them all before it ends, its value kept
-rewrite $p => $q where program and $q = tasked($p)
 
 // the scheduler: each step of a task runs to the task's next sleep, which queues the rest
 class Task {

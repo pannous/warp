@@ -1,6 +1,6 @@
 # GPU lists `[f32]`, `[i32]`, `[u32]` (decision gpu-bound-floats), the runtime of the gpu_lists extension
 # (gpu_lists.warp registers it): the numbers a program hands the GPU, packed as four-byte cells in linear memory from
-# their creation (lib/wgsl.warp gpu_packed chooses them), so the GPU's library reads and writes them where they are
+# their creation (extensions/rules/wgsl.warp gpu_packed chooses them), so the GPU's library reads and writes them where they are
 # (lib/native/warp_node.h warp_cells). A List $Node of the square bracket of list kind gpu_list_row() and its cell
 # type (GpuCell) in KindUnit.ListCell, its data an Int of (address << 32) + count. It reads, shows and compares as a
 # list (the core's list words reach it through runtime/bridge.warp's list hooks); a list word that would change one
@@ -33,7 +33,7 @@ gpu_zeros(count: int, cell: int): Node := {
 	if before < 0 { gpu_list_refused("no memory left for a GPU list of this size") }
 	with_kind(fresh_int_node(shifted_left(before * page_bytes(), 32) + count), gpu_list_kind(cell))
 }
-# a GPU list of a list's numbers: what a GPU word gives back (lib/wgsl.warp packs a list where it is made)
+# a GPU list of a list's numbers: what a GPU word gives back (extensions/rules/wgsl.warp packs a list where it is made)
 gpu_list_of(xs: Node, cell: int): Node := {
 	if is_gpu_list(xs) and gpu_list_cell(xs) == cell { return xs }
 	items = if is_gpu_list(xs) then gpu_list_items(xs) else unboxed_list(xs)
@@ -41,7 +41,7 @@ gpu_list_of(xs: Node, cell: int): Node := {
 	for i in 1 to #items { gpu_list_set(out, i, items#i) }
 	out
 }
-# the list with its index-th number set: a literal's items written one by one (lib/wgsl.warp gpu_packed)
+# the list with its index-th number set: a literal's items written one by one (extensions/rules/wgsl.warp gpu_packed)
 gpu_put(n: Node, index: int, value: Node): Node := {
 	gpu_list_set(n, index, value)
 	n
