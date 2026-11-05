@@ -86,8 +86,11 @@ unbound_words(body: Body, e: Node): list := {
 }
 # `div{ class: "box" p{"Hi"} }`: a word nothing binds, glued to its block, is the data pair `div: […]`, Warp's own data
 # notation (decision data-parameters, option b), which lib/markup.warp's to_html renders by name
-# (or written before its block, `div { … }`: walk.warp tag_parts)
+# (or written before its block, `div { … }`: walk.warp tag_parts). A function's name glued to a block it can't take stays
+# a tag: `form{ method: "post" … }` is the element, though lib/markup's form(method, action, body) is a function; `json{ 'a': 1 }` is its call
 is_data_tag(body: Body, n: Node): bool := {
 	parts = tag_parts(n)
-	#parts == 2 and not is_bound(body, name_of(parts#1)) and name_of(parts#1) not in module.classes
+	if #parts != 2 or name_of(parts#1) in module.classes { return no }
+	name = name_of(parts#1)
+	not is_bound(body, name) or (names_function_only(body, name) and not takes_arguments(module.functions[name], [parts#2]))
 }
