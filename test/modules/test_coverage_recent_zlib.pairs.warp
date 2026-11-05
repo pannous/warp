@@ -1,0 +1,9 @@
+// zlib compress/decompress edges beyond test_compress_api.pairs.warp (card lib-coverage-recent)
+'use compress; zlib_decompress_text(zlib_compress(""))'	""
+'use compress; zlib_decompress(zlib_compress([]))'	[]
+'use compress; zlib_decompress(zlib_compress([0, 255, 1]))'	[0, 255, 1]
+'use compress; try { zlib_decompress([1, 2, 3]) } catch e { e.message }'	"zlib: the input is too short for a zlib stream"
+'use compress; try { zlib_decompress([112, 156, 0, 0, 0, 0]) } catch e { e.message }'	"zlib: compression method 0 is not deflate"
+'use compress; try { zlib_decompress([120, 0, 1, 2, 3, 4]) } catch e { e.message }'	"zlib: the header check fails"
+'use compress; try { zlib_decompress([120, 32, 0, 0, 0, 0]) } catch e { e.message }'	"zlib: a preset dictionary is not supported"
+'use compress; zlib_decompress_text(zlib_compress("a"))'	"a"
