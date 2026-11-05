@@ -149,7 +149,7 @@ library_system_value(name: text, value: pointer): i32 from "c"
 library_system_value_set(name: text, value: i64): i32 from "c"
 shader_shown(shader: pointer, values: pointer, width: i64, height: i64): i32 from "c"
 pixels_shown(pixels: pointer, width: i64, height: i64): i32 from "c"
-library_word(name: pointer): handle from "c"
+lazy_library_word(name: pointer, engine: handle, unanswered: i64): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -586,10 +586,11 @@ unanswered(name: text): nothing := {
 # values in place (lib/native/warp_node.h, decision library-direct-refs); else a word naming it when called
 host_word_defined(linker: handle, engine: handle, import: handle, name: text, trap: pointer): nothing := {
 	word = answered_word(name)
-	library = if word < 0 then library_word(c_string(name)) else 0
-	if library == 0 { return word_defined(linker, import, word, trap) }
+	if word >= 0 { return word_defined(linker, import, word, trap) }
+	# (its library looked for at its first call, lib/native/foreign.c warp_lazy_host_callback: a module importing it
+	# whose program never calls it opens none)
 	type = wasm_externtype_as_functype_const(wasm_importtype_type(import))
-	checked(wasmtime_linker_define_func(linker, "host", 4, name, name.length, type, library, engine, 0), trap)
+	checked(wasmtime_linker_define_func(linker, "host", 4, name, name.length, type, c_function("warp_lazy_host_callback"), lazy_library_word(c_string(name), engine, word), 0), trap)
 }
 # the import defined as warp_host_callback, `word` its data
 word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing := {
