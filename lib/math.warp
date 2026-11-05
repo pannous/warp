@@ -17,8 +17,9 @@ operator ≠ := !=
 operator ≟ := ==
 operator ≡ := ==
 operator ﹦ := ==
-// `a ≈ b` with tolerance 1e-9 (alike below); `a ~ b` (Op.Rough, tolerance 0.01) still lowers in core
+// `a ≈ b` with tolerance 1e-9 (alike below); `a ~ b` (also `a ~~ b`) the looser, tolerance 0.01 (decision approx-zero)
 infix operator ≈(a: any, b: any) := alike(a, b, 0.000000001, no)
+infix operator ~(a: any, b: any) := alike(a, b, 0.01, yes)
 infix operator ⋍(a: any, b: any) := alike(a, b, 0.000000001, no)
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
 // pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
