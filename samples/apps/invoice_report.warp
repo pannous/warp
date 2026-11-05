@@ -1,0 +1,51 @@
+#!/usr/bin/env warp
+# Expenses from a CSV export turned into a report per category, exact money in two currencies, a VAT line and a
+# three-way split of the bill (csv, money, tables)
+use csv
+use money
+use tables
+
+export = "date,category,description,amount,currency
+2026-10-02,travel,Train Berlin–Hamburg,49.90,EUR
+2026-10-03,food,Team lunch,\"1,234.50\",EUR
+2026-10-03,travel,Taxi,23.10,EUR
+2026-10-07,software,Hosting,19.99,USD
+2026-10-09,food,Coffee beans,12.35,EUR
+2026-10-12,software,Domain,12.00,USD
+2026-10-15,office,Desk lamp,0.10,EUR
+2026-10-15,office,Cables,0.20,EUR"
+
+rows = csv_maps(export)
+print(str(count(rows)) + " expenses")
+
+# the totals per currency, then per category in each currency
+currencies = unique([row["currency"] for row in rows])
+for code in currencies {
+	mine = [row for row in rows if row["currency"] == code]
+	categories = unique([row["category"] for row in mine])
+	lines = []
+	total = money_of("0", code)
+	for category in categories {
+		items = [row for row in mine if row["category"] == category]
+		sum = money_of("0", code)
+		for item in items { sum = sum + money_parse(item["amount"], {currency: code, style: "en"}) }
+		total = total + sum
+		lines = lines + [[category, count(items), money_format(sum)]]
+	}
+	lines = lines + [["total", count(mine), money_format(total)]]
+	print("")
+	print(code + ":")
+	print(table_text(lines, {headers: ["category", "items", "amount"], align: ["left", "right", "right"]}))
+	print("in German: " + money_format(total, "de"))
+	if code == "EUR" {
+		# the net amount and the 19% VAT inside a gross total, rounded half-even to the cent
+		net = money_times(total, 100 / 119, "half_even")
+		print("net " + money_format(net) + " + VAT " + money_format(total - net))
+		shares = money_split(total, 3)
+		print("split three ways: " + join([money_format(s) for s in shares], ", ") + " (sum " + money_format(shares[0] + shares[1] + shares[2]) + ")")
+	}
+}
+
+# amounts are whole cents: 0.10 + 0.20 is exactly 0.30
+print("")
+print("0.10 + 0.20 = " + money_format(money_of("0.10", "EUR") + money_of("0.20", "EUR")))
