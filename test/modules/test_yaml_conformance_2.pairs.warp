@@ -1,0 +1,10 @@
+// card lib-template-yaml-conformance: the yaml-test-suite cases parked on lib-config-conformance
+# yaml_flow_plain_over_lines
+'use yaml; parse_yaml("- { multi\\n  line, a: b}\\n- { multi\\n  line: value}\\n") == [{"multi line": ø, "a": "b"}, {"multi line": "value"}]'	yes
+'use yaml; parse_yaml("[\\nplain\\n text, [ nested ],\\nsingle: pair,\\n]\\n") == ["plain text", ["nested"], {"single": "pair"}]'	yes
+# yaml_escaped_tab_before_fold
+'use yaml; parse_yaml("\\"2 trailing\\\\t  \\n    tab\\"\\n") == "2 trailing" + chr(9) + " tab"'	yes
+# yaml_dash_inside_plain_scalar
+'use yaml; parse_yaml("- single multiline\\n - sequence entry\\n") == ["single multiline - sequence entry"]'	yes
+# yaml_anchor_line_before_sequence
+'use yaml; parse_yaml("seq:\\n &anchor\\n- a\\n- b\\nother: *anchor\\n") == {"seq": ["a", "b"], "other": ["a", "b"]}'	yes
