@@ -255,7 +255,7 @@ def described_type(body: Body, type_code: list, value: list): list {
 	descriptor = as_node(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
 	code = as_node(type_code) + [op.local_set] + type[1..] + [ref_null, gc_type(gc.node), op.local_set] + described[1..]
 	code += value + [op.ref_is_null, op.i32_eqz, op.if, no_value] + descriptor + gc_code(gc_ops.ref_test, [gc_type(gc.class)]) + [op.if, no_value] + descriptor + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) + [op.local_set] + described[1..] + [op.end, op.end]
-	code + part(0) + part(1) + described + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
+	code + part(0) + part(1) + as_node(described) + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # a whole number is a nat but where it is a fast int, declared int (decision nat-and-int)
 def type_value_of(body: Body, n: Node): TypedCode {
