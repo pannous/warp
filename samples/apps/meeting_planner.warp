@@ -1,0 +1,31 @@
+#!/usr/bin/env warp
+# Free slots for a meeting: three calendars' busy hours (minutes since midnight) merged, cut out of the working day,
+# and the slots long enough for a 45 minute meeting listed (intervals)
+use intervals
+
+hm(minutes) := {
+	h = minutes /! 60
+	m = minutes % 60
+	(if h < 10 then "0" else "") + str(h) + ":" + (if m < 10 then "0" else "") + str(m)
+}
+shown(e) := hm(e.lo) + "-" + hm(e.hi)
+
+busy = {
+	ana: [extent(540, 600), extent(780, 840)],
+	ben: [extent(570, 660), extent(900, 960)],
+	cleo: [extent(720, 780), extent(990, 1020)]
+}
+everyone = []
+for name in ["ana", "ben", "cleo"] {
+	print(name + " busy: " + join([shown(e) for e in busy[name]], ", "))
+	everyone = everyone + busy[name]
+}
+merged = merge_intervals(everyone)
+print("busy together: " + join([shown(e) for e in merged], ", "))
+print("busy minutes: " + str(total_length(merged)))
+day = extent(540, 1050)
+free = subtract_intervals(day, merged)
+print("free: " + join([shown(e) for e in free], ", "))
+long_enough = [e for e in free if extent_length(e) >= 45]
+print("45 minute slots: " + join([shown(e) for e in long_enough], ", "))
+print("is 12:30 free? " + str(free.any(e => extent_contains(e, 750))))
