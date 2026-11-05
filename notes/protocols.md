@@ -12,10 +12,20 @@ Spec: wiki/trait.md ("Protocol and default class"). One general mechanism, exten
 - A place typed by the protocol, `f(x: shape)`, takes any value (typed as `any`); dispatch is the methods'.
 - The pass runs before definition_heads, so the class-method lifting sees the default functions as program functions.
 
+## map, a built-in protocol (landing B, decision map-protocol)
+- extensions/protocols.warp `built_in_protocols()`: map with keys/get/has/set/remove required. Only when a class of the
+  program conforms does it act: `x is map` tests the built-in maps and those classes, `f(m: map)` takes any value.
+- The map forms on such a class call its methods (extensions/class_methods/methods.warp map_form_call): `keys(p)`,
+  `values(p)` (keys mapped through get when it has no values), `p[k]`, `p.k` (no field k), `p[k] = v`, `k in p`,
+  `for k in p` (keys, when it has no next()); lib/map.warp's words reach them through the dispatchers. A bare call
+  only when the method takes the arguments after the first (`remove(x)` in a class stays its own call).
+- A name whose class is known only at run time (`f(m: map) := m["a"]`) gets an instance test per text-keyed form.
+- A class of a linked library module (ListMap in lib/collections.warp) is seen through module.linked_words.
+- Default class: `Map{…}` / `map{…}` / `Map x = v` build the hashed map; after `map default ListMap` they call
+  `ListMap(the hashed map)`. The early sugar makes `map default C` `map ?? C`, which the pass reads.
+- ListMap vs the hashed map, 2M reads (net of start-up; collections adds ~0.17 s start-up): 8 keys 0.53 vs 0.33 µs,
+  200 keys 1.97 vs 0.36 µs (a linear scan). An opt-in, never the bare `{…}`.
+
 ## Next landings
-- B, map: `map` a protocol with keys/get/has/set/remove required, lib/map.warp's words its defaults; the five gaps
-  (bare keys(p), p["k"] / p.k / p["k"] = v, `k in p`, `for k in p`, get_or) close by routing those to the class's
-  methods; `Map{…}` / `map{…}` build the default class, `map default ListMap` switches it; implementations convert
-  transparently (`Map x = {a: 1}`, `f(a: map)`); ListMap measured against NodeMap before it ships.
 - C, matrix: `matrix` a protocol (rows, columns, the element at i j required), lib/matrix.warp's list of lists the
-  default class.
+  default class: one more entry of built_in_protocols(), `matrix default DenseMatrix` and `Matrix{…}` the same way.
