@@ -222,6 +222,12 @@ installed_compilers_are_trees() {
 	folder=$(installed_folder) && cmp -s "$TREE/lib/warp.wasm" "$folder/warp.wasm"
 }
 
+# gate_failures <log>: the gate's first failing tests, else its tiers' RED lines (a tier that failed before any test,
+# 09:14 11-05: "tier 2 (…): RED 3s: read …/2e.ms failed" left the RED line empty)
+gate_failures() {
+	{ grep -a '^FAIL' "$1" || grep -a '^tier .*: RED' "$1"; } | head -3 | tr -s ' ' | paste -sd ';' -
+}
+
 # watch <commit>: install its compilers, then (unless main moved on meanwhile) the slow tiers
 watch() {
 	tip=$1
@@ -283,7 +289,7 @@ slow_tiers() {
 	[[ $promoted == *"NO FIXPOINT"* || $promoted == *FAILED* ]] && red "self lane: ${promoted:0:160}" --urgent
 	install_compilers
 	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
-		red "tiers 1-2: $(grep -a '^FAIL' "$state/gate-${tip:0:10}.log" | head -3 | paste -sd ';' -)"
+		red "tiers 1-2: $(gate_failures "$state/gate-${tip:0:10}.log")"
 	samples_committed "$tip"
 	echo "$tip" >"$state/tested"
 	say "slow tiers of ${tip:0:10} done"
