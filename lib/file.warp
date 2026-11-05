@@ -30,3 +30,12 @@ lines(path) := split(read(home_expanded(path)), "\n")
 // `~/notes.txt`: a path's leading ~ is the home folder ($HOME), expanded where the path is used (notes/shell_words.md),
 // so a quoted "~/x" works too and a program expands it on the machine it runs on; any other value stays as it is
 home_expanded(path: any): any := if path is text and (path == "~" or path.starts_with("~/")) then std_io("os", "env", ["HOME"]) + path[1..] else path
+// the folder for temporary files: $TMPDIR without its trailing /, else /tmp (card lib-regex-groups-tempfiles)
+global temp_folder(): text := {
+	folder = std_io("os", "env", ["TMPDIR"]) ?? "/tmp"
+	if folder == "" then "/tmp" else if folder.ends_with("/") and #folder > 1 then folder[0 ..< #folder - 1] else folder
+}
+// `delete_file("~/old.txt")`: the file removed, yes when it was there; natively C's unlink through the 'c' library
+// (lib/c.warp), so a page, which has no C library, has no delete_file yet
+unlink(path: text): i32 from 'c'
+global delete_file(path: any): bool := unlink(home_expanded(path)) == 0

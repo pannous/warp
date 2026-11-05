@@ -3,7 +3,6 @@
 use markdown
 use yaml
 use template
-use os
 use file
 
 layout = "<!doctype html>
@@ -34,7 +33,7 @@ split_page(source: text): map := {
 # newest first: the yaml dates are ISO texts, so they sort as texts
 pages = sort_by([split_page(s) for s in sources], p => p["date"]).reverse()
 nav = [{title: p["title"], slug: p["slug"]} for p in pages]
-out = (env("TMPDIR") ?? "/tmp") + "/warp_site"
+out = temp_folder() + "/warp_site"
 for page in pages {
 	page["site"] = "warp notes"
 	page["pages"] = nav
