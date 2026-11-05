@@ -3,7 +3,6 @@
 # compiles alone
 # nodes: their kind field, payloads and the nodes built of them
 with_kind(n: any, kind: int): any from runtime
-with_descriptor(type: any, n: any): any from runtime
 kind_code(n: any): int from runtime
 marked_kind(n: any): int from runtime
 is_null(n: any): bool from runtime
