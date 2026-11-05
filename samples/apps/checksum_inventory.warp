@@ -1,0 +1,67 @@
+#!/usr/bin/env warp
+# A checksum manifest of a few files, then a verify pass that names what changed (file, hash, json)
+#   sha256 for each file's content, crc32 as a quick second check, the manifest kept as JSON beside them
+# it plays the whole story in fresh files under $TMPDIR
+use file
+use hash
+use json
+
+folder = temp_folder()
+names = ["readme.txt", "notes.txt", "data.csv"]
+path_of(name: text): text := folder + "/warp_inventory_" + name
+manifest_path = folder + "/warp_inventory_manifest.json"
+
+files = {
+	"readme.txt": "warp checksums\n",
+	"notes.txt": "buy milk\ncall Ada\n",
+	"data.csv": "id,qty\n1,4\n2,9\n"
+}
+for name in names { write(path_of(name), files[name]) }
+
+# one manifest entry: the size in bytes, its sha256 and crc32
+entry(content: text): map := {size: count(to_utf8(content)), sha256: sha256(content), crc32: crc32(content)}
+short(digest: text): text := digest[0 ..< 12]
+
+# the manifest of the names that exist now
+def manifest(wanted: list): map {
+	m = {}
+	for name in wanted { if exists(path_of(name)) { m[name] = entry(read(path_of(name))) } }
+	m
+}
+
+made = manifest(names)
+write(manifest_path, to_json(made))
+print("manifest of " + str(count(keys(made))) + " files:")
+for name in keys(made) {
+	e = made[name]
+	print("  " + name + "  " + str(e.size) + " bytes  sha256 " + short(e.sha256) + "…  crc32 " + str(e.crc32))
+}
+print("empty text sha256: " + sha256(""))
+print("same content, same digest: " + str(sha256("buy milk\ncall Ada\n") == made["notes.txt"].sha256))
+
+# the verify pass: each name of the saved manifest checked against the file on disk
+def verify(saved: map, present: list): list {
+	out = []
+	for name in keys(saved) {
+		if not exists(path_of(name)) { out = out + ["missing  " + name] }
+		else {
+			now = entry(read(path_of(name)))
+			if now.sha256 == saved[name].sha256 { out = out + ["ok       " + name] }
+			else { out = out + ["changed  " + name + " (" + str(saved[name].size) + " -> " + str(now.size) + " bytes)"] }
+		}
+	}
+	for name in present { if not (name in saved) and exists(path_of(name)) { out = out + ["new      " + name] } }
+	out
+}
+
+print("$ verify (untouched)")
+for line in verify(parse_json(read(manifest_path)), names) { print(line) }
+
+write(path_of("notes.txt"), "buy milk\ncall Ada\nwrite report\n")
+delete_file(path_of("data.csv"))
+write(path_of("todo.txt"), "ship it\n")
+print("$ verify (notes edited, data.csv deleted, todo.txt added)")
+for line in verify(parse_json(read(manifest_path)), names + ["todo.txt"]) { print(line) }
+
+cleaned = [delete_file(path_of(name)) for name in ["readme.txt", "notes.txt", "todo.txt"]] + [delete_file(manifest_path)]
+print("demo files removed: " + str(all(cleaned, c => c)))

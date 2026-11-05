@@ -1,0 +1,25 @@
+// lib/time.warp edges (card lib-money-time-edges): leap-day fringe, bad dates, zero and odd durations, ISO refusals
+'use time; d = date_of(parse_date("2000-02-29")); [d.year, d.month, d.day]'	[2000, 2, 29]
+'use time; try { parse_date("1900-02-29") } catch e { e.message }'	"parse_date: \"1900-02-29\": no day 29 in that month"
+'use time; try { parse_date("2100-02-29") } catch e { e.message }'	"parse_date: \"2100-02-29\": no day 29 in that month"
+'use time; try { parse_date("2026-04-31") } catch e { e.message }'	"parse_date: \"2026-04-31\": no day 31 in that month"
+'use time; try { parse_date("2026-00-10") } catch e { e.message }'	"parse_date: \"2026-00-10\": no month 0"
+'use time; try { parse_date("") } catch e { e.message }'	"parse_date: \"\" is no YYYY-MM-DD date"
+'use time; try { parse_date("26-01-01") } catch e { e.message }'	"parse_date: \"26-01-01\" is no YYYY-MM-DD date"
+'use time; try { parse_date("2026-01-01T24:00:00Z") } catch e { e.message }'	"parse_date: \"2026-01-01T24:00:00Z\" names no time of day (hours 0-23, minutes and seconds 0-59, no leap seconds)"
+'use time; try { parse_date("2026-01-01T10:00:00+24:00") } catch e { e.message }'	"parse_date: \"2026-01-01T10:00:00+24:00\": no offset +24:00"
+'use time; try { parse_duration("") } catch e { e.message }'	"parse_duration: \"\" names no duration (like 1h30m, 2d 4h, 500ms)"
+'use time; try { parse_duration("5") } catch e { e.message }'	"parse_duration: \"5\": unknown unit \"\" after 5 (d, h, m, s or ms)"
+'use time; try { parse_duration("3w") } catch e { e.message }'	"parse_duration: \"3w\": unknown unit \"w\" after 3 (d, h, m, s or ms)"
+'use time; parse_duration("0s")'	0
+'use time; [format_duration(0), format_iso_duration(0)]'	["0ms", "PT0S"]
+'use time; parse_iso_duration("PT0S")'	0
+'use time; parse_iso_duration("P1W")'	604800000
+'use time; try { parse_iso_duration("P") } catch e { e.message }'	"parse_iso_duration: \"P\" does not start with P (like PT1H30M)"
+'use time; try { parse_iso_duration("PT") } catch e { e.message }'	"parse_iso_duration: \"PT\": it names no amount"
+'use time; try { parse_iso_duration("P1Y") } catch e { e.message }'	"parse_iso_duration: \"P1Y\": years and months have no fixed length in milliseconds"
+'use time; try { parse_iso_duration("PT1H1D") } catch e { e.message }'	"parse_iso_duration: \"PT1H1D\": no designator D after T"
+'use time; try { parse_iso_duration("PT1HT2M") } catch e { e.message }'	"parse_iso_duration: \"PT1HT2M\": a second T"
+'use time; try { parse_iso_duration("1H") } catch e { e.message }'	"parse_iso_duration: \"1H\" does not start with P (like PT1H30M)"
+'use time; parse_iso_duration(format_iso_duration(90061500))'	90061500
+'use time; format_iso_duration(-5400000)'	"-PT1H30M"
