@@ -26,9 +26,11 @@ glob_listed(pattern: text): list := {
 	matching = names.filter(name => glob_match(part, name) and (part.starts_with(".") or not name.starts_with("."))).sort
 	if pattern.contains("/") then matching.map(name => path_join(folder, name)) else matching
 }
-// beware: for a text argument the prelude's lines(t) wins, so lines("notes.txt") is ["notes.txt"]; shell's file_lines(path)
-// reads the file (test/modules/FILE_LINES.md; the API cleanup is parked)
-lines(path) := split(read(home_expanded(path)), "\n")
+// prefer file_lines(path): the file's text split on "\n", so a final newline leaves a trailing "" (test/modules/FILE_LINES.md);
+// text.lines(t) splits a text, and shell's file_lines(path) drops one final newline
+file_lines(path) := split(read(home_expanded(path)), "\n")
+// deprecated: use file_lines(path); for a text argument the prelude's lines(t) wins, so qualify it as file.lines(path)
+lines(path) := file_lines(path)
 // `~/notes.txt`: a path's leading ~ is the home folder ($HOME), expanded where the path is used (notes/shell_words.md),
 // so a quoted "~/x" works too and a program expands it on the machine it runs on; any other value stays as it is
 home_expanded(path: any): any := if path is text and (path == "~" or path.starts_with("~/")) then std_io("os", "env", ["HOME"]) + path[1..] else path
