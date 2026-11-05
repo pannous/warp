@@ -15,20 +15,10 @@ log = "192.168.1.10 - - [05/Nov/2026:09:14:02 +0100] \"GET /index.html HTTP/1.1\
 this line is garbage and gets skipped"
 
 # one request per line: ip, method, path, status, bytes, seconds; ø for a line that is no request
+LINE = "^([0-9.]+) [^[]*\\[([^]]+)\\] \"([A-Z]+) ([^ ]+) [^\"]*\" ([0-9]{3}) ([0-9]+) ([0-9.]+)$"
 parse_line(line: text): any := {
-	if not matches(line, "^[0-9.]+ .*\" [0-9]{3} [0-9]+ [0-9.]+$") { return ø }
-	request = first_match(line, "\"[A-Z]+ [^ ]+")
-	tail = find_all(line, "[0-9.]+$")
-	numbers = find_all(line, "\" [0-9]{3} [0-9]+")
-	fields = numbers[0].split(" ")
-	{
-		ip: first_match(line, "^[0-9.]+"),
-		method: request[1..].split(" ")[0],
-		path: request.split(" ")[1],
-		status: int(fields[1]),
-		bytes: int(fields[2]),
-		seconds: float(tail[0])
-	}
+	g = match_groups(line, LINE)
+	if g == ø then ø else {ip: g[0], time: g[1], method: g[2], path: g[3], status: int(g[4]), bytes: int(g[5]), seconds: float(g[6])}
 }
 
 requests = [r for r in [parse_line(l) for l in log.split("\n")] if r != ø]
@@ -51,3 +41,11 @@ print("latency mean " + str(round_to(mean(times), 3)) + " s, median " + str(roun
 slowest = sort_by(requests, r => -r.seconds)[0]
 print("slowest: " + slowest.method + " " + slowest.path + " (" + str(slowest.seconds) + " s, status " + str(slowest.status) + ")")
 print("busiest client: " + sort_by(frequencies([r.ip for r in requests]), f => -f[1])[0][0])
+
+# requests per minute: the hour and minute out of each time stamp, as a bar per minute
+per_minute = tally([join(match_groups(r.time, ":([0-9]{2}):([0-9]{2}):"), ":") for r in requests])
+for minute in sort(keys(per_minute)) { print(minute + " " + "#" * per_minute[minute]) }
+
+# the clients that got an error answer
+failed = unique([r.ip for r in requests if r.status >= 400])
+print("clients with errors: " + join(failed, ", "))

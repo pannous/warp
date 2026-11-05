@@ -1,0 +1,6 @@
+// lib/file.warp temp_folder and delete_file (card lib-regex-groups-tempfiles)
+'use file; temp_folder() != ""'	yes
+'use file; temp_folder().ends_with("/")'	no
+'use file; p = temp_folder() + "/warp_test_temp_files_1.txt"; write(p, "x"); [exists(p), delete_file(p), exists(p)]'	[yes, yes, no]
+'use file; delete_file(temp_folder() + "/warp_test_temp_files_never_there.txt")'	no
+'use file; p = temp_folder() + "/warp_test_temp_files_2.txt"; write(p, "a"); delete_file(p); write(p, "b"); r = read(p); delete_file(p); r'	"b"
