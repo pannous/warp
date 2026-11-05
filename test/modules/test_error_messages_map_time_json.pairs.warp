@@ -1,0 +1,15 @@
+# lib-error-messages: errors name the function and the offending value (map, time, json)
+«use map; r = try { set_path({a: [1, 2]}, ["a", 9], 0) } catch e { "" + e }; r == "set_path: no position 9 in a list of 2"»	true
+«use time; r = try { parse_date("2026-13-01") } catch e { "" + e }; r == "parse_date: " + chr(34) + "2026-13-01" + chr(34) + ": no month 13"»	true
+«use time; r = try { parse_date("2026-02-30") } catch e { "" + e }; r == "parse_date: " + chr(34) + "2026-02-30" + chr(34) + ": no day 30 in that month"»	true
+«use time; r = try { parse_date("soon") } catch e { "" + e }; r == "parse_date: " + chr(34) + "soon" + chr(34) + " is no YYYY-MM-DD date"»	true
+«use time; r = try { days_in_month(2026, 0) } catch e { "" + e }; r == "days_in_month: the month 0 is not 1 to 12"»	true
+«use time; r = try { parse_duration("5 parsecs") } catch e { "" + e }; starts_with(r, "parse_duration: " + chr(34) + "5 parsecs" + chr(34) + ": unknown unit")»	true
+«use time; r = try { parse_iso_duration("1H") } catch e { "" + e }; r == "parse_iso_duration: " + chr(34) + "1H" + chr(34) + " does not start with P (like PT1H30M)"»	true
+«use time; r = try { zone_named("Atlantis/City") } catch e { "" + e }; starts_with(r, "unknown time zone Atlantis/City")»	true
+«use time; r = try { two_digits(3) } catch e { "" + e }; r == "03"»	true
+«use json; r = try { parse_json("[1, 2") } catch e { "" + e }; r contains "is no json: no closing ]"»	true
+«use json; r = try { parse_json("{" + chr(34) + "a" + chr(34) + " 1}") } catch e { "" + e }; r contains "is no json: no : after the key"»	true
+«use json; r = try { parse_json("[1] x") } catch e { "" + e }; r contains "is no json: more after the value"»	true
+«use json_tools; r = try { json_patch(json("{}"), json("[5]")) } catch e { e.message }; r == "json_patch: operation 0: the operation is no JSON object but a JSON number"»	true
+«use json_tools; r = try { json_pointer_get(json("{" + chr(34) + "a" + chr(34) + ": 1}"), "a") } catch e { "" + e }; r == "json pointer a does not start with /"»	true
