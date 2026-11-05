@@ -39,7 +39,7 @@ mkdir -p "$results/out"
 
 wall_seconds() {
 	local load cores
-	load=$(LC_ALL=C uptime | sed -E 's/.*load averages?: *([0-9.]+).*/\1/')
+	load=$(env LC_ALL=C uptime | sed -E 's/.*load averages?: *([0-9.]+).*/\1/')
 	cores=$(getconf _NPROCESSORS_ONLN)
 	awk -v wall="$WALL_SECONDS" -v load="$load" -v cores="$cores" 'BEGIN { share = load / cores; printf "%d", wall * (share > 1 ? share : 1) }'
 }

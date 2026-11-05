@@ -1,0 +1,9 @@
+# style sheets with combinators and a rule after them (cards markup-style-traps, lib-markup-and-money-polish): the
+# parser chains `.box` onto the block before it and hangs the rest of the sheet off `>`; lib/markup.warp parts them again
+'use markup; to_html(style{ ul > li { color: red } })'	'<style>ul > li { color: red }</style>'
+'use markup; to_html(style{ div > p.note { color: red } })'	'<style>div > p.note { color: red }</style>'
+'use markup; to_html(style{ ul > li { color: red } .box { padding: 4px } })'	'<style>ul > li { color: red } .box { padding: 4px }</style>'
+'use markup; to_html(style{ ul li { color: red } .box { padding: 4px } })'	'<style>ul li { color: red } .box { padding: 4px }</style>'
+'use markup; to_html(style{ p { color: red } .box { padding: 4px } })'	'<style>p { color: red } .box { padding: 4px }</style>'
+'use markup; to_html(style{ a + b { color: red } .x { color: blue } })'	'<style>a + b { color: red } .x { color: blue }</style>'
+'use markup; to_html(style{ .box { padding: 4px } ul > li { color: red } })'	'<style>.box { padding: 4px } ul > li { color: red }</style>'

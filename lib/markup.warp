@@ -436,6 +436,10 @@ style_combinator(node: any) := if contains(keys(style_combinators), str(node.op)
 style_body(body: any) := bracketed(style_items(if style_is_block(body) then body else [body]), "{")
 
 style_is_block(node: any): bool := not (node is pair) and str(node.bracket) == "{"
+// a bracketless group of items (`li {…} .box {…}` as one value)
+style_is_group(node: any): bool := not (node is pair or node is symbol or node is text or node is number or node == ø) and str(node.bracket) is empty
+// style_is_block for a node that may be a plain word, number or text (which have no bracket)
+style_is_block_node(node: any): bool := not (node is symbol or node is text or node is number or node == ø) and style_is_block(node)
 
 // the items of a block: rules with their selectors as texts, declarations with their lengths as texts; selector
 // words wait for their block (`ul li`, `h1, h2`)
@@ -490,10 +494,18 @@ style_entries(items: any, separator: any, leading: any) := {
 // `ul li { … }` and `.a { … }` on the next line: the parser chains the leading dot onto the rule before it
 // (`rule.a{…}`), as it does `#main` on the same line (`rule#main{…}`); the rules apart again
 style_unchained(node: any) := {
+	if node is pair and style_combinator(node) != ø and contains([" > ", " + ", " ~ "], style_combinator(node)) and style_is_group(node.value) {
+		// `ul > li { … } .box { … }`: the parser hangs the rest of the sheet off the combinator's right side, a group
+		// [li, {…}.box, {…}]; the rule `ul > li {…}` apart from the rules after it
+		var parts = []
+		for item in node.value { parts = parts + style_unchained(item) }
+		if #parts < 2 or not style_is_block_node(parts#2) or style_selector_text(parts#1) == ø { return [node] }
+		return [key(node.key, node.op, key(parts#1, ":", parts#2))] + parts[2:]
+	}
 	if not (node is pair) or not (str(node.op) == "." or str(node.op) == "#") { return [node] }
 	var parts = style_unchained(node.key)
 	let last = parts.pop()
-	if style_rule_parts(last) != ø {
+	if style_rule_parts(last) != ø or style_is_block_node(last) {
 		parts.add(last)
 		parts.add(key(ø, node.op, node.value))
 	} else if #parts == 0 { return [node] }
