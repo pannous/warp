@@ -1,0 +1,10 @@
+# csv_rows_raises_on_unclosed_quotes
+'use csv; try { csv_rows("a,\\"b") } catch e { e.message }'	"csv: unclosed quote"
+'use csv; try { csv_rows("\\"open") } catch e { e.message }'	"csv: unclosed quote"
+'use csv; try { csv_rows("a,\\"b\nc") } catch e { e.message }'	"csv: unclosed quote"
+'use csv; try { csv_rows("\\"line\nbreak") } catch e { e.message }'	"csv: unclosed quote"
+
+# csv_rows_still_accepts_closed_quotes
+'use csv; csv_rows("\\"x,y\\",z")'	[["x,y", "z"]]
+'use csv; csv_rows("\\"say \\"\\"hi\\"\\"\\",b")'	[["say \"hi\"", "b"]]
+'use csv; csv_rows("\\"line\nbreak\\",b")'	[["line\nbreak", "b"]]
