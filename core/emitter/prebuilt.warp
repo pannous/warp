@@ -1,7 +1,7 @@
-# runtime.wasm (emitter.warp's part; card runtime-prebuilt, notes/runtime_linking.md "runtime.wasm format"): every
-# runtime word compiled once, no program deciding its kinds or what it makes, and the hooks a program gives the code of
 # the standard module every program links first, whose words a used module's of as many values shadow (link_libraries)
 PRELUDE_MODULE = "prelude"
+# runtime.wasm (emitter.warp's part; card runtime-prebuilt, notes/runtime_linking.md "runtime.wasm format"): every
+# runtime word compiled once, no program deciding its kinds or what it makes, and the hooks a program gives the code of
 # the module of the runtime words alone, its bytes: read again while a reading leaves out a word more
 runtime_wasm_module(runtime: Node, host: map): any := {
 	module.prebuilding = yes
@@ -353,7 +353,7 @@ def link_libraries(images: list, own_names: list) {
 	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
 	# (the program's own word beats a used module's, which beats the prelude's of as many values, as with_own_words sets
 	# the prelude's aside: draw's clear(color) is called, never the prelude's clear(x))
-	for image in images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE) {
+	for image in by_precedence(images) {
 		for word in image.functions {
 			known = module.linked_words.get(word.name) ?? []
 			shadowed = image.name == PRELUDE_MODULE and known.any(other => #other.kinds == #word.kinds)
@@ -361,6 +361,8 @@ def link_libraries(images: list, own_names: list) {
 		}
 	}
 }
+# the images, the prelude's last: a word is bound to the first of them defining it
+by_precedence(images: list): list := images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE)
 # a module's word a program may call: not one of the builders it exports for the host (its show(x) is the host's,
 # beside draw's own show()), which a program linking it exports its own of
 linkable(image: LibraryImage, word: Function): bool := word.name not in image.builders
@@ -431,7 +433,8 @@ def behind_libraries() {
 # the module's class structs the program's of their names, which it declares alike (its classes from the module's
 # text), else the program compiles the module from its source
 def bind_library_words() {
-	for image in module.linked_images {
+	# (in link_libraries' order: two variants alike, the prelude's clear(x) and draw's clear(color), compare equal)
+	for image in by_precedence(module.linked_images) {
 		for entry in image.classes {
 			# (a class the program never reached: its struct declared as the module wrote it)
 			if entry#1 not in module.class_structs { module.class_structs[entry#1] = [struct_read(entry#2), instance_fields] }
