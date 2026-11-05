@@ -30,10 +30,10 @@ def use_library(folder: text) { given_library = folder }
 # older seed) calls library_sources below and reads them where it runs
 # lib/'s folders the bundle leaves out: core's link and extensions/, the compiler itself, which is compiled in, and the
 # files a build makes; of those, the folders the compiler reads as data while it runs: the sugar's rules, the uncertain
-# extension's operator rows (card library-removal-core L1: the extensions' source was 487 KB of the bundle, and their
+# extension's operator rows, the modules' compile-time rules (card library-removal-core L1: the extensions' source was 487 KB of the bundle, and their
 # parses beside it, the library baked a second time)
 UNBUNDLED_FOLDERS = ["compiler", "data", "extensions"]
-BUNDLED_DATA_FOLDERS = ["extensions/sugar", "extensions/uncertain"]
+BUNDLED_DATA_FOLDERS = ["extensions/sugar", "extensions/uncertain", "extensions/rules/modules"]
 LIBRARY_FILES = library_sources()
 # (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)

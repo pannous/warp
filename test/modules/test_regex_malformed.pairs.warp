@@ -1,0 +1,14 @@
+// lib/regex.warp: a malformed pattern is refused the same way by every function (card regex-malformed-message):
+// "regex <pattern>: <the host's reason>", never the return type's "not a list" / "not a text"
+'use regex; try { find_all("abc", "(a") } catch e { e.message }'	"regex (a: Unmatched ( or \\("
+'use regex; try { replace_all("abc", "(a", "x") } catch e { e.message }'	"regex (a: Unmatched ( or \\("
+'use regex; try { match_groups("abc", "(a") } catch e { e.message }'	"regex (a: Unmatched ( or \\("
+'use regex; try { find_all_groups("abc", "(a") } catch e { e.message }'	"regex (a: Unmatched ( or \\("
+'use regex; try { find_all("abc", "*a") } catch e { e.message }'	"regex *a: Invalid preceding regular expression"
+'use regex; try { replace_all("abc", "*a", "") } catch e { e.message }'	"regex *a: Invalid preceding regular expression"
+'use regex; try { find_all_groups("abc", "*a") } catch e { e.message }'	"regex *a: Invalid preceding regular expression"
+'use regex; try { find_all("abc", "[a-") } catch e { e.message.starts_with("regex [a-: Unmatched [") }'	yes
+'use regex; try { replace_all("abc", "[a-", "x") } catch e { e.message.starts_with("regex [a-: Unmatched [") }'	yes
+// the same message as matches and first_match give
+'use regex; m = try { find_all("abc", "(a") } catch e { e.message }; f = try { first_match("abc", "(a") } catch e { e.message }; m == f'	yes
+'use regex; m = try { replace_all("abc", "(a", "") } catch e { e.message }; f = try { matches("abc", "(a") } catch e { e.message }; m == f'	yes

@@ -1,0 +1,49 @@
+// lib/regex.warp edge cases (card lib-regex-edges): empty subject and pattern, no-match paths, empty replacement,
+// non-overlapping finds (POSIX ERE leftmost-longest, each search starts after the last match), malformed patterns,
+// groups without a match, and a long but safe subject (a few thousand characters)
+// empty subject, empty pattern
+'use regex; matches("", "")'	yes
+'use regex; matches("", "a")'	no
+'use regex; matches("", "^$")'	yes
+'use regex; matches("abc", "")'	yes
+'use regex; first_match("abc", "")'	""
+'use regex; find_all("", "[0-9]+")'	[]
+'use regex; replace_all("", "x", "y")'	""
+// no match
+'use regex; first_match("", "a") == ø'	yes
+'use regex; first_match("abc", "[0-9]+") == ø'	yes
+'use regex; find_all("abc", "[0-9]+")'	[]
+'use regex; replace_all("abc", "[0-9]+", "#")'	"abc"
+'use regex; match_groups("abc", "([0-9])([0-9])") == ø'	yes
+'use regex; match_groups("", "(a)") == ø'	yes
+'use regex; find_all_groups("abc", "([0-9])([0-9])")'	[]
+'use regex; find_all_groups("", "(a)")'	[]
+// a group that matched empty is "", not ø
+'use regex; match_groups("x=", "x=([0-9]*)")'	[""]
+// empty replacement
+'use regex; replace_all("a1b22c333", "[0-9]+", "")'	"abc"
+'use regex; replace_all("  a  b  ", " +", "")'	"ab"
+// finds never overlap: the next search starts after the previous match
+'use regex; find_all("aaaa", "aa")'	["aa", "aa"]
+'use regex; find_all("ababab", "aba")'	["aba"]
+'use regex; replace_all("aaaa", "aa", "b")'	"bb"
+'use regex; find_all("a,b,,c", ",")'	[",", ",", ","]
+// an empty-matching pattern: the longest run, then the empty match at the end
+'use regex; find_all("aaa", "a*")'	["aaa", ""]
+// malformed patterns are refused with the pattern and the reason (matches, first_match)
+'use regex; try { matches("abc", "a(b") } catch e { e.message }'	"regex a(b: Unmatched ( or \\("
+'use regex; try { matches("abc", "*a") } catch e { e.message }'	"regex *a: Invalid preceding regular expression"
+'use regex; try { first_match("abc", "(a") } catch e { e.message.starts_with("regex (a: ") }'	yes
+'use regex; try { matches("abc", "[a-") } catch e { e.message.starts_with("regex [a-: Unmatched [") }'	yes
+// find_all, replace_all and match_groups refuse a malformed pattern too (their message is not yet the pattern's)
+'use regex; try { count(find_all("abc", "(a")) > -1 } catch e { "refused" }'	"refused"
+'use regex; try { replace_all("abc", "(a", "x") } catch e { "refused" }'	"refused"
+'use regex; try { match_groups("abc", "(a") } catch e { "refused" }'	"refused"
+// a lone ) is a literal in POSIX ERE
+'use regex; replace_all("f(a) x", "a)", "b")'	"f(b x"
+// a long, safe subject
+'use regex; s = "ab," * 500; count(find_all(s, "ab"))'	500
+'use regex; s = "ab," * 500; count(replace_all(s, ",", ""))'	1000
+'use regex; s = "x" * 2000 + "42"; first_match(s, "[0-9]+")'	"42"
+'use regex; s = "x" * 2000 + "42"; matches(s, "^x+[0-9]{2}$")'	yes
+'use regex; s = "k=1;" * 300; count(find_all_groups(s, "([a-z])=([0-9])"))'	300

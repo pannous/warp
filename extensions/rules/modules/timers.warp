@@ -1,0 +1,4 @@
+# lib/timers.warp's rules that run code at compile time, its whole program or a rule word of extensions/rules/rule_words.warp:
+# the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
+// the page shows main's last expression anew after each firing (extensions/rules/rule_words.warp page_valued)
+rewrite $p => $q where program and $q = page_valued($p)
