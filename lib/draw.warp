@@ -155,3 +155,11 @@ def label(x, y, words, color, size = 12) {
 		if amount > 0 { dot(x + at % width, y + at /! width, with_alpha(color, amount / 255)) }
 	}
 }
+
+// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
+draw_shape(kind: int, x: float, y: float, width: float, height: float, color: int) from host
+draw_show(width: int, height: int) from host
+draw_shader(shader: node) from host
+text_coverage(words: node, size: int): node from host
+paint(picture: node, width: int, height: int, values: node) from host
+save_picture(picture: node, width: int, height: int, file: node) from host

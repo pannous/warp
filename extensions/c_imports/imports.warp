@@ -24,7 +24,7 @@ c_library_aliases = {libc: "c", libm: "m", cmath: "m", zlib: "z", SDL2: "SDL2", 
 # libc and libm, which a program may name for each other
 c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
-not_c_libraries = ["warp", "emitter", "runtime"]
+not_c_libraries = ["warp", "emitter", "runtime", "host"]
 # the files whose foreign lines say what a library's functions take and give
 c_catalog_files = ["c.warp", "math.warp"]
 c_foreign_mark = " from "
