@@ -523,8 +523,8 @@ word_set(words: list): map := {
 # the origin's shape after `where … =`, else of the pattern, else (a pattern starting with a hole, `$n $u`) the words
 # its `in [ms, kg]` listing names
 rule_needs(source: text): list := {
-	if not source.contains(rewrite_line_start) { return [] }
-	needs = []
+	needs = phrase_heads(source).map(leading_word)
+	if not source.contains(rewrite_line_start) { return needs }
 	for line in source.split("\n") {
 		if line.starts_with(rewrite_line_start) {
 			rule = line[#rewrite_line_start ..]
@@ -594,11 +594,27 @@ statements_ruled(statements: list, module: text, source: text): list := {
 			}
 		} else {
 			rule = rule_of(statements#at, module, source)
+			if rule != ø and module == "" { note_phrase_reading(rule, statements#at) }
 			if rule == ø { kept += [statements#at] } else { rules += [rule] }
 		}
 	}
 	[rules, kept]
 }
+
+# the reading of a program's phrase definition (extensions/phrase_definitions.warp phrase_rule), printed: `give v to c
+# := …` reads as `give (v) to (c) := …`, so a word the body leaves unnamed shows as the fixed word it became (decision
+# phrase-functions); its rule calls the function its first word names with the holes alone
+note_phrase_reading(rule: Rule, statement: Node) := {
+	if not is_phrase(rule.pattern) or not is_round(rule.template) or not (rule.template#1 is symbol) or not (rule.pattern#1 is symbol) { return ø }
+	words = items_of(rule.pattern)
+	if not name_of(rule.template#1).starts_with(name_of(words#1)) or words.all(word => phrase_hole(word) == ø) or not items_of(rule.template)[1 ..].all(is_phrase_argument) { return ø }
+	diagnose(call_of("phrase_reading", [symbol(words.map(head_word_name).join(" ")), symbol(words.map(word => if phrase_hole(word) == ø then name_of(word) else "(" + head_word_name(word) + ")").join(" "))]), statement)
+}
+# `$v`, `to: $c`, `() => $body`: an argument a phrase rule passes
+is_phrase_argument(argument: Node): bool := rule_hole(argument) != ø or (argument is key and rule_hole(value_of(argument)) != ø)
+# a phrase head's hole `$v` or `$body: block`, its name; ø for a fixed word
+phrase_hole(word: Node): text? := if is_key(word, Op.Colon) then rule_hole(key_of(word)) else rule_hole(word)
+head_word_name(word: Node): text := if phrase_hole(word) == ø then name_of(word) else phrase_hole(word)[1 ..]
 
 # Overloads of a built-in operator by its operands' kinds (decision rules-to-typed-operators, user OK 2026-10-31):
 # `infix operator |(x: any, g: function) := g(x)` is the rule `$x | $g => $g($x)`, its parameter types its conditions

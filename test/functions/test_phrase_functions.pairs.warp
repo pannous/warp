@@ -1,0 +1,10 @@
+# decision phrase-functions: a definition head may be a phrase; the words the body names (or types) are its parameters
+'give v to c := c + v; give 2 to 40'	42
+'move x by d := x + d; [move 1 by 2, move 10 by 5]'	[3, 15]
+'bump n by (body: block) := n + body(); bump 2 by { 3 }'	5
+'twice x := 2 * x; twice 4'	8
+'give v to c := c + v; [give(1, 2), give 3 to: 4]'	[3, 7]
+'move x by c := x + c; move 1 by 2'	3
+'to add a to b: a + b; add 1 to 2'	3
+'on_time every n (body: block) := n * body(); on_time every 2 { 5 }'	10
+'send v to c := c + v'	error

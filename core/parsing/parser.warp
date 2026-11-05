@@ -18,7 +18,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; later: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
 // What stands at the parser's position (card parser-checklist-idioms): its character, the one k further, the one at
 // any offset, each a line break past the end; whether the character or a text stands there
 def char_here(p: Parser): text := peek(p.code, p.at, p.n)
@@ -85,8 +85,11 @@ def written_tree(written: text, uses: text = ""): Node := {
 	word_types = multi_word_types(source)
 	statements = source_operator_statements(source)
 	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), scans: extension_scans(source + uses), aliases: by_first_character(aliases_among(statements) + aliases_among(math_operator_statements()), alias => alias.spelling), word_types: word_types, line_starts: line_starts_of(source), shifts: passed#2}
-	items_until(p, Bracket.None, ItemsEnd.Source)
+	program = items_until(p, Bracket.None, ItemsEnd.Source)
+	// (the statements a reader wrote for after the program's own, a phrase definition's rule)
+	if #p.later == 0 then program else listed(Bracket.None, Separator.Semicolon, statements_in(program) + p.later.map(later => statements_in(written_tree(later))#1))
 }
+
 
 // The names glued to `!` a source defines as words of their own: `def is!(warp, expected) := …`, `is!(…) := …`;
 // any other `!` after a name stays a suffix (`x!`), a macro (`println!(…)`) or `!=` (card parser-reads-2)
@@ -167,10 +170,12 @@ def given_fixity(head: list, body: list): Fixity {
 	Fixity.Infix
 }
 // whether a word of code holds the name `it` whole, `it*it`, `f(it)`
-def says_it(word: text): bool {
+def says_it(word: text): bool := mentions_name(word, "it")
+// whether code holds the name whole: `x` in `x*x`, `f(x)`, not in `xs`
+def mentions_name(code: text, name: text): bool {
 	at = 0
-	while at + 1 < word.length {
-		if word[at .. at + 2] == "it" and (at == 0 or not is_name_char(word[at - 1])) and (at + 2 == word.length or not is_name_char(word[at + 2])) { return true }
+	while at + name.length <= code.length {
+		if code[at .. at + name.length] == name and (at == 0 or not is_name_char(code[at - 1])) and (at + name.length == code.length or not is_name_char(code[at + name.length])) { return true }
 		at += 1
 	}
 	false
@@ -1860,20 +1865,6 @@ def code_statements(source: text): list {
 }
 
 def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: fixity_level(fixity)}
-// `square x := x*x`, `add a b := a + b` (decision spaced-definition-head): at a statement's start, plain names before
-// `:=` are a definition's head without its parentheses, square(x) := x*x; `f x` elsewhere stays a call
-def spaced_definition(p: Parser): Node {
-	if not at_statement_start(p) { return ø }
-	line = p.code[p.at .. statement_end(p)]
-	if not line.contains(" := ") { return ø }
-	head = line.split(" := ")#1
-	names = blank_words(head)
-	// (no keyword: `def f x := …` stays the def rule's)
-	if names.length < 2 or not names.all(name => is_plain_name(name) and keyword_form(name) == "") or names#1 == "def" { return ø }
-	p.at += head.length + 4
-	skip_spaces(p)
-	Key(call_of(names.map(name => symbol(name))), Op.Define, expression(p, 0))
-}
 // whether only blanks stand between the parser and its statement's start: the input's, a line's, after `;` or `{`
 def at_statement_start(p: Parser): bool {
 	before = p.at - 1
@@ -2101,14 +2092,15 @@ def prefixed(p: Parser): Node := {
 	}
 	foreign = foreign_form(p, word)
 	if foreign != ø { return foreign }
+	// a statement an extension reads where one starts, `give v to c := …` (core/extension.warp statement_readers)
+	stated = if at_statement_start(p) then read_statement(p) else ø
+	if stated != ø { return stated }
 	// a phrase an extension reads from its word, `emit alarm` (core/extension.warp keyword_readers)
 	keyword_reader = keyword_reader_of(word)
 	word_start = p.at
 	phrase = if keyword_reader == ø then ø else keyword_reader(p, word)
 	// a reader that moved on read its statement, if only to nothing (a declaration a prescan applied)
 	if phrase != ø or p.at != word_start { return phrase }
-	spaced = spaced_definition(p)
-	if spaced != ø { return spaced }
 	if word in FIXITY_WORDS {
 		// an alias the pre-scan applied
 		if only_spells(operator_statement(statement_words_at(p))) { return skip_statement(p) }

@@ -2,7 +2,87 @@
 # `To square a number: it * it` (an English sentence starts with a capital), read by their word `to` when it opens a
 # statement; the parser keeps at_to_header_end and known_type, which other forms read too
 read_phrase_definition(p: Parser, word: text): Node := if starts_statement(p) then to_definition(p) else ø
-phrase_definitions_extension = Extension{name: "phrase_definitions", keyword_readers: {"to": read_phrase_definition, "To": read_phrase_definition}}
+phrase_definitions_extension = Extension{name: "phrase_definitions", keyword_readers: {"to": read_phrase_definition, "To": read_phrase_definition}, statement_readers: [read_spaced_definition]}
+
+# `square x := x*x`, `give v to c := c + v`, `on every period (body: block) := …` (decisions spaced-definition-head,
+# phrase-functions): a definition head without parentheses at a statement's start, read as `to give v to c: …` is
+# (phrase_defined); ø, nothing read, before anything else. A head starting with a keyword's word is refused: `send v to
+# c := …` would never be read past `send`'s own reader
+def read_spaced_definition(p: Parser): Node := {
+	head = spaced_head(p.code[p.at .. statement_end(p)])
+	if head == "" { return ø }
+	words = head_words(head)
+	if keyword_reader_of(words#1) != ø { raise "`" + words#1 + "` starts its own statements, no phrase definition: name the phrase by another word" }
+	p.at += head.length + 4
+	skip_spaces(p)
+	body = expression(p, 0)
+	phrase_defined(p, words#1, phrase_slots(words[1 ..], body, p.types), body, "")
+}
+# the head of a definition written without parentheses, `give v to c` of `give v to c := c + v`, else ""; no keyword
+# (`def f x := …` stays the def rule's, `global a b := …` a declaration)
+def spaced_head(line: text): text {
+	if not line.contains(" := ") { return "" }
+	head = line.split(" := ")#1
+	words = head_words(head)
+	if #words < 2 or not is_plain_name(words#1) or words#1 == "def" or not words.all(word => typed_head_word(word) != ø or (is_plain_name(word) and keyword_form(word) == "")) { return "" }
+	head
+}
+# the words of a definition head, a typed one `(body: block)` one word
+def head_words(head: text): list {
+	words = []
+	at = 0
+	while at < head.length {
+		end = at
+		closer = if head[at] == '(' then ')' else ' '
+		while end < head.length and head[end] != closer { end += 1 }
+		if closer == ')' { end += 1 }
+		if end > at { words += [head[at .. end]] }
+		at = if end == at then at + 1 else end
+	}
+	words
+}
+# [name, type] of a typed head word `(body: block)`, else ø
+def typed_head_word(word: text): list? {
+	if not word.starts_with("(") or not word.ends_with(")") or not word.contains(":") { return ø }
+	parts = word[1 .. word.length - 1].split(":").map(part => part.trim())
+	if #parts == 2 and is_plain_name(parts#1) and is_plain_name(parts#2) then parts else ø
+}
+
+# The definition a phrase head makes, `name(parameters) := body`, its parameters labelled by their prepositions, its
+# name joined with its other fixed words (`on every period` → on_every(period)); a head with words beside its name and
+# parameters also makes its rule, so the phrase as written calls it, `rewrite give $v to $c => give($v, to: $c)`, read
+# after the program's own statements (Parser.later), a block parameter given as its thunk
+def phrase_defined(p: Parser, name: text, parts: list, body: Node, result_type: text): Node := {
+	parameters = parts.filter(part => not (part is text))
+	function = ([name] + parts.filter(part => part is text)).join("_")
+	clash = phrase_redefinition(p, function, parameters)
+	if clash != "" { raise clash }
+	if #parameters != #parts or parameters.any(parameter => is_list_of(parameter, "")) { p.later += [phrase_rule(name, function, parts)] }
+	head = symbol(function)
+	if #parameters > 0 {
+		p.phrases += [[function, parameters]]
+		head = call_of([head] + parameters.map(parameter => if slot_type(parameter) == BLOCK_SLOT then symbol(slot_name(parameter)) else parameter))
+	}
+	if result_type != "" { head = Key(head, Op.As, symbol(result_type)) }
+	Key(head, Op.Define, body)
+}
+# `rewrite give $v to $c => give($v, to: $c)`: the rule of a phrase head's parts, a fixed word as written, a parameter
+# its hole (labelled by its preposition), a block one given as its thunk
+def phrase_rule(name: text, function: text, parts: list): text {
+	parameters = parts.filter(part => not (part is text))
+	pattern = [name] + parts.map(part => if part is text then part else (if label_of(part) == "" then "" else label_of(part) + " ") + "$" + slot_name(part) + (if slot_type(part) == BLOCK_SLOT then ": block" else ""))
+	arguments = parameters.map(parameter => (if label_of(parameter) == "" then "" else label_of(parameter) + ": ") + (if slot_type(parameter) == BLOCK_SLOT then "() => $" else "$") + slot_name(parameter))
+	"rewrite " + pattern.join(" ") + " => " + function + "(" + arguments.join(", ") + ")"
+}
+# the preposition labelling a slot, `to` of `to b`, else ""
+def label_of(parameter: Node): text := if is_list_of(parameter, "") and parameter#1 is symbol then name_of(parameter#1) else ""
+# the type a slot names, `block` of `body: block`, else ""
+def slot_type(parameter: Node): text := match parameter {
+	Key(_, Op.Colon, type): if type is symbol then name_of(type) else ""
+	List(parts, _, _): slot_type(parts#(parts.length))
+	_: ""
+}
+BLOCK_SLOT = "block"
 
 # `to name params: body` (also `{ body }`, `do body`, the lines indented below), after `to` opening a statement: the
 # function `name(params) := body`, its parameters the head's slots (phrase_slots); ø, nothing read, before anything
@@ -40,16 +120,7 @@ def to_definition(p: Parser): Node := {
 	if at_char(p, ':') { advance(p) }
 	skip_spaces(p)
 	body = definition_body(p)
-	parameters = phrase_slots(words, body, p.types).map(parameter => shaped(parameter, shapes))
-	clash = phrase_redefinition(p, name, parameters)
-	if clash != "" { raise clash }
-	head = symbol(name)
-	if #parameters > 0 {
-		p.phrases += [[name, parameters]]
-		head = call_of([head] + parameters)
-	}
-	if result_type != "" { head = Key(head, Op.As, symbol(result_type)) }
-	Key(head, Op.Define, body)
+	phrase_defined(p, name, phrase_slots(words, body, p.types).map(part => if part is text then part else shaped(part, shapes)), body, result_type)
 }
 
 # The word at the parser's position, read
@@ -97,6 +168,7 @@ def shaped(parameter: Node, shapes: list): Node := {
 # - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`;
 #   when together they name a declared type, by all of them: `a full name` → `full-name: full-name`
 # - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
+# - a word the body never names is a fixed word, a text among the parameters: `every` of `on every period`
 # Rust twin: type_name_matching.rs parameter_slots (labelled)
 def phrase_slots(words: list, body: Node, types: list): list {
 	parameters = []
@@ -106,6 +178,14 @@ def phrase_slots(words: list, body: Node, types: list): list {
 		word = words#at
 		if phrase_prepositions.contains(word) {
 			preposition = word
+			at += 1
+			continue
+		}
+		typed = typed_head_word(word)
+		if typed != ø {
+			slot = Key(symbol(typed#1), Op.Colon, symbol(typed#2))
+			parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
+			preposition = ""
 			at += 1
 			continue
 		}
@@ -120,17 +200,24 @@ def phrase_slots(words: list, body: Node, types: list): list {
 		at += 1
 		# `a full name` of `class full name`: the nouns together are the type, and the slot's name
 		head = if #noun > 1 and known_type(noun.join("-"), types) then noun.join("-") else noun#(#noun)
+		# a word the body never names (nor reads as `it`), of no declared type, is a fixed word of the phrase, its
+		# preposition too: `every` of `on every period` (decision phrase-functions)
+		if #noun == 1 and not known_type(head, types) and not mentions(body, head) and not mentions(body, implicit_parameter) {
+			parameters += (if preposition == "" then [] else [preposition]) + [head]
+			preposition = ""
+			continue
+		}
 		slot = if known_type(head, types) then Key(symbol(head), Op.Colon, symbol(head)) else symbol(head)
 		parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
 		preposition = ""
 	}
 	names = []
-	for parameter in parameters {
+	for parameter in parameters.filter(part => not (part is text)) {
 		name = slot_name(parameter)
 		if names.contains(name) { raise "two parameters are named " + name + ": use one-word parameter names here (`first name`, `last name` need multi-word identifiers)" }
 		names += [name]
 	}
-	if #parameters == 1 and is_key(parameters#1, Op.Colon) {
+	if #parameters == 1 and not (parameters#1 is text) and is_key(parameters#1, Op.Colon) {
 		typed = parameters#1
 		type_name = name_of(value_of(typed))
 		if slot_name(typed) == type_name and mentions(body, implicit_parameter) and not mentions(body, type_name) {

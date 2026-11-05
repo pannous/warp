@@ -1,5 +1,7 @@
 # The hints of the warp compiler (core/diagnostics.warp): pattern TAB message, the first match wins
 alias_word($written, $canonical)	"warp says {canonical}"	"{canonical}"	"alias-{written}@{written}"
+# a definition head read as a phrase (rewrites.warp phrase_definition): its parameters, the words the body names
+phrase_reading($written, $reading)	"{written} := … reads as {reading} := …"	"{reading}"
 # a word of a standard module the program names without its use (extensions/implicit_uses.warp)
 implicit_use($word, $module)	"{word} is {module}'s"	"use {module}"
 # a foreign type name of the prelude (prelude_words.warp foreign_types): `x: Int`

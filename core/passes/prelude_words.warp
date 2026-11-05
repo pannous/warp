@@ -12,6 +12,7 @@ use "scope.warp"
 use "lambdas.warp"
 use "../../extensions/c_imports.warp"
 use "../../extensions/components.warp"
+use "../../extensions/phrase_definitions.warp"
 
 # each function a library file brought, by name: [the file, the line its definition starts on], the place a refusal
 # inside it names (emitter.warp note_emitting): its slice was parsed alone, its nodes keep no line of the file
@@ -707,7 +708,10 @@ word_index_text(): text := {
 # the word each `rewrite` line of a source starts its pattern with: `stored` of `rewrite stored $name: [$kind] => …`
 # (none of a pattern starting with a hole, `rewrite $p => …`)
 rule_heads(source: text): list := rule_patterns(source).map(leading_word).filter(word => #word > 0)
-rule_patterns(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => line[#"rewrite " ..])
+rule_patterns(source: text): list := source.split("\n").filter(line => line.starts_with("rewrite ")).map(line => line[#"rewrite " ..]) + phrase_heads(source)
+# the phrase heads a source defines, `give v to c` of `give v to c := c + v` (parser.warp spaced_definition): each one's
+# rule starts with its first word (also a parenthesis-free head, `square x`, whose first word is a definition's too)
+phrase_heads(source: text): list := source.split("\n").filter(line => line != "" and not is_blank(line[0])).map(spaced_head).filter(head => head != "")
 leading_word(pattern: text): text := {
 	start = if pattern.starts_with("(") then 1 else 0
 	pattern[start ..< name_end(pattern, start, #pattern)]

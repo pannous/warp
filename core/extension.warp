@@ -43,6 +43,9 @@ class Extension {
 	# there, nothing read; one that read its statement to nothing (applied by a prescan) answers ø past it (`emit
 	# alarm`)
 	keyword_readers: map = {}
+	# functions reading a statement where one starts, given the parser there, each ø where its form is not, nothing read
+	# (`give v to c := c + v`, a phrase definition)
+	statement_readers: list = []
 	# words that take a block glued to them as theirs, `go{…}`, never the tagged block `go:{…}`
 	block_words: list = []
 	# functions run on the source before it is parsed, each giving [the new source, its shifts]: where the new source
@@ -102,7 +105,7 @@ claimed_once(maps: list): map := {
 	joined
 }
 # the Extension fields every row's entries join into one: lists as one list, maps as one map
-JOINED_LISTS = ["number_readers", "number_suffix_readers", "type_readers", "infix_readers", "prefix_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "attributes", "commands", "host_exports"]
+JOINED_LISTS = ["number_readers", "number_suffix_readers", "type_readers", "infix_readers", "prefix_readers", "statement_readers", "glyph_owners", "block_words", "text_passes", "arm_lowerings", "implicit_uses", "lints", "attributes", "commands", "host_exports"]
 JOINED_MAPS = ["atom_readers", "suffix_readers", "keyword_readers", "text_escape_readers", "value_settlers"]
 # every row joined as one row, once: a hot path (the parser's readers, the lints on every node) reads its typed field
 # and looks no field up by its name
@@ -191,6 +194,8 @@ OPERAND_ENDS = symbol("operand ends")
 read_infix(p: Parser, operand: Node, min_power: int): Node := first_answer(hooks().infix_readers, reader => reader(p, operand, min_power))
 # the operator and operand an extension reads where an expression starts, else ø
 read_prefix(p: Parser): Node := first_answer(hooks().prefix_readers, reader => reader(p))
+# the statement an extension reads where one starts, else ø
+read_statement(p: Parser): Node := first_answer(hooks().statement_readers, reader => reader(p))
 # whether an extension reads the glyph as its own in this parse
 owned_glyph(p: Parser, glyph: text): bool := hooks().glyph_owners.any(owns => owns(p, glyph))
 # each extension's prescan of the source, by its name
