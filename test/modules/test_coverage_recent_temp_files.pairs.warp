@@ -1,0 +1,5 @@
+// edges for temp_folder / delete_file beyond test_temp_files.pairs.warp (card lib-coverage-recent)
+'use file; a = temp_folder(); b = temp_folder(); a == b'	yes
+'use file; p = temp_folder() + "/warp_cov_recent_del.txt"; write(p, ""); [delete_file(p), delete_file(p)]'	[yes, no]
+'use file; p = temp_folder() + "/warp_cov_recent_empty.txt"; write(p, ""); [exists(p), delete_file(p), exists(p)]'	[yes, yes, no]
+'use file; p = temp_folder() + "/warp_cov_recent_bytes.bin"; write_bytes(p, [0, 255, 1]); r = read_bytes(p); delete_file(p); [r, exists(p)]'	[[0, 255, 1], no]

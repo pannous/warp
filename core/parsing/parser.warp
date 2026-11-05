@@ -186,13 +186,13 @@ def operator_pattern(words: list, define: int): OperatorStatement? {
 def defined_spelling(statement: OperatorStatement): text {
 	if #statement.head == 0 or statement.fixity == Fixity.Circumfix { return "" }
 	first = statement.head#1
-	if #statement.head == 1 and is_operator_glyph(first) { return first }
+	if #statement.head == 1 and is_definable_glyph(first) { return first }
 	if statement.fixity != Fixity.Infix and not first.contains("(") { return "" }
 	named = is_name_start(first#1)
 	end = if named then name_end(first, 0, first.length) else 0
 	if not named { while end < first.length and first[end] != '(' { end += 1 } }
 	word = first[0 .. end]
-	operator = (named and word != "operator") or is_operator_glyph(word)
+	operator = (named and word != "operator") or is_definable_glyph(word)
 	if operator and (end == first.length or first[end] == '(') and word_operator(word) == ø then word else ""
 }
 // `operator × := *` (lib/math.warp): another spelling of a built-in operator; `prefix operator √ := sqrt` one of a
@@ -1719,6 +1719,8 @@ def fixity_level(fixity: Fixity): int := match fixity {
 def operator_call(glyph: text, arguments: list): Node := call_of([symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
 
 
+// A glyph a declaration may define: one beyond ASCII, or one the aliases leave to a declaration (`~`, `declared: yes`)
+def is_definable_glyph(glyph: text): bool := is_operator_glyph(glyph) or alias_spellings().declared contains glyph
 // A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), no letter or digit;
 // raised digits too (`suffix operator ³`)
 def is_operator_glyph(glyph: text): bool {
