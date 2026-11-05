@@ -862,10 +862,3 @@ gpu_packed_code(v: Node, cell: text): text := {
 	for i in 1 to #v { written = "gpu_put(" + written + ", " + i + ", " + as_code(v#i) + ")" }
 	written
 }
-
-# the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
-gpu_compute(shader: node, values: node, count: int): node from host
-gpu_render(shader: node, width: int, height: int, values: node): node from host
-gpu_compute_linear(shader: node, address: int, count: int): int from host
-gpu_map_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
-gpu_reduce_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
