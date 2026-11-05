@@ -1,0 +1,27 @@
+#!/usr/bin/env warp
+# A recipe scaled from 4 servings to 6 and to 1 with exact fractions: "1 1/2 cups" stays exact, never 1.4999
+# (fractions, tables)
+use fractions
+use tables
+
+recipe = [["flour", "2 1/4", "cups"], ["sugar", "3/4", "cup"], ["butter", "1/2", "cup"], ["eggs", "2", ""], ["vanilla", "1 1/2", "tsp"], ["salt", "1/8", "tsp"]]
+servings = 4
+
+scaled(target) := {
+	factor = target / servings
+	rows = []
+	for item in recipe {
+		amount = parse_fraction(item#2) * factor
+		rows = rows + [[item#1, mixed_text(amount), item#3]]
+	}
+	rows
+}
+
+for target in [6, 1] {
+	print("for " + str(target) + " (x " + mixed_text(target / servings) + "):")
+	print(table_text(scaled(target), {headers: ["ingredient", "amount", "unit"], align: ["left", "right", "left"]}))
+	print("")
+}
+total = parse_fraction("2 1/4") + parse_fraction("3/4") + parse_fraction("1/2")
+print("dry and fat cups for 4: " + mixed_text(total))
+print("as a decimal: " + str(float(total)))

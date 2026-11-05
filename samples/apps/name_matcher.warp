@@ -1,0 +1,23 @@
+#!/usr/bin/env warp
+# Duplicate contacts found although typed differently: composed and decomposed accents, the ﬁ ligature, full-width
+# letters and German ß all compare equal after NFKC and case folding (unicode, tables)
+use unicode
+use tables
+
+names = ["Zoë Müller", "Zoe" + chr(776) + " Mu" + chr(776) + "ller", "ZOË MÜLLER", "Sofia Strauß", "sofia STRAUSS", "ﬁona Ｌｅｅ", "Fiona Lee", "Fiona Leigh"]
+key(name) := casefold(nfkc(name))
+
+rows = []
+for name in names { rows = rows + [[name, str(count(codepoint_numbers(name))), str(count(codepoint_numbers(nfc(name)))), key(name)]] }
+print(table_text(rows, {headers: ["as typed", "code points", "after NFC", "match key"]}))
+print("")
+groups = {}
+order = []
+for name in names {
+	k = key(name)
+	if not (k in groups) { groups[k] = []; order = order + [k] }
+	groups[k] = groups[k] + [name]
+}
+print(str(count(order)) + " people among " + str(count(names)) + " entries")
+for k in order { if count(groups[k]) > 1 { print("same person: " + join(groups[k], " | ")) } }
+print("already NFC? " + str(is_normalized(names#2, "NFC")) + ", after nfc: " + str(is_normalized(nfc(names#2), "NFC")))
