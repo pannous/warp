@@ -1,0 +1,8 @@
+// money_allocate / money_split edges without .text() (card lib-coverage-recent; core-test-runner-money-ms flakes on .text())
+'use money; try { money_allocate(Money(5, "EUR"), []) } catch e { e.message }'	"money: allocate needs at least one ratio"
+'use money; try { money_allocate(Money(5, "EUR"), [0, 0]) } catch e { e.message }'	"money: the ratios sum to 0"
+'use money; try { money_split(Money(5, "EUR"), 0) } catch e { e.message }'	"money: allocate needs at least one ratio"
+'use money; [p.currency for p in money_split(Money(100, "USD"), 3)]'	["USD", "USD", "USD"]
+'use money; s = money_allocate(Money(100, "USD"), [1, 1, 1]); n = 0; for p in s { n = n + p.minor }; [n, [p.minor for p in s]]'	[100, [34, 33, 33]]
+'use money; [p.minor for p in money_allocate(Money(10, "EUR"), [0, 1, 0])]'	[0, 10, 0]
+'use money; [p.minor for p in money_allocate(Money(7, "JPY"), [1/2, 1/2])]'	[4, 3]
