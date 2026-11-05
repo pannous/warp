@@ -108,7 +108,7 @@ def json_patch_member(op: any, name: text): any {
 	op[name]
 }
 def json_patch_step(doc: any, op: any): any {
-	if not json_is_object(op) { raise "it is no object" }
+	if not json_is_object(op) { raise "the operation is no JSON object but a JSON " + json_kind(op) }
 	verb = json_patch_member(op, "op")
 	target = json_patch_member(op, "path")
 	tokens = json_pointer_tokens(target)
