@@ -62,9 +62,9 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol == "%" and kind == ValueKind.Int { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [TypedCode(ValueKind.Float, converted(a, kind)), TypedCode(ValueKind.Float, converted(b, kind))]) }
 	if symbol == "rem" and kind == ValueKind.Float { return float_remainder(body, converted(a, kind), converted(b, kind)) }
-	if symbol == "/" and kind == ValueKind.Int { return runtime_call("extended_ratio", [a, b]) }
+	if symbol == "/" and kind == ValueKind.Int { return needed_call("extended_ratio", [a, b]) }
 	# a negative exponent gives an exact rational, so the power is a boxed value
-	if symbol == "^" and kind == ValueKind.Int { return runtime_call("extended_power", [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))]) }
+	if symbol == "^" and kind == ValueKind.Int { return needed_call("extended_power", [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))]) }
 	if symbol == "^" { return float_power(body, converted(a, kind), converted(b, kind)) }
 	ops = if kind == ValueKind.Float then float_ops else int_ops
 	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind_spelling(kind)) }

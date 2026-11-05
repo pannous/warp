@@ -78,7 +78,7 @@ test_verdicts(work: text, words: list) := {
 			if why != "" { failed += 1 }
 		}
 		took = run_milliseconds(work, "" + n) + run_milliseconds(work, n + EXPECTED_RUN)
-		if took > SLOW_MILLISECONDS { print SLOW_MARK + described + ": " + took / 100 / 10.0 + " s" }
+		if took > SLOW_MILLISECONDS { print SLOW_MARK + described + ": " + float(took) / 1000 + " s" }
 	}
 	unread = test_files_of(words).flat_map(file => unread_lines(file, cases).map(line => file + ":" + line))
 	for place in unread { print "✗ " + place + ": " + UNREAD_PAIR }
