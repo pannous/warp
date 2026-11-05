@@ -139,7 +139,8 @@ node_from(view: View, keeps_maps: bool): Node := {
 	if keeps_maps and is_empty_group(view) and view#2 == "{" { return Key(symbol(opaque_word), Op.Colon, view) }
 	if kind == "list" { return List(view[3..].map(item => part(item)), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(part(view#4), view#2, view#3) }
-	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }
+	# (a subscript's offset is read by index_positions, before a class body or other view becomes code: here it is its 1)
+	if kind == "attribute" { return if view#2 == subscript_offset_mark then part(view#4) else Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }
 	if count(kind) == 0 { return view }
 	Key(symbol(opaque_word), Op.Colon, view)
 }
