@@ -100,15 +100,12 @@ def class_struct(class_name: text): text {
 # final type by comparing type indexes, against an open one of another type through its is_subtype libcall (each
 # instance lookup tested every class in turn so: a quarter of the emit; notes/compile_speed.md "Emit")
 def subtype_prefix(class_name: text): int { if class_name in module.parents.values then 80 else 79 }
-# $Instance, every class's struct's supertype: a $Node with the map of its extra fields
+# $Instance, every class's struct's supertype, a fixed GC type (emitter.warp gc_types): a $Node with the map of its
+# extra fields
 instance_fields = ["kind", "data", "value", "extra"]
 def instance_field_types(): list { node_fields + [99, gc.node, 1] }
 extra_field = 3
-def instance_struct(): text {
-	name = "Instance"
-	if name not in module.class_structs { module.class_structs[name] = [[80, 1, gc.node, 95] + uleb(#instance_fields) + instance_field_types(), instance_fields] }
-	name
-}
+def instance_struct(): text { gc.instance }
 # every class's struct declared at once, a parent before its children, as one recursion group (module_layout.warp
 # type_entries): wasm canonicalizes structurally equal types, so two classes of as many fields would be one type, and
 # the test of one class's struct would pass the other's instance; inside one group each type is its own
