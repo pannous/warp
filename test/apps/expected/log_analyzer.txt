@@ -10,3 +10,10 @@ status codes: {200: 4, 401: 1, 404: 1, 500: 1, 304: 1}
 latency mean 0.219 s, median 0.011 s, p90 0.535 s
 slowest: GET /api/report (1.502 s, status 500)
 busiest client: 192.168.1.10
+09:14 ##
+09:15 ##
+09:16 #
+09:17 #
+09:18 #
+09:19 #
+clients with errors: 10.0.0.7, 192.168.1.10, 10.0.0.9

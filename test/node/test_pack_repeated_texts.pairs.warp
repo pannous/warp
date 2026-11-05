@@ -1,0 +1,4 @@
+// card intern-names: a text met again in a pack comes back as it was, wherever it repeats
+'x = ["a", "b", "a", {a: "b"}, ["a", ["b"]]]; unpack(pack(x)) == x'	yes
+'c = data f(x) + f(x) * x; unpack(pack(c)) == c'	yes
+'unpack(pack(["", "", "word", "word"]))'	["", "", "word", "word"]

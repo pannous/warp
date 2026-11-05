@@ -289,7 +289,7 @@ sugar_applied(program: Node, rules: list): Node := {
 	first_parameter_types = typed_first_parameters_in(nodes)
 	rule_signatures = definitions_signatures_in(nodes)
 	rule_case_holders = case_holders_in(nodes)
-	rule_instances = instance_names_in(program, nodes)
+	rule_instances = instance_names_in(program, outer_nodes_in(program))
 	rule_classes = class_names_of(program)
 	rule_program = program
 	rule_varying_known = no
@@ -1240,8 +1240,8 @@ class_names_of(program: Node): map := {
 }
 # the names the program assigns only instances of its classes, `s = Stack()` (classes.warp written_type), of its
 # nodes as the caller listed them
-instance_names_in(program: Node, nodes: list): map := {
-	classes = class_names_of(program)
+instance_names_in(program: Node, nodes: list): map := instances_assigned(nodes, class_names_of(program))
+instances_assigned(nodes: list, classes: map): map := {
 	found = {}
 	if #classes == 0 { return found }
 	types = assigned_types_in(nodes, classes)
@@ -1366,6 +1366,17 @@ context_holds(code: Node, context: text): bool := {
 # the names a function binds inside it, else ø: a definition's (bound_by_definition), a lambda's parameters and the
 # names its body declares (`xs.map(x => x.f(1))`: x is the lambda's)
 bound_inside(n: Node): list? := if is_key(n, Op.Define) then bound_by_definition(n) else if is_key(n, Op.Arrow) then declared_within(value_of(n), lambda_bound_names(key_of(n))) else ø
+# the instance names inside a definition or lambda binding `bound`: a name binds in its own scope, so one it binds is an
+# instance where its own body, nested definitions aside, assigns it only instances (a library function's parameter m
+# is its own, never the program's m = Diag(…)); the outer ones it leaves alone stay
+scoped_instances(outer: map, bound: list, n: Node): map := {
+	if #bound == 0 or #rule_classes.keys == 0 { return outer }
+	own = instances_assigned(outer_nodes_in(value_of(n)), rule_classes)
+	found = {}
+	for name in outer.keys { if name not in bound { found[name] = yes } }
+	for name in bound { if own.has(name) { found[name] = yes } }
+	found
+}
 # the names a lambda's parameters bind, typed ones too: `x`, `(a: int, b)`
 lambda_bound_names(taken: Node): list := (if is_group(taken) then items_of(taken) else [taken]).map(leftmost_name).filter(name => name != ø)
 # the names a definition binds inside it: its parameters, the names its body's statements declare
@@ -1545,7 +1556,10 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		return f(Key(left, Op.Dot, right))
 	}
 	outer = rule_binding
-	rule_binding = rule_binding + (bound_inside(n) ?? [])
+	outer_instances = rule_instances
+	bound = bound_inside(n) ?? []
+	rule_binding = rule_binding + bound
+	rule_instances = scoped_instances(rule_instances, bound, n)
 	if not is_key(n, Op.Define) {
 		at_item = rule_next_item != ø and n == rule_next_item
 		rule_next_item = ø
@@ -1560,6 +1574,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		} else if rule_tag_depth > 0 and is_key(n, Op.Colon) { rule_in_attribute = yes }
 		walked = children(n, x => walked_item(x, holds_items, f, inner))
 		rule_binding = outer
+		rule_instances = outer_instances
 		if tag { rule_tag_depth -= 1 }
 		rule_in_attribute = outer_attribute
 		rule_maps = maps
@@ -1574,6 +1589,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 	# `square(x) := …` names its parameters, no call: only they are tried, so broadcasting leaves the head as it is
 	walked = if is_called_head(key_of(n)) then placed(Key(head_with_parameters(key_of(n), x => walked_parameter(x, f, inner)), Op.Define, placed_map_scoped(value_of(n), f, inner)), n) else children(n, x => placed_map_scoped(x, f, inner))
 	rule_binding = outer
+	rule_instances = outer_instances
 	rule_defining = outer_defining
 	rule_maps = maps
 	f(walked)
