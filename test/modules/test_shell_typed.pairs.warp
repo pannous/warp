@@ -1,0 +1,4 @@
+# Shell helpers (lib/shell.warp): directory detection and wildcard patterns.
+'use shell; is_folder(".")'	yes
+'use shell; wildcard_regex("*.warp")'	"^[^/]*\\.warp$"
+'use shell; wildcard_regex("a?.txt")'	"^a[^/]\\.txt$"
