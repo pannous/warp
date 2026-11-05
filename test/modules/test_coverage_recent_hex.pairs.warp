@@ -1,0 +1,8 @@
+// hex via encoding edges beyond test_hex_unify.pairs.warp (card lib-coverage-recent)
+'use encoding; hex_decode_bytes("")'	[]
+'use encoding; hex_decode_bytes("FF")'	[255]
+'use encoding; hex_decode("c3A9")'	"é"
+'use encoding; hex_byte(16)'	"10"
+'use encoding; hex_value("AbCd")'	43981
+'use encoding; hex_encode_bytes([255])'	"ff"
+'use encoding; try { hex_decode_bytes("F") } catch e { e.message }'	"hex: 1 digits are an odd count"
