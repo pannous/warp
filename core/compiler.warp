@@ -139,7 +139,7 @@ linked_libraries(source: text): list := {
 		# (the prelude is every program's own, its words reached as it reaches them)
 		if name != "prelude" and bundled != ø and bundled == (file_text(std_module_path(name)) ?? "") {
 			for inner in used_modules(bundled) { if inner not in names { names += [inner] } }
-			wasm = try read_bytes(folder + name + ".wasm") else ø
+			wasm = try read_bytes(folder + name + SPLICED_SUFFIX) else ø
 			# (a module not prebuilt was said by the rebuild, its file left empty; one prebuilt but not linkable is said here)
 			image = if wasm == ø or #wasm == 0 then ø else library_image_of(name, wasm)
 			if image is text { warn name + ".wasm not linked: " + image + "; compiled from source" } else if image != ø { images += [image] }
@@ -181,12 +181,21 @@ write_runtime(file: text) := {
 	if made is text { raise made }
 	write_bytes(file, with_call_sites(made))
 }
-# <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp own_items_from), for
-# programs to be linked to; `warp rebuild` writes one beside warp.wasm for each. Every program has the prelude, used
-# again it would define its words twice
+# <name>.wasm, the bundled module compiled once behind runtime.wasm, for programs to link at load time (card
+# wasm-module-linking, notes/library_zero_bake.md "The module interface"): its runtime words, memory, error tag and
+# hooks imported from `warp_runtime`, its words exported by name, its global initializers the export `warp/start`.
+# Beside it <name>.splice.wasm, the whole module behind the runtime (emitter/prebuilt.warp own_items_from), which a
+# compile splices into the program until programs import the linked one. `warp rebuild` writes both for each module.
+# Every program has the prelude, used again it would define its words twice
 write_module(name: text, runtime_file: text, file: text) := {
-	write_bytes(file, compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file)))
+	spliced = compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file))
+	if spliced is text { throw spliced }
+	write_bytes(spliced_file(file), spliced)
+	write_bytes(file, linked_bytes(module.order, MODULE_START))
 }
+MODULE_START = "warp/start"
+SPLICED_SUFFIX = ".splice.wasm"
+spliced_file(file: text): text := file.remove_suffix(".wasm") + SPLICED_SUFFIX
 # every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild keeps
 # an empty file, never an older build linked in its place. A module calling C by its foreign lines (`… from "c"`) may
 # refuse and stays compiled from source with the program; any other refusal fails the rebuild, naming the module and
@@ -197,6 +206,7 @@ write_modules(folder: text, runtime_file: text) := {
 		file = folder + "/" + name + ".wasm"
 		try { write_module(name, runtime_file, file) } catch refusal {
 			write_bytes(file, [])
+			write_bytes(spliced_file(file), [])
 			calls_c = #c_declarations_in(LIBRARY_FILES.get(name + module_extension) ?? "") > 0
 			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
 		}
