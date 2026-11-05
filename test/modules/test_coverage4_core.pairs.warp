@@ -1,0 +1,14 @@
+# coverage audit 2, batch 4 (ranked 81-160): prelude, list, map, regex helpers, edge cases
+«[any([1, 2], x -> x > 1), any([], x -> true), any("abc", c -> c == 'b')] == [true, false, true]»	true
+«use map; m = {a: 1}; u = update(m, {b: 2, a: 3}); u == {a: 3, b: 2} and m == {a: 3, b: 2} and update({}, {}) == {}»	true
+«use map; get_path({a: {b: [10, 20]}}, ["a", "b", 2]) == 20 and get_path({a: 1}, []) == {a: 1}»	true
+«use map; [get_path({a: 1}, ["x"]), get_path({a: 1}, ["a", "b"])] == [ø, ø]»	true
+«s = []; each([1, 2], x -> s.add(x * 2)); s == [2, 4]»	true
+«use regex; [replace_all("a1b22", "[0-9]+", "#"), replace_all("", "x", "y"), replace_all("aaa", "a", "")] == ["a#b#", "", ""]»	true
+«use list; [zip([1, 2, 3], ["a", "b"]), zip([], [1])] == [[[1, "a"], [2, "b"]], []]»	true
+«[range(3), range(0), range(-2), range(2, 5), range(5, 2)] == [[0, 1, 2], [], [], [2, 3, 4], []]»	true
+«use text; [edit_distance("kitten", "sitting"), edit_distance("", "abc"), edit_distance("", ""), edit_distance("😀a", "a"), edit_distance("é", "e")] == [3, 3, 0, 1, 1]»	true
+«[number("42"), number("-1.5")] == [42, -1.5]»	true
+«r = try { number("abc") } catch e { "" + e }; r == "invalid number"»	true
+«r = random_between(1, 3); r >= 1 and r <= 3 and random_between(5, 5) == 5»	true
+«r = try { random_between(3, 1) } catch e { "" + e }; r == "random_between needs lo <= hi"»	true

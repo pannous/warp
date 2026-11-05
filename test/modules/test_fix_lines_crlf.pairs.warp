@@ -1,0 +1,2 @@
+# lines strips the carriage return of CRLF line endings (Supervisor-approved fix, lib-coverage-audit-2 batch 4)
+«use text; lines("a" + chr(13) + chr(10) + "b") == ["a", "b"] and lines("a" + chr(13) + chr(10)) == ["a", ""] and lines("x" + chr(13) + "y") == ["x" + chr(13) + "y"]»	true
