@@ -307,7 +307,13 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
   const start = time(rows[0].date), end = time(rows[rows.length - 1].date);
   const x = date => L + (time(date) - start) / (end - start) * (W - L - R);
   const holder = document.getElementById("builds");
-  const INSTRUCTIONS = 2, MEGABYTES = 5;
+  const INSTRUCTIONS = 2, MEGABYTES = 5, SMOOTHING_WINDOW = 15;
+  // centered mean over SMOOTHING_WINDOW landings, the window shrinking at both ends so the curve reaches the last dot
+  const movingAverage = values => values.map((_, i) => {
+    const half = Math.min(SMOOTHING_WINDOW >> 1, i, values.length - 1 - i);
+    const window = values.slice(i - half, i + half + 1);
+    return window.reduce((a, b) => a + b, 0) / window.length;
+  });
   const metricCard = (name, points, index, unit, detail) => {
     const card = document.createElement("div"); card.className = "tier";
     if (!points.length) { card.innerHTML = `<div class="label">${name}</div><div class="empty">no build record of a landing yet</div>`; holder.appendChild(card); return; }
@@ -323,12 +329,12 @@ const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.dat
       element("text", { x: L - 4, y: y(v) + 3, "text-anchor": "end" }, svg).textContent = v + unit.split(" ")[0];
     });
     days.forEach((day, i) => { if (i % 2 === 0) element("text", { x: x(day + " 00:00"), y: H - 4 }, svg).textContent = shortDay(day); });
-    if (points.length > 1) element("polyline", { points: points.map(p => `${x(p[0])},${y(p[index])}`).join(" "), fill: "none", stroke: "var(--s3)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
     points.forEach((p, i) => {
-      const dot = element("circle", { cx: x(p[0]), cy: y(p[index]), r: i === points.length - 1 ? 4 : 2.5, fill: "var(--s3)", stroke: "var(--panel)", "stroke-width": 1.5, style: "cursor:pointer" }, svg);
+      const dot = element("circle", { cx: x(p[0]), cy: y(p[index]), r: i === points.length - 1 ? 3.5 : 1.8, fill: "var(--s3)", "fill-opacity": i === points.length - 1 ? 1 : 0.35, style: "cursor:pointer" }, svg);
       element("title", {}, dot).textContent = `${p[0]} · ${p[1]} · ${p[index]} ${unit} · ${detail(p)}`;
       dot.addEventListener("click", () => window.open(COMMIT_URL + p[1], "_blank", "noopener"));
     });
+    if (points.length > 1) element("polyline", { points: movingAverage(points.map(p => p[index])).map((v, i) => `${x(points[i][0])},${y(v)}`).join(" "), fill: "none", stroke: "var(--s3)", "stroke-width": 2.2, "stroke-linejoin": "round", "stroke-linecap": "round", "pointer-events": "none" }, svg);
     holder.appendChild(card);
   };
   const cost = p => `${Math.round(p[4])} s CPU · ${(p[3] / 1024).toFixed(1)} GB peak`;

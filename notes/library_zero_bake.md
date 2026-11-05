@@ -170,3 +170,17 @@ The emitter must guarantee these for L3–L5:
 - A library signature never names a program's own class types (module_layout.warp:62 type_entries differ per
   program). Those pass as $Node/$Instance/anyref and are cast inside.
 - The warp_error tag is declared once (in the runtime or the library) and imported everywhere.
+
+## Progress (warp-sugar)
+- L1 landed 6f3a15e394: lib/extensions unbundled but sugar/, uncertain/ (and rules/modules/ with 1b); warp.wasm 5.05 -> 4.22 MB.
+- 1b (card compile-time-rules): 21 rules ($program / where program, paint, shader_of, gpu_render, law, typed json)
+  in extensions/rules/modules/<module>.warp, taken with their module (rewrites.warp module_rule_paths,
+  rules_of_module); lib/rule_words.warp, lib/wgsl.warp -> extensions/rules/, still used as modules
+  (uses.warp std_module_path finds extensions/rules/<name>.warp; an include retyped the emitter: card
+  makes-compiling). warp.wasm 4.22 -> 4.01 MB.
+- L2 next: modules/index.warp written by `warp rebuild` (write_modules beside words.tsv): BLOCK_HEADS
+  (parser.warp block_heads_in), STD_RULE_NEEDS (rewrites.warp scanned_rule_needs), declarations_scanned
+  (parser.warp ~1750: global words/classes/tags by module), with_library_host_words (builtin_signatures.warp:53),
+  alias table (parser.warp ALIAS_TABLE, alias_table_tree), sugar_module_names; the readers read the index, the
+  scans of LIBRARY_FILES go. Question (a): measure gathering the union from the modules' sections instead.
+- Before L3: measure the prelude's 108 untyped words linked as boxed code (hello, compiler.warp, a numeric sample).

@@ -1,7 +1,7 @@
 # A function's own words (cards name-params, doc-signature): `f.name` the text it is named by, `f.params` (also
 # `f.parameters`) the names of its parameters, `f.body` the code it computes, `f.definition` its whole definition as
-# code to paste (lib/rule_words.warp definition_text), `f.doc` its doc text, `f.signature` and
-# `f.return_type` as the analyzer infers them (lib/rule_words.warp parameters_named, body_of, doc_of, signature_text,
+# code to paste (extensions/rules/rule_words.warp definition_text), `f.doc` its doc text, `f.signature` and
+# `f.return_type` as the analyzer infers them (extensions/rules/rule_words.warp parameters_named, body_of, doc_of, signature_text,
 # return_kind); a word it has none of but another one means is refused naming that one
 rewrite $f.name => $n where $f is symbol and $f is function and $n = spelled($f)
 rewrite $f.params => [$names...] where $f is symbol and $f is function and $names = parameters_named($f, $program)
@@ -15,13 +15,13 @@ rewrite $f.returns => $refused where $f is symbol and $f is function and $refuse
 rewrite $f.representation => $refused where $f is symbol and $f is function and $refused = misnamed($f, representation, body)
 rewrite $f.definition => $d where $f is symbol and $f is function and $d = definition_text($f, $program, $source)
 rewrite $f.full => $d where $f is symbol and $f is function and $d = full_definition($f, $program, $source)
-# `p.fields`, `p.methods` of an instance the program makes of a class, `p = Point(3, 4)` (lib/rule_words.warp
+# `p.fields`, `p.methods` of an instance the program makes of a class, `p = Point(3, 4)` (extensions/rules/rule_words.warp
 # instance_members)
 rewrite $p.fields => [$names...] where $p is symbol and $names = instance_members($p, fields, $source)
 rewrite $p.methods => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
 
-# `dir(time)`, `dir text`: the words of a module or type named as written (lib/rule_words.warp dir_words); `dir(v)` of
+# `dir(time)`, `dir text`: the words of a module or type named as written (extensions/rules/rule_words.warp dir_words); `dir(v)` of
 # a value only the run knows: a map's keys then its words, a list's or a text's words, none of a number (lib/prelude.warp
 # dir_of_value). A program's own dir wins
 rewrite dir $x => dir($x)
@@ -29,7 +29,7 @@ rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $pr
 rewrite dir($p) => [$names...] where $p is symbol and $names = instance_members($p, dir, $source)
 rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
 
-# `help(Point)`, `help(area)`, `help(sound)`: what a class, a function or a module is, as text (lib/rule_words.warp
+# `help(Point)`, `help(area)`, `help(sound)`: what a class, a function or a module is, as text (extensions/rules/rule_words.warp
 # class_help, function_help, module_help, module_word_help; wiki/reflection.md); a program's own help wins
 rewrite help $x => help($x)
 rewrite help($c) => $t where $c is symbol and $t = class_help($c, $program, $source)
@@ -37,7 +37,7 @@ rewrite help($f) => $t where $f is symbol and $f is function and $t = function_h
 rewrite help($m) => $t where $m is symbol and $t = module_help($m, $program)
 rewrite help($w) => $t where $w is symbol and $t = module_word_help($w, $program, $source)
 # `help(trick)` of a name or an instance only the run knows: looked up at run time among the program's and its
-# modules' words (lib/rule_words.warp value_helps, lib/prelude.warp looked_up_word)
+# modules' words (extensions/rules/rule_words.warp value_helps, lib/prelude.warp looked_up_word)
 rewrite help($x) => looked_up_word($x, "help", $helps...) where $helps = value_helps($program, $source)
 # `function(trick).definition`: the definition, as written, of the word a name only the run knows names
 rewrite function($x).definition => looked_up_word($x, "function", $definitions...) where $definitions = value_definitions($program, $source)

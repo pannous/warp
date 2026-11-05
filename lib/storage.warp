@@ -12,8 +12,6 @@ use units
 
 rewrite stored $name: [$kind] in $table => $name = stored_table($table, $kind)
 rewrite stored $name: [$kind] => $name = stored_table($table, $kind) where $table = spelled($name)
-// a table's add and remove, and a write of its class's field, kept in the database (lib/rule_words.warp tables_kept)
-rewrite $p => $q where program and $q = tables_kept($p)
 rewrite transaction $body: block => stored_transaction(() => $body)
 // `stored visits default 0`, `stored visits = 0`: one value kept under its name, its first run's value the default,
 // each write kept: a listener of lib/signals.warp writes it through
@@ -111,7 +109,7 @@ stored_add(name: text, instance: any) := {
 	if has_row_id(instance) { instance[ROW_ID] = sqlite3_last_insert_rowid(opened_database()) }
 	kept_instance(instance)
 }
-// a kept instance's fields written to its row once a field write gave the value (lib/rule_words.warp tables_kept); the value
+// a kept instance's fields written to its row once a field write gave the value (extensions/rules/rule_words.warp tables_kept); the value
 stored_written(instance: any, value: any) := {
 	name = kept_tables["${type(instance)}"]
 	if name == ø or not has_row_id(instance) or instance[ROW_ID] == 0 { return value }

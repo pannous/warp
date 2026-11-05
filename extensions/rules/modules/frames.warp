@@ -1,0 +1,5 @@
+# lib/frames.warp's rules that run code at compile time, its whole program or a rule word of extensions/rules/rule_words.warp:
+# the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
+// the program ended by its frames, then by its exit listeners (extensions/rules/rule_words.warp framed, exited)
+rewrite $p => $q where program and $q = framed($p)
+rewrite $p => $q where program and $q = exited($p)

@@ -466,7 +466,7 @@ shared_names(statements: list, locals: list, blocks: list): list := {
 	for name in changed { if name in locals and name not in globals and name not in shared { shared += [name] } }
 	shared
 }
-# where each name a local declaration word declared was written (lib/rule_words.warp declared_local), set anew for
+# where each name a local declaration word declared was written (extensions/rules/rule_words.warp declared_local), set anew for
 # each program (passes.warp with_used)
 global local_declarations = {}
 # a name a declaration word declared, noted where it was written (a name a pass made is written nowhere)
