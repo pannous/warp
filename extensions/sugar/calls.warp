@@ -10,6 +10,8 @@ rewrite map($f, $xs) => map($xs, $f) where $f is function and not $xs is functio
 # a function before an empty `()`, spaced or not, is called with nothing: `f ()` is f() (user decision calls-arguments)
 rewrite ($f ()) => $f() where $f is function
 rewrite ($f $x) => $f($x) where $f takes one
+# `3 then twice` is no pipe (decision then-not-pipe): a function after `then` is refused naming `|>`
+rewrite $x then $f => $refused where $f is function and $refused = then_not_pipe($x, $f)
 # before several words it takes the phrase they make: `reverse sort xs` is `reverse(sort xs)`, then `reverse(sort(xs))`
 rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one
 # a function of the library written in warp (`first`, `last`, `sum`: no typed `from` line) before such a word and its
