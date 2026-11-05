@@ -1,0 +1,8 @@
+# coverage audit 2, batch 3 (ranked 81-160): list, map and time helpers, edge cases
+«use list; [index_where([1, 5, 9], x -> x > 3), index_where([], x -> true), index_where([1], x -> x > 3)] == [2, 0, 0]»	true
+«use list; [flatten([[1, 2], [3], []]), flatten([]), flatten([[1, [2]]])] == [[1, 2, 3], [], [1, [2]]]»	true
+«use list; [chunk([1, 2, 3, 4, 5], 2), chunk([], 3)] == [[[1, 2], [3, 4], [5]], []]»	true
+«use list; r = try { chunk([1], 0) } catch e { "" + e }; r == "chunk needs a size of at least 1, not 0"»	true
+«use map; [get_or({a: 1}, "a", 0), get_or({}, "a", 0)] == [1, 0]»	true
+«use map; m = {a: 1}; r = setdefault(m, "b", 2); r == 2 and m == {a: 1, b: 2} and setdefault({a: 1}, "a", 9) == 1»	true
+«use time; [two_digits(5), two_digits(10), two_digits(0), two_digits(123)] == ["05", "10", "00", "123"]»	true
