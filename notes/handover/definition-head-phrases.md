@@ -27,6 +27,8 @@ on keyword words.
 - `send` is an emit word (extensions/event_phrases.warp emit_words): the decision's example needs another word.
 
 ## Open
+- The tip 2cfd2e22c5 does not build: `label_of(Node) is declared in both core/analysis/signatures.warp and
+  extensions/phrase_definitions.warp` — rename the extension's (e.g. phrase_label) first.
 - Verify the last build (to-definition tests: test_to_definition, test_type_name_matching, test_phrase_class_parameter,
   test_statement_blocks, test_kept_wiki_forms) against main; then self-check, gate.
 - Library migration (~15–20 plain rules → declarations) after the reading is decided.
