@@ -191,6 +191,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - spaced-definition-head (user): parentheses in a definition head are optional, as core language: `square x := x*x` defines square(x), `add a b := a + b` add(a, b); `f x` outside a definition stays a call (test_pipe_stages stands).
 - negated-call (user): minus binds weaker than application: `-f x` = -(f x), so `1 + -floor 2.5` → -1 and `-sin 0` → 0; `-a * b`, `-x^2` unchanged and `x=5; -x 1` stays [-5, 1] (glued-negative: a plain value is not a call); ~4–6 core lines.
 - phrase-functions (user): a definition head may be a phrase with holes: `send v to c := c.send(v)`, `on every period (body: block) := timer_every(period, body)`, `await x within t or d := …`, `set field of object to value := …`; one phrase-row mechanism like the operator rows (~60–120 core lines), replacing ~35 lib rewrite rules (tasks, timers, signals, channels, english, which stay as such declarations).
+- named-argument-phrases (user): a phrase is already an ordinary function called with named arguments: `give(v, to) := v + to; give 2 to: 40` → 42, `transfer 5 from: 1 to: 2`; this is the phrase form today. Colonless phrase heads (`send v to c := …`) stay parked (phrase-params).
+- phrase-rules-kept (user): `on change x {…}` / `on set x {…}` and `set name of p to 3` stay rewrite rules until name parameters (`f(x: name)`) exist, then become plain functions; `await all xs` / `await any xs` stay as written (notes/phrase_inventory.md).
 - P86 adding values of unknown kinds builds `a + b` lazily; evaluated operands need Addable, else a type error.
 
 ## Comments, separators and lexing

@@ -231,6 +231,8 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
 		# a type's value names a type, `type P = int -> bool` a function type, no lambda
 		Key(left, Op.Assign, right): if is_type_view(left) then n else Key(lowered_lambdas(left, locals, lowering), Op.Assign, lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
+		# `x=5; -x 1` parses as -(x 1) (decision negated-call): a value heads no call, the minus negates it alone, [-5, 1]
+		Key(left, Op.Sub, right): if left == ø and are_values(right, locals, lowering) then List([Key(ø, Op.Sub, right#1)] + items_of(right)[1 ..], Bracket.Square, Separator.Comma) else Key(lowered_lambdas(left, locals, lowering), Op.Sub, lowered_lambdas(right, locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
@@ -285,6 +287,8 @@ side_by_side_words(n: Node): list := {
 	for item in items_of(n) { words += side_by_side_words(item) }
 	words
 }
+# values side by side, `x 1` of a variable x
+are_values(n: Node, locals: list, lowering: Lowering): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and items_of(n).all(word => is_plain_value(word, locals, lowering))
 # a number, a text, or a variable holding no function
 is_plain_value(word: Node, locals: list, lowering: Lowering): bool := word is number or word is text or (word is symbol and is_variable(name_of(word), locals, lowering) and not lowering.function_values.has(name_of(word)))
 # `f 3 4`, words side by side: the first calls the others, its name kept; a lambda first is called with them,
