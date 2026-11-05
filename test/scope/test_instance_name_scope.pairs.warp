@@ -1,0 +1,6 @@
+// card instance-names: a name binds in its own scope; the program's instance m leaves a function's own m a list
+'class Diag { v: list }; total(m: list): int := { s = 0; for row in m { s += row }; s }; m = Diag([1, 2]); total([3, 4]) + #m.v'	9
+'use matrix; class Diag { v: list }; m = Diag([1]); map_matrix([[1, 2]], x => x * 2)'	[[2, 4]]
+'class Diag { v: list }; m = Diag([1]); sum([1, 2].map(m => m * 3))'	9
+// a function's own instance still walks by next()
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; walk(k: int): list := { m = C(k); out = []; for x in m { out += [x] }; out }; m = [7]; walk(2)'	[2, 1]
