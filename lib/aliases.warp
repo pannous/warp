@@ -45,7 +45,7 @@ compare { aliases: [compareTo, compare_to] }
 "===" { power: [115, 116] }
 "!==" { power: [115, 116] }
 "≈" { power: [115, 116] }
-"~" { symbol: Op.Rough, aliases: ["~~"], power: [115, 116] }
+"~" { declared: yes, aliases: ["~~"], power: [115, 116] }
 "and" { symbol: Op.And, aliases: ["&&", "&"], power: [100, 101] }
 "xor" { symbol: Op.Xor, aliases: ["^^"], power: [95, 96] }
 "or" { symbol: Op.Or, aliases: ["||", "|"], power: [90, 91] }

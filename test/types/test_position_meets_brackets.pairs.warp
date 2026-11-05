@@ -21,3 +21,6 @@
 'xs = [10 20 30]; xs.insert(5, at: 0); xs'	[5 10 20 30]
 'xs = [10 20 30]; p = xs.index_of(10); q = xs.index_of(30); p + q'	error
 'xs = [10 20 30]; xs[xs.index_of(99)]'	error
+# a method's own xs[i] is xs#(i+1) as anywhere else: the subscript's mark is read where the class body becomes code (card xs-inside)
+'class C { xs: list; f(i: int) := xs[i] }; C([1, 2, 3]).f(1)'	2
+'"hí" ≈ "HI"'	yes

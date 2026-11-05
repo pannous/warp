@@ -10,9 +10,9 @@ crc32(subject: text or list): int := std_pure("hash", "crc32", [subject])
 
 hash_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
 // the hex helpers are lib/encoding.warp's (card lib-audit-bugfixes); hex_digit keeps its -1 for a non-digit
-hex_digit(c: any): int := digit_value(HEX_DIGITS, lower(c))
+hex_digit(c: any): int := hex_value(c)
 hex_bytes(hex: text): list := hex_decode_bytes(hex)
-bytes_hex(bytes: list): text := join([hex_byte(b) for b in bytes], "")
+bytes_hex(bytes: list): text := hex_encode_bytes(bytes)
 
 // 32-bit words: whole numbers 0 to 2^32 - 1, kept there by % 2 ** 32
 word_not(x: int, width: int): int := 2 ** width - 1 - x

@@ -1,0 +1,6 @@
+// markup style-sheet ~ combinator edges; > and + covered in test/web/test_markup_style_child.pairs.warp (card lib-coverage-recent)
+// lengths like 4px need units_shown in the compiler; these stay on color values so an older seed still runs them
+'use markup; to_html(style{ a ~ b { color: red } })'	'<style>a ~ b { color: red }</style>'
+'use markup; to_html(style{ a ~ b { color: red } .x { color: blue } })'	'<style>a ~ b { color: red } .x { color: blue }</style>'
+'use markup; to_html(style{ .box { color: green } a ~ b { color: red } })'	'<style>.box { color: green } a ~ b { color: red }</style>'
+'use markup; to_html(style{ div > p + span ~ em { color: red } })'	'<style>div > p + span ~ em { color: red }</style>'

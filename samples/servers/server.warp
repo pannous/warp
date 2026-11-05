@@ -1,6 +1,7 @@
 #!/usr/bin/env warp
 # One source for a server and its page: `warp serve samples/servers/server.warp` (or `warp samples/servers/server.warp`), then open
-# http://localhost:8080/ (notes/server_routes.md). The playground runs it as one page, the table in IndexedDB
+# http://localhost:8080/ (notes/server_routes.md). The playground runs it as one page, the table in IndexedDB.
+# Curl probe (skips paths that need open core cards): scripts/samples_check.sh
 class User{name: text}
 stored users: [User]                       # the table users, kept on the server in server.database.sqlite
 

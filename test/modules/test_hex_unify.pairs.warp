@@ -1,0 +1,15 @@
+# one hex story in lib/encoding.warp (card lib-hex-unify): hex_byte, hex_encode_bytes, hex_value, hex_decode_bytes;
+# hash, uuid and url keep their words as thin wrappers over it
+'use encoding; [hex_byte(0), hex_byte(171), hex_byte(255)]'	["00", "ab", "ff"]
+'use encoding; [hex_encode_bytes([0, 15, 171, 255]), hex_encode_bytes([])]'	["000fabff", ""]
+'use encoding; hex_encode("é")'	"c3a9"
+'use encoding; [hex_value("0"), hex_value("a"), hex_value("F"), hex_value("1F"), hex_value("ff00")]'	[0, 10, 15, 31, 65280]
+'use encoding; [hex_value(""), hex_value("g"), hex_value("1g"), hex_value("😀")]'	[-1, -1, -1, -1]
+'use encoding; hex_decode_bytes(hex_encode_bytes([1, 2, 254]))'	[1, 2, 254]
+'use encoding; try { hex_decode_bytes("0g") } catch e { e.message }'	"hex: g at 2 is no hex digit"
+'use encoding; try { hex_decode_bytes("abc") } catch e { e.message }'	"hex: 3 digits are an odd count"
+'use hash; [hex_digit("0"), hex_digit("A"), hex_digit("z"), bytes_hex(hex_bytes("00ff"))]'	[0, 10, -1, "00ff"]
+'use hash; sha256("abc")'	"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+'use uuid; u = uuid(); is_uuid(u) and u#15 == "4" and hex_digit(11) == "b"'	yes
+'use url; [url_decode("%C3%A9%2f"), url_decode("100%"), url_decode("%zz")]'	["é/", "100%", "%zz"]
+'use json; parse_json(chr(34) + chr(92) + "u00e9" + chr(92) + "u00C9" + chr(34))'	"éÉ"

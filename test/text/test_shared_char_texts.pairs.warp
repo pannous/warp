@@ -1,0 +1,3 @@
+# a character's text stays its own when another text is made from it (card char-text-new)
+'a = op_of(parse("x+y")); b = a + "="; [a, b, op_of(parse("p+q")) == a]'	['+', "+=", yes]
+'cs = "héllo".chars; [cs#1 + cs#2, cs#2, cs#1]'	["hé", 'é', 'h']

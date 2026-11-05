@@ -20,7 +20,7 @@ take() {
 	gh release download "$TAG" -R "$REPO" -p "$asset" -D "$scratch" >/dev/null 2>&1 || return 1
 	tar -C "$scratch/$1.d" -xzf "$scratch/$asset" "$hash" || return 1
 	[ -f "$got/SHA256SUMS" ] && [ -f "$got/$needed" ] || { echo "fetch-build: $asset has no manifest or $needed" >&2; return 1; }
-	listed=$(cd "$got" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort)
+	listed=$(cd "$got" && find . -type f ! -name SHA256SUMS | env LC_ALL=C sort)
 	[ "$listed" = "$(sed 's/^[0-9a-f]*  //' "$got/SHA256SUMS")" ] || { echo "fetch-build: $asset: files and manifest differ" >&2; return 1; }
 	while read -r sum file; do
 		[ "$(cd "$got" && sha256_of "$file")" = "$sum" ] || { echo "fetch-build: $asset: $file fails its checksum" >&2; return 1; }

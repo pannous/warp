@@ -1,0 +1,5 @@
+# backward application (decision postfix-words): a value then a library word of one value is its call
+'16 sqrt'	4
+'-7 abs'	7
+'x = -3; y = x abs; y + 1'	4
+'sqrt 16'	4
