@@ -379,7 +379,8 @@ def linked_needs(): list {
 }
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
 # words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
-# definition written], the host's builders it exports (by name) and the runtime it was built behind
+# definition written], the host's builders it exports (by name), the methods its classes route (class_methods
+# methods.warp lifted_routes) and the runtime it was built behind
 def image_fields(functions: list): list {
 	images_classes = concatenated(module.linked_images.map(image => image.classes.map(entry => entry#1)))
 	own_classes = module.gc_order[#gc_names ..].filter(name => name not in images_classes)
@@ -389,6 +390,7 @@ def image_fields(functions: list): list {
 		field_node("globals", square_list(own_globals.map(name => square_list([Text(name), Number(held_code(module.globals[name]#2)), Number(module.global_marks.get(name) ?? 0)])))),
 		field_node("classes", square_list(own_classes.map(name => square_list([Text(name), Text(struct_written(name))])))),
 		field_node("builders", square_list(module.builders.map(f => Text(f.name)))),
+		field_node("routes", square_list(lifted_routes.map(method => Text(method)))),
 		field_node("runtime", square_list(runtime_behind().map(n => Number(n))))]
 }
 # the image of a linked module read back from its signature; why it is not linkable behind this runtime, a text
