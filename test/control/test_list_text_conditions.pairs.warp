@@ -1,0 +1,6 @@
+# a list or a text as a condition is yes when it holds anything (card boxed-condition-node)
+'xs = []; if xs then 1 else 2'	2
+'xs = [0]; if xs then 1 else 2'	1
+'t = ""; if not t then "empty" else "full"'	"empty"
+'t = "a"; ys = [1,2]; [if t then 1 else 0, if not ys then 1 else 0]'	[1, 0]
+'global seen = []; f() := { if not seen { seen = [1, 2] }; #seen }; [f(), f()]'	[2, 2]
