@@ -1,0 +1,24 @@
+// lib/shell edges as observed (card lib-shell-edges), with os.command for running a line: a failing or empty command
+// throws, quoting reaches sh unchanged, which() on missing programs, file_lines on blank lines, the Path overloads
+# command_failures_throw
+'use os; try { command("exit 3") } catch e { "caught" }'	"caught"
+'use os; try { command("exit 3") } catch e { str(e).contains("exit status: 3") }'	yes
+'use os; try { command("") } catch e { "caught" }'	"caught"
+'use os; command("true")'	""
+# quoting_reaches_sh
+'use os; q = chr(34); command("echo " + q + "a  b" + q)'	"a  b"
+'use os; q = chr(34); command("printf " + q + "<%s>" + q + " " + q + "x y" + q + " z")'	"<x y><z>"
+'use os; command("printf a; echo; echo")'	"a"
+# which
+'use shell; which("warp_she_no_such_program") == ø'	yes
+'use shell; which("/bin/sh")'	"/bin/sh"
+'use shell; which("/warp_she_nowhere/sh") == ø'	yes
+# file_lines_blank_lines: one final newline goes, an empty line before it stays
+'use file; use shell; p = temp_folder() + "/warp_she_blank.txt"; write(p, "a\n\n"); r = file_lines(p); delete_file(p); r'	["a", ""]
+'use shell; try { file_lines("/warp_she_never_there.txt") } catch e { "caught" }'	"caught"
+# line_words
+'use file; use shell; p = temp_folder() + "/warp_she_words.txt"; write(p, "b\na\nb\n"); r = [sort_lines(p), unique_lines(p), head(p, 1), tail(p, 1), wc(p)]; delete_file(p); r'	[["a", "b", "b"], ["b", "a"], ["b"], ["b"], {lines: 3, words: 3, bytes: 6}]
+'use file; use shell; p = temp_folder() + "/warp_she_grep.txt"; write(p, "x1\ny\nx2"); r = grep("x", p); delete_file(p); r'	["x1", "x2"]
+# path_overloads: a Path sorts and uniques the file's lines
+'use file; use shell; p = temp_folder() + "/warp_she_path.txt"; write(p, "b\na\nb"); r = [sort(Path(p)), unique(Path(p))]; delete_file(p); r'	[["a", "b", "b"], ["b", "a"]]
+'use shell; sort([3, 1, 2])'	[1, 2, 3]
