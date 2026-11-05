@@ -253,7 +253,7 @@ function_value(name: text, n: Node, locals: list, lowering: Lowering): Node := {
 # an argument as passed: a function without parameters given for a parameter declared a function, `g(d)` of
 # `g(c: function)`, is its closure, not its call
 passed_value(argument: Node, at: int, callee: Node, locals: list, lowering: Lowering): Node := {
-	takes_function = callee is symbol and lowering.function_positions.has(name_of(callee)) and at in lowering.function_positions[name_of(callee)]
+	takes_function = callee is symbol and function_named_at(lowering.function_positions, name_of(callee), at) != ""
 	parameterless = argument is symbol and name_of(argument) not in locals and lowering.arities.has(name_of(argument)) and lowering.arities[name_of(argument)] == 0
 	if takes_function and parameterless then call_node(symbol("closure_new"), [argument]) else lowered_lambdas(argument, locals, lowering)
 }
@@ -586,14 +586,14 @@ with_function_parameters(statement: Node): Node := match statement {
 block_run(n: Node, blocks: list): Node := {
 	if is_round(n) and #n == 2 and n#1 == symbol(unwrap_word) and n#2 is symbol and name_of(n#2) in blocks then call_node(n#2, []) else n
 }
-# the positions of each function's function parameters, by its name
+# each function's parameter names, "" where a parameter takes no function, by the function's name
 function_positions_of(written: list): map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
 		if parts == ø { continue }
-		positions = (1 to #parts.parameters).filter(i => takes_function_at(parts, parts.parameters#i))
-		if #positions > 0 { found[parts.name] = positions }
+		names = parts.parameters.map(parameter => if takes_function_at(parts, parameter) then parameter_name(parameter) else "")
+		if names.any(name => name != "") { found[parts.name] = names }
 	}
 	found
 }
@@ -625,18 +625,29 @@ regrouped_block(n: Node, positions: map): Node := {
 	if not (is_round(call) and #call > 0 and not takes_function(call#1, positions) and is_block_argument(block)) { return n }
 	group_like(n, items[0 ..< #items - 1] + [call, block])
 }
-# the arguments of the call or phrase `f a {…}` that are blocks given to a function parameter of f, by position
+# the function parameter's name at a function's position, else ""
+function_named_at(positions: map, function: text, at: int): text := {
+	names = positions.get(function) ?? []
+	if at <= #names then names#at else ""
+}
+# the arguments of the call or phrase `f a {…}` that are blocks given to a function parameter of f, by position or by
+# its label: `f(a, body: {…})`
 given_positions(n: Node, positions: map): list := {
 	if not (n is list and #n >= 2 and takes_function(n#1, positions)) { return [] }
-	positions[name_of(n#1)].filter(i => i < #n and is_block_argument(n#(i + 1)))
+	names = positions[name_of(n#1)]
+	(1 ..< #n).filter(i => is_block_argument(block_given(n#(i + 1))) and (if is_labeled(n#(i + 1)) then name_of(key_of(n#(i + 1))) in names else function_named_at(positions, name_of(n#1), i) != ""))
 }
-blocks_given(n: Node, positions: map): list := nodes_in(n).map(part => joined_block_call(part, positions)).flat_map(call => given_positions(call, positions).map(i => call#(i + 1)))
-# `f {…}`, `f(a) {…}`, `f(a, {…})` with those blocks as lambdas
+is_labeled(argument: Node): bool := is_key(argument, Op.Colon) and key_of(argument) is symbol
+# the block an argument gives, its label's value for a labeled one
+block_given(argument: Node): Node := if is_labeled(argument) then value_of(argument) else argument
+blocks_given(n: Node, positions: map): list := nodes_in(n).map(part => joined_block_call(part, positions)).flat_map(call => given_positions(call, positions).map(i => block_given(call#(i + 1))))
+# `f {…}`, `f(a) {…}`, `f(a, {…})`, `f(a, body: {…})` with those blocks as lambdas
 with_block_arguments(n: Node, positions: map): Node := {
 	n = joined_block_call(children(n, part => with_block_arguments(part, positions)), positions)
 	given = given_positions(n, positions)
-	if #given == 0 then n else group_like(n, (1 to #n).map(i => if i - 1 in given then block_lambda(n#i) else n#i))
+	if #given == 0 then n else group_like(n, (1 to #n).map(i => if i - 1 in given then block_lambda_given(n#i) else n#i))
 }
+block_lambda_given(argument: Node): Node := if is_labeled(argument) then Key(key_of(argument), Op.Colon, block_lambda(value_of(argument))) else block_lambda(argument)
 
 lambdas(program: Node): Node := {
 	positions = function_positions_of(statements_in(program))

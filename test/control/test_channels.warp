@@ -7,7 +7,7 @@ is! 'ch = channel(); go { for i in 1 to 3 { ch.send(i) }; ch.close() }; total = 
 is! 'produce(c) := { for i in 1 to 4 { c.send(i) }; c.close() }; ch = channel(); go produce(ch); n = 0; for v in ch { n += 1 }; n' 4
 
 # a_machine_channel_has_the_same_words
-is! 'chat = channel "warp-test-p155-to"; send 5 to chat; chat.receive() + 1' 6
+is! 'chat = channel "warp-test-p155-to"; send 5 to: chat; chat.receive() + 1' 6
 
 # a_sender_queued_behind_busy_tasks_is_received
 is! 'for k in 1 to 6 { go { sleep(300 ms) } }; ch = channel(); go { ch.send(5) }; ch.receive()' 5

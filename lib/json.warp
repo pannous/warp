@@ -232,13 +232,13 @@ json_word_read(source: text, at: int): list := {
 
 // the JSON text of a value, an instance its fields; exact refuses a fraction it can't write so
 json_written(value: any, exact: bool): text := {
-	written = (part => json_written(part, exact))
 	if value == ø { return "null" }
 	if value is bool { return if value then "true" else "false" }
 	if value is int { return "" + value }
 	if value is number { return json_number(value, exact) }
 	if value is text or value is codepoint { return json_quoted("" + value) }
 	if value is symbol { return json_quoted(value.name) }
+	written = (part => json_written(part, exact))
 	if value is map or (value is key and type(value).name not in KEY_TYPES) { return json_fields(value, written) }
 	if value is key { return json_code_key(value, written) }
 	if value is list { return json_list(value, written) }
@@ -258,14 +258,14 @@ json_number(value: any, exact: bool): text := {
 json_quoted(source: text): text := {
 	if #source <= 32 {
 		quoted = "\""
-		for character in source { quoted += json_escape(character) ?? character }
+		for character in source { quoted += if json_plain(character) then character else json_escape(character) ?? character }
 		return quoted + "\""
 	}
 	parts = ["\""]
 	plain = 0
 	i = 0
 	for character in source {
-		escape = json_escape(character)
+		escape = if json_plain(character) then ø else json_escape(character)
 		if escape != ø {
 			if i > plain { parts.add(source[plain ..< i]) }
 			parts.add(escape)
@@ -277,6 +277,8 @@ json_quoted(source: text): text := {
 	parts.add("\"")
 	join(parts, "")
 }
+// a character that stands as itself without a lookup: not a control, " or \\ (the common case, checked first)
+json_plain(character: any): bool := ord(character) >= 32 and character != "\"" and character != "\\"
 // the escape of one character, ø when it stands as itself; a character of several code points (a CRLF) escapes each
 json_escape(character: any): any := {
 	escape = JSON_ESCAPES.get("" + character)
@@ -295,7 +297,7 @@ json_control(code: int): text := {
 	"\\u00" + HEX_DIGITS[code /! 16] + HEX_DIGITS[code % 16]
 }
 // a map's entries, an instance's fields, as an object
-json_fields(value: any, written: function): text := json_object(value.keys.map(key => [json_key(key), written(value[key])]))
+json_fields(value: any, written: function): text := "{" + value.keys.map(key => json_quoted(json_key(key)) + ":" + written(value[key])).join(",") + "}"
 json_key(key: any): text := if key is text then key else if key is symbol then key.name else "" + key
 // [[key, its JSON], …] as an object
 json_object(entries): text := "{" + entries.map(entry => json_quoted(entry#1) + ":" + entry#2).join(",") + "}"

@@ -167,7 +167,50 @@ fast_int(body: Body, n: Node): bool := {
 }
 # a call of a function declared to give an int, `f(): int := 3` (decision declared-int-result)
 gives_declared_int(f: Function): bool := declared_kinds.get(aliased_type(declared_result_word(f) ?? "")) == ValueKind.Int
-declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or (is_global(body, name) and global_key(body, name) in module.int_globals) or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int)
+declared_int(body: Body, name: text): bool := (name in body.declared and body.declared[name] == ValueKind.Int) or name in body.boxed_ints or (is_global(body, name) and global_key(body, name) in module.int_globals) or body.function.signature.parameters.any(p => p.name == name and p.type_name and declared_kinds.get(aliased_type(p.type_name)) == ValueKind.Int) or name in counters(body)
+# A counter is a whole number proven small, kept as i64 (decision nat-and-int): a local every write of which is a
+# literal up to COUNTER_START, a declared int's value, a counter's, or a counter plus or minus a literal step up to
+# COUNTER_STEP, so it passes 2^63 only after 10^16 steps. `x = x + x` doubles, so a sum of counters is none.
+# The greatest fixpoint: every local written so starts as one, and one losing a write drops out until none does
+counters(body: Body): map := {
+	if body.counters != ø { return body.counters }
+	body.counters = {}
+	if body.function.is_runtime { return body.counters }
+	writes = {}
+	gathered_writes(body.function.body, writes)
+	parameters = body.function.signature.parameters.map(p => p.name)
+	held = {}
+	for name in writes.keys {
+		if name not in parameters and name not in body.declared and not is_global(body, name) and name not in module.shared { held[name] = writes[name].filter(write => not declared_int_value(body, write)) }
+	}
+	dropped = yes
+	while dropped {
+		dropped = no
+		kept = {}
+		for name in held.keys { if held[name].all(write => counted_write(write, held)) { kept[name] = held[name] } else { dropped = yes } }
+		held = kept
+	}
+	body.counters = held
+}
+COUNTER_START = 2147483648
+COUNTER_STEP = 1023
+counter_steps = [Op.AddAssign, Op.SubAssign]
+assignments = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign, Op.FloorDivAssign, Op.ModAssign, Op.PowAssign, Op.AndAssign, Op.OrAssign, Op.XorAssign]
+def gathered_writes(n: Node, writes: map) {
+	if type(n) is key and key_of(n) is symbol and op_of(n) in assignments { writes[name_of(key_of(n))] = (writes.get(name_of(key_of(n))) ?? []) + [n] }
+	for part in parts_of(n) { gathered_writes(part, writes) }
+}
+small_literal(n: Node, bound: int): bool := n is int and n <= bound and n >= -bound
+# `i = end` of `end` declared int or the call of a function declared int: an i64 already, whatever the counters are
+declared_int_value(body: Body, write: Node): bool := op_of(write) == Op.Assign and (small_literal(value_of(write), COUNTER_START) or fast_int(body, value_of(write)))
+counted_write(write: Node, held: map): bool := {
+	value = value_of(write)
+	if op_of(write) in counter_steps { return small_literal(value, COUNTER_STEP) }
+	if op_of(write) != Op.Assign { return no }
+	if value is symbol { return name_of(value) in held }
+	stepped = is_key(value, Op.Add) or is_key(value, Op.Sub)
+	stepped and ((key_of(value) is symbol and name_of(key_of(value)) in held and small_literal(value_of(value), COUNTER_STEP)) or (is_key(value, Op.Add) and value_of(value) is symbol and name_of(value_of(value)) in held and small_literal(key_of(value), COUNTER_STEP)))
+}
 exact_words = {"-": "extended_difference", "*": "extended_product", "/": "extended_quotient", "%": "extended_modulo", "rem": "extended_remainder"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }

@@ -451,7 +451,7 @@ def defined_arities(program: Node): map {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
 # marks: the marked kind of each local holding a number of a marked type unboxed (`a: Angle`, `b = a * 2`)
-class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {} }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map; boxed_ints: map = {}; int_members: map = {}; marks: map = {}; kept: map = {}; counters: any = ø }
 
 local_index(body: Body, name: text, kind: ValueKind): int := {
 	if name in body.names { return body.names[name] }
