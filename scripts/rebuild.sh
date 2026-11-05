@@ -215,10 +215,11 @@ released() {
 	local lock=$store/$hash/$1.building
 	[ "$(cat "$lock/pid" 2>/dev/null)" = $$ ] && rm -rf "$lock"
 }
-# A compiler's code is core/**, BAKED and the seed (the --baked hash); the rest of lib/ is data baked into its segments
+# A compiler's code is core/**, extensions/**, the lib/ modules they use and the seed (the --baked hash,
+# compiler-inputs.sh code_files); the rest of lib/ it reads from disk, but the sugar's rules baked into a segment
 # (uses.warp baked_tables). <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change
-# rebakes that compiler with this lib/ (warp.wasm rebake, ~1 min) and makes its runtime and modules anew instead of
-# compiling compiler.warp (decision lib-hash-rebake)
+# rebakes that compiler with this lib/ (warp.wasm rebake, ~1 min) and makes its runtime, modules and library index
+# anew instead of compiling compiler.warp (decision lib-hash-rebake)
 code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$baked"; }
 # rebaked_stored <log>: 0 rebaked, 1 no stored compiler of this code, 2 failed (its output in the log, step rebake)
 rebaked_stored() {

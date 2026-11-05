@@ -37,12 +37,14 @@ module_signature(name: text, wasm: list): ModuleSignature? := {
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])
-# `warp signature <m>`: the prebuilt module's signature as warp text
+# `warp signature <m>`: the prebuilt module's signature as warp text, a definition's head line a line, as its file
+# writes it (the parses behind them are the signature's, `warp parse` shows one)
 show_signature(name: text) := {
 	wasm = try read_bytes(folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name + ".wasm") else []
-	place = if #wasm > 0 then section_place(wasm, section_ids.custom, SIGNATURE_SECTION) else ø
-	if place == ø { raise name + ": no prebuilt module with a " + SIGNATURE_SECTION + " section" }
-	print unpack(utf8_text(wasm[place#1 ..< place#2]))
+	signature = if #wasm > 0 then module_signature(name, wasm) else ø
+	if signature == ø { raise name + ": no prebuilt module with a " + SIGNATURE_SECTION + " section" }
+	print "# " + name + ".wasm, built of lib/" + name + module_extension + " " + signature.source + ", using " + (if #signature.uses == 0 then "no module" else signature.uses.join(", ")) + "; ${#signature.rules} rewrite rules, ${#signature.words} words linked"
+	for slice in signature.slices { print slice#2 }
 }
 
 field_node(name: text, value: Node): Node := Key(symbol(name), Op.Colon, value)
