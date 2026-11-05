@@ -174,12 +174,6 @@ with_dependencies(name: text, names: list, ordered: list, visiting: list): list 
 	for inner in used_modules(LIBRARY_FILES.get(name + module_extension) ?? "") { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
 	ordered + [name]
 }
-	for inner in used_modules(LIBRARY_FILES.get(image.name + module_extension) ?? "") {
-		found = images.filter(other => other.name == inner)
-		if #found > 0 { ordered = with_dependencies(found#1, images, ordered) }
-	}
-	ordered + [image]
-}
 
 # the module of the source file written to the wasm file, the source's uses found in folder
 compile_file(source_file: text, wasm_file: text, folder: text) := {
