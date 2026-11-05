@@ -820,7 +820,10 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	conditions = conditions.filter(condition => condition != symbol(alias_mark))
 	places = conditions.filter(is_place_word)
 	conditions = conditions.filter(condition => not is_place_word(condition))
-	if #places > 1 or not conditions.all(is_condition) { return ø }
+	unread = conditions.filter(condition => not is_condition(condition))
+	# a rule whose condition no reader knows is refused aloud: dropped silently, its program reads `rewrite` as a name
+	if #unread > 0 { raise "rewrite: no rule reads the condition " + unread.map(condition => "`${condition}`").join(", ") }
+	if #places > 1 { raise "rewrite: one place word at most, not " + places.map(place => "`${place}`").join(" and ") }
 	place = if #places == 0 then Place.Anywhere else PLACE_WORDS[name_of(places#1)]
 	origins = conditions.filter(condition => is_key(condition, Op.Assign) and not is_computed_binding(condition))
 	if #origins > 1 { return ø }
@@ -902,7 +905,8 @@ conjuncts(condition: Node): list := match condition {
 		more = if #rest == 0 then [] else if chained then conjuncts(Key(and_joined(rest), Op.Assign, value_of(right))) else rest.flat_map(conjuncts)
 		before[0 ..< #before - 1].flat_map(conjuncts) + [Key(before.last(), Op.Assign, after#1)] + more
 	}
-	_: [condition]
+	# `$f takes one and $x is …` parses as `$f takes (one and …)`: the phrase's last word ends at the `and`
+	_: if is_phrase(condition) and #condition > 1 and is_key(condition.last(), Op.And) then conjuncts(rule_phrase(items_of(condition)[0 ..< #condition - 1] + [key_of(condition.last())])) + conjuncts(value_of(condition.last())) else [condition]
 }
 and_parts(n: Node): list := if is_key(n, Op.And) then and_parts(key_of(n)) + and_parts(value_of(n)) else [n]
 and_joined(parts: list): Node := if #parts == 1 then parts#1 else Key(and_joined(parts[0 ..< #parts - 1]), Op.And, parts.last())
