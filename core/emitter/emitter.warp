@@ -158,7 +158,7 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, i64_load: 41, f32_load: 42, f64_load: 43, i64_load32_s: 52, i64_load32_u: 53, i64_store32: 62, i32_load8_u: 45, i32_store: 54, f32_store: 56, i32_store8: 58, memory_grow: 64,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_add: 106, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_trunc: 157, f64_nearest: 158, f64_sub: 161, f64_mul: 162, f64_div: 163, f64_abs: 153, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
-	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125, i64_mul: 126}
+	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, br_on_null: 213, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125, i64_mul: 126}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast: 22, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -548,12 +548,20 @@ def cast(value: TypedCode, to: ValueKind): TypedCode {
 	if value.kind == ValueKind.Node { return runtime_call(node_cast(to), [value]) }
 	TypedCode(to, converted(value, to))
 }
+# a list or text as a condition: yes when it holds anything, its count read in place (node_truthy's answer), no of ø;
+# boxing it for node_truthy made a node at every test, `if not small_int_nodes` in each int_node (card
+# boxed-condition-node). The 0 under the reference is the block's answer when br_on_null leaves, else or'd away
+def held_count_test(reference: list, count_read: list): list {
+	[op.block, type_bytes.bool, op.i32_const, 0] + reference + [op.br_on_null, 0] + count_read + [op.i32_eqz, op.i32_eqz, op.i32_or, op.end]
+}
 # a value as a yes/no condition: non-zero is yes
 def condition(value: TypedCode): list {
 	kind = value.kind
 	if kind == ValueKind.Int { return value.code + [op.i64_eqz, op.i32_eqz] }
 	if kind == ValueKind.Float { return value.code + [op.f64_const] + le64(0) + [op.f64_ne] }
-	if kind == ValueKind.Node or kind == ValueKind.List or is_textual(kind) { return runtime_call("node_truthy", [TypedCode(ValueKind.Node, boxed(value))]).code }
+	if kind == ValueKind.List { return held_count_test(value.code, gc_code(gc_ops.struct_get, [gc_type(gc.list), 0])) }
+	if kind == ValueKind.Text { return held_count_test(value.code, gc_code(gc_ops.array_len, [])) }
+	if kind == ValueKind.Node or is_textual(kind) { return runtime_call("node_truthy", [TypedCode(ValueKind.Node, boxed(value))]).code }
 	# (a recursive call not yet known is taken as yes/no: wasm validation fails the module if it is not)
 	if kind != ValueKind.Bool and kind != pending { refuse("a " + kind_spelling(kind) + " as a condition") }
 	value.code
