@@ -71,8 +71,9 @@ instance_among(n: Node, classes: list): bool := {
 # (decision real-canonical)
 real_among(n: Node, classes: list): bool := instance_among(n, classes) or (not is_null(n) and marked_kind(n) != Marked.Bool and (kind_code(n) == Kind.Int or kind_code(n) == Kind.Float))
 # `type(x)` of a value known only at run time: the type value naming its kind as
-# the static names do; an instance names its class, one of the program's `classes`
-node_type_name(n: any, classes: list): any := with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue)
+# the static names do; an instance names its class, one of the program's `classes`, and holds its descriptor, so
+# `type(u)()` constructs one as `U()` does
+node_type_name(n: any, classes: list): any := with_descriptor(with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue), n)
 # … of a variable declared int in an optional or union slot: its whole number an int
 int_slot_type_name(n: any, classes: list): any := if node_type_word(n, classes) == "nat" then with_kind(symbol_of("int"), Marked.TypeValue) else node_type_name(n, classes)
 node_type_word(n: any, classes: list): text := {
