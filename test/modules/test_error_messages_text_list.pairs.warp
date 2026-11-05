@@ -1,0 +1,18 @@
+# lib-error-messages: errors name the function and the offending value (text, list, math)
+«use text; r = try { ordinalize(0) } catch e { "" + e }; r == "ordinalize needs a whole number >= 1"»	true
+«use text; r = try { human_size(-1) } catch e { "" + e }; r == "human_size needs bytes >= 0"»	true
+«use text; r = try { repeat("x", -2) } catch e { "" + e }; r == "repeat needs a count of at least 0, not -2"»	true
+«use text; r = try { truncate("abc", -1) } catch e { "" + e }; r == "truncate needs a width of at least 1, not -1"»	true
+«use text; r = try { from_utf8([65, 255]) } catch e { "" + e }; r == "from_utf8: the byte 255 at position 1 cannot start a character (invalid UTF-8)"»	true
+«use text; r = try { from_utf8([226, 130]) } catch e { "" + e }; r == "from_utf8: the character starting at position 0 is cut off (invalid UTF-8)"»	true
+«use list; r = try { chunk([1, 2], -3) } catch e { "" + e }; r == "chunk needs a size of at least 1, not -3"»	true
+«use list; r = try { median([]) } catch e { "" + e }; r == "median of an empty list"»	true
+«use list; r = try { quantile([], 0.5) } catch e { "" + e }; r == "quantile of an empty list"»	true
+«use list; r = try { quantile([1, 2], 1.5) } catch e { "" + e }; r == "quantile 1.5 is not between 0 and 1"»	true
+«use list; r = try { percentile([1, 2], -5) } catch e { "" + e }; r == "percentile -5 is not between 0 and 100"»	true
+«use list; r = try { percentile([], 50) } catch e { "" + e }; r == "percentile of an empty list"»	true
+«use list; r = try { index([1, 2], 7) } catch e { "" + e }; r == "ValueError: 7 is not in the list"»	true
+«use math; r = try { prime_factors(0) } catch e { "" + e }; r == "prime_factors needs a positive whole number, not 0"»	true
+«r = try { mean([]) } catch e { "" + e }; r == "mean of an empty list"»	true
+«r = try { to_base(10, 40) } catch e { "" + e }; r == "to_base: the base 40 is not 2 to 36"»	true
+«r = try { floor_mod(5, 0) } catch e { "" + e }; r == "floor_mod by zero"»	true
