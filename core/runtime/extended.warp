@@ -1,12 +1,10 @@
 # The extended runtime words (decision runtime-split): the parts in core/runtime/extended/, for what only some
-# programs do (durations and times, files over WASI). The core, runtime.warp and core/runtime/*.warp, never uses them
+# programs do (files over WASI). The core, runtime.warp and core/runtime/*.warp, never uses them
 # nor names their words (scripts/self-check.sh checks it): its generic words hand an extended value to the hooks
 # core/runtime/bridge.warp declares, whose bodies are this file's, at its end, or extensions/runtime.warp's (big ints and
-# ratios, GPU lists). The emitter calls these words where a program needs them, compiling each on
+# ratios, GPU lists, times). The emitter calls these words where a program needs them, compiling each on
 # its first call like any runtime word.
 # Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS), the words of each file its `use` lines name in their order.
-use "extended/durations.warp"
-use "extended/times.warp"
 use "extended/wasi.warp"
 # the extensions' runtime words (extensions/runtime.warp: big numbers, GPU lists), until the seed joins the extensions'
 # runtime roots itself: a seed lowers the runtime by its own compiler.warp's RUNTIME_ROOTS

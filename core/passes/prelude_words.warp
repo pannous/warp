@@ -571,6 +571,8 @@ heads_defining(program: Node, name: text): list := statements_in(program).filter
 # page_event beside its handler(name, action)), whose uses are that local's
 binds_locally(statement: Node, name: text): bool := declared_name(statement) != name and names_bound_in(statement).has(name)
 own_word(name: text): text := name + name_joiner + "own"
+# the name as the program wrote it, of its own word too
+written_word(name: text): text := if name.ends_with(own_word("")) then name.replace(own_word(""), "") else name
 # whether a library module is being built (prebuilt.warp sets it), not a program
 building_a_module(): bool := module.relocating
 # `sin(x: Real) := …`: a definition typing its parameters overloads the library's word beside it (arity_overloads.warp
@@ -841,12 +843,19 @@ names_bound_in_kept(program: Node): any := {
 }
 # the names in a view, `["attribute", "variants", ["list", ["symbol", "red"]], ["symbol", "Color"]]`'s red and Color
 view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
-# the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point)
+# the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the
+# holes of a text pattern `"/users/" + id: int`
 pattern_names(pattern: Node): list := match pattern {
 	Symbol(name): [name]
-	Key(head, Op.Colon, type): pattern_names(head)
+	Key(head, Op.Colon, type): pattern_names(head) + names_after_type(type)
+	Key(head, Op.Add, tail): pattern_names(head) + pattern_names(tail)
 	Key(head, op, fields): if is_group(fields) then pattern_names(fields) else []
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
+}
+# a text pattern goes on after a hole's type, `id: int + "/posts/" + post: int` parsing as `id: (int + "/posts/" + post)`
+names_after_type(type: Node): list := match type {
+	Key(left, Op.Add, right): names_after_type(left) + pattern_names(right)
+	_: []
 }
 # the variables a `for x in …` among the items binds, also inside a comprehension `[x * 2 for x in xs]`
 iteration_variables(items: list): list := {

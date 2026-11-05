@@ -89,7 +89,8 @@ yaml_node(st: map, indent: int): any := {
 	if content.starts_with("? ") or content == "?" { yaml_fail(st, "complex keys (? …) are not supported") }
 	if yaml_key_end(st, content) > 0 { return yaml_mapping(st, n) }
 	st["i"] = st["i"] + 1
-	yaml_value(st, content, n - 1, no)
+	// an anchor alone on its line also takes a sequence at the key's own indentation below (yaml-test-suite SKE5)
+	yaml_value(st, content, n - 1, content.starts_with("&") and not content.trim().contains(" "))
 }
 yaml_sequence(st: map, n: int): list := yaml_sequence(st, n, no)
 // under_key: the sequence is a mapping value at the key's own indentation, ended by the mapping's next key
@@ -253,7 +254,8 @@ yaml_plain_lines(st: map, t: text, parent: int): any := {
 		while j <= #(st["lines"]) and st["lines"]#j.trim() == "" { blank_lines += 1; j += 1 }
 		if yaml_next_indent(st) <= parent { break }
 		line = yaml_line(st).trim()
-		if yaml_key_end(st, line) > 0 or yaml_is_entry(line) { yaml_fail(st, "bad indentation: a mapping or sequence inside a plain scalar") }
+		// "- " there is text (yaml-test-suite AB8U), "key: " a mapping where none may be
+		if yaml_key_end(st, line) > 0 { yaml_fail(st, "bad indentation: a mapping or sequence inside a plain scalar") }
 		// an empty line between two of its lines is a line break (yaml-test-suite 36F6)
 		text = text + (if blank_lines > 0 then "\n" * blank_lines else " ") + yaml_plain_cut(line)
 		folded = yes
@@ -425,8 +427,10 @@ yaml_flow_value(st: map, source: text, at: int): list := {
 	else if c == "!" { yaml_flow_fail(st, source, at, "tags (!…) are not supported") }
 	else {
 		end = at
-		while end <= #source and not (source#end in ",]}\n") and not (source#end == ":" and (end == #source or source#(end + 1) in " \t\n,]}")) and not (source#end == "#" and source#(end - 1) == " ") { end += 1 }
-		r = [yaml_scalar(source[at - 1..<end - 1].trim()), end]
+		// a plain scalar may run on over lines, each folded to one space (yaml-test-suite 8KB6, NJ66, 8UDB)
+		while end <= #source and not (source#end in ",]}") and not (source#end == ":" and (end == #source or source#(end + 1) in " \t\n,]}")) and not (source#end == "#" and (source#(end - 1) == " " or source#(end - 1) == "\n")) { end += 1 }
+		lines = [line.trim() for line in source[at - 1..<end - 1].split("\n")].filter(line => line != "")
+		r = [if #lines > 1 then lines.join(" ") else yaml_scalar(lines.join(" ")), end]
 	}
 	if anchor != "" { st["anchors"][anchor] = r#1 }
 	r
@@ -437,10 +441,12 @@ yaml_flow_sequence(st: map, source: text, at: int): list := {
 		at = yaml_flow_space(source, at)
 		if at > #source { yaml_flow_fail(st, source, at, "an unclosed [") }
 		if source#at == "]" { return [items, at + 1] }
+		first = at
 		r = yaml_flow_value(st, source, at)
 		at = yaml_flow_space(source, r#2)
 		if at <= #source and source#at == ":" {
-			// a single pair [a: 1]
+			// a single pair [a: 1], its key on one line ([1, 2⏎b: 3] lacks a ,)
+			if source[first - 1..<at - 1].contains("\n") { yaml_flow_fail(st, source, at, "no , or ] in a flow sequence") }
 			v = yaml_flow_value(st, source, at + 1)
 			pair = {}
 			pair["" + r#1] = v#1
@@ -480,6 +486,8 @@ yaml_flow_text(st: map, source: text, at: int): list := {
 	quote = "" + source#at
 	at += 1
 	out = ""
+	// the length of out after its last escape: a fold trims no escaped tab or space (yaml-test-suite DE56)
+	escaped = 0
 	while true {
 		if at > #source { yaml_flow_fail(st, source, at, "an unclosed " + quote) }
 		c = source#at
@@ -503,17 +511,19 @@ yaml_flow_text(st: map, source: text, at: int): list := {
 					code = code * 16 + YAML_HEX.find(d) - 1
 				}
 				out += "" + chr(code)
+				escaped = #out
 				at += 2 + size
 				continue
 			}
 			if not YAML_ESCAPED.has(e) { yaml_flow_fail(st, source, at, "bad escape \\" + e) }
 			out += YAML_ESCAPED[e]
+			escaped = #out
 			at += 2
 			continue
 		}
 		if c == "\n" {
 			// fold: trailing spaces dropped, empty lines kept as breaks, else one space
-			while out.ends_with(" ") or out.ends_with("\t") { out = out[0..<#out - 1] }
+			while #out > escaped and (out.ends_with(" ") or out.ends_with("\t")) { out = out[0..<#out - 1] }
 			at += 1
 			empties = 0
 			while true {

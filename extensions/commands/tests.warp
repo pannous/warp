@@ -7,6 +7,7 @@
 # warp writes `<run>.out`, `<run>.err` and `<run>.status` (its exit status, or `time ` and the limit it hit)
 TEST_FOLDER = "test"
 PAIRS_SUFFIX = ".pairs.warp"
+UNREAD_PAIR = "reads as no test pair: an unclosed quote (' or «) before it joins it to the lines after?"
 TEST_PREFIX = "test_"
 CHECK_WORD = "is!"
 # a case's expected column `error`: its code fails, as a compile refusal or a raise (tests never pin wording)
@@ -79,8 +80,11 @@ test_verdicts(work: text, words: list) := {
 		took = run_milliseconds(work, "" + n) + run_milliseconds(work, n + EXPECTED_RUN)
 		if took > SLOW_MILLISECONDS { print SLOW_MARK + described + ": " + took / 100 / 10.0 + " s" }
 	}
+	unread = test_files_of(words).flat_map(file => unread_lines(file, cases).map(line => file + ":" + line))
+	for place in unread { print "✗ " + place + ": " + UNREAD_PAIR }
+	failed += #unread
 	skipped = test_files_of(words).map(file => #skipped_pairs(read(file))).sum()
-	total = if failed > 0 then "" + failed + " of " + #cases + " failed" else "✓ " + (#cases - timed) + " tests passed"
+	total = if failed > 0 then "" + failed + " of " + (#cases + #unread) + " failed" else "✓ " + (#cases - timed) + " tests passed"
 	print total + " in " + #test_files_of(words) + " files" + (if skipped > 0 then ", " + skipped + " skipped" else "") + (if timed > 0 then ", " + timed + " hit a time limit" else "")
 	write(work + "/failed", "" + failed)
 }
@@ -156,6 +160,20 @@ cases_in(file: text, source: text): list := {
 		if parts != ø { cases += [TestCase(file, statement_line(statement), parts#1, parts#2)] }
 	}
 	cases
+}
+# the pair lines of a pairs file no case starts on: `'"I'm"'⇥"I'm"`'s unescaped ' opens a text that runs over the
+# next lines, which then are one statement and no pair; each such line fails loudly, never silently dropped
+unread_lines(file: text, cases: list): list := {
+	if not file.ends_with(PAIRS_SUFFIX) { return [] }
+	read_at = {}
+	for case in cases { if case.file == file { read_at["" + case.line] = yes } }
+	lines = read(file).split("\n")
+	(1 to #lines).filter(at => is_pair_line(lines#at) and not read_at.has("" + at))
+}
+# a line with a tab between its columns, not commented out
+is_pair_line(line: text): bool := {
+	written = line.trim()
+	written.contains("\t") and not written.starts_with("//") and not written.starts_with("#")
 }
 # the line a statement starts on: its own, else its first leaf's (a tab-separated pair carries none itself)
 statement_line(statement: Node): int := line_of(statement) ?? line_of(first_leaf(statement) ?? statement) ?? 0

@@ -1,0 +1,4 @@
+# clearly-wrong fixes, lib-coverage-audit-2 batch 3: mean([]) (Supervisor-approved message, like median), to_base with a base outside 2-36 (looped forever), floor_mod by zero (uncatchable trap), truncate to a width below 1 (index error), two_digits of a negative ("0-5")
+«a(f) := try { str(f()) } catch e { "" + e }; [a(() -> mean([])), a(() -> to_base(5, 1)), a(() -> to_base(5, 37)), a(() -> floor_mod(1, 0))] == ["mean of an empty list", "to_base: the base 1 is not 2 to 36", "to_base: the base 37 is not 2 to 36", "floor_mod by zero"]»	true
+«use text; r = try { truncate("abc", 0) } catch e { "" + e }; r == "truncate needs a width of at least 1, not 0"»	true
+«use time; two_digits(-5) == "-05" and two_digits(-12) == "-12"»	true
