@@ -1,8 +1,10 @@
 // The standard library module compress: `use compress`, DEFLATE (RFC 1951) and its gzip (RFC 1952) and zlib
 // (RFC 1950) wrappers in pure warp. inflate(bytes) reads stored, fixed and dynamic Huffman blocks; deflate(bytes)
 // writes fixed Huffman blocks of LZ77 matches (hash chains over a 32 KB window), or stored blocks when those are
-// smaller, so gzip and zlib read it. A subject is text (its UTF-8) or a list of bytes; results are byte lists, and the
-// *_text forms decode them as UTF-8: gunzip_text(gzip("hello")) is "hello". Corrupt input raises, saying what is wrong.
+// smaller, so gzip and zlib read it. A subject is text (its UTF-8) or a list of bytes; compress/decompress results
+// are byte lists. A `_text` sibling means the same as the bytes form, then decoded as UTF-8 text — the pairs are
+// inflate_text / inflate, gunzip_text / gunzip, zlib_decompress_text / zlib_decompress: gunzip_text(gzip("hello"))
+// is "hello". Corrupt input raises, saying what is wrong.
 // CRC-32 is lib/hash's crc32 (through the host); Adler-32 is offset
 use hash
 
