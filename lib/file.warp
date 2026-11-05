@@ -23,7 +23,7 @@ glob_listed(pattern: text): list := {
 	folder = dirname(pattern)
 	part = basename(pattern)
 	names = try { list_files(folder) } catch e { [] }
-	matching = names.filter(name => glob_match(part, name) and (part.starts_with(".") or not name.starts_with("."))).sort
+	matching = names.filter(name => path_matches(name, part) and (part.starts_with(".") or not name.starts_with("."))).sort
 	if pattern.contains("/") then matching.map(name => path_join(folder, name)) else matching
 }
 // beware: for a text argument the prelude's lines(t) wins, so lines("notes.txt") is ["notes.txt"]; shell's file_lines(path)
