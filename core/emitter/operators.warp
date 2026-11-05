@@ -246,11 +246,25 @@ analyzed_list_type(body: Body, n: Node): text? := {
 	word = type_word(n, scope)
 	if word == "list of node" then "list" else word
 }
+# the type value the code gives with the class descriptor of the instance `value` reads, which a call of it constructs
+# by (closures.warp dispatcher_code), so `type(u)()` is `U()`; as it is of any other value
+def described_type(body: Body, type_code: list, value: list): list {
+	type = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+	described = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+	part = i => as_node(type) + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
+	descriptor = as_node(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
+	code = as_node(type_code) + [op.local_set] + type[1..] + [ref_null, gc_type(gc.node), op.local_set] + described[1..]
+	code += value + [op.ref_is_null, op.i32_eqz, op.if, no_value] + descriptor + gc_code(gc_ops.ref_test, [gc_type(gc.class)]) + [op.if, no_value] + descriptor + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) + [op.local_set] + described[1..] + [op.end, op.end]
+	code + part(0) + part(1) + as_node(described) + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
+}
 # a whole number is a nat but where it is a fast int, declared int (decision nat-and-int)
 def type_value_of(body: Body, n: Node): TypedCode {
 	value = expression_code(body, n)
-	if value.kind == ValueKind.Node and int_member_slot(body, n) { return runtime_call("int_slot_type_name", [value, list_value(body, module.classes.keys)]) }
-	if value.kind == ValueKind.Node { return runtime_call("node_type_name", [value, list_value(body, module.classes.keys)]) }
+	if value.kind == ValueKind.Node {
+		held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+		named = runtime_call(if int_member_slot(body, n) then "int_slot_type_name" else "node_type_name", [TypedCode(ValueKind.Node, held), list_value(body, module.classes.keys)])
+		return TypedCode(ValueKind.Node, as_node(value.code) + [op.local_set] + held[1..] + described_type(body, named.code, held))
+	}
 	listed = if value.kind == ValueKind.List then analyzed_list_type(body, n) else ø
 	if value.kind == ValueKind.List and listed == ø { return runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)]) }
 	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else if value.kind == ValueKind.List then listed else static_type_word(value.kind)

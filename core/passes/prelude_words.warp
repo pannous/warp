@@ -315,7 +315,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	if in_front or not building_a_module() { program = with_own_words(program, module_names + (if in_front then [] else runtime_words_of_math)) }
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
-	aliases = with_call_forms(module_aliases(module), module_names + own.keys)
+	# (a linked module's aliases from its signature, its text being none)
+	written_aliases = module_aliases(module)
+	if #linked > 0 { for signature in linked_signatures.values { for name in signature.aliases.keys { written_aliases[name] = signature.aliases[name] } } }
+	aliases = with_call_forms(written_aliases, module_names + own.keys)
 	program = aliased(program, aliases, own)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other

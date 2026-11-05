@@ -6,7 +6,7 @@
 # ~0.3 s). The first section behind the header, so a reader reads its bytes first. `warp signature <m>` shows it as
 # warp text
 SIGNATURE_SECTION = "warp.signature"
-class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; words: list; globals: list; classes: list; builders: list; runtime: list }
+class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list }
 
 # the signature of the standard module `name` as lib/ lies now, a node; with the fields of its image (prebuilt.warp
 # image_fields) when its compile wrote them
@@ -15,13 +15,13 @@ module_signature_node(name: text, image: list): Node := {
 	source = file_text(path) ?? ""
 	uses = use_lines(source)
 	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), plain_node(parsed(slice#2, uses))]))
-	foreign = foreign_types(source)
 	curly_list([
 		field_node("source", Text(source_hash(try read(path) else ""))),
 		field_node("uses", square_list(used_modules(source).map(module => Text(module)))),
 		field_node("slices", square_list(slices)),
 		field_node("rules", square_list(module_rules_of(path, name).map(rule_node))),
-		field_node("foreign", curly_list(foreign.keys.map(type => field_node(type, Text(foreign[type])))))] + image)
+		field_node("foreign", texts_node(foreign_types(source))),
+		field_node("aliases", texts_node(module_aliases(source)))] + image)
 }
 # the module's bytes with its signature as their first section
 with_signature(wasm: list, name: text, image: list): list := wasm_header + section(section_ids.custom, name_bytes(SIGNATURE_SECTION) + pack(module_signature_node(name, image)).bytes) + wasm[#wasm_header ..]
@@ -32,10 +32,8 @@ module_signature(name: text, wasm: list): ModuleSignature? := {
 	if place == ø { return ø }
 	fields = {}
 	for entry in items_of(unpack(utf8_text(wasm[place#1 ..< place#2]))) { fields[name_of(key_of(entry))] = value_of(entry) }
-	foreign = {}
-	for entry in items_of(fields["foreign"]) { foreign[name_of(key_of(entry))] = "${value_of(entry)}" }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", slice#3, module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: foreign, words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", slice#3, module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"))
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])
@@ -48,6 +46,13 @@ show_signature(name: text) := {
 }
 
 field_node(name: text, value: Node): Node := Key(symbol(name), Op.Colon, value)
+# a map of texts by name as a node, `{deque: "Deque"}`, and read back (none for a field an older build left out)
+texts_node(texts: map): Node := curly_list(texts.keys.map(name => field_node(name, Text(texts[name]))))
+texts_read(n: any): map := {
+	texts = {}
+	if n != ø { for entry in items_of(n) { texts[name_of(key_of(entry))] = "${value_of(entry)}" } }
+	texts
+}
 square_list(items: list): Node := List(items, Bracket.Square, Separator.Comma)
 curly_list(items: list): Node := List(items, Bracket.Curly, Separator.Comma)
 first_line(written: text): text := written.split("\n")#1
