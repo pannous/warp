@@ -1,0 +1,29 @@
+#!/usr/bin/env warp
+# Named deadlines checked against a fixed reference instant: overdue, due soon (within 2 days) or later,
+# with the time remaining, as a table (time, tables)
+use time
+use tables
+
+today = date_time_ms("2026-11-05T12:00:00Z")
+soon = 2 * 24 * 3600 * 1000
+deadlines = [
+	{name: "Tax return", due: "2026-10-31"},
+	{name: "Conference talk", due: "2026-11-06T09:30:00Z"},
+	{name: "Rent", due: "2026-11-07"},
+	{name: "Passport renewal", due: "2026-12-01"},
+	{name: "Invoice #42", due: "2026-11-04T17:00:00Z"},
+	{name: "Car service", due: "2027-01-15"}]
+
+rows = []
+late = 0
+for d in deadlines {
+	left = parse_date(d["due"]) - today
+	state = "later"
+	if left < 0 { state = "overdue"; late = late + 1 } else if left <= soon { state = "due soon" }
+	shown = format_duration(left)
+	if left < 0 { shown = format_duration(0 - left) + " ago" }
+	rows = rows + [[d["name"], format_date(parse_date(d["due"])), state, shown, days_between(today, parse_date(d["due"]))]]
+}
+print("as of " + format_date(today) + ": " + str(count(deadlines)) + " deadlines, " + str(late) + " overdue")
+print("")
+print(table_text(rows, {headers: ["deadline", "due", "status", "remaining", "days"], align: ["left", "left", "left", "right", "right"]}))
