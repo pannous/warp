@@ -1,0 +1,12 @@
+# a closure calls its own entry by reference, made where the closure is (card closure-funcref): its call, its text,
+# its equality, a call of the wrong arity, a closure a linked module makes and one the program gives it
+
+'f = x => x*2; f(21)'	42
+'n = 3; add = x => x + n; [1, 2].map(add)'	[4, 5]
+'f = x => x*2; "" + f'	"x => x*2"
+'sq(x) := x*x; sq == sq'	yes
+'sq(x) := x*x; cube(x) := x*x*x; sq == cube'	no
+'f = (a, b) => a; f(1)'	error	a closure called with too few values
+'twice(f, x) := f(f(x)); twice(x => x + 1, 5)'	7
+'use list; group_by([1, 2, 3], x => x % 2)'	{1: [1, 3], 0: [2]}
+'class P { a: int }; make(c) := c(3); make(P).a'	3

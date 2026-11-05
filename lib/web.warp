@@ -9,7 +9,7 @@ use markup
 
 // `get "/fib/:n:int" { … }`: a route, the route table's entry of lib/router.warp, `route_add("GET", "/fib/:n:int",
 // request => { n = route_parameter("/fib/:n:int", request.path, "n"); … })`, each `:name` of the path a variable of
-// its body; post, put, delete and patch alike. A program with routes ends serving them (routes_end; lib/rule_words.warp
+// its body; post, put, delete and patch alike. A program with routes ends serving them (routes_end; extensions/rules/rule_words.warp
 // computes both, decision computed-hole)
 // `form post "/todos" { … }` is the form sending there, `form{ method: "POST", action: "/todos", … }`, the path any
 // expression (notes/server_routes.md)
@@ -21,7 +21,6 @@ rewrite route $path {$body...} => route_add("GET", $path, page_answering(request
 // the request's body
 rewrite server def $h() {$b...} => ($h() := {$b...}; route_add("POST", "/rpc/" + $name, request => $h())) where $name = spelled($h)
 rewrite server def $h($x) {$b...} => ($h($x) := {$b...}; route_add("POST", "/rpc/" + $name, request => $h(request.body))) where $name = spelled($h)
-rewrite $p => $q where program and $q = served($p)
 
 DEFAULT_PORT = 8080
 HTML_TYPE = "text/html; charset=utf-8"

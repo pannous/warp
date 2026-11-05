@@ -260,28 +260,6 @@ rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first)
 // `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
 rewrite $n floats => float[$n]
 rewrite $n ints => int[$n]
-// paint(f, width, height) of a program function f(x, y) (card warp-to-shaders, decision shaders-in-lib): the WGSL shader
-// that wgsl_shader of lib/wgsl.warp compiles f to, the program values it reads the values of paint, read again
-// at each paint; on the GPU, else f of each pixel on the CPU, by paint_shader below. shader_of(f) is the text of that
-// shader. Rules of the prelude, so they meet paint before arity_overloads names its overloads, in every program
-// paint(s) and paint(s, values) paint at the program's own width and height where it assigns both, else at the view's
-// size (wiki/graphics.md): the rules below then fill the shader's holes or compile the function
-rewrite paint($s) => paint($s, $size...) where $s is symbol and $size = paint_size($program)
-rewrite paint($s, $v) => paint($s, $size..., $v) where $s is symbol and $size = paint_size($program)
-rewrite paint($f, $w, $h) => paint_shader($painting, $w, $h, $f) where $f is symbol and $f is function and $painting = wgsl_painting($f, $program)
-rewrite shader_of($f) => $shader where $f is symbol and $f is function and $shader = wgsl_shader($f, $program)
-// a paint of a shader the program assigns reads its holes from the variables of their names (lib/wgsl.warp shader_values)
-rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values($s, $v, $program)
-rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
-// gpu_render(s, width, height): a shader's render without values of its own, its holes read as paint's
-rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
-rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, [])
-// a list the program makes for the GPU (gpu_compute takes it) is made as a GPU list [f32] (decision gpu-bound-floats,
-// lib/rule_words.warp gpu_lists_packed): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks
-// for one outright, `xs: [i32] = …` and `xs: [u32] = …` for one of integer cells
-rewrite $p => $q where program and $q = gpu_lists_packed($p)
-// (this rule needs gpu_compute, so the prelude's rules, the one above too, come with any program calling it)
-rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
 rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f32, $v)
 rewrite ($xs: [i32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(i32, $v)
 rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, $v)
@@ -1035,3 +1013,10 @@ kept_listeners(key: text, keep: function): any := {
 // Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
 range(stop: int): list := 0 ..< stop
 range(start: int, stop: int): list := start ..< stop
+// the GPU host words, which the host answers (natively core/native/driver.warp, the playground its JS); the shaders
+// they run are written at compile time by extensions/rules/wgsl.warp
+gpu_compute(shader: node, values: node, count: int): node from host
+gpu_render(shader: node, width: int, height: int, values: node): node from host
+gpu_compute_linear(shader: node, address: int, count: int): int from host
+gpu_map_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
+gpu_reduce_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
