@@ -144,17 +144,18 @@ library_index_section(section: text): map := {
 	if not index_sections_held.has(section) { index_sections_held[section] = index_section_scanned(section) }
 	index_sections_held[section]
 }
-# an index's sections, each one present (empty or not) when there is an index
+# an index's sections, each one it holds (empty or not, a line `section\t<name>\t` names it): a section an older
+# index lacks is scanned
 index_sections_read(index: text?): map := {
 	sections = {}
-	if index == ø { return sections }
-	for section in INDEX_SECTIONS { sections[section] = {} }
-	for line in index.split("\n") {
+	for line in (index ?? "").split("\n") {
 		fields = line.split("\t")
+		if #fields == 3 and fields#1 == SECTION_MARK and fields#2 in INDEX_SECTIONS { sections[fields#2] = {} }
 		if #fields == 3 and sections.has(fields#1) { sections[fields#1][fields#2] = fields#3 }
 	}
 	sections
 }
+SECTION_MARK = "section"
 index_section_scanned(section: text): map := match section {
 	"block": block_heads_in(library_on_disk())
 	"global": declarations_scanned(library_on_disk())["words"]
@@ -207,7 +208,7 @@ write_library_index(folder: text) := {
 	write(folder + "/" + LIBRARY_INDEX, INDEX_SECTIONS.flat_map(section => index_lines(section, index_sections_held[section])).join("\n"))
 	host_words_held = ø
 }
-index_lines(section: text, entries: map): list := entries.keys.map(key => section + "\t" + key + "\t" + entries[key])
+index_lines(section: text, entries: map): list := [SECTION_MARK + "\t" + section + "\t"] + entries.keys.map(key => section + "\t" + key + "\t" + entries[key])
 
 # Every bundled module's parse, packed (pack), baked in beside its text: module_text writes them in where
 # library_parses() stands as it does the texts (decision runtime-prepended: a compile derives no table of its own
