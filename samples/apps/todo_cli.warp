@@ -7,14 +7,19 @@ use os
 use file
 use cli
 
-options = [
-	{name: "file", short: "f", help: "the JSON file of the todos (else warp_todo_demo.json in $TMPDIR)"},
-	{name: "words", positional: yes, many: yes, help: "add <title> | done <id> | list | clear"}
-]
+# git style: global options, then a command with its own
+options = [{name: "file", short: "f", help: "the JSON file of the todos (else warp_todo_demo.json in $TMPDIR)"}]
+commands = {
+	add: {help: "add a todo", options: [{name: "title", positional: yes, many: yes}]},
+	done: {help: "mark a todo done", options: [{name: "id", kind: "int", positional: yes}]},
+	list: {help: "show the todos", options: []},
+	clear: {help: "remove every todo", options: []}
+}
 # a mistake on the command line is shown with the help, never a trace
-parsed(argv: list): map := try { parse_args(options, argv) } catch e { print(e.message); {help: yes} }
+parsed(argv: list): map := try { parse_commands(options, commands, argv) } catch e { print(e.message); {help: yes, command: ø} }
 
-store = parsed(args)["file"] ?? temp_folder() + "/warp_todo_demo.json"
+given = if count(args) > 0 then parsed(args) else {help: no, command: ø}
+store = given.get("file") ?? temp_folder() + "/warp_todo_demo.json"
 
 load(): list := if exists(store) then parse_json(read(store)) else []
 keep(items: list) := write(store, to_json(items))
@@ -48,28 +53,28 @@ show() := {
 	print(if count(items) == 0 then "nothing to do" else str(open) + " open, " + str(count(items) - open) + " done")
 }
 
-command(words: list) := {
-	verb = if count(words) == 0 then "" else words[0]
-	if verb == "add" { add_todo(join(words[1..], " ")) }
-	else if verb == "done" { finish(int(words[1])) }
+command(o: map) := {
+	verb = o["command"]
+	if verb == "add" { add_todo(join(o["title"], " ")) }
+	else if verb == "done" { finish(o["id"]) }
 	else if verb == "list" { show() }
-	else if verb == "clear" { keep([]); print("cleared") }
-	else { print("usage: add <title> | done <id> | list | clear") }
+	else { keep([]); print("cleared") }
 }
 
-# one command line: the help, or the command its words name
-run(argv: list) := {
-	o = parsed(argv)
-	if o["help"] { print(cli_help("todo", options)) } else { command(o["words"]) }
+# one parsed command line: the help, or the command it names
+act(o: map) := {
+	if not o["help"] { command(o) }
+	else if o["command"] == ø { print(cli_commands_help("todo", options, commands)) }
+	else { print(cli_command_text("todo", commands, o["command"])) }
 }
 
 if count(args) > 0 {
-	run(args)
+	act(given)
 } else {
 	keep([])
-	for argv in [["list"], ["add", "buy", "milk"], ["add", "write", "the", "report"], ["add", "call", "Ada"], ["done", "2"], ["done", "7"], ["list"], ["frobnicate"], ["--color", "list"], ["--help"]] {
+	for argv in [["list"], ["add", "buy", "milk"], ["add", "write", "the", "report"], ["add", "call", "Ada"], ["done", "2"], ["done", "7"], ["list"], ["frobnicate"], ["--color", "list"], ["done", "two"], ["add", "--help"], ["--help"]] {
 		print("$ todo " + join(argv, " "))
-		run(argv)
+		act(parsed(argv))
 	}
 	print("stored: " + read(store))
 	print("demo file removed: " + str(delete_file(store)))
