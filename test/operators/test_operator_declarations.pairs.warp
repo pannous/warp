@@ -23,3 +23,7 @@
 # test_built_in_operators_are_untouched
 '3²'	9
 'infix operator ⊕ := a+b; 3²'	9
+# a declared glyph beside a longer built-in spelling: the longer one wins, so a for loop (its step glued with ··) still runs beside a declared · (maximal munch)
+'infix operator ·(u, v) := u + v; s = 0; for i in 1 to 3 { s += i }; [s, 3·4]'	[6, 7]
+# a module's glyph operator written tight between its operands still brings its module (lib/math.warp ∘ and ·)
+'[[1, 2]∘[3, 4], 3·4]'	[11, 12]
