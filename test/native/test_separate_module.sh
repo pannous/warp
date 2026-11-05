@@ -43,4 +43,16 @@ check class_text 'class P{x:int; text() := "P" + x}
 print P(3)' "P3"
 check function 'square(n: int): int := n*n
 print square(12)' "144"
+
+# natively: the warp runs x.mod.wasm itself, linking runtime.wasm's instance as `warp_runtime` (card
+# wasm-module-linking, core/native/driver.warp instances_linked)
+native_check() {
+	printf '%s\n' "$2" >"$stage/$1.warp"
+	(cd "$stage" && "$warp" build --wasm "$1.warp" >"$stage/$1.log" 2>&1)
+	got=$("$warp" "$stage/$1.mod.wasm" 2>&1)
+	if [ "$got" = "$3" ]; then echo "✓ native $1"; else echo "✗ native $1: got $got, expected $3"; failures=$((failures + 1)); fi
+}
+native_check arithmetic 'print "Hi " + (6*7)' "Hi 42"
+native_check class_text 'class P{x:int; text() := "P" + x}
+print P(3)' "P3"
 [ $failures = 0 ]
