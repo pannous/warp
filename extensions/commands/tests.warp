@@ -177,6 +177,17 @@ is_pair_line(line: text): bool := {
 }
 # the line a statement starts on: its own, else its first leaf's (a tab-separated pair carries none itself)
 statement_line(statement: Node): int := line_of(statement) ?? line_of(first_leaf(statement) ?? statement) ?? 0
+# the code's first word, number or text as written
+first_leaf(n: Node): Node := {
+	if not (n is key or is_group(n)) { return n }
+	for part in parts_of(n) {
+		if part != ø {
+			leaf = first_leaf(part)
+			if leaf != ø { return leaf }
+		}
+	}
+	ø
+}
 # a pair `'1+1'⇥2` (a third column a remark): its code and expected value
 pair_parts(view: any): any := {
 	if kind(view) != "list" or view#3 != "\t" or #view < 5 or #view > 6 { return ø }
