@@ -1,4 +1,4 @@
-# 6dde37dae9 2026-11-04 03:23 192/238 80.7%
+# 5d087b3890 2026-11-05 03:45 202/248 81.5%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
@@ -6,6 +6,9 @@ ok   samples/advanced/neural_net.warp
 ok   samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
 ok   samples/advanced/snake.warp
+ok   samples/apps/invoice_report.warp
+ok   samples/apps/log_analyzer.warp
+ok   samples/apps/todo_cli.warp
 ok   samples/conditions/control_flow.warp
 ok   samples/conditions/fizzbuzz.warp
 ok   samples/crates/regex_and_sha2.warp
@@ -66,6 +69,7 @@ ok   samples/gpu/domain_warp.warp
 ok   samples/gpu/gpu_arrays.warp
 ok   samples/gpu/gpu_map.warp
 ok   samples/gpu/gpu_million.warp
+ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
@@ -110,9 +114,13 @@ ok   samples/matching/pattern_clauses.warp
 ok   samples/matching/text_patterns.warp
 ok   samples/matching/tree_patterns.warp
 ok   samples/modules/ask_claude.warp
+ok   samples/modules/config_patch.warp
+ok   samples/modules/csv_report.warp
+ok   samples/modules/free_slots.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
+ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi.warp
 ok   samples/modules/test_ffi_comprehensive.warp
@@ -140,10 +148,11 @@ ok   samples/objects/data_structures.warp
 ok   samples/objects/dijkstra.warp
 ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/json_parser.warp
-ok   samples/signals/signal_fields.warp
-ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/hum_blocks.warp
+ok   samples/sound/music.warp
 ok   samples/sound/play_mp3.warp
+ok   samples/sound/rhythm.warp
+ok   samples/sound/signal_graph.warp
 ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp
@@ -176,6 +185,7 @@ ok   samples/types/reflection.warp
 ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
+ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
@@ -186,7 +196,7 @@ ok   samples/web/html.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/keyed_counters.warp
 ok   samples/web/select_binding.warp
-EXP  samples/errors/errors.warp
+EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
 WIN  samples/graphics/raylib_circle.warp
 WIN  samples/graphics/raylib_circle_forever.warp
 WIN  samples/graphics/raylib_debug.warp
@@ -196,44 +206,44 @@ WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
-EXP  samples/native/c_calls.warp
+EXP  samples/native/c_calls.warp: primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
 SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
-EXP  samples/storage/netbase.warp
+EXP  samples/storage/netbase.warp: outside the core: the unknown name query
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/test.warp
-FAIL samples/events/effects.warp
-FAIL samples/functions/code_as_data.warp
-FAIL samples/functions/functions.warp
-FAIL samples/gpu/gpu_visualizer.warp
-FAIL samples/hello/natural.warp
-FAIL samples/lists/dot.warp
-FAIL samples/modules/javascript.warp
-FAIL samples/modules/packages.warp
-FAIL samples/modules/rust_crates.warp
-FAIL samples/numbers/dates.warp
-FAIL samples/numbers/measurements.warp
-FAIL samples/objects/references.warp
-FAIL samples/python/numpy_matrix.warp
-FAIL samples/python/python_modules.warp
-FAIL samples/sound/arrangement.warp
-FAIL samples/sound/filters.warp
-FAIL samples/sound/harmony.warp
-FAIL samples/sound/midi.warp
-FAIL samples/sound/music.warp
-FAIL samples/sound/rhythm.warp
-FAIL samples/sound/signal_graph.warp
-FAIL samples/sound/sound_pipes.warp
-FAIL samples/tasks/async.warp
-FAIL samples/text/uniscript_text.warp
-FAIL samples/wasm/component_reflection.warp
-FAIL samples/wasm/import_compiled.warp
-FAIL samples/wasm/wasm_interop.warp
-FAIL samples/web/keyframes.warp
-FAIL samples/web/leaving_list.warp
-FAIL samples/web/live_region.warp
-FAIL samples/web/page_custom_event.warp
-FAIL samples/web/page_elements.warp
-FAIL samples/web/typed_form.warp
+FAIL samples/advanced/test.warp: outside the core: the call array(…)
+FAIL samples/apps/config_validator.warp: `(find rest (str next))` fits no single variant of find(text, text), find(list, function), find(text, function)
+FAIL samples/apps/dependency_resolver.warp: index out of range: 0 not in an empty list
+FAIL samples/apps/site_generator.warp: `(find rest (str next))` fits no single variant of find(Path, text), find(list, function), find(text, function)
+FAIL samples/events/effects.warp: outside the core: a function value in .
+FAIL samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
+FAIL samples/functions/functions.warp: outside the core: a call of reduce with 3 arguments
+FAIL samples/hello/natural.warp: outside the core: the unknown name one
+TIME samples/lists/dot.warp: used its 30 s of CPU
+FAIL samples/modules/javascript.warp: outside the core: the call randomUUID(…)
+FAIL samples/modules/packages.warp: packages/colors/colors.warp: no such file to use
+FAIL samples/modules/rust_crates.warp: outside the core: the call levenshtein(…)
+FAIL samples/numbers/dates.warp: outside the core: a data
+FAIL samples/numbers/measurements.warp: outside the core: the unknown name certainly
+FAIL samples/objects/references.warp: outside the core: the field members of a int
+FAIL samples/python/numpy_matrix.warp: no C function Py_IsInitialized in its library, or the library not found
+FAIL samples/python/python_modules.warp: no C function Py_IsInitialized in its library, or the library not found
+TIME samples/signals/signal_fields.warp: still running after 120 s
+TIME samples/sound/arrangement.warp: still running after 120 s
+TIME samples/sound/filters.warp: still running after 120 s
+TIME samples/sound/gpu_visualizer_warp.warp: still running after 120 s
+TIME samples/sound/harmony.warp: used its 30 s of CPU
+FAIL samples/sound/midi.warp: the host word midi.send is not in warp yet
+TIME samples/sound/sound_pipes.warp: used its 30 s of CPU
+FAIL samples/tasks/async.warp: hint: ms is units's fix: use units
+FAIL samples/text/uniscript_text.warp: packages/uniscript/uniscript.warp: no such file to use
+FAIL samples/wasm/component_reflection.warp: outside the core: the unknown name demo
+FAIL samples/wasm/import_compiled.warp: no module, library or package named shapes: no shapes.warp beside the program or in lib/; a package is used by its path, use "…"
+FAIL samples/web/keyframes.warp: wrong number of arguments
+FAIL samples/web/leaving_list.warp: wrong number of arguments
+FAIL samples/web/live_region.warp: no field loading
+FAIL samples/web/page_custom_event.warp: wrong number of arguments
+FAIL samples/web/page_elements.warp: wrong number of arguments
+FAIL samples/web/typed_form.warp: outside the core: an instance of form, a class not declared here
