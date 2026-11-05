@@ -864,3 +864,4 @@ all operator declarations (`(infix|prefix|suffix|postfix|circumfix)? operator $o
 rows of the atom_readers table. "If you see other patterns on the way that can be improved, don't hesitate to
 implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - after-push-cron (supervisor 2026-11-04, superseded): the */2 cron is gone (user); the pre-push hook starts after-push.sh on every push (9befcabbda). The 18:15 RED (empty WARP_BINARY after a failed lib/ rsync) is still fixed at its cause.
+- 2026-11-05 plan-only-hold (user): "All the other work, if it doesn't contribute to the big plan, must be on hold." Only library-zero-bake-plan work (L1–L5) runs; everything else is parked until the plan lands.
