@@ -8,25 +8,40 @@ def csv_rows(t: text): list {
 	row = []
 	field = ""
 	quoted = no
-	cs = [c for c in t]
-	i = 0
-	// a CRLF is one character of the text
-	while i < count(cs) {
-		c = cs[i]
+	i = 1
+	n = #t
+	// index the text by character (no full char list); unquoted runs append as one slice (card lib-bench-baseline)
+	while i <= n {
+		c = t#i
 		if quoted {
 			if c == "\"" {
-				if i + 1 < count(cs) and cs[i + 1] == "\"" { field = field + "\""; i = i + 1 } else { quoted = no }
-			} else { field = field + c }
-		} else if c == "\"" { quoted = yes
-		} else if c == "," { row = row + [field]; field = ""
+				if i < n and t#(i + 1) == "\"" { field += "\""; i += 1 } else { quoted = no }
+			} else { field += c }
+			i += 1
+		} else if c == "\"" {
+			quoted = yes
+			i += 1
+		} else if c == "," {
+			row.add(field)
+			field = ""
+			i += 1
 		} else if c == "\n" or c == "\r" or c == "\r\n" {
-			rows = rows + [row + [field]]
+			row.add(field)
+			rows.add(row)
 			row = []
 			field = ""  // a CRLF is one character of the text
-		} else { field = field + c }
-		i = i + 1
+			i += 1
+		} else {
+			start = i
+			while i <= n {
+				c = t#i
+				if c == "," or c == "\"" or c == "\n" or c == "\r" or c == "\r\n" { break }
+				i += 1
+			}
+			field += t[start - 1 ..< i - 1]
+		}
 	}
-	if count(row) > 0 or field != "" { rows = rows + [row + [field]] }
+	if count(row) > 0 or field != "" { row.add(field); rows.add(row) }
 	rows
 }
 

@@ -491,9 +491,19 @@ style_entries(items: any, separator: any, leading: any) := {
 	entries
 }
 
+// `a ~ b`: an operator only a declaration gives its meaning (lib/aliases.warp `declared: yes`) reaches the data as
+// its call, operator_~(a, b); a selector reads it as written, as it reads `a > b`
+style_as_written(node: any) := {
+	if node is pair { return key(style_as_written(node.key), node.op, style_as_written(node.value)) }
+	if node is symbol or node is text or node is number or node == ø or str(node.bracket) != "(" or count(node) != 3 { return node }
+	let head = str(node#1)
+	if head.starts_with("operator_") then key(style_as_written(node#2), head.remove_prefix("operator_"), style_as_written(node#3)) else node
+}
+
 // `ul li { … }` and `.a { … }` on the next line: the parser chains the leading dot onto the rule before it
 // (`rule.a{…}`), as it does `#main` on the same line (`rule#main{…}`); the rules apart again
-style_unchained(node: any) := {
+style_unchained(written: any) := {
+	let node = style_as_written(written)
 	if node is pair and style_combinator(node) != ø and contains([" > ", " + ", " ~ "], style_combinator(node)) and style_is_group(node.value) {
 		// `ul > li { … } .box { … }`: the parser hangs the rest of the sheet off the combinator's right side, a group
 		// [li, {…}.box, {…}]; the rule `ul > li {…}` apart from the rules after it
