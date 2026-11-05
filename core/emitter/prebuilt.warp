@@ -442,10 +442,8 @@ def bind_library_words() {
 	for image in module.linked_images {
 		for name in image.c_functions { program_import(name) }
 		for entry in image.classes {
-			# (a class the program knows from the module's text but never reached: its struct made now, as the module's)
-			known = entry#1[#instance_struct_prefix ..]
-			if entry#1 not in module.class_structs and known in module.classes { class_struct(known) }
-			if entry#1 not in module.class_structs { refuse("the program declares no class struct " + entry#1 + " of the linked module " + image.name) }
+			# (a class the program never reached: its struct declared as the module wrote it)
+			if entry#1 not in module.class_structs { module.class_structs[entry#1] = [struct_read(entry#2), instance_fields] }
 			if struct_written(entry#1) != entry#2 { refuse("the class struct " + entry#1 + " of the linked module " + image.name + ", " + entry#2 + ", is " + struct_written(entry#1) + " in the program") }
 			gc_type(entry#1)
 		}
@@ -519,6 +517,9 @@ def with_linked_c_functions(functions: map, library_folder: text): map {
 	}
 	functions
 }
+# a class struct's definition from its written form (module_layout.warp struct_written): numbers, and the types it
+# names by their names
+def struct_read(written: text): list := written.split(" ").map(part => if is_digits(part) then int(part) else part)
 # the index of the program's import of this C function, which a linked module calls
 def program_import(name: text): int {
 	for i in 0..<#module.imports { if module.imports[i]#2 == name { return i } }
