@@ -17,9 +17,11 @@ kill(child: i32, signal: i32): i32 from "c"
 usleep(microseconds: i32): i32 from "c"
 _exit(status: i32) from "c"
 setrlimit(resource: i32, limit: pointer): i32 from "c"
+getloadavg(loads: pointer, count: i32): i32 from "c"
 
 # a case's budget is CPU time, which a loaded machine doesn't shrink; the wall clock only ends a case that waits
-# forever (scripts/samples.sh keeps the same rule)
+# forever, WALL_SECONDS stretched by the runnable processes per core (load 40 on 10 cores gave a case a quarter of one,
+# so its 30 s of CPU outlasted 120 s; scripts/samples.sh keeps the same rule)
 CPU_SECONDS = 30
 WALL_SECONDS = 120
 RLIMIT_CPU = 0
@@ -88,6 +90,8 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 	done = 0
 	status = allocate(4)
 	reported = milliseconds_now()
+	cores = machine_cores()
+	loads = allocate(8)
 	while done < total {
 		for k in 0..slots {
 			child = child_at(children + k * CHILD_BYTES)
@@ -114,10 +118,10 @@ all_ran(work: text, runs: text, prefix: text): nothing := {
 				run_ended(work, field(runs, child.run, NEWLINE), status_said(exit_code(word_at(status).value as i32)), child)
 				done = done + 1
 			}
-			if child.pid > 0 and milliseconds_now() - child.started > WALL_SECONDS * 1000 {
+			if child.pid > 0 and milliseconds_now() - child.started > WALL_SECONDS * 1000 and milliseconds_now() - child.started > wall_seconds(cores, loads) * 1000 {
 				kill(child.pid, KILLED)
 				waitpid(child.pid, status, 0)
-				run_ended(work, field(runs, child.run, NEWLINE), time_status("still running after ", WALL_SECONDS, " s"), child)
+				run_ended(work, field(runs, child.run, NEWLINE), time_status("still running after ", wall_seconds(cores, loads), " s"), child)
 				done = done + 1
 			}
 		}
@@ -190,9 +194,16 @@ started_run(work: text, run: text, prefix: text, children: pointer, slots: i32):
 # compiler builds (scripts/rebuild.sh's build slots; 2026-10-31: load 33 on 10 cores, tests beside 3 builds; user 2026-11-01: four
 # warps at once, 3 builds and 1 test run)
 WHILE_BUILDING = 1
+machine_cores(): i32 := number_of(trimmed_end(command_output("getconf _NPROCESSORS_ONLN")))
+# the wall clock a case may take: WALL_SECONDS, stretched by the machine's runnable processes per core (loads: room
+# for getloadavg's one double)
+wall_seconds(cores: i32, loads: pointer): i64 := {
+	share = if getloadavg(loads, 1) == 1 and cores > 0 then float_at(loads).value / (cores as f64) else 1.0
+	(WALL_SECONDS as f64 * (if share > 1.0 then share else 1.0)) as i64
+}
 slot_count(): i32 := {
 	given = getenv("WARP_TEST_SLOTS")
-	cores = number_of(trimmed_end(command_output("getconf _NPROCESSORS_ONLN")))
+	cores = machine_cores()
 	count = if given.length > 0 then number_of(given) else if compiler_building() and cores > WHILE_BUILDING then WHILE_BUILDING else cores
 	if count < 1 then 1 else if count > MAX_SLOTS then MAX_SLOTS else count
 }

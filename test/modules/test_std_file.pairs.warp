@@ -11,5 +11,5 @@
 'use file; xs = [1]; xs.append(2); xs'	[1 2]
 
 # decision file-words-implicit: write works with and without `use file` (std_file_written.txt holds what it writes)
-'use file; write("test/modules/std_file_written.txt", "hi"); read("test/modules/std_file_written.txt")'	"hi"
-'write("test/modules/std_file_written.txt", "hi"); read("test/modules/std_file_written.txt")'	"hi"
+'use file; write("std_file_written.txt", "hi"); read("std_file_written.txt")'	"hi"
+'write("std_file_written.txt", "hi"); read("std_file_written.txt")'	"hi"

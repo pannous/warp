@@ -1,0 +1,22 @@
+for 6 (x 1 1/2):
+ingredient  amount  unit
+----------  ------  ----
+flour        3 3/8  cups
+sugar        1 1/8  cup
+butter         3/4  cup
+eggs             3
+vanilla      2 1/4  tsp
+salt          3/16  tsp
+
+for 1 (x 1/4):
+ingredient  amount  unit
+----------  ------  ----
+flour         9/16  cups
+sugar         3/16  cup
+butter         1/8  cup
+eggs           1/2
+vanilla        3/8  tsp
+salt          1/32  tsp
+
+dry and fat cups for 4: 3 1/2
+as a decimal: 3.5
