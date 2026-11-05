@@ -1,0 +1,11 @@
+// card lib-json-time-conformance: JSONTestSuite numbers and keys, RFC 3339 date-times through parse_date
+# json_bad_numbers_refused
+'use json; attempt(t: text): text := try { to_json(parse_json(t)) } catch e { "refused" }; ["[-]", "[++1]", "[1+2]", "[012]", "[-01]", "{[: 1}"].map(attempt)'	["refused", "refused", "refused", "refused", "refused", "refused"]
+# json_json5_numbers_kept
+'use json; to_json(parse_json("[+1, .5, 1., -0.5e-3, 0, 1E+2]"))'	"[1,0.5,1,-0.0005,0,100]"
+# time_rfc3339_offsets_and_fractions
+'use time; [parse_date("2026-11-04T14:05:09Z"), parse_date("2026-11-04t14:05:09.5+01:00"), parse_date("2026-11-04 14:05:09.123456-00:30"), parse_date("1970-01-01T00:00:00-00:00")]'	[1793801109000, 1793797509500, 1793802909123, 0]
+# time_rfc3339_refused
+'use time; attempt(t: text): text := try { "" + parse_date(t) } catch e { "refused" }; ["2026-11-04T24:00:00Z", "2026-11-04T23:59:60Z", "2026-11-04T14:05:09", "2026-W45-3", "2026-309", "26-11-04", "1900-02-29"].map(attempt)'	["refused", "refused", "refused", "refused", "refused", "refused", "refused"]
+# time_year_four_digits
+'use time; Instant(parse_date("0001-01-01T00:00:00Z")).text()'	"0001-01-01T00:00:00Z"
