@@ -133,3 +133,8 @@ route_answer(request: any): any := {
 	}
 	throw "no route answers " + request.method + " " + request.path
 }
+
+// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
+serve_routes(port: int, routes: node): node from host
+response_header(name: node, value: node) from host
+page_path(): node from host

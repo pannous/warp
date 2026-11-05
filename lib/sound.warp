@@ -1399,3 +1399,6 @@ band_level(weighted, frequency) := {
 	power = max(recent * recent + before * before - coefficient * recent * before, 0.0 as float)
 	4 * sqrt(power) / count(weighted) / loudest_sample
 }
+
+// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
+sound_samples(samples: node, rate: int, channels: int, wait: int) from host

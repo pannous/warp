@@ -60,3 +60,7 @@ value_polled(at: int, read: function, listener: function): any := {
 		listener(value, old)
 	}
 }
+
+// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
+notify(name: node) from host
+dispatch_event(name: node, detail: node) from host

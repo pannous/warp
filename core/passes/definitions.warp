@@ -83,8 +83,9 @@ names_result_type(word: text): bool := is_type_word_or_any(word) or word in coll
 # `is_null(x: any): bool from runtime` (decision bodiless-imports): an intrinsic the emitter supplies, declared only;
 # the line goes.
 # So do `floor(x: number): int from warp` and `count(xs: list): int from emitter` (decision foreign-signature): words
-# the compiler supplies itself, whose signatures it reads from the prelude (builtin_signatures.warp)
-compiler_libraries = ["runtime", "warp", "emitter"]
+# the compiler supplies itself, whose signatures it reads from the prelude (builtin_signatures.warp), and
+# `draw_show(width: int, height: int) from host`, a library's host word (builtin_signatures.warp host_words)
+compiler_libraries = ["runtime", "warp", "emitter", "host"]
 is_runtime_declaration(n: Node): bool := {
 	words = if is_key(n, Op.Colon) and is_group(value_of(n)) then value_of(n) else n
 	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 is symbol and name_of(words#3) in compiler_libraries
