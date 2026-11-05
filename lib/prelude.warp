@@ -260,8 +260,6 @@ rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first)
 // `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
 rewrite $n floats => float[$n]
 rewrite $n ints => int[$n]
-// (this rule needs gpu_compute, so the prelude's rules, the one above too, come with any program calling it)
-rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
 rewrite ($xs: [f32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(f32, $v)
 rewrite ($xs: [i32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(i32, $v)
 rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, $v)
@@ -1015,3 +1013,10 @@ kept_listeners(key: text, keep: function): any := {
 // Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
 range(stop: int): list := 0 ..< stop
 range(start: int, stop: int): list := start ..< stop
+// the GPU host words, which the host answers (natively core/native/driver.warp, the playground its JS); the shaders
+// they run are written at compile time by extensions/rules/wgsl.warp
+gpu_compute(shader: node, values: node, count: int): node from host
+gpu_render(shader: node, width: int, height: int, values: node): node from host
+gpu_compute_linear(shader: node, address: int, count: int): int from host
+gpu_map_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
+gpu_reduce_linear(shader: node, address: int, values: node, count: int, width: int, result: int): int from host
