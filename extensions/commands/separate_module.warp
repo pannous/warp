@@ -84,7 +84,7 @@ def reached_hooks(code: list): list {
 	own_hooks().filter(f => reached.has(f.index - #module.imports))
 }
 def hook_elements(hooks: list, first: int): list {
-	vector(range_list(#hooks).map(i => [0, op.i32_const] + sleb(module.runtime_image.hooks.index_of(hooks[i].name) - 1) + [op.end] + vector([uleb(first + i)])))
+	range_list(#hooks).map(i => [0, op.i32_const] + sleb(module.runtime_image.hooks.index_of(hooks[i].name) - 1) + [op.end] + vector([uleb(first + i)]))
 }
 # the program importing only the host words, runtime functions and types its code uses: its code emitted relocatable
 # (relocates), each index moved to the linked numbering: the called imports, its own functions, its hooks; the fixed GC
@@ -124,9 +124,8 @@ def linked_bytes(functions: list, entry: text = "main"): list {
 	declared = section(section_ids.function, vector(range_list(#functions).map(k => uleb(first_own_type + k)) + hook_types.map(type => uleb(retyped[type]))))
 	own_globals = module.global_order[#module.runtime_image.globals ..]
 	globals = section(section_ids.globals, vector(own_globals.map(global_entry)))
-	elements = section(section_ids.element, hook_elements(hooks, first_hook))
-	# (a standard module's closures keep their own numbers, from 0: its lifted lambdas are exported by name)
-	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data), shifted(0)]
+	elements = section(section_ids.element, vector(hook_elements(hooks, first_hook) + closure_entries_declared(functions.map(f => [f.name, numbering[f.index]]))))
+	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data)]
 	codes = section(section_ids.code, vector(code.map(f => moved_body(f, moves))))
 	texts = section(section_ids.data, vector(text_segments()))
 	imports = section(section_ids.import, linked_imports(first_own_type + #functions, called, types_move))
