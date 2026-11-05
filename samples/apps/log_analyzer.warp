@@ -1,0 +1,53 @@
+#!/usr/bin/env warp
+# An access-log analyzer: regex pulls the fields, list statistics sum them up, tables print the report (regex, list, tables)
+use regex
+use list
+use tables
+
+log = "192.168.1.10 - - [05/Nov/2026:09:14:02 +0100] \"GET /index.html HTTP/1.1\" 200 5120 0.012
+192.168.1.11 - - [05/Nov/2026:09:14:05 +0100] \"GET /about.html HTTP/1.1\" 200 2048 0.008
+10.0.0.7 - - [05/Nov/2026:09:15:11 +0100] \"POST /api/login HTTP/1.1\" 401 312 0.120
+192.168.1.10 - - [05/Nov/2026:09:15:40 +0100] \"GET /missing.png HTTP/1.1\" 404 0 0.002
+10.0.0.7 - - [05/Nov/2026:09:16:02 +0100] \"POST /api/login HTTP/1.1\" 200 845 0.095
+192.168.1.12 - - [05/Nov/2026:09:17:30 +0100] \"GET /index.html HTTP/1.1\" 200 5120 0.010
+10.0.0.9 - - [05/Nov/2026:09:18:44 +0100] \"GET /api/report HTTP/1.1\" 500 128 1.502
+192.168.1.11 - - [05/Nov/2026:09:19:01 +0100] \"GET /index.html HTTP/1.1\" 304 0 0.004
+this line is garbage and gets skipped"
+
+# one request per line: ip, method, path, status, bytes, seconds; ø for a line that is no request
+parse_line(line: text): any := {
+	if not matches(line, "^[0-9.]+ .*\" [0-9]{3} [0-9]+ [0-9.]+$") { return ø }
+	request = first_match(line, "\"[A-Z]+ [^ ]+")
+	tail = find_all(line, "[0-9.]+$")
+	numbers = find_all(line, "\" [0-9]{3} [0-9]+")
+	fields = numbers[0].split(" ")
+	{
+		ip: first_match(line, "^[0-9.]+"),
+		method: request[1..].split(" ")[0],
+		path: request.split(" ")[1],
+		status: int(fields[1]),
+		bytes: int(fields[2]),
+		seconds: float(tail[0])
+	}
+}
+
+requests = [r for r in [parse_line(l) for l in log.split("\n")] if r != ø]
+print("parsed " + str(count(requests)) + " of " + str(count(log.split("\n"))) + " lines")
+
+# hits, bytes and errors per path
+rows = []
+for path in unique([r.path for r in requests]) {
+	hits = [r for r in requests if r.path == path]
+	errors = count_by(hits, r => r.status >= 400)
+	rows = rows + [[path, count(hits), sum([r.bytes for r in hits]), errors]]
+}
+rows = sort_by(rows, row => -row[1])
+print(table_text(rows, {headers: ["path", "hits", "bytes", "errors"]}))
+
+# status classes and latency
+print("status codes: " + str(tally([r.status for r in requests])))
+times = [r.seconds for r in requests]
+print("latency mean " + str(round_to(mean(times), 3)) + " s, median " + str(round_to(median(times), 3)) + " s, p90 " + str(round_to(percentile(times, 90), 3)) + " s")
+slowest = sort_by(requests, r => -r.seconds)[0]
+print("slowest: " + slowest.method + " " + slowest.path + " (" + str(slowest.seconds) + " s, status " + str(slowest.status) + ")")
+print("busiest client: " + sort_by(frequencies([r.ip for r in requests]), f => -f[1])[0][0])

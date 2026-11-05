@@ -1,0 +1,54 @@
+=== index.html
+<!doctype html>
+<html><head><title>Hello warp · warp notes</title></head>
+<body>
+<nav><a href="index.html">Hello warp</a> <a href="release-0-2.html">Release 0.2</a> <a href="about.html">About</a> </nav>
+<article>
+<h1>Hello warp</h1>
+<p class="meta">2026-11-05 by Ada #intro #news</p>
+<h1>Welcome</h1>
+<p>This site is <em>generated</em> by a warp program.</p>
+<ul>
+<li>fast</li>
+<li>small</li>
+</ul>
+
+</article>
+</body></html>
+=== release-0-2.html
+<!doctype html>
+<html><head><title>Release 0.2 · warp notes</title></head>
+<body>
+<nav><a href="index.html">Hello warp</a> <a href="release-0-2.html">Release 0.2</a> <a href="about.html">About</a> </nav>
+<article>
+<h1>Release 0.2</h1>
+<p class="meta">2026-11-03 by Ada #news</p>
+<h2>What changed</h2>
+<ol>
+<li>JSON numbers stay whole</li>
+<li>A <a href="https://example.com/log">changelog</a> link</li>
+</ol>
+
+</article>
+</body></html>
+=== about.html
+<!doctype html>
+<html><head><title>About · warp notes</title></head>
+<body>
+<nav><a href="index.html">Hello warp</a> <a href="release-0-2.html">Release 0.2</a> <a href="about.html">About</a> </nav>
+<article>
+<h1>About</h1>
+<p class="meta">2026-11-01 by Bob</p>
+<p>We write <strong>wasm</strong>.</p>
+<pre><code>warp run site.warp
+</code></pre>
+
+</article>
+</body></html>
+=== tags.html
+<h1>Tags</h1>
+<ul>
+<li>intro: <a href="index.html">Hello warp</a> </li>
+<li>news: <a href="index.html">Hello warp</a> <a href="release-0-2.html">Release 0.2</a> </li>
+</ul>
+wrote 4 pages

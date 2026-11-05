@@ -1,0 +1,21 @@
+8 expenses
+
+EUR:
+category  items     amount
+--------  -----  ---------
+travel        2     €73.00
+food          2  €1,246.85
+office        2      €0.30
+total         6  €1,320.15
+in German: 1.320,15 €
+net €1,109.37 + VAT €210.78
+split three ways: €440.05, €440.05, €440.05 (sum €1,320.15)
+
+USD:
+category  items  amount
+--------  -----  ------
+software      2  $31.99
+total         2  $31.99
+in German: 31,99 $
+
+0.10 + 0.20 = €0.30

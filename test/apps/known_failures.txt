@@ -1,0 +1,3 @@
+site_generator linked-collections-unicode: the bundled markdown and template modules misbehave (compiled from source it passes)
+dependency_resolver linked-collections-unicode: the bundled graphs module misbehaves (compiled from source it passes)
+config_validator linked-collections-unicode: the bundled json_tools module misbehaves beside toml (compiled from source it passes)
