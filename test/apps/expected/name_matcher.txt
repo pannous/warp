@@ -1,0 +1,16 @@
+as typed       code points  after NFC  match key
+-------------  -----------  ---------  -------------
+Zoë Müller     10           10         zoë müller
+Zoë Müller     12           10         zoë müller
+ZOË MÜLLER     10           10         zoë müller
+Sofia Strauß   12           12         sofia strauss
+sofia STRAUSS  13           13         sofia strauss
+ﬁona Ｌｅｅ    8            8          fiona lee
+Fiona Lee      9            9          fiona lee
+Fiona Leigh    11           11         fiona leigh
+
+4 people among 8 entries
+same person: Zoë Müller | Zoë Müller | ZOË MÜLLER
+same person: Sofia Strauß | sofia STRAUSS
+same person: ﬁona Ｌｅｅ | Fiona Lee
+already NFC? no, after nfc: yes

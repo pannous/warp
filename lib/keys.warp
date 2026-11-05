@@ -60,3 +60,7 @@ keys_went_down() := {
 		emitted(KEY_EVENT, pressed_key)
 	}
 }
+
+// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
+key_held(key: int): int from host
+clipboard_text(): node from host

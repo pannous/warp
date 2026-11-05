@@ -1,0 +1,10 @@
+<ul>
+  <li><b>ana</b>: Great post! &lt;3</li>
+  <li><b>mallory</b>: &lt;script&gt;alert(&#39;hi&#39;)&lt;/script&gt;</li>
+  <li><b>ben</b>: Tom &amp; Jerry © 1940 — classic</li>
+  <li><b>cleo</b>: 5 &gt; 3 &amp; 2 &lt; 4</li>
+</ul>
+
+no live script tag: yes
+decoded again: <script>alert('hi')</script>
+numeric references: Hi! 😀

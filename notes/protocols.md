@@ -26,6 +26,12 @@ Spec: wiki/trait.md ("Protocol and default class"). One general mechanism, exten
 - ListMap vs the hashed map, 2M reads (net of start-up; collections adds ~0.17 s start-up): 8 keys 0.53 vs 0.33 µs,
   200 keys 1.97 vs 0.36 µs (a linear scan). An opt-in, never the bare `{…}`.
 
-## Next landings
-- C, matrix: `matrix` a protocol (rows, columns, the element at i j required), lib/matrix.warp's list of lists the
-  default class: one more entry of built_in_protocols(), `matrix default DenseMatrix` and `Matrix{…}` the same way.
+## matrix, a built-in protocol (landing C, decision matrix-protocol, words matrix-protocol-words)
+- Required rows(), cols() (`columns` its alias), element(i, j); lib/matrix.warp's words are the defaults, the list of
+  equally long rows the default implementation.
+- A prebuilt module's calls never reach a program's classes, so the program converts at the module's boundary: with
+  `use matrix` the pass adds `matrix·is(x)` (a list of equally long lists) and `matrix·listed(x)` (a conforming
+  instance read element by element into its rows), and every argument of the module's words (not the required ones)
+  goes through matrix·listed: a list passes as it is.
+- `Matrix x = rows` keeps the list; `matrix default Dense` makes it Dense(rows).
+

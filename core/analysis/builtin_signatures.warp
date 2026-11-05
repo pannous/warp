@@ -46,6 +46,36 @@ typed_line(line: text, library: text): Builtin? := {
 	Builtin(name: head#1, signature: Signature(parameters: parameters, result: result))
 }
 
+# the host words: the core's (host_words.warp) and each bundled library's lines `draw_shape(kind: int, x: float): nothing
+# from host` (lib/draw.warp)
+host_library = "host"
+host_kinds = {int: ValueKind.Int, float: ValueKind.Float, i32: ValueKind.I32, ctext: ValueKind.CText, node: ValueKind.Node}
+host_words = with_library_host_words(core_host_words)
+with_library_host_words(words: map): map := {
+	all = {}
+	for name in words.keys { all[name] = words[name] }
+	for path in LIBRARY_FILES.keys {
+		content = LIBRARY_FILES[path]
+		if content.contains(" from " + host_library) {
+			for line in content.split("\n") {
+				word = typed_line(line, host_library)
+				if word != ø { all[word.name] = host_word(word, path) }
+			}
+		}
+	}
+	all
+}
+# a host line's [parameter kinds, result kinds]; a type no host word crosses as is the library's error
+host_word(word: Builtin, path: text): list := {
+	results = if word.signature.result in ["", "nothing"] then [] else [word.signature.result]
+	[word.signature.parameters.map(p => host_kind(p.type_name, word.name, path)), results.map(t => host_kind(t, word.name, path))]
+}
+host_kind(type_name: text, name: text, path: text): ValueKind := {
+	kind = host_kinds.get(type_name)
+	if kind == ø { raise "the host word " + name + " of lib/" + path + " has the type " + type_name + ", no host word's: " + host_kinds.keys.join(", ") }
+	kind
+}
+
 library_lines(library: text): list := prelude_text.split("\n").map(line => typed_line(line, library)).filter(line => line != ø)
 
 runtime_lines = library_lines(runtime_library)

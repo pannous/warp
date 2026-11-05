@@ -1,0 +1,22 @@
+#!/usr/bin/env warp
+# User comments rendered safely into an HTML page: markup in the text is escaped, entities typed by users decode
+# once, and the page round-trips (html)
+use html
+
+comments = [
+	["ana", "Great post! <3"],
+	["mallory", "<script>alert('hi')</script>"],
+	["ben", "Tom &amp; Jerry &copy; 1940 &mdash; classic"],
+	["cleo", "5 > 3 & 2 < 4"]
+]
+page = "<ul>"
+for c in comments {
+	shown = html_escape(html_unescape(c#2))
+	page = page + "\n  <li><b>" + html_escape(c#1) + "</b>: " + shown + "</li>"
+}
+page = page + "\n</ul>"
+print(page)
+print("")
+print("no live script tag: " + str(not page.contains("<script>")))
+print("decoded again: " + html_unescape(html_escape(comments#2#2)))
+print("numeric references: " + html_unescape("&#72;&#x69;&#33; &#128512;"))
