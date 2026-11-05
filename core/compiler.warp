@@ -93,7 +93,8 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	link_libraries(images, if linking and module.relocating then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}
 	timed("checked_program")
-	program = checked_program(foreign#1, folder, prelude_source)
+	# (the prelude being written is the program's use of it, never reached a second time)
+	program = checked_program(foreign#1, folder, if module_written == "prelude" then "" else prelude_source)
 	timed("checked_program done")
 	c_functions = with_used_c_functions(foreign#2)
 	found = checked_facts(known)
@@ -217,8 +218,8 @@ write_runtime(file: text) := {
 # imported from `warp_runtime`, the words of the modules it uses from theirs (`warp/<module>`), its own words exported
 # by name, its global initializers the export `warp/start`. Its warp.signature (passes/signature.warp) carries what a
 # compile needs of it: its definitions' parses and its image, the words, globals and classes it exports.
-# Every program has the prelude, used again it would define its words twice
-module_source(name: text): text := if name == "prelude" then "ø" else "use " + name + "\nø"
+# The prelude's too, every word of it (its compile reaches no prelude of its own, compile)
+module_source(name: text): text := "use " + name + "\nø"
 # where the modules a compile links are: beside runtime.wasm, or where the module written goes
 linked_modules_folder(): text := if module_written != "" then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 # the module a compile writes, and the folder of the modules it links: its own never linked
