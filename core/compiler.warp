@@ -88,7 +88,9 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	relocate_program(separately)
 	shake_runtime(library_runtime == ø and not separately)
 	cut_runtime_words(if own then left_out_runtime_words(COMPILER_BUILD_EXTENSIONS) else [])
-	link_libraries(images, if linking then definition_slices(source).map(slice => slice#1) else [])
+	# (a program's own definition of a module's name is renamed its own, prelude_words.warp with_own_words, the module's
+	# word linked beside it: `clamp(x) := 9` beside math's clamp(x, low, high); a module being built has its own instead)
+	link_libraries(images, if linking and module.relocating then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}
 	timed("checked_program")
 	program = checked_program(foreign#1, folder, prelude_source)
