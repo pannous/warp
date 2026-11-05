@@ -383,13 +383,14 @@ def class_construct_code(f: Function, class_name: text): list {
 	scope = new_body(f)
 	# (a made word's signature names no parameters: its locals in their order first)
 	for name in ["class", "values"] { local_index(scope, name, ValueKind.Node) }
-	fields = module.classes[class_name].keys
-	values = range_list(#fields).map(i => "value" + (i + 1))
+	# a closure call passes at most hook_arities values, so no other count is ever constructed
+	given = min(#module.classes[class_name].keys, hook_arities)
+	values = range_list(given).map(i => "value" + (i + 1))
 	for name in values { local_index(scope, name, ValueKind.Node) }
 	count = payload([op.local_get, 1], gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0])
 	code = []
-	for i in 0..<#fields { code += count + [op.i32_const] + sleb(i) + [op.i32_gt_s, op.if, no_value] + closure_item([op.local_get, 1], i).code + [op.local_set] + uleb(local_index(scope, values[i], ValueKind.Node)) + [op.end] }
-	for k in 0 to #fields { code += count + [op.i32_const] + sleb(k) + [op.i32_eq, op.if, no_value] + boxed(positional_instance(scope, class_name, values[0 ..< k].map(name => symbol(name)))) + [op.return, op.end] }
+	for i in 0..<given { code += count + [op.i32_const] + sleb(i) + [op.i32_gt_s, op.if, no_value] + closure_item([op.local_get, 1], i).code + [op.local_set] + uleb(local_index(scope, values[i], ValueKind.Node)) + [op.end] }
+	for k in 0 to given { code += count + [op.i32_const] + sleb(k) + [op.i32_eq, op.if, no_value] + boxed(positional_instance(scope, class_name, values[0 ..< k].map(name => symbol(name)))) + [op.return, op.end] }
 	f.locals = scope.kinds[#f.kinds ..]
 	code + [ref_null, gc_type(gc.node)]
 }
