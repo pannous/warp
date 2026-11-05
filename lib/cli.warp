@@ -1,0 +1,167 @@
+// The module cli (card lib-cli-args), `use cli`: command line options parsed from a spec, a list of maps, one an option
+//   {name: "count", short: "n", kind: "int", default: 1, help: "how many"}
+// name        the long option --name, and the key of the result
+// short       a one-letter -n (several combine: -vq, the last may take the value: -vn5, -vn 5)
+// kind        "flag" (no value: --name sets yes, --no-name no, default no), "text" (the default), "int" or "float"
+// default     the value when the option is not given
+// required    yes: missing it is an error
+// many        yes: each use adds to a list (default []); for a positional, it takes all the rest
+// positional  yes: no dashes, filled in spec order; required unless many or a default is given
+// help        one line for the help text
+// parse_args(spec, argv) gives a map of every option's value, "help" yes when -h or --help was given (then nothing
+// is checked: show cli_help(program, spec)); a mistake raises "cli: …". `--` ends the options: the rest are positionals.
+// Like python's argparse, except: no prefix abbreviations (--verb for --verbose is unknown), kinds are named, not
+// functions, a value starting with - needs the = form (--name=-x; a negative number needs none), and positionals
+// may come between options (argparse's parse_intermixed_args)
+
+cli_kind(o: map): text := if "kind" in o then o["kind"] else "text"
+cli_is_flag(o: map): bool := cli_kind(o) == "flag"
+cli_is(o: map, key: text): bool := key in o and o[key] == yes
+cli_shown(o: map): text := if cli_is(o, "positional") then o["name"] else "--" + o["name"]
+
+// the option a long name names, ø when none
+// whether an argument is an option, not a value: -x and --x are, - and a negative number (-5, -2.5) are not (argparse)
+cli_dashed(a: text): bool := a.starts_with("-") and a != "-" and not is_digits(replace(a[1..], ".", ""))
+def cli_long(spec: list, name: text): any {
+	for o in spec { if not cli_is(o, "positional") and o["name"] == name { return o } }
+	ø
+}
+def cli_short(spec: list, letter: text): any {
+	for o in spec { if "short" in o and o["short"] == letter { return o } }
+	ø
+}
+// a value text as the option's kind wants it
+def cli_value(o: map, t: text): any {
+	kind = cli_kind(o)
+	if kind == "int" {
+		if not is_digits(if t.starts_with("-") then t[1..] else t) or t == "" or t == "-" { raise "cli: " + cli_shown(o) + " wants an int, not " + t }
+		return int(t)
+	}
+	if kind == "float" { return try { float(t) } catch e { raise "cli: " + cli_shown(o) + " wants a number, not " + t } }
+	t
+}
+def cli_set(result: map, o: map, value: any) {
+	if cli_is(o, "many") { result[o["name"]] = result[o["name"]] + [value] } else { result[o["name"]] = value }
+}
+def cli_start(spec: list): map {
+	result = {help: no}
+	for o in spec {
+		result[o["name"]] = if "default" in o then o["default"] else if cli_is(o, "many") then [] else if cli_is_flag(o) then no else ø
+	}
+	result
+}
+
+def parse_args(spec: list, argv: list): map {
+	result = cli_start(spec)
+	positionals = []
+	given = []
+	i = 0
+	options_end = no
+	while i < count(argv) {
+		a = argv[i]
+		i += 1
+		if options_end or not cli_dashed(a) { positionals = positionals + [a] }
+		else if a == "--" { options_end = yes }
+		else if a == "--help" or a == "-h" { result["help"] = yes; return result }
+		else if a.starts_with("--") {
+			body = a[2..]
+			name = if "=" in body then body[0 ..< body.index_of("=") - 1] else body
+			o = cli_long(spec, name)
+			if o == ø and name.starts_with("no-") {
+				o = cli_long(spec, name[3..])
+				if o == ø or not cli_is_flag(o) { raise "cli: unknown option --" + name }
+				if "=" in body { raise "cli: --" + name + " takes no value" }
+				result[o["name"]] = no
+			} else {
+				if o == ø { raise "cli: unknown option --" + name }
+				if cli_is_flag(o) {
+					if "=" in body { raise "cli: --" + name + " takes no value" }
+					result[o["name"]] = yes
+				} else {
+					value = ø
+					if "=" in body { value = body[body.index_of("=")..] }
+					else {
+						if i >= count(argv) or cli_dashed(argv[i]) { raise "cli: --" + name + " needs a value" }
+						value = argv[i]
+						i += 1
+					}
+					cli_set(result, o, cli_value(o, value))
+				}
+			}
+			given = given + [o["name"]]
+		} else {
+			// -v, -vq, -n5, -vn 5
+			letters = a[1..]
+			k = 0
+			while k < count(letters) {
+				letter = letters[k]
+				o = cli_short(spec, letter)
+				if o == ø { raise "cli: unknown option -" + letter }
+				given = given + [o["name"]]
+				if cli_is_flag(o) { result[o["name"]] = yes; k += 1 }
+				else {
+					rest = letters[k + 1..]
+					if rest == "" {
+						if i >= count(argv) or cli_dashed(argv[i]) { raise "cli: -" + letter + " needs a value" }
+						rest = argv[i]
+						i += 1
+					}
+					cli_set(result, o, cli_value(o, rest))
+					k = count(letters)
+				}
+			}
+		}
+	}
+	// positionals in spec order; a many one takes what the later single ones leave
+	slots = [o for o in spec if cli_is(o, "positional")]
+	singles_after = 0
+	p = 0
+	for s in 0 ..< count(slots) {
+		o = slots[s]
+		later = count([x for x in slots[s + 1..] if not cli_is(x, "many")])
+		if cli_is(o, "many") {
+			take = max(0, count(positionals) - p - later)
+			result[o["name"]] = [cli_value(o, x) for x in positionals[p ..< p + take]]
+			p += take
+		} else if p < count(positionals) {
+			result[o["name"]] = cli_value(o, positionals[p])
+			given = given + [o["name"]]
+			p += 1
+		} else if not ("default" in o) {
+			raise "cli: missing " + o["name"]
+		}
+	}
+	if p < count(positionals) { raise "cli: unexpected " + positionals[p] }
+	for o in spec {
+		if cli_is(o, "required") and not (o["name"] in given) { raise "cli: missing required " + cli_shown(o) }
+	}
+	result
+}
+
+// an option's column, its help from column 25 as argparse aligns it (on the next line when the option is long)
+cli_pad(part: text): text := "  " + part + (if count(part) < 22 then " " * (22 - count(part)) else "\n" + " " * 24)
+// the help text: a usage line, then one line per option
+def cli_help(program: text, spec: list): text {
+	usage = "usage: " + program + " [-h]"
+	lines = ["", "options:", "  -h, --help            show this help"]
+	for o in spec {
+		metavar = upper(o["name"])
+		if cli_is(o, "positional") {
+			usage = usage + " " + (if cli_is(o, "many") then "[" + o["name"] + " ...]" else o["name"])
+		} else {
+			value = if cli_is_flag(o) then "" else " " + metavar
+			part = (if "short" in o then "-" + o["short"] + ", " else "") + "--" + o["name"] + value
+			if cli_is_flag(o) { part = part + ", --no-" + o["name"] }
+			text = if "help" in o then o["help"] else ""
+			if "default" in o and not cli_is_flag(o) { text = text + " (default " + str(o["default"]) + ")" }
+			if cli_is(o, "required") { text = text + " (required)" }
+			lines = lines + [cli_pad(part) + text]
+			usage = usage + " " + (if cli_is(o, "required") then "" else "[") + "--" + o["name"] + value + (if cli_is(o, "required") then "" else "]")
+		}
+	}
+	pos = [o for o in spec if cli_is(o, "positional")]
+	if count(pos) > 0 {
+		lines = ["", "positional arguments:"] + [cli_pad(o["name"]) + (if "help" in o then o["help"] else "") for o in pos] + lines
+	}
+	usage + "\n" + join(lines, "\n")
+}

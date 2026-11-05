@@ -17,5 +17,24 @@ $ todo list
 2 open, 1 done
 $ todo frobnicate
 usage: add <title> | done <id> | list | clear
+$ todo --color list
+cli: unknown option --color
+usage: todo [-h] [--file FILE] [words ...]
+
+positional arguments:
+  words                 add <title> | done <id> | list | clear
+
+options:
+  -h, --help            show this help
+  -f, --file FILE       the JSON file of the todos (else warp_todo_demo.json in $TMPDIR)
+$ todo --help
+usage: todo [-h] [--file FILE] [words ...]
+
+positional arguments:
+  words                 add <title> | done <id> | list | clear
+
+options:
+  -h, --help            show this help
+  -f, --file FILE       the JSON file of the todos (else warp_todo_demo.json in $TMPDIR)
 stored: [{"id":1,"title":"buy milk","done":false},{"id":2,"title":"write the report","done":true},{"id":3,"title":"call Ada","done":false}]
 demo file removed: yes
