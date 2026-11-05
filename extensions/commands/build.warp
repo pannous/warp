@@ -66,6 +66,8 @@ DEFAULT_TRIM = "optimize"
 build(words: list) := {
 	options = words.filter(word => word.starts_with(OPTION_MARK))
 	targets = words.filter(word => not word.starts_with(OPTION_MARK))
+	# (what it builds stands alone: the modules it uses compiled in, none linked at load time)
+	modules_linked = no
 	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
 	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
 	target = targets#1

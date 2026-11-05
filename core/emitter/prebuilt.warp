@@ -214,17 +214,15 @@ def rebased_runtime_code(): list {
 def prepended_code(functions: list): list {
 	if shaken() {
 		moves = shaken_moves()
-		bodies = shaken_runtime_code(moves) + library_bodies() + functions.map(f => moved_body(f, moves))
+		bodies = shaken_runtime_code(moves) + functions.map(f => moved_body(f, moves))
 		return uleb(#bodies) + concatenated(bodies)
 	}
 	runtime = rebased_runtime_code()
 	count = uleb_read(runtime, 0)
 	at = count#2
-	linked = library_bodies()
 	stubs = unreached_import_stubs()
-	content = uleb(count#1 + #linked + #functions + #stubs)
+	content = uleb(count#1 + #functions + #stubs)
 	content += runtime[at ..]
-	for body in linked { content += body }
 	for f in functions { content += own_body(f, #content) }
 	for body in stubs { content += body }
 	content
@@ -275,18 +273,18 @@ def prepended_bytes(functions: list): list {
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
-	types = section(section_ids.type, with_section_entries(runtime_part(section_ids.type), library_types() + class_types + function_types + c_import_types()))
-	c_entries = c_import_entries(module.runtime_image.types + linked_function_count() + #classes + #functions)
-	declared = section(section_ids.function, with_section_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f))) + stub_types()))
+	types = section(section_ids.type, with_section_entries(runtime_part(section_ids.type), class_types + function_types + c_import_types()))
+	c_entries = c_import_entries(module.runtime_image.types + #classes + #functions)
+	declared = section(section_ids.function, with_section_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), functions.map(f => uleb(own_function_type(f))) + stub_types()))
 	own_globals = module.global_order[#module.runtime_image.globals ..]
 	globals = section(section_ids.globals, with_section_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
 	codes = section(section_ids.code, prepended_code(functions))
 	# the exports and names by the shaken numbering, or behind the host words dropped
 	for f in functions { f.index -= dropped() }
-	texts = section(section_ids.data, with_section_entries(runtime_part(section_ids.data), library_segments() + text_segments()))
+	texts = section(section_ids.data, with_section_entries(runtime_part(section_ids.data), text_segments()))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	parts = [types, section(section_ids.import, host_imports(c_entries)), declared, memory,
-		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), element_section(references_declared(functions.map(f => [f.name, f.index]) + library_entries())), section(section_ids.data_count, uleb(module.runtime_image.data + linked_text_count() + #module.texts)), codes, texts]
+		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), element_section(references_declared(functions.map(f => [f.name, f.index]))), section(section_ids.data_count, uleb(module.runtime_image.data + #module.texts)), codes, texts]
 	made = wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks() + runtime_sections(functions)
 	# the separate module (separate_module) is numbered behind the whole runtime, every host word kept
 	for f in functions { f.index += imports_dropped() }
@@ -309,7 +307,7 @@ def program_marks(): list {
 def prepended_names(functions: list, classes: list, own_globals: list): list {
 	imported = range_list(#module.imports).filter(i => import_kept(i)).map(i => index_name(import_place(i), module.imports#(i + 1)#2)) + stub_names()
 	words = module.runtime_image.words.keys.filter(name => runtime_index(module.runtime_image.words[name]#1) != ø).map(name => index_name(runtime_index(module.runtime_image.words[name]#1), name))
-	content = subsection(names_subsections.functions, vector(imported + words + library_names() + functions.map(f => index_name(f.index, f.name))))
+	content = subsection(names_subsections.functions, vector(imported + words + functions.map(f => index_name(f.index, f.name))))
 	content += subsection(names_subsections.locals, shifted_locals(runtime_subsection(names_subsections.locals), functions.map(local_name_map)))
 	content += runtime_names(names_subsections.types, classes.map(name => index_name(module.gc_indices[name], name)))
 	content += runtime_names(names_subsections.globals, own_globals.map(name => index_name(module.globals[name]#1, name)))
@@ -345,7 +343,7 @@ def runtime_fingerprint(): int {
 ## module's, at its index, of its kinds: never compiled again
 # a module's warp.module read back: its own functions (index, kinds, result, signature), globals [name, kind], text
 # segments, what it was built behind, and where each kind of its items lands here (base: placed, type, text)
-class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; classes: list; builders: list; c_functions: list; base: list }
+class LibraryImage { name: text; functions: list; globals: list; classes: list; builders: list; base: list }
 def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
 	module.linked_own_names = own_names
@@ -355,7 +353,7 @@ def link_libraries(images: list, own_names: list) {
 }
 # a module's word a program may call: not one of the builders it exports for the host (its show(x) is the host's,
 # beside draw's own show()), which a program linking it exports its own of
-linkable(image: LibraryImage, word: Function): bool := word.index not in image.builders
+linkable(image: LibraryImage, word: Function): bool := word.name not in image.builders
 # the variant of a linked name that takes that many values (card module-export-arity), ø for none
 linked_variant(name: text, parameters: int): any := {
 	fitting = (module.linked_words.get(name) ?? []).filter(word => #word.kinds == parameters)
@@ -379,54 +377,44 @@ def linked_needs(): list {
 	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) + image.globals.map(entry => entry#1).filter(name => name.starts_with(program_global_prefix)).map(name => name[#program_global_prefix ..]) }
 	names
 }
-# why a module is not linkable behind this runtime, a text: no warp.module section, of other GC types or host
-# imports, built behind another runtime.wasm
-def library_image_of(name: text, wasm: list): any {
-	place = section_place(wasm, section_ids.custom, library_section)
-	if place == ø { return "no " + library_section + " section" }
-	layout = ByteReader(wasm, place#1)
-	types = read_number(layout)
-	imports = read_number(layout)
-	read_number(layout)
-	read_number(layout)
-	texts = read_number(layout)
-	read_names(layout)
-	globals = []
-	for i in 0..<read_number(layout) { globals += [read_global(layout)] }
-	functions = []
-	for i in 0..<read_number(layout) {
-		word = Function(read_name(layout), ø, ø)
-		word.index = read_number(layout)
-		kinds = []
-		for j in 0..<read_number(layout) { kinds += [read_kind(layout)] }
-		word.kinds = kinds
-		word.result = read_kind(layout)
-		word.signature = read_signature(layout)
-		functions += [word]
-	}
-	behind = []
-	for i in 0..<read_number(layout) { behind += [read_number(layout)] }
-	classes = []
-	for i in 0..<read_number(layout) { classes += [[read_name(layout), read_name(layout)]] }
-	builders = []
-	for i in 0..<read_number(layout) { builders += [read_number(layout)] }
-	# the C functions it imports behind the runtime's imports, which its runtime functions follow
-	c_functions = read_names(layout)
-	built_behind = [behind#1 - #c_functions] + behind[1 ..]
-	if types != #gc_names + #classes { return "other canonical or class types than this runtime's" }
-	if imports != module.runtime_image.imports + #c_functions { return "other host imports than this runtime's" }
-	if built_behind != runtime_behind() { return "built behind another runtime.wasm (warp rebuild writes it anew)" }
-	LibraryImage(name, wasm, functions, globals, texts, behind, classes, builders, c_functions, [])
+# a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
+# words (each name, parameter kinds, result kind), its globals [name, kind, mark], its own class structs [name,
+# definition written], the host's builders it exports (by name) and the runtime it was built behind
+def image_fields(functions: list): list {
+	images_classes = concatenated(module.linked_images.map(image => image.classes.map(entry => entry#1)))
+	own_classes = module.gc_order[#gc_names ..].filter(name => name not in images_classes)
+	own_globals = module.global_order[#module.runtime_image.globals + #linked_globals_imported() ..]
+	words = functions[1 ..].filter(f => not f.is_runtime and not f.name.starts_with(closure_entry_prefix))
+	[field_node("words", square_list(words.map(f => square_list([Text(f.name), square_list(f.kinds.map(kind => Number(held_code(kind)))), Number(held_code(f.result))])))),
+		field_node("globals", square_list(own_globals.map(name => square_list([Text(name), Number(held_code(module.globals[name]#2)), Number(module.global_marks.get(name) ?? 0)])))),
+		field_node("classes", square_list(own_classes.map(name => square_list([Text(name), Text(struct_written(name))])))),
+		field_node("builders", square_list(module.builders.map(f => Text(f.name)))),
+		field_node("runtime", square_list(runtime_behind().map(n => Number(n))))]
 }
-# each linked module's place: its functions behind those placed so far, its types (one per function) and texts too,
+# the image of a linked module read back from its signature; why it is not linkable behind this runtime, a text
+def library_image_of(name: text, signature: ModuleSignature): any {
+	if #signature.words == 0 { return "no words in its " + SIGNATURE_SECTION + " (built before L5e)" }
+	if signature.runtime.map(number_read) != runtime_behind() { return "built behind another runtime.wasm (warp rebuild writes it anew)" }
+	functions = signature.words.map(entry => image_word(entry))
+	globals = signature.globals.map(entry => [text_read(entry#1), held_kinds[number_read(entry#2)], number_read(entry#3)])
+	classes = signature.classes.map(entry => [text_read(entry#1), text_read(entry#2)])
+	LibraryImage(name, functions, globals, classes, signature.builders.map(text_read), [])
+}
+def image_word(entry: Node): Function {
+	word = Function(text_read(entry#1), ø, ø)
+	word.kinds = items_of(entry#2).map(code => held_kinds[number_read(code)])
+	word.result = held_kinds[number_read(entry#3)]
+	word
+}
+def text_read(n: Node): text := "${n}"
+def number_read(n: Node): int := int("${n}")
+# each linked module's place: its functions numbered behind those placed so far (the program imports those it calls),
 # its globals declared by name (one the runtime or a module before it declares is theirs)
 def behind_libraries() {
 	for image in module.linked_images {
-		image.base = [module.placed, #gc_names + module.runtime_types, module.first_text_segment]
+		image.base = [module.placed]
 		for entry in image.globals { declared_linked_global(entry) }
 		module.placed += #image.functions
-		module.runtime_types += #image.functions
-		module.first_text_segment += image.texts
 	}
 }
 # the module words the program reaches: the first module's of a name, unless the program defines the name itself;
@@ -434,7 +422,6 @@ def behind_libraries() {
 # text), else the program compiles the module from its source
 def bind_library_words() {
 	for image in module.linked_images {
-		for name in image.c_functions { program_import(name) }
 		for entry in image.classes {
 			# (a class the program never reached: its struct declared as the module wrote it)
 			if entry#1 not in module.class_structs { module.class_structs[entry#1] = [struct_read(entry#2), instance_fields] }
@@ -457,16 +444,6 @@ def linked_index(image: LibraryImage, k: int): int := #module.imports + image.ba
 # the host's builders, exported once main is placed (the first function, which a program's exports name), for a
 # linked module that calls them
 def linked_builders() { if module.linked_images.any(image => #image.builders > 0) { exported_builders() } }
-def linked_function_count(): int {
-	count = 0
-	for image in module.linked_images { count += #image.functions }
-	count
-}
-def linked_text_count(): int {
-	count = 0
-	for image in module.linked_images { count += image.texts }
-	count
-}
 # a section's entries after the first `skip` (those of the runtime it was built behind), each its bytes: a code
 # section's, each its size first, or a data section's passive segments, a flag byte before the size
 def entries_after(content: list, skip: int, flagged: bool): list {
@@ -481,51 +458,9 @@ def entries_after(content: list, skip: int, flagged: bool): list {
 	}
 	entries
 }
-# a linked module's own function bodies, each operand moved to where its item lands: its own items by its bases, the
-# runtime's functions by the program's C imports
-def library_code(image: LibraryImage): list {
-	place = section_place(image.wasm, section_ids.code)
-	content = image.wasm[place#1 ..< place#2]
-	# a runtime function behind the program's C imports, not the module's; a C function the program's import of it
-	imported = {}
-	for j in 0..<#image.c_functions { imported[module.runtime_image.imports + j] = program_import(image.c_functions[j]) }
-	runtime_calls = if shaken() then kept_calls(module.runtime_image.imports + #image.c_functions, imported) else import_move(runtime_shift() - #image.c_functions, imported)
-	relocations = relocations_of(image.wasm).filter(entry => entry#3 == own_space or (entry#3 == runtime_space and entry#2 == relocated.calls and (drops_imports() or uleb_read(content, entry#1)#1 >= module.runtime_image.imports)))
-	globals = {}
-	for j in 0..<#image.globals { globals[image.behind#3 + j] = module.globals[image.globals[j]#1]#1 }
-	# its class structs first among its types, the program's of their names, then a type per function
-	types = {}
-	for c in 0..<#image.classes { types[image.behind#2 + c] = module.gc_indices[image.classes[c]#1] }
-	own = [shifted(#module.imports + image.base#1 - image.behind#1 - dropped()), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4)]
-	entries_after(rebased(content, relocations, [[runtime_calls], own]), module.runtime_image.functions, no)
-}
-# the program's C functions with those the linked modules call (list's sqrt, which a program using text never names),
-# each by its foreign line in lib/
-def with_linked_c_functions(functions: map, library_folder: text): map {
-	missing = concatenated(module.linked_images.map(image => image.c_functions)).filter(name => not functions.has(name))
-	if #missing == 0 { return functions }
-	catalog = c_catalog(library_folder, [])
-	for name in missing {
-		found = catalog.filter(d => d#1 == name)
-		if #found > 0 { functions[name] = found#1 }
-	}
-	functions
-}
 # a class struct's definition from its written form (module_layout.warp struct_written): numbers, and the types it
 # names by their names
 def struct_read(written: text): list := written.split(" ").map(part => if is_digits(part) then int(part) else part)
-# the index of the program's import of this C function, which a linked module calls
-def program_import(name: text): int {
-	for i in 0..<#module.imports { if module.imports[i]#2 == name { return i } }
-	refuse("the program imports no C function " + name + " a linked module calls")
-	-1
-}
-def library_types(): list := concatenated(module.linked_images.map(image => image.functions.map(function_type)))
-def library_declared(): list := concatenated(module.linked_images.map(image => range_list(#image.functions).map(k => uleb(image.base#2 + k))))
-def library_bodies(): list := concatenated(module.linked_images.map(library_code))
-def library_segments(): list := concatenated(module.linked_images.map(image => entries_after(image.wasm[section_place(image.wasm, section_ids.data)#1 ..< section_place(image.wasm, section_ids.data)#2], module.runtime_image.data, yes)))
-def library_entries(): list := concatenated(module.linked_images.map(image => range_list(#image.functions).map(k => [image.functions[k].name, linked_index(image, k)])))
-def library_names(): list := concatenated(module.linked_images.map(image => range_list(#image.functions).map(k => index_name(linked_index(image, k), image.functions[k].name))))
 
 # each of runtime.wasm's imports (host words, every one a function): its entry's bytes up to its type, and its type
 def runtime_import_entries(): list {
@@ -682,7 +617,7 @@ def can_raise(functions: list): bool {
 	raising = raising_globals.map(name => module.globals.get(name)).filter(entry => entry != ø).map(entry => entry#1)
 	own = exports_reach(functions)
 	if sets_global(own, raising) { return yes }
-	reached = runtime_reach(runtime_positions_called(own) + library_positions_called())
+	reached = runtime_reach(runtime_positions_called(own))
 	runtime_raisers().any(p => reached.has(p))
 }
 # the functions the module's exports reach (main, _start, the builders, the program's own words), through the calls
@@ -759,24 +694,11 @@ def trapping_body(): list := uleb(3) + [0, op.unreachable, op.end]
 def shaken(): bool := module.shaking != ø
 def dropped(): int := if shaken() then module.shaking.dropped else imports_dropped()
 def shaking_of(functions: list): any {
-	reached = runtime_reach(runtime_positions_called(functions) + library_positions_called())
+	reached = runtime_reach(runtime_positions_called(functions))
 	kept = range_list(module.runtime_image.functions).filter(p => reached.has(p))
 	places = range_list(module.runtime_image.functions).map(p => -1)
 	for k in 0..<#kept { places[kept[k]] = #module.imports + k }
 	Shaking(kept, places, module.runtime_image.functions - #kept)
-}
-# the runtime positions the linked modules' code calls (a module's runtime calls are behind its own C imports)
-def library_positions_called(): list {
-	positions = []
-	for image in module.linked_images {
-		place = section_place(image.wasm, section_ids.code)
-		first = module.runtime_image.imports + #image.c_functions
-		for entry in relocations_of(image.wasm).filter(entry => entry#3 == runtime_space and entry#2 == relocated.calls) {
-			index = uleb_read(image.wasm, place#1 + entry#1)#1
-			if index >= first and index < first + module.runtime_image.functions { positions += [index - first] }
-		}
-	}
-	positions
 }
 # where a call of runtime function `first + p` goes: a kept one to its place; a dropped one is the gap
 def kept_calls(first: int, more: map): Move {
@@ -858,7 +780,7 @@ def drop_imports(functions: list) {
 		}
 	}
 	gone = #host_types - #called.keys
-	first_stub = #module.imports + module.runtime_image.functions + linked_function_count() + #functions - gone
+	first_stub = #module.imports + module.runtime_image.functions + #functions - gone
 	places = []
 	count_kept = 0
 	for i in 0..<#host_types {
@@ -870,21 +792,14 @@ def drop_imports(functions: list) {
 	stub_type_list = trapping
 	imports_gone = gone
 }
-# the host words called by the program's own code, the runtime functions it reaches and the linked modules' code
+# the host words called by the program's own code and the runtime functions it reaches
 def host_words_called(functions: list): map {
 	own = exports_reach(functions)
-	reached = runtime_reach(runtime_positions_called(own) + library_positions_called())
+	reached = runtime_reach(runtime_positions_called(own))
 	called = {}
 	own_calls = relocated_operands(own, relocated.calls)
 	for index in 0..<module.runtime_image.imports { if own_calls.has(index) { called[index] = yes } }
 	for site in operand_sites(relocated.calls) { if site#3 < module.runtime_image.imports and reached.has(site#2) { called[site#3] = yes } }
-	for image in module.linked_images {
-		place = section_place(image.wasm, section_ids.code)
-		for entry in relocations_of(image.wasm).filter(entry => entry#3 == runtime_space and entry#2 == relocated.calls) {
-			index = uleb_read(image.wasm, place#1 + entry#1)#1
-			if index < module.runtime_image.imports { called[index] = yes }
-		}
-	}
 	called
 }
 # where a function index goes, as behind the whole runtime: a host word to its place, one in more to its entry there,

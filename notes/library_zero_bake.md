@@ -214,5 +214,5 @@ The emitter must guarantee these for L3–L5:
   So L4 stays small: typed overloads only for the prelude's numeric words a hot loop calls (fourth_root, round_to,
   pixel_channel, is_digit and the like, random_*, mean); the compiler itself doesn't feel it.
 - L5 (wasm-module-linking): points 1 (closure funcref), 3 (Instance), 2 (class descriptors) landed; L5c programs and
-  modules import their modules' words (notes/runtime_linking.md "Load-time linking"). warp.module's content moves
-  into warp.signature with L5e (agreed with warp-sugar).
+  modules import their modules' words (notes/runtime_linking.md "Load-time linking"); L5d the playground links them
+  too; L5e the splice path and .splice.wasm are gone, a module's image lives in its warp.signature.
