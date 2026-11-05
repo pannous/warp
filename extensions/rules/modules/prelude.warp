@@ -20,3 +20,5 @@ rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, [])
 // extensions/rules/rule_words.warp gpu_lists_packed): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks
 // for one outright, `xs: [i32] = …` and `xs: [u32] = …` for one of integer cells
 rewrite $p => $q where program and $q = gpu_lists_packed($p)
+// (this rule needs gpu_compute, so the prelude's rules, the one above too, come with any program calling it)
+rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
