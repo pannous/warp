@@ -21,7 +21,7 @@ scratch=$(mktemp -d) && trap 'rm -rf "$scratch"' EXIT
 # pack <asset> <folder>: <folder> (named <hash>) with its SHA256SUMS manifest as <asset>, uploaded; one there is kept
 pack() {
 	if grep -qx "$1" <<<"$present"; then echo "publish-build: $1 is there already"; return; fi
-	(cd "$2" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort | while read -r f; do sha256_of "$f"; echo "  $f"; done | paste -d '' - - > SHA256SUMS)
+	(cd "$2" && find . -type f ! -name SHA256SUMS | env LC_ALL=C sort | while read -r f; do sha256_of "$f"; echo "  $f"; done | paste -d '' - - > SHA256SUMS)
 	tar -C "$(dirname "$2")" -czf "$scratch/$1" "$hash"
 	gh release upload "$TAG" -R "$REPO" "$scratch/$1" >/dev/null
 	echo "publish-build: $1 ($(ls "$2" | tr '\n' ' '))"
