@@ -1,0 +1,35 @@
+#!/usr/bin/env warp
+# Mail merge: a CSV of recipients filled into one combined HTML letter batch, with a short summary table (csv, html, tables)
+use csv
+use html
+use tables
+
+recipients = "name,email,city,note
+Ada Lovelace,ada@example.com,London,Welcome aboard
+Grace Hopper,grace@navy.mil,NYC,\"Hello & thanks\"
+Alan Turing,alan@bletchley.uk,Manchester,<script>alert(1)</script>
+Émilie du Châtelet,emilie@paris.fr,Paris,5 > 3 & café"
+
+rows = csv_maps(recipients)
+print(str(count(rows)) + " letters")
+print("")
+print(table_text([[row["name"], row["email"], row["city"]] for row in rows], {headers: ["name", "email", "city"], align: ["left", "left", "left"]}))
+
+page = "<!doctype html>
+<html><head><meta charset=\"utf-8\"><title>Letters</title></head>
+<body>"
+for row in rows {
+	page = page + "
+<article>
+  <h1>Dear " + html_escape(row["name"]) + ",</h1>
+  <p>We wrote to <a href=\"mailto:" + html_escape(row["email"]) + "\">" + html_escape(row["email"]) + "</a> in " + html_escape(row["city"]) + ".</p>
+  <p class=\"note\">" + html_escape(row["note"]) + "</p>
+</article>"
+}
+page = page + "
+</body></html>"
+print("")
+print(page)
+print("")
+print("no live script tag: " + str(not page.contains("<script>")))
+print("escaped ampersand: " + str(page.contains("Hello &amp; thanks")))
