@@ -1,0 +1,3 @@
+# Supervisor decisions, lib-coverage-audit-2: a negative duration is formatted like the positive one with a minus sign; percentile of an empty list names percentile
+«use time; [format_duration(-5000), format_duration(-500), format_duration(-90061000), format_duration(5000)] == ["-5s", "-500ms", "-1d 1h 1m 1s", "5s"]»	true
+«use list; r = try { percentile([], 50) } catch e { "" + e }; r == "percentile of an empty list"»	true
