@@ -373,13 +373,7 @@ def own_words_unlinked(names: list) {
 		}
 	}
 }
-# the definitions of the linked modules, by their text (a slice of one is declared, not brought whole), and the
-# names the program needs of each even when it never says them: its classes and globals
-def linked_slices(): map {
-	slices = {}
-	for image in module.linked_images { for slice in definition_slices(LIBRARY_FILES[image.name + module_extension]) { slices[slice#2] = yes } }
-	slices
-}
+# the names the program needs of each linked module even when it never says them: its classes and globals
 def linked_needs(): list {
 	names = []
 	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) + image.globals.map(entry => entry#1).filter(name => name.starts_with(program_global_prefix)).map(name => name[#program_global_prefix ..]) }

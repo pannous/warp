@@ -564,7 +564,11 @@ first_alphabetic_word(written: text): text := {
 # (decision library-zero-bake-plan 1b)
 module_rule_paths(module: text): list := [std_module_path(module), run_library() + COMPILE_TIME_RULES + module + module_extension]
 COMPILE_TIME_RULES = "/extensions/rules/modules/"
-rules_of_module(module: text): list := module_rule_paths(module).flat_map(path => module_rules_of(path, module))
+# (a linked module's own rules are its signature's, signature.warp)
+rules_of_module(module: text): list := {
+	linked = linked_signature(module)
+	if linked == ø then module_rule_paths(module).flat_map(path => module_rules_of(path, module)) else linked.rules + module_rules_of(module_rule_paths(module)#2, module)
+}
 # the rules of the module at `path`, of its baked parse when it is the bundled one
 module_rules_of(path: text, module: text): list := {
 	source = file_text(path) ?? ""

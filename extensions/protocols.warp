@@ -30,7 +30,8 @@ helper_name(protocol: text, word: text): text := protocol + "·" + word
 # the words of the module a statement uses (`use matrix`), linked or brought as source; ø when none does
 module_words(name: text, statements: list): list? := {
 	if not statements.any(statement => is_group(statement) and #statement == 2 and statement#1 == symbol("use") and statement#2 == symbol(name)) { return ø }
-	definition_slices(LIBRARY_FILES.get(name + ".warp") ?? "").map(slice => slice#1)
+	signature = linked_signature(name)
+	if signature == ø then definition_slices(file_text(std_module_path(name)) ?? "").map(slice => slice#1) else signature.slices.map(slice => slice#1)
 }
 # the two functions over x of a protocol whose module the program uses, its conforming classes listed
 helper_functions(protocol: text, classes: list): list := {

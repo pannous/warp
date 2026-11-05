@@ -25,6 +25,7 @@ use "../analysis/source_checks.warp"
 use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
+use "signature.warp"
 
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
 # foreign lines and C imports off the source. with_used: interpolation, then used_passes (the program's rewrite rules,
