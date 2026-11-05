@@ -24,14 +24,14 @@ parameter_names(target: Node): list := {
 
 // `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
 // A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md)
-// offset: the `1` added to a non-number index, the parser's marked one for code as written (walk.warp subscript_offset_mark)
-subscript(target: Node, index: Node, offset: Node = 1): Node := {
+// (the parser keeps `xs[i]` as its subscript·of form, extensions/sugar/subscripts.warp lowers it so)
+subscript(target: Node, index: Node): Node := {
 	bounds = slice_bounds(index)
 	for bound in subscript_positions(index) {
-		if counts_from_the_end(bound) { return error_node("index out of range: negative index " + negated_form(bound) + " does not wrap around, the last element is last(${target})") }
+		if counts_from_the_end(bound) { throw "index out of range: negative index " + negated_form(bound) + " does not wrap around, the last element is last(${target})" }
 	}
 	if bounds != ø { return call_of([symbol("slice"), target] + bounds) }
-	Key(target, Op.Hash, one_based(index, offset))
+	Key(target, Op.Hash, one_based(index))
 }
 
 // The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
@@ -52,12 +52,9 @@ counts_from_the_end(bound: Node): bool := if bound is number then bound < 0 else
 // `-1`, `-k` as written
 negated_form(bound: Node): text := if bound is number then "${bound}" else "-${value_of(bound)}"
 
-// `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
-// A number index keeps the number written in an attribute layer on `d#2`: a map
-// keyed by numbers reads it; plain_node drops the layer, number_keys.warp reads `d#2` itself
-one_based(index: Node, offset: Node = 1): Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, offset)
-// the offset of a subscript written in code, which index_positions reads
-written_offset(): Node := attributed(subscript_offset_mark, yes, 1)
+// `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added (a map keyed by numbers reads
+// `d#2` as its key 1, number_keys.warp)
+one_based(index: Node): Node := if index is number then index + 1 else Key(index, Op.Add, 1)
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]

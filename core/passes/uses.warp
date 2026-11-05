@@ -444,6 +444,8 @@ aliased_type_name(left: Node): text? := if is_key(left, Op.Colon) and key_of(lef
 leftmost_name(n: Node): any := {
 	if n is symbol { return name_of(n) }
 	if n is key { return leftmost_name(key_of(n)) }
+	# `xs[i]` as written, the subscript·of form, names xs
+	if is_group(n) and #n == 3 and n#1 == symbol(HiddenWord.Subscript as text) { return leftmost_name(n#2) }
 	if is_group(n) and #n > 0 { return leftmost_name(n#1) }
 	ø
 }

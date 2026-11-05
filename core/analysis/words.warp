@@ -17,7 +17,8 @@ enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·ste
 	ViewOpaque = "view·opaque", ViewAttribute = "view·attribute", DataSpliced = "data·spliced", GlueName = "glue·name",
 	GlueHidden = "glue·hidden", MatchSubject = "match·subject", MatchBound = "match·bound", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",
-	UncaughtError = "uncaught·error", CaughtError = "caught·error", StoredValue = "store·value", InstanceOf = "instance·of" }
+	UncaughtError = "uncaught·error", CaughtError = "caught·error", StoredValue = "store·value", InstanceOf = "instance·of",
+	Subscript = "subscript·of" }
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }`
 implicit_parameter = "it"
 # the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic

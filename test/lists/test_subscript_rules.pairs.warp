@@ -1,0 +1,11 @@
+# xs[i] and slices as rules after index_positions (decision subscript-pass-slot, card subscript-slices-rules)
+
+'xs = [1,2,3]; xs[1]'	2
+'xs = [1,2,3]; xs[1:]'	[2, 3]
+'s = "hello"; s[...2]'	"hel"
+'f(xs) := { xs[0] = 9; xs }; f([1,2])'	[9, 2]
+'xs = [5,6,7]; i = 1; xs[i] += 10; xs'	[5, 16, 7]
+'p: position = 2; xs = [5,6,7]; xs[p]'	6
+'d = {1: 5}; d[1]'	5
+'g(xs) := { out = {}; for x in xs { out["" + x] = x }; out }; g([1])'	{1: 1}
+'xs = [1]; xs[-1]'	error	negative index -1 does not wrap around

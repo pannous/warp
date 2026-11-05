@@ -1,0 +1,9 @@
+# Subscripts (decision subscript-pass-slot, card subscript-slices-rules): the parser keeps `xs[i]` as written, the
+# subscript·of form; these rules lower it right after index_positions.warp read a position meeting the brackets, on the
+# program and on each library definition it reaches (prelude_words.warp with_reached): `xs[i]` is the 1-based
+# `xs#(i+1)`, a slice `xs[a:b]`, `xs[a..b]`, `xs[a...b]` the call `slice(xs, a, b)`, a negative index an error
+# naming last (passes/sugar.warp subscript)
+# an element's compound assignment evaluates its list and index once (decision op-assign-target-once), before the
+# element is lowered (extensions/sugar/arithmetic.warp has the other targets)
+rewrite ($xs[$i] $op= $v) => ($list = $xs; $at = $i; $list[$at] = ($list[$at] $op $v)) where $op is symbol
+rewrite $xs[$i] => $element where $element = subscript_lowered($xs, $i)

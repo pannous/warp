@@ -987,7 +987,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			index = with_field(p, "indexing", true, () => index_expression(p))
 			skip_blanks(p)
 			if at_char(p, ']') { advance(p) }
-			left = subscript(left, index, written_offset())
+			left = call_of([symbol(HiddenWord.Subscript as text), left, index])
 		} else if c == '(' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power and is_callee(left) {
 			advance(p)
 			left = call_of([left] + spread(items_until(p, Bracket.Round, ItemsEnd.Closer)))

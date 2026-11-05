@@ -57,11 +57,6 @@ assigned_variable(target: Node): Node := match target {
 attribute_word = HiddenWord.ViewAttribute as text
 # `x!` of a name no mutation takes: `unwrap(x)` (parser.warp forced)
 unwrap_word = "unwrap"
-# the number a subscript was written with, `1` of `d[1]` on its shifted index `d#2`
-written_index_mark = "written_index"
-# the `1` `xs[i]` adds to i for `xs#(i+1)` (Rust: warp_parser SubscriptOffset): a position i meets the brackets as it
-# is, `xs#i` (index_positions.warp); plain_node keeps it for a program's own code, index_positions drops it
-subscript_offset_mark = "subscript_offset"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: View): bool := kind_of(view) == "list" and #view == 3
@@ -139,8 +134,7 @@ node_from(view: View, keeps_maps: bool): Node := {
 	if keeps_maps and is_empty_group(view) and view#2 == "{" { return Key(symbol(opaque_word), Op.Colon, view) }
 	if kind == "list" { return List(view[3..].map(item => part(item)), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(part(view#4), view#2, view#3) }
-	# (a subscript's offset is read by index_positions, before a class body or other view becomes code: here it is its 1)
-	if kind == "attribute" { return if view#2 == subscript_offset_mark then part(view#4) else Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }
+	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }
 	if count(kind) == 0 { return view }
 	Key(symbol(opaque_word), Op.Colon, view)
 }

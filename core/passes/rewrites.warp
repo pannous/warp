@@ -106,7 +106,7 @@ sugar_files(names: list): list := names.map(name => sugar_folder + name)
 # tuples and safe navigation first: data_items reads the names in `[a, b]` before the later sugar steps could see them
 first_sugar_module_names = sugar_files(["tuples", "safe_navigation", "lists", "arms", "heads", "test_words"])
 # every other file of extensions/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
-placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
+placed_sugar_modules(): list := first_sugar_module_names + subscript_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
 sugar_module_names(): list := {
 	placed = placed_sugar_modules()
 	LIBRARY_FILES.keys.filter(path => path.starts_with(sugar_folder) and path.ends_with(module_extension)).map(path => path[0 ..< #path - #module_extension]).filter(name => name not in placed)
@@ -450,6 +450,17 @@ early_module_rules(): list := {
 		early_rules_read = yes
 	}
 	early_rules
+}
+# `xs[i]` lowered by the subscripts rules (extensions/sugar/subscripts.warp), a used-stage pass right after
+# index_positions read the positions meeting brackets; also each library definition the program reaches
+# (prelude_words.warp with_reached). No program binds the subscript·of word, so every rule applies
+subscript_sugared(program: Node): Node := if mentions(program, subscript_word) then sugared(program, subscript_rules()) else program
+subscript_word = HiddenWord.Subscript as text
+subscript_sugar_module_names = sugar_files(["subscripts"])
+global subscript_rules_read = ø
+subscript_rules(): list := {
+	if subscript_rules_read == ø { subscript_rules_read = subscript_sugar_module_names.flat_map(module => module_rules_of(std_module_path(module), "")) }
+	subscript_rules_read
 }
 # the words of the phrases in the node (`var total = 0`'s var, `square of number = …`'s of), also as the parser writes
 # a declaration word (uses.warp declaration_keywords), the key of `global: (play(tone) := …)`
@@ -1945,9 +1956,6 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	if hole != ø { return hole_binding(hole, code, bound) }
 	typed = typed_hole(pattern)
 	if typed != ø { return is_hole_kind(code, typed.kind) and hole_binding(typed.hole, code, bound) }
-	# a mark the code keeps past plain_node and the pattern doesn't write (the subscript offset of `xs[i]`) stands for
-	# the node it marks
-	if is_attribute(code) and not is_attribute(pattern) { return rule_matches(pattern, attribute_marked(code), bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }

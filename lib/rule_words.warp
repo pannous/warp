@@ -532,6 +532,8 @@ definition_start(source: text, word: text): any := {
 	}
 	ø
 }
+# `xs[i]` as the passes read it: `xs#(i+1)`, a slice's call, a negative index's error (extensions/sugar/subscripts.warp)
+subscript_lowered(target: Node, index: Node): Node := subscript(target, index)
 # `3 then twice` (decision then-not-pipe): `then` is only the branch word, the pipe is `|>`; ø after `if c`, whose
 # branch may be a function (`if wanted then float_pi`)
 then_not_pipe(value: Node, function: Node): Node := {
@@ -723,6 +725,7 @@ rule_words = {
 	leading_unit: leading_unit,
 	misnamed: misnamed,
 	then_not_pipe: then_not_pipe,
+	subscript_lowered: subscript_lowered,
 	module_help: module_help,
 	module_named: module_named,
 	module_word_help: module_word_help,

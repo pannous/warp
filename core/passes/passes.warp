@@ -85,7 +85,7 @@ def timed(label: text) := { if TIMES != "" { print "§T " + "${clock()}" + " " +
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
-	lowered_reached(plain_node(parsed(rules_ended(source)), [subscript_offset_mark]), source, folder, prelude)
+	lowered_reached(plain_node(parsed(rules_ended(source))), source, folder, prelude)
 }
 # the program with the definitions it reaches, after every pure pass, those it doesn't call after all dropped
 lowered_reached(program: Node, source: text, folder: text, prelude: text): Node := called_only(lowered_node(with_used(program, source, folder, prelude)))
@@ -135,9 +135,10 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 global used_source = ""
 global used_folder = ""
 global used_prelude = ""
-# the used stage's passes, in order: the program's rewrite rules, the type modules, the expected types and the modules it
-# uses; extensions place theirs between them as between the pure passes (index_positions, property_accessors)
-used_passes = [rules_rewritten, with_type_module_uses, expected_types_used, modules_used]
+# the used stage's passes, in order: the program's rewrite rules, its subscripts (once index_positions read them), the
+# type modules, the expected types and the modules it uses; extensions place theirs between them as between the pure
+# passes (index_positions, property_accessors)
+used_passes = [rules_rewritten, subscript_sugared, with_type_module_uses, expected_types_used, modules_used]
 rules_rewritten(program: Node): Node := rewritten_program(program, used_source)
 expected_types_used(program: Node): Node := with_expected_type_uses(program, used_prelude)
 modules_used(program: Node): Node := with_used_modules(program, used_folder)
@@ -166,7 +167,7 @@ comprehension_sugar(program: Node): Node := sugared(program, kept_comprehension_
 # those of the lowered program; what they find goes to `diagnosed` (diagnostics.warp)
 checked_program(source: text, folder: text, prelude: text): Node := {
 	lowering_from(prelude)
-	program = plain_node(source_checks(parsed(rules_ended(source)), prelude), [subscript_offset_mark])
+	program = plain_node(source_checks(parsed(rules_ended(source)), prelude))
 	own_names = statements_in(program).map(declared_name)
 	main_globals(kind_changes(lowered_reached(program, source, folder, prelude)), own_names)
 }
