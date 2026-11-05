@@ -1,0 +1,4 @@
+# a rule's conditions joined by `and` in any order; one no rule reads is refused aloud, never dropped
+'rewrite ($x $f) => $f($x) where $f takes one and not $x is function; 16 sqrt'	4
+'rewrite ($x $f) => $f($x) where not $x is function and $f takes one; 16 sqrt'	4
+'rewrite twice $x => ($x * 2) where $x is shiny; twice 3'	error
