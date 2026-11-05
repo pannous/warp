@@ -1,0 +1,50 @@
+#!/usr/bin/env warp
+# Warehouse stock from a CSV export: stock value per SKU and per location, then the items at or below their
+# reorder level exported back as CSV for purchasing (csv, tables)
+use csv
+use tables
+
+stock = "sku,name,location,qty,unit_cents,reorder
+A-100,Hex bolt M6,Shelf A,1200,4,500
+A-101,Hex nut M6,Shelf A,300,2,500
+B-200,Cable tie 20cm,Shelf B,80,5,100
+B-201,Duct tape,Shelf B,25,349,10
+C-300,Pallet wrap,Dock,4,1899,6
+C-301,Cardboard box L,Dock,150,120,50"
+
+def cents(n: int): text {
+	t = str(n)
+	while #t < 3 { t = "0" + t }
+	t[0..<#t - 2] + "." + t[#t - 2..<#t]
+}
+
+rows = csv_maps(stock)
+print(str(count(rows)) + " SKUs")
+
+lines = []
+total = 0
+for row in rows {
+	value = int(row["qty"]) * int(row["unit_cents"])
+	total = total + value
+	lines = lines + [[row["sku"], row["name"], row["location"], int(row["qty"]), cents(int(row["unit_cents"])), cents(value)]]
+}
+print("")
+print(table_text(lines, {headers: ["sku", "name", "location", "qty", "unit", "value"], align: ["left", "left", "left", "right", "right", "right"]}))
+print("stock value: " + cents(total))
+
+print("")
+places = []
+for loc in unique([row["location"] for row in rows]) {
+	mine = [row for row in rows if row["location"] == loc]
+	sum = 0
+	for row in mine { sum = sum + int(row["qty"]) * int(row["unit_cents"]) }
+	places = places + [[loc, count(mine), cents(sum)]]
+}
+print(table_text(places, {headers: ["location", "skus", "value"], align: ["left", "right", "right"]}))
+
+# at or below the reorder level: order back up to twice that level
+low = [row for row in rows if int(row["qty"]) <= int(row["reorder"])]
+print("")
+print(str(count(low)) + " to reorder:")
+print("sku,name,order_qty")
+for row in low { print(row["sku"] + "," + row["name"] + "," + str(2 * int(row["reorder"]) - int(row["qty"]))) }

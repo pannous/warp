@@ -1,0 +1,23 @@
+6 SKUs
+
+sku    name             location   qty   unit   value
+-----  ---------------  --------  ----  -----  ------
+A-100  Hex bolt M6      Shelf A   1200   0.04   48.00
+A-101  Hex nut M6       Shelf A    300   0.02    6.00
+B-200  Cable tie 20cm   Shelf B     80   0.05    4.00
+B-201  Duct tape        Shelf B     25   3.49   87.25
+C-300  Pallet wrap      Dock         4  18.99   75.96
+C-301  Cardboard box L  Dock       150   1.20  180.00
+stock value: 401.21
+
+location  skus   value
+--------  ----  ------
+Shelf A      2   54.00
+Shelf B      2   91.25
+Dock         2  255.96
+
+3 to reorder:
+sku,name,order_qty
+A-101,Hex nut M6,700
+B-200,Cable tie 20cm,120
+C-300,Pallet wrap,8
