@@ -3,6 +3,7 @@
 # hooks: a list of an extension's kind (core/analysis/kinds.warp ListKind) to that kind's words
 use "big_numbers.warp"
 use "gpu_lists/runtime.warp"
+use "times/runtime.warp"
 extended_list_at(n: Node, index: int): Node := {
 	if is_gpu_list(n) { return gpu_list_at(n, index) }
 	fail()

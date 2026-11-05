@@ -27,7 +27,7 @@ prelude_source = bundled_module("prelude.warp")
 # extended runtime (decision runtime-split)
 RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
 # a root's text, its `use` paths named from core, where the roots are lowered together: runtime/extended.warp's
-# `use "extended/times.warp"` is core/runtime/extended/times.warp
+# `use "extended/wasi.warp"` is core/runtime/extended/wasi.warp
 root_text(file: text): text := {
 	text = file_text(runtime_folder() + "/" + file)
 	if text == ø { raise "no runtime file " + runtime_folder() + "/" + file }

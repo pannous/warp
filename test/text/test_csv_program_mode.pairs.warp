@@ -1,0 +1,3 @@
+// lib/csv.warp as a standalone program and from source (card program-mode-full): else-if chains, quoted fields, CRLF
+'use csv; csv_rows("a,b\nc,d")'	[["a", "b"], ["c", "d"]]
+'use csv; csv_rows("a,\\"x,y\\"\r\n1,\\"q\\"\\"\\"")'	[["a", "x,y"], ["1", "q\""]]

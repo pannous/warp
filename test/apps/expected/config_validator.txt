@@ -1,0 +1,14 @@
+== good.toml
+valid; with defaults:
+{"server":{"host":"0.0.0.0","workers":4,"port":8080},"database":{"pool":20,"url":"postgres://db.internal/billing"},"features":["metrics","cache"],"service":"billing-api"}
+== bad.toml
+7 problems:
+  /service: does not match the pattern ^[a-z][a-z0-9-]*$
+  /debug: additional property debug is not allowed
+  /features: items 0 and 1 are equal
+  /features/2: "telepathy" is not one of ["metrics","tracing","cache"]
+  /server/port: 70000 is more than the maximum 65535
+  /server/workers: 0 is less than the minimum 1
+  /database/url: does not match the pattern ^postgres://
+== broken.toml
+not TOML: toml line 2: expected ]

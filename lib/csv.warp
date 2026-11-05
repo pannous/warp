@@ -17,12 +17,12 @@ def csv_rows(t: text): list {
 			if c == "\"" {
 				if i + 1 < count(cs) and cs[i + 1] == "\"" { field = field + "\""; i = i + 1 } else { quoted = no }
 			} else { field = field + c }
-		} else if c == "\"" { quoted = yes }
-		else if c == "," { row = row + [field]; field = "" }
-		else if c == "\n" or c == "\r" or c == "\r\n" {
+		} else if c == "\"" { quoted = yes
+		} else if c == "," { row = row + [field]; field = ""
+		} else if c == "\n" or c == "\r" or c == "\r\n" {
 			rows = rows + [row + [field]]
 			row = []
-			field = ""
+			field = ""  // a CRLF is one character of the text
 		} else { field = field + c }
 		i = i + 1
 	}

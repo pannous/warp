@@ -1,0 +1,5 @@
+# coverage audit 2, batch 4: time helpers (UTC milliseconds), edge cases incl. before 1970 and leap day
+«use time; [weekday(0), weekday(86400000 * 3), weekday(-86400000)] == [4, 7, 3]»	true
+«use time; [format_date(0), format_date(-86400000), format_date(951782400000)] == ["1970-01-01", "1969-12-31", "2000-02-29"]»	true
+«use time; [format_time(0), format_time(3723000), format_time(-1000)] == ["00:00:00", "01:02:03", "23:59:59"]»	true
+«use time; [relative_time(0, 0), relative_time(0, 7200000), relative_time(90000, 0), relative_time(0, 31536000000 * 2)] == ["just now", "2 hours ago", "in 1 minute", "2 years ago"]»	true

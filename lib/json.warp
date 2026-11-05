@@ -126,7 +126,10 @@ json_number_read(source: text, at: int): list := {
 	digits = source[at - 1..<end - 1]
 	if not json_number_valid(digits) { raise json_refusal(source, "a bad number " + digits) }
 	fractional = "." in digits or "e" in digits or "E" in digits
-	[if fractional then float(digits) else whole_number(digits), end]
+	// two returns, not one `if … then float else int` inside the list, which typed every number a float (card
+	// samples-dogfood-apps: a todo id read back from JSON refused `next_id(…): int`)
+	if fractional { return [float(digits), end] }
+	[whole_number(digits), end]
 }
 // JSON's number, with JSON5's leading + and a fraction without digits on one side (+1, .5, 1.): one sign, digits, no
 // leading zero, an exponent's sign only after its e (-, ++1, 1+2, 012 are none, JSONTestSuite)

@@ -1,0 +1,5 @@
+# behaviour pinned by Supervisor decision (lib-coverage-audit-2 batch 4): deliberate, not bugs
+# deliberate: is_letter_text is ASCII-only; use is_unicode_letter for letters beyond ASCII
+«is_letter_text("é") == false and is_letter_text("e")»	true
+# deliberate: lines of an empty text is one empty line
+«use text; lines("") == [""]»	true

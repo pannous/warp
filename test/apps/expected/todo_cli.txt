@@ -1,0 +1,20 @@
+$ todo list
+nothing to do
+$ todo add buy milk
+added #1: buy milk
+$ todo add write the report
+added #2: write the report
+$ todo add call Ada
+added #3: call Ada
+$ todo done 2
+done #2
+$ todo done 7
+no todo #7
+$ todo list
+[ ] 1. buy milk
+[x] 2. write the report
+[ ] 3. call Ada
+2 open, 1 done
+$ todo frobnicate
+usage: add <title> | done <id> | list | clear
+stored: [{"id":1,"title":"buy milk","done":false},{"id":2,"title":"write the report","done":true},{"id":3,"title":"call Ada","done":false}]
