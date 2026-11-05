@@ -9,8 +9,12 @@ zeros(r: any, c: any): list := filled_matrix(r, c, 0)
 ones(r: any, c: any): list := filled_matrix(r, c, 1)
 random_matrix(r: any, c: any): list := [[random() for j in 1 to c] for i in 1 to r]
 identity(n: any): list := [[if i == j then 1 else 0 for j in 1 to n] for i in 1 to n]
+// matrix is a protocol (decision matrix-protocol): a class with rows(), cols() and element(i, j) is a matrix, every word
+// of this module takes it, converted to the default implementation, the list of rows, these words compute on
+// (extensions/protocols.warp `matrix·listed`)
 rows(m: any): int := count(m)
 cols(m: any): int := count(m#1)
+alias columns => cols
 shape(m: any): list := [rows(m), cols(m)]
 transpose(m: any): list := [[m#i#j for i in 1 to rows(m)] for j in 1 to cols(m)]
 map_matrix(m: any, f: any) := [[f(x) for x in row] for row in m]
