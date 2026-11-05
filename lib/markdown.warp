@@ -874,6 +874,8 @@ md_raw_html_at(t: text, k: int): list := {
 	}
 	if name == "" { return [] }
 	while yes {
+		// an attribute needs whitespace before it (spec 624 <m:abc>, 627 title=title)
+		before = j
 		j = md_space(t, j, yes)
 		if j > n { return [] }
 		if t#j == "/" {
@@ -881,6 +883,7 @@ md_raw_html_at(t: text, k: int): list := {
 			return []
 		}
 		if t#j == ">" { return [t[k - 1..<j], j + 1] }
+		if j == before { return [] }
 		an = ""
 		while j <= n {
 			c = "" + t#j
