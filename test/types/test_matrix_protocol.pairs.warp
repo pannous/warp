@@ -1,0 +1,10 @@
+# a class with rows, cols and element(i, j) is a matrix: every matrix word takes it, as it takes a list of rows
+# (decision matrix-protocol, card matrix-protocol-default)
+'use matrix; class Diag { d: list; rows() := count(d); cols() := count(d); element(i, j) := if i == j then d#i else 0 }; g = Diag([1, 2]); [rows(g), cols(g), shape(g), map_matrix(g, x => x + 1)]'	[2, 2, [2, 2], [[2, 1], [1, 3]]]
+'use matrix; class Diag { d: list; rows() := count(d); cols() := count(d); element(i, j) := if i == j then d#i else 0 }; g = Diag([1, 2]); [transpose(g), matmul(g, [[1, 1], [1, 1]]), scale(g, 3)]'	[[[1, 0], [0, 2]], [[1, 1], [2, 2]], [[3, 0], [0, 6]]]
+'use matrix; class Diag { d: list; rows() := count(d); cols() := count(d); element(i, j) := if i == j then d#i else 0 }; g = Diag([1, 2]); determinant(g) == 2'	yes
+'use matrix; class Diag { d: list; rows() := count(d); cols() := count(d); element(i, j) := if i == j then d#i else 0 }; g = Diag([1, 2]); [g is matrix, [[1, 2], [3, 4]] is matrix, [[1], [2, 3]] is matrix, 3 is matrix]'	[yes, yes, no, no]
+'use matrix; class Diag { d: list; rows() := count(d); cols() := count(d); element(i, j) := if i == j then d#i else 0 }; g = Diag([1, 2]); f(x: matrix) := rows(x) * cols(x); [f(g), f([[1, 2, 3]]), columns([[1, 2, 3]])]'	[4, 3, 3]
+# Matrix and matrix build the default class: the list of rows, unless `matrix default` names another
+'use matrix; Matrix x = [[1, 2], [3, 4]]; x#2#1'	3
+'use matrix; class Dense { rs: list; rows() := count(rs); cols() := count(rs#1); element(i, j) := rs#i#j }; matrix default Dense; Matrix d = [[1, 2], [3, 4]]; [d is Dense, transpose(d)]'	[yes, [[1, 3], [2, 4]]]
