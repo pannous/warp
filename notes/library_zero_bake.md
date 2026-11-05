@@ -183,4 +183,9 @@ The emitter must guarantee these for L3–L5:
   (parser.warp ~1750: global words/classes/tags by module), with_library_host_words (builtin_signatures.warp:53),
   alias table (parser.warp ALIAS_TABLE, alias_table_tree), sugar_module_names; the readers read the index, the
   scans of LIBRARY_FILES go. Question (a): measure gathering the union from the modules' sections instead.
+- L2 decided (a): index.warp is a cache of the union, derived by `warp modules` from the signatures in the same step,
+  each module's source hash beside it (reading the 45 modules, 15 MB, at each compile was too dear). L2a: block heads,
+  rule needs, words/classes/tags by module, host words; L2b: alias and operator tables, sugar_module_names.
+- L3: warp.signature goes right after the wasm header (a custom section may be first), so reading a signature costs
+  a few KB, not the whole module.
 - Before L3: measure the prelude's 108 untyped words linked as boxed code (hello, compiler.warp, a numeric sample).
