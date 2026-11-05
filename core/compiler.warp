@@ -175,11 +175,6 @@ with_dependencies(name: text, names: list, ordered: list, visiting: list): list 
 	for inner in modules_used_by(name) { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
 	ordered + [name]
 }
-# the modules a standard module uses: a linked one's signature says them, any other's use lines
-modules_used_by(name: text): list := {
-	signature = linked_signature(name)
-	if signature != ø then signature.uses else used_modules(library_text(name + module_extension))
-}
 
 # the module of the source file written to the wasm file, the source's uses found in folder
 compile_file(source_file: text, wasm_file: text, folder: text) := {
