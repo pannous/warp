@@ -169,11 +169,18 @@ library_on_disk(): map := {
 	if library_on_disk_held == ø { library_on_disk_held = library_texts(run_library(), "") }
 	library_on_disk_held
 }
-# each standard module's source hash (sha256 of its file), against which a prebuilt module is checked
+# each standard module's source hash, against which a prebuilt module is checked
 module_hashes(): map := {
 	hashes = {}
-	for module in std_module_names { hashes[module] = std_pure("hash", "sha256", [try read(std_module_path(module)) else ""]) }
+	for module in std_module_names { hashes[module] = source_hash(try read(std_module_path(module)) else "") }
 	hashes
+}
+# a text's length and the djb2 hash of its bytes (the host's sha256 takes no text a compiler's scratch can't show)
+SOURCE_HASH_MODULUS = 4294967291
+source_hash(source: text): text := {
+	hash = 5381
+	for byte in source.bytes { hash = (hash * 33 + byte) % SOURCE_HASH_MODULUS }
+	"${#source}-${hash}"
 }
 # the index as lib/ lies now, written into the modules folder; this run goes on with it, the host words made anew
 write_library_index(folder: text) := {
