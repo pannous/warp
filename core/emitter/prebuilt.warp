@@ -1,5 +1,7 @@
 # runtime.wasm (emitter.warp's part; card runtime-prebuilt, notes/runtime_linking.md "runtime.wasm format"): every
 # runtime word compiled once, no program deciding its kinds or what it makes, and the hooks a program gives the code of
+# the standard module every program links first, whose words a used module's of as many values shadow (link_libraries)
+PRELUDE_MODULE = "prelude"
 # the module of the runtime words alone, its bytes: read again while a reading leaves out a word more
 runtime_wasm_module(runtime: Node, host: map): any := {
 	module.prebuilding = yes
@@ -349,7 +351,15 @@ def link_libraries(images: list, own_names: list) {
 	module.linked_own_names = own_names
 	module.linked_words = {}
 	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
-	for image in images { for word in image.functions { if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) { module.linked_words[word.name] = (module.linked_words.get(word.name) ?? []) + [word] } } }
+	# (the program's own word beats a used module's, which beats the prelude's of as many values, as with_own_words sets
+	# the prelude's aside: draw's clear(color) is called, never the prelude's clear(x))
+	for image in images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE) {
+		for word in image.functions {
+			known = module.linked_words.get(word.name) ?? []
+			shadowed = image.name == PRELUDE_MODULE and known.any(other => #other.kinds == #word.kinds)
+			if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) and not shadowed { module.linked_words[word.name] = known + [word] }
+		}
+	}
 }
 # a module's word a program may call: not one of the builders it exports for the host (its show(x) is the host's,
 # beside draw's own show()), which a program linking it exports its own of
