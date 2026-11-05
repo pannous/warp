@@ -14,9 +14,37 @@ protocol_self = "self"
 # the body marking a required word, Python's
 required_body = "pass"
 class Protocol { name: text; required: list; default_members: list }
-# the protocols every program knows without declaring them, each a built-in type's name: a class with its required
-# words is one too, beside the built-in values (decision map-protocol: a class with the map words is a map)
-built_in_protocols(): list := [Protocol("map", ["keys", "get", "has", "set", "remove"], [])]
+# the protocols every program knows without declaring them, each named like its built-in values: a class with its
+# required words is one too, beside them (decisions map-protocol, matrix-protocol). Their defaults are library words
+# taking any value: lib/map.warp's, lib/matrix.warp's
+built_in_protocols(): list := [Protocol("map", ["keys", "get", "has", "set", "remove"], []), Protocol("matrix", ["rows", "cols", "element"], [])]
+# A built-in protocol whose words are a library module's (matrix: lib/matrix.warp) gives a program using that module
+# two functions of its own over a value x: `matrix·is(x)`, its built-in values (a list of equally long lists), and
+# `matrix·listed(x)`, a conforming instance as the default implementation, which every argument of the module's words
+# goes through: the module's words compute on lists, its calls never reaching a program's classes. map needs neither,
+# its words being the runtime's, which the class methods route
+built_in_module(protocol: text): text := if protocol == "matrix" then "matrix" else ""
+built_in_values(protocol: text): text := "x is list and count(x) > 0 and x.all(row => row is list and count(row) == count(x#1))"
+built_in_listed(protocol: text): text := "[[x.element(i, j) for j in 1 to x.cols()] for i in 1 to x.rows()]"
+helper_name(protocol: text, word: text): text := protocol + "·" + word
+# the words of the module a statement uses (`use matrix`), linked or brought as source; ø when none does
+module_words(name: text, statements: list): list? := {
+	if not statements.any(statement => is_group(statement) and #statement == 2 and statement#1 == symbol("use") and statement#2 == symbol(name)) { return ø }
+	definition_slices(LIBRARY_FILES.get(name + ".warp") ?? "").map(slice => slice#1)
+}
+# the two functions over x of a protocol whose module the program uses, its conforming classes listed
+helper_functions(protocol: text, classes: list): list := {
+	x = symbol("x")
+	conforming = classes.filter(name => name != protocol)
+	listed = statements_in(parsed(built_in_listed(protocol)))#1
+	converted = if #conforming == 0 then x else chosen(instance_tests(x, conforming), listed, x)
+	[Key(call_of(helper_name(protocol, "is"), [x]), Op.Define, statements_in(parsed(built_in_values(protocol)))#1), Key(call_of(helper_name(protocol, "listed"), [x]), Op.Define, converted)]
+}
+instance_tests(subject: Node, classes: list): Node := {
+	test = Key(subject, Op.Is, symbol(classes#1))
+	for name in classes[1..] { test = Key(test, Op.Or, Key(subject, Op.Is, symbol(name))) }
+	test
+}
 
 # `protocol shape {…}` opening a statement: the type declaration of its members, its name marked a protocol's
 read_protocol(p: Parser, word: text): Node := {
@@ -55,13 +83,19 @@ protocols_applied(program: Node): Node := {
 		functions += declared.default_members.map(member => default_function(member, declared))
 		conforming[declared.name] = conforming_classes(kept, declared)
 	}
-	# a built-in protocol only where a class conforms to it: else its type stays the built-in one
+	# a built-in protocol only where a class conforms to it or its module is used: else its type stays the built-in one
+	converted = {}
 	for built_in in built_in_protocols() {
 		classes = conforming_classes(kept, built_in)
-		if #classes > 0 { conforming[built_in.name] = [built_in.name] + classes }
+		words = if built_in_module(built_in.name) == "" then ø else module_words(built_in_module(built_in.name), kept)
+		if #classes > 0 or words != ø { conforming[built_in.name] = [built_in.name] + classes }
+		if words != ø {
+			functions += helper_functions(built_in.name, conforming[built_in.name])
+			if #classes > 0 { converted[built_in.name] = words.filter(word => word not in built_in.required) }
+		}
 	}
 	if #conforming == 0 and #defaults == 0 and kept == written { return program }
-	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming)))
+	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming, converted)))
 	separated(bracketed(resolved, ""), ";")
 }
 
@@ -130,13 +164,19 @@ word_and_first_type(statement: Node): list? := {
 }
 
 # `x is shape`: x is one of the conforming classes; `x: shape`, a place the protocol types, takes any value
-protocol_resolved(n: Node, conforming: map): Node := {
+# `x is C` of a class, the built-in protocol's own test of its name
+instance_or_built_in(subject: Node, name: text): Node := if built_in_module(name) != "" then call_of(helper_name(name, "is"), [subject]) else Key(subject, Op.Is, symbol(name))
+protocol_resolved(n: Node, conforming: map, converted: map): Node := {
+	# a call of a word of a built-in protocol's module: each argument the default implementation
+	if is_called_name(n) and #n > 1 {
+		for protocol in converted.keys { if name_of(n#1) in converted[protocol] { return call_of(name_of(n#1), items_of(n)[1..].map(argument => call_of(helper_name(protocol, "listed"), [argument]))) } }
+	}
 	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in conforming) { return n }
 	classes = conforming[name_of(value_of(n))]
 	if is_key(n, Op.Is) {
 		if #classes == 0 { return False }
-		test = Key(key_of(n), Op.Is, symbol(classes#1))
-		for name in classes[1..] { test = Key(test, Op.Or, Key(key_of(n), Op.Is, symbol(name))) }
+		test = instance_or_built_in(key_of(n), classes#1)
+		for name in classes[1..] { test = Key(test, Op.Or, instance_or_built_in(key_of(n), name)) }
 		return test
 	}
 	if is_key(n, Op.Colon) { return Key(key_of(n), Op.Colon, symbol("any")) }
