@@ -1,0 +1,3 @@
+# a linked class's methods are named as its module named them, whatever else the program sees
+'use collections; s = Set([1]); s.union(Set([3])).items'	[1, 3]
+'use collections; a = Set([1, 2, 3]); b = Set([2, 3, 4]); [a.intersection(b).items, a.difference(b).items]'	[[2, 3], [1]]
