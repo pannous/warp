@@ -89,7 +89,7 @@ def hook_elements(hooks: list, first: int): list {
 # the program importing only the host words, runtime functions and types its code uses: its code emitted relocatable
 # (relocates), each index moved to the linked numbering: the called imports, its own functions, its hooks; the fixed GC
 # types, the runtime's function types used, its classes, its own function types; its texts from segment 0
-def linked_bytes(functions: list): list {
+def linked_bytes(functions: list, entry: text = "main"): list {
 	hooks = reached_hooks(functions)
 	code = functions + hooks
 	calls = relocated_operands(code, relocated.calls)
@@ -125,13 +125,14 @@ def linked_bytes(functions: list): list {
 	own_globals = module.global_order[#module.runtime_image.globals ..]
 	globals = section(section_ids.globals, vector(own_globals.map(global_entry)))
 	elements = section(section_ids.element, hook_elements(hooks, first_hook))
-	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data)]
+	# (a standard module's closures keep their own numbers, from 0: its lifted lambdas are exported by name)
+	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data), shifted(0)]
 	codes = section(section_ids.code, vector(code.map(f => moved_body(f, moves))))
 	texts = section(section_ids.data, vector(text_segments()))
 	imports = section(section_ids.import, linked_imports(first_own_type + #functions, called, types_move))
 	# the exports and names by the linked numbering
 	for f in functions { f.index = numbering[f.index] }
-	parts = [types, imports, declared, globals, section(section_ids.export, vector(program_exports(functions))), elements, section(section_ids.data_count, uleb(#module.texts)), codes, texts]
+	parts = [types, imports, declared, globals, section(section_ids.export, vector(program_exports(functions, entry))), elements, section(section_ids.data_count, uleb(#module.texts)), codes, texts]
 	names = vector(functions.map(f => index_name(f.index, f.name)) + range_list(#hooks).map(i => index_name(first_hook + i, hooks[i].name)))
 	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
 }
