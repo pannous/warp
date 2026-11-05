@@ -1,0 +1,8 @@
+// edges for match_groups / find_all_groups beyond test/text/test_regex_groups.pairs.warp (card lib-coverage-recent)
+'use regex; match_groups("abcdefghij", "(a)(b)(c)(d)(e)(f)(g)(h)(i)")'	["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+'use regex; find_all_groups("a1 a2", "(a)([0-9])")'	[["a", "1"], ["a", "2"]]
+'use regex; try { match_groups(chr(2) + "a", "(a)") } catch e { e.message }'	"find_all_groups: the text holds the marker characters chr(2) or chr(3)"
+'use regex; try { find_all_groups("x" + chr(3), "(x)") } catch e { e.message }'	"find_all_groups: the text holds the marker characters chr(2) or chr(3)"
+'use regex; regex_group_count("(?:a)(b)[()](c)")'	2
+'use regex; match_groups("", "(a)?")'	[""]
+'use regex; match_groups("1.2.3", "([0-9]+)\\.([0-9]+)")'	["1", "2"]

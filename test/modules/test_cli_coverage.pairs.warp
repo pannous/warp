@@ -1,0 +1,22 @@
+// lib/cli.warp edge cases (card lib-cli-coverage): choices (accepted, unknown, required, positional) and commands
+// (dispatch, missing, unknown, -h before and after the command, repeated options under a command, help texts)
+'use cli; parse_args([{name: "mode", choices: ["fast", "slow"], default: "fast"}], ["--mode", "slow"])'	{help: no, mode: "slow"}
+'use cli; parse_args([{name: "mode", choices: ["fast", "slow"], default: "fast"}], [])'	{help: no, mode: "fast"}
+'use cli; parse_args([{name: "level", kind: "int", choices: [1, 2, 3], default: 1}], ["--level=3"])'	{help: no, level: 3}
+'use cli; try { parse_args([{name: "mode", choices: ["fast", "slow"], default: "fast"}], ["--mode", "medium"])["help"] } catch e { e.message }'	"cli: --mode is one of fast, slow, not medium"
+'use cli; try { parse_args([{name: "level", kind: "int", choices: [1, 2, 3], default: 1}], ["--level", "7"])["help"] } catch e { e.message.starts_with("cli: --level is one of") }'	yes
+'use cli; try { parse_args([{name: "mode", choices: ["fast", "slow"], required: yes}], [])["help"] } catch e { e.message.starts_with("cli: ") }'	yes
+'use cli; parse_args([{name: "mode", choices: ["fast", "slow"], required: yes}], ["--mode=fast"])'	{help: no, mode: "fast"}
+'use cli; try { parse_args([{name: "mode", choices: ["fast", "slow"], required: yes}], ["--mode=quick"])["help"] } catch e { e.message.starts_with("cli: --mode is one of fast, slow") }'	yes
+'use cli; parse_args([{name: "shape", positional: yes, choices: ["circle", "square"]}], ["square"])'	{help: no, shape: "square"}
+'use cli; parse_commands([{name: "verbose", short: "v", kind: "flag"}], {add: [{name: "force", short: "f", kind: "flag"}, {name: "paths", positional: yes, many: yes}], list: {help: "show items", options: [{name: "all", short: "a", kind: "flag"}]}}, ["-v", "add", "-f", "x", "y"])'	{help: no, verbose: yes, command: "add", force: yes, paths: ["x", "y"]}
+'use cli; parse_commands([{name: "verbose", short: "v", kind: "flag"}], {add: [{name: "force", short: "f", kind: "flag"}, {name: "paths", positional: yes, many: yes}], list: {help: "show items", options: [{name: "all", short: "a", kind: "flag"}]}}, ["list"])'	{help: no, verbose: no, command: "list", all: no}
+'use cli; try { parse_commands([{name: "verbose", short: "v", kind: "flag"}], {add: [], list: []}, ["-v"])["help"] } catch e { e.message }'	"cli: missing command (add, list)"
+'use cli; try { parse_commands([], {add: [], list: []}, ["remove"])["help"] } catch e { e.message }'	"cli: unknown command remove (add, list)"
+'use cli; parse_commands([{name: "verbose", short: "v", kind: "flag"}], {add: [], list: []}, ["-h"])'	{help: yes, verbose: no, command: ø}
+'use cli; parse_commands([], {add: [{name: "force", kind: "flag"}]}, ["add", "-h"])'	{help: yes, command: "add", force: no}
+'use cli; parse_commands([], {add: [{name: "tag", short: "t", many: yes}, {name: "count", short: "n", kind: "int", default: 0}]}, ["add", "-t", "a", "--tag=b", "-n", "1", "-n", "5"])'	{help: no, command: "add", tag: ["a", "b"], count: 5}
+'use cli; parse_commands([], {run: [{name: "verbose", short: "v", kind: "flag"}]}, ["run", "-v", "--no-verbose", "-v"])'	{help: no, command: "run", verbose: yes}
+'use cli; h = cli_commands_help("prog", [{name: "verbose", short: "v", kind: "flag"}], {add: {help: "add files", options: []}, list: {help: "show items", options: []}}); h.starts_with("usage: prog [-h] [--verbose] {add,list} ...") and h.contains("  list                  show items") and h.contains("-v, --verbose, --no-verbose")'	yes
+'use cli; t = cli_command_text("prog", {add: [{name: "force", short: "f", kind: "flag", help: "overwrite"}]}, "add"); t.starts_with("usage: prog add [-h] [--force]") and t.contains("overwrite")'	yes
+'use cli; cli_help("prog", [{name: "mode", choices: ["fast", "slow"], default: "fast"}]).contains("--mode {fast,slow}    (default fast)")'	yes
