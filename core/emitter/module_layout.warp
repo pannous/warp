@@ -69,9 +69,13 @@ def type_entries(): list {
 	first = module.gc_indices[module.gc_order.filter(name => name in module.class_structs)#1]
 	entries[0 ..< first] + [[rec_group_byte] + uleb(#group) + concatenated(group)] + entries[first ..< #entries]
 }
+# the name a module exports its global under
+def exported_global_name(name: text): text := "global/" + name
 # main (a standard module's warp/start), memory, the globals the runner reads after a trap, then the program's functions
-# under the names left free: a module imported compiled calls them
-def program_exports(functions: list, entry: text = "main"): list {
+# under the names left free: a module imported compiled calls them. Linked (separate_module.warp linked_bytes): its
+# functions numbered by `linked`, a linked module's word exported only if imported, its own globals exported as
+# `global/<name>` (another module's code reads them; a global may share a function's name: descriptor·<Class>)
+def program_exports(functions: list, entry: text = "main", linked: any = ø, own_globals: list = []): list {
 	exports = [name_bytes(entry) + [export_function_byte] + uleb(functions#1.index), name_bytes("memory") + [export_memory_byte, 0]]
 	for name in exported_globals {
 		if name in module.globals { exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)] }
@@ -94,12 +98,14 @@ def program_exports(functions: list, entry: text = "main"): list {
 	for image in module.linked_images {
 		for k in 0..<#image.functions {
 			name = image.functions[k].name
-			if name in module.linked_words and name not in taken {
-				exports += [name_bytes(name) + [export_function_byte] + uleb(linked_index(image, k))]
+			index = if linked == ø then linked_index(image, k) else linked.get(linked_index(image, k))
+			if name in module.linked_words and name not in taken and index != ø {
+				exports += [name_bytes(name) + [export_function_byte] + uleb(index)]
 				taken[name] = yes
 			}
 		}
 	}
+	for name in own_globals { exports += [name_bytes(exported_global_name(name)) + [export_global_byte] + uleb(module.globals[name]#1)] }
 	exports
 }
 def module_bytes(functions: list): list {

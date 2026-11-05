@@ -6,7 +6,7 @@
 // paragraph continuation), bullet and ordered lists (nested, start numbers, tight or loose), thematic breaks,
 // backslash escapes, entities (lib/html's names and numeric ones); GFM tables with alignment and ~~strikethrough~~.
 // Decisions and simplifications:
-// - raw HTML, block or inline, is escaped as text, never passed through: a Markdown text can't inject markup
+// - raw HTML, block or inline, is passed through by default (CommonMark); a backslash before < keeps it literal
 // - text is escaped by lib/html's html_escape, apostrophes kept as CommonMark writes them
 // - tabs are expanded to 4-column stops in a line's leading indentation and block markers, kept as tabs after
 // - punctuation for flanking is ASCII and Unicode P/S by main blocks (md_unicode_punct); whitespace the ASCII kind and U+00A0
@@ -16,6 +16,10 @@ use html
 MD_PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 MD_URL_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789;/?:@&=+$,-_.!~*'()#%"
 MD_HEX = "0123456789ABCDEF"
+
+// CommonMark HTML block type 1 open tags; type 6 block tags (closing forms too)
+MD_HTML1 = "pre|script|style|textarea"
+MD_HTML6 = "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul"
 
 global markdown_html(source: text): text := {
 	lines = []
@@ -117,6 +121,8 @@ md_list_marker(line: text): map := {
 // whether a line starts a block that ends a paragraph
 md_interrupts(line: text): bool := {
 	if md_blank(line) or md_is_break(line) or md_atx_level(line) > 0 or md_fence(line).has("char") or md_is_quote(line) { return yes }
+	// HTML blocks types 1–6 interrupt a paragraph; type 7 does not (spec 187)
+	if md_html_block_start(line, no).has("type") { return yes }
 	m = md_list_marker(line)
 	if not m.has("mark") or m["empty"] { return no }
 	not m["ordered"] or m["start"] == 1
@@ -131,7 +137,96 @@ md_setext_level(line: text): int := {
 	if c == "=" then 1 else 2
 }
 
-// the blocks of lines: maps with a kind ("p", "h", "code", "hr", "quote", "list", "table")
+
+// HTML blocks (CommonMark §4.6) and inline raw HTML (§6.8): pass through source text unchanged
+md_html_tag_named(name: text, list_pipe: text): bool := {
+	n = name.lower()
+	for part in list_pipe.split("|") { if part == n { return yes } }
+	no
+}
+// start of an HTML block on a line: {type: 1..7} or {} ; type 7 only when allow7 (not interrupting a paragraph)
+md_html_block_start(line: text, allow7: bool): map := {
+	if md_indent(line) > 3 { return {} }
+	s = md_unindent(line)
+	if not s.starts_with("<") { return {} }
+	rest = s[1..<#s]
+	// type 2 comment
+	if rest.starts_with("!--") { return {"type": 2} }
+	// type 3 processing instruction
+	if rest.starts_with("?") { return {"type": 3} }
+	// type 5 CDATA
+	if rest.starts_with("![CDATA[") { return {"type": 5} }
+	// type 4 declaration: <!LETTER
+	if rest.starts_with("!") and #rest > 1 {
+		c = "" + rest#2
+		if c.lower() != c.upper() { return {"type": 4} }
+	}
+	// open or close tag name
+	closing = rest.starts_with("/")
+	name_src = if closing then rest[1..<#rest] else rest
+	name = ""
+	k = 1
+	while k <= #name_src {
+		c = "" + name_src#k
+		if (c.lower() != c.upper()) or is_digit(c) or c == "-" { name += c; k += 1 } else { break }
+	}
+	if name == "" { return {} }
+	after = name_src[k - 1..<#name_src]
+	ok_after = after == "" or after.starts_with(" ") or after.starts_with("\t") or after.starts_with(">") or (not closing and after.starts_with("/"))
+	if not closing and md_html_tag_named(name, MD_HTML1) and ok_after { return {"type": 1, "name": name.lower()} }
+	if md_html_tag_named(name, MD_HTML6) {
+		if ok_after { return {"type": 6} }
+		return {}
+	}
+	if allow7 and md_html_open_or_close_complete(s) { return {"type": 7} }
+	{}
+}
+// a complete open or close tag as the whole (trimmed) line for type 7, or any inline tag start
+md_html_open_or_close_complete(s: text): bool := {
+	t = s.trim()
+	r = md_raw_html_at(t, 1)
+	#r > 0 and r#2 == #t + 1
+}
+// end condition for HTML block types 1-5 on a line
+md_html_block_end(line: text, typ: int, name: text): bool := {
+	low = line.lower()
+	if typ == 1 { return ("</" + name + ">") in low }
+	if typ == 2 { return "-->" in line }
+	if typ == 3 { return "?>" in line }
+	if typ == 4 { return ">" in line }
+	if typ == 5 { return "]]>" in line }
+	no
+}
+// consume an HTML block starting at i: [block, next_i]
+md_html_block(lines: list, i: int, start: map): list := {
+	typ = start["type"]
+	name = if start.has("name") then start["name"] else ""
+	body = []
+	n = #lines
+	// include the starting line
+	body += [lines#i]
+	i += 1
+	if typ == 1 or typ == 2 or typ == 3 or typ == 4 or typ == 5 {
+		// keep going until end condition (may be on the first line already)
+		if not md_html_block_end(body#1, typ, name) {
+			while i <= n {
+				body += [lines#i]
+				closed = md_html_block_end(lines#i, typ, name)
+				i += 1
+				if closed { break }
+			}
+		}
+	} else {
+		// types 6 and 7: until a blank line (not including it) or EOF
+		while i <= n and not md_blank(lines#i) {
+			body += [lines#i]
+			i += 1
+		}
+	}
+	[{"kind": "html", "text": body.join("\n") + "\n"}, i]
+}
+
+// the blocks of lines: maps with a kind ("p", "h", "code", "hr", "quote", "list", "table", "html")
 md_blocks(lines: list, st: map): list := {
 	blocks = []
 	i = 1
@@ -172,6 +267,11 @@ md_blocks(lines: list, st: map): list := {
 			i += 1
 		}
 		else if md_is_break(line) { blocks += [{"kind": "hr"}]; i += 1 }
+		else if md_html_block_start(line, yes).has("type") {
+			r = md_html_block(lines, i, md_html_block_start(line, yes))
+			blocks += [r#1]
+			i = r#2
+		}
 		else if md_is_quote(line) {
 			inner = []
 			going = yes
@@ -506,6 +606,7 @@ md_render_block(b: map, st: map, tight: bool): text := {
 		return out + "</" + tag + ">\n"
 	}
 	if kind == "table" { return md_render_table(b, st) }
+	if kind == "html" { return b["text"] }
 	""
 }
 md_render_table(b: map, st: map): text := {
@@ -616,6 +717,7 @@ md_inline(t: text, st: map): text := {
 		}
 		else if c == "<" {
 			r = md_autolink(t, k)
+			if #r == 0 { r = md_raw_html_at(t, k) }
 			if #r > 0 { tokens = md_flush(tokens, plain); plain = ""; tokens.add(md_html(r#1)); k = r#2 }
 			else { plain += "<"; k += 1 }
 		}
@@ -705,6 +807,113 @@ md_autolink(t: text, k: int): list := {
 	}
 	[]
 }
+
+// inline raw HTML at place k: [literal html text, place after] or [] (CommonMark §6.8)
+// open/close tags, comments, processing instructions, declarations, CDATA; source kept as-is
+md_raw_html_at(t: text, k: int): list := {
+	if k > #t or t#k != "<" { return [] }
+	n = #t
+	// HTML comment <!-- ... --> ; <!--> and <!---> end at that first >
+	if k + 3 <= n and t[k..<k + 3] == "!--" {
+		if k + 4 <= n and t#(k + 4) == ">" { return [t[k - 1..<k + 4], k + 5] }
+		if k + 5 <= n and t#(k + 4) == "-" and t#(k + 5) == ">" { return [t[k - 1..<k + 5], k + 6] }
+		j = k + 4
+		while j + 2 <= n {
+			if t#j == "-" and t#(j + 1) == "-" and t#(j + 2) == ">" { return [t[k - 1..<j + 2], j + 3] }
+			j += 1
+		}
+		return []
+	}
+	// processing instruction <? ... ?>
+	if k + 1 <= n and t#(k + 1) == "?" {
+		j = k + 2
+		while j < n {
+			if t#j == "?" and t#(j + 1) == ">" { return [t[k - 1..<j + 1], j + 2] }
+			j += 1
+		}
+		return []
+	}
+	// CDATA <![CDATA[ ... ]]>
+	if k + 8 <= n and t[k..<k + 8] == "![CDATA[" {
+		j = k + 9
+		while j + 2 <= n {
+			if t#j == "]" and t#(j + 1) == "]" and t#(j + 2) == ">" { return [t[k - 1..<j + 2], j + 3] }
+			j += 1
+		}
+		return []
+	}
+	// declaration <!NAME ... >
+	if k + 1 <= n and t#(k + 1) == "!" {
+		if k + 2 > n { return [] }
+		c0 = "" + t#(k + 2)
+		if c0.lower() == c0.upper() { return [] }
+		j = k + 3
+		while j <= n and t#j != ">" { j += 1 }
+		if j > n { return [] }
+		return [t[k - 1..<j], j + 1]
+	}
+	// closing tag </tagname>
+	if k + 1 <= n and t#(k + 1) == "/" {
+		j = k + 2
+		name = ""
+		while j <= n {
+			c = "" + t#j
+			if (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-")) { name += c; j += 1 } else { break }
+		}
+		if name == "" { return [] }
+		j = md_space(t, j, yes)
+		if j <= n and t#j == ">" { return [t[k - 1..<j], j + 1] }
+		return []
+	}
+	// open tag <tagname attrs? /?>
+	j = k + 1
+	name = ""
+	while j <= n {
+		c = "" + t#j
+		if (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-")) { name += c; j += 1 } else { break }
+	}
+	if name == "" { return [] }
+	while yes {
+		// an attribute needs whitespace before it (spec 624 <m:abc>, 627 title=title)
+		before = j
+		j = md_space(t, j, yes)
+		if j > n { return [] }
+		if t#j == "/" {
+			if j + 1 <= n and t#(j + 1) == ">" { return [t[k - 1..<j + 1], j + 2] }
+			return []
+		}
+		if t#j == ">" { return [t[k - 1..<j], j + 1] }
+		if j == before { return [] }
+		an = ""
+		while j <= n {
+			c = "" + t#j
+			if (c.lower() != c.upper()) or is_digit(c) or c == "_" or c == ":" or c == "." or c == "-" { an += c; j += 1 } else { break }
+		}
+		if an == "" { return [] }
+		j = md_space(t, j, yes)
+		if j <= n and t#j == "=" {
+			j = md_space(t, j + 1, yes)
+			if j > n { return [] }
+			q = "" + t#j
+			if q == "\"" or q == "'" {
+				j += 1
+				while j <= n and ("" + t#j) != q { j += 1 }
+				if j > n { return [] }
+				j += 1
+			} else {
+				started = j
+				while j <= n {
+					c = "" + t#j
+					if c == " " or c == "\t" or c == "\n" or c == "'" or c == "\"" or c == "=" or c == "<" or c == ">" or c == "`" { break }
+					j += 1
+				}
+				if j == started { return [] }
+			}
+		}
+	}
+	[]
+}
+
 // at a ]: a link or image when an opener and a destination fit, else a literal ]: [tokens, place after]
 md_close_bracket(tokens: list, t: text, k: int, st: map): list := {
 	opener = 0

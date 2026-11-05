@@ -1,0 +1,6 @@
+# path_matches subject-first; glob_match kept (card lib-path-matches)
+'use path; path_matches("notes.txt", "*.txt")'	yes
+'use path; path_matches("dir/notes.txt", "*.txt")'	no
+'use path; path_matches("lib/deep/path.warp", "**/*.warp")'	yes
+'use path; path_matches("a.md", "[!a]*")'	no
+'use path; [path_matches("file1.md", "file?.md"), glob_match("file?.md", "file1.md")]'	[yes, yes]

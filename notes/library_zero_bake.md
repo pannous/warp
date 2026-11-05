@@ -196,6 +196,13 @@ The emitter must guarantee these for L3–L5:
   seed-compiles).
 - L3: warp.signature goes right after the wasm header (a custom section may be first), so reading a signature costs
   a few KB, not the whole module.
+- L3 landed (core/passes/signature.warp): both forms of a module carry warp.signature, pack() of {source hash, uses,
+  slices [name, head line, parse], rules, foreign}; unpacked, never parsed. linked_libraries links a module when the
+  hash is its file's, else warns one line why (no signature, or lib/<m>.warp differs) and compiles it from source; the
+  hash test replaced L5c's same_but_comments. A linked module's words reach the program as its signature's parses
+  (prelude_words.warp with_reached), its rules from the signature: no text of it is read. `warp signature <m>` shows
+  one as warp text. The hash moves to sha256 once the host takes long texts (card signature-sha256). With `use units`
+  the compile went from 19.6 G to 19.3 G instructions.
 - Measured before L3 (2026-11-05): the prelude's untyped parameters compiled as nodes, as a linked prelude would
   take them (a switch in emitter/functions.warp call_values, never committed; data/boxed-measurement.patch of the
   worktree). The emitter types a function by its first call's argument kinds (call_values), not the analyzer's slots.
@@ -206,3 +213,6 @@ The emitter must guarantee these for L3–L5:
     about +20% of its run, the compile being ~5.1 G).
   So L4 stays small: typed overloads only for the prelude's numeric words a hot loop calls (fourth_root, round_to,
   pixel_channel, is_digit and the like, random_*, mean); the compiler itself doesn't feel it.
+- L5 (wasm-module-linking): points 1 (closure funcref), 3 (Instance), 2 (class descriptors) landed; L5c programs and
+  modules import their modules' words (notes/runtime_linking.md "Load-time linking"). warp.module's content moves
+  into warp.signature with L5e (agreed with warp-sugar).

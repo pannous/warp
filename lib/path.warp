@@ -56,9 +56,11 @@ relative_path(from: text, to: text): text := {
 	steps = [".." for i in common + 1 to #a] + b[common:]
 	if #steps == 0 then "." else steps.join("/")
 }
-// glob_match(pattern, path): * any run of characters within one part, ? one character but "/", [abc] [a-z] one of
+// path_matches(path, pattern): subject-first (lib-consistency matcher order). * any run of characters within one part, ? one character but "/", [abc] [a-z] one of
 // them ([!…] or [^…] none of them), ** any number of whole parts ("**/" none too); everything else is itself
-glob_match(pattern: text, path: text): bool := glob_from(pattern, 1, path, 1)
+path_matches(path: text, pattern: text): bool := glob_from(pattern, 1, path, 1)
+// glob_match(pattern, path): kept; prefer path_matches(path, pattern)
+glob_match(pattern: text, path: text): bool := path_matches(path, pattern)
 glob_from(p: text, i: int, s: text, j: int): bool := {
 	if i > #p { return j > #s }
 	c = p#i

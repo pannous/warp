@@ -271,8 +271,14 @@ def slot_arity(slot: text): int := match slot {
 	"set": 2
 	_: 1
 }
-# the class's descriptor, made once into its global at its first use
-def descriptor_code(class_name: text): list := call_code(descriptor_word(class_name).index)
+# the class's descriptor, made once into its global at its first use; a linked module's class its module's (its
+# instances and the program's are one class only so)
+def descriptor_code(class_name: text): list := call_code(linked_descriptor(class_name) ?? descriptor_word(class_name).index)
+def linked_descriptor(class_name: text): any {
+	name = descriptor_prefix + class_name
+	for image in module.linked_images { for k in 0..<#image.functions { if image.functions[k].name == name { return linked_index(image, k) } } }
+	ø
+}
 def descriptor_word(class_name: text): Function {
 	name = descriptor_prefix + class_name
 	if name in module.class_words { return module.class_words[name]#1 }
