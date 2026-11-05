@@ -9,6 +9,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 
 ## Parked
+- phrase-params (user: park for now; card definition-heads-phrases): in `send v to c := …` which words are parameters: (a) the body decides (used or typed words), () optional, unifying the older `to add a to b:` reader (an unused plain word there turns fixed); (b) always parentheses. Also: a phrase head starting with a keyword word (`send` is an emit word) refused aloud vs outranking the keyword. Provisional (a) on the branch only, not landed.
 - class-text (sound notes), unit plurals, def-first (b), note tests: discuss later (user).
 - event-handlers (prose discussion with the user, no popups; block-parameters-captures landed): proposed `on(event: Event, body: block)` in the prelude, `emit(event, data)` runs the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol; (3) decided: on-frame-headless. Branch event-handlers-unknown (a4d0dde771) only a reference.
 - graphics-plain (warp-markup, parked): display alias table with notes; bare width/height as canvas sides with did-you-mean.
