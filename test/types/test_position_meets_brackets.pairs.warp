@@ -1,0 +1,23 @@
+# a position meeting [ ], an index meeting #, insert(at:) taking an index, adding two counts an error
+# (decision index-position, notes/index_position.md; card pure-lane-position)
+'xs = [10 20 30]; xs[xs.index_of(20)]'	20
+'xs = [10 20 30]; p = xs.index_of(30); xs[p]'	30
+'xs = [10 20 30]; xs#(xs.index_of(20))'	20
+'xs = [10 20 30]; xs.index_of(20)'	2
+'xs = [10 20 30]; xs#(xs.argmax())'	30
+'xs = [10 20 30]; xs[argmax(xs)]'	30
+'xs = [10 20 30]; i = argmin(xs); xs#i'	10
+'xs = [10 20 30]; p: position = 2; xs[p]'	20
+'xs = [10 20 30]; i: index = 2; xs#i'	30
+'xs = [10 20 30]; f(p: position) := xs[p]; f(1)'	10
+'xs = [10 20 30]; xs[xs.index_of(10) + 1]'	20
+'xs = [10 20 30]; xs#(xs.index_of(10) + 1)'	20
+'xs = [10 20 30]; p = xs.index_of(30); xs[p - 1]'	20
+'xs = [10 20 30]; xs#(argmin(xs) + 1)'	20
+'xs = [10 20 30]; next = xs.index_of(10) + 1; xs[next]'	20
+'xs = [10 20 30]; p = xs.index_of(10); q = xs.index_of(30); xs[q - p]'	30
+'xs = [10 20 30]; i = 1; xs[i]'	20
+'xs = [10 20 30]; xs.insert(15, at: xs.index_of(20)); xs'	[10 15 20 30]
+'xs = [10 20 30]; xs.insert(5, at: 0); xs'	[5 10 20 30]
+'xs = [10 20 30]; p = xs.index_of(10); q = xs.index_of(30); p + q'	error
+'xs = [10 20 30]; xs[xs.index_of(99)]'	error
