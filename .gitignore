@@ -1,8 +1,8 @@
 vendor
 target
 *.wasm
-# the word index `warp rebuild` writes beside the prebuilt modules
-lib/modules/words.tsv
+# the library index `warp rebuild` writes beside the prebuilt modules
+lib/modules/index.tsv
 wiki/
 out
 

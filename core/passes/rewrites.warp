@@ -701,12 +701,10 @@ packed_rules(files: map): map := {
 	}
 	packed
 }
-# each standard module with rules, the words they need (rule_needs) joined by spaces, baked in: module_text writes
-# std_rule_needs() in, so a compile reads no other module's text (38 of them at every compile were ~5 ms of a small one).
-# With WARP_LIB (a module edited after the build) and in a compiler built by one that bakes none: read off the texts
-STD_RULE_NEEDS = std_rule_needs()
-std_rule_needs(within: text = ""): map := {}
-rule_needs_by_module(): map := if #STD_RULE_NEEDS > 0 and warp_lib() == ø then STD_RULE_NEEDS else scanned_rule_needs()
+# each standard module with rules, the words they need (rule_needs) joined by spaces, from the library index, so a
+# compile reads no other module's text (38 of them at every compile were ~5 ms of a small one). With WARP_LIB (a module
+# edited after the build): read off the texts
+rule_needs_by_module(): map := if warp_lib() == ø then library_index_section("needs") else scanned_rule_needs()
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {

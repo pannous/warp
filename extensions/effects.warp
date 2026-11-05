@@ -14,7 +14,7 @@ pure_host_words = ["std_pure"]
 # the effect a word has by itself, else ø: FFI of a foreign line's word, IO of a host or emitter word that does IO
 own_effect(word: text, foreign: map): text? := {
 	if foreign.has(word) { return "FFI" }
-	if word in emitter_io_words or (host_words.has(word) and word not in pure_host_words) { return "IO" }
+	if word in emitter_io_words or (host_words().has(word) and word not in pure_host_words) { return "IO" }
 	ø
 }
 

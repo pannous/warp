@@ -158,17 +158,17 @@ mark_main() {
 
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
 # beside warp.wasm (card runtime-prebuilt) with its machine code, which linked runs load (card runtime-cwasm-shipped),
-# the standard modules in modules/ (card modules-prebuilt) and their word index, which implicit module pulls read
-# (compiler.warp WORD_INDEX; card store-hit-words-index)
-companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/words.tsv 2>/dev/null); }
-# an entry stored or fetched before words.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
+# the standard modules in modules/ (card modules-prebuilt) and the library index, which a compile reads
+# (library.warp LIBRARY_INDEX; card store-hit-words-index)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv 2>/dev/null); }
+# an entry stored or fetched before index.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
 # the modules step of its own compiler into a scratch folder, only the index taken (store-hit-words-index)
 words_kept() {
 	local entry=$store/$hash scratch
-	[ -f "$entry/warp.wasm" ] && [ -f "$entry/runtime.wasm" ] && [ ! -f "$entry/modules/words.tsv" ] || return 0
+	[ -f "$entry/warp.wasm" ] && [ -f "$entry/runtime.wasm" ] && [ ! -f "$entry/modules/index.tsv" ] || return 0
 	scratch=$(mktemp -d)
 	(cd "$tree" && WARP_LIB=$lib "$warp" "$entry/warp.wasm" modules "$scratch" "$entry/runtime.wasm") >/dev/null 2>&1
-	[ -f "$scratch/words.tsv" ] && publish "$scratch/words.tsv" modules/words.tsv && logged warp words-index-made
+	[ -f "$scratch/index.tsv" ] && publish "$scratch/index.tsv" modules/index.tsv && logged warp words-index-made
 	rm -rf "$scratch"
 }
 # a compiler's name before the rename (transition)

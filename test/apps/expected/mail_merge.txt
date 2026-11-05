@@ -1,0 +1,36 @@
+4 letters
+
+name                email              city
+------------------  -----------------  ----------
+Ada Lovelace        ada@example.com    London
+Grace Hopper        grace@navy.mil     NYC
+Alan Turing         alan@bletchley.uk  Manchester
+Émilie du Châtelet  emilie@paris.fr    Paris
+
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Letters</title></head>
+<body>
+<article>
+  <h1>Dear Ada Lovelace,</h1>
+  <p>We wrote to <a href="mailto:ada@example.com">ada@example.com</a> in London.</p>
+  <p class="note">Welcome aboard</p>
+</article>
+<article>
+  <h1>Dear Grace Hopper,</h1>
+  <p>We wrote to <a href="mailto:grace@navy.mil">grace@navy.mil</a> in NYC.</p>
+  <p class="note">Hello &amp; thanks</p>
+</article>
+<article>
+  <h1>Dear Alan Turing,</h1>
+  <p>We wrote to <a href="mailto:alan@bletchley.uk">alan@bletchley.uk</a> in Manchester.</p>
+  <p class="note">&lt;script&gt;alert(1)&lt;/script&gt;</p>
+</article>
+<article>
+  <h1>Dear Émilie du Châtelet,</h1>
+  <p>We wrote to <a href="mailto:emilie@paris.fr">emilie@paris.fr</a> in Paris.</p>
+  <p class="note">5 &gt; 3 &amp; café</p>
+</article>
+</body></html>
+
+no live script tag: yes
+escaped ampersand: yes

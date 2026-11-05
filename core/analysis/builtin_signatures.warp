@@ -50,20 +50,31 @@ typed_line(line: text, library: text): Builtin? := {
 # from host` (lib/draw.warp)
 host_library = "host"
 host_kinds = {int: ValueKind.Int, float: ValueKind.Float, i32: ValueKind.I32, ctext: ValueKind.CText, node: ValueKind.Node}
-host_words = with_library_host_words(core_host_words)
+# (made when first asked: the library's lines come from the index, library.warp library_index_section)
+global host_words_held = ø
+host_words(): map := {
+	if host_words_held == ø { host_words_held = with_library_host_words(core_host_words) }
+	host_words_held
+}
 with_library_host_words(words: map): map := {
 	all = {}
 	for name in words.keys { all[name] = words[name] }
-	for path in LIBRARY_FILES.keys {
-		content = LIBRARY_FILES[path]
-		if content.contains(" from " + host_library) {
-			for line in content.split("\n") {
-				word = typed_line(line, host_library)
-				if word != ø { all[word.name] = host_word(word, path) }
-			}
-		}
+	lines = library_index_section("host")
+	for line in lines.keys {
+		word = typed_line(line, host_library)
+		if word != ø { all[word.name] = host_word(word, lines[line]) }
 	}
 	all
+}
+# each host line of the files, by the file's path
+host_lines_in(files: map): map := {
+	lines = {}
+	for path in files.keys {
+		if files[path].contains(" from " + host_library) {
+			for line in files[path].split("\n") { if typed_line(line, host_library) != ø { lines[line] = path } }
+		}
+	}
+	lines
 }
 # a host line's [parameter kinds, result kinds]; a type no host word crosses as is the library's error
 host_word(word: Builtin, path: text): list := {
@@ -225,7 +236,7 @@ gives_nothing(word: text): bool := {
 takes_map_first(word: text): bool := lines_of(typed_lines, unaliased(word)).any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == "map")
 
 # a word the prelude, libm or the host declares
-is_declared_word(word: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(word)) > 0 or host_words.has(word)
+is_declared_word(word: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(word)) > 0 or host_words().has(word)
 
 # a host word's result kinds as host_words.warp declares them: one int or float, else a node or none
 host_result_kind(results: list): text := if #results == 1 and results#1 != "node" then type_word_kind(results#1) ?? "int" else "empty"
@@ -240,7 +251,7 @@ declared_call_kind(word: text, arguments: int): text? := {
 		if results.any(result => result != results#1) or argument_result(word) != ø { return ø }
 		return declared_result_kind(results#1)
 	}
-	if host_words.has(word) { host_result_kind(host_words[word]#2) } else { ø }
+	if host_words().has(word) { host_result_kind(host_words()[word]#2) } else { ø }
 }
 
 # the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
