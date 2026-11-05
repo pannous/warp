@@ -99,3 +99,20 @@ lib/prelude.warp on disk (one file, about 3 ms to parse per compile, to be measu
    and rebase code goes.
 
 node-wasm-type comes after 5.
+
+## Load-time linking: the probe (data/wasm-linking/: L.wat, P.wat, run.mjs)
+Dynamic linking of separately compiled wasm GC modules works in wasmtime 49.0.2 (`--preload`, with gc,
+function-references and exceptions) and in Node 26 / V8 14.6 (no flags). All 17 checks pass:
+- $Node passes both ways.
+- A $MetaNode subtype that only P defines passes into L and is cast there.
+- Shared mutable and immutable globals work.
+- funcref and typed tables work with call_ref.
+- Exception tags with i32 or $Node payloads are caught across modules.
+
+The emitter must guarantee these for L3–L5:
+- Every shared type has the same rec-group shape in every module. A reordered or split group fails at link with
+  "incompatible import type".
+- $Node stays open; $MetaNode stays final.
+- A library signature never names a program's own class types (module_layout.warp:62 type_entries differ per
+  program). Those pass as $Node/$Instance/anyref and are cast inside.
+- The warp_error tag is declared once (in the runtime or the library) and imported everywhere.
