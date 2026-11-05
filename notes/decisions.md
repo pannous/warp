@@ -840,7 +840,7 @@ the original questions 1–41: test edits and housekeeping done.
 - implicit-def-parameters (user 2026-11-01): undone. A free name in a `def` is an unknown name; parameters are declared (`def add(a, b)`).
 - word-arithmetic-infix (user 2026-11-01): undone. `plus`, `divided by` are aliases only, not infix words; `one plus two` is not arithmetic.
 - word-arithmetic-parked (user): the test lines expecting `3 plus 4` → 7, `5 subtract 2`, `2 add 3` … (test_add_subtract_words, test_operator_spellings) are parked until those words are declared in place as infix operators (`infix operator plus := +` in a library or the program), never as core language.
-- then-not-pipe (user): `then` is only the branch word; `3 then twice` is not a pipe (`|>` is); test_then_pipe's lines become refusals naming `|>`.
+- then-not-pipe (user): `then` is only the branch word; `3 then twice` is not a pipe (`|>` is); test_then_pipe's lines become refusals naming `|>`. A bare `x > 2 then 5` is refused with the fix `if x > 2 then 5` (user); test_then_pipe:9 becomes that refusal.
 - arm-symbols (user 2026-11-01): undone. An undeclared capitalised word in a match arm is an unknown name; matching.warp declares enum Day.
 - sample-count-rounds (user 2026-11-01, confirmed): a sound's sample count rounds to the nearest sample.
 - Night 2026-10-31 decisions not listed here were reviewed one by one where risky; the rest stand as built (notes/night_2026-10-31.md).
@@ -864,3 +864,5 @@ all operator declarations (`(infix|prefix|suffix|postfix|circumfix)? operator $o
 rows of the atom_readers table. "If you see other patterns on the way that can be improved, don't hesitate to
 implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - after-push-cron (supervisor 2026-11-04, superseded): the */2 cron is gone (user); the pre-push hook starts after-push.sh on every push (9befcabbda). The 18:15 RED (empty WARP_BINARY after a failed lib/ rsync) is still fixed at its cause.
+- 2026-11-05 plan-only-hold (user): "All the other work, if it doesn't contribute to the big plan, must be on hold." Only library-zero-bake-plan work (L1–L5) runs; everything else is parked until the plan lands.
+- 2026-11-05 Supervisor: L5 load-time-linking shape approved (warp-markup-handler-spacing): modules in separate form import warp_runtime; the hosts (driver, playground) link instances depth-first; the splice path (~170 lines) goes once a module links. Steps (a)–(e) land one by one. Prelude stays compiled in until L4.

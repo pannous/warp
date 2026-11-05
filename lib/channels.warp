@@ -9,7 +9,6 @@ use tasks
 // how often `on message from …` looks for messages that arrived
 MESSAGE_POLL = 20ms
 rewrite channel() => Channel()
-rewrite send $v to $c => $c.send($v) where $c = channel()
 rewrite (for $item in $c $body) => while $c.more() { $item = $c.receive(); $body } where $c = channel()
 
 class Channel {
@@ -33,10 +32,13 @@ class Channel {
 	close() := { closed = yes }
 }
 
+// `send v to: c` (decision named-argument-phrases): to a channel of this run, to a machine-wide one (`channel "chat"`,
+// its name and listener) or to the machine-wide channel of a name
+send(value, to) := if to is text then channel_send(to, value) else if to is list then channel_send(to#1, value) else to.send(value)
+
 // the machine-wide channel listens from its assignment on: a variable holds its name and its listener
 rewrite channel $name => machine_channel($name)
 rewrite $c.send($v) => channel_send($c#1, $v) where $c = channel $name
-rewrite send $v to $c => channel_send($c#1, $v) where $c = channel $name
 rewrite $c.receive() => machine_receive($c#2) where $c = channel $name
 
 // `on message from "chat" {…}`: the block runs for each message that arrives on the machine-wide channel, the message as

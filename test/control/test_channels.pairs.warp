@@ -2,7 +2,7 @@
 
 # a_value_sent_in_a_task_is_received
 'ch = channel(); go { ch.send(42) }; ch.receive()'	42
-'ch = channel(); go { send 7 to ch }; ch.receive() * 2'	14
+'ch = channel(); go { send 7 to: ch }; ch.receive() * 2'	14
 
 # a_machine_channel_has_the_same_words
 'chat = channel "warp-test-p155"; chat.send("hi"); chat.receive()'	'hi'

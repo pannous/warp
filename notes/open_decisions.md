@@ -5,6 +5,7 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+(zero-bake hold, user via Supervisor 2026-11-05: only questions serving the library zero-bake plan are asked; others queue here.)
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 

@@ -1,0 +1,31 @@
+# TOML 1.0 edge cases not covered by test_toml / test_toml_conformance (card lib-toml-edges)
+
+# empty / whitespace+comments-only documents
+'use toml; [parse_toml("") == {}, parse_toml("   \\n\\t\\n  # only\\n") == {}]'	[yes, yes]
+
+# empty quoted key; empty segment in a dotted path (root keys are "" then a)
+«use toml; m = parse_toml("\\"\\" = \\"v\\"\\na.\\"\\".b = 1"); [m.keys, m[""], m["a"].keys, m["a"][""]["b"]]»	[["", "a"], "v", [""], 1]
+
+# spaces around dotted keys / table header segments
+«use toml; m = parse_toml("a . b = 1\\n[  c  .  d  ]\\ne = 2"); [m["a"]["b"], m["c"]["d"]["e"]]»	[1, 2]
+
+# quoted key that looks dotted stays one key (index via a name: m["f.g"] is a field path in warp)
+«use toml; m = parse_toml("\\"f.g\\" = 3"); k = "f.g"; m[k]»	3
+
+# empty arrays (nested); trailing comma in an array is allowed
+«use toml; m = parse_toml("a = []\\nb = [[], []]\\nc = [1, 2,]"); [m["a"], m["b"], m["c"]]»	[[], [[], []], [1, 2]]
+
+# inline table duplicate key refused (error_safe adds "." when the message ends in " a")
+«use toml; (try { parse_toml("t = {a = 1, a = 2}") } catch e { "" + e }) == "toml line 1: duplicate key a."»	yes
+
+# unicode escapes; multiline line-continuation; literal multiline keeps backslash text
+«use toml; m = parse_toml("u = \\"\\\\u0041\\\\U00000042\\"\\ns = \\"\\"\\"\\\\\\n  X\\"\\"\\"\\nlit = '''\\\\n'''"); [m["u"], m["s"], m["lit"]]»	["AB", "X", "\\n"]
+
+# date-time fringe: +00:00 offset, fractional Z, local-time with fraction
+«use toml; m = parse_toml("a = 1979-05-27T07:32:00+00:00\\nb = 1979-05-27T07:32:00.123Z\\nc = 23:59:59.999999"); [m["a"]["value"], m["b"]["value"], m["c"]["toml"]]»	["1979-05-27T07:32:00+00:00", "1979-05-27T07:32:00.123Z", "local-time"]
+
+# array-of-tables: leading empty row, then named rows
+«use toml; m = parse_toml("[[p]]\\n[[p]]\\nname = \\"x\\"\\n[[p]]\\nname = \\"y\\""); [count(m["p"]), m["p"][0] == {}, m["p"][1]["name"], m["p"][2]["name"]]»	[3, yes, "x", "y"]
+
+# control character in a comment; bare True is not a boolean; missing value after =
+«use toml; [(try { parse_toml("a = 1 # hi" + chr(1)) } catch e { "" + e }), (try { parse_toml("t = True") } catch e { "" + e }), (try { parse_toml("a =") } catch e { "" + e })]»	["toml line 1: a control character in a comment", "toml line 1: no value True", "toml line 1: a value expected"]

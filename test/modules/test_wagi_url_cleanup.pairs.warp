@@ -1,0 +1,8 @@
+// lib/wagi.warp decodes through lib/url.warp (card lib-url-wagi-cleanup, consistency audit finding 10): wagi_query is
+// url's query_map, a malformed %zz stays literal as in url
+'use wagi; wagi_query("a=1&b=x+y")'	{a: "1", b: "x y"}
+'use wagi; wagi_query("q=caf%C3%A9&n=100%zz")'	{q: "café", n: "100%zz"}
+'use wagi; use url; wagi_query("k%3D=v=w&e") == query_map("k%3D=v=w&e")'	yes
+'use wagi; wagi_query("x=%2")'	{x: "%2"}
+'use wagi; wagi_query("")'	{}
+'use wagi; use url; url_decoded("%zz%41") == url_decode("%zz%41")'	yes
