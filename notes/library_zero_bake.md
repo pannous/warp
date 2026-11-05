@@ -137,6 +137,19 @@ $Instance or anyref and are cast inside.
   foreign_types: { … }, host: { word: [parameters, result] }, rules: <packed rules>, tags: [ … ],
   closures: [[n, target, captured, shown]…] }
 ```
+**Class group (agreed with L5, point 3).** Instance and a Class descriptor struct join the fixed gc_names types, so
+there is no prelude class group. A module's classes form one rec group, directly after the fixed types and the
+function types its fields name. Each class is `sub Instance` or `sub` its parent, in classes_parents_first order
+(depth 0 first, then declaration order).
+- warp.signature `class_group`: a list of [name, parent ("" for Instance, "module/Class" for another module's
+  class, whose group comes earlier), the struct's definition bytes as the module wrote them]. Inside those bytes, a
+  type reference is tagged: [0, gc_names index] for a fixed type, [1, index from the group's start] for a class of
+  the group, [2, the function signature written out] for a function type. An importer rebuilds the bytes against
+  its own type section and emits the group byte for byte.
+- Class identity goes through a descriptor global exported as `class/<Name>`, never the struct type: two groups of
+  one shape canonicalize to one type.
+- `classes` (fields with warp types, method heads) stays beside it for the analyzer.
+
 `warp.module` (the binary layout: kinds, closures, relocations for the splicing path) stays until L5 removes the
 splice. The parse-time union of all modules' `aliases`, `operators`, `block_last` words, `words`→module, `classes`
 and `tags` is gathered from these sections or kept in an index file; L2 measures which (question (a)).

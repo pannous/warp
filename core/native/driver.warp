@@ -656,7 +656,9 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 	start = allocate(EXTERN_BYTES)
 	start_name = "warp/start"
 	if wasmtime_instance_export_get(context, instance, start_name, start_name.length, start) {
-		checked(wasmtime_func_call(context, start + 8, 0, 0, 0, 0, trap), trap)
+		# (a module's start is its main: its value, if any, dropped)
+		results_count = native_long(wasm_functype_results(wasmtime_func_type(context, start + 8)))
+		checked(wasmtime_func_call(context, start + 8, 0, 0, allocate(VALUE_BYTES * MAX_RESULTS), results_count, trap), trap)
 	}
 }
 
