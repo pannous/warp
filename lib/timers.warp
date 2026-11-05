@@ -39,3 +39,6 @@ export timer_fired(id: int) := {
 	handler = timer_handlers#id
 	handler()
 }
+
+// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
+signal_listen(signal: int, changes_only: int, listener: int) from host
