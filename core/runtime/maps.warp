@@ -7,6 +7,7 @@ use "errors.warp"
 use "fields.warp"
 use "lists.warp"
 use "nodes.warp"
+use "nodes.warp"
 use "show.warp"
 use "text.warp"
 use "types.warp"
@@ -235,6 +236,14 @@ with_entries_of(m: Node, more: Node): Node := {
 	m
 }
 # `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none
+# each operator code's case, as cases (a program's Op·cases, by spelling) gives its spelling: a match binds a key's
+# operator by its code through this list, made once (node_cases.warp Op·coded)
+operator_cases(cases: Node): list := {
+	spellings = operator_spellings()
+	found = new_list(#spellings)
+	for i in 1 to #spellings { found#i = map_get_or(cases, node_text(spellings#i), node_text(spellings#i)) }
+	found
+}
 map_get_or(m: Node, key: Node, fallback: Node = ø): Node := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))

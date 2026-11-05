@@ -59,8 +59,22 @@ def base64_decode_bytes(t: text): list {
 }
 base64_decode(t: text): text := from_utf8(base64_decode_bytes(t))
 
+// hex, the one story (card lib-hex-unify): hex_byte(255) is "ff", hex_encode_bytes([0, 171]) is "00ab", hex_encode(t)
+// a text's UTF-8 bytes; hex_value("f") is 15 and hex_value("1F") 31, -1 for an empty text or any character that is no
+// hex digit (never raising, for scanners such as url's %HH); hex_decode_bytes and hex_decode are strict and raise
 hex_byte(n: int): text := HEX_DIGITS[n /! 16] + HEX_DIGITS[n % 16]
-hex_encode(t: text): text := join([hex_byte(n) for n in to_utf8(t)], "")
+hex_encode_bytes(bytes: list): text := join([hex_byte(b) for b in bytes], "")
+hex_encode(t: text): text := hex_encode_bytes(to_utf8(t))
+hex_value(digits: text): int := {
+	if digits == "" { return -1 }
+	n = 0
+	for c in digits {
+		v = digit_value(HEX_DIGITS, lower(c))
+		if v < 0 { return -1 }
+		n = n * 16 + v
+	}
+	n
+}
 
 // the bytes a hex text spells, for data that is no UTF-8 text (compressed, hashed): hex_decode_bytes("ff00") is [255, 0]
 // strict: an odd number of digits or a character that is no hex digit (either case) raises with its position
@@ -76,7 +90,7 @@ def hex_decode_bytes(t: text): list {
 }
 // the value of one hex digit (either case) at a position, raising for any other character
 encoding_hex_digit(c: any, at: int): int := {
-	v = digit_value(HEX_DIGITS, lower(c))
+	v = hex_value(c)
 	if v < 0 { raise "hex: " + c + " at " + str(at) + " is no hex digit" }
 	v
 }

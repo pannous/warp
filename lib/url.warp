@@ -1,11 +1,12 @@
 // The standard library module url: `use url`, percent-encoding of a text's UTF-8 bytes (RFC 3986) and query strings:
 // url_encode("é") is "%C3%A9", query_map("a=1&b=x+y") is {a: "1", b: "x y"}, query_text({a: "1"}) is "a=1"
 use text
+use encoding
 
 URL_UNRESERVED = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~"
 URL_HEX = "0123456789ABCDEF"
 
-url_hex_value(c: any): int := { v = -1; u = upper(c); for i in 0 ..< 16 { if URL_HEX[i] == u { v = i } }; v }
+url_hex_value(c: any): int := hex_value(c)
 url_byte(n: int): text := if URL_UNRESERVED.contains(chr(n)) and n < 128 then chr(n) else "%" + URL_HEX[n /! 16] + URL_HEX[n % 16]
 url_encode(t: text): text := join([url_byte(n) for n in to_utf8(t)], "")
 

@@ -1,0 +1,4 @@
+# money_split keeps its exact amounts (card lib-markup-and-money-polish); the "rule word units_shown" warning seen on a
+# behind checkout does not print on a current build (stderr is not asserted by pairs tests)
+'use money; money_split(money_of(100, "EUR"), 3).map(m => m.text())'	["EUR 33.34", "EUR 33.33", "EUR 33.33"]
+'use money; money_split(money_of(1, "USD"), 3).map(m => m.text())'	["USD 0.34", "USD 0.33", "USD 0.33"]
