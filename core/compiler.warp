@@ -93,8 +93,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	link_libraries(images, if linking and module.relocating then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}
 	timed("checked_program")
-	# (the prelude being written is the program's use of it, never reached a second time)
-	program = checked_program(foreign#1, folder, if module_written == "prelude" then "" else prelude_source)
+	program = checked_program(foreign#1, folder, prelude_source)
 	timed("checked_program done")
 	c_functions = with_used_c_functions(foreign#2)
 	found = checked_facts(known)
