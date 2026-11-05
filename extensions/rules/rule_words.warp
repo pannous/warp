@@ -3,7 +3,7 @@
 # (a rest hole's items), `where routed($program)` holds when the word gives yes. Each word takes the code its rule's
 # holes bound, `$program` the whole program, and runs inside the compiler.
 # warp functions as one WGSL shader (lib/prelude.warp paint rules) are extensions/rules/wgsl.warp's words
-use "wgsl.warp"
+use wgsl
 
 # the mark of a program's function named as a library word, its own (core/passes/prelude_words.warp own_word)
 own_mark = "·own"

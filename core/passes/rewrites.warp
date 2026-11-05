@@ -37,7 +37,7 @@ use "../analysis/builtin_signatures.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
 use "main_globals.warp"
-use "../../extensions/rules/rule_words.warp"
+use rule_words
 
 rewrite_word = "rewrite"
 where_word = "where"

@@ -7,7 +7,7 @@
 # A form WGSL has none of is refused, naming it; the Rust era's twin: rust-harness:src/lowering/foreign/gpu_maps/kernels.rs
 # The compiler runs these words as rule words (extensions/rules/rule_words.warp); they read the program through its reflection
 # words (function_definition, body_of …).
-use "rule_words.warp"
+use rule_words
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUES_NAME = "values"
