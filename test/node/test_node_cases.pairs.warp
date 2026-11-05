@@ -25,3 +25,7 @@
 'n = parse("a+1"); match n { Key(l, op, r): op as text, _: 0 }'	'+'
 # a lowercase local never shadows a Capitalized constructor: Key(…) with a local key builds the key (card key-shadows-constructor)
 'f() := { key = 3; n = Key(3, Op.Add, 4); [key, key_of(n), value_of(n)] }; f()'	[3, 3, 4]
+# its siblings: a local point beside a class Point, list beside List(…), symbol beside Symbol(…) (card capitalized-call-resolution)
+'class Point { x: int; y: int }; f() := { point = 3; p = Point(1, 2); [point, p.x] }; f()'	[3, 1]
+'f() := { list = 3; l = List([1, 2], Bracket.Square, Separator.Comma); [list, #l] }; f()'	[3, 2]
+'f() := { symbol = 3; s = Symbol("a"); [symbol, name_of(s) == "a"] }; f()'	[3, yes]

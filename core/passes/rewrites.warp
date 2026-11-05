@@ -1941,6 +1941,9 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	if hole != ø { return hole_binding(hole, code, bound) }
 	typed = typed_hole(pattern)
 	if typed != ø { return is_hole_kind(code, typed.kind) and hole_binding(typed.hole, code, bound) }
+	# a mark the code keeps past plain_node and the pattern doesn't write (the subscript offset of `xs[i]`) stands for
+	# the node it marks
+	if is_attribute(code) and not is_attribute(pattern) { return rule_matches(pattern, attribute_marked(code), bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
