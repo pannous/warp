@@ -81,95 +81,21 @@ aliased(n: Node, aliases: list): any := {
 	n
 }
 
-# the empty call `library_sources()` … of the baked table `name`, its computing marked (WARP_TIMES)
+# the empty call `sugar_rules_baked()` of the baked table `name`, its computing marked (WARP_TIMES)
 def is_baking(n: Node, word: text, name: text): bool := {
-	if not is_empty_call(n, word) { return no }
+	if not (is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(word)) { return no }
 	timed("computing " + name)
 	yes
 }
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time (the std modules are lib/<name>.warp); `module_source("compiler/analysis/errors.data")`, a name with an
-# extension, that file of lib/; `library_sources()`, every module of lib/ (library.warp LIBRARY_FILES), `library_parses()`
-# their parses (LIBRARY_PARSES); a definition's parse is cut from its file's where it's reached (slices_cut). A compiled
-# compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
+# extension, that file of lib/. A compiled compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
 module_text(n: Node): any := {
-	if is_baking(n, "library_sources", "LIBRARY_FILES") { return baked_literal("LIBRARY_FILES", library_texts(run_library(), "")) }
-	if is_baking(n, "library_parses", "LIBRARY_PARSES") { return baked_literal("LIBRARY_PARSES", packed_parses(library_texts(run_library(), ""))) }
-	if is_baking(n, "library_slices", "LIBRARY_SLICES") { return baked_literal("LIBRARY_SLICES", baked_slices(library_texts(run_library(), ""))) }
-	if is_baking(n, "library_rules", "LIBRARY_RULES") { return baked_literal("LIBRARY_RULES", packed_rules(library_texts(run_library(), ""))) }
+	if is_baking(n, "sugar_rules_baked", "SUGAR_RULES") { return baked_literal("SUGAR_RULES", sugar_rules_packed()) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
 	source = try read(path) else ø
 	if source == ø then n else source
-}
-is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(name)
-# each file's parse, packed (library.warp LIBRARY_PARSES), made here: never the building compiler's own baked one
-packed_parses(files: map): map := {
-	parses = {}
-	for path in files.keys { parses[path] = pack(file_parse(path, files[path])) }
-	parses
-}
-# a library file's parse, parsed once for both tables of parses
-global file_parses = {}
-file_parse(path: text, source: text): Node := {
-	kept = file_parses.get(path)
-	if kept != ø and kept#1 == source { return kept#2 }
-	tree = plain_node(parsed(rules_ended(source)))
-	file_parses[path] = [source, tree]
-	tree
-}
-# a top-level module's slices cut from its file's parse, by their key `<file> <start>` (prelude_words.warp slice_parse):
-# the file is parsed once and a definition keeps its line in the file (card slice-parses-rederive: no baked table of
-# slice parses, 659 KB of the compiler)
-slices_cut(path: text, source: text, tree: Node): map := {
-	cut = {}
-	spans = slice_spans(source)
-	held = statements_by_slice(statements_in(tree), spans, span_lines(source, spans))
-	for index in 0 ..< #spans {
-		owned = held.get("${index}") ?? []
-		cut[slice_key(path, "${spans[index]#2}")] = if #owned == 1 then owned#1 else separated(bracketed(owned, ""), ";")
-	}
-	cut
-}
-# each slice's statements of the file's parse, by the slice's index: a statement goes to the slice its line falls in,
-# a class to the next slice of its name (its node is placed where the statement before it ended, so its line misleads)
-statements_by_slice(statements: list, spans: list, ranges: list): map := {
-	slices_named = {}
-	for index in 0 ..< #spans { slices_named[spans[index]#1] = (slices_named.get(spans[index]#1) ?? []) + [index] }
-	taken = {}
-	held = {}
-	for statement in statements {
-		name = aliased_type_name(statement)
-		named = if name is text then slices_named.get(name) ?? [] else []
-		used = if name is text then taken.get(name) ?? 0 else 0
-		owner = if used < #named then named[used] else slice_holding(ranges, (written_at(statement) ?? [0])#1)
-		if used < #named { taken[name] = used + 1 }
-		if owner != ø { held["${owner}"] = (held.get("${owner}") ?? []) + [statement] }
-	}
-	held
-}
-# the index of the slice whose lines hold the line, ø for none
-slice_holding(ranges: list, wanted_line: int): int? := {
-	for index in 0 ..< #ranges { if ranges[index]#1 <= wanted_line and wanted_line <= ranges[index]#2 { return index } }
-	ø
-}
-# [first, last] line of each slice in its file
-span_lines(source: text, spans: list): list := {
-	ranges = []
-	first_line = 1
-	at = 0
-	for span in spans {
-		first_line += #source[at ..< span#2].split("\n") - 1
-		at = span#2
-		ranges += [[first_line, first_line + #source[span#2 ..< span#3].split("\n") - 1]]
-	}
-	ranges
-}
-# each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
-baked_slices(files: map): map := {
-	slices = {}
-	for path in files.keys { slices[path] = slice_spans(files[path]).map(span => "${span#1} ${span#2} ${span#3}").join("\n") }
-	slices
 }
 # `baked-current <file>`: yes when the library baked into this compiler is cut and parsed as this very compiler cuts
 # and parses it, else no. One built by an older compiler (the seed) carries that one's slices and parses, so `warp
@@ -180,11 +106,9 @@ write_baked_current(file: text) := {
 }
 # [name, baked in, as this compiler makes it of lib/ as it lies now] of each table module_text bakes from the library:
 # `rebake` writes the third over the second, so a lib/-only change needs no compile (decision lib-hash-rebake); a new
-# baked table joins here
-baked_tables(): list := {
-	files = library_texts(run_library(), "")
-	[["LIBRARY_FILES", LIBRARY_FILES, files], ["LIBRARY_SLICES", LIBRARY_SLICES, baked_slices(files)], ["LIBRARY_PARSES", LIBRARY_PARSES, packed_parses(files)], ["LIBRARY_RULES", LIBRARY_RULES, packed_rules(files)]]
-}
+# baked table joins here. Since L4 only the sugar's rules (rewrites.warp SUGAR_RULES): the compiler reads the rest
+# of lib/ from disk
+baked_tables(): list := [["SUGAR_RULES", SUGAR_RULES, sugar_rules_packed()]]
 # a baked table as the code of its read: one segment of its own (baked_segment_text) that `rebake` can write anew
 baked_literal(name: text, table: map): Node := List([symbol("unbaked_table"), List([symbol("baked_segment"), baked_segment_text(name, table)], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
 # a baked table's segment: its body's byte count in BAKED_LENGTH_DIGITS digits, the line `warp.baked <name>` padded to

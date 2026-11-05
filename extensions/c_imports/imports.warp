@@ -136,7 +136,7 @@ c_crate_use(statement: text): any := {
 # need an import (`floor` is warp's, `fmin` libm's)
 warp_word_names(): any := {
 	names = {}
-	for content in [bundled_module("math.warp"), bundled_module("prelude.warp")] {
+	for content in [library_text("math.warp"), library_text("prelude.warp")] {
 		for line in content.split("\n") {
 			trimmed = line.trim()
 			if trimmed.ends_with(" from warp") or trimmed.ends_with(" from emitter") {

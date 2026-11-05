@@ -1,6 +1,5 @@
-# The standard library a compile reads and bundles: lib/'s folder for this run, its modules' texts baked into the
-# compiler (comments blanked) and their baked parses, and a source file's text by its path. Reading lib/ is no
-# parsing: the parser, uses.warp and compiler.warp read through these words.
+# The standard library a compile reads: lib/'s folder for this run, a source file's text by its path, read from disk,
+# and the library index. The parser, uses.warp and compiler.warp read lib/ through these words.
 use os
 use file
 # The lib/ a run reads a program's standard modules from (its own data is built in, module_source): the one the run was
@@ -24,61 +23,16 @@ def warp_lib(): text? {
 def library_of_core(core: text): text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
 # The lib/ the run was given, which run_library answers from now on
 def use_library(folder: text) { given_library = folder }
-# Every module of lib/ by its path within lib/ ("prelude.warp", "native/z.warp", "extensions/sugar/lists.warp"), bundled into the
-# built compiler: uses.warp's module_text writes them in where library_sources() stands when it compiles the compiler,
-# so a compiler needs no lib/ on any disk (decision built-in-lib). A compiler built by one that bundles none yet (an
-# older seed) calls library_sources below and reads them where it runs
-# lib/'s folders the bundle leaves out: core's link and extensions/, the compiler itself, which is compiled in, and the
-# files a build makes; of those, the folders the compiler reads as data while it runs: the sugar's rules, the uncertain
-# extension's operator rows, the modules' compile-time rules (card library-removal-core L1: the extensions' source was 487 KB of the bundle, and their
-# parses beside it, the library baked a second time)
-UNBUNDLED_FOLDERS = ["compiler", "data", "extensions"]
-BUNDLED_DATA_FOLDERS = ["extensions/sugar", "extensions/uncertain", "extensions/rules/modules"]
-LIBRARY_FILES = library_sources()
-# (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
-def library_sources(within: text = ""): map := library_texts(run_library(), within)
-# A bundled module's text as the bundle carries it: each line that is only a comment ("# …", "## …", "// …") left
-# empty, so the compiler carries no comment text and every line and position stays where it was (a shebang `#!` and
-# a line inside a text literal spanning lines are kept). Only the bundle: a module read from disk keeps its comments
-def blanked_comments(source: text): text {
-	lines = source.split("\n")
-	quote = ""
-	for at in 0 ..< #lines {
-		line = lines[at]
-		if quote == "" and is_comment_line(line.trim()) { lines[at] = "" } else if quote != "" or line.contains("\"") or line.contains("'") or line.contains("`") { quote = quote_open_after(line, quote) }
-	}
-	lines.join("\n")
-}
+# whether a line is only a comment ("# …", "## …", "// …")
 def is_comment_line(line: text): bool := line == "#" or line.starts_with("# ") or line.starts_with("##") or line.starts_with("//")
-# the quote a text literal still open after the line opened with (open: "" outside one), as far as a quote, its
-# backslash escapes and a trailing comment (`# `, `//` outside a text) tell
-def quote_open_after(line: text, open: text): text {
-	quote = open
-	at = 0
-	while at < #line {
-		c = line[at ..< at + 1]
-		if quote != "" {
-			if c == "\\" { at += 1 } else if c == quote { quote = "" }
-		} else if c == "\"" or c == "'" or c == "`" {
-			quote = c
-		} else if (c == "#" or c == "/") and (line[at ..< at + 2] == "# " or line[at ..< at + 2] == "//") {
-			return ""
-		}
-		at += 1
-	}
-	quote
-}
-# a bundled module's text, the bundle's one copy (module_source would bake a second one, with its comments)
-def bundled_module(within: text): text := LIBRARY_FILES.get(within) ?? ""
-# whether source is a bundled module's text but for its comments: each line the same, or blank in the bundle where
-# source has a comment (a walk, no copy: asked of every bundled module a compile reads from disk)
-def same_but_comments(bundled: text, source: text): bool {
-	ours = bundled.split("\n")
-	theirs = source.split("\n")
-	if #ours != #theirs { return no }
-	for at in 0 ..< #ours { if ours[at] != theirs[at] and not (ours[at] == "" and is_comment_line(theirs[at].trim())) { return no } }
-	yes
-}
+# lib/'s folders read as no module: core's link, extensions/ (compiled into the compiler) and the files a build makes;
+# of those, the folders the compiler reads as data while it runs: the sugar's rules, the uncertain extension's operator
+# rows, the modules' compile-time rules
+UNREAD_FOLDERS = ["compiler", "data", "extensions"]
+DATA_FOLDERS = ["extensions/sugar", "extensions/uncertain", "extensions/rules/modules"]
+# a file of lib/ by its path within lib/ ("prelude.warp", "extensions/sugar/lists.warp"), read from disk: the compiler
+# carries no library text (notes/library_zero_bake.md L4), "" for none
+def library_text(within: text): text := file_source(run_library() + "/" + within) ?? ""
 
 # the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): map {
@@ -89,53 +43,36 @@ def library_texts(library: text, within: text): map {
 	for name in entry_names.sort() {
 		path = within + name
 		if name.ends_with(".warp") {
-			found[path] = blanked_comments(try read(library + "/" + path) else "")
-		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
+			found[path] = try read(library + "/" + path) else ""
+		} else if not name.contains(".") and not UNREAD_FOLDERS.contains(path) {
 			inner = library_texts(library, path + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
 		}
 	}
 	if within == "" {
-		for folder in BUNDLED_DATA_FOLDERS {
+		for folder in DATA_FOLDERS {
 			data = library_texts(library, folder + "/")
 			for path in data.keys { found[path] = data[path] }
 		}
 	}
 	found
 }
-# A source file's text: a bundled module of lib/ from the bundle, unless WARP_LIB is set and has the file changed
-# after the build (beyond its comments; per module); any other file (the program's own, core reached as lib/compiler) from the disk;
-# ø for none
+# a source file's text, read once a compile; ø for none
 def file_source(path: text): text? {
-	bundled = LIBRARY_FILES.get(library_path(path))
-	if bundled != ø and warp_lib() == ø { return bundled }
-	read_text = try read(path) else ø
-	if read_text == ø or bundled == ø { return read_text ?? bundled }
-	# the bundle's very text when the file differs from it only in its comments, so its baked parse, rules and slices
-	# apply (the bundle carries no comment, blanked_comments); walked once per file and text a run
-	kept = bundled_reads.get(path)
-	if kept == ø or kept#1 != read_text {
-		kept = [read_text, if same_but_comments(bundled, read_text) then bundled else read_text]
-		bundled_reads[path] = kept
-	}
-	kept#2
+	if not file_texts.has(path) { file_texts[path] = try read(path) else ø }
+	file_texts[path]
 }
-global bundled_reads = {}
-# a path's place within lib/ ("native/z.warp"), "" outside it
-def library_path(path: text): text {
-	library = run_library() + "/"
-	if path.starts_with(library) then path[library.length .. path.length] else ""
-}
+global file_texts = {}
 
 # modules/index.tsv: what a compile has to know of the standard library before a program's uses are resolved, a cache
 # derived from lib/ by `warp rebuild` beside the modules it prebuilt (notes/library_zero_bake.md L2): the words taking
 # a block last, the global words, classes and tags of the top modules, the words each module defines (implicit uses),
-# the words each module's rules need, the host lines, each module's source hash, lib/aliases.warp's entries and the
-# sugar's files. A line `<section>\t<key>\t<value>`,
+# the words each module's rules need, the host lines, each module's source hash, lib/aliases.warp's entries, the
+# sugar's files and the cuts of the modules every compile reads (prelude_words.warp slices_of). A line `<section>\t<key>\t<value>`,
 # read once a compile (scanning the modules' texts was the compiler's baked tables, or ~5 ms of a small compile).
 # Without one (the seed's build, a fresh lib/) a section is scanned off lib/ where it runs
 LIBRARY_INDEX = "index.tsv"
-INDEX_SECTIONS = ["block", "global", "class", "tag", "word", "needs", "host", "hash", "alias", "sugar"]
+INDEX_SECTIONS = ["block", "global", "class", "tag", "word", "needs", "host", "hash", "alias", "sugar", "slice"]
 # the modules beside the runtime a compile runs behind, as the modules it links (compiler.warp linked_libraries)
 index_file(): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + LIBRARY_INDEX
 global index_sections_held = ø
@@ -167,11 +104,12 @@ index_section_scanned(section: text): map := match section {
 	"hash": module_hashes()
 	"alias": alias_entries_scanned()
 	"sugar": sugar_modules_scanned()
+	"slice": sliced_modules_scanned()
 }
 # lib/aliases.warp's entries, each word with its fields as the index holds them (parser.warp alias_rows)
 alias_entries_scanned(): map := {
 	entries = {}
-	for row in table_rows(source_parse(run_library() + "/" + ALIAS_FILE, library_on_disk()[ALIAS_FILE])) { entries[row#1] = alias_fields_written(row#1, row#2) }
+	for row in table_rows(source_parse(library_text(ALIAS_FILE))) { entries[row#1] = alias_fields_written(row#1, row#2) }
 	entries
 }
 ALIAS_FILE = "aliases.warp"
@@ -196,7 +134,9 @@ module_hashes(): map := {
 SOURCE_HASH_MODULUS = 4294967291
 source_hash(source: text): text := {
 	hash = 5381
-	for byte in source.bytes { hash = (hash * 33 + byte) % SOURCE_HASH_MODULUS }
+	# (by byte_at: a loop over source.bytes, a list made first, was ~2.6x as dear)
+	size = byte_size(source)
+	for at in 0 ..< size { hash = (hash * 33 + byte_at(source, at)) % SOURCE_HASH_MODULUS }
 	"${#source}-${hash}"
 }
 # the index as lib/ lies now, written into the modules folder; this run goes on with it, the host words made anew
@@ -210,17 +150,8 @@ write_library_index(folder: text) := {
 }
 index_lines(section: text, entries: map): list := [SECTION_MARK + "\t" + section + "\t"] + entries.keys.map(key => section + "\t" + key + "\t" + entries[key])
 
-# Every bundled module's parse, packed (pack), baked in beside its text: module_text writes them in where
-# library_parses() stands as it does the texts (decision runtime-prepended: a compile derives no table of its own
-# library). A compiler built by one that bakes none yet (an older seed) parses them where it runs
-LIBRARY_PARSES = library_parses()
-def library_parses(within: text = ""): map := {}
-# a source's parse, the baked one when the file at `path` is the bundled module of this very text
-def source_parse(path: text, source: text): Node {
-	within = library_path(path)
-	packed = if LIBRARY_FILES.get(within) == source then LIBRARY_PARSES.get(within) else ø
-	if packed != ø then unpack(packed) else plain_node(parsed(rules_ended(source)))
-}
+# a source's parse
+def source_parse(source: text): Node := plain_node(parsed(rules_ended(source)))
 # the source with each rule ending its line in `$s...` ended by `;`: the parser reads `...` at the end of a line as a
 # range going on into the next line (`rewrite loudly $s... => $s...` and the line after it as `$s ... (next line)`),
 # which swallowed the next rule or statement

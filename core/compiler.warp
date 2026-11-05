@@ -21,7 +21,7 @@ library_folder = if not command and #args > 3 then args#4 else run_library()
 use_library(library_folder)
 
 # the prelude's text, whose definitions a program reaches (prelude_words.warp), built in as the compiler's other data
-prelude_source = bundled_module("prelude.warp")
+prelude_source = library_text("prelude.warp")
 
 # the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
 # extended runtime (decision runtime-split)
@@ -138,7 +138,7 @@ linked_libraries(source: text): list := {
 	images = []
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole; a
 	# module written links those it uses, never itself
-	names = if module_written != "" then used_modules(LIBRARY_FILES.get(module_written + module_extension) ?? "") else used_modules(source)
+	names = if module_written != "" then used_modules(library_text(module_written + module_extension)) else used_modules(source)
 	timed("linking from " + folder + ": " + names.join(", "))
 	at = 0
 	while at < #names {
@@ -174,7 +174,7 @@ in_dependency_order(names: list): list := {
 # (two modules using each other: the one met first goes first)
 with_dependencies(name: text, names: list, ordered: list, visiting: list): list := {
 	if name in ordered or name in visiting { return ordered }
-	for inner in used_modules(LIBRARY_FILES.get(name + module_extension) ?? "") { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
+	for inner in used_modules(library_text(name + module_extension)) { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
 	ordered + [name]
 }
 
@@ -262,7 +262,7 @@ write_modules(folder: text, runtime_file: text) := {
 		try { write_spliced_module(name, runtime_file, file) } catch refusal {
 			write_bytes(file, [])
 			write_bytes(spliced_file(file), [])
-			calls_c = #c_declarations_in(LIBRARY_FILES.get(name + module_extension) ?? "") > 0
+			calls_c = #c_declarations_in(library_text(name + module_extension)) > 0
 			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
 		}
 	}

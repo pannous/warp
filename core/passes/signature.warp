@@ -12,9 +12,8 @@ class ModuleSignature { source: text; uses: list; slices: list; rules: list; for
 module_signature_node(name: text): Node := {
 	path = std_module_path(name)
 	source = file_text(path) ?? ""
-	keys = slice_keys([path])
 	uses = use_lines(source)
-	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), slice_parse(keys.get(slice#2)) ?? plain_node(parsed(slice#2, uses))]))
+	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), plain_node(parsed(slice#2, uses))]))
 	foreign = foreign_types(source)
 	curly_list([
 		field_node("source", Text(source_hash(try read(path) else ""))),
