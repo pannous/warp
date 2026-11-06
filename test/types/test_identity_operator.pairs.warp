@@ -1,0 +1,20 @@
+# === and !== (decision same-multi-dispatch): identity, built in and never overridden; a list, map or object the one value, a number, text or yes/no its value of one type
+'xs = [1]; ys = xs; ys === xs'	true
+'xs = [1]; ys = [1]; ys === xs'	false
+'xs = [1.5]; ys = xs; xs !== ys'	false
+'f(a) := a; xs = [1, 2]; f(xs) === xs'	true
+'f(a) := [1, 2]; xs = [1, 2]; f(xs) === xs'	false
+'m = {a:1}; n = m; m === n'	true
+'m = {a:1}; n = {a:1}; m === n'	false
+'class P { x: int }; p = P(1); q = p; p === q'	true
+'class P { x: int }; p = P(1); q = P(1); p === q'	false
+'class P { x: int }; p = P(1); q = P(1); p !== q'	true
+'"ab" === "ab"'	true
+'1 === 1.0'	true
+'0 === no'	false
+'1 === "1"'	false
+'xs = [1, "a"]; x = xs#1; x === 1'	true
+'xs = [1, "a"]; x = xs#2; x === "a"'	true
+'xs = [0, "a"]; x = xs#1; x === no'	false
+'1 === 1.5'	false
+'2 === 2.0'	true

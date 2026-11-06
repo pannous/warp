@@ -20,6 +20,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
 	if a.kind == pending and b.kind != pending { a = TypedCode(b.kind, a.code) }
 	if b.kind == pending and a.kind != pending { b = TypedCode(a.kind, b.code) }
+	if symbol in identities { return identity_code(body, symbol, a, b) }
 	if symbol not in equalities and (a.kind == ValueKind.Bool or b.kind == ValueKind.Bool) and number_like(a.kind) and number_like(b.kind) { return bools_as_ints(body, symbol, a, b) }
 	kind = joint_kind(a.kind, b.kind)
 	# two results not known yet: computed as ints, but of a kind still pending, so `f(x) + g(x) + [y]` reads again
@@ -128,6 +129,27 @@ def identity_with_nothing(body: Body, symbol: text, n: Node): TypedCode {
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
 def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 	tested_as(symbol, runtime_call("node_equal", [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))]))
+}
+# `a === b`, `a !== b`: identity, built in for every type and never overridden (decision same-multi-dispatch): a list,
+# map or object is the one value (same); a number, text, character, yes/no or time has none apart from its value, so
+# two of one type are identical when equal (`1 === 1.0` yes, 1.0 being an int; `1 === 1.5`, `0 === no` and `1 === "1"`
+# no: equality, `==`, is the one across types); a value known only at
+# run time asks the runtime's same_identity
+def identity_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+	if immutable_type(a.kind) != "" and immutable_type(a.kind) == immutable_type(b.kind) { return tested_as(symbol, unmarked_operation(body, "==", a, b)) }
+	if immutable_type(a.kind) != "" or immutable_type(b.kind) != "" or a.kind == ValueKind.Node or b.kind == ValueKind.Node { return tested_as(symbol, runtime_call("same_identity", [TypedCode(ValueKind.Node, boxed(a)), TypedCode(ValueKind.Node, boxed(b))])) }
+	tested_as(symbol, same_code(a, b))
+}
+# the type two values without identity share when identical, "" for a value with an identity of its own
+immutable_type(kind: ValueKind): text := match kind {
+	ValueKind.Int: "int"
+	ValueKind.Float: "float"
+	ValueKind.Bool: "bool"
+	ValueKind.Text: "text"
+	ValueKind.Char: "char"
+	ValueKind.Codepoint: "char"
+	ValueKind.Time: "time"
+	_: ""
 }
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
 def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
