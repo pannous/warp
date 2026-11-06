@@ -968,3 +968,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - error-gaps: split into three: the Fail effect first (extensions/effects.warp), WIT result<T, string> at the linked-module edge, catch-in-body (= catch-blocks, parked); the broad card closes.
   - jsx: now, as an extension: `<tag …>…</tag>` in expression position reads into the same markup nodes, `{expr}` holes.
   - investigate-concept (contracts): the user asked how assert, check, require and ensure differ; explained, answer pending.
+  - jsx (refined, user): inline `<div …>` HTML is accepted with a warning that `warp format` turns HTML into warp markup (`div{ … }`) as well; warp format does that rewrite.
