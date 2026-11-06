@@ -1,0 +1,102 @@
+# A literal block given to a function whose block parameter is only ever called, `3000000 times { s += 1 }`: the call
+# becomes the function's body with the block's statements where it calls the parameter, so each round runs them in
+# place instead of calling a closure (card inline-literal-block). Beside iteration_inlining.warp, before lambdas,
+# which would make the block a closure. Left alone: a block that leaves early (return, break, continue) or reads
+# `it`, a recursive function and other arguments not steady
+# where the body reads them more than once.
+
+class BlockFunction { names: list; at: int; body: Node }
+block_function(parts: Definition): BlockFunction? := {
+	names = parts.parameters.map(parameter_name)
+	at = block_parameter_at(parts.parameters)
+	if at == 0 or mentions(parts.body, parts.name) { return ø }
+	block = names#at
+	if mention_count(parts.body, block) != block_call_count(parts.body, block) { return ø }
+	BlockFunction(names, at, parts.body)
+}
+
+# the place of the first parameter typed block, 0 for none
+block_parameter_at(parameters: list): int := {
+	for i in 1 to #parameters { if parameter_type(parameters#i) == "block" { return i } }
+	0
+}
+
+# how often n calls the block named `block` with no arguments, `body()`
+block_call_count(n: Node, block: text): int := {
+	if is_block_call(n, block) { return 1 }
+	count = 0
+	for part in parts_of(n) { count += block_call_count(part, block) }
+	count
+}
+is_block_call(n: Node, block: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(block)
+
+# n with each call of the block parameter as the block's statements
+with_block_inlined(n: Node, block: text, statements_given: Node): Node := {
+	if is_block_call(n, block) { return statements_given }
+	children(n, child => with_block_inlined(child, block, statements_given))
+}
+
+every_loop_variable(n: Node): list := loop_variables(n) + parts_of(n).flat_map(every_loop_variable)
+
+LEAVING_WORDS = ["return", "break", "continue", "it"]
+# the call of such a function on a literal block as its body, else ø
+inlined_block_call(n: Node, functions: map): Node? := {
+	if not is_group(n) or bracket_of(n) != "(" or #n == 0 or not (n#1 is symbol) or not functions.has(name_of(n#1)) { return ø }
+	arguments = arguments_of(items_of(n))
+	for overload in functions[name_of(n#1)] {
+		inlined = inlined_into(overload, arguments)
+		if inlined != ø { return inlined }
+	}
+	ø
+}
+inlined_into(function: BlockFunction, arguments: list): Node? := {
+	names = function.names
+	if #arguments != #names { return ø }
+	given = arguments#(function.at)
+	if not is_curly_group(given) { return ø }
+	if mentioned_names(given, []).any(name => name in LEAVING_WORDS) { return ø }
+	body = with_fresh_locals(sole_statement(function.body), names)
+	for i in 1 to #names {
+		if i != function.at {
+			if mention_count(body, names#i) > 1 and not is_steady(arguments#i) { return ø }
+			body = renamed(body, names#i, arguments#i)
+		}
+	}
+	with_block_inlined(body, names#(function.at), statements(items_of(given)))
+}
+# the body with each variable it binds (`i` of `for i in 1 to n`) freshly named, so the block's names and the
+# caller's never meet them
+with_fresh_locals(body: Node, parameters: list): Node := {
+	number = fresh_number()
+	for name in names_bound(body, []) + every_loop_variable(body) {
+		if name not in parameters { body = renamed(body, name, fresh_name(name, number)) }
+	}
+	body
+}
+
+# the program's functions with a block parameter only called, by name, each overload; none of a top-level variable's
+# name
+block_functions(statements: list): map := {
+	variables = statements.filter(statement => definition_of(statement) == ø).fold([], (found, statement) => names_bound(statement, found))
+	functions = {}
+	for statement in statements {
+		parts = definition_of(statement)
+		function = if parts == ø or parts.name in variables then ø else block_function(parts)
+		if function != ø { functions[parts.name] = overloads_of(functions, parts.name) + [function] }
+	}
+	functions
+}
+
+overloads_of(functions: map, name: text): list := if functions.has(name) then functions[name] else []
+
+block_inlining(program: Node): Node := {
+	functions = block_functions(statements_in(program))
+	if #functions.keys == 0 { return program }
+	words_rewritten(program, part => block_inlined_or_kept(part, functions), functions.keys)
+}
+block_inlined_or_kept(n: Node, functions: map): Node := {
+	inlined = inlined_block_call(n, functions)
+	if inlined == ø then n else inlined
+}
+
+block_inlining_extension = Extension{name: "block_inlining", passes_before: {"lambdas": block_inlining}}
