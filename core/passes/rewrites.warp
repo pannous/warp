@@ -236,8 +236,11 @@ store_word = HiddenWord.StoredValue as text
 stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if is_store(part) then Key(part#2, Op.Assign, part#3) else part) else n
 is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
 
-# the standard modules a module's `use` lines name
-modules_used_by(module: text): list := used_module_text(module).split("\n").filter(line => line.starts_with(use_line_start)).map(line => line[#use_line_start ..].trim())
+# the standard modules a module uses: a linked one's signature says them, any other's `use` lines
+modules_used_by(module: text): list := {
+	signature = linked_signature(module)
+	if signature != ø then signature.uses else used_module_text(module).split("\n").filter(line => line.starts_with(use_line_start)).map(line => line[#use_line_start ..].trim())
+}
 # the program rewritten by the rules of its whole, `where program`, each once, after the rules inside it fired
 # (`$program` their program): lib/web.warp's ending of a program with routes
 with_program_rules(program: Node, rules: list, origins: list): Node := {
@@ -260,12 +263,21 @@ is_type_declaration(statement: Node): bool := match statement {
 }
 
 # the module rules none of whose words the program binds itself: a program's own word keeps its meaning
-unbound_rules(module_rules: list, program: Node): list := if #module_rules == 0 then [] else rules_unbound_by(module_rules, rule_bindings(program))
+unbound_rules(module_rules: list, program: Node): list := {
+	if #module_rules == 0 { return [] }
+	bindings = rule_bindings(program)
+	parts = if module_rules.any(rule => defines_last(rule.pattern)) then nodes_in(program) else []
+	module_rules.filter(rule => is_unbound(rule, bindings) or spells_definition_in(rule, parts))
+}
+# a rule spelling a definition, `unit $name := $value`, keeps the definitions it matches, though their spaced head
+# (`unit hand := 4inch`, decision spaced-definition-head) binds its first word as the program's function
+spells_definition_in(rule: Rule, parts: list): bool := defines_last(rule.pattern) and parts.any(part => rule_matches(rule.pattern, part, {}))
 # [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
 # all the sugar steps of a program (card speed-module-cache)
 rule_bindings(program: Node): list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
 # (a class's method binds no word of the program: `in(u)` of a class keeps `for x in xs`)
-rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function)))
+rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => is_unbound(rule, bindings))
+is_unbound(rule: Rule, bindings: list): bool := not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function))
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (rule_bindings: a
 # program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it
@@ -319,21 +331,20 @@ reaching_template_words(program: Node, rules: list): list := rules_reaching(rule
 # with these alone gives what all the rules give, without trying the others at each node
 rules_reaching(rules: list, needs: list, results: list, statement: Node): list := {
 	mentioned = word_set(tokens_within(statement))
-	picked = []
+	# (a yes/no per rule: `index in picked` of a list compared each index with every picked one, node by node)
+	picked = range_list(#rules).map(index => no)
 	grew = yes
 	while grew {
 		grew = no
 		for index in 0 ..< #rules {
-			if index not in picked and needs[index].all(word => mentioned.has(word)) {
-				picked += [index]
+			if not picked[index] and needs[index].all(word => mentioned.has(word)) {
+				picked[index] = yes
 				for word in results[index] { mentioned[word] = yes }
 				grew = yes
 			}
 		}
 	}
-	reaching = []
-	for index in 0 ..< #rules { if index in picked { reaching += [rules[index]] } }
-	reaching
+	range_list(#rules).filter(index => picked[index]).map(index => rules[index])
 }
 
 # what code must hold for the rule to fire in it (tokens_within): its pattern's words outside holes, and the operator
@@ -564,19 +575,47 @@ first_alphabetic_word(written: text): text := {
 # (decision library-zero-bake-plan 1b)
 module_rule_paths(module: text): list := [std_module_path(module), run_library() + COMPILE_TIME_RULES + module + module_extension]
 COMPILE_TIME_RULES = "/extensions/rules/modules/"
-rules_of_module(module: text): list := module_rule_paths(module).flat_map(path => module_rules_of(path, module))
-# the rules of the module at `path`, of its baked parse when it is the bundled one
+# (a linked module's own rules are its signature's, signature.warp)
+rules_of_module(module: text): list := {
+	linked = linked_signature(module)
+	if linked == ø then module_rule_paths(module).flat_map(path => module_rules_of(path, module)) else linked.rules + module_rules_of(module_rule_paths(module)#2, module)
+}
+# the rules of the module at `path`, read once a compile: the sugar's baked ones while its file is the text they were
+# baked of
+global module_rules_held = {}
 module_rules_of(path: text, module: text): list := {
-	source = file_text(path) ?? ""
-	within = library_path(path)
-	baked = if LIBRARY_FILES.get(within) == source then LIBRARY_RULES.get(within) else ø
-	if baked != ø { return items_of(unpack(baked)).map(packed => unpacked_rule(packed, module)) }
-	written_rules(path, source, module)
+	key = path + " " + module
+	if not module_rules_held.has(key) { module_rules_held[key] = module_rules_read(path, module) }
+	module_rules_held[key]
+}
+# (the bake trusted as the library index is, rule_needs_by_module: its file's hash asked only under WARP_LIB, a lib/
+# edited since the build; reading and hashing the sugar's files was ~10 ms a compile)
+module_rules_read(path: text, module: text): list := {
+	baked = SUGAR_RULES.get(path.remove_prefix(run_library() + "/"))
+	place = if baked != ø then baked.find("\n") else ø
+	if place != ø and (warp_lib() == ø or baked[0 ..< place - 1] == source_hash(file_text(path) ?? "")) { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
+	written_rules(path, file_text(path) ?? "", module)
+}
+# The sugar's rules (extensions/sugar), the compiler's own and read by every compile, baked in packed (rule_node):
+# parsing their 45 KB was ~0.3 s of a small compile (notes/library_zero_bake.md L4), the only library text the
+# compiler still bakes. By file within lib/, its source hash, a line break, then its rules packed. uses.warp
+# module_text writes them in where sugar_rules_baked() stands; a compiler built by one that bakes none (an older seed)
+# parses them where it runs, and `warp rebuild` builds it once more (core/native/warp.warp rebaked)
+SUGAR_RULES = sugar_rules_baked()
+sugar_rules_baked(within: text = ""): map := {}
+# the sugar's rules as the bake holds them, read off lib/ as it lies now
+sugar_rules_packed(): map := {
+	packed = {}
+	for path in sugar_modules_scanned().keys.map(module => module + module_extension) {
+		source = library_text(path)
+		packed[path] = source_hash(source) + "\n" + pack(List(rules_parsed(source_parse(source), "", source).map(rule_node), Bracket.Square, Separator.Comma))
+	}
+	packed
 }
 # (a rule line the parse doesn't give a rule of fails loudly, naming it: a line before it left an apostrophe or a
 # bracket open, which took the rules after it in, and they were gone without a word)
 written_rules(path: text, source: text, module: text): list := {
-	rules = rules_parsed(source_parse(path, source), module, source)
+	rules = rules_parsed(source_parse(source), module, source)
 	lines = lines_of(source)
 	rule_lines = (1 to #lines).filter(i => lines#i.trim().starts_with(rewrite_line_start))
 	if #rules < #rule_lines { throw dropped_rules(path, lines, rule_lines, rules, module) }
@@ -686,20 +725,6 @@ dropped_rules(path: text, lines: list, rule_lines: list, rules: list, module: te
 	patterns = rules.map(rule => rule.pattern)
 	dropped = rule_lines.filter(i => rules_parsed(plain_node(parsed(rules_ended(lines#i))), module, lines#i).all(rule => rule.pattern not in patterns))
 	dropped.map(i => path + ":" + i + ": the rule `" + lines#i.trim() + "` was dropped").join("\n") + "\n(a line before it left an apostrophe or a bracket open, even in a comment: `#` starts one only before a blank)"
-}
-# every bundled module's rules, packed (rule_node), baked in beside its parse: uses.warp module_text writes them in where
-# library_rules() stands; reading them off each parse at every compile was a tenth of a small program's (card
-# fixed-startup-cost). A compiler built by one that bakes none reads them where it runs
-LIBRARY_RULES = library_rules()
-library_rules(within: text = ""): map := {}
-# each file's rewrite rules, packed (LIBRARY_RULES): those of a file with any, read off its fresh parse, never the building
-# compiler's baked one (uses.warp baked_tables)
-packed_rules(files: map): map := {
-	packed = {}
-	for path in files.keys {
-		if files[path].contains(rewrite_line_start) { packed[path] = pack(List(rules_parsed(plain_node(parsed(rules_ended(files[path]))), "", files[path]).map(rule_node), Bracket.Square, Separator.Comma)) }
-	}
-	packed
 }
 # each standard module with rules, the words they need (rule_needs) joined by spaces, from the library index, so a
 # compile reads no other module's text (38 of them at every compile were ~5 ms of a small one). With WARP_LIB (a module
@@ -1667,6 +1692,10 @@ is_parenthesized(pattern: Node): bool := is_group(pattern) and bracket_of(patter
 # a rule whose phrase pattern matches runs of a phrase
 matches_runs(rule: Rule): bool := not rule.whole and is_run_pattern(rule.pattern)
 
+# a rule tried on the whole node: one not matching runs, or a run rule spelling a definition at a definition with a
+# spaced head, which spreads into the phrase it matches (head_spread)
+tried_whole(rule: Rule, n: Node): bool := not matches_runs(rule) or (defines_last(rule.pattern) and head_spread(n) != ø)
+
 # a pattern of words without a rest: it matches runs of a phrase
 is_run_pattern(pattern: Node): bool := match pattern {
 	List(words, Bracket.None, Separator.Space): not words.any(word => rest_hole_name(word) != ø)
@@ -1695,7 +1724,7 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 		n = if key_of(n) == opaque_symbol then with_changed_members(n, member => at_place(member, Place.Member, rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
 	for index in 0 ..< #rules {
-		if rules[index].place == Place.Anywhere and not matches_runs(rules[index]) {
+		if rules[index].place == Place.Anywhere and tried_whole(rules[index], n) {
 			result = rule_applied(rules[index], origins[index], n)
 			if result != ø { return rewritten_again(result, rules, origins) }
 		}
@@ -1954,11 +1983,30 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	# the node it marks
 	if is_attribute(code) and not is_attribute(pattern) { return rule_matches(pattern, attribute_marked(code), bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
+	spread = if defines_last(pattern) then head_spread(code) else ø
+	if spread != ø { return rule_matches(pattern, spread, bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
 }
 
+# a definition the parser gave its spaced words as a call head (decision spaced-definition-head: `unit hand := 4inch`
+# is unit(hand) := 4inch), as written for a pattern spelling it spaced, `unit $name := $value` (the phrase unit,
+# $name := $value): a used module's rule sees the form the program wrote
+defines_last(pattern: Node): bool := is_group(pattern) and bracket_of(pattern) == "" and separator_of(pattern) == " " and is_key(items_of(pattern)[#pattern - 1], Op.Define)
+# the code spread so, else ø; the words after the definition's value continue it, as they do a plain definition's
+# (`unit furlong := 201.168 m`, which the parser keeps as `(unit furlong := 201.168) m`)
+head_spread(code: Node): Node? := {
+	trailing = []
+	if is_group(code) and bracket_of(code) == "" and separator_of(code) == " " and #code > 1 {
+		trailing = items_of(code)[1 ..]
+		code = code#1
+	}
+	if not (is_key(code, Op.Define) and is_called_head(key_of(code))) { return ø }
+	words = items_of(key_of(code))
+	value = if #trailing == 0 then value_of(code) else rule_phrase([value_of(code)] + trailing)
+	rule_phrase(words[0 ..< #words - 1] + [placed(Key(words[#words - 1], Op.Define, value), code)])
+}
 # a tuple pattern `($a, $b)` matches a tuple, never the call `f(a, b)`, whose parentheses hold no commas
 tuple_fits(pattern: Node, code: Node): bool := not (bracket_of(pattern) == "(" and separator_of(pattern) == ",") or separator_of(code) == ","
 # an unbracketed phrase pattern `$x.$f $b $a...` matches a phrase, never a sequence of statements (a block `{$b...}`

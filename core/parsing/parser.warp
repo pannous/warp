@@ -105,7 +105,7 @@ def bang_words(source: text): list {
 // front stage 5× slower (card front-stage-5x-slower)
 global prelude_bangs = ø
 def prelude_bang_words(): list {
-	if prelude_bangs == ø { prelude_bangs = bang_words(bundled_module("prelude.warp")) }
+	if prelude_bangs == ø { prelude_bangs = bang_words(library_text("prelude.warp")) }
 	prelude_bangs
 }
 
@@ -290,7 +290,7 @@ def own_spellings(): Spellings := {
 }
 def aliased_spellings(): Spellings := {
 	tables = own_spellings()
-	for row in alias_rows() + extension_operator_rows().flat_map(rows => table_rows(source_parse("extension rows", rows))) { add_alias_entry(tables, row#1, row#2) }
+	for row in alias_rows() + extension_operator_rows().flat_map(rows => table_rows(source_parse(rows))) { add_alias_entry(tables, row#1, row#2) }
 	tables.operator_symbols = longest_first(tables.operator_symbols)
 	tables
 }
@@ -1833,12 +1833,15 @@ def module_sources(modules: list): list {
 // the modules the source's use lines name, each once: `use regex`, `import sound`
 def used_modules(source: text): list {
 	modules = []
-	for statement in code_statements(source) {
+	for statement in code_statements(use_candidates(source)) {
 		words = blank_words(statement)
 		if words.length == 2 and USE_KEYWORDS.contains(words#1) and not modules.contains(words#2) { modules += [words#2] }
 	}
 	modules
 }
+// the lines of a source a use statement may start or stand in: one leads a line, unindented, or follows a `;` (the
+// statements of all the prelude were ~20 ms a compile)
+def use_candidates(source: text): text := source.split("\n").filter(line => USE_KEYWORDS.any(keyword => line.starts_with(keyword + " ") or line.contains("; " + keyword + " "))).join("\n")
 // the use lines of a source, as a slice of it reads them (written_tree's `uses`)
 def use_lines(source: text): text := used_modules(source).map(module => "\nuse " + module).join("")
 // whether the code names the word, not as a part of a longer name: `play` in `play(A4)`, not in `display`; glued to a

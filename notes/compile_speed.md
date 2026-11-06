@@ -131,3 +131,26 @@ lints; a sibling branch) 3.7198e12 (+1.9%); 8225781320 (both) 3.7465e12 (+2.7%);
   hot path keyed by what starts its form costs one lookup, a list of hooks costs each one's own scan. The drift is gone.
 - Not it: the map index's 64-slot scan. Home slots by first-name hash (data/drift/home-slot.patch) measured +0.08%,
   index_last already catches most lookups (card map-hash-index keeps the proper fix for its own sake).
+
+## Typed nodes (card node-wasm-type, 2026-11-06, 5e2cf051bb)
+A node is held as `(ref null $Node)`, no longer anyref: self compile 2582 G → 2351 G instructions (−9.0 %), hello −1 %,
+units −0.6 %. wasmtime runs a `ref.cast` even when the value is statically of the target type (200 M casts of a
+$MetaNode to $Node: 1.13 s, none 0.19 s), so the win came from dropping the casts, not from the type alone. Casts stay
+only where an anyref enters (emitter `entered_node`): a list item (`item_read`), a $Node's data, a host word's node
+result, a call_ref result. Host imports keep anyref; closure entries and class words return anyref (a class word's
+place/set is an i31). A closure's item 0 is a $Closure: read by `closure_slot`, never through the node cast.
+Each class struct is its own wasm type group: a module grouping two classes made another Instant type than a program
+declaring only Instant (cast failure across modules).
+
+## Hot spots after typed nodes (2026-11-06, profile data/profile/53103.sample)
+- lambdas-definitions-index (a14808ff41): parameters_given_functions filtered every definition per call node; by
+  name now: self compile −5.0 %.
+- lexer-codepoints (9dec4062f4): code_only was asked of one source 4–5 times per parse (declared operators, type
+  names, reached modules), each a walk of every character; kept per source now, and rules_reaching's picked a
+  yes/no per rule: self compile −12.5 %, units −18 %, hello −5.4 %. The character compares were not the cost: a
+  pre-check skipping non-delimiters and code points instead of the text measured the same.
+  The kept map (lexer.warp code_only_known) is a global holding every source of a compile: bounded, as each
+  compile gets a fresh instance (the native driver a fresh store per run, the playground a fresh instance per compile,
+  web/playground/driver.js). A host keeping one compiler instance across compiles would grow it: clear it there.
+- Open for the user (morning): typed $items (seed ABI), map_index 14.8 % (scope_with copies maps via field_with,
+  enum ·case lookups by name), GC 15.8 %.

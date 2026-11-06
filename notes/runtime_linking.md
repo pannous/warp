@@ -129,12 +129,13 @@ made_case kind made, since no program decides any more what it makes.
 - Load-time linking (2026-11-05, L5c, card wasm-module-linking): a program whose uses link runs as its own module
   (linked_bytes), importing warp_runtime and each module word it calls from `warp/<m>` by name, each module global
   from its owner as `global/<name>`; the native driver instantiates runtime.wasm and the modules once per run. Every
-  module's linked form links the modules it uses the same way (`warp rebuild` writes all spliced forms, then the
-  linked forms dependencies first). Each module's class group is emitted whole, in one canonical order (by name, a
+  module's linked form links the modules it uses the same way (`warp rebuild` writes them dependencies first). Each module's class group is emitted whole, in one canonical order (by name, a
   parent before its children), in the module and in every importer, so the struct types are one type; class identity
-  is the module's descriptor (its descriptor·<Class> word). A word's kinds come from the linked form's warp.words
-  section (the spliced form, compiled apart, may infer others: sound's text·real). The compiler's own build keeps its
-  modules spliced. Until 2026-11-05 nothing linked at all: the bundle's comment blanking made the text compare fail
+  is the module's descriptor (its descriptor·<Class> word). Since L5e there is one form, modules/<m>.wasm: what a
+  compile needs of it, its words with their kinds, globals, own class structs, builders and the runtime it was built
+  behind, is its warp.signature (prebuilt.warp image_fields / library_image_of); no .splice.wasm. The compiler's own
+  build and `warp build` (modules_linked) compile their modules in. prebuilt-parts.sh makes the machine code of
+  runtime.wasm and each module at install, which a first run would make. Until 2026-11-05 nothing linked at all: the bundle's comment blanking made the text compare fail
   silently, and a plain `warp x.warp` compile had no runtime argument; an unlinked prebuilt module now warns.
 
 ## Separate modules (card runtime-separate-modules; owner: separate-modules)

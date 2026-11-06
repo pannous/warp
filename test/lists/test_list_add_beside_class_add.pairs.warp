@@ -1,0 +1,3 @@
+# a list assigned [] stays a list beside a class declaring add: xs.add(v) appends in place
+'class B { n = 0; add(x) := 1 }; zz = []; zz.add(3); zz'	[3]
+'use collections; out = []; out.add(3); out'	[3]

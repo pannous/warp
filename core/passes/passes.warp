@@ -25,6 +25,7 @@ use "../analysis/source_checks.warp"
 use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
+use "signature.warp"
 
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
 # foreign lines and C imports off the source. with_used: interpolation, then used_passes (the program's rewrite rules,
@@ -129,7 +130,12 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 		passed = pass(passed)
 	}
 	timed("with_reached")
-	with_reached(passed, prelude, no, [std_module_path("prelude")])
+	# (the prelude being built as a module is the program's use of it, never reached a second time: only its alias
+	# calls named, `index_of(rest, piece)` in its text_holes, as with_reached names a program's)
+	if module_written == "prelude" { return aliased(passed, module_aliases(prelude), {}) }
+	# (a linked prelude's definitions from its signature, declared only, its words called in prelude.wasm)
+	linked = linked_signature("prelude")
+	if linked != ø and prelude == prelude_text then with_reached(passed, "", no, [], linked.slices) else with_reached(passed, prelude, no, [std_module_path("prelude")])
 }
 # the source, folder and prelude of the compile at hand, which the used stage's passes read (set by with_used)
 global used_source = ""

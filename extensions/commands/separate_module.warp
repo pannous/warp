@@ -82,9 +82,9 @@ def value_types_end(content: list, at: int): int {
 # the program importing only the host words, runtime functions and types its code uses: its code emitted relocatable
 # (relocates), each index moved to the linked numbering: the called imports, the linked modules' words it calls
 # (imported from `warp/<module>` by name), its own functions; the fixed GC types, the runtime's function types used,
-# each linked module's class group as that module declares it, its own classes, its own function types; its texts
+# each linked module's classes, its own classes, its own function types; its texts
 # behind the runtime's and the linked modules' segments (card wasm-module-linking, L5c)
-def linked_bytes(functions: list, entry: text = "main", words_listed: bool = no): list {
+def linked_bytes(functions: list, entry: text = "main"): list {
 	calls = relocated_operands(functions, relocated.calls)
 	called = range_list(#module.imports + module.runtime_image.functions).filter(index => calls.has(index))
 	words = linked_words_called(calls)
@@ -109,7 +109,7 @@ def linked_bytes(functions: list, entry: text = "main", words_listed: bool = no)
 	types_move = Move(0, retyped)
 	fixed_entries = range_list(fixed).map(i => gc_bytes(gc_definition(module.gc_order[i])))
 	runtime_types = runtime_function_type_entries(concatenated(fixed_entries))
-	class_types = groups.filter(group => #group > 0).map(group => [rec_group_byte] + uleb(#group) + concatenated(group.map(name => gc_bytes(gc_definition(name)))))
+	class_types = classes.map(name => gc_bytes(gc_definition(name)))
 	first_own_type = fixed + #used + #classes
 	c_types = c_import_types()
 	first_word_type = first_own_type + #functions + #c_types
@@ -120,7 +120,7 @@ def linked_bytes(functions: list, entry: text = "main", words_listed: bool = no)
 	own_globals = module.global_order[#module.runtime_image.globals + #linked_globals ..]
 	globals = section(section_ids.globals, vector(own_globals.map(global_entry)))
 	elements = element_section(references_declared(functions.map(f => [f.name, numbering[f.index]])))
-	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data - linked_text_count())]
+	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data)]
 	codes = section(section_ids.code, vector(functions.map(f => moved_body(f, moves))))
 	texts = section(section_ids.data, vector(text_segments()))
 	word_imports = range_list(#words).map(k => name_bytes(module_import_name(words[k]#2)) + name_bytes(words[k]#3.name) + [export_function_byte] + uleb(first_word_type + k))
@@ -129,32 +129,7 @@ def linked_bytes(functions: list, entry: text = "main", words_listed: bool = no)
 	for f in functions { f.index = numbering[f.index] }
 	parts = [types, imports, declared, globals, section(section_ids.export, vector(program_exports(functions, entry, numbering, own_globals))), elements, section(section_ids.data_count, uleb(#module.texts)), codes, texts]
 	names = vector(functions.map(f => index_name(f.index, f.name)))
-	listed = if words_listed then words_section(functions) else []
-	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks() + listed
-}
-# a linked module's words as this compile made them, each its name, parameter kinds and result kind: what a program
-# importing one calls it as (its spliced form, compiled apart, may hold a word of other kinds: sound's text·real)
-words_section_name = "warp.words"
-def words_section(functions: list): list := section(section_ids.custom, name_bytes(words_section_name) + vector(functions.map(f => name_bytes(f.name) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)))))
-# the image's words given the kinds its linked form (the module's <name>.wasm) made them of; a word it lacks keeps
-# its own (the import of one fails at load, naming it)
-def with_linked_kinds(image: LibraryImage, linked: list) {
-	place = section_place(linked, section_ids.custom, words_section_name)
-	if place == ø { throw image.name + ".wasm has no " + words_section_name + " section: warp rebuild writes it anew" }
-	reader = ByteReader(linked, place#1)
-	kinds = {}
-	for i in 0..<read_number(reader) {
-		name = read_name(reader)
-		parameters = []
-		for j in 0..<read_number(reader) { parameters += [read_kind(reader)] }
-		kinds[name] = [parameters, read_kind(reader)]
-	}
-	for word in image.functions {
-		if kinds.has(word.name) {
-			word.kinds = kinds[word.name]#1
-			word.result = kinds[word.name]#2
-		}
-	}
+	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
 }
 # the instance a linked module's items are imported from (core/native/driver.warp instance_path)
 def module_import_name(image: LibraryImage): text := "warp/" + image.name
@@ -176,8 +151,8 @@ def linked_globals_imported(): list {
 	}
 	owned
 }
-# the classes, each linked module's whole group, then the program's own; every group in one canonical order (by
-# name, each class behind its supertype), so a module's group here and in the module itself canonicalize to one type
+# the classes, each linked module's, then the program's own; each group in one order (by name, each class behind its
+# supertype, which a type of its own group must follow: module_layout.warp type_entries)
 def class_groups(fixed: int): list {
 	# (the images come dependencies first: a class two carry, sound's copy of units' Length, is the first's)
 	theirs = []

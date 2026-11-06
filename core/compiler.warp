@@ -21,7 +21,7 @@ library_folder = if not command and #args > 3 then args#4 else run_library()
 use_library(library_folder)
 
 # the prelude's text, whose definitions a program reaches (prelude_words.warp), built in as the compiler's other data
-prelude_source = bundled_module("prelude.warp")
+prelude_source = library_text("prelude.warp")
 
 # the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
 # extended runtime (decision runtime-split)
@@ -60,13 +60,14 @@ left_out_runtime_words(kept: list): list := {
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
 # runtime.wasm, a library module behind it, its operands relocatable (write_module), linking the modules it uses when
-# `links` (its linked form) or compiling them in (its spliced form); a program links them
+# `links`; a program links them unless a `warp build` compiles them in (modules_linked)
 compile(source: text, folder: text, library_runtime: any = ø, links: any = ø): any := {
 	fresh_module()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
 	own = own_build(source)
+	written = source
 	# (the standard modules it names words of without their `use`, as if it said them)
 	timed("implicit uses")
 	source = with_implicit_uses(source, folder)
@@ -77,40 +78,42 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	if #unknown > 0 { throw outside_the_core + "no C signature for " + unknown.join(", ") + ": declare it with a foreign line, `name(x: i32): i32 from 'library'`" }
 	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)
 	prepend_runtime(library_runtime ?? runtime_bytes())
-	linking = (links ?? library_runtime == ø) and prepended()
+	# (the compiler's own build, and a `warp build` whose program stands alone, compile the modules they use in)
+	linking = (links ?? (library_runtime == ø and not own and modules_linked)) and prepended()
+	linked_signatures = {}
 	images = if linking then linked_libraries(source) else []
 	# a program using linked modules runs as its own module beside theirs and runtime.wasm's, importing their words
-	# (L5c, card wasm-module-linking); the compiler's own build keeps them spliced in (it runs with no modules beside it)
-	separately = separate_module_wanted or (#images > 0 and not own and library_runtime == ø)
-	# (linked, a module's words are called as its linked form made them)
-	if separately or module_written != "" { for image in images { with_linked_kinds(image, read_bytes(linked_module_file(image.name))) } }
+	# (L5c, card wasm-module-linking)
+	separately = separate_module_wanted or (#images > 0 and library_runtime == ø)
+	# (`warp build` writes both forms itself; a run needs only the module linked apart, never the whole one first)
+	only_apart = separately and not separate_module_wanted and library_runtime == ø and #images > 0
+	whole_module_wanted = not only_apart
 	relocate_program(separately)
 	shake_runtime(library_runtime == ø and not separately)
 	cut_runtime_words(if own then left_out_runtime_words(COMPILER_BUILD_EXTENSIONS) else [])
-	link_libraries(images, if linking then definition_slices(source).map(slice => slice#1) else [])
+	# (a program's own definition of a module's name is renamed its own, prelude_words.warp with_own_words, the module's
+	# word linked beside it: `clamp(x) := 9` beside math's clamp(x, low, high); a module being built has its own instead)
+	link_libraries(images, if linking and module.relocating then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}
 	timed("checked_program")
 	program = checked_program(foreign#1, folder, prelude_source)
 	timed("checked_program done")
-	c_functions = with_linked_c_functions(with_used_c_functions(foreign#2), library_folder)
+	c_functions = with_used_c_functions(foreign#2)
 	found = checked_facts(known)
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
 	timed("emit")
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), c_functions), emitter_kinds(program))
 	timed("emit done")
-	# a linked module whose words won't take the program's values: said, and the program compiled with its source
-	if made is text and #module.linked_images > 0 {
+	# a linked module whose words won't take the program's values: said, and the program compiled anew with the
+	# modules' sources, nothing of the linked attempt kept; only a binding refusal (emitter.warp link_refusal) is
+	# retried, a program's own error never (every program links the prelude)
+	if made is text and link_refused {
 		warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source"
-		link_libraries([], [])
-		relinked = #diagnosed
-		program = checked_program(foreign#1, folder, prelude_source)
-		checked_facts(relinked)
-		made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), with_used_c_functions(foreign#2)), emitter_kinds(program))
+		return compile(written, folder, library_runtime, no)
 	}
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
 	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
-	# (`warp build` writes both forms itself)
-	if separately and not separate_module_wanted and library_runtime == ø and #module.linked_images > 0 { made = linked_bytes(module.order) }
+	if only_apart { made = linked_bytes(module.order) }
 	# the warnings once the module is made
 	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
 	# and its hints: `A4 is sound's; fix: use sound`, the use warp beautify writes
@@ -129,38 +132,45 @@ checked_facts(known: int): list := {
 }
 
 # the standard modules the source uses, each prebuilt beside runtime.wasm (`warp rebuild`) and linked behind it
-# when its text is the bundled one; any other compiles from its source (a WARP_LIB edit, a module not prebuilt)
+# when its signature's source hash is its file's (signature.warp); any other compiles from its source, said in one
+# line when it was prebuilt (a WARP_LIB edit; a module that calls C is not prebuilt, its file left empty)
 MODULES_FOLDER = "modules"
 linked_libraries(source: text): list := {
+	linked_signatures = {}
 	folder = linked_modules_folder()
 	images = []
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole; a
 	# module written links those it uses, never itself
-	names = if module_written != "" then used_modules(LIBRARY_FILES.get(module_written + module_extension) ?? "") else used_modules(source)
+	# (the prelude too, every program's, linked as any module but by the prelude it is written of)
+	names = (if module_written != "" then used_modules(library_text(module_written + module_extension)) else ["prelude"] + used_modules(source)).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
 	at = 0
 	while at < #names {
 		name = names[at]
 		at += 1
-		bundled = LIBRARY_FILES.get(name + module_extension)
-		# (the prelude is every program's own, its words reached as it reaches them)
-		if name == "prelude" or bundled == ø { continue }
-		wasm = try read_bytes(folder + name + SPLICED_SUFFIX) else ø
+		wasm = try read_bytes(folder + name + ".wasm") else ø
 		# (a module not prebuilt was said by the rebuild, its file left empty; one prebuilt but not linkable is said here,
 		# never silently compiled from source)
 		if wasm == ø or #wasm == 0 { continue }
-		if not same_but_comments(bundled, file_text(std_module_path(name)) ?? "") {
-			warn name + ".wasm not linked: lib/" + name + module_extension + " differs from the text it was built of; compiled from source"
+		signature = module_signature(name, wasm)
+		image = if signature == ø then "no " + SIGNATURE_SECTION + " (built before it)" else if not built_of_text(name, signature.source) then "lib/" + name + module_extension + " differs from the text it was built of" else library_image_of(name, signature)
+		if image is text {
+			warn name + ".wasm not linked: " + image + "; compiled from source"
 			continue
 		}
-		for inner in used_modules(bundled) { if inner not in names { names += [inner] } }
-		image = library_image_of(name, wasm)
-		if image is text { warn name + ".wasm not linked: " + image + "; compiled from source" } else { images += [image] }
+		images += [image]
+		linked_signatures[name] = signature
+		for inner in signature.uses { if inner not in names { names += [inner] } }
 	}
 	dependencies_first(images)
 }
-# the images, each behind those of the modules it uses: a word, class or global any two carry (sound's copy of
-# units') is the first's, the module that declares it
+# whether lib/<module> is the text the module was built of: by its length, and under WARP_LIB (a lib/ edited since
+# the build) by its hash, as the index is trusted (library.warp); djb2 over the prelude was ~1.5 % of hello
+built_of_text(module: text, hash: text): bool := {
+	text = file_text(std_module_path(module)) ?? ""
+	hash.starts_with("${#text}-") and (warp_lib() == ø or hash == source_hash(text))
+}
+# the images, each behind those of the modules it uses
 dependencies_first(images: list): list := in_dependency_order(images.map(image => image.name)).map(name => images.filter(image => image.name == name)#1)
 # the modules named, each behind those of them it uses
 in_dependency_order(names: list): list := {
@@ -171,7 +181,7 @@ in_dependency_order(names: list): list := {
 # (two modules using each other: the one met first goes first)
 with_dependencies(name: text, names: list, ordered: list, visiting: list): list := {
 	if name in ordered or name in visiting { return ordered }
-	for inner in used_modules(LIBRARY_FILES.get(name + module_extension) ?? "") { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
+	for inner in modules_used_by(name) { if inner in names { ordered = with_dependencies(inner, names, ordered, visiting + [name]) } }
 	ordered + [name]
 }
 
@@ -213,61 +223,40 @@ write_runtime(file: text) := {
 # <name>.wasm, the bundled module compiled once behind runtime.wasm, for programs to link at load time (card
 # wasm-module-linking, notes/library_zero_bake.md "The module interface"): its runtime words, memory and error tag
 # imported from `warp_runtime`, the words of the modules it uses from theirs (`warp/<module>`), its own words exported
-# by name, its global initializers the export `warp/start`. Beside it <name>.splice.wasm, the whole module behind the
-# runtime (emitter/prebuilt.warp own_items_from), the modules it uses compiled in: the image a compile reads a module's
-# words, globals and classes from (until warp.signature carries them, L5e). `warp rebuild` writes every spliced form
-# first, so each linked form reads the images of the modules it uses as they are now.
-# Every program has the prelude, used again it would define its words twice
-write_module(name: text, runtime_file: text, file: text) := {
-	write_spliced_module(name, runtime_file, file)
-	write_linked_module(name, runtime_file, file)
-}
-module_source(name: text): text := if name == "prelude" then "ø" else "use " + name + "\nø"
-write_spliced_module(name: text, runtime_file: text, file: text) := {
-	spliced = compile(module_source(name), library_folder, read_bytes(runtime_file), no)
-	if spliced is text { throw spliced }
-	write_bytes(spliced_file(file), spliced)
-}
-# a module's linked form, beside its spliced form
-linked_module_file(name: text): text := linked_modules_folder() + name + ".wasm"
+# by name, its global initializers the export `warp/start`. Its warp.signature (passes/signature.warp) carries what a
+# compile needs of it: its definitions' parses and its image, the words, globals and classes it exports.
+# The prelude's too, every word of it (its compile reaches no prelude of its own, compile)
+module_source(name: text): text := "use " + name + "\nø"
 # where the modules a compile links are: beside runtime.wasm, or where the module written goes
 linked_modules_folder(): text := if module_written != "" then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
-# the module a compile writes in its linked form, and the folder of the images it links: its own never linked
+# the module a compile writes, and the folder of the modules it links: its own never linked
 global module_written = ""
 global module_written_folder = ""
-write_linked_module(name: text, runtime_file: text, file: text) := {
+# whether a compile links the modules it uses: a `warp build` compiles them in, what it builds stands alone
+global modules_linked = yes
+write_module(name: text, runtime_file: text, file: text) := {
 	module_written = name
 	module_written_folder = folder_of(file) + "/"
 	made = ø
 	try { made = compile(module_source(name), library_folder, read_bytes(runtime_file), yes) } catch refusal { made = refusal }
 	module_written = ""
 	if made is text { throw made }
-	write_bytes(file, linked_bytes(module.order, MODULE_START, yes))
+	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name, image_fields(module.order)))
 }
 MODULE_START = "warp/start"
-SPLICED_SUFFIX = ".splice.wasm"
-spliced_file(file: text): text := file.remove_suffix(".wasm") + SPLICED_SUFFIX
-# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild keeps
-# an empty file, never an older build linked in its place. A module calling C by its foreign lines (`… from "c"`) may
-# refuse and stays compiled from source with the program; any other refusal fails the rebuild, naming the module and
-# why (decision prebuild-fails-loudly)
+# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder, each after the modules it uses
+# (it links them). One refusing to prebuild keeps an empty file, never an older build linked in its place. A module
+# calling C by its foreign lines (`… from "c"`) may refuse and stays compiled from source with the program; any other
+# refusal fails the rebuild, naming the module and why (decision prebuild-fails-loudly)
 write_modules(folder: text, runtime_file: text) := {
 	write_library_index(folder)
 	refused = []
-	for name in std_module_names {
-		file = folder + "/" + name + ".wasm"
-		try { write_spliced_module(name, runtime_file, file) } catch refusal {
-			write_bytes(file, [])
-			write_bytes(spliced_file(file), [])
-			calls_c = #c_declarations_in(LIBRARY_FILES.get(name + module_extension) ?? "") > 0
-			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
-		}
-	}
-	# then each linked form, behind every image it may link and every linked form it imports from
 	for name in in_dependency_order(std_module_names) {
 		file = folder + "/" + name + ".wasm"
-		if #read_bytes(spliced_file(file)) > 0 {
-			try { write_linked_module(name, runtime_file, file) } catch refusal { refused += [name + ".wasm (linked): " + refusal] }
+		try { write_module(name, runtime_file, file) } catch refusal {
+			write_bytes(file, [])
+			calls_c = #c_declarations_in(library_text(name + module_extension)) > 0
+			if calls_c { print name + ".wasm not prebuilt (it calls C, compiled with the program): " + refusal } else { refused += [name + ".wasm: " + refusal] }
 		}
 	}
 	if #refused > 0 { raise "standard modules that don't prebuild: " + refused.join("; ") }
