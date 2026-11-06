@@ -207,13 +207,13 @@ FAIL samples/advanced/neural_net.warp: not a function
 FAIL samples/apps/site_generator.warp: text of node
 FAIL samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
 FAIL samples/functions/functions.warp: outside the core: a call of reduce with 3 arguments
-FAIL samples/golf/sierpiński-triangle.warp: not an int
+ok   samples/golf/sierpiński-triangle.warp
 FAIL samples/gpu/fluid_smear_dsl.warp: outside the core: the call operator_·(…)
 FAIL samples/gpu/fluid_smear.warp: outside the core: the call operator_·(…)
 FAIL samples/gpu/gpu_visualizer.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
 FAIL samples/gpu/scene_3d.warp: paint of a shader: the shader: Validation Error
 FAIL samples/gpu/watercolor.warp: outside the core: the unknown name view
-FAIL samples/hello/natural.warp: outside the core: the unknown name one
+ok   samples/hello/natural.warp
 FAIL samples/laws/laws.warp: outside the core: the call law_holds(…)
 FAIL samples/laws/project_laws.warp: outside the core: the call law_holds(…)
 FAIL samples/matching/matching.warp: `(find rest (text next))` fits no single variant of find(text, text), find(list, function), find(text, function)
@@ -246,8 +246,8 @@ FAIL samples/sound/synth.warp: outside the core: waited_till giving a mixed at l
 FAIL samples/sound/visualizer.warp: outside the core: the call binary_log(…) at lib/sound.warp:303 (in plain_midi)
 FAIL samples/sound/voices.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
 FAIL samples/storage/orm_units.warp: hint: m is units's fix: use units
-FAIL samples/text/uniscript_text.warp: packages/uniscript/uniscript.warp: no such file to use
-FAIL samples/text/word_lengths.warp: outside the core: the unknown name length
+ok   samples/text/uniscript_text.warp
+ok   samples/text/word_lengths.warp
 FAIL samples/wasm/component_reflection.warp: outside the core: the unknown name demo
 FAIL samples/wasm/import_compiled.warp: no module, library or package named shapes: no shapes.warp beside the program or in lib/; a package is used by its path, use "…"
 FAIL samples/web/component_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)

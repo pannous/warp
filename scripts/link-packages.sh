@@ -11,8 +11,8 @@
 # usage: scripts/link-packages.sh [<tree>]   (default: this checkout)
 set -u
 registry_url=https://github.com/pannous/warp-packages.git
-cache=${WARP_PACKAGES_CACHE:-$HOME/.cache/warp/packages}
-registry=$cache/.registry
+source "$(dirname "$0")/lib/packages.sh"
+registry=$package_cache/.registry
 tree=${1:-$(cd "$(dirname "$0")/.." && pwd)}
 max_age_minutes=60
 
@@ -30,8 +30,6 @@ for folder in "$registry"/*/; do
 done
 echo "link-packages: $tree/packages linked to $registry"
 
-# manifest_field <package.warp> <field>: its value, unquoted ("" for none)
-manifest_field() { sed -n "s/^$2:[[:space:]]*//p" "$1" | head -1 | tr -d '"'"'" | sed 's/[[:space:]]*$//'; }
 # the folder of the warp binary on PATH, where the native warp looks for a library first
 warp_folder() { local warp; warp=$(command -v warp) && dirname "$(readlink -f "$warp")"; }
 case $(uname) in Darwin) extension=dylib origin=@loader_path ;; *) extension=so origin='$ORIGIN' ;; esac
@@ -53,14 +51,8 @@ native_library() {
 for manifest in "$tree"/packages/*/package.warp; do
   [[ -f $manifest ]] || continue
   name=$(basename "$(dirname "$manifest")")
-  repository=$(manifest_field "$manifest" repository) version=$(manifest_field "$manifest" version)
-  [[ -n $repository && -n $version ]] || continue
-  clone=$cache/$name@$version
-  if [[ ! -d $clone/.git ]]; then
-    echo "link-packages: fetching $repository v$version into $clone"
-    git clone -q --depth 1 --branch "v$version" "https://github.com/$repository.git" "$clone" 2>/dev/null ||
-      { echo "link-packages: cannot clone $repository v$version" >&2; continue; }
-  fi
+  version=$(manifest_field "$manifest" version)
+  clone=$(package_clone "$manifest") || continue
   library=$(manifest_field "$manifest" library)
   [[ -n $library && -f $tree/lib/native/$(basename "$library").c ]] || continue
   library_name=$(basename "$library")

@@ -206,6 +206,8 @@ type_word_kind(word: text): text? := type_kinds.get(word)
 # libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
 # floor compiles to, so its result is the call's
 foreign_math_lines = library_text("math.warp").split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
+# the words lib/math.warp declares `from warp`, `abs(x: number): number from warp`, which a program calls without its use
+math_runtime_lines = library_text("math.warp").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø)
 
 # the kind a declared result is held as: `nothing` and `any` a node of run-time kind, a yes/no an int, a type of
 # values its kind, any other type (`time`, `signal`) an object; ø for `number`, decided where the value is made
@@ -234,8 +236,8 @@ gives_nothing(word: text): bool := {
 # a member of every map, `m.keys`, `m.get(k)`: a builtin whose line takes a map first
 takes_map_first(word: text): bool := lines_of(typed_lines, unaliased(word)).any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == "map")
 
-# a word the prelude, libm or the host declares
-is_declared_word(word: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(word)) > 0 or host_words().has(word)
+# a word the prelude, math, libm or the host declares
+is_declared_word(word: text): bool := #lines_of(typed_lines + foreign_math_lines + math_runtime_lines, unaliased(word)) > 0 or host_words().has(word)
 
 # a host word's result kinds as host_words.warp declares them: one int or float, else a node or none
 host_result_kind(results: list): text := if #results == 1 and results#1 != "node" then type_word_kind(results#1) ?? "int" else "empty"
