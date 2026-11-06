@@ -283,7 +283,7 @@ bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
 // chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
 // stays one), so the loop needs no type at the sugar
 walked_by(value: any, unit: text): list := {
-	if value is text { return if unit == "bytes" then bytes(value) else if unit == "codepoints" then codepoints(value) else chars(value) }
+	if value is text { return if unit == "bytes" then bytes(value) else if unit == "codepoints" then code_point_list(value) else chars(value) }
 	if value is map { return if unit == "pairs" then map_keys(value).map(key => [key, value[key]]) else map_keys(value) }
 	value
 }
