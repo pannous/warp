@@ -11,3 +11,4 @@
 's = 0; for each byte in "Hello" { s += byte }; s'	500
 't = "héllo"; n = 0; for byte in t: n += 1; n'	6
 'out = ""; for each char in "你好" { out = char + out }; out'	'好你'
+f(xs: list) := { s = 0; for byte in xs { s += byte }; s }; f([1, 2, 3])	6
