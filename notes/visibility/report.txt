@@ -1,0 +1,181 @@
+525 of 1864 std-module functions untyped (private unless public)
+179 private words called by 711 lines
+collections.OrderedMap	1	test/modules/test_std_words.warp:4
+draw.canvas	20	samples/advanced/particles.warp:70 samples/events/arrow_keys.warp:4 samples/graphics/finger_paint.warp:15
+draw.circle	6	samples/advanced/particles.warp:65 samples/events/arrow_keys.warp:15 samples/graphics/finger_paint.warp:26
+draw.clear	11	samples/advanced/particles.warp:71 samples/events/arrow_keys.warp:14 samples/graphics/finger_paint.warp:16
+draw.label	7	samples/events/arrow_keys.warp:16 samples/graphics/paint_text.warp:10 samples/graphics/paint_text.warp:11
+draw.line	2	samples/graphics/paint_text.warp:9 test/programs/test_draw.warp:28
+draw.rect	5	samples/graphics/paint_text.warp:7 samples/sound/visualizer.warp:35 samples/sound/visualizer.warp:36
+draw.show	10	samples/advanced/particles.warp:4 samples/advanced/particles.warp:67 samples/events/arrow_keys.warp:17
+file.file_lines	4	test/modules/test_file_lines.pairs.warp:2 test/modules/test_file_path_edges.pairs.warp:15 test/modules/test_file_path_edges.pairs.warp:16
+file.glob	1	test/modules/test_path_file_conformance.pairs.warp:7
+file.home_expanded	3	lib/shell.warp:16 test/modules/test_file_typed.pairs.warp:2 test/modules/test_file_typed.pairs.warp:3
+file.list_files	9	lib/fix/command.warp:29 lib/fix/command.warp:50 lib/shell.warp:10
+graphs.a_star	3	test/modules/test_graphs.pairs.warp:50 test/modules/test_graphs.pairs.warp:52 test/modules/test_graphs.pairs.warp:54
+graphs.bfs	14	test/modules/test_graphs.pairs.warp:103 test/modules/test_graphs.pairs.warp:11 test/modules/test_graphs.pairs.warp:13
+graphs.connected_components	8	test/modules/test_graphs.pairs.warp:62 test/modules/test_graphs.pairs.warp:63 test/modules/test_graphs.pairs.warp:74
+graphs.dfs	13	test/modules/test_graphs.pairs.warp:102 test/modules/test_graphs.pairs.warp:14 test/modules/test_graphs.pairs.warp:16
+graphs.dijkstra	10	test/modules/test_graphs.pairs.warp:43 test/modules/test_graphs.pairs.warp:44 test/modules/test_graphs.pairs.warp:49
+graphs.dijkstra_path	5	test/modules/test_graphs.pairs.warp:105 test/modules/test_graphs.pairs.warp:45 test/modules/test_graphs.pairs.warp:46
+graphs.graph_neighbors	3	test/modules/test_graphs.pairs.warp:5 test/modules/test_graphs.pairs.warp:6 test/modules/test_graphs.pairs.warp:8
+graphs.graph_node_count	1	test/modules/test_graphs.pairs.warp:9
+graphs.graph_nodes	3	test/modules/test_graphs.pairs.warp:10 test/modules/test_graphs.pairs.warp:4 test/modules/test_graphs.pairs.warp:7
+graphs.graph_of	101	samples/apps/dependency_resolver.warp:51 samples/apps/dependency_resolver.warp:58 test/modules/test_graphs.pairs.warp:10
+graphs.has_path	10	test/modules/test_graphs.pairs.warp:108 test/modules/test_graphs.pairs.warp:20 test/modules/test_graphs.pairs.warp:22
+graphs.kruskal_mst	8	test/modules/test_graphs.pairs.warp:100 test/modules/test_graphs.pairs.warp:109 test/modules/test_graphs.pairs.warp:66
+graphs.mst_weight	5	test/modules/test_graphs.pairs.warp:100 test/modules/test_graphs.pairs.warp:109 test/modules/test_graphs.pairs.warp:67
+graphs.shortest_path	10	test/modules/test_graphs.pairs.warp:104 test/modules/test_graphs.pairs.warp:19 test/modules/test_graphs.pairs.warp:21
+graphs.strongly_connected_components	6	test/modules/test_graphs.pairs.warp:107 test/modules/test_graphs.pairs.warp:61 test/modules/test_graphs.pairs.warp:64
+graphs.topological_sort	7	samples/apps/dependency_resolver.warp:51 samples/apps/dependency_resolver.warp:59 test/modules/test_graphs.pairs.warp:106
+json_tools.json_merge_patch	17	samples/apps/config_validator.warp:69 test/modules/test_json_merge_patch.pairs.warp:10 test/modules/test_json_merge_patch.pairs.warp:11
+list.concat	2	test/modules/test_list_operations_typed.pairs.warp:3 test/modules/test_list_operations_typed.pairs.warp:5
+list.extend	1	test/modules/test_list_grouping_typed.pairs.warp:3
+list.group_by	3	test/functions/test_closure_entries.pairs.warp:11 test/modules/test_list_grouping_typed.pairs.warp:1 test/modules/test_std_list.warp:5
+list.max_by	2	test/modules/test_list_selection_typed.pairs.warp:2 test/modules/test_std_list.pairs.warp:28
+list.min_by	2	test/modules/test_list_selection_typed.pairs.warp:3 test/modules/test_std_list.pairs.warp:29
+list.mode	2	test/modules/test_list_statistics_typed.pairs.warp:4 test/modules/test_std_list.pairs.warp:51
+list.product	3	test/modules/test_coverage_list_map.pairs.warp:5 test/modules/test_list_typed.pairs.warp:5 test/modules/test_std_list.pairs.warp:7
+list.rotate	3	test/modules/test_list_operations_typed.pairs.warp:2 test/modules/test_list_operations_typed.pairs.warp:6 test/modules/test_std_list.pairs.warp:36
+list.sum_by	3	test/modules/test_list_operations_typed.pairs.warp:1 test/modules/test_std_list.pairs.warp:34 test/numbers/test_float_accumulator.pairs.warp:8
+list.tally	5	samples/apps/log_analyzer.warp:38 samples/apps/log_analyzer.warp:46 test/modules/test_coverage_list_map.pairs.warp:5
+map.deep_merge	2	samples/modules/config_patch.warp:7 test/modules/test_coverage2_prelude_map.pairs.warp:8
+map.filter_values	2	test/modules/test_map_selection_typed.pairs.warp:4 test/modules/test_std_map.warp:5
+map.find_key	2	test/modules/test_map_selection_typed.pairs.warp:5 test/modules/test_std_map.pairs.warp:12
+map.from_pairs	2	test/modules/test_map_transform_typed.pairs.warp:5 test/modules/test_std_map.pairs.warp:6
+map.get_or	4	test/modules/test_coverage3_list_map.pairs.warp:6 test/modules/test_coverage_list_map.pairs.warp:6 test/modules/test_map_transform_typed.pairs.warp:6
+map.invert	3	test/modules/test_coverage_list_map.pairs.warp:8 test/modules/test_map_transform_typed.pairs.warp:4 test/modules/test_std_map.pairs.warp:4
+map.map_values	1	test/modules/test_map_transform_typed.pairs.warp:3
+map.merge	3	test/modules/test_fix_map_merge.pairs.warp:2 test/modules/test_fix_map_merge.pairs.warp:4 test/modules/test_map_transform_typed.pairs.warp:2
+map.omit	3	test/modules/test_coverage_list_map.pairs.warp:8 test/modules/test_map_selection_typed.pairs.warp:3 test/modules/test_std_map.warp:4
+map.pick	3	test/modules/test_coverage_list_map.pairs.warp:8 test/modules/test_map_selection_typed.pairs.warp:2 test/modules/test_std_map.pairs.warp:5
+map.setdefault	2	test/modules/test_coverage3_list_map.pairs.warp:7 test/modules/test_coverage_list_map.pairs.warp:7
+map.update	3	test/modules/test_coverage4_core.pairs.warp:3 test/modules/test_fix_map_merge.pairs.warp:3 test/modules/test_map_entries_typed.pairs.warp:4
+markup.page_of	1	test/web/test_markup_page_types.pairs.warp:3
+markup.page_render	8	test/web/test_markup_handler_types.pairs.warp:2 test/web/test_markup_handlers.pairs.warp:11 test/web/test_markup_handlers.pairs.warp:12
+math.angle	2	lib/geometry.warp:6 test/modules/test_std_shadowed_names.pairs.warp:6
+math.arc_cosine	1	test/modules/test_std_words.pairs.warp:4
+math.binary_log	1	samples/gpu/ocean.warp:245
+math.clamp	2	lib/color.warp:45 test/modules/test_std_math_text.pairs.warp:6
+math.cosine	17	samples/gpu/julia.warp:15 samples/gpu/ocean.warp:271 samples/gpu/ocean.warp:293
+math.cross	6	lib/geometry.warp:5 samples/gpu/ocean.warp:272 samples/gpu/ocean.warp:273
+math.distance	2	test/lists/test_element_wise_vectors.pairs.warp:41 test/modules/test_hidden_module_word.pairs.warp:3
+math.exponential	9	lib/draw.warp:109 lib/random.warp:39 samples/gpu/ocean.warp:148
+math.fract	8	samples/gpu/domain_warp.warp:10 samples/gpu/domain_warp.warp:7 samples/gpu/ocean.warp:62
+math.hyperbolic_cosine	1	test/modules/test_std_words.pairs.warp:6
+math.hyperbolic_sine	1	test/modules/test_std_words.pairs.warp:5
+math.hyperbolic_tangent	1	test/modules/test_std_words.pairs.warp:7
+math.hypotenuse	1	test/ffi/test_foreign_lines.pairs.warp:5
+math.lerp	2	test/lists/test_element_wise_vectors.pairs.warp:35 test/modules/test_std_math_text.pairs.warp:35
+math.magnitude	1	test/lists/test_element_wise_vectors.pairs.warp:25
+math.norm	7	samples/gpu/julia.warp:10 samples/gpu/voronoi.warp:15 samples/gpu/warp_compiled_wgsl_shader.warp:19
+math.normalize	1	test/lists/test_element_wise_vectors.pairs.warp:42
+math.percent	1	test/modules/test_std_math_text.pairs.warp:51
+math.reflect	3	samples/gpu/ocean.warp:216 samples/sound/gpu_visualizer_warp.warp:76 test/lists/test_element_wise_vectors.pairs.warp:44
+math.sign	2	lib/pga.warp:100 test/modules/test_std_math_text.pairs.warp:7
+math.sine	22	samples/gpu/domain_warp.warp:7 samples/gpu/ocean.warp:116 samples/gpu/ocean.warp:271
+math.smoothstep	12	samples/gpu/ocean.warp:117 samples/gpu/ocean.warp:138 samples/gpu/ocean.warp:148
+math.step	1	test/lists/test_element_wise_vectors.pairs.warp:39
+math.tangent	1	samples/gpu/ocean.warp:40
+math.to_degrees	2	lib/geometry.warp:278 test/modules/test_std_math_text.pairs.warp:52
+math.to_radians	7	lib/geometry.warp:262 lib/geometry.warp:263 lib/geometry.warp:265
+matrix.map_matrix	3	test/modules/test_matrix_map_typed.pairs.warp:2 test/scope/test_instance_name_scope.pairs.warp:3 test/types/test_matrix_protocol.pairs.warp:3
+money.money_add	2	test/modules/test_money.pairs.warp:38 test/modules/test_money_edges.pairs.warp:11
+money.money_sub	1	test/modules/test_money.pairs.warp:41
+net.post	1	lib/agent.warp:14
+os.command	14	lib/fix/command.warp:113 lib/repl.warp:4 lib/shell.warp:3
+os.compile_wasm	2	lib/repl.warp:142 lib/repl.warp:86
+os.env	15	lib/agent.warp:10 lib/extra/netbase.warp:9 lib/repl.warp:190
+os.input	3	lib/fix/command.warp:105 lib/repl.warp:96 lib/repl.warp:98
+os.run_wasm	3	lib/repl.warp:144 lib/repl.warp:89 lib/repl.warp:97
+prelude.element_wise_any	4	test/lists/test_element_wise_vectors.warp:25 test/lists/test_element_wise_vectors.warp:27 test/lists/test_element_wise_vectors.warp:29
+prelude.pixel_color	2	test/lists/test_element_wise_vectors.warp:35 test/lists/test_element_wise_vectors.warp:37
+prelude.random_between	1	test/functions/test_bare_host_words.pairs.warp:49
+prelude.random_bool	1	test/functions/test_bare_host_words.pairs.warp:52
+prelude.random_codepoint	1	test/functions/test_bare_host_words.pairs.warp:53
+prelude.random_element	1	test/functions/test_random_dispatch.pairs.warp:8
+prelude.random_fraction	1	test/functions/test_bare_host_words.pairs.warp:50
+prelude.random_int	1	test/functions/test_bare_host_words.pairs.warp:51
+prelude.random_of	1	test/functions/test_random_dispatch.pairs.warp:18
+prelude.random_until	1	test/functions/test_bare_host_words.pairs.warp:48
+random.choice	4	lib/scene.warp:67 test/modules/test_random_typed.pairs.warp:2 test/modules/test_random_typed.pairs.warp:3
+random.seed	4	lib/scene.warp:7 test/modules/test_random_typed.pairs.warp:6 test/modules/test_std_random.pairs.warp:10
+regex.first_match	10	lib/json_tools.warp:198 test/modules/test_coverage_time_file_regex.pairs.warp:10 test/modules/test_regex_edges.pairs.warp:13
+router.answer_reset	2	test/web/test_router_response_types.pairs.warp:4 test/web/test_router_response_types.pairs.warp:5
+router.route_answer	1	lib/web.warp:172
+router.route_parameter	5	lib/web.warp:11 test/modules/test_router_signatures.pairs.warp:4 test/modules/test_router_signatures.pairs.warp:5
+signals.signal_value	1	test/control/test_signal_typed.pairs.warp:2
+sound.bar	4	samples/gpu/gpu_visualizer.warp:65 samples/sound/arrangement.warp:10 samples/sound/arrangement.warp:8
+sound.bar_seconds	1	test/programs/test_sound_tempo.warp:13
+sound.bars	4	samples/sound/arrangement.warp:11 samples/sound/arrangement.warp:7 samples/sound/arrangement.warp:9
+sound.beat	18	samples/sound/filters.warp:11 samples/sound/harmony.warp:8 samples/sound/midi.warp:19
+sound.beat_seconds	1	test/programs/test_sound_tempo.warp:13
+sound.beats	1	samples/sound/midi.warp:21
+sound.bus	6	samples/sound/sound_pipes.warp:13 samples/sound/sound_pipes.warp:18 test/functions/test_callable_instances.pairs.warp:4
+sound.chord_amplitudes	1	test/modules/test_std_shadowed_names.warp:21
+sound.chord_samples	14	test/programs/test_sound_effects.warp:10 test/programs/test_sound_effects.warp:15 test/programs/test_sound_effects.warp:22
+sound.dB	6	samples/sound/filters.warp:7 samples/sound/signal_graph.warp:8 samples/sound/synth.warp:12
+sound.decibels	1	test/programs/test_sound_synth.warp:44
+sound.envelope	5	test/programs/test_sound_synth.warp:15 test/programs/test_sound_synth.warp:21 test/programs/test_sound_synth.warp:27
+sound.fade_sound	3	test/programs/test_sound_gaps.pairs.warp:6 test/web/test_rendered_fades.warp:7 test/web/test_rendered_fades.warp:8
+sound.filtered	1	test/programs/test_sound_filters.warp:33
+sound.hertz_of	1	test/programs/test_note_values.pairs.warp:8
+sound.interval	2	test/programs/test_note_values.pairs.warp:11 test/programs/test_note_values.pairs.warp:12
+sound.linear_address	6	samples/sound/stereo_sound.warp:18 samples/sound/stereo_sound.warp:4 test/functions/test_overloaded_function_values.warp:28
+sound.melody	20	samples/sound/arrangement.warp:7 samples/sound/arrangement.warp:8 samples/sound/filters.warp:11
+sound.melody_samples	4	samples/gpu/gpu_visualizer.warp:23 samples/sound/visualizer.warp:19 test/lists/test_element_wise_vectors.warp:20
+sound.midi	5	samples/sound/harmony.warp:13 test/programs/test_music_values.warp:15 test/programs/test_music_values.warp:17
+sound.midi_hertz	1	test/programs/test_music_values.warp:11
+sound.midi_note	3	samples/sound/midi.warp:19 samples/sound/midi.warp:20 samples/sound/midi.warp:21
+sound.midi_off	1	samples/sound/midi.warp:15
+sound.midi_on	1	samples/sound/midi.warp:14
+sound.mix	3	samples/sound/sound_pipes.warp:10 test/programs/test_sound_pipes.warp:29 test/programs/test_sound_pipes.warp:32
+sound.nearest_band	2	test/programs/test_sound_spectrum.warp:6 test/programs/test_sound_spectrum.warp:9
+sound.note	34	samples/sound/music.warp:14 samples/sound/synth.warp:2 test/lists/test_element_wise_vectors.warp:11
+sound.note_name	4	samples/sound/harmony.warp:13 test/programs/test_music_values.warp:19 test/programs/test_music_values.warp:21
+sound.note_value	1	test/programs/test_note_values.pairs.warp:4
+sound.osc	25	samples/sound/sound_pipes.warp:14 samples/sound/sound_pipes.warp:19 samples/sound/sound_pipes.warp:7
+sound.panned	3	test/programs/test_sound_pan.warp:11 test/programs/test_sound_pan.warp:6 test/programs/test_sound_pan.warp:9
+sound.pattern	3	samples/sound/sound_patterns.warp:10 samples/sound/sound_patterns.warp:9 test/programs/test_sound_gaps.pairs.warp:4
+sound.phase	2	test/programs/test_sound_filters.warp:15 test/programs/test_sound_filters.warp:18
+sound.plain_hertz	1	test/programs/test_sound_play_notes.pairs.warp:3
+sound.play_file	1	test/web/test_task_files.warp:9
+sound.play_signal	1	test/programs/test_sound_signals.pairs.warp:2
+sound.read_midi	1	samples/sound/midi.warp:10
+sound.si_amount	1	test/programs/test_sound_pitches.pairs.warp:3
+sound.sound	4	samples/gpu/gpu_visualizer.warp:134 samples/sound/visualizer.warp:21 test/programs/test_sound_gaps.pairs.warp:3
+sound.sound_at	1	test/programs/test_sound_at.warp:5
+sound.sound_at_end	1	test/programs/test_sound_at.warp:6
+sound.sound_queued	4	test/programs/test_sound_tempo.warp:23 test/programs/test_sound_tempo.warp:45 test/web/test_task_voices.warp:14
+sound.through_effects	6	test/programs/test_sound_effects.warp:11 test/programs/test_sound_effects.warp:17 test/programs/test_sound_effects.warp:24
+sound.tone	9	samples/gpu/gpu_visualizer.warp:5 samples/sound/music.warp:13 test/programs/test_sound.warp:31
+sound.transpose	5	samples/sound/harmony.warp:12 test/programs/test_music_values.warp:25 test/programs/test_music_values.warp:27
+sound.voices_of	1	test/programs/test_sound_filters.warp:24
+sound.wave	4	test/modules/test_std_shadowed_names.warp:20 test/modules/test_std_shadowed_names.warp:21 test/programs/test_sound_play_notes.pairs.warp:4
+sound.write_midi	1	samples/sound/midi.warp:9
+tasks.task_awaited	1	test/control/test_task_completion_typed.pairs.warp:2
+tasks.tasks_run_while	1	lib/channels.warp:22
+text.between	3	test/modules/test_coverage2_text.pairs.warp:4 test/modules/test_coverage_text.pairs.warp:6 test/modules/test_std_math_text.pairs.warp:65
+text.capitalize	3	test/modules/test_coverage3_text.pairs.warp:10 test/modules/test_coverage_text.pairs.warp:9 test/modules/test_std_math_text.pairs.warp:23
+text.center	3	test/modules/test_coverage2_text.pairs.warp:2 test/modules/test_coverage_text.pairs.warp:4 test/modules/test_std_math_text.pairs.warp:24
+text.format	5	samples/golf/quine.warp:6 samples/golf/quine.warp:7 test/modules/test_std_math_text.pairs.warp:16
+text.pad_left	6	test/functions/test_concatenated_text_argument.pairs.warp:10 test/functions/test_concatenated_text_argument.pairs.warp:5 test/functions/test_concatenated_text_argument.pairs.warp:6
+text.pad_right	3	test/functions/test_concatenated_text_argument.pairs.warp:10 test/modules/test_coverage_text.pairs.warp:4 test/modules/test_std_math_text.pairs.warp:12
+text.remove_prefix	2	test/modules/test_std_math_text.pairs.warp:45 test/modules/test_std_math_text.pairs.warp:47
+text.remove_suffix	4	lib/shell.warp:33 test/modules/test_coverage3_text.pairs.warp:5 test/modules/test_coverage_text.pairs.warp:5
+text.truncate	6	test/modules/test_coverage3_text.pairs.warp:6 test/modules/test_coverage_text.pairs.warp:5 test/modules/test_error_messages_text_list.pairs.warp:5
+time.add_days	2	test/modules/test_std_time.pairs.warp:12 test/time/test_time_days_typed.pairs.warp:2
+time.date_of	6	lib/time_arithmetic.warp:84 test/modules/test_coverage_time_file_regex.pairs.warp:7 test/modules/test_std_time.pairs.warp:12
+time.today	2	test/control/test_grouped_receivers.warp:11 test/modules/test_std_time.pairs.warp:9
+units.h	2	test/numbers/test_unit_beside_variable.warp:11 test/numbers/test_unit_beside_variable.warp:12
+units.m	1	test/numbers/test_unit_beside_variable.warp:9
+units.milliseconds_of	4	lib/time.warp:33 lib/time.warp:34 lib/time.warp:43
+units.mm	1	lib/time.warp:93
+units.s	1	lib/tasks.warp:14
+units.seconds	3	lib/sound.warp:555 lib/sound.warp:977 lib/tasks.warp:80
+units.sleep	5	lib/channels.warp:54 samples/graphics/raylib_circle_forever.warp:37 samples/graphics/raylib_sleep.warp:18
+wagi.url_decoded	5	test/modules/test_audit_bugfixes.pairs.warp:38 test/modules/test_audit_bugfixes.pairs.warp:39 test/modules/test_audit_bugfixes.pairs.warp:40
+wagi.wagi_body	1	lib/web.warp:157
+wagi.wagi_headers	1	lib/web.warp:158
+wagi.wagi_query	6	lib/web.warp:151 test/modules/test_wagi_url_cleanup.pairs.warp:3 test/modules/test_wagi_url_cleanup.pairs.warp:4
+wasmtime.run	1	test/ffi/test_wasmtime_ffi.warp:9
