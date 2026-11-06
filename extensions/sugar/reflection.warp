@@ -22,6 +22,8 @@ rewrite $f.full => $d where $f is symbol and $f is function and $d = full_defini
 # instance_members)
 rewrite $p.fields => [$names...] where $p is symbol and $names = instance_members($p, fields, $source)
 rewrite $p.methods => [$names...] where $p is symbol and $names = instance_members($p, methods, $source)
+# `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number` (extensions/rules/rule_words.warp builtin_type)
+rewrite type($f) => $t where $f is symbol and $t = builtin_type($f, $program)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
 
 # `dir(time)`, `dir text`: the words of a module or type named as written (extensions/rules/rule_words.warp dir_words); `dir(v)` of
