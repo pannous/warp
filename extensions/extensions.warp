@@ -26,6 +26,7 @@ use "inline_html.warp"
 use "declared_operators.warp"
 use "list_operators.warp"
 use "last_results.warp"
+use "operator_folds.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
 use "function_clauses.warp"
@@ -70,6 +71,8 @@ EXTENSIONS = [
 	inline_html_extension
 	declared_operators_extension
 	list_operators_extension
+	# first in the used stage: a fold of an operator alone, `sum := fold +`
+	operator_folds_extension
 	tasks_extension
 	typed_templates_extension
 	function_clauses_extension
