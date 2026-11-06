@@ -1,0 +1,9 @@
+# warp fix writes warp's word for another language's spelling of it (decisions.md 2026-11-06 round 15-17, card
+# compile-time: only foreign or deprecated spellings are rewritten; English aliases stay)
+is! «use "../../lib/fix/fix.warp"; fixed('n = len(xs) + strlen(t)', [], yes)#1» 'n = count(xs) + count(t)\n'
+is! «use "../../lib/fix/fix.warp"; fixed('if isdigit(c) { print c.toString() }', [], yes)#1» 'if is_digit(c) { print c.text() }\n'
+is! «use "../../lib/fix/fix.warp"; fixed('xs.push(3)', [], yes)#1» 'xs.add(3)\n'
+# English aliases, a definition of the word, a field and a text stay
+is! «use "../../lib/fix/fix.warp"; fixed('n = size(xs) + length(t)', [], yes)#1» 'n = size(xs) + length(t)\n'
+is! «use "../../lib/fix/fix.warp"; fixed('len(x) := 7', [], yes)#1» 'len(x) := 7\n'
+is! «use "../../lib/fix/fix.warp"; fixed('print "len(x)"', [], yes)#1» 'print "len(x)"\n'

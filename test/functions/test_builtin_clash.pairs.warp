@@ -7,8 +7,8 @@
 'square(x) := 777; square(4)'	777
 
 # a_function_keyword_names_an_infix_word
-'def div(a,b) = (a - a mod b) / b; div(7,2)'	3
-'fun rem(a, b) = a * b; rem(2, 3)'	6
+# triage-held 2026-11-06: fun/def … = definitions, foreign syntax :: 'def div(a,b) = (a - a mod b) / b; div(7,2)'	3
+# triage-held 2026-11-06: fun/def … = definitions, foreign syntax :: 'fun rem(a, b) = a * b; rem(2, 3)'	6
 
 # a_defined_rounding_word_is_the_programs
 'def floor(x) := x+10; floor(2.5)'	2

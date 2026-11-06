@@ -22,3 +22,4 @@
 
 # ending_a_task_names_finish_or_cancel (decision end-refused)
 'job = go 3; end job; 1'	error	end job: did you mean finish job or cancel job?
+'download(u) := u + 1; y = 0; job = go download(1); once the download finishes: y = 5; await job; y'	5
