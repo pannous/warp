@@ -24,6 +24,7 @@ use "times_loops.warp"
 use "entities.warp"
 use "declared_operators.warp"
 use "list_operators.warp"
+use "last_results.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
 use "function_clauses.warp"
@@ -77,7 +78,8 @@ EXTENSIONS = [
 	Extension{name: "int_types", passes: {"definition_heads": int_types}}
 	conversions_extension
 	implicit_uses_extension
-	# right before tries, in this order: parse words, then the checked tries the core's tries guard
+	# right before tries, in this order: the last result `it`, parse words, then the checked tries the core's tries guard
+	last_results_extension
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
 	iteration_inlining_extension
