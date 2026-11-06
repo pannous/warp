@@ -167,6 +167,7 @@ function callC(holder, exports, member, call, values, what) {
 function crossedResult(program, call, returned, textOf) {
 	if (call?.crossing === "text" || call?.crossing === "owned_text") return !returned ? program.new_empty() : newGuestText(program, textOf(returned));
 	if (call?.crossing === "handle" || call?.register === "i32") return Number(returned ?? 0) | 0;
+	if (call?.crossing === "u32") return BigInt(Number(returned ?? 0) >>> 0);
 	if (call?.register === "bool") return Number(returned) & 0xff ? 1 : 0;
 	if (call?.register === "i64") return BigInt(returned ?? 0);
 	return returned;
