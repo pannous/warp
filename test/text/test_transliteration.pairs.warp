@@ -1,0 +1,5 @@
+# Latin letters written in Cyrillic (lib/i18n.warp cyrillic, card print-in-script, wiki/in.md)
+'cyrillic("Ivan Shchukin, James!")'	"Иван Щукин, Джамес!"
+'name = "Sasha"; name in cyrillic'	"Саша"
+'print "Peter" in cyrillic'	ø
+'"a" in ["a"]'	yes

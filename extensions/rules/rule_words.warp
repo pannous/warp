@@ -82,9 +82,16 @@ route_verb(method: Node): text := "${method}".upper()
 # `n = route_parameter("/fib/:n:int", request.path, "n")`
 route_bindings(path: Node): list := path_parameters(path).map(name => Key(symbol(name), Op.Assign, List([symbol("route_parameter"), path, Key(symbol("request"), Op.Dot, symbol("path")), name], Bracket.Round, Separator.None)))
 # a program with routes, ending in serving them (lib/web.warp routes_end) once all of it ran; ø for a program without
-# routes or served already
-routes_end_word = "routes_end"
-served(program: Node): any := ended_by(program, "route_add", routes_end_word)
+# routes or served already. `warp build` ends them otherwise (extensions/commands/build.warp, decision
+# build-kinds-detected): an executable serving them always (routes_served), a WAGI module answering one request
+# (lib/wagi.warp routes_wagi); routes_seen says it found routes
+global routes_end_word = "routes_end"
+global routes_seen = no
+served(program: Node): any := {
+	ended = ended_by(program, "route_add", routes_end_word)
+	if ended != ø { routes_seen = yes }
+	ended
+}
 # a program with frame listeners, ending in its frames (lib/frames.warp frames_end): one, as no window opens
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
@@ -468,6 +475,34 @@ bare_fields_read(condition: Node, program: Node): Node := {
 	readable = fields.filter(name => not bound.has(name))
 	item_field_read(condition, readable)
 }
+# `match c {Penny: 1; Nickel: 5}` over `enum Coin {Penny, Nickel, Dime}`: arms naming cases of one enum only, no
+# default, that leave a case out are refused naming it (card pure-lane-def); ø when the match covers its enum
+missed_cases(arms: Node, program: Node): any := {
+	if not is_group(arms) or bracket_of(arms) != "{" { return ø }
+	named = items_of(arms).map(arm_case_name)
+	if #named == 0 or named.any(name => name == "") { return ø }
+	owner = statements_in(program).map(declared_enum).find(found => found != ø and named.all(name => name in found#2))
+	if owner == ø { return ø }
+	missing = owner#2.filter(case => case not in named)
+	if #missing == 0 { return ø }
+	throw "match on ${owner#1} misses ${missing.join(", ")}: an arm for each, or _ => … for the rest"
+}
+# the case an arm `Penny: 1` or `Penny => 1` names, "" for any other arm (a default, a value, a pattern)
+arm_case_name(arm: Node): text := if (is_key(arm, Op.Colon) or is_key(arm, Op.Arrow)) and key_of(arm) is symbol and not (name_of(key_of(arm)) in ["_", "default", "else"]) then name_of(key_of(arm)) else ""
+# `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable or a list literal
+unit_lists = {byte: "bytes", codepoint: "codepoints"}
+unit_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_lists)
+# `for bytes in t {… it …}`: a plural unit word walks the text by that unit, each item `it`
+unit_plurals = {bytes: "bytes", codepoints: "codepoints", chars: "chars", characters: "chars"}
+unit_plural_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_plurals)
+units_of(variable: Node, iterable: Node, units: map): any := {
+	if not units.has(name_of(variable)) or (is_group(iterable) and bracket_of(iterable) == "[") { return ø }
+	Key(iterable, Op.Dot, symbol(units[name_of(variable)]))
+}
+# `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
+are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))
+# `for p in ps where it > 2`: the condition's `it` read as the loop's variable
+it_read_as(condition: Node, variable: Node): Node := renamed(condition, "it", variable)
 declared_field_names(statement: Node): list := {
 	view = class_view(statement)
 	if view == ø then [] else class_declared(statement, view).fields
@@ -803,6 +838,7 @@ polled_word(name: Node, program: Node, source: text): any := {
 
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 rule_words = {
+	are_arms: are_arms,
 	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
@@ -829,9 +865,11 @@ rule_words = {
 	instance_members: instance_members,
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
+	it_read_as: it_read_as,
 	law_check: law_check,
 	leading_unit: leading_unit,
 	misnamed: misnamed,
+	missed_cases: missed_cases,
 	then_not_pipe: then_not_pipe,
 	then_without_if: then_without_if,
 	module_help: module_help,
@@ -860,6 +898,8 @@ rule_words = {
 	units_shown: units_shown,
 	typed_json: typed_json,
 	unit_bound: unit_bound,
+	unit_items: unit_items,
+	unit_plural_items: unit_plural_items,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	value_definitions: value_definitions,
@@ -912,30 +952,42 @@ typed_json_value(value: text, path: text, value_type: text, depth: int, program:
 	declared = class_declared(statement, view)
 	if constructor_of(declared) != ø { return ø }
 	fields = declared.fields
-	members = view#3[3..].map(member_read)
+	parts = typed_json_fields(value, view#3[3..].map(member_read), fields, field => "(" + path + " + \".\" + \"" + field + "\")", depth + 1, program, ancestors + [value_type])
+	if parts == ø { return ø }
+	checks = parts#1
+	arguments = parts#2
+	field_names = fields.map(field => "\"" + field + "\"").join(", ")
+	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + value_type + "{" + arguments.join(", ") + "} })"
+}
+
+# [the checks that each required field is there, the constructor's arguments] of the object `value` names, each field
+# converted by its declared type: a defaulted field (`port: int = 80`) missing takes its default; ø for a field whose
+# type typed JSON doesn't read
+typed_json_fields(value: text, members: list, fields: list, field_path: function, depth: int, program: Node, ancestors: list): list? := {
 	field_types = {}
+	defaults = {}
 	for member in members {
 		field = field_name(member)
 		if field != ø {
 			field_type = typed_json_field_type(member)
-			if field_type == ø or is_key(member, Op.Assign) { return ø }
+			if field_type == ø { return ø }
 			field_types[field] = field_type
+			if is_key(member, Op.Assign) { defaults[field] = as_code(value_of(member)) }
 		}
 	}
-	field_names = fields.map(field => "\"" + field + "\"").join(", ")
 	checks = []
 	arguments = []
 	for field in fields {
-		field_path = "(" + path + " + \".\" + \"" + field + "\")"
-		field_value = value + "[\"" + field + "\"]"
-		converted = typed_json_value(field_value, field_path, field_types[field], depth + 1, program, ancestors + [value_type])
+		present = "keys(" + value + ").contains(\"" + field + "\")"
+		converted = typed_json_value(value + "[\"" + field + "\"]", field_path(field), field_types[field], depth, program, ancestors)
 		if converted == ø { return ø }
-		checks = checks + ["if not keys(" + value + ").contains(\"" + field + "\") { raise " + field_path + " + \" is required\" }"]
-		arguments = arguments + [field + ": " + converted]
+		if defaults.has(field) { arguments = arguments + [field + ": (if " + present + " then " + converted + " else " + defaults[field] + ")"] } else {
+			checks = checks + ["if not " + present + " { raise " + field_path(field) + " + \" is required\" }"]
+			arguments = arguments + [field + ": " + converted]
+		}
 	}
-	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + value_type + "{" + arguments.join(", ") + "} })"
+	[checks, arguments]
 }
-
 # Generate typed JSON parsing from the class declared in the program.
 typed_json(source: Node, type_name: Node, program: Node): Node := {
 	for statement in level_statements(program) {
@@ -944,24 +996,10 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			declared = class_declared(statement, view)
 			if constructor_of(declared) != ø { return plain_node(parsed("raise \"typed JSON does not support class constructors yet\"")) }
 			fields = declared.fields
-			members = view#3[3..].map(member_read)
-			field_types = {}
-			for member in members {
-				field = field_name(member)
-				if field != ø {
-					field_type = typed_json_field_type(member)
-					if field_type == ø or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
-					field_types[field] = field_type
-				}
-			}
-			required_checks = fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
-			arguments = []
-			for field in fields {
-				value = "typed_json_value[\"" + field + "\"]"
-				converted = typed_json_value(value, "\"" + field + "\"", field_types[field], 0, program, [name_of(type_name)])
-				if converted == ø { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
-				arguments = arguments + [field + ": " + converted]
-			}
+			parts = typed_json_fields("typed_json_value", view#3[3..].map(member_read), fields, field => "\"" + field + "\"", 0, program, [name_of(type_name)])
+			if parts == ø { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
+			required_checks = parts#1
+			arguments = parts#2
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
