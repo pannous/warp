@@ -1,0 +1,17 @@
+# console print gate: use/let/… stay silent; assignments and expressions still show (card repl-line)
+'use repl; should_show_repl_value("use shell", 1)'	no
+'use repl; should_show_repl_value("use os", "os")'	no
+'use repl; should_show_repl_value("let x = 1", 1)'	no
+'use repl; should_show_repl_value("var y = 2", 2)'	no
+'use repl; should_show_repl_value("const z = 3", 3)'	no
+'use repl; should_show_repl_value("global g = 4", 4)'	no
+'use repl; should_show_repl_value("class Point{x}", 0)'	no
+'use repl; should_show_repl_value("f(x) := x + 1", 1)'	no
+'use repl; should_show_repl_value("x = 7", 7)'	yes
+'use repl; should_show_repl_value("x += 1", 8)'	yes
+'use repl; should_show_repl_value("1 + 2", 3)'	yes
+'use repl; should_show_repl_value("use shell", ø)'	no
+'use repl; declaration_entry("use shell")'	yes
+'use repl; declaration_entry("x = 7")'	no
+'use repl; state_entry("use shell")'	yes
+'use repl; state_entry("x = 7")'	yes
