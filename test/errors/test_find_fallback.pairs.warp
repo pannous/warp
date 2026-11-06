@@ -1,8 +1,6 @@
-# a missing part falls back in one word: or, ??, default and try … else alike; `result?` is ø where it fails
+# a missing part falls back in one word: or and try … else; `result?` is ø where it fails
 # (user, card find-fallback)
 '"ab".find("x") or 0'	0
-'"ab".find("x") ?? 0'	0
-'"ab".find("x") default 0'	0
 'try "ab".find("x") else 0'	0
 '"ab".find("b") ?? 0'	2
 'r = "ab".find("x")?; r == ø'	yes
