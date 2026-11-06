@@ -1,0 +1,6 @@
+unit-after	types	lib/units.warp:113 rule $xs $u where $xs is list; a typed hole for a call returning a list (typed-rule-holes) instead of a literal list	types
+verify-law	type-theory	warp verify and its Lean side (lean/, lib/laws.warp) are outside core; an Int.emod nonnegativity lemma/tactic for the law	types
+now-america	units	a got-it note for `in` with a text joined to a quantity; Interviewer chose option A (no special precedence), a diagnostic in a time/zone extension or lib/time.warp	units-time
+sleep-ms	units	sleep(duration) is lib/units.warp:268 and the unit binding rules are lib/units.warp:111-117; (50/3) ms must give the same DimensionError there	units-time
+spaced-degree	units	degree atoms are extensions/degrees.warp (core/extension.warp:17 only the hook); spaced 20 °C needs a rule there or in lib/units.warp	units-time
+component-calls	web	web framework holes are lib/markup.warp work (run-time hole lists from page·shown); only shrinks patches, no core/ need	web

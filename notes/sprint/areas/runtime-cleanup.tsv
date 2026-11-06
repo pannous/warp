@@ -36,9 +36,3 @@ test-case-timeout	runtime-speed	step 1 landed (extensions/commands/tests.warp:25
 test-failure-investigation	cleanup-3	a classification task over test/results*.txt and samples, no code change; report goes to the Interviewer
 test-over	lowering	the runner is extensions/commands/tests.warp (listing/verdicts); reproduce the 'text of node' over ~60 files there first, core/native/tests.warp only if the child runner is at fault
 xs-each	cleanup-3	no `.each.<field>` broadcast in extensions/sugar/broadcasting.warp (only `f each xs`); a rule `$xs.each.$f => $xs.map(…)` fits there (decision each-field-broadcast)
-component-build	codegen	build kinds live in extensions/commands/build.warp; a WIT-world component output is a build-command/extension addition, nothing in core/ grep finds
-hot-reload-slots	runtime-speed	warp dev hot reload via funcref slots fits lib web framework / extensions/commands; idea card
-parallel-module-builds	runtime-speed-2	still open: no WARP_JOBS anywhere; the modules step is a driver/rebuild concern (scripts/rebuild.sh or core/native/warp.warp rebuild step) — opt-in parallel processes in dependency order; mostly scripts/
-playground-compiles	self-hosted-3	decision playground-today (2026-11-01) supersedes playground-after-parity: web/playground moves to the self-hosted compiler; work is in web/, no core change
-self-showcase	self-hosted	no sample shows the warp-written parser yet; a samples/ program plus a guide section, no core change
-variable-signals-tests	parallel-runtime	lib/signals.warp (whenever, watched fields, hooks); 9 red lines of test_variable_signals.warp

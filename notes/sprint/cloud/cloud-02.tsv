@@ -1,0 +1,7 @@
+block-after	parsing-2	extensions/pipe_lambdas.warp handles `do |x| … end` only for a call's last argument (test_python_ruby_definitions.warp:51 apply(3) do); `xs.map do |a|` needs a rule there	spec
+bool-of-collection	spec-gaps	core/runtime/conversions.warp:88 bool() refuses non-bools; a truthiness overload bool(x: any) in lib/prelude.warp	spec
+cargo-version	spec-gaps	`use cargo strsim` works (samples/modules/rust_crates.warp:6); a version in the use line goes to the cargo extension's use reader	spec
+catch-blocks	spec-gaps	only `try {…} catch e {…}` exists (test/results.txt:31,163); `catch (kind) {}` / `on error {}` inside a function body can be rewrite rules in extensions/checked_tries.warp	spec
+definition-head-phrases	parser-features	phrase heads extend extensions/phrase_definitions.warp (decision phrase-functions, notes/decisions.md:193); parked under the plan-only hold, WIP 2cfd2e22c5	spec
+effects-lists	effects	extensions/effects.warp already computes a function's effects for @pure/@io marks; expose them as f.effects / effects of f there	spec
+english-type-facts	spec-gaps	nothing implements 'a person has a random id'; an English-facts reader belongs in lib/english.warp or an extension	spec
