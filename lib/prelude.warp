@@ -230,6 +230,8 @@ sorted_in_order(xs: list, before: function): list := {
 }
 // x rounded to that many digits after the point
 round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
+// (a float's own, unboxed: the prelude is linked, its untyped words take nodes)
+round_to(x: float, places: int): float := round(x * 10 ^ places) / 10 ^ places
 // The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
 // regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
@@ -274,9 +276,11 @@ infix operator ↓(x: number, b: number) := log(x, b)
 log(x: number, base: number): float := log(x) / log(base)
 // ∜x (lib/math.warp prefix operator)
 fourth_root(x) := sqrt(sqrt(x))
+fourth_root(x: float): float := sqrt(sqrt(x))
 replace(t, old, with new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
 is_digit(c) := c >= '0' and c <= '9'
+is_digit(c: codepoint): bool := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
@@ -420,6 +424,7 @@ each_any(value: any, f) := if value is list then [f(item) for item in value] els
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
+pixel_channel(c: float): int := round(255 * min(max(c, 0.0), 1.0)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
 // row) of every pixel, row by row; in a frame without a window (lib/frames.warp frames_end) at most the window's size,
 // f sampled across the size asked
