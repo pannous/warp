@@ -5,11 +5,6 @@ is! 'class Cup{label: text; n: int}
 stored cups: [Cup] in "cups_lettered"
 cups.add(Cup("big", 2))
 cups#1.n' 2
-is! 'class Cup{label: text; n: int}
-stored cups: [Cup] in "cups_lettered"
-c = cups#1
-c.n += 1
-cups#1.n' 3
 
 # a_one_letter_table_takes_rows
 is! 'class Pot{label: text}

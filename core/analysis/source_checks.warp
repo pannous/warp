@@ -21,6 +21,7 @@ source_checks(program: Node, prelude: text): Node := {
 		for lint in hooks().lints { lint(n, program) }
 		bare_sleep(n)
 		spaced_sign(n)
+		division_path(n, program)
 		uneven_spacing(n)
 		assigned_mutation(n, aliases)
 		lints_of(without_mark(n))
@@ -93,6 +94,14 @@ spaced_sign(n: Node) := {
 	written = items_of(value_of(n)#2)
 	item = written#2
 	diagnose(call_of("spaced_sign", [written#1, item, written#1 + " " + item[0 ..< 1] + " " + item[1 ..]]), n)
+}
+# `width /height` (decision path-after-operand): a path after an operand, the name one the program binds or reads (a
+# variable, a parameter), means a division; `show /tmp` stays the path
+division_path(n: Node, program: Node) := {
+	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == PATH_AFTER_OPERAND_MARK) { return ø }
+	written = items_of(value_of(n)#2)
+	name = written#2[1 ..]
+	if name.all(c => is_name_char(c)) and nodes_in(program).any(part => part == symbol(name)) { diagnose(call_of("division_path", [written#1, name]), n) }
 }
 # `a *b`: an operator spaced on one side only computes; the fix spaces it evenly, `a * b`
 uneven_spacing(n: Node) := {

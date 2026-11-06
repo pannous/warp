@@ -25,7 +25,7 @@ infix operator ≈(a: any, b: any) := alike(a, b, tolerance, no)
 infix operator ~(a: any, b: any) := alike(a, b, rough_tolerance, yes)
 infix operator ⋍(a: any, b: any) := alike(a, b, tolerance, no)
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
-// pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
+// instances of one class field by field, pairs part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
 alike(a: any, b: any, tolerance: float, rough: bool) := {
 	if bracket_of(a) == "{" and bracket_of(b) == "{" {
@@ -33,6 +33,9 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 	}
 	if bracket_of(a) != ø and bracket_of(a) == bracket_of(b) {
 		return #a == #b and (1 to #a).all(i => alike(a#i, b#i, tolerance, rough))
+	}
+	if is_instance(a) and is_instance(b) {
+		return class_name(a) == class_name(b) and a.keys.all(k => alike(a[k], b[k], tolerance, rough))
 	}
 	if type(a) is key and type(b) is key {
 		keys_alike = alike(key_of(a), key_of(b), tolerance, rough)
@@ -46,7 +49,8 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 // folded (lower case without accents), the rough ones trimmed of blanks and punctuation at both ends first
 values_alike(a: any, b: any, tolerance: float, rough: bool): bool := {
 	if a is bool or b is bool { return truthy(a) == truthy(b) }
-	if a is number and b is number { return numbers_alike(a as float, b as float, tolerance) }
+	# real: an exact value too, π or 2π, which `is number` leaves out
+	if a is real and b is real { return numbers_alike(a as float, b as float, tolerance) }
 	if (a is text or a is char) and (b is text or b is char) { return text_alike(str(a), rough) == text_alike(str(b), rough) }
 	a == b
 }
@@ -55,6 +59,8 @@ numbers_alike(a: float, b: float, tolerance: float): bool := {
 	d <= tolerance * abs(a) or d <= tolerance * abs(b) or d <= 0.000000000001
 }
 truthy(x: any): bool := if x then yes else no
+// an instance of a class, a pair of its class name and its fields as a value: P(1), 5km
+is_instance(x: any): bool := type(x) is key and class_name(x) != "key"
 text_alike(t: text, rough: bool): text := case_fold(if rough then rough_trimmed(t) else t)
 rough_trimmed(t: text): text := {
 	first = 1; last = #t
@@ -125,7 +131,6 @@ sin(x: float): float from warp
 cos(x: float): float from warp
 tan(x: float): float from warp
 exp(x: float): float from warp
-ln(x: float): float from warp
 min(a: number, b: number, more...): number from warp
 max(a: number, b: number, more...): number from warp
 

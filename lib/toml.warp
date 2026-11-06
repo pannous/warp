@@ -481,6 +481,7 @@ toml_infinity(): any := float("1e308") * 10.0
 
 // writing
 global to_toml(m: map): text := toml_table_written(m, [])
+toml_dotted_header(here: list): text := here.map(toml_key_written).join(".")
 toml_table_written(m: map, keys: list): text := {
 	out = ""
 	for k in m.keys { v = m[k]; if not toml_is_table(v) and not toml_is_table_array(v) { out += toml_key_written(k) + " = " + toml_value_written(v) + "\n" } }
@@ -489,11 +490,11 @@ toml_table_written(m: map, keys: list): text := {
 		here = keys + [k]
 		if toml_is_table(v) {
 			if out != "" { out += "\n" }
-			out += "[" + here.map(toml_key_written).join(".") + "]\n" + toml_table_written(v, here)
+			out += "[" + toml_dotted_header(here) + "]\n" + toml_table_written(v, here)
 		} else if toml_is_table_array(v) {
 			for item in v {
 				if out != "" { out += "\n" }
-				out += "[[" + here.map(toml_key_written).join(".") + "]]\n" + toml_table_written(item, here)
+				out += "[[" + toml_dotted_header(here) + "]]\n" + toml_table_written(item, here)
 			}
 		}
 	}

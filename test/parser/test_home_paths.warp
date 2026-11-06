@@ -8,10 +8,14 @@ x' '~/a.txt'
 is! 'x = /etc/hosts
 x' '/etc/hosts'
 
-# division_and_comparison_stay
+# division_and_comparison_stay; a spaced /name after an operand is a path, a variable's name asks for `width / height`
+# (decision path-after-operand)
 is! 'width = 6
 height = 2
-width /height' 3
+width /height' error
+is! 'width = 6
+height = 2
+width / height' 3
 is! 'x = 1
 x ~ 1' true
 
@@ -19,4 +23,4 @@ x ~ 1' true
 is! 'show(p) := p
 show /tmp' '/tmp'
 is! 'area(w, h) := w /h
-area(6, 2)' 3
+area(6, 2)' error
