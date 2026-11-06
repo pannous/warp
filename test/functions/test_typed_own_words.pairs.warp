@@ -1,0 +1,5 @@
+# A program's typed function named like a prelude word it can't join (no typed line of the library) is its own, as an
+# untyped one is: the call reaches the program's, never the prelude's (card typed-add-overflow)
+'add(a: int, b: int): int := a + b; add(2, 3)'	5
+'add(a: text, b: text): text := a + "+" + b; add("x", "y")'	"x+y"
+'count_item(a: int, b: int): int := 7; count_item(1, 2)'	7
