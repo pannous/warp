@@ -9,7 +9,6 @@ use tasks
 // how often `on message from …` looks for messages that arrived
 MESSAGE_POLL = 20ms
 rewrite channel() => Channel()
-rewrite (for $item in $c $body) => while $c.more() { $item = $c.receive(); $body } where $c = channel()
 
 class Channel {
 	waiting: list = []
@@ -30,6 +29,8 @@ class Channel {
 		oldest
 	}
 	close() := { closed = yes }
+	// `for v in ch {…}` receives until the channel is closed or no task is left to send (decision for-over-iterator)
+	next() := if more() then receive() else ø
 }
 
 // `send v to: c` (decision named-argument-phrases): to a channel of this run, to a machine-wide one (`channel "chat"`,

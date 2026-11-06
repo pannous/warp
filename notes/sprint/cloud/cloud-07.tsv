@@ -1,0 +1,6 @@
+linux-glibc-floor	distro-packages	.github/workflows/release.yml:96-98 still ubuntu-24.04 runners (glibc 2.39); build in an older container/runner (packaging, no core)	tooling
+netbase-wikidata-load	ffi-libraries-roadmap	samples/storage/netbase.warp:2 marked expected failure, test/samples.txt:205 EXP 'unknown name query'; needs a netbase library in lib/ or a package	tooling
+build-app-bundle	tooling	no `--app` in core/native/warp.warp build; a scripts/ or lib/ bundler (Info.plist + executable) beside `warp build`; may need one flag in core/native/warp.warp	tooling
+page-app-build	tooling-2	still open (decision build-kinds-detected, Later); core/native/warp.warp has no page kind in `warp build`; the detection and macOS web-view app belong to the native warp command/lib packaging, not the compiler core	tooling
+page-wasm-build	tooling-2	still open (build-kinds-detected); no page build kind in core/native/warp.warp; emitting the program wasm plus its imported module wasms beside it is a build-step concern after load-time linking (L5), doable in the warp command/scripts	tooling
+powershell-semantics	tooling	user's for-fun experiment: structured pipelines (Where-Object/Select) as lib/ words over lists of records; no core needed	tooling
