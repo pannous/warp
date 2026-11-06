@@ -1,0 +1,5 @@
+# a map's loop names key and value as a pair or as an entry (card for-kv-iteration, user todo.md)
+'m = {a: 1, b: 2}; s = 0; for (k, v) in m { s += v }; s'	3
+'m = {a: 1, b: 2}; s = ""; for k: v in m { s += k }; s'	"ab"
+'m = {a: 1, b: 2}; s = 0; for k, v in m { s += v }; s'	3
+'ps = [(1, 2), (3, 4)]; s = 0; for (a, b) in ps { s += a * b }; s'	14

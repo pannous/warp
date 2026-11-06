@@ -11,10 +11,10 @@
 //   void              no result
 
 // Sorted 2026-11-06 (card c-entries-sort). Nothing here is warp's own way of doing a thing: every line is the C
-// function as C has it, for programs that call C on purpose (samples/native/c_calls.warp, test/ffi/). Kept so: each
-// one is called by a test, a sample or a library (lib/sound.warp declares its own getpid, fputs, fflush). Where warp
-// has the word itself, the warp word is the one to use; the C twin stays for the FFI tests that call it by name.
-// Unused anywhere and kept only as the obvious libc surface: labs, system, setenv, unsetenv, strerror.
+// function as C has it, for programs that call C on purpose (samples/native/c_calls.warp, samples/system/c_lines.warp,
+// test/ffi/); where warp has the word itself, the warp word is the one to use. One line per C function: libm's f64
+// functions are lib/math.warp's lines (`import sqrt from 'm'` reads them there), puts is the prelude's, isalpha and
+// isspace its aliases. Any other C function is one line in the program itself (samples/system/c_lines.warp).
 
 // texts (warp: count, compare, find, uppercase …)
 strlen(s: text): i64 from 'c'
@@ -36,8 +36,6 @@ strtod(s: text, end: out): f64 from 'c'
 toupper(c: i32): i32 from 'c'
 tolower(c: i32): i32 from 'c'
 isdigit(c: i32): i32 from 'c'
-isalpha(c: i32): i32 from 'c'
-isspace(c: i32): i32 from 'c'
 
 // integers and random numbers (warp: abs, random)
 abs(x: i32): i32 from 'c'
@@ -58,12 +56,8 @@ fopen(path: text, mode: text): handle from 'c'
 fclose(file: handle): i32 from 'c'
 fputs(s: text, file: handle): i32 from 'c'
 fflush(file: handle): i32 from 'c'
-puts(s: text): i32 from 'c'
 
-// libm (lib/math.warp declares the f64 functions every program has without `use`; these are C's own spellings)
-sqrt(x: f64): f64 from 'm'
-pow(x: f64, y: f64): f64 from 'm'
-hypot(x: f64, y: f64): f64 from 'm'
+// libm's functions lib/math.warp has no line of
 ldexp(x: f64, exponent: i32): f64 from 'm'
 cbrt(x: f64): f64 from 'm'
 sqrtf(x: f32): f32 from 'm'

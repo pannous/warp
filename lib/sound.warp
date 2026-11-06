@@ -329,7 +329,8 @@ class Note {
 	// a part of a semitone moves the cents: note(C4) + 2.25 is D4+25c
 	plus(semitones) := if semitones is int then Note(key + semitones, cents) else nearest_note(hertz() * 2 ^ (semitones / 12.0))
 	minus(semitones) := plus(-semitones)
-	equals(o) := o is Note and key == o.key and cents == o.cents
+	// a Note equals its name text (decision class-text): note("C#4") == "C#4"
+	equals(o) := (o is Note and key == o.key and cents == o.cents) or (o is text and o == text())
 }
 // `F#4` (decision music-plain-details): a letter is its pitch class, indexed by an octave its sharp note there, F♯4
 class PitchClass {
@@ -711,7 +712,14 @@ sound_file(speakers, rate, channels, seconds) := {
 	said("sound " + hundredths(seconds) + " s: " + file)
 	file
 }
-waited_till(start) := if start > clock() { sleep_ms(start - clock()) }
+// how far ahead of the speaker a voice may queue when heard (notes/sound.md PLAY_AHEAD). Offline (WARP_NO_WINDOW / CI)
+// never waits: save sound mixes by place, and tests stay fast
+PLAY_AHEAD_SECONDS = 0.5 as float
+waited_till(start) := {
+	if quiet_run() { return ø }
+	ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
+	if ahead > clock() { sleep_ms(ahead - clock()) }
+}
 
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
 // then). libwarp_sound beside warp plays it in the process (decision sound-plays: miniaudio, crates/warp-sound), the
@@ -987,6 +995,8 @@ render_sound(path) := save(Recording(), path)
 at(time, actions: block) := { sound_at(time); actions!; sound_at_end() }
 sound_at(seconds) := clock_at(si_amount(seconds))
 sound_at_end() := clock_at_end()
+// silence of that length on the voice's clock: the next sound or MIDI message follows (host sound.rest; card sound-native-clock)
+rest(seconds) := scheduled(si_amount(seconds))
 // a live loop says this first each cycle: the playground hands the loop over to the next run at its next cycle (card
 // playground-live), natively it does nothing
 live_cycle_started(name) := std_io("sound", "live_cycle", [name])
@@ -1081,7 +1091,7 @@ melody(notes) := melody(notes, note_seconds)
 // the melody of its notes, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
 tune(score: data) := melody([score_pitch(item) for item in score])
 score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(str(item)) else item
-// not text.warp's capitalize: its letter test's variable `at` meets this module's function at ("at was a function")
+// capitalize is text.warp's; letter-range uses range_index so it does not meet this module's at(time, block)
 note_capitalized(name: text) := upper(name[0]) + name[1..]
 
 // patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.
@@ -1214,7 +1224,7 @@ midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
 // a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
 midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	midi_on(pitch, velocity, channel)
-	scheduled(si_amount(duration))
+	rest(duration)
 	midi_off(pitch, channel)
 }
 midi_outputs() := std_io("midi", "outputs", [])
@@ -1406,5 +1416,7 @@ band_level(weighted, frequency) := {
 	4 * sqrt(power) / count(weighted) / loudest_sample
 }
 
-// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
-sound_samples(samples: node, rate: int, channels: int, wait: int) from host
+// PCM samples played through the same path as sounded (libwarp_sound / the page's warp_sound), so native and the
+// browser agree without a host import (card sound-samples). count is how many interleaved frames to take, as the old
+// host word and the page's sound_samples read them; rate and channels are the buffer's.
+sound_samples(samples: node, count: int, rate: int, channels: int) := sounded(samples[0..count], rate, channels)

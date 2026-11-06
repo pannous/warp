@@ -58,4 +58,34 @@ is_evident_text(n: Node, program: Node): bool := {
 	#given > 0 and given.all(value => value is text)
 }
 
-text_lints_extension = Extension{name: "text_lints", lints: [spelled_number_join, text_index_of]}
+# --- a value bound to a type word the program also tests with is/as (decision (b), card binding-local) ---
+# `text = "a"; n is text` compares n with "a": the binding shadows the type in `is` and `as`. Only where the binding
+# holds, its definition (else the program), tests with the word too: `text = …` alone is a fine name
+
+type_word_binding(n: Node, program: Node) := {
+	plain = without_mark(n)
+	if not is_key(plain, Op.Assign) { return ø }
+	target = assigned_variable(key_of(plain))
+	if not (target is symbol) or not is_tested_type_word(name_of(target)) { return ø }
+	if not tests_with(program, target) or not tests_with(binding_scope(n, program), target) { return ø }
+	diagnose(call_of("type_word_binding", [name_of(target)]), n)
+}
+# whether the code tests a value with the word, `x is text`, `x as text`
+tests_with(code: Node, word: Node): bool := nodes_in(code).any(m => (is_key(m, Op.Is) or is_key(m, Op.As)) and value_of(m) == word)
+# the body of the innermost definition holding the binding, else the program
+binding_scope(binding: Node, program: Node): Node := {
+	scope = program
+	size = #nodes_in(program)
+	for m in nodes_in(program) {
+		if is_key(m, Op.Define) {
+			body = nodes_in(value_of(m))
+			if #body < size and body.any(inner => inner == binding) {
+				scope = value_of(m)
+				size = #body
+			}
+		}
+	}
+	scope
+}
+
+text_lints_extension = Extension{name: "text_lints", lints: [spelled_number_join, text_index_of, type_word_binding]}
