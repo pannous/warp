@@ -17,6 +17,9 @@ floor_division_words = ["div"]
 # `alias acos = arc_cosine` → `alias acos => arc_cosine`: an alias says its direction (decision alias-arrows)
 alias_word = "alias"
 alias_arrow = "=>"
+# `str(x)` → `text(x)`: we call it text (card fix-rewrites; user 2026-11-06)
+showing_as_text = "text"
+showing_as_text_words = ["str"]
 
 # every hint of the scanned lines, in the order of the source
 hints_of(lines: list): list := {
@@ -59,9 +62,12 @@ word_at(cs: list, i: int): text := {
 	piece(cs, i, n)
 }
 
-# the hint on a word: a counted type, another language's word, a floor division word; ø when none
+# the hint on a word: a counted type, str→text, another language's word, a floor division word; ø when none
 word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
 	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
+	if word in showing_as_text_words and at(cs, i + #word) == "(" {
+		return Hint(number, i, word, showing_as_text, "we call it text")
+	}
 	if word == alias_word and starts_statement(cs, i) { return alias_arrow_hint(cs, i + #word, number) }
 	for pair in foreign_words {
 		if word == pair[0] and starts_statement(cs, i) and is_word_character(character_after_blanks(cs, i + #word)) and is_blank_character(at(cs, i + #word)) {
