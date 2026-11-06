@@ -3,6 +3,7 @@ target
 *.wasm
 # the library index `warp rebuild` writes beside the prebuilt modules
 lib/modules/index.tsv
+lib/modules/sugar_rules.packed
 wiki/
 out
 
