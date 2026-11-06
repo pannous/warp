@@ -38,3 +38,4 @@ page-wasm-build	tooling-2	still open (build-kinds-detected); no page build kind 
 powershell-semantics	tooling	user's for-fun experiment: structured pipelines (Where-Object/Select) as lib/ words over lists of records; no core needed
 precompiled-crates	ffi-libraries-roadmap	CI matrix + release assets + download cache for crate shims: scripts/, packaging/, lib/crates; no compiler change
 pure-exec-refused	lib-compiler	exec lives in lib/os.warp; the 'error value' it returns needs lib/os to give a result value the core accepts (command/run already work); check after zero-bake linking
+program-test	user-decided	user (round 9-10): a test program ends with "✓ N tests passed" / "K of N failed"; extension + lib

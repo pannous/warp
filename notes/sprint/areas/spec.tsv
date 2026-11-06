@@ -43,3 +43,4 @@ scene-3d	spec-gaps	3d scenes (wiki/3d.md): a lib/ module over the gpu/webgpu lib
 shell-backtick-run	spec-gaps	lib/shell.warp:27 already has rm "file"; rm of each file of ls is a lib/shell.warp word over iteration
 shell-symbolic-mode	spec-gaps	repl behavior lives in lib/repl.warp; no symbolic mode anywhere yet
 with-do-block	spec-gaps	with context do … end as a sugar rule in extensions/sugar/ (or esoteric: drop?)
+find-fallback	user-decided	user (round 9-10): or 0, ?? 0, default 0, try … else 0 all give 0; result? means null or error → ø

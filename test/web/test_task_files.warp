@@ -2,13 +2,16 @@
 
 # a_task_plays_a_wav_rendered_before_it
 is! 'use sound
+use file
+wav = temp_folder() + "/before.wav"
 play(C4, 0.1s)
-save sound as: "before.wav"
-job = go { play_file("before.wav"); exists("before.wav") }
+save sound as: wav
+job = go { play_file(wav); exists(wav) }
 await job' true
 
 # the_program_reads_what_its_task_wrote
 is! 'use file
-job = go { write("task.txt", "from the task"); 1 }
+written = temp_folder() + "/task.txt"
+job = go { write(written, "from the task"); 1 }
 await job
-read("task.txt")' 'from the task'
+read(written)' 'from the task'

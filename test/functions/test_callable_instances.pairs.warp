@@ -1,4 +1,4 @@
 # an instance whose class has call(self, …) is called like a function (trait Callable): a sound bus takes a signal
 'class A { k: int; call(x) := x + k }; a = A(1); [a(2), A(10)(2)]'	[3, 12]
 'class A { k: int }; call(a: A, x) := x + a.k; a = A(1); 2 |> a'	3
-'use sound; room = bus() |> delay(0.3, 0.5, 1); osc(A4, 0.1s) |> room; round(save(sound, "callable_bus.wav") * 10)'	29
+'use sound; room = bus() |> delay(0.3, 0.5, 1); osc(A4, 0.1s) |> room; round(save(sound, temp_folder() + "/callable_bus.wav") * 10)'	29
