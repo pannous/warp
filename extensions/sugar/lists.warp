@@ -15,9 +15,11 @@ rewrite $v as list of $t => $v.map($x => $x as $t)
 # `count bytes in t`: the text's byte size, ahead of the `in` of a membership
 rewrite (count bytes in $t) => byte_size($t)
 
+# `xs are in t`: every item of xs is in t (decisions.md 2026-11-06 round 9: are-words-in, all-words-in)
+rewrite ($xs are in $t) => $xs.all($x => collection_contains($t, $x))
 # A filter (card pair-count-filter): `xs where it > 2` is the items the condition holds for, `it` each item, also as a
 # call's argument, `count(xs where it is Pair)`; a field named bare reads the item's (decision P223, `people where age > 18`)
 rewrite ($xs where $c...) => $xs.filter(it => $d) where $d = bare_fields_read($c..., $program)
 rewrite $f($xs where $c...) => $f($xs.filter(it => $d)) where $d = bare_fields_read($c..., $program)
-# `for p in people where p.age > 90 {…}`: the filter reads the loop's variable
-rewrite for $x in $xs.filter(it => $c) {$body...} => for $x in $xs.filter($x => $c) {$body...} where $x is symbol
+# `for p in people where p.age > 90 {…}`: the filter reads the loop's variable, and `it` as well (`where it > 2`)
+rewrite for $x in $xs.filter(it => $c) {$body...} => for $x in $xs.filter($x => $d) {$body...} where $x is symbol and $d = it_read_as($c, $x)
