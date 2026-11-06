@@ -14,3 +14,13 @@ The local area workers (../README.md) no longer hold these cards.
   A card whose change affects core/ is not approached: `core` with the reason.
 - Push the branch often (a cloud box can vanish). The Integrator smokes and lands cloud-NN on the Mac; the
   Supervisor applies the result file to the board.
+01 https://claude.ai/code/session_018Xoawma9cQcHffHi4hbYQk
+02 https://claude.ai/code/session_018XoawogY9jcGdddiomjgDd
+03 https://claude.ai/code/session_018XoawnuFqdCf49XHg2Lbv5
+04 https://claude.ai/code/session_018XoawnRp6T7Y9pr4aSTXjf
+05 https://claude.ai/code/session_018XoawmxFemegg7pK561MXW
+06 https://claude.ai/code/session_018XoawmiSBtjcZ6tXCf9K66
+07 https://claude.ai/code/session_018XoawmUo9fEn92KbeFYbvM
+08 https://claude.ai/code/session_018Xoawmpw7euUA2kkVY5NRV
+09 https://claude.ai/code/session_018Xoawnw1X8FbJwH4dZafsM
+10 https://claude.ai/code/session_018XoawkmPGHcg2gyscamE2q

@@ -25,6 +25,10 @@ stem=${source%.warp}
 title=$(basename "$stem")
 
 warp build --wasm "$source"
+# the page's first markup, prerendered: what the program shows once it ran (`warp run` serves no routes), so the page
+# shows it before its Worker starts; the Worker's first render morphs it in place
+shown=$(WARP_NO_WINDOW=1 warp run "$source" </dev/null 2>/dev/null | tail -1) || shown=""
+case $shown in "<"*) ;; *) echo "build-site: no markup to prerender, the page shows its markup once its Worker runs" >&2; shown="" ;; esac
 mkdir -p "$folder/$SCRIPT_FOLDER/lib"
 mv "$stem.full.wasm" "$folder/app.wasm"
 rm -f "$stem.wasm" "$stem.mod.wasm" "$stem"
@@ -36,7 +40,7 @@ cp "$PLAYGROUND/coi-serviceworker.js" "$folder/"
 	printf '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n'
 	printf '<meta name="viewport" content="width=device-width, initial-scale=1">\n<link rel="icon" href="data:,">\n'
 	printf '<title>%s</title>\n</head>\n<body>\n' "$title"
-	printf '<div id="warp-root"></div>\n'
+	printf '<div id="warp-root">%s</div>\n' "$shown"
 	for script in $PAGE_SCRIPTS; do printf '<script src="%s/%s"></script>\n' "$SCRIPT_FOLDER" "$script"; done
 	printf '</body>\n</html>\n'
 } > "$folder/index.html"

@@ -48,7 +48,10 @@ export page_render(value: any) := {
 	page_handler_labels = []
 	component_calls = {}
 	component_order = []
-	to_html(value)
+	component_current = ø
+	let html = to_html(value)
+	component_moments_run()
+	html
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 // a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
@@ -100,11 +103,41 @@ component(name: text, key: any): map := {
 	id = name + "·" + str(key ?? calls)
 	if not component_states.has(id) { component_states[id] = {} }
 	instance = component_states[id]
-	component_order.add([name, instance])
+	component_order.add([name, instance, id])
+	component_current = id
 	instance
 }
 component_state(instance: map, name: text, made: function) := { if not instance.has(name) { instance[name] = made() } }
 component_instances(name: text): list := component_order.filter(entry => entry#1 == name).map(entry => entry#2)
+
+// `on mount {…}` and `on cleanup {…}` (card mount-cleanup-handlers): in a component's body the instance's own moments,
+// run once when it appears on the page and when it leaves it; outside any, the page's, which appears at its first
+// render. A body runs right after its component call and before the components it shows, so the moment is the
+// instance's whose call ran last
+page_moments_id = "·page"
+global component_current = ø
+global component_moments = {}
+// the instances on the page after the last render, by id
+global component_shown = []
+rewrite listen(data $moment, $action, $once) => component_moment(data $moment, $action) where $moment in [mount, cleanup]
+component_moment(moment: any, action: function) := {
+	let id = component_current ?? page_moments_id
+	var moments = if component_moments.has(id) then component_moments[id] else {}
+	moments[name_of(moment)] = action
+	component_moments[id] = moments
+}
+component_moments_run() := {
+	let shown = [page_moments_id] + component_order.map(entry => entry#3)
+	for id in shown { if id not in component_shown { component_moment_run(id, "mount") } }
+	for id in component_shown { if id not in shown { component_moment_run(id, "cleanup") } }
+	component_shown = shown
+}
+component_moment_run(id: text, moment: text) := {
+	if component_moments.has(id) and component_moments[id].has(moment) {
+		let action = component_moments[id][moment]
+		action(ø)
+	}
+}
 
 // what an element shows to be found by: its text, its tags left out, and its labelling attributes
 html_labels(tag: any, items: list, children: text): list := [html_shown_text(children)] + items.filter(item => html_is_attribute(item, tag) and html_name(item) in handler_label_attributes).map(item => html_plain(html_content(item)))
@@ -139,6 +172,16 @@ class Live {
 	show() := str(now())
 }
 live(compute: function): Live := Live(compute)
+
+// `input{ bind: name }`: a two-way binding, the field showing the variable and setting it from what is typed; the
+// item rule (extensions/sugar/bindings.warp) keeps the variable as code to read and to write (card input-bind-name)
+class Binding {
+	read: function
+	write: function
+	now() := { value = read; value() }
+	set(entered: any) := { change = write; change(entered) }
+}
+binding(read: function, write: function): Binding := Binding(read, write)
 
 // an element's handler: `on click {…}` among its items (a Handler), or HTML's own spelling
 // `onclick: (event => …)`
@@ -181,13 +224,14 @@ html_is_listed_element(value: any): bool := value is pair and contains(html_elem
 html_is_custom_element(name: any): bool := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
-	let items = html_items(content)
+	let items = html_shorthands_spread(html_items(content))
 	var own_scope = scope
 	var own_chosen = chosen
 	var value = ø
 	for item in items {
 		if html_is_attribute(item, tag) and html_name(item) == "data-warp-scope" { own_scope = html_plain(html_content(item)) }
 		if html_is_attribute(item, tag) and html_name(item) == "value" { value = html_plain(html_content(item)) }
+		if html_is_binding(item) { value = html_plain(html_content(item).now()) }
 	}
 	if tag == "select" { own_chosen = value }
 	var attributes = ""
@@ -199,6 +243,10 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	for item in items {
 		if html_is_handler(item) {
 			attributes = attributes + html_handler(item)
+			own_handlers.add(#page_handlers)
+		}
+		else if html_is_binding(item) {
+			attributes = attributes + html_bound(tag, items, html_content(item))
 			own_handlers.add(#page_handlers)
 		}
 		else if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(html_name(item), html_content(item)) }
@@ -224,6 +272,22 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	if contains(html_raw_text_elements, tag) { children = replace(children, "</", "<\\/") }
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
 }
+
+html_is_binding(item: any): bool := item is pair and html_name(item) == "bind" and html_content(item) is Binding
+
+// a bound field's attributes: its kind and step from the variable's type unless the element names its type, the
+// value it shows and its input handler (card web-validate: the browser refuses 2.5 for an int, a bool is a checkbox)
+html_bound(tag: any, items: list, binding: Binding): text := {
+	let shown = binding.now()
+	let field = tag == "input"
+	let kind = if field and not html_names_any(items, ["type"]) then html_field_type(shown) else ""
+	let step = if field and shown is number then " step=\"" + (if shown is int then "1" else "any") + "\"" else ""
+	let state = if shown is bool then (if shown then " checked" else "") else " value=\"" + html_escaped(shown) + "\""
+	kind + step + state + html_handler_attribute("input", detail => binding.set(html_entered_like(shown, if shown is bool then detail.checked else detail.value)))
+}
+html_field_type(value: any): text := if value is bool then " type=\"checkbox\"" else if value is number then " type=\"number\"" else ""
+// what was entered, an int variable's kept an int
+html_entered_like(shown: any, entered: any) := if shown is int and entered is number then int(entered) else entered
 
 // `select{ "apple" "pear" }`, `select{ ["apple" "pear"] }`, `select{ fruits }`: what a select holds besides elements
 // is its options, a pair `"s": "small"` an option's value and label (card select-shorthand)
@@ -602,23 +666,42 @@ style_selector_text(node: any) := {
 // `li{ transition: opacity 200ms ease-out }`, `animation: pop 400ms`: the element's inline CSS, its words as data,
 // durations in milliseconds, a text as written (decisions.md transitions-data). fade, scale and slide are the CSS
 // transitions of opacity and transform, from the starting style the kind names
-transition(spec: data) := {
-	let parts = css_parts(spec)
+transition(spec: data) := css_shorthand("transition", css_items(spec))
+animation(spec: data) := css_shorthand("animation", css_items(spec))
+// `leave: pop 400ms reverse`: the animation the page plays before it removes the element (CSS has no waiting removal)
+leave(spec: data) := css_shorthand("leave", css_items(spec))
+css_shorthands = ["transition", "animation", "leave"]
+
+// a shorthand's items, its words then the element's children: the style or attribute they give, the children after it
+css_shorthand(name: text, items: list) := {
+	let parts = css_parts(items)
 	let words = parts#1
+	if name == "leave" { return [key(symbol("data-warp-leave"), ":", words)] + parts#2 }
+	if name == "animation" { return [css_style("animation", words)] + parts#2 }
 	let kind = css_kind(words)
 	if kind == ø { return [css_style("transition", words)] + parts#2 }
 	[key(symbol("starting-style"), ":", css_kinds[kind]), css_style("transition", css_of_kind(words))] + parts#2
 }
 
-animation(spec: data) := {
-	let parts = css_parts(spec)
-	[css_style("animation", parts#1)] + parts#2
-}
-
-// `leave: pop 400ms reverse`: the animation the page plays before it removes the element (CSS has no waiting removal)
-leave(spec: data) := {
-	let parts = css_parts(spec)
-	[key(symbol("data-warp-leave"), ":", parts#1)] + parts#2
+// `li{ transition: "opacity 150ms" key: 1 … }`, `transition: opacity 200ms ease-out`: an element's item naming a
+// shorthand is its style, the words after it up to the children included (card li-transition-render)
+html_shorthands_spread(items: list): list := {
+	var spread = []
+	var at = 1
+	while at <= #items {
+		let item = items#at
+		if item is pair and html_name(item) in css_shorthands {
+			let value = html_raw_content(item)
+			var spec = if value is text or not html_is_group(value) then [value] else [part for part in value]
+			while not (value is text) and at < #items and css_is_word(items#(at + 1)) {
+				at += 1
+				spec.add(items#at)
+			}
+			spread = spread + css_shorthand(html_name(item), spec)
+		} else { spread.add(item) }
+		at += 1
+	}
+	spread
 }
 
 // the starting style each kind before CSS enters from
@@ -627,10 +710,9 @@ css_default_duration = "200ms"
 
 css_style(property: any, value: any) := key(symbol("style"), ":", bracketed([key(symbol(property), ":", value)], "{"))
 
-// the words of a spec as CSS writes them, and the element's children after them (`opacity 1s "a"`): `fade 1s ease-out`
-// → "fade 1000ms ease-out"; a text leading the spec as written
-css_parts(spec: any) := {
-	let items = css_items(spec)
+// the words of a spec's items as CSS writes them, and the element's children after them (`opacity 1s "a"`): `fade 1s
+// ease-out` → "fade 1000ms ease-out"; a text leading the spec as written
+css_parts(items: list) := {
 	if items#1 is text { return [items#1, [items#i for i in 2 to #items]] }
 	var words = []
 	var children = []

@@ -13,12 +13,38 @@ mentions_indexed(source: text, word: text): bool := {
 	spelled = spelling_of(word)
 	if spelled != word then source.contains(spelled) else mentions_word(source, spelled)
 }
+# the [start, end] of each text literal and comment of the source, in order, by the lexer's own ends of both
+texts_and_comments(source: text): list := {
+	spans = []
+	n = source.length
+	at = 0
+	while at < n {
+		c = source[at]
+		end = if opens_text(c) then text_end(source, at + 1, closing_of(c), n) else comment_end(source, at, n)
+		if end == at { at += 1 } else {
+			spans += [[at, end]]
+			at = end
+		}
+	}
+	spans
+}
+# the source without its comments: a word only in a comment or the shebang (`#!/usr/bin/env warp`) names nothing
+uncommented(source: text): text := {
+	kept = []
+	from = 0
+	for span in texts_and_comments(source).filter(span => not opens_text(source[span#1])) {
+		kept += [source[from ..< span#1]]
+		from = span#2
+	}
+	(kept + [source[from ..< source.length]]).join("")
+}
 implicit_modules(source: text, folder: text = "."): list := {
 	index = library_index_section("word")
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
-	candidates = index.keys.filter(word => mentions_indexed(source, word))
+	code = uncommented(source)
+	candidates = index.keys.filter(word => mentions_indexed(code, word))
 	if #candidates == 0 { return [] }
 	program = interpolation(plain_node(parsed(source)))
 	own = own_heads(program)
