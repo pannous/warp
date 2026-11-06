@@ -331,9 +331,7 @@ Readers of the layout (each place a module's result or a value crossing the boun
   `$list` (told from a cons cell by its first field: the i32 length, where a cons cell's first item is a $Node), and
   needs no memory export. Done.
 - src/gc_traits (GcString::from_val): already reads an `(array i8)` text.
-- web/playground/reader.js reads through the reflection exports each Rust-emitted module carries
-  (src/wasm_emitter/reflection/exports.rs). emitter.warp modules do not run in the browser yet; when they do, they
-  carry the same exports, with tags for a byte-array text and a vector list.
+- web/playground/values.js reads a module's values in the browser through its exports (shown_at, item_at …).
 - Host imports, FFI and WIT (src/host, src/ffi): take $String (ptr, len) texts in linear memory. emitter.warp imports
   only WASI's fd_write, and only for a program that says `print` (imports shift function indices, so it is decided
   before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
