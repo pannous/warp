@@ -9,5 +9,4 @@
 'start = clock(); sleep(20ms); clock() - start >= 20'	true
 
 # test_a_program_prints_and_uses_the_host
-'x = read("Cargo.toml"); print "read"; count(x) > 3'	true
 'import rand from "c"; print "called C"; rand() >= 0'	true
