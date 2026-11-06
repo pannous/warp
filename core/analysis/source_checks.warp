@@ -45,24 +45,28 @@ charged_assignments(block: Node) := {
 }
 # decisions let-reassign, const-deep: a name declared `let k = 7` (also const, constant, final, val) binds once, so
 # assigning it again in its block, `k = 8`, `k += 1`, is an error whose fix is the variable, `var k = 7`; a function's
-# body keeps its own locals (lambda-assign-writes-through)
+# body keeps its own locals (lambda-assign-writes-through); its own value again, `const x=7; x=7`, changes nothing (P159)
 constant_words = ["let", "const", "constant", "final", "val"]
 constant_assignments(block: Node) := {
-	statements = items_of(block)
-	constants = statements.map(plain_node).map(declared_constant).filter(name => name != ø)
+	constants = {}
+	for statement in items_of(block).map(plain_node) {
+		bound = declared_constant(statement)
+		if bound != ø { constants[name_of(key_of(bound))] = "${value_of(bound)}" }
+	}
 	if #constants == 0 { return ø }
-	for statement in statements.filter(statement => declared_constant(plain_node(statement)) == ø) {
+	for statement in items_of(block).filter(statement => declared_constant(plain_node(statement)) == ø) {
 		for n in outer_nodes_in(statement) {
-			if n is key and op_of(n) in assigning_operators and "${without_mark(key_of(n))}" in constants { diagnose(call_of("constant_assignment", ["${without_mark(key_of(n))}"]), n) }
+			name = if n is key and op_of(n) in assigning_operators then "${without_mark(key_of(n))}" else ""
+			if constants.has(name) and not (op_of(n) == "=" and "${value_of(n)}" == constants[name]) { diagnose(call_of("constant_assignment", [name]), n) }
 		}
 	}
 	ø
 }
-# the name `let k = 7` declares a constant, else ø
+# the binding `k = 7` of `let k = 7` declaring a constant, else ø
 declared_constant(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in constant_words) { return ø }
 	bound = statement#2
-	if bound is key and op_of(bound) == "=" and key_of(bound) is symbol then name_of(key_of(bound)) else ø
+	if bound is key and op_of(bound) == "=" and key_of(bound) is symbol then bound else ø
 }
 # an error the parser leaves in the tree (a negative index), the program's value
 located_error(n: Node) := {
