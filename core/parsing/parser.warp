@@ -1691,9 +1691,10 @@ def heads_rule(p: Parser): bool {
 	while start > 0 and p.code[start - 1] != '\n' { start -= 1 }
 	p.code[start .. p.at].trim() == "rewrite"
 }
-// The parser's position is the name a function keyword defines: `def add(a, b)` defines add, never `def + (a, b)`
+// The parser's position is the name a function keyword defines: `def add(a, b)` defines add, never `def + (a, b)`;
+// `$f is function and …` goes on with its operator
 NAMING_KEYWORDS = function_keywords + ["override"]
-def follows_naming_keyword(p: Parser): bool := word_before(p) in NAMING_KEYWORDS
+def follows_naming_keyword(p: Parser): bool := word_before(p) in NAMING_KEYWORDS and char_ahead(p, word_at(p).length) == '('
 // The operator symbol at the parser's position as [written, canonical], the longest, else []
 // (`c ?.5 : 1` keeps its ternary: `?.` before a digit is `?` and the number .5)
 def symbol_operator_at(p: Parser, c: text): list {

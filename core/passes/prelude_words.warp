@@ -860,7 +860,7 @@ view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else
 # the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the
 # holes of a text pattern `"/users/" + id: int`
 pattern_names(pattern: Node): list := match pattern {
-	Symbol(name): [name]
+	Symbol(name): [rest_name(pattern) ?? name]
 	Key(head, Op.Colon, type): pattern_names(head) + names_after_type(type)
 	Key(head, Op.Add, tail): pattern_names(head) + pattern_names(tail)
 	Key(head, op, fields): if rest_name(pattern) != ø then [rest_name(pattern)] else if is_group(fields) then pattern_names(fields) else []
