@@ -316,8 +316,10 @@ static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
 void* library_function(char* library, char* name) {
 	for (size_t i = 0; i < sizeof PROCESS_LIBRARIES / sizeof *PROCESS_LIBRARIES; i++)
 		if (!strcmp(library, PROCESS_LIBRARIES[i])) return dlsym(RTLD_DEFAULT, name);
-	// path as given: contains '/', dlopen that file (kept from samples-python tip)
-	int flags = RTLD_NOW | ((!strcmp(library, "python") || strchr(library, '/')) ? RTLD_GLOBAL : RTLD_LOCAL);
+	// global: a library's own plugins (python's extension modules) find its symbols; dlsym on the handle still answers
+	// from this library alone
+	int flags = RTLD_NOW | RTLD_GLOBAL;
+	// path as given: contains '/', dlopen that file
 	if (strchr(library, '/')) {
 		void* loaded = dlopen(library, flags);
 		return loaded ? dlsym(loaded, name) : NULL;
