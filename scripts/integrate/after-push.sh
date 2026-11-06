@@ -270,9 +270,20 @@ watch() {
 	# stage two: its compilers beside it, else the whole native warp
 	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
 	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
+	# a new native folder lacks the package libraries (libuniscript_c beside warp): linked again, as samples.sh does
+	"$scripts/link-packages.sh" "$MAIN_CHECKOUT" >/dev/null || say "packages not linked beside the new warp: the package samples fail"
+	playground_refreshed
 	echo "$tip" >"$state/watched"
 	"$0" --slow </dev/null &
 	disown
+}
+
+# the user's playground (web/playground/warp-lib) runs the compilers of the tip just installed, not the ones of its last
+# manual build (card after-push-refresh); build.sh refuses compilers whose sources the checkout no longer has, said here
+playground_refreshed() {
+	local log=$state/playground-build.log
+	WARP_LIB=$TREE/lib "$MAIN_CHECKOUT/web/playground/build.sh" compiler >"$log" 2>&1 ||
+		say "the user's playground not refreshed: $(tail -1 "$log" | cut -c1-160)"
 }
 
 # the samples that run, the gap to 2.0 (decision night-samples-modules): test/samples.txt committed on main when it
