@@ -106,6 +106,11 @@ lb() := known_unit("lb")
 ms() := known_unit("ms")
 µs() := known_unit("µs")
 ns() := known_unit("ns")
+// `°C`, `°F`: the temperature scales, values (a glyph-led name is no function head: `°C()` reads °C then ()); a scale
+// starts away from zero, so `20°C` is the temperature 20 on it, not 20 times one degree
+°C = known_unit("°C")
+°F = known_unit("°F")
+rewrite $e * $u => quantity($e, $name) where $e is number and $u is symbol and $u in [°C, °F] and $name = spelled($u)
 // `2 hours in minutes`: `in` is a word of the phrase, so the run is taken whole, before `2 hours` alone (rules try
 // a phrase's runs in their order)
 rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
