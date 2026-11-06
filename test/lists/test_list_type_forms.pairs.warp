@@ -1,0 +1,7 @@
+# The type forms of an empty list (card list-type-forms, wiki/list.md "Typed lists")
+'x = int[]; x'	[]
+'x = number[]; x'	[]
+'x = float[]; x += 2.5; x'	[2.5]
+'x = list of numbers; x'	[]
+'x = list of int; x += 3; x'	[3]
+'x = list of texts; x += "a"; x'	["a"]
