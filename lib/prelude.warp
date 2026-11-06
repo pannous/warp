@@ -665,10 +665,11 @@ lossy_utf8(bytes) := {
 	out
 }
 // `x as! T` is convert!(x, to: T), the target a value (decision checked-forced-conversions, convert-bang): one
-// definition for every target the prelude forces, as typed parameters cannot tell targets apart
+// definition for every target the prelude forces, as typed parameters cannot tell targets apart; T a type or its
+// symbol (`as!` passes symbol("byte")), named alike
 byte_names = ["byte", "u8", "uint8"]
 convert!(value, to) := {
-	target = "${to}"
+	target = to.name
 	if byte_names.contains(target) { return byte_wrapped(value) }
 	if target == "text" { return lossy_utf8(value) }
 	raise "no forced conversion to " + target + " of that value"
