@@ -213,6 +213,8 @@ output.located { cursor: pointer; }
 .completions { position: absolute; z-index: 20; margin: 0; padding: 2px 0; list-style: none; max-height: 16em; overflow-y: auto;
 	background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px;
 	font-family: monospace; font-size: 0.9em; box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
-.completions li { padding: 1px 8px; cursor: pointer; white-space: nowrap; }
+/* a row's glyph sits at its end in the row's own box: a float, taller than the line (an emoji), pushed the glyphs below
+   it a row down (card code-completing) */
+.completions li { display: flex; align-items: baseline; padding: 1px 8px; cursor: pointer; white-space: nowrap; }
 .completions li.chosen { background: var(--code-ground); color: var(--keyword); }
-.completions .glyph { margin-left: 1em; float: right; }
+.completions .glyph { margin-left: auto; padding-left: 1em; line-height: 1; }
