@@ -1,2 +1,4 @@
 enum-case	done	6de6827
 counter-struct	done	ab23ce7 (aside, not this card: `c = Counter()` without var gives c.count 3 and warns no field count)
+binding-local	done	2267475 (touches core/analysis/warnings.data: one message row, where every extension lint keeps its message; self-compile clean)
+pure-record-keyword	done	baf43bf (aside: C#-typed parameters record/class Point(int X, int Y) still fail, a class-form gap)
