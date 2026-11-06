@@ -899,3 +899,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - class-text: a Note equals the text of its name (Note.equals): `note("C#4") == "C#4"`; it still shows unquoted; test_note_values:7 stays.
   - play-mozart-mp3: the sample uses the decided source-relative literal `play ^/tune.mp3` (source-relative-prefix); `program.folder` is welcome as a word for the same folder ($dir). Note: inline `x = ^/tune.mp3; x` shows ['^', "/tune.mp3"] today.
   - power-function: investigate first: exact non-integer powers in lib/reals would be perfect, but measure the cost before choosing over floats.
+- 2026-11-06 card sprint, round 3 (user):
+  - scope-use-packages: test_use_scopes:4 and :7 change tests/warp/ → test/warp/ (user OK); expected values stay.
+  - library-typed-outcome: test_polled_signal_typed and test_task_completion_typed may be rewritten to the public behaviour (user OK); the helpers value_polled/task_awaited can then turn private.
+  - immutable-tuple: round brackets are a plain list (`a = (1, 2, 3); a#1 = 9` → [9, 2, 3]); immutability comes from a declaration, not the bracket; the tuple idea leaves wiki/mutable.md.
+  - param-as-type: a parameter's type is `f(int a)` or `f(a: int)`; `as` is the PREFERRED return-type syntax (`fib i as int := …`, `fun calculate(…) as real`), not a parameter type, and not to be confused with conversion. So `f(a as int)` is not a parameter annotation (wiki/return.md:17,32 to fix).
