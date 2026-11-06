@@ -23,6 +23,7 @@ use "phrase_definitions.warp"
 use "alias_arrows.warp"
 use "times_loops.warp"
 use "entities.warp"
+use "inline_html.warp"
 use "declared_operators.warp"
 use "list_operators.warp"
 use "last_results.warp"
@@ -71,6 +72,7 @@ EXTENSIONS = [
 	alias_arrows_extension
 	times_loops_extension
 	entities_extension
+	inline_html_extension
 	declared_operators_extension
 	list_operators_extension
 	# first in the used stage: a fold of an operator alone, `sum := fold +`
