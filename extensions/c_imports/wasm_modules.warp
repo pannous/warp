@@ -10,7 +10,6 @@ INCLUDE_WORD = "include"
 INCLUDED_MAIN = "main"
 # wasm's value types as a foreign line's types
 WASM_VALUE_TYPES = {127: "i32", 126: "i64", 125: "f32", 124: "f64"}
-FUNCTION_TYPE_BYTE = 96
 IMPORTED_FUNCTION = 0
 IMPORTED_TABLE = 1
 IMPORTED_MEMORY = 2
@@ -159,9 +158,9 @@ wasm_declaration(name: text, path: text, type: list?): list := {
 }
 # the statements a use of the module stands for: its constant globals' values, then an include's run of its main,
 # else nothing, which a use gives (`import fourty_two` is ø, not its last value)
-NOTHING = "ø"
+USE_GIVES = "()"
 wasm_statements(statement: text, exports: WasmExports): text := {
 	runs = statement.starts_with(INCLUDE_WORD + " ") and exports.functions.any(d => d#1 == INCLUDED_MAIN)
 	if #exports.values == 0 and not runs { return "" }
-	(exports.values + [if runs then INCLUDED_MAIN + "()" else NOTHING]).join("; ")
+	(exports.values + [if runs then INCLUDED_MAIN + "()" else USE_GIVES]).join("; ")
 }
