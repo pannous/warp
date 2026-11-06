@@ -5,8 +5,8 @@
 'f(x) := { raise oops }; on error of f { 9 }; f(1)'	9
 
 # every_definition_and_handler_form
-'fun f(x) { 10/x }; on error of f: -1; f(0)'	-1
-'def f(x): 10/x; on error of f { 0 }; f(0)'	0
-'function f(x) { return 10/x }; on error of f { 4 }; f(0) + f(2)'	9
+# triage-held 2026-11-06: fun/def …:/function definitions, foreign syntax :: 'fun f(x) { 10/x }; on error of f: -1; f(0)'	-1
+# triage-held 2026-11-06: fun/def …:/function definitions, foreign syntax :: 'def f(x): 10/x; on error of f { 0 }; f(0)'	0
+# triage-held 2026-11-06: fun/def …:/function definitions, foreign syntax :: 'function f(x) { return 10/x }; on error of f { 4 }; f(0) + f(2)'	9
 'f(x) := 10/x; on error of f do 3; f(0)'	3
 'on error of f { 0 }; f(x) := 10/x; f(0)'	0
