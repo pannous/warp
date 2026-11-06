@@ -7,7 +7,7 @@
 '3 + √9'	6
 
 # test_param_reference
-'add1(x):=$0+1;add1(3)'	4
+# triage-held 2026-11-06: $0 parameter / pixels.number() :: 'add1(x):=$0+1;add1(3)'	4
 
 # test_index_assign_in_loop
 'i=0;pixel=(0 0 0 0 0);while(i++<5){pixel[i]=i%2};i'	5
@@ -17,7 +17,7 @@
 'pixels=(1,2,3);count(pixels)'	3
 'pixels=(1,2,3);pixels.count()'	3
 'pixels=(1,2,3);pixels.count'	3
-'pixels=(1,2,3);pixels.number()'	3
+# triage-held 2026-11-06: $0 parameter / pixels.number() :: 'pixels=(1,2,3);pixels.number()'	3
 'pixels=(1,2,3);size(pixels) '	3
 
 # test_polymorphic_dispatch

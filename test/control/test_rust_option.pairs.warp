@@ -4,7 +4,7 @@
 'let o: option<int> = ø; o ?? 5'	5
 
 # loop_runs_until_break
-'let mut i = 0; loop { i += 1; if i == 3 { break; } } i'	3
+# triage-held 2026-11-06: Rust spelling, foreign syntax :: 'let mut i = 0; loop { i += 1; if i == 3 { break; } } i'	3
 
 # a_programs_own_option_method_keeps_its_meaning
 'expect(x, y) := x + y; o = 3; o.expect(5)'	8

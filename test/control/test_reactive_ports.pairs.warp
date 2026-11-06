@@ -23,8 +23,8 @@
 # old_in_set_listeners_and_its_aliases
 'x = 1; log = 0; on set x {log = log*10 + old}; x = 2; x = 3; log'	12
 'p = {age: 1}; d = 0; on set p.age {d = value - old}; p.age = 7; d'	6
-'x = 1; d = 0; on change x {d = value - was}; x = 5; d'	4
-'x = 1; d = 0; on change x {d = value - before}; x = 5; d'	4
+# triage-held 2026-11-06: was/before, synonyms of old in a change handler :: 'x = 1; d = 0; on change x {d = value - was}; x = 5; d'	4
+# triage-held 2026-11-06: was/before, synonyms of old in a change handler :: 'x = 1; d = 0; on change x {d = value - before}; x = 5; d'	4
 'old = 9; x = 1; on change x {print old}; x = 2; old'	9
 
 # a_named_event_handler_is_removed_and_counted

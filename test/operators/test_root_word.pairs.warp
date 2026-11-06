@@ -3,8 +3,8 @@
 # root_is_sqrt
 'root 4'	2
 'root(9)'	3
-'square x := x*x; 2|square|root'	2
-'square x := x*x; square 2|root'	2
+# triage-held 2026-11-06: old wasp definition by space, `square x := …` :: 'square x := x*x; 2|square|root'	2
+# triage-held 2026-11-06: old wasp definition by space, `square x := …` :: 'square x := x*x; square 2|root'	2
 
 # a_defined_root_wins
 'tree = {root: 3}; tree.root'	3

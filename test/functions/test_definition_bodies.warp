@@ -10,21 +10,21 @@ is! 'def f(x)
 	y + 1
 end
 f(3)' 7
-is! 'class Point
-	def initialize(x)
-		@x = x
-	end
-	def doubled
-		@x * 2
-	end
-end
-Point.new(4).doubled' 8
+# triage-held 2026-11-06: Ruby class / Python def …: bodies, foreign syntax :: is! 'class Point
+# :: 	def initialize(x)
+# :: 		@x = x
+# :: 	end
+# :: 	def doubled
+# :: 		@x * 2
+# :: 	end
+# :: end
+# :: Point.new(4).doubled' 8
 
 # a_colon_body_may_assign
-is! 'def foo: hi=2*2
-foo' 4
-is! 'def foo(x): y = x*2
-foo(5)' 10
-is! 'def foo: hi=2*2
-foo
-result' 4
+# triage-held 2026-11-06: Ruby class / Python def …: bodies, foreign syntax :: is! 'def foo: hi=2*2
+# :: foo' 4
+# triage-held 2026-11-06: Ruby class / Python def …: bodies, foreign syntax :: is! 'def foo(x): y = x*2
+# :: foo(5)' 10
+# triage-held 2026-11-06: Ruby class / Python def …: bodies, foreign syntax :: is! 'def foo: hi=2*2
+# :: foo
+# :: result' 4

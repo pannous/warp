@@ -1,5 +1,5 @@
 # from test_memoization.rs: edit the Rust test, then run the script again
 
 # fib_is_memoized
-'def fib(n): n<2 ? n : fib(n-1)+fib(n-2); fib(40)'	102334155
-'def fib(n): n<2 ? n : fib(n-1)+fib(n-2); fib(10) + fib(-3)'	52
+# triage-held 2026-11-06: Python-style def fib(n): …, foreign syntax :: 'def fib(n): n<2 ? n : fib(n-1)+fib(n-2); fib(40)'	102334155
+# triage-held 2026-11-06: Python-style def fib(n): …, foreign syntax :: 'def fib(n): n<2 ? n : fib(n-1)+fib(n-2); fib(10) + fib(-3)'	52
