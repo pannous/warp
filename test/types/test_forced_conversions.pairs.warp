@@ -1,0 +1,18 @@
+# as! T calls convert!(x, to: T) (decision checked-forced-conversions, convert-bang)
+'300 as! byte'	44
+'300 as! u8'	44
+'300 as! uint8'	44
+'-1 as! byte'	255
+'300 as! int'	300
+'(2^64) as! byte'	0
+'convert!(300, to: byte)'	44
+'convert!(n: int, to: tiny) := n % 10; 25 as! tiny'	5
+'try { "200" as! byte } catch e { e.message }'	'no forced conversion to byte of that value'
+'try { 3 as! text } catch e { e.message }'	'no forced conversion to text of that value'
+'[72, 105] as! text'	'Hi'
+'ord(([255] as! text)#1)'	65533
+'[] as! text'	''
+'class Person{name:text age:int}; p = {name:"Ada" age:36 city:"x"} as! Person; p.age'	36
+'class Person{name:text age:int}; p = {name:"Ada" age:36 city:"x"} as! Person; p.name'	'Ada'
+'pattern Config = {port: int, host: text}; c = {port: "80", host: "x", extra: 1} as! Config; c.port'	80
+'pattern Config = {port: int, host: text}; c = {port: "80", host: "x", extra: 1} as! Config; "extra" in c'	no

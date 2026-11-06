@@ -82,7 +82,9 @@ implicit_modules(source: text, folder: text = "."): list := {
 }
 # whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
 # quoted code (`data(set width of p to 12)` brings no english)
-only_rules_lead(word: text, modules: list): bool := modules.all(module => not definition_slices(used_module_text(module)).any(slice => slice#1 == word))
+only_rules_lead(word: text, modules: list): bool := modules.all(module => not defines_word(used_module_text(module), word))
+# a definition of the word in the module's source, or its `alias ln => natural_log`
+defines_word(source: text, word: text): bool := definition_slices(source).any(slice => slice#1 == word) or module_aliases(source).has(word)
 # a statement led by a word a module's rule starts with: `stored users: [User]`, whose `stored` declares (sound's
 # `pattern` function never takes `pattern Pair = [_, _]`)
 leads_statement(program: Node, word: text, modules: list): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word)) and modules.any(module => word in module_rule_heads(module))

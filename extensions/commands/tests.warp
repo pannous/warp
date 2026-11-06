@@ -169,11 +169,14 @@ cases_in(file: text, source: text): list := {
 	cases
 }
 # the pair lines of a pairs file no case starts on: `'"I'm"'⇥"I'm"`'s unescaped ' opens a text that runs over the
-# next lines, which then are one statement and no pair; each such line fails loudly, never silently dropped
+# next lines, which then are one statement and no pair; each such line fails loudly, never silently dropped. A case
+# whose code runs over lines (an Allman `{` on the next line) reads each of them, its tab on its last
 unread_lines(file: text, cases: list): list := {
 	if not file.ends_with(PAIRS_SUFFIX) { return [] }
 	read_at = {}
-	for case in cases { if case.file == file { read_at["" + case.line] = yes } }
+	for case in cases {
+		if case.file == file { for at in case.line to case.line + #case.code.split("\n") - 1 { read_at["" + at] = yes } }
+	}
 	lines = read(file).split("\n")
 	(1 to #lines).filter(at => is_pair_line(lines#at) and not read_at.has("" + at))
 }

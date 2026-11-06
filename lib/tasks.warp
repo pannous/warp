@@ -11,7 +11,9 @@ rewrite await go $x => ($context = task_context(); $value = $x; task_context_bac
 // `go for x in xs {…}`: each iteration a task, the loop done when all of them are (a parallel for)
 rewrite go for $x in $xs {$body...} => ($jobs = $xs.map($x => task_go(() => $steps)); $jobs.map(task_awaited); ø) where $steps = task_steps({$body...})
 rewrite go $body: block => task_go(() => $steps) where $steps = task_steps($body)
-// a task of an expression is a block's (decision go-unified): `go f(x)` is `go { f(x) }`
+// a task of an expression is a block's (decision go-unified): `go f(x)` is `go { f(x) }`, the task named by its
+// function, so `once the f finishes: …` finds it without a job (card once-english-task)
+rewrite go $f($a...) => task_named(task_go(() => $f($a...)), $n) where $f is function and $n = spelled($f)
 rewrite go $x => task_go(() => $x)
 rewrite await all $xs => $xs.map(task_awaited)
 rewrite await any $xs => task_awaited_any($xs)
@@ -42,6 +44,9 @@ rewrite pause $x => (task_paused($x); ø) where statement
 rewrite resume $x => (task_resumed($x); ø) where statement
 // `once job finishes: …` runs when the task's last step ran, at once if it is done; `once job pauses: …` at each
 // pause (`on job.stop: …` alike), `on job.cancel: …` once it is cancelled
+// `once the download finishes: …`: the job-less form, the last task `go download(…)` started
+rewrite once the $f finishes $body: block => task_finished_then(task_named_by($n), () => $body) where $f is symbol and $n = spelled($f)
+rewrite once the $f finishes: $body => task_finished_then(task_named_by($n), () => $body) where $f is symbol and $n = spelled($f)
 rewrite once $x finishes $body: block => task_finished_then($x, () => $body)
 rewrite once $x finishes: $body => task_finished_then($x, () => $body)
 rewrite once $x pauses $body: block => task_paused_then($x, () => $body)
@@ -67,6 +72,8 @@ global task_queue = []
 global running_task = ø
 global failed_tasks = []
 global task_sleep_said = no
+// the last task each function's `go f(…)` started, by the function's name
+global named_tasks = {}
 // the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
 task_go(first: function): Task := {
 	task = Task(clock(), first)
@@ -74,6 +81,11 @@ task_go(first: function): Task := {
 	task_queue = task_queue + [task]
 	task
 }
+task_named(task: Task, name: text): Task := {
+	named_tasks[name] = task
+	task
+}
+task_named_by(name: text): Task := named_tasks[name] ?? raise "no task of " + name + " was started: `go " + name + "(…)` starts one"
 // the task of `after`: each turn it checks the condition, giving the others their turn until it holds
 task_when(holds: function, value: function): Task := task_go(() => task_polled(holds, value))
 task_polled(holds: function, value: function) := if holds() then value() else task_sleep(1, () => task_polled(holds, value))

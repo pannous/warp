@@ -8,3 +8,7 @@
 # Matrix and matrix build the default class: the list of rows, unless `matrix default` names another
 'use matrix; Matrix x = [[1, 2], [3, 4]]; x#2#1'	3
 'use matrix; class Dense { rs: list; rows() := count(rs); cols() := count(rs#1); element(i, j) := rs#i#j }; matrix default Dense; Matrix x = [[1, 2], [3, 4]]; [x is Dense, transpose(x)]'	[yes, [[1, 3], [2, 4]]]
+
+# Matrix, the protocol's default class (decision matrix-class): * the matrix product, + and - element by element
+'use matrix; a = Matrix([[1, 2], [3, 4]]); [(a * a).cells, (a + a).cells, (a * 2).cells, determinant(a)]'	[[[7, 10], [15, 22]], [[2, 4], [6, 8]], [[2, 4], [6, 8]], -2]
+'use matrix; [[1, 2]] + [[3, 4]]'	[[1, 2], [3, 4]]

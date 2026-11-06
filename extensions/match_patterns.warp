@@ -36,6 +36,7 @@ guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
 	else if is_value_pattern(pattern, variants) { test = value_test(subject, pattern) }
 	else if is_type_pattern(pattern) { test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None) }
 	else if case_pattern(pattern) != ø { test = arm_test(case_pattern(pattern), subject); bound = part_bindings(case_pattern(pattern), subject) }
+	else if direct_items(pattern, variants) != ø { test = items_test(subject, direct_items(pattern, variants)); bound = item_bindings(subject, direct_items(pattern, variants)) }
 	else { test = structural_test(subject, pattern); bound = structural_bindings(pattern, List([guard, result], Bracket.Square, Separator.Comma)) }
 	if guard != ø {
 		guarded = List(bound + [guard], Bracket.Round, Separator.Semicolon)
@@ -43,6 +44,44 @@ guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
 	}
 	value = if #bound == 0 then result else List(bound + [result], Bracket.Round, Separator.Semicolon)
 	if test == ø then value else chosen(test, value, otherwise)
+}
+
+# A list pattern known whole at compile time, `[a, b]`, `["add", x, y]`, `[_, 0]`: tested and bound in place, item by
+# item, with no call of the prelude's matcher (card pattern-direct-tests). Its items are names binding once, `_`, and
+# numbers, texts or characters the item equals; any other list (a rest, a type word, a class of characters, a name
+# twice, a nested pattern) stays pattern_bindings's at run time
+direct_items(pattern: Node, variants: map): list? := match pattern {
+	List(items, Bracket.Square, separator): if #items > 0 and items.all(item => is_direct_item(item, variants)) and distinct_names(items) then items else ø
+	_: ø
+}
+is_direct_item(item: Node, variants: map): bool := match item {
+	Number(value): yes
+	Text(value): yes
+	Char(value): yes
+	Symbol(name): is_binding_word(name, variants)
+	_: no
+}
+# a word binding the item as itself: no hole `$x`, rest `*xs`, type word, class of characters or declared variant
+is_binding_word(name: text, variants: map): bool := not (name.starts_with("$") or name.starts_with("*") or name.starts_with(".")) and not is_tested_type_word(name) and not (name in character_class_words) and not (name in variants)
+distinct_names(items: list): bool := {
+	names = items.filter(item => item is symbol and name_of(item) != other_arm).map(item => name_of(item))
+	#names == #names.unique()
+}
+# a list of as many items, each literal one equal
+items_test(subject: Node, items: list): Node := {
+	test = Key(List([symbol("is_type"), subject, "list"], Bracket.Round, Separator.None), Op.And, Key(applied("count", subject), Op.Eq, #items))
+	for at in 1 to #items {
+		if not (items#at is symbol) { test = Key(test, Op.And, Key(Key(subject, Op.Hash, at), Op.Eq, items#at)) }
+	}
+	test
+}
+# each name the item at its place
+item_bindings(subject: Node, items: list): list := {
+	bound = []
+	for at in 1 to #items {
+		if items#at is symbol and name_of(items#at) != other_arm { bound += [Key(items#at, Op.Assign, Key(subject, Op.Hash, at))] }
+	}
+	bound
 }
 
 # the structural pattern fits: what it binds is held in match·bound
@@ -56,6 +95,10 @@ structural_bindings(pattern: Node, result: Node): list := structural_names(patte
 
 # `{port: "80"} as Config`: the prelude's converter of a value field by field to a named pattern's types
 pattern_converter_word = "converted_to_pattern"
+# `{port: "80", extra: 1} as! Config`: the same, after the fields the pattern does not name are dropped
+kept_pattern_word = "kept_pattern"
+# `word(value, data(pattern))`
+pattern_call(word: text, subject: Node, pattern: Node): Node := List([symbol(word), subject, List([quote_symbol, pattern], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
 
 # [name, pattern] of `pattern Definition = …`, else ø
 named_pattern(statement: Node): list? := if is_pattern_definition(statement) then named_definition(statement#2) else ø
@@ -84,7 +127,12 @@ with_named_patterns(n: Node, patterns: map): Node := match n {
 	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
 	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
 	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
-	Key(subject, Op.As, Symbol(name)): if name in patterns then List([symbol(pattern_converter_word), subject, List([quote_symbol, patterns[name]], Bracket.Round, Separator.None)], Bracket.Round, Separator.None) else n
+	Key(subject, Op.As, right): {
+		if right is symbol and name_of(right) in patterns { return pattern_call(pattern_converter_word, subject, patterns[name_of(right)]) }
+		# `value as! Config`: the parser's `value as !Config`. Unknown fields are dropped, then the pattern's types bind
+		forced = if is_key(right, Op.Not) and key_of(right) == ø and value_of(right) is symbol then name_of(value_of(right)) else ""
+		if forced != "" and forced in patterns then pattern_call(kept_pattern_word, subject, patterns[forced]) else n
+	}
 	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))
 	_: n
 }

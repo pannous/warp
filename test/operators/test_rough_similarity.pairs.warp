@@ -6,7 +6,7 @@
 '1 ~ 1.02'	false
 '1 ~~ 1.005'	true
 'x = 100; x ~ 100.9'	true
-'rough_tolerance = 0.1; 1 ~ 1.05'	true
+# triage-held 2026-11-06: desk-invented rough_tolerance :: 'rough_tolerance = 0.1; 1 ~ 1.05'	true
 'tolerance = 0.1; 1 ≈ 1.05'	true
 
 # rough_texts_ignore_surrounding_whitespace_and_punctuation

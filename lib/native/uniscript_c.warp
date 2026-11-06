@@ -1,0 +1,9 @@
+// the uniscript package's C library (github.com/pannous/uniscript, c/ffi): `use uniscript` (lib/uniscript.warp) or
+// `import uniscript_c`; the native warp loads libuniscript_c (lib/native/uniscript_c.c over the crate's libuniscript_ffi),
+// which scripts/link-packages.sh builds of the package's pinned tag and puts beside warp. A result NULL is ø
+uniscript_to_unicode(source: text): owned_text from 'uniscript_c'
+uniscript_error(source: text): owned_text from 'uniscript_c'
+uniscript_warnings(source: text): owned_text from 'uniscript_c'
+uniscript_to_uniscript(text: text): owned_text from 'uniscript_c'
+uniscript_to_ascii_uniscript(text: text): owned_text from 'uniscript_c'
+uniscript_explicit(source: text): owned_text from 'uniscript_c'

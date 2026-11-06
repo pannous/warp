@@ -1,6 +1,6 @@
 # Open words (card linked-cross-module-overloads): a module's own calls reach a variant another module or the program
 # adds for its class; a program's untyped redefinition of a module's helper changes only the program's own calls
 'use time; use units; shifted = Instant(0) + 2 seconds; shifted.ms'	2000
-'use time; use units; [milliseconds_of(3 seconds), milliseconds_of(7)]'	[3000, 7]
+'use time; use units; [((3 seconds) as Duration).ms, (7 as Duration).ms]'	[3000, 7]
 'use time; padded(n, width) := "xy"; [format_date(951782400000), padded(1, 2)]'	["2000-02-29", "xy"]
 'use time; milliseconds_of(d) := 55; [Instant(0) + 2, milliseconds_of(1)].map(v => "" + v)'	["1970-01-01T00:00:00.002Z", "55"]

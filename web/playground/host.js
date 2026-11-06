@@ -6,8 +6,6 @@ const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 // a program with a `try` exports it: the runtime error that raises the Error left in trap_detail (runtime_errors.rs)
 const RETURNED_ERROR_EXPORT = "returned_error";
-// the position of the statement a trapped run was in, line << 12 | column (src/wasm_emitter/globals.rs emit_trap_position)
-const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_BITS = 16;
 const STDERR = 2;
@@ -40,7 +38,7 @@ const readText = (module, pointer, length) => utf8Decoder.decode(new Uint8Array(
 // the system values of the pointer the page shares; without shared memory a running program cannot see it move (the
 // run blocks its Worker's messages), so it would wait for a finger forever (card abysmally-slow: the in-app browser
 // view of an iPad app painted nothing). A key held reads none there, as in the test suite's page
-const POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down", "mouse_wheel"];
+const POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down", "mouse_down_x", "mouse_down_y", "mouse_wheel"];
 const NO_SHARED_POINTER = "this page has no shared memory (it is not cross-origin isolated, as in an app's built-in browser view), so a running program cannot follow the pointer: open the page in Safari, Chrome or Firefox";
 // the pointer the page shares (canvas.js pointerMessage) as the worker keeps it: self.pagePointer, read by system_value
 const sharedPointer = ({ buffer, names }) => ({ values: new Int32Array(buffer), names });

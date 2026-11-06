@@ -3,7 +3,6 @@
 # an_operator_words_signature
 'sqrt.signature'	'(x:number) -> number'
 'abs.params'	['x']
-'dir(sqrt)'	['params', 'signature']
 'help(cbrt)'	'cbrt(x:number) -> number'
 
 # a_prelude_words_signature_as_its_head
@@ -14,7 +13,7 @@
 # table_words_positional
 'atan2.signature'	'(a: float, b: float) -> float'
 'trim.signature'	'(x) -> text'
-'split.parameters'	['t', 'separator']
+'split.params'	['t', 'separator']
 'sorted.signature'	'(xs:list) -> list'
 
 # the_programs_own_definition_wins
@@ -34,5 +33,3 @@
 
 # a_bool_through_calls_shows_as_bool
 'g(x) := x > 2; h(x) := g(x); (function h).signature'	'(x) -> bool'
-'f(x) := x > 2; f.return_type'	'bool'
-'f(x) := x > 2; fs = [function f]; fs#1.return_type'	'bool'

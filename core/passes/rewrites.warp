@@ -119,7 +119,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers", "tasks"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers", "tasks", "shaders"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -158,6 +158,9 @@ global rule_instances = {}
 global rule_classes = {}
 # the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
 global rule_program = Node.Empty
+# the classes and the program's names assigned an instance of one, name → class (`where $u is Unit`), worked out when a
+# rule first asks (program_typing)
+global rule_types = ø
 # the text of the program being compiled, `$source` of a rule word: what its parse drops, the comment above a definition
 global rule_source = ""
 global rule_varying = {}
@@ -217,6 +220,7 @@ own_rules_applied(program: Node, source: text): Node := {
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
 	rule_program = program
+	rule_types = ø
 	raw_rules = []
 	for index in 0 ..< #rules { if symbol(raw_word) in rules[index].conditions { raw_rules += [[rules[index], origins[index]]] } }
 	program = placed_map_scoped(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
@@ -304,6 +308,7 @@ sugar_applied(program: Node, rules: list): Node := {
 	rule_instances = instance_names_in(program, outer_nodes_in(program))
 	rule_classes = class_names_of(program)
 	rule_program = program
+	rule_types = ø
 	rule_varying_known = no
 	rule_vectors_known = no
 	maps = map_names_of(program)
@@ -544,7 +549,8 @@ rule_needs(source: text): list := {
 			# (a hole a rule word binds, `$names = path_parameters($path)`, is no origin)
 			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not is_rule_word(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
-			needs += if word != "" then [word] else listed_in_text(rule)
+			listed = listed_in_text(rule)
+			needs += if word != "" then [word] else if #listed > 0 then listed else classes_in_text(rule).flat_map(instance_words)
 		}
 	}
 	needs
@@ -557,6 +563,9 @@ listed_in_text(rule: text): list := {
 	listing = rule[start - 1 + #listed_word + 3 ..]
 	listing[0 ..< listing.find("]") - 1].split(",").map(word => word.trim())
 }
+
+# the classes a rule's `$u is Unit` tests, as written: each word after ` is ` the library has constants of
+classes_in_text(rule: text): list := rule.split(" is ")[1 ..].map(after => name_starting(after)).filter(name => name in library_typed_constants().values)
 
 # the first run of letters, digits, `_` and `$` starting with a letter
 first_alphabetic_word(written: text): text := {
@@ -808,7 +817,14 @@ needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
 needed_words(rule: Rule): list := {
 	word = needed_word(rule)
 	if word != "" { return [word] }
-	rule.conditions.map(membership).filter(listing => listing != ø).flat_map(listing => listing.words)
+	listed = rule.conditions.map(membership).filter(listing => listing != ø).flat_map(listing => listing.words)
+	if #listed > 0 then listed else rule.conditions.map(class_tested).filter(name => name != ø).flat_map(instance_words)
+}
+# `$u is Unit`: the class a condition tests its hole an instance of, else ø
+class_tested(condition: Node): text? := {
+	if not (is_key(condition, Op.Is) and rule_hole(key_of(condition)) != ø and value_of(condition) is symbol) { return ø }
+	name = name_of(value_of(condition))
+	if name in library_typed_constants().values then name else ø
 }
 
 # `rewrite p => t` and `rewrite p => t where $c = shape`, as parser.warp reads them: the words before the arrow's key
@@ -1093,7 +1109,7 @@ is_place_word(condition: Node): bool := condition is symbol and name_of(conditio
 
 is_negation(condition: Node): bool := is_key(condition, Op.Not) and key_of(condition) == ø
 
-is_property(word: Node): bool := word is symbol and (name_of(word) in code_properties or name_of(word) in hole_kinds)
+is_property(word: Node): bool := word is symbol and (name_of(word) in code_properties or name_of(word) in hole_kinds or declared_classes_modules().has(name_of(word)) or rule_classes.has(name_of(word)))
 
 # `case`, `case of $e` after `is`
 is_case_property(wanted: Node): bool := wanted == symbol(case_word) or enum_hole_of(wanted) != ø
@@ -1192,8 +1208,23 @@ has_property(code: Node, property: text): bool := {
 	if property == "value" { return binds_value(rule_scope, word) }
 	# the program's function, else a builtin or the prelude's where the program binds nothing of the name (`x.upper!`'s upper)
 	if property == "function" { return (binds_as(rule_scope, word, Meaning.Function) or (not rule_scope.has(word) and (is_declared_word(word) or word in prelude_definitions()))) and not locally_bound(code) }
+	if program_typing()#1.has(property) { return typed_as(word, property) }
 	not rule_scope.has(word)
 }
+# `$u is Unit`: a name the program assigns an instance of the class, else, unbound by it, a library module's,
+# `km = Unit("km")` (parser.warp library_typed_constants)
+typed_as(word: text, class_name: text): bool := if rule_scope.has(word) then program_typing()#2.get(word) == class_name else library_typed_constants().get(word) == class_name
+# [the classes, the program's and the library's; the program's names typed by them]
+program_typing(): list := {
+	if rule_types == ø {
+		classes = class_names_of(rule_program)
+		for name in declared_classes_modules().keys { classes[name] = yes }
+		rule_types = [classes, assigned_types_in(outer_nodes_in(rule_program), classes)]
+	}
+	rule_types
+}
+# the words that may be a class's instance, needing a rule `where $u is Unit`: the class, the library's constants of it
+instance_words(class_name: text): list := [class_name] + library_typed_constants().keys.filter(word => library_typed_constants()[word] == class_name)
 
 # The program's names and functions that may give a list (notes/broadcasting.md "Vector parameters"): a name assigned
 # a value that may be one, a parameter some call passes one, a function whose result may be one; worked out to a

@@ -14,3 +14,11 @@ repeats 3{
 3 times{
 	print "Hi"
 }
+
+# the count words are one line each, a block parameter handed on to `times`
+twice(body: block) := 2 times body
+thrice(body: block) := 3 times body
+twice { print "Ho" }
+thrice {
+	print "Hip"
+}

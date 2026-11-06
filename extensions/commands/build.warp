@@ -8,8 +8,11 @@ use "separate_module.warp"
 NATIVE_WORD = "native"
 WASM2C_MODULE = "program"
 C_COMPILER = "cc -O2"
-# wasm2c's runtime and headers, in these folders of the wabt whose wasm2c is on the PATH
+# wasm2c's runtime and headers, in these folders of the wabt whose wasm2c runs
 WASM2C_RUNTIME = "/share/wabt/wasm2c"
+# the oldest wasm2c writing the w2c_ names and taking -n (an old /usr/local/bin/wasm2c 1.0.13 before Homebrew's 1.0.42
+# failed on -n, card native-build-wasm2c); CI pins 1.0.42 (scripts/ci-compilers.sh)
+WASM2C_OLDEST = [1, 0, 33]
 WABT_HEADERS = "/include"
 build_native(source_file: text, library: text) := {
 	source = read(source_file)
@@ -21,13 +24,30 @@ build_native(source_file: text, library: text) := {
 	write_bytes(stem + ".wasm", compile(source, source_folder(source_file)))
 	header = stem.split("/").last() + ".h"
 	write(stem + ".main.c", native_main(header, library))
-	wabt = folder_of(folder_of(shell("command -v wasm2c").trim()))
+	wasm2c = supported_wasm2c()
+	wabt = folder_of(folder_of(wasm2c))
 	runtime = wabt + WASM2C_RUNTIME
-	shell("wasm2c " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
+	shell(quoted_path(wasm2c) + " " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
 	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + exported_symbols() + native_links(wabt, library))
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
+}
+# the first wasm2c on the PATH at least WASM2C_OLDEST, loudly none
+supported_wasm2c(): text := {
+	# (a PATH entry ending in / lists /opt/homebrew/bin//wasm2c: its wabt folder is found from the path without it)
+	found = shell("which -a wasm2c").trim().split("\n").filter(path => path != "").map(path => path.replace("//", "/"))
+	for path in found { if version_at_least(shell(quoted_path(path) + " --version").trim(), WASM2C_OLDEST) { return path } }
+	raise "warp build native needs wasm2c " + WASM2C_OLDEST.join(".") + " or newer (wabt), found " + (if #found == 0 then "none" else found.map(path => path + " " + shell(quoted_path(path) + " --version").trim()).join(", "))
+}
+# whether a dotted version, "1.0.42", is at least the oldest, [1, 0, 33]
+version_at_least(version: text, oldest: list): bool := {
+	parts = version.split(".").map(part => int(part) ?? 0)
+	for i in 1 to #oldest {
+		have = if i <= #parts then parts#i else 0
+		if have != oldest#i { return have > oldest#i }
+	}
+	yes
 }
 # -l of each C library the program imports beside libc and libm, found in warp's library folder first (warp's own
 # libraries, libwarp_wasmtime: card wasmtime-bundled), then among the libraries of the wabt's prefix (/opt/homebrew/lib)
@@ -59,8 +79,16 @@ WASM_ONLY = "--wasm"
 EXE_ONLY = "--exe"
 # what a build of inline code is called: out.wasm, the executable out
 INLINE_STEM = "out"
-# what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component, WAGI
-UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component", "--wagi"]
+# what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component
+UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component"]
+# the kinds a build detects from the program (decision build-kinds-detected): a program with routes builds as a server,
+# its executable serving them (lib/web.warp routes_served, card server-build); `warp build wagi app.warp` (the old
+# `--wagi`) as a WAGI module, app.wasm answering the one request of its environment (lib/wagi.warp routes_wagi, card
+# site-wagi-build; notes/hosting.md "Fermyon")
+WAGI_WORD = "wagi"
+WAGI_OPTION = "--wagi"
+SERVER_ENDING = "routes_served"
+WAGI_ENDING = "routes_wagi"
 DEFAULT_TRIM = "optimize"
 
 build(words: list) := {
@@ -71,6 +99,9 @@ build(words: list) := {
 	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
 	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
 	if targets#1 == APP_WORD { return build_app(targets#2, options) }
+	wagi = targets#1 == WAGI_WORD or WAGI_OPTION in options
+	if targets#1 == WAGI_WORD { targets = targets[1 ..] }
+	routes_end_word = if wagi then WAGI_ENDING else SERVER_ENDING
 	target = targets#1
 	is_file = exists(target)
 	source = if is_file then read(target) else target
@@ -85,10 +116,20 @@ build(words: list) := {
 	write_bytes(stem + ".mod.wasm", if is_primitive_file(source) then read_bytes(stem + ".full.wasm") else linked_bytes(module.order))
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
 	modules = [stem + ".full.wasm", stem + ".mod.wasm", stem + ".wasm"]
+	if wagi { return wagi_built(stem, modules) }
 	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", stem) }
+	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at WARP_PORT, else 8080" }
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
 	}
+	ø
+}
+# a WAGI build keeps app.wasm, which a WAGI host runs once a request (Spin's wagi executor: REQUEST_METHOD, PATH_INFO
+# and QUERY_STRING in, the CGI answer out)
+wagi_built(stem: text, modules: list) := {
+	if not routes_seen { raise "warp build wagi: " + stem + " has no routes to answer a request (get \"/path\" { … }, lib/web.warp)" }
+	shell("rm -f " + modules.filter(m => m != stem + ".wasm").map(quoted_path).join(" "))
+	print "compiled " + size_of(stem + ".wasm") + " bytes to " + stem + ".wasm, a WAGI module answering its routes"
 	ø
 }
 # a file's size in bytes, as text

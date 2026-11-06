@@ -1,3 +1,5 @@
 # lib/json.warp's rules that run code at compile time, its whole program or a rule word of extensions/rules/rule_words.warp:
 # the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
-rewrite parse($input, $type) => $result where $type is type and $result = typed_json($input, $type, $program)
+# parse(text, T) of a class the program declares: the JSON read as a T at run time (lib/json.warp typed_json_value),
+# the class handed over as data (class_data)
+rewrite parse($input, $type) => typed_json_value(json($input), $class, "") where $type is type and $class = class_data($type, $program)

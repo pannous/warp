@@ -9,6 +9,8 @@ uneven_spacing($written, $operator, $fix)	"{written} spaces {operator} on one si
 bare_sleep($amount)	"sleep needs a unit: sleep {amount}s or sleep {amount}ms (a bare number is seconds)"
 # decision byte-index-of: a text names the unit it counts a place in
 text_index_of()	"index_of of a text names no unit: it counts characters from 1, as find does; byte_index_of gives the byte offset from 0"	"find"	"text-index-of@index_of"
+# a value bound to a type word the program tests with is/as (extensions/text_lints.warp, card binding-local)
+type_word_binding($name)	"{name} holds a value here, so is {name} and as {name} compare with it, not with the type {name}"	"name it e.g. op"
 # a name the program binds, given where its parameter's type has a value of that name (plain_enums.warp, card
 # expected-type-names): the program's own wins
 shadows_expected_value($name, $type)	"{name} is the program's own {name}, not {type}.{name}"	"{type}.{name}"
@@ -32,3 +34,5 @@ optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`
 local_or_global($name, $function)	"does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}? (taking a new local of {function})"	"let {name} = …"	"local-or-global@{name} = …"
 # a call of a function overloaded by result type whose expected type names no variant: the first declared (arity_overloads.warp)
 result_variant_taken($name, $returning, $taken, $written)	"{name} has variants returning {returning}: which does {written} mean? (taking {taken})"	"({written}) as {taken}"	"return-type@{name}"
+# inline HTML read as warp markup (extensions/inline_html.warp, decision jsx)
+inline_html($tag)	"inline HTML <{tag}> reads as warp markup; `warp format` writes it so"	"warp format"
