@@ -1,7 +1,7 @@
 # from test_wasm_modules.rs: edit the Rust test, then run the script again
 
 # an_imported_module_gets_wasi_host_words_and_other_modules
-is! 'import test/fixtures/wasm/counter.wasm; import test/fixtures/wasm/greeter; count_up(1); count_twice(1)' 3
+is! 'import •/test/fixtures/wasm/counter.wasm; import •/test/fixtures/wasm/greeter; count_up(1); count_twice(1)' 3
 
 # zlib_compresses_into_a_buffer_and_back
 is! 'import test/fixtures/wasm/zlib; uncompress(100, compress(64, "hello hello hello"))' 'hello hello hello'
