@@ -189,9 +189,3 @@ before asking a question). After a context swap, this file and your role file be
 - Never retire holding a card: done, or `todo release <card> "done: …; left: …; branch: …"`.
 - After the push remove your worktree and branches (local and remote). Deleting merged/stale things needs no
   confirmation, except files the user touched.
-
-## Binaryen on the Linux box (card install-binaryen)
-`wasm-opt` is required by `web/playground/build.sh` `slim_compiler`. On the box it is pinned at
-`/home/box/tools/binaryen-version_133` and linked from `/home/box/bin/wasm-opt` (also `~/.local/bin`).
-Reinstall with `scripts/box-install-binaryen.sh`. Details: `/workspace/handover/box-warp.md`.
-
