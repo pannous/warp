@@ -5,3 +5,6 @@
 # a raise or an Error made is the effect Fail (card error-gaps)
 'half(x) := { if x < 0 { raise "negative" }; x / 2 }; half.effects'	['Fail']
 '@pure half(x) := { if x < 0 { raise "negative" }; x / 2 }; half(4)'	error
+# a raise a try catches is no Fail (card try-clears-fail)
+'h(x) := try raise("a") else 0; h.effects'	[]
+'h(x) := try { raise "a" } catch e { print e }; h.effects'	['IO']
