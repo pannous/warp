@@ -12,7 +12,7 @@ use "types.warp"
 # captured values (emitter.warp closure_value), texts and characters as texts, numbers as numbers (an int and a float alike)
 node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
-	if same_node(a, b) { return yes }
+	if same(a, b) { return yes }
 	# two texts, the common case of a match on spellings (`Op·case`): their bytes, past none of the other kinds' tests
 	if kind_code(a) == Kind.Text and kind_code(b) == Kind.Text { return byte_count(unboxed_text(a)) == byte_count(unboxed_text(b)) and text_order(unboxed_text(a), unboxed_text(b)) == 0 }
 	# two instances: of one class, their fields equal (each read from its struct as a map)
@@ -43,11 +43,11 @@ node_equal(a: Node, b: Node): bool := {
 # `a === b` of values known only at run time (decision same-multi-dispatch, emitter operators.warp identity_code): a list,
 # map or object the one value; a number, text, character, yes/no or time, having no identity apart from its value,
 # an equal value of the very same type (a yes/no is no int, a float no int)
-same_identity(a: Node, b: Node): bool := same_node(a, b) or (immutable_node(a) and code_free_kind(a) == code_free_kind(b) and node_equal(a, b))
+same_identity(a: Node, b: Node): bool := same(a, b) or (immutable_node(a) and code_free_kind(a) == code_free_kind(b) and node_equal(a, b))
 immutable_node(n: Node): bool := not is_null(n) and (numeric_node(n) or textual_node(n) or kind_code(n) == Kind.Time)
 # a value is an enum's case (made once, emitter.warp case_value) by being that very node; a copy, another module's or
 # the host's, by its kind (the enum's number in the info byte) and name, past node_equal's tests of every other kind
-case_equal(value: Node, case: Node): bool := same_node(value, case) or (not is_null(value) and code_free_kind(value) == code_free_kind(case) and same_bytes(unboxed_text(value), unboxed_text(case)))
+case_equal(value: Node, case: Node): bool := same(value, case) or (not is_null(value) and code_free_kind(value) == code_free_kind(case) and same_bytes(unboxed_text(value), unboxed_text(case)))
 # two texts or characters equal as texts: two characters by their code points, no text made of either
 textual_equal(a: Node, b: Node): bool := {
 	if kind_code(a) == Kind.Codepoint and kind_code(b) == Kind.Codepoint { return unboxed_char(a) == unboxed_char(b) }

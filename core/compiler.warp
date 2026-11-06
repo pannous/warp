@@ -73,7 +73,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	source = with_implicit_uses(source, folder)
 	timed("c functions, runtime, linking")
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
-	foreign = c_functions_of(source, library_folder)
+	foreign = c_functions_of(source, library_folder, folder)
 	unknown = foreign#3
 	if #unknown > 0 { throw outside_the_core + "no C signature for " + unknown.join(", ") + ": declare it with a foreign line, `name(x: i32): i32 from 'library'`" }
 	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)

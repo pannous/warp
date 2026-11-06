@@ -15,9 +15,9 @@ wagi_variable(name: any) := {
 }
 
 // the query's fields, + and %XX decoded as UTF-8, a malformed % kept: lib/url.warp's query_map (card lib-url-wagi-cleanup)
-wagi_query(query: any) := query_map(query)
+public wagi_query(query: any) := query_map(query)
 // a query component as sent: url's query_decode under wagi's old name
-url_decoded(t: any) := query_decode(t)
+public url_decoded(t: any) := query_decode(t)
 
 wagi_request() := {method: wagi_variable("REQUEST_METHOD"), path: wagi_variable("PATH_INFO"), query: wagi_query(wagi_variable("QUERY_STRING")), body: ""}
 
@@ -62,11 +62,11 @@ wagi_reply(status: any, content_type: any, body: any) := puts "Status: " + str(s
 // the route's value with the status and headers it set
 wagi_answer(value: any) := puts "Status: " + str(answer_status) + "\n" + wagi_headers(value) + "\n\n" + wagi_body(value)
 // its header lines, Content-Type first, and its body (also lib/web.warp's HTTP answer)
-wagi_headers(value: any) := {
+public wagi_headers(value: any) := {
 	let own_type = if value is text then "text/plain; charset=utf-8" else "application/json"
 	"Content-Type: " + (if answer_content_type is empty then own_type else answer_content_type) + answer_header_lines
 }
-wagi_body(value: any) := if value is text then value else wagi_json(value)
+public wagi_body(value: any) := if value is text then value else wagi_json(value)
 
 // lowering/serve.rs page·submitted throws "no route answers …" for a request no route takes
 wagi_failed(message: any) := wagi_reply(if starts_with(message, "no route answers") then 404 else 500, "text/plain; charset=utf-8", message)

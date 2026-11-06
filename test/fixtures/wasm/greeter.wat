@@ -4,7 +4,7 @@
 (module
   (import "wasi_snapshot_preview1" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
   (import "host" "random_below" (func $random_below (param i64) (result i64)))
-  (import "test/fixtures/wasm/counter.wasm" "count_up" (func $count_up (param i64) (result i64)))
+  (import "•/test/fixtures/wasm/counter.wasm" "count_up" (func $count_up (param i64) (result i64)))
   (memory (export "memory") 1)
   (data (i32.const 16) "hi\n")
   ;; prints hi, the number of bytes written

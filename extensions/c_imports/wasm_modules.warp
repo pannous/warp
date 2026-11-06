@@ -1,0 +1,170 @@
+# WebAssembly modules a program uses (card wasm-module-uses, decision load-time linking): `use counter.wasm`,
+# `import test/fixtures/wasm/fourty_two` (its .wasm found), `include …` (which also runs its main). Read at compile
+# time, a core module's exported functions become typed imports of the program, as a foreign line's C functions do,
+# from the module named by its path; the native warp instantiates that file once a run and links its exports
+# (core/native/driver.warp instance_path). An exported constant global becomes a value of the program, `ft = 42`.
+# A component (WIT types) is no core module and stays unread.
+#   count_up(by: i64): i64 from 'test/fixtures/wasm/counter.wasm'     what `use test/fixtures/wasm/counter.wasm` declares
+WASM_EXTENSION = ".wasm"
+INCLUDE_WORD = "include"
+INCLUDED_MAIN = "main"
+# wasm's value types as a foreign line's types
+WASM_VALUE_TYPES = {127: "i32", 126: "i64", 125: "f32", 124: "f64"}
+IMPORTED_FUNCTION = 0
+IMPORTED_TABLE = 1
+IMPORTED_MEMORY = 2
+IMPORTED_GLOBAL = 3
+IMPORTED_TAG = 4
+EXPORTED_FUNCTION = 0
+EXPORTED_GLOBAL = 3
+# the constant instructions an immutable global's value may be, the ints of them
+I32_CONST = 65
+I64_CONST = 66
+LIMITS_WITH_MAXIMUM = 1
+
+# the module name of the core wasm module a `use`, `import`, `require` or `include` statement names, as written or with
+# .wasm: its path in the program's folder, a `•/` path as written, which the native warp roots at the project root
+# where it runs, so a program and a module it links (greeter.wat's import) name one file alike; ø for another statement
+wasm_module_used(statement: text, folder: text): text? := {
+	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
+	if word == ø or word == "" { return ø }
+	bare = word
+	for quote in c_quotes { if word.starts_with(quote) and word.ends_with(quote) and #word > 2 { bare = word.remove_prefix(quote).remove_suffix(quote) } }
+	for written in [bare, bare + WASM_EXTENSION] {
+		name = if rooted(written, folder) == written then path_in(folder, written) else written
+		if name.ends_with(WASM_EXTENSION) and is_core_wasm(wasm_bytes(wasm_file(name, folder))) { return name }
+	}
+	ø
+}
+# the file of a module name
+wasm_file(name: text, folder: text): text := path_in(folder, rooted(name, folder))
+# a file's bytes, none for a file that isn't there
+wasm_bytes(path: text): list := try read_bytes(path) else []
+is_core_wasm(bytes: list): bool := #bytes >= #wasm_header and bytes[0 ..< #wasm_header] == wasm_header
+
+# what the module gives the program: [the declarations of its exported functions (c_declaration's form, the module's
+# path as their library), the statements giving its constant globals their values]
+class WasmExports {
+	functions: list = []
+	values: list = []
+}
+wasm_exports(path: text, folder: text): WasmExports := {
+	bytes = wasm_bytes(wasm_file(path, folder))
+	types = wasm_types(bytes)
+	imported = wasm_imported(bytes)
+	function_types = imported.functions + wasm_vector(bytes, section_ids.function, reader => read_number(reader))
+	global_values = imported.globals + wasm_vector(bytes, section_ids.globals, wasm_global_value)
+	exports = WasmExports()
+	for export in wasm_vector(bytes, section_ids.export, reader => [read_name(reader), bytes[reader.offset], next_number(reader)]) {
+		name = export#1
+		index = export#3
+		if export#2 == EXPORTED_FUNCTION { exports.functions += wasm_declaration(name, path, types[function_types[index]]) }
+		if export#2 == EXPORTED_GLOBAL and global_values[index] != ø { exports.values += [name + " = " + global_values[index]] }
+	}
+	exports
+}
+# the number after the byte the reader is at
+next_number(reader: ByteReader): int := {
+	reader.offset += 1
+	read_number(reader)
+}
+# the items of a section's vector, each read by `read`; none without the section
+wasm_vector(bytes: list, id: int, read: function): list := {
+	place = section_place(bytes, id)
+	if place == ø { return [] }
+	reader = ByteReader(bytes, place#1)
+	items = []
+	for i in 0 ..< read_number(reader) { items += [read(reader)] }
+	items
+}
+# each function type: [parameter types, result types], ø for one a foreign line can't type (a reference)
+wasm_types(bytes: list): list := wasm_vector(bytes, section_ids.type, reader => {
+	reader.offset += 1
+	parameters = wasm_value_types(reader)
+	results = wasm_value_types(reader)
+	if "?" in parameters or "?" in results then ø else [parameters, results]
+})
+wasm_value_types(reader: ByteReader): list := {
+	types = []
+	for i in 0 ..< read_number(reader) {
+		types += [WASM_VALUE_TYPES.get(reader.bytes[reader.offset]) ?? "?"]
+		reader.offset += 1
+	}
+	types
+}
+# the module's own imports, which come first in the index spaces: the types of its imported functions, an unknown
+# value for each imported global
+class WasmImported {
+	functions: list = []
+	globals: list = []
+}
+wasm_imported(bytes: list): WasmImported := {
+	imported = WasmImported()
+	wasm_vector(bytes, section_ids.import, reader => {
+		read_name(reader)
+		read_name(reader)
+		kind = reader.bytes[reader.offset]
+		reader.offset += 1
+		if kind == IMPORTED_FUNCTION { imported.functions += [read_number(reader)] }
+		if kind == IMPORTED_TABLE {
+			reader.offset += 1
+			skip_limits(reader)
+		}
+		if kind == IMPORTED_MEMORY { skip_limits(reader) }
+		if kind == IMPORTED_GLOBAL {
+			reader.offset += 2
+			imported.globals += [ø]
+		}
+		if kind == IMPORTED_TAG {
+			reader.offset += 1
+			read_number(reader)
+		}
+		kind
+	})
+	imported
+}
+skip_limits(reader: ByteReader) := {
+	flags = read_number(reader)
+	read_number(reader)
+	if bit_and(flags, LIMITS_WITH_MAXIMUM) != 0 { read_number(reader) }
+}
+# a global's value as warp code when it is an immutable int constant, else ø; the reader past its initializer
+wasm_global_value(reader: ByteReader): text? := {
+	reader.offset += 1
+	mutable = reader.bytes[reader.offset] != 0
+	reader.offset += 1
+	instruction = reader.bytes[reader.offset]
+	reader.offset += 1
+	value = if instruction == I32_CONST or instruction == I64_CONST then "${sleb_read_from(reader)}" else ø
+	# (to the initializer's end, 0x0B)
+	while reader.bytes[reader.offset] != 11 { reader.offset += 1 }
+	reader.offset += 1
+	if mutable then ø else value
+}
+# the signed LEB128 number at the reader
+sleb_read_from(reader: ByteReader): int := {
+	n = 0
+	shift = 0
+	byte = 128
+	while byte >= 128 {
+		byte = reader.bytes[reader.offset]
+		reader.offset += 1
+		n += bit_and(byte, 127) << shift
+		shift += 7
+	}
+	if bit_and(byte, 64) != 0 and shift < 64 then n - (1 << shift) else n
+}
+# an exported function as a foreign line declares it, none for a type a line can't say (several results, a reference)
+wasm_declaration(name: text, path: text, type: list?): list := {
+	if type == ø or #type#2 > 1 { return [] }
+	parameters = type#1
+	[[name, path, parameters, range_list(#parameters).map(i => "p" + (i + 1)), if #type#2 == 0 then "void" else type#2#1]]
+}
+# the statements a use of the module stands for: its constant globals' values, then an include's run of its main,
+# else nothing, which a use gives (`import fourty_two` is ø, not its last value)
+USE_GIVES = "()"
+wasm_statements(statement: text, exports: WasmExports): text := {
+	runs = statement.starts_with(INCLUDE_WORD + " ") and exports.functions.any(d => d#1 == INCLUDED_MAIN)
+	if #exports.values == 0 and not runs { return "" }
+	(exports.values + [if runs then INCLUDED_MAIN + "()" else USE_GIVES]).join("; ")
+}

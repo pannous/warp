@@ -1,20 +1,20 @@
 # from test_wasm_modules.rs: edit the Rust test, then run the script again
 
 # a_module_keeps_its_state_for_the_run
-'import test/fixtures/wasm/counter.wasm; count_up(2); count_up(3)'	5
+'import •/test/fixtures/wasm/counter.wasm; count_up(2); count_up(3)'	5
 
 # a_module_is_found_by_name_or_path
-'use "test/fixtures/wasm/counter.wasm"; count_up(5)'	5
+'use "•/test/fixtures/wasm/counter.wasm"; count_up(5)'	5
 'import "test/fixtures/wasm/fourty_two.wat"; ft'	42
 
 # include_runs_main_globals_are_set_and_casts_are_ambiguous
-'include test/fixtures/wasm/fourty_two'	42
-'include test/fixtures/wasm/fourty_two; ft * 2'	84
+'include •/test/fixtures/wasm/fourty_two'	42
+'include •/test/fixtures/wasm/fourty_two; ft * 2'	84
 
 # an_imported_module_gets_wasi_host_words_and_other_modules
-'import test/fixtures/wasm/greeter; greet()'	3
-'import test/fixtures/wasm/greeter; five()'	5
-'import test/fixtures/wasm/greeter; count_twice(4)'	8
+'import •/test/fixtures/wasm/greeter; greet()'	3
+'import •/test/fixtures/wasm/greeter; five()'	5
+'import •/test/fixtures/wasm/greeter; count_twice(4)'	8
 
 # a_c_module_takes_and_gives_texts_by_its_header
 'import test/fixtures/wasm/shout; shout("hi there")'	'HI THERE!'
