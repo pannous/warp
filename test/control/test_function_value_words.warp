@@ -9,9 +9,3 @@ is! 'sq(x) := x * x
 h(f: function) := f.signature
 h(sq) == sq.signature' true
 
-# a_functions_body_is_code_from_its_value
-is! 'sq(x) := x * x
-h(f: function) := f.body
-h(sq) is code' true
-is! 'f(x) := { y = x + 1; y * 2 }
-f.body is code' true

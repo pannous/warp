@@ -29,6 +29,8 @@ def attributed(name: text, value: Node, node: Node): Node := Key(symbol(attribut
 def attribute_marked(n: Node): Node := if n is key and key_of(n) == symbol(attribute_word) then attribute_marked(value_of(n)#3) else n
 # the mark of a signed item after a space, `+1` of `1 +1`: [what was written before it, it as written] (parser.warp spaced_sign_marked)
 SPACED_SIGN_MARK = "spaced_sign"
+# `width /height`: a path after an operand, which a bound name reads as a division (decision path-after-operand)
+PATH_AFTER_OPERAND_MARK = "path_after_operand"
 # the mark of an operation whose operator is spaced on one side only, `a *b`: [it as written, the operator, its left and its right as written] (parser.warp unevenly_spaced)
 UNEVEN_SPACING_MARK = "uneven_spacing"
 

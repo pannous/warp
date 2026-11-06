@@ -260,19 +260,22 @@ typed_libraries = ["warp", "emitter", "'m'"]
 # lib/math.warp it reaches, the first written first. A primitive file's prelude (lib/primitive.warp) has none: no GC
 # library word joins its definitions as a variant (arity_overloads.warp library_variants)
 global typed_word_lines = ø
+global typed_one_definitions = ø
 global word_lines_prelude = prelude_text
 # a lowering of a program behind this prelude: the library words it sees are the prelude's
 lowering_from(prelude: text) := {
 	if prelude != word_lines_prelude {
 		word_lines_prelude = prelude
 		typed_word_lines = ø
+		typed_one_definitions = ø
 	}
 }
+# the library a lowering sees: the prelude, with lib/math.warp beside the standard one
+library_sources(): text := if word_lines_prelude == prelude_text then prelude_text + "\n" + library_text("math.warp") else word_lines_prelude
 word_lines(): map := {
 	if typed_word_lines != ø { return typed_word_lines }
 	typed_word_lines = {}
-	sources = if word_lines_prelude == prelude_text then prelude_text + "\n" + library_text("math.warp") else word_lines_prelude
-	for line in sources.split("\n") {
+	for line in library_sources().split("\n") {
 		for library in typed_libraries {
 			typed = typed_line(line, library)
 			if typed != ø {
@@ -288,10 +291,31 @@ word_lines(): map := {
 # that name must not hide from the other values (class_methods.warp routes it, rewrites.warp keeps its sugar rules)
 is_library_word(word: text): bool := typed_lines.any(line => line.name == word) or word_lines().has(word)
 
-# whether the word's first line takes exactly one value, typed
+# whether the word's first line takes exactly one value, typed: its `from` line, else its first definition in the
+# library, `square(x: number): number := x * x`
 takes_one_typed_value(word: text): bool := {
 	lines = word_lines()
-	if not lines.has(word) { return no }
+	if not lines.has(word) { return one_typed_definitions().has(word) }
 	parameters = lines[word]#1.signature.parameters
 	#parameters == 1 and parameters#1.type_name != "" and not parameters#1.rest
+}
+# the library's words whose first definition takes exactly one typed value, read off the heads as written
+one_typed_definitions(): map := {
+	if typed_one_definitions != ø { return typed_one_definitions }
+	typed_one_definitions = {}
+	seen = {}
+	for slice in definition_slices(library_sources()) {
+		if not seen.has(slice#1) {
+			seen[slice#1] = yes
+			if takes_one_typed(slice#1, slice#2) { typed_one_definitions[slice#1] = yes }
+		}
+	}
+	typed_one_definitions
+}
+# `square(x: number): … := …` of the word: one parameter, typed, no rest
+takes_one_typed(word: text, written: text): bool := {
+	head = written.trim().remove_prefix("def ").trim()
+	if not head.starts_with(word + "(") or not head.contains(")") { return no }
+	parameters = outer_parts(head[#word + 1 ..].split(")")#1)
+	#parameters == 1 and parameters#1.contains(":") and not parameters#1.contains("...") and parameters#1.split(":")#2.trim() != ""
 }

@@ -64,6 +64,7 @@ PARSE_CODE_WORD = 13
 REAL_PATH_WORD = 14
 SIGNAL_LISTEN_WORD = 15
 EVAL_CODE_WORD = 16
+CANONICAL_TEXT_WORD = 17
 # the end of a field in warp.wasm's parse-code encoding (extensions/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -71,6 +72,9 @@ FIELD_END = 1
 WINDOW_WIDTH_SLOT = 0
 WINDOW_HEIGHT_SLOT = 1
 DISPLAY_DPI_SLOT = 2
+# the running run's linker, engine, linked instances and unicode instance (run_state), for a host word that links a
+# module on its first call (canonical_text); a nested run (eval) keeps its own and gives the outer one back
+RUN_SLOT = 3
 NATIVE_VIEW_WIDTH = 640
 NATIVE_VIEW_HEIGHT = 480
 DEFAULT_DPI = 96
@@ -555,6 +559,7 @@ opens_window(name: text): bool := same_text(name, "InitWindow") or same_text(nam
 # the number of a host word the driver answers, else a word that names it when called
 answered_word(name: text): i64 := {
 	if same_text(name, "std_io") { return STD_IO_WORD }
+	if same_text(name, "canonical_text") { return CANONICAL_TEXT_WORD }
 	if same_text(name, "exit") { return EXIT_WORD }
 	if same_text(name, "sleep_ms") { return SLEEP_WORD }
 	if same_text(name, "clock") { return CLOCK_WORD }
@@ -665,7 +670,7 @@ contains_line(lines: text, line: text): bool := {
 	no
 }
 # the module at `path` instantiated and defined in the linker as `name`, its start run
-instance_defined(linker: handle, engine: handle, context: handle, name: text, path: text, linked: pointer, trap: pointer): nothing := {
+instance_defined(linker: handle, engine: handle, context: handle, name: text, path: text, linked: pointer, trap: pointer): pointer := {
 	text_kept(linked, joined(joined(cell_text(linked), name), "\n"))
 	module = read_file(path)
 	if module.length == 0 {
@@ -686,6 +691,7 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 		results_count = native_long(wasm_functype_results(wasmtime_func_type(context, start + 8)))
 		checked(wasmtime_func_call(context, start + 8, 0, 0, allocate(VALUE_BYTES * MAX_RESULTS), results_count, trap), trap)
 	}
+	instance
 }
 
 # the module run with the arguments and a GC heap starting at `heap_bytes`; its machine code kept in the file
@@ -718,6 +724,8 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasmtime_linker_allow_shadowing(linker, yes)
 	linked = allocate(16)
 	text_kept(linked, "")
+	outer_run = kept_value(RUN_SLOT)
+	keep_value(RUN_SLOT, run_state(linker, engine, linked) as i64)
 	instances_linked(linker, engine, context, compiled, linked, trap)
 	host_words_defined(linker, engine, compiled, module, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
@@ -741,6 +749,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	}
 	if results_count > 0 and output.length == 0 { print_result(results) }
 	crash_context_restored(outer)
+	keep_value(RUN_SLOT, outer_run)
 	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
 	# behind the last (it peaked at 4.8 GB with all of them kept)
 	wasmtime_store_delete(store)
@@ -748,6 +757,37 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasmtime_module_delete(compiled)
 	wasm_engine_delete(engine)
 	failure
+}
+# a run's linker, engine and linked-instances cell, whether canonical_text linked unicode (1) and that instance, kept in
+# the run's block: what a host word allocates is given back when it returns (foreign.c warp_host_callback)
+run_state(linker: handle, engine: handle, linked: pointer): pointer := {
+	run = allocate(32 + INSTANCE_BYTES)
+	long_at(run).value = linker
+	long_at(run + 8).value = engine
+	long_at(run + 16).value = linked as i64
+	long_at(run + 24).value = 0
+	run
+}
+# `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): the runtime's canonical_text, a text's
+# NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call, never at its start; a
+# library folder without it ends the run naming the file (instance_defined), never a silent byte compare
+canonical_text_answered(context: handle, given: pointer, result: pointer): nothing := {
+	run = kept_value(RUN_SLOT) as i32
+	trap = allocate(8)
+	long_at(trap).value = 0
+	if long_at(run + 24).value == 0 {
+		module_name = "warp/unicode"
+		instance = instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name), long_at(run + 16).value as i32, trap)
+		memcpy(run + 32, native_pointer(instance), INSTANCE_BYTES)
+		long_at(run + 24).value = 1
+	}
+	function = allocate(EXTERN_BYTES)
+	word = "canonical_text"
+	if not wasmtime_instance_export_get(context, run + 32, word, word.length, function) {
+		complain("modules/unicode.wasm exports no canonical_text: warp rebuild writes it anew")
+		exit(1)
+	}
+	checked(wasmtime_func_call(context, function + 8, given, 1, result, 1, trap), trap)
 }
 # what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
 # engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
@@ -953,6 +993,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
 	if word == PARSE_CODE_WORD { return code_parsed(caller, context, given, results) }
 	if word == EVAL_CODE_WORD { return code_evaluated(caller, context, given, results) }
+	if word == CANONICAL_TEXT_WORD { return canonical_text_answered(context, given, results) }
 	if word == REAL_PATH_WORD { return real_path_written(caller, context, given, results) }
 	if word == SET_SYSTEM_VALUE_WORD { return system_value_set(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64), long_at(given + VALUE_BYTES + VALUE_OFFSET).value) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }

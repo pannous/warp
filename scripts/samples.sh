@@ -36,6 +36,8 @@ mkdir -p "$results/out"
 # the tree's own compilers, else a count names the tree's commit but measures whichever compiler is installed (128 to
 # 122 at 08:12 was the installed one's, the trees' own went 131 to 132)
 [ -f "$tree/lib/warp.wasm" ] && export WARP_LIB=${WARP_LIB:-$tree/lib}
+# the registry's packages the package samples use by path (modules/packages, text/uniscript_text), as full-suite.sh links them
+"$tree/scripts/link-packages.sh" "$tree" >/dev/null || echo "samples: no packages linked: the package samples fail" >&2
 
 wall_seconds() {
 	local load cores

@@ -98,6 +98,8 @@ slice_spans(source: text): list := {
 # exported under its name (decision host-callback-exports)
 export_word = "export"
 is_exported_slice(slice: list): bool := leading_name(slice#2) == export_word
+# `public f(x) := …`: an untyped library word its importers may call (decision library-word-visibility), no host export
+public_word = "public"
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
@@ -106,7 +108,7 @@ name_defined_in(line: text): text := {
 	declared = operator_declared(operator_statement(blank_words(line)))
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1.glyph }
 	leading = leading_name(line)
-	if leading == export_word { return name_defined_in(line[#leading ..].trim()) }
+	if leading == export_word or leading == public_word { return name_defined_in(line[#leading ..].trim()) }
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if count(leading) == 0 or leading == rewrite_word { return "" }
 	following = line[#leading ..].trim()
@@ -356,7 +358,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	if program_words.any(word => word in foreign) { hint_foreign_types(program, foreign, own_names) }
 	exported = slices.filter(is_exported_slice).map(slice => slice#1)
 	for name in exported { exported_names[name] = yes }
-	wanted = exported + program_words + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
+	# (an alias the program writes where the sugar makes its call later, `3 squared`, wants its word: square)
+	wanted = exported + program_words + program_words.filter(word => written_aliases.has(word)).map(word => written_aliases[word]) + variant_words(program_words) + lowering_words(program) + sugar_words_of(program) + linked_needs() + (if callable_word in module_names and calls_a_value(program) then [callable_word] else []) + extension_value_settlers().values.filter(word => word in module_names)
 	uses = ø
 	origins = {}
 	while #wanted > 0 {
