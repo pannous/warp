@@ -25,8 +25,8 @@ letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
 is_unicode_letter(c): bool := {
 	code = ord(c)
 	if code < 128 { return is_alpha(c) }
-	at = letter_range_before(code)
-	at >= 0 and code <= letter_ranges[at * 2 + 1]
+	range_index = letter_range_before(code)
+	range_index >= 0 and code <= letter_ranges[range_index * 2 + 1]
 }
 // the last letter range (lib/letter_ranges.warp) starting at or before code, by halving; -1 when none does
 letter_range_before(code: int): int := {
@@ -57,7 +57,8 @@ def to_utf8(t: text): list {
 	out
 }
 
-def from_utf8(bytes: any): text {
+// bytes → text; UFCS `string.from_utf8(bytes)` arrives as from_utf8(string, bytes) — ignore the owner
+def from_utf8_bytes(bytes: any): text {
 	out = ""
 	i = 0
 	total = count(bytes)
@@ -79,6 +80,8 @@ def from_utf8(bytes: any): text {
 	}
 	out
 }
+from_utf8(bytes) := from_utf8_bytes(bytes)
+from_utf8(owner, bytes) := from_utf8_bytes(bytes)
 // only spaces, tabs and line breaks, or nothing
 is_blank(t): bool := trim(t) is empty
 // has letters, all upper (or lower) case

@@ -64,6 +64,11 @@ try {
 
 	const elsewhere = await fetch(`${PROXY}/session`, { method: "POST", headers: { origin: "https://example.com" }, body: "{}" });
 	assert.equal(elsewhere.status, 403, "another page's request is refused");
+	assert.equal(elsewhere.headers.get("access-control-allow-origin"), null, "a foreign Origin is not reflected");
+	assert.match(elsewhere.headers.get("vary") ?? "", /origin/i, "refusals Vary on Origin");
+	const preflight = await fetch(`${PROXY}/session`, { method: "OPTIONS", headers: { origin: ORIGIN, "access-control-request-method": "POST" } });
+	assert.equal(preflight.headers.get("access-control-allow-origin"), ORIGIN);
+	assert.equal(preflight.headers.get("cross-origin-resource-policy"), "cross-origin", "COEP pages need CORP cross-origin");
 	assert.equal((await post("/messages", { task: "completion", messages: [{ role: "user", content: "x‸" }] })).status, 401, "no session, no answer");
 
 	const { session } = await (await post("/session", { turnstile: "XXXX.DUMMY.TOKEN.XXXX" })).json();
