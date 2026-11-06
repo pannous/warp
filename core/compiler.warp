@@ -68,6 +68,8 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	known = #diagnosed
 	own = own_build(source)
 	written = source
+	# (the program's own modules beside it known before anything reads its uses: implicit uses reach their words too)
+	for name in used_modules(source) { own_module_beside(name, folder) }
 	# (the standard modules it names words of without their `use`, as if it said them)
 	timed("implicit uses")
 	source = with_implicit_uses(source, folder)
@@ -142,13 +144,13 @@ linked_libraries(source: text): list := {
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole; a
 	# module written links those it uses, never itself
 	# (the prelude too, every program's, linked as any module but by the prelude it is written of)
-	names = (if module_written != "" then used_modules(library_text(module_written + module_extension)) else ["prelude"] + used_modules(source)).filter(name => name != module_written)
+	names = (if module_written != "" then used_modules(file_text(std_module_path(module_written)) ?? "") else ["prelude"] + used_modules(source)).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
 	at = 0
 	while at < #names {
 		name = names[at]
 		at += 1
-		wasm = try read_bytes(folder + name + ".wasm") else ø
+		wasm = try read_bytes(own_module_wasm.get(name) ?? folder + name + ".wasm") else ø
 		# (a module not prebuilt was said by the rebuild, its file left empty; one prebuilt but not linkable is said here,
 		# never silently compiled from source)
 		if wasm == ø or #wasm == 0 { continue }
@@ -167,8 +169,17 @@ linked_libraries(source: text): list := {
 # whether lib/<module> is the text the module was built of: by its length, and under WARP_LIB (a lib/ edited since
 # the build) by its hash, as the index is trusted (library.warp); djb2 over the prelude was ~1.5 % of hello
 built_of_text(module: text, hash: text): bool := {
+	# a program's own module linked without its text beside it is what it was built of
+	if own_module_wasm.has(module) and file_text(std_module_path(module)) == ø { return yes }
 	text = file_text(std_module_path(module)) ?? ""
 	hash.starts_with("${#text}-") and (warp_lib() == ø or hash == source_hash(text))
+}
+# `import shapes` beside a shapes.wasm carrying a warp.signature: the program's own module, linked as a standard
+# module is, imported by its path (decision samples-modules-wasm); its text, where beside it, is shapes.warp
+own_module_beside(name: text, program_folder: text) := {
+	wasm = path_in(absolute_folder(program_folder), name + ".wasm")
+	bytes = try read_bytes(wasm) else []
+	if #bytes > 0 and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) != ø { own_module(name, wasm.remove_suffix(".wasm") + module_extension, wasm) }
 }
 # the images, each behind those of the modules it uses
 dependencies_first(images: list): list := in_dependency_order(images.map(image => image.name)).map(name => images.filter(image => image.name == name)#1)
@@ -228,7 +239,7 @@ write_runtime(file: text) := {
 # The prelude's too, every word of it (its compile reaches no prelude of its own, compile)
 module_source(name: text): text := "use " + name + "\nø"
 # where the modules a compile links are: beside runtime.wasm, or where the module written goes
-linked_modules_folder(): text := if module_written != "" then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
+linked_modules_folder(): text := if module_written != "" and not own_module_files.has(module_written) then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 # the module a compile writes, and the folder of the modules it links: its own never linked
 global module_written = ""
 global module_written_folder = ""
@@ -238,7 +249,9 @@ write_module(name: text, runtime_file: text, file: text) := {
 	module_written = name
 	module_written_folder = folder_of(file) + "/"
 	made = ø
-	try { made = compile(module_source(name), library_folder, read_bytes(runtime_file), yes) } catch refusal { made = refusal }
+	# (its `use` brings its file whole, found in the folder it is in: lib/, or a program's own module's)
+	folder = if own_module_files.has(name) then folder_of(own_module_files[name]) else library_folder
+	try { made = compile(module_source(name), folder, read_bytes(runtime_file), yes) } catch refusal { made = refusal }
 	module_written = ""
 	if made is text { throw made }
 	write_bytes(file, with_signature(linked_bytes(module.order, MODULE_START), name, image_fields(module.order)))

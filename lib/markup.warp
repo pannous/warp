@@ -254,7 +254,8 @@ html_is_listed_element(value: any): bool := value is pair and contains(html_elem
 html_is_custom_element(name: any): bool := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
-	let items = html_shorthands_spread(html_items(content))
+	// a live item as it is now: `style: { color: (if dark …) }` live as a whole is an attribute again
+	let items = html_shorthands_spread(html_items(content).map(item => if item is Live then html_now(item) else item))
 	var own_scope = scope
 	var own_chosen = chosen
 	var value = ø

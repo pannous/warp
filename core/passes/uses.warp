@@ -198,7 +198,16 @@ call_head(n: Node): any := {
 # extensions/rules/<name>.warp, a module only the compiler uses: its rule words, run at compile time (decision
 # library-zero-bake-plan 1b). It stays a module: brought in as its own file, its words reached, as from lib/ (an
 # include of it as the compiler's own code typed the emitter's values anew: shown_text refused)
-std_module_path(name: text): text := run_library() + (if compiler_modules().has(name) then COMPILER_MODULES else "/") + name + module_extension
+std_module_path(name: text): text := own_module_files.get(name) ?? run_library() + (if compiler_modules().has(name) then COMPILER_MODULES else "/") + name + module_extension
+# A program's own module, compiled as a standard module is and linked like one (decision samples-modules-wasm:
+# `import shapes` of a shapes.wasm with its warp.signature beside the program, which `warp build --module shapes.warp`
+# writes): name → its .warp file, and name → its .wasm, which a program imports by that path (driver instance_path)
+global own_module_files = {}
+global own_module_wasm = {}
+own_module(name: text, file: text, wasm: text) := {
+	own_module_files[name] = file
+	own_module_wasm[name] = wasm
+}
 COMPILER_MODULES = "/extensions/rules/"
 global compiler_module_names = ø
 compiler_modules(): map := {
@@ -244,13 +253,14 @@ rooted(name: text, folder: text): text := {
 project_root(folder: text): any := {
 	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
 	# working folder that holds .git
-	at = without_steps_up(if folder.starts_with("/") then folder else cwd + "/" + folder)
+	at = without_steps_up(absolute_folder(folder))
 	while at != "" and at != "/" {
 		if file_text(at + "/.git") != ø or file_text(at + "/.git/HEAD") != ø { return at }
 		at = without_steps_up(at + "/..")
 	}
 	ø
 }
+absolute_folder(folder: text): text := if folder.starts_with("/") then folder else cwd + "/" + folder
 path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
 # the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
 # runtime/text.warp, card runtime-split)
