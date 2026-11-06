@@ -9,6 +9,23 @@ rewrite $n * int => zero_fill($n, 0)
 rewrite $n * float => zero_fill($n, 0 as float)
 rewrite $x : $n int => $x = zero_fill($n, 0)
 
+# The type forms of a list (card list-type-forms, wiki/list.md "Typed lists"): `x = int[]` (the parser's `x = [int]`)
+# and `x = list of numbers` (or `list of number`) are the empty list of the type, as `int[0]`
+rewrite ($x = [int]) => ($x = zero_fill(0, 0))
+rewrite ($x = [float]) => ($x = zero_fill(0, 0 as float))
+rewrite ($x = [text]) => ($x = zero_fill(0, ""))
+rewrite ($x = [$t]) => ($x = []) where $t is type
+rewrite ($x = list of int) => ($x = zero_fill(0, 0))
+rewrite ($x = list of float) => ($x = zero_fill(0, 0 as float))
+rewrite ($x = list of text) => ($x = zero_fill(0, ""))
+rewrite ($x = list of $t) => ($x = []) where $t is type
+rewrite ($x = list of numbers) => ($x = [])
+rewrite ($x = list of ints) => ($x = zero_fill(0, 0))
+rewrite ($x = list of floats) => ($x = zero_fill(0, 0 as float))
+rewrite ($x = list of texts) => ($x = zero_fill(0, ""))
+rewrite ($x = list of strings) => ($x = zero_fill(0, ""))
+rewrite ($x = list of bools) => ($x = [])
+
 # A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
 rewrite $v as list of $t => $v.map($x => $x as $t)
 
