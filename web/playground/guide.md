@@ -814,3 +814,15 @@ Examples: "kitchen sink"; samples: laws, kitchensink
 Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
 
 Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test
+
+## Warp reads itself
+
+The compiler that runs your program is written in warp and compiles itself. `parse` runs its parser on a text, and
+the tree comes back as plain data:
+
+```warp => "(+ 1 (* 2 x))"
+shown(code) := if code is key then "(" + code.op + " " + shown(code.key) + " " + shown(code.value) + ")" else str(code)
+shown(parse("1 + 2 * x"))
+```
+
+Examples: data; samples: self_parser, code_as_data
