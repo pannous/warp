@@ -36,7 +36,7 @@ global signals_notifying = []
 signal_notify(name: text, value: any, old: any): any := {
 	signal_values[name] = value
 	if name in signals_notifying { return value }
-	signals_notifying.add(name)
+	signals_notifying = signals_notifying + [name]
 	emitted(name, [value, old])
 	signals_notifying = signals_notifying.filter(notifying => notifying != name)
 	value
