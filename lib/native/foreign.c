@@ -291,24 +291,36 @@ void* c_function(char* name) { return native_function(name); }
 // warp's own libraries (libwarp_sound) beside the executable first, as libwarp_wasmtime is
 // Fixed short folders per platform (user 2026-11-06 library-search-paths): no scan/sort/computed from.
 // macOS: homebrew + local + opt/<name>/Frameworks/<Name>.framework/<Name>. Linux: /usr/lib(+triple) + local,
-// lib<name>.so / lib<name>3.so (versioned sonames e.g. libpython3.13.so.1.0 still need a symlink or WARP path).
-// Windows native uses LoadLibrary's System32+PATH (not this dlopen list).
+// lib<name>.so / .so.0 / -2.0.so.0 / .so.1 (usual versioned sonames; odd ones like libpython3.13.so.1.0 still
+// need a symlink, WARP path, or a computed `from`). Windows: LoadLibrary System32+PATH (not this dlopen list).
 static const char* LIBRARY_PATHS[] = {
 	"@executable_path/lib%s.dylib",
 	"$ORIGIN/lib%s.so",
 	"lib%s.dylib",
 	"lib%s.so",
 	"lib%s.so.0",
+	"lib%s-2.0.so.0",
+	"lib%s-2.so.0",
+	"lib%s.so.1",
+	"lib%s.so.1.0",
 	"lib%s3.so",
 	"/opt/homebrew/lib/lib%s.dylib",
 	"/usr/local/lib/lib%s.dylib",
 	"/usr/local/lib/lib%s.so",
+	"/usr/local/lib/lib%s-2.0.so.0",
 	"/usr/local/lib/lib%s3.so",
 	"/usr/lib/lib%s.so",
+	"/usr/lib/lib%s-2.0.so.0",
 	"/usr/lib/lib%s3.so",
 	"/usr/lib/x86_64-linux-gnu/lib%s.so",
+	"/usr/lib/x86_64-linux-gnu/lib%s.so.0",
+	"/usr/lib/x86_64-linux-gnu/lib%s-2.0.so.0",
+	"/usr/lib/x86_64-linux-gnu/lib%s.so.1",
 	"/usr/lib/x86_64-linux-gnu/lib%s3.so",
 	"/usr/lib/aarch64-linux-gnu/lib%s.so",
+	"/usr/lib/aarch64-linux-gnu/lib%s.so.0",
+	"/usr/lib/aarch64-linux-gnu/lib%s-2.0.so.0",
+	"/usr/lib/aarch64-linux-gnu/lib%s.so.1",
 	"/usr/lib/aarch64-linux-gnu/lib%s3.so",
 };
 static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
