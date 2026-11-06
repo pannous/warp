@@ -26,7 +26,7 @@ def closure_value(body: Body, target: Node, captured: list): TypedCode {
 	arity = #module.functions[name].signature.parameters - #captured
 	if arity > hook_arities { return refuse("a closure of " + arity + " parameters, more than " + hook_arities) }
 	entry = closure_entry(name, #captured, arity)
-	held = [op.ref_func] + relocatable(relocated.calls, entry#3.index) + text_bytes(entry#4) + gc_code(gc_ops.struct_new, [gc_type(gc.closure)])
+	held = [op.i64_const] + sleb(Kind.Data) + [ref_null, any_reference, ref_null, gc_type(gc.node), op.ref_func] + relocatable(relocated.calls, entry#3.index) + text_bytes(entry#4) + gc_code(gc_ops.struct_new, [gc_type(gc.closure)])
 	items = [held] + captured.map(c => boxed(expression_code(body, c)))
 	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(target)))
 }
@@ -48,12 +48,11 @@ closure_entry_code(f: Function): any := {
 	values = range_list(made#2).map(i => closure_item(closure, i + 1)) + range_list(#f.kinds - 1).map(j => TypedCode(ValueKind.Node, [op.local_get] + uleb(j + 1)))
 	f.code = boxed(call_values(module.functions[made#1], values))
 }
-# the item i of a closure's list: 0 its entry, then its captured values
-# a closure's list item i, an anyref: its entry (0) a $Closure, its captured values (from 1) nodes
+# a closure's list item i: its entry (0) a $Closure, its captured values (from 1)
 def closure_slot(closure: list, i: int): list { payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)]) }
-def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, entered_node(closure_slot(closure, i))) }
-# a field of a closure's entry: 0 the reference it calls, 1 its text
-def entry_field(closure: list, field: int): list { closure_slot(closure, 0) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.closure)]) + gc_code(gc_ops.struct_get, [gc_type(gc.closure), field]) }
+def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, closure_slot(closure, i)) }
+# a field of a closure's entry: 0 the reference it calls, 1 its text (after the $Node's three)
+def entry_field(closure: list, field: int): list { closure_slot(closure, 0) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.closure)]) + gc_code(gc_ops.struct_get, [gc_type(gc.closure), field + 3]) }
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
 def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
