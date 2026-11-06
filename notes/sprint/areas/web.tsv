@@ -34,3 +34,4 @@ server-build	web	extensions/commands/build.warp:62-71 refuses unbuilt kinds; a p
 site-wagi-build	hosting	extensions/commands/build.warp:63 UNBUILT_OPTIONS --site/--wagi; lib/wagi.warp exists; build kinds detected per decision build-kinds-detected
 use-cargo-config-structs	connectors	the crate binding generator (crates/, lib/crates/) needs Default constructors, field setters, &Struct handles; no core change
 use-cargo-playground	connectors	serving prebuilt crate components to web/playground and leaving excluded_samples.txt is web/ work
+js-webidl-bindings	user-decided	user (round 9-10): use js binds from web.webidl via an extension

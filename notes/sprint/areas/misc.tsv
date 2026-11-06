@@ -39,3 +39,4 @@ pure-as-exact	no	`7 as exact` is a conversion: extensions/conversions.warp / lib
 scripted-integration	no	scripts/integrate/ automation (merge batch, queue suite, bisect, push) with timeouts and watchdog; scripts only
 stroke-start	no	samples/graphics/finger_paint.warp:40 polls mouse_down per frame; a press point word in lib/draw.warp plus the hosts (web/) fixes it
 write-hook	no	.claude/hooks/claudeignore-hook.sh is a repo hook script, no core change
+lib-file-lines	user-decided	interviewer: a lib card for the sprint

@@ -32,3 +32,5 @@ now-america	units	a got-it note for `in` with a text joined to a quantity; Inter
 runtime-keeps	time-text-civil	extensions/times/runtime.warp:74 date_text keeps its own civil-date arithmetic while lib/prelude.warp/lib/time.warp have civil_from_days; dedupe by calling the prelude's (extensions/, not core)
 sleep-ms	units	sleep(duration) is lib/units.warp:268 and the unit binding rules are lib/units.warp:111-117; (50/3) ms must give the same DimensionError there
 spaced-degree	units	degree atoms are extensions/degrees.warp (core/extension.warp:17 only the hook); spaced 20 °C needs a rule there or in lib/units.warp
+plural-singular-check	user-decided	user (round 9-10): lib/units declares singular+plural unit words as aliases
+zoned-literal-sample	user-decided	samples/numbers/dates.warp:23 the zoned literal 2030-07-01T09:30[America/New_York] fails (from sprint-media-samples sample-gaps-types)
