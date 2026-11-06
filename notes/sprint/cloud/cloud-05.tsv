@@ -1,0 +1,6 @@
+says-field	errors	[1 2].z error message teaching the swizzle rule: swizzles live in extensions/rules/wgsl.warp + core/runtime/fields.warp; the message text could come from the rule; Later edge case	spec
+scene-3d	spec-gaps	3d scenes (wiki/3d.md): a lib/ module over the gpu/webgpu libraries (samples/gpu), no core	spec
+shell-backtick-run	spec-gaps	lib/shell.warp:27 already has rm "file"; rm of each file of ls is a lib/shell.warp word over iteration	spec
+shell-symbolic-mode	spec-gaps	repl behavior lives in lib/repl.warp; no symbolic mode anywhere yet	spec
+with-do-block	spec-gaps	with context do … end as a sugar rule in extensions/sugar/ (or esoteric: drop?)	spec
+alias-network	lookup	no method lookup over lib/aliases.warp's alias line; a fallback rule in extensions/class_methods/methods.warp (method dispatch) plus lib/aliases.warp	text-collections

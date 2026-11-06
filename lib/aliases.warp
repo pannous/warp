@@ -36,8 +36,9 @@ position { operator: "#", symbol: Op.Hash, power: [170, 182] }
 # comparison and logic
 equal { operator: "==", symbol: Op.Eq, aliases: [equals, Equals], power: [115, 116] }
 compare { aliases: [compareTo, compare_to] }
-"<" { power: [120, 121] }
-">" { power: [120, 121] }
+# a class's less(o) and greater(o) are its `<` and `>` (extensions/class_methods)
+less { operator: "<", power: [120, 121] }
+greater { operator: ">", power: [120, 121] }
 "<=" { symbol: Op.Le, aliases: ["≤"], power: [120, 121] }
 ">=" { symbol: Op.Ge, aliases: ["≥"], power: [120, 121] }
 "!=" { symbol: Op.Ne, aliases: ["≠"], power: [115, 116] }
