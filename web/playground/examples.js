@@ -21,7 +21,7 @@ pi = 4
 	lists: { value: '[3, "apple"]', code: `// a list, how many items it has, and its first item
 fruits = ["apple" "pear" "plum"]
 [#fruits, fruits#1]` },
-	"lazy ranges": { value: "[999999999999 499999999999500000000000 123456789]", code: `// a range of a trillion numbers, counted and summed at once
+	"lazy ranges": { value: "[999999999999, 499999999999500000000000, 123456789]", code: `// a range of a trillion numbers, counted and summed at once
 n = 10^12
 r = 1..n
 [count r, sum r, r#123456789]` },
@@ -45,7 +45,7 @@ total` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },
-	arguments: { value: '["Hello, Ada" "Hi, Bob" 6 12 6]', code: `// default values, named arguments, any number of arguments
+	arguments: { value: '["Hello, Ada", "Hi, Bob", 6, 12, 6]', code: `// default values, named arguments, any number of arguments
 def greet(name, greeting = "Hello") = greeting + ", " + name
 def total(xs...) = sum xs
 def area(r) = r * r * 3
