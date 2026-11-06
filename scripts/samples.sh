@@ -38,6 +38,8 @@ mkdir -p "$results/out"
 [ -f "$tree/lib/warp.wasm" ] && export WARP_LIB=${WARP_LIB:-$tree/lib}
 # the registry's packages the package samples use by path (modules/packages, text/uniscript_text), as full-suite.sh links them
 "$tree/scripts/link-packages.sh" "$tree" >/dev/null || echo "samples: no packages linked: the package samples fail" >&2
+# the compiled module wasm/import_compiled links (samples/wasm/shapes.wasm, a link to it), built behind this runtime.wasm
+(cd "$tree" && "$WARP" build --module test/fixtures/compiled/shapes.warp >/dev/null) || echo "samples: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails" >&2
 
 wall_seconds() {
 	local load cores

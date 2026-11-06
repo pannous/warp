@@ -1,0 +1,5 @@
+# an element's CSS shorthands, their words as written: a library word (pop) and a unit (ms) in an attribute are data
+# (decisions transitions-data, tag-items-calls)
+'use markup; to_html(li{ animation: pop 400ms, "x" })'	'<li style="animation: pop 400ms">x</li>'
+'use markup; to_html(li{ transition: opacity 200ms ease-out, "x" })'	'<li style="transition: opacity 200ms ease-out">x</li>'
+'use markup; to_html(li{ title: pop 400, "x" })'	'<li title="pop 400">x</li>'
