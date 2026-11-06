@@ -7,6 +7,11 @@ rewrite (fn $d) => def $d
 rewrite (define $d) => def $d
 rewrite (function $d) => def $d
 rewrite (func $d) => def $d
+# Kotlin's extension function, `fun Int.twice() = this * 2`: a function whose first parameter `this` is of that type,
+# so `3.twice()` calls it as `twice(3)` does
+rewrite (def $T.$f($p...) = $e) => ($f(this: $T, $p...) := $e)
+rewrite (def $T.$f($p...): $t {$b...}) => ($f(this: $T, $p...): $t := {$b...})
+rewrite (def $T.$f($p...) {$b...}) => ($f(this: $T, $p...) := {$b...})
 rewrite (def $h($p...): $t {$b...}) => ($h($p...): $t := {$b...})
 rewrite (def $h($p...) -> $t {$b...}) => ($h($p...): $t := {$b...})
 # `fun f(a: int) as float64 {…}`: `as` after the signature names the result type too (decision M4); the `as` splits

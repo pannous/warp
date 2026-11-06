@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
 # Measurements with uncertainty: x ± r is an interval that flows through arithmetic
-# a plain tolerance counts in the value's unit: 6.0m ± 0.3 is 6.0m ± 0.3m
-length = 6.0m ± 0.3
-width = 2.0m ± 0.2
+# the tolerance written with its unit, so 0.3 can't read as a share of the value
+length = 6.0m ± 0.3m
+width = 2.0m ± 0.2m
 area = length * width
 print "area: " + str(area)
 print "between " + str(area.low) + " and " + str(area.high)

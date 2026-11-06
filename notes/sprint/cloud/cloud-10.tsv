@@ -1,0 +1,6 @@
+components-on-the-fly	connectors	run-time component loading is a library host word (lib/wasmtime.warp, lib/native) plus research; part 1 goes with card module-linking	web
+firefox-tour	web	fewer gpu_compute jobs or a longer limit for that check: scripts/browser-dry-run.sh / web/playground	web
+server-build	web	extensions/commands/build.warp:62-71 refuses unbuilt kinds; a plain warp app.warp already serves routes (core/native/warp.warp:471); detection of routes belongs in the build command extension	web
+site-wagi-build	hosting	extensions/commands/build.warp:63 UNBUILT_OPTIONS --site/--wagi; lib/wagi.warp exists; build kinds detected per decision build-kinds-detected	web
+use-cargo-config-structs	connectors	the crate binding generator (crates/, lib/crates/) needs Default constructors, field setters, &Struct handles; no core change	web
+use-cargo-playground	connectors	serving prebuilt crate components to web/playground and leaving excluded_samples.txt is web/ work	web

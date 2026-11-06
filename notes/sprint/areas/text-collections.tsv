@@ -24,13 +24,7 @@ size-size	lookup	p.size -1 should be [p.size, -1] per decision glued-negative; m
 split-map-phrase	collections	"…".split.map length: method-chain phrase in extensions/sugar/methods.warp; test_word_functions:9
 tree-find-replace-gaps	tree-patterns	test_tree_find/test_tree_replace still red (results.txt:2229-2261): pattern find, replace into code, named pattern templates; lib tree walks (with extensions/match_patterns.warp)
 uniscript-ownership	unicode-strings	test_versions:18,19 still 'the call uniscript(…) (no owner)'; test_package_registry:4 'no uniscript_c'; fix in packages/registry loading of uniscript, not core
-alias-network	lookup	no method lookup over lib/aliases.warp's alias line; a fallback rule in extensions/class_methods/methods.warp (method dispatch) plus lib/aliases.warp
-browser-json	format	web/playground/host.js:338 keyOfTree re-implements serialize; make it call the module's json_key (lib/json.warp:300) or align its forms, web/ only
-completion-order	lookup	no completion code in core/ or lib/ (only lib/graphs.warp unrelated); completion lives in web/playground / lib/repl.warp: order declared methods first
-div-class	format	no 'class name has no dot' hint exists; add it in lib/markup.warp
 empty-equality-hint	format	no such hint yet; a lint in extensions (as extensions/text_lints.warp) suggesting 'is empty' / plain truthy 'if x'
-friends-print	printing	print-bang lands in extensions/sugar/methods.warp:29 (test_print_bang.pairs.warp:4 passes for a list); force of a map literal as data still open there
-function-signatures	format	signature text is reflection (extensions/sugar/reflection.warp); type(sqrt) currently even fails 'unknown name sqrt' (test_function_objects.pairs.warp:4)
-pattern-direct-tests	matching	optimization: per-form rewrite of compile-time-known patterns in extensions/match_patterns.warp (rewrite per form in lib/extensions per card); pattern_bindings stays for run time
 are-words-in	user-decided	user (round 9-10): one rule xs are in t, together with all-words-in
 all-words-in	user-decided	user (round 9-10): one rule xs are in t, together with are-words-in
+compile-time	user-decided	user (rounds 15-17) (interviewer default, undoable): only foreign/deprecated spellings warn + warp fix rewrites them

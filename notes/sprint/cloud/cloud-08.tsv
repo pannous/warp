@@ -1,0 +1,6 @@
+precompiled-crates	ffi-libraries-roadmap	CI matrix + release assets + download cache for crate shims: scripts/, packaging/, lib/crates; no compiler change	tooling
+binding-local	types	no warning for binding a local to a type word; a lint in extensions/text_lints.warp (decision (b), hint 'name it e.g. op')	types
+counter-struct	types-2	test/types/test_class_forms_ported.warp:12 swift mutating func still open; class forms belong in extensions/class_methods.warp ('mutating' already a member word in core/passes/sugar.warp:63)	types
+dir-filters	reflection-words	dir hints and filtered views are reflection words (extensions/sugar/reflection.warp / lib), no core change	types
+enum-case	types-2	the fix is a sugar rule in extensions/sugar/enums.warp (patch data/stray/enum-case-65c5db729f.patch); O.W(3) still refused by core/emitter/instances.warp:36 until the rule fires	types
+pure-record-keyword	types-2	extensions/sugar rule rewriting record/data class to class with value equality (card asks for a lib/sugar rule, no new pass); nothing defines record today	types
