@@ -10,7 +10,7 @@ yohei = shader {
 	fn hsv(h: f32, s: f32, v: f32) -> vec3f {
 		let wheel = vec4f(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
 		let turned = abs(fract(vec3f(h) + wheel.xyz) * 6.0 - vec3f(wheel.w));
-		return v * mix(vec3f(wheel.x), clamp(turned - vec3f(wheel.x), 0.0, 1.0), s);
+		return v * mix(vec3f(wheel.x), saturate(turned - vec3f(wheel.x)), s);
 	}
 
 	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {

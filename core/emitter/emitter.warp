@@ -387,6 +387,8 @@ def collect_functions(program: Node, functions: map): list {
 	for n in program_statements(program).map(unkeyworded) {
 		head = function_head(n)
 		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
+			# a name the passes made is made once: of two lifted lambdas named alike, one closure would call the other's code
+			if is_lifted_lambda(name_of(head#1)) and functions.has(name_of(head#1)) { raise "two lifted lambdas named " + name_of(head#1) + " (passes/walk.warp fresh_number)" }
 			functions[name_of(head#1)] = Function(name_of(head#1), signature_of(head), value_of(n))
 		}
 	}
@@ -1333,6 +1335,9 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `m.a`: the entry a of the map (or instance) m, `m#("a"+1)`
 	if operator == Op.Dot and right is symbol {
 		value = expression_code(body, left)
+		# `d.weekday`: a time's own field, ahead of a word of that name (lib/time's weekday(ms: int)), as a known class's
+		# struct field is (decision time-fields-before-ufcs)
+		if value.kind == ValueKind.Time and time_fields.has(name_of(right)) and module.functions.has(time_field_word) { return time_field(value, name_of(right)) }
 		# `n.sq`, `parts.last`: a member naming a function of the program that takes the value is its call (a node's
 		# entry of that name first)
 		method = method_function(body, name_of(right), [left])

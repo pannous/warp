@@ -1,0 +1,5 @@
+// POSIX bracket syntax means the same in both hosts (card samples-page-apps): a `]` first in a class and a `[` inside one are
+// literal brackets, [:alpha:] and its kin named classes
+'use regex; match_groups("at [10/Oct]", "[^[]*[[]([^]]+)[]]")'	["10/Oct"]
+'use regex; match_groups("abc123", "([[:alpha:]]+)([[:digit:]]+)")'	["abc", "123"]
+'use regex; find_all_groups("a b", "([^[:space:]]+)")'	[["a"], ["b"]]

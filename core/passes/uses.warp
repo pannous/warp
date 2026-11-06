@@ -242,7 +242,9 @@ rooted(name: text, folder: text): text := {
 	root + "/" + name[#marker#1 ..< #name]
 }
 project_root(folder: text): any := {
-	at = without_steps_up(folder)
+	# from the absolute folder: a relative one (`samples/wasm` of `warp samples/wasm/x.warp`) ran out before the
+	# working folder that holds .git
+	at = without_steps_up(if folder.starts_with("/") then folder else cwd + "/" + folder)
 	while at != "" and at != "/" {
 		if file_text(at + "/.git") != ø or file_text(at + "/.git/HEAD") != ø { return at }
 		at = without_steps_up(at + "/..")
