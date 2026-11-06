@@ -522,21 +522,13 @@ missed_cases(arms: Node, program: Node): any := {
 arm_case_name(arm: Node): text := if (is_key(arm, Op.Colon) or is_key(arm, Op.Arrow)) and key_of(arm) is symbol and not (name_of(key_of(arm)) in ["_", "default", "else"]) then name_of(key_of(arm)) else ""
 # `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable or a list literal
 unit_lists = {byte: "bytes", codepoint: "codepoints"}
-unit_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, unit_lists, program)
+unit_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_lists)
 # `for bytes in t {… it …}`: a plural unit word walks the text by that unit, each item `it`
 unit_plurals = {bytes: "bytes", codepoints: "codepoints", chars: "chars", characters: "chars"}
-unit_plural_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, unit_plurals, program)
-units_of(variable: Node, iterable: Node, units: map, program: Node): any := {
-	if not units.has(name_of(variable)) or not holds_text(iterable, program) { return ø }
+unit_plural_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_plurals)
+units_of(variable: Node, iterable: Node, units: map): any := {
+	if not units.has(name_of(variable)) or (is_group(iterable) and bracket_of(iterable) == "[") { return ø }
 	Key(iterable, Op.Dot, symbol(units[name_of(variable)]))
-}
-# a text written out, or a name the program gives only texts written out or declares a text (`t = "héllo"`,
-# `f(t: text)`): `for byte in bytes` over a list of numbers keeps its plain loop
-holds_text(iterable: Node, program: Node): bool := {
-	if iterable is text { return yes }
-	if not (iterable is symbol) { return no }
-	givers = nodes_in(program).filter(n => (is_key(n, Op.Assign) or is_key(n, Op.Colon)) and key_of(n) == iterable)
-	#givers > 0 and givers.all(n => value_of(n) is text or value_of(n) == symbol("text"))
 }
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
 are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))

@@ -27,8 +27,8 @@ rewrite for $x in $o {$body...} => ($walked = $o; while yes { $x = $walked.next(
 # A unit word as the loop variable walks a text by that unit (test_for_unit_words, decision text-unit-plurals): `for
 # byte in t` its bytes, `for codepoint in t` its code points, a plural (`for bytes in t`) each as `it`; a character is a
 # text's own item
-rewrite for $u in $t {$body...} => for it in $units {$body...} where $u is symbol and $units = unit_plural_items($u, $t, $program)
-rewrite for $u in $t {$body...} => ($items = $units; $index: int = 0; while $index < #$items { $u = $items#($index + 1); $body...; loop··step: $index++ }) where $u is symbol and $units = unit_items($u, $t, $program)
+rewrite for $u in $t {$body...} => for it in $units {$body...} where $u is symbol and $units = unit_plural_items($u, $t)
+rewrite for $u in $t {$body...} => ($items = $units; $index: int = 0; while $index < #$items { $u = $items#($index + 1); $body...; loop··step: $index++ }) where $u is symbol and $units = unit_items($u, $t)
 # A map is walked by its keys, as in Python; any other iterable item by item: a list, a text.
 rewrite for $k in $m {$body...} => ($items = map_keys($m); $index: int = 0; while $index < #$items { $k = $items#($index + 1); $body...; loop··step: $index++ }) where $k is symbol and $m is map
 rewrite for $x in $xs {$body...} => ($items = $xs; $index: int = 0; while $index < #$items { $x = $items#($index + 1); $body...; loop··step: $index++ }) where $x is symbol

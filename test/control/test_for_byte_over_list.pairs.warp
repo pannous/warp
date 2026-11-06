@@ -1,3 +1,0 @@
-# a loop variable named byte over a list of numbers walks the list (only a text walks by its bytes)
-'f(bytes: list): int := { s = 0; for byte in bytes { s += byte }; s }; f([1, 2, 3])'	6
-'bytes = [4, 5]; s = 0; for byte in bytes { s += byte }; s'	9
