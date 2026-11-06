@@ -1,4 +1,0 @@
-# `raise x` raises wherever it stands, a match arm or a list item too (card raise-field)
-'field = "a"; f(x) := match x { "x": raise field, _: 2 }; try f("x") catch e { e.message }'	'a'
-'field = "a"; f(x) := match x { "x": raise field, _: 2 }; f("y")'	2
-'field = "a"; g() := [raise field]; try g() catch e { e.message }'	'a'

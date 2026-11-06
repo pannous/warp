@@ -4,8 +4,6 @@
 # find-fallback)
 rewrite $a ?? $b => if $a == ø then $b else $a where $a is symbol
 rewrite $a ?? $b => ($t = $a; if $t == ø then $b else $t)
-# `result?`: the value, ø where it is missing or fails (user, card find-fallback)
-rewrite ($x?) => (try $x else ø)
 # `a ?: b` is `a or b`: b where a is falsy (ø, 0, "", no) or raises, else a
 # done is this not exactly what our or operator does for non int types?  a or b => falsy(a) ? b : a (card elvis-is-or)
 rewrite $a ?: $b => $a or $b where alias

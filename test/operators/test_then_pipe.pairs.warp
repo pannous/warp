@@ -6,10 +6,10 @@
 'twice(x) := x * 2; 3 then twice then twice'	error	no pipe, `|>` is (decision then-not-pipe)
 
 # a bare condition then a value is refused, naming its if (decision then-not-pipe)
-'x = 3; x > 2 then 5'	error	no if: `if x > 2 then 5`
-'x = 1; x < 2 then 1 else 2'	error	no if
-'x = 3; x < 2 then 1 else 2'	error	no if
-'twice(x) := x * 2; x = 3; x > 2 then twice(x) else 0'	error	no if
+'x = 3; x > 2 then 5'	error	a bare then is refused, naming `if x > 2 then 5`
+'x = 1; x < 2 then 1 else 2'	error	a bare then is refused (decision then-not-pipe)
+'x = 3; x < 2 then 1 else 2'	error	a bare then is refused (decision then-not-pipe)
+'twice(x) := x * 2; x = 3; x > 2 then twice(x) else 0'	error	a bare then is refused (decision then-not-pipe)
 
 # nor into a word operator
 '4 then sqrt'	error	no pipe, `|>` is (decision then-not-pipe)
