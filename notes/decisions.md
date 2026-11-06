@@ -959,3 +959,6 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - implicit-copy-call: `copy` is a built-in word, always available, never pulling lib/memory in (no bloat: unused words are shaken out); memory's byte copy is `memory.copy`.
   - program-defining: C-style typed parameters `f(double x)` are definitely warp ("f(type x) definitely for parameters"); a C-style return type in front (`double sin(…)`) is not decided: the preferred return form is `f(type x) as type := …`. test_wasm:69,85 stay as they are for now.
 - 2026-11-06 card sprint, round 15 (user): parallel-compilation: compile independent modules in parallel (each needs only its imports' signatures); a program's passes stay sequential. wasm-linker: not now (linking stays in warp, card parked). package-manager: no preference → stays parked (after the module manager). module-manager: the user asked what module vs package manager meant; explained, answer pending.
+
+- 2026-11-06 Supervisor (user widget): warnings-meaning-question → hard error when prebuilt module has no warp.module / won’t link; no compile-from-source fallback ("This must never happen").
+  - module-manager (user): keep the card in Next (the missing module-manager parts after zero-bake: module blocks, use *, aliases of non-lib modules, conditional use, versions).
