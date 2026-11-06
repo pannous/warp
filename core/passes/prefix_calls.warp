@@ -52,7 +52,7 @@ prefix_calls(n: Node, takers: list, counters: list): Node := {
 	match n {
 		Key(word, op, argument): {
 			callers = if op == Op.Hash then counters else takers
-			if op in prefix_call_operators and takes_value(word, callers) then call_of(name_of(word), [prefixed_by(op, prefix_calls(argument, takers, counters))]) else children(n, x => prefix_calls(x, takers, counters))
+			if op in prefix_call_operators and takes_value(word, callers) then bracketed([word, prefixed_by(op, prefix_calls(argument, takers, counters))], "(") else children(n, x => prefix_calls(x, takers, counters))
 		}
 		_: children(n, x => prefix_calls(x, takers, counters))
 	}

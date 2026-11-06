@@ -324,13 +324,16 @@ function exportedParameters(bytes) {
 // the exports of a WebAssembly module the program imports by path (src/modules/wasm_modules.rs link): instantiated once per
 // run at the first call, with its own imports linked like the program's; a global reads through a getter and is set
 // through `set g`
+// one file however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
+// /warp/web/playground/warp-lib/crates) is that file of the served repository
+function servedModuleUrl(path) {
+	const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
+	return new URL(served, FILE_ROOT).href;
+}
 function moduleImports(holder, hooks, path) {
 	const instance = () => {
 		const modules = holder.run.wasmModules ??= new Map();
-		// one instance however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
-		// /warp/web/playground/warp-lib/crates) is that file of the served repository
-		const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
-		const file = new URL(served, FILE_ROOT).href;
+		const file = servedModuleUrl(path);
 		if (!modules.has(file)) {
 			if (file.endsWith(".wat")) throw new Error(`${path}: a module in WAT text needs the native build`);
 			const moduleHolder = { warnings: holder.warnings, run: holder.run };
