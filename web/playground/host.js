@@ -200,6 +200,9 @@ function programImports(holder, hooks) {
 				holder.exitCode = Number(code);
 				throw new Error(`exit(${code})`);
 			},
+			// a text's NFC for text == (decision nfc-slot, driver.warp canonical_text_answered): lib/unicode, its module
+			// linked on this first call, never at the run's start
+			canonical_text: text => linkedInstance(UNICODE_MODULE, libraryFile(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
 		wasi_snapshot_preview1: {
@@ -267,6 +270,7 @@ function stopListening(holder) {
 const RUNTIME_MODULE = "warp_runtime";
 const LINKED_MODULE_PREFIX = "warp/";
 const MODULE_START = "warp/start";
+const UNICODE_MODULE = "warp/unicode";
 const compiledLibraries = new Map(); // by file: {module, descriptors}, compiled once per worker
 // (a deployed site has no compiler folder: its runtime and modules beside the page)
 function libraryUrl(file) { return typeof COMPILER_FOLDER === "undefined" ? file : `../../${COMPILER_FOLDER}/${file}`; }
