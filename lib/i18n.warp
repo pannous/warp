@@ -66,3 +66,34 @@ plural_category(language: text, n: int): text := {
 	}
 	if n == 1 then "one" else "other"
 }
+
+// --- transliteration (card print-in-script, wiki/in.md): a text's Latin letters written in another script, letter
+// for letter, by a table; every other character kept. `cyrillic("Peter")` is "Петер", and `print name in cyrillic`
+// prints it so (`to print string in cyrillic: map string's chars to cyrillic`). The table reads English spellings the
+// Russian way, the longest Latin spelling first ("shch" before "sh" before "s").
+
+// Latin spellings and their Cyrillic letters, longest first
+CYRILLIC_LETTERS = [["shch", "щ"], ["sch", "щ"], ["zh", "ж"], ["kh", "х"], ["ts", "ц"], ["ch", "ч"], ["sh", "ш"], ["yu", "ю"], ["ya", "я"], ["yo", "ё"], ["a", "а"], ["b", "б"], ["c", "к"], ["d", "д"], ["e", "е"], ["f", "ф"], ["g", "г"], ["h", "х"], ["i", "и"], ["j", "дж"], ["k", "к"], ["l", "л"], ["m", "м"], ["n", "н"], ["o", "о"], ["p", "п"], ["q", "к"], ["r", "р"], ["s", "с"], ["t", "т"], ["u", "у"], ["v", "в"], ["w", "в"], ["x", "кс"], ["y", "ы"], ["z", "з"]]
+
+// the text in Cyrillic letters: each Latin spelling its letter, a capital's spelling capitalized ("Sh" → "Ш")
+cyrillic(t: text): text := transliterated(t, CYRILLIC_LETTERS)
+
+// the text with each spelling of the table, matched case-blind, replaced by its letter, upper case after a capital
+transliterated(t: text, table: list): text := {
+	out = ""
+	at = 0
+	n = count(t)
+	while at < n {
+		matched = table.filter(pair => at + count(pair#1) <= n and lower(t[at .. at + count(pair#1)]) == pair#1)
+		step = if count(matched) == 0 then 1 else count(matched#1#1)
+		out = out + (if count(matched) == 0 then t[at .. at + 1] else capitalized_like(matched#1#2, t[at .. at + 1]))
+		at += step
+	}
+	out
+}
+
+// the letter in upper case when the character it stands for is a capital
+capitalized_like(letter: text, character: text): text := if upper(character) == character and lower(character) != character then upper(letter[0 .. 1]) + letter[1 .. count(letter)] else letter
+
+// `name in cyrillic` is the name written so, `print name in cyrillic` prints it (no list is called cyrillic)
+rewrite ($x in cyrillic) => cyrillic($x)

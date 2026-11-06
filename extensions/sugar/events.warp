@@ -8,6 +8,8 @@ rewrite on $e $body: block => handler(data $e, event => $body) where $e is symbo
 # `p{ "count: " + count }`, `class: (if done then "done" else "open")`
 rewrite $k: $v => $k: live(() => $v) where item and $v is varying
 rewrite $e => live(() => $e) where item and $e is varying
+# `when ping {…}` is `on ping {…}` (notes/decisions.md "`when` by shape"; arms after `when` are a match, arms.warp)
+rewrite when $e $body: block => on $e $body where $e is symbol and not are_arms($body) and alias
 rewrite on $e $body: block => listen(data $e, event => $body, no) where $e is symbol
 rewrite on $e: $body => listen(data $e, event => $body, no) where $e is symbol
 rewrite once $e $body: block => listen(data $e, event => $body, yes) where $e is symbol
