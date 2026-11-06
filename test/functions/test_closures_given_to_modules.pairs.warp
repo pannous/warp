@@ -1,0 +1,4 @@
+# a function or a lambda handed to a linked module's word: passed as written, taking the values that word gives it
+'use matrix; zork() := 7; matrix(1, 2, zork)'	[[7, 7]]
+'h(f) := f("abc"); sort_by([2, 1], p => p)'	[1, 2]
+'use yaml; ms = [parse_yaml("title: bb\n"), parse_yaml("title: aa\n")]; sort_by(ms, p => p["title"]).map(p => p["title"])'	["aa", "bb"]

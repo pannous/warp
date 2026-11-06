@@ -662,8 +662,20 @@ with_block_arguments(n: Node, positions: map): Node := {
 }
 block_lambda_given(argument: Node): Node := if is_labeled(argument) then Key(key_of(argument), Op.Colon, block_lambda(value_of(argument))) else block_lambda(argument)
 
+# the definitions of the linked modules' words the program mentions: what their parameters take, so that
+# `matrix(2, 4, weight)` passes weight to a linked lib/matrix as it does to a matrix written in the program
+linked_definitions(program: Node): list := {
+	mentioned = {}
+	for part in nodes_in(program) { if part is symbol { mentioned[name_of(part)] = yes } }
+	found = []
+	for image in module.linked_images {
+		for slice in linked_signature(image.name).slices.filter(slice => mentioned.has(slice#1)) { found += statements_in(unpack(slice#3)) }
+	}
+	found
+}
+
 lambdas(program: Node): Node := {
-	positions = function_positions_of(statements_in(program))
+	positions = function_positions_of(statements_in(program) + linked_definitions(program))
 	written = statements_in(program).map(statement => with_function_parameters(celled_definition(statement, positions)))
 	main_statements = written.filter(statement => definition_of(statement) == ø)
 	read_by_functions = written.flat_map(statement => read_from_outside(statement))
