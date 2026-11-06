@@ -36,6 +36,7 @@ env:
   BINARYEN: 133    # wasm-opt, which `warp build` runs
   WARP_NO_WINDOW: 1
   WARP_HINTS: 0
+  GLIBC_FLOOR: 2.35 # the oldest glibc the linux binaries run on (card linux-glibc-floor)
 
 permissions:
   contents: write
@@ -93,9 +94,10 @@ jobs:
         include:
         - { os: macos-latest, target: aarch64-apple-darwin, wabt: macos-arm64, binaryen: arm64-macos, library: libwarp_wasmtime.dylib }
         - { os: macos-15-intel, target: x86_64-apple-darwin, wabt: brew, binaryen: x86_64-macos, library: libwarp_wasmtime.dylib }
-        # pinned: the runner's glibc is the oldest the binaries run on
-        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, wabt: linux-x64, binaryen: x86_64-linux, library: libwarp_wasmtime.so }
-        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, wabt: linux-arm64, binaryen: aarch64-linux, library: libwarp_wasmtime.so }
+        # pinned: the runner's glibc is the oldest the binaries run on (card linux-glibc-floor): 22.04's 2.35, so
+        # Ubuntu 22.04, Debian 12 and their kin run them; the previous release's warp, which bootstraps, asks only 2.34
+        - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, wabt: linux-x64, binaryen: x86_64-linux, library: libwarp_wasmtime.so }
+        - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, wabt: linux-arm64, binaryen: aarch64-linux, library: libwarp_wasmtime.so }
     runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -138,6 +140,17 @@ jobs:
       run: .workflow/scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
     - name: the native warp
       run: WARP_LIB=$PWD/lib "$RUNNER_TEMP/bootstrap/warp" build native core/native/warp.warp
+    - name: the glibc floor
+      # no binary or library may ask a glibc newer than the promised floor (notes/packaging.md), whatever the runner;
+      # weak symbols (Rust std's pidfd_*) bind to none
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        floor=$GLIBC_FLOOR
+        for f in core/native/warp lib/*.so; do
+          newest=$(objdump -T "$f" | grep -v ' w ' | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
+          echo "$f: glibc $newest (floor $floor)"
+          [ "$(printf '%s\n%s\n' "$newest" "$floor" | sort -V | tail -1)" = "$floor" ]
+        done
     - name: the release folder, gated
       run: |
         packaging/native_dist.sh dist

@@ -9,12 +9,10 @@ commit-guard	tooling-2	no commit guard or ALLOW_STALE_COMMIT in this repo (scrip
 help-menu	tooling-2	help no longer lists 'warp debug' (no match in core/native/warp.warp); the wanted debug command folding lower/parse/types/format views fits extensions/commands/
 js-global-missing	libraries-and-ecosystem	no `use js` in core/extensions/lib; WebIDL globals belong to lib/web.warp + lib/web.webidl
 libraries-and-ecosystem	libraries-and-ecosystem	lib/extra/netbase.warp exists; samples/storage/netbase.warp still EXP 'unknown name query' (test/samples.txt:205): add query to the library
-linux-glibc-floor	distro-packages	.github/workflows/release.yml:96-98 still ubuntu-24.04 runners (glibc 2.39); build in an older container/runner (packaging, no core)
 match-alternatives	lint-hints	and/or lint must skip compiler-generated match conditions: lint lives in extensions (text_lints / match_patterns), probes/ gone so repro must be rewritten
 native-build-wasm2c	native-harness	scripts/ci-compilers.sh pins WABT 1.0.42; picking the supported wasm2c by version is a native-build script/extensions/primitive.warp concern (PATH lookup), not the compiler core
 native-library-hosts	native-harness	native driver answers some sound words (core/native/driver.warp:945) but sound/gpu samples still need native hosts; libraries' host words go in lib/ native C libraries (notes/roadmap_native_harness.md)
 native-lsp-warp	tooling-2	`lsp` is listed in native_commands (extensions/commands/commands.warp:37) but not in native_warp_commands; an LSP server as lib/ over stdio
-netbase-wikidata-load	ffi-libraries-roadmap	samples/storage/netbase.warp:2 marked expected failure, test/samples.txt:205 EXP 'unknown name query'; needs a netbase library in lib/ or a package
 package-tests-registry	modules-and-libraries	warp test should run scripts/link-packages.sh (or the tests skip without packages/); uniscript_c binding is a package/library issue, all outside core
 pypi-warp-release	tooling-2	packaging/pypi/build_wheels.py ships binaries only, no warp.node Python module; doable in packaging/ + release.yml, no core
 results-file-output	tooling-2	scripts/full-suite.sh:21 writes only test/results.txt, not the store's warp.record/results.txt
@@ -29,13 +27,8 @@ wasmtime-api	wasmtime-api	scripts/wasmtime-c-api.sh failure on main 7d84b773b2; 
 wasmtime-pure-compiler	ffi-libraries-roadmap	lib/wasmtime.warp:6 still calls wasm_config_new without declaring it; core/native/driver.warp:80 shows the fix: foreign lines `wasm_config_new(): handle from "warp_wasmtime"` (handles, no header reader needed); write them in lib/wasmtime.warp
 wasmtime-wasm-prebuilt	runtime-linking	duplicate of wasmtime-pure-compiler: modules/wasmtime.wasm fails on the unknown name wasm_config_new at lib/wasmtime.warp:6; fixed by its foreign lines
 windows-native	native-harness	no Windows code anywhere (no LoadLibrary/_WIN32 in core/ lib/); the libc calls are bound in lib/native/foreign.c, release matrix in scripts/.github; needs the user's Windows box
-build-app-bundle	tooling	no `--app` in core/native/warp.warp build; a scripts/ or lib/ bundler (Info.plist + executable) beside `warp build`; may need one flag in core/native/warp.warp
 help-log	tooling	log(x, base) is lib/prelude.warp:275; its shown signature and function-value wrapper are library/reflection work
 making-topic	tooling	todo tool noise (~/dev/bin/todo, scripts/): draft→issue retry and BrokenPipeError on grep -q; no core part
 more-use	tooling	basename/dirname exist (lib/path.warp, lib/file.warp); temp_file, eprint, set_env, run {out err status}, read_line are lib/script.warp/lib/os.warp words over existing host words
-page-app-build	tooling-2	still open (decision build-kinds-detected, Later); core/native/warp.warp has no page kind in `warp build`; the detection and macOS web-view app belong to the native warp command/lib packaging, not the compiler core
-page-wasm-build	tooling-2	still open (build-kinds-detected); no page build kind in core/native/warp.warp; emitting the program wasm plus its imported module wasms beside it is a build-step concern after load-time linking (L5), doable in the warp command/scripts
-powershell-semantics	tooling	user's for-fun experiment: structured pipelines (Where-Object/Select) as lib/ words over lists of records; no core needed
-precompiled-crates	ffi-libraries-roadmap	CI matrix + release assets + download cache for crate shims: scripts/, packaging/, lib/crates; no compiler change
 pure-exec-refused	lib-compiler	exec lives in lib/os.warp; the 'error value' it returns needs lib/os to give a result value the core accepts (command/run already work); check after zero-bake linking
 program-test	user-decided	user (round 9-10): a test program ends with "✓ N tests passed" / "K of N failed"; extension + lib
