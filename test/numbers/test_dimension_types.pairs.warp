@@ -23,7 +23,7 @@
 '2 Hz is frequency'	true
 
 # a_unit_after_a_list_applies_to_each_element
-'x = [3, 4] cm; str(x)'	'[3cm 4cm]'
+'x = [3, 4] cm; text(x)'	'[3cm, 4cm]'
 
 # a_list_of_quantities_gives_quantities
 'x = [3, 4] cm; max(x) > 3.5 cm'	true

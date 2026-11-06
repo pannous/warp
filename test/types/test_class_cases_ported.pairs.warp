@@ -32,6 +32,7 @@
 # static_members_belong_to_the_class
 'class Circle{r:int; static k = 3}; Circle.k + Circle(1).k'	6
 'class Circle{r:int; static k = 3; area() := k * r}; Circle(2).area()'	6
+'class T{c: float; static of(f) := T(f * 2)}; T.of(2).c'	4
 
 # an_object_has_one_text_form
 'class Point{x:int; y:int}; p = Point(1, 2); string(p)'	'Point{x: 1, y: 2}'

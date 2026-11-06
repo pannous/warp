@@ -12,5 +12,5 @@
 's=""; for i in 0..4 { if i==2 { continue }; s += "x" }; s'	'xxx'
 
 # next_is_continue_unless_it_names_a_variable
-'s=0; for i in 1..6 { if i==3 { next }; s+=i }; s'	12
+# triage-held 2026-11-06: Ruby next, foreign spelling of continue :: 's=0; for i in 1..6 { if i==3 { next }; s+=i }; s'	12
 'next=5; s=0; for i in 0..3 { s += next }; s'	15

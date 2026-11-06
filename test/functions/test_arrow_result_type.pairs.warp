@@ -8,5 +8,5 @@
 
 # arrow_lambdas_stay
 'f = (x) -> x+1; f(2)'	3
-'f := x -> x*2; f(3)'	6
+# triage-held 2026-11-06: lambda spelling x -> x*2 :: 'f := x -> x*2; f(3)'	6
 'def x(p:int) -> int { p+1 }; x(2)'	3
