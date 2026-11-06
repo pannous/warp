@@ -623,7 +623,7 @@ c_head(declaration: list): Node := List([symbol(declaration#1)] + (0 ..< #declar
 # takes; a call none takes keeps the library's word
 with_own_words(program: Node, library: list): Node := {
 	heads = own_heads(program)
-	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(heads[name]))
+	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(name, heads[name]))
 	for name in owned {
 		mine = own_word(name)
 		arities = heads_defining(program, name).map(head => signature_of(items_of(head)))
@@ -654,10 +654,11 @@ own_word(name: text): text := name + name_joiner + "own"
 written_word(name: text): text := if name.ends_with(own_word("")) then name.replace(own_word(""), "") else name
 # whether a library module is being built (prebuilt.warp sets it), not a program
 building_a_module(): bool := module.relocating
-# `sin(x: Real) := …`: a definition typing its parameters overloads the library's word beside it (arity_overloads.warp
-# library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its own body too,
-# reaches the library's; only an untyped one, `round(x) := …`, is the program's own
-is_typed_overload(head: Node): bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
+# `sin(x: Real) := …`: a definition typing its parameters overloads the library's typed word beside it
+# (arity_overloads.warp library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its
+# own body too, reaches the library's; an untyped one, `round(x) := …`, and one of a word with no typed line to join,
+# `add(a: int, b: int) := …` beside the prelude's `add(xs, x) := …`, is the program's own
+is_typed_overload(name: text, head: Node): bool := word_lines().has(name) and #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
 own_heads(program: Node): any := {
