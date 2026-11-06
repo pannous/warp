@@ -160,8 +160,8 @@ mark_main() {
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
 # beside warp.wasm (card runtime-prebuilt) with its machine code, which linked runs load (card runtime-cwasm-shipped),
 # the standard modules in modules/ (card modules-prebuilt) and the library index, which a compile reads
-# (library.warp LIBRARY_INDEX; card store-hit-words-index)
-companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv 2>/dev/null); }
+# (library.warp LIBRARY_INDEX; card store-hit-words-index) with the sugar's rules packed (rewrites.warp SUGAR_RULES_FILE)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv modules/sugar_rules.packed 2>/dev/null); }
 # an entry stored or fetched before index.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
 # the modules step of its own compiler into a scratch folder, only the index taken (store-hit-words-index)
 words_kept() {
