@@ -279,10 +279,14 @@ watch() {
 }
 
 # the user's playground (web/playground/warp-lib) runs the compilers of the tip just installed, not the ones of its last
-# manual build (card after-push-refresh); build.sh refuses compilers whose sources the checkout no longer has, said here
+# manual build (card after-push-refresh): built in the tree at that tip, so main moving meanwhile cannot make build.sh
+# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout
 playground_refreshed() {
-	local log=$state/playground-build.log
-	WARP_LIB=$TREE/lib "$MAIN_CHECKOUT/web/playground/build.sh" compiler >"$log" 2>&1 ||
+	local folder log=$state/playground-build.log built=$TREE/web/playground/warp-lib page=$MAIN_CHECKOUT/web/playground/warp-lib
+	folder=$(installed_folder) || return 1
+	WARP_LIB=$TREE/lib "$TREE/web/playground/build.sh" compiler >"$log" 2>&1 &&
+		rm -rf "$folder/playground-lib" && mv "$built" "$folder/playground-lib" &&
+		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" ||
 		say "the user's playground not refreshed: $(tail -1 "$log" | cut -c1-160)"
 }
 
