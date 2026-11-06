@@ -1637,6 +1637,7 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 		holds_items = rule_item_block != ø and n == rule_item_block
 		if holds_items { rule_item_block = ø }
 		tag = is_word_block(n)
+		if tag { n = with_handler_items(n) }
 		outer_attribute = rule_in_attribute
 		if tag {
 			rule_item_block = value_of(n)
@@ -1671,6 +1672,30 @@ placed_map_scoped(n: Node, f: function, maps: map): Node := {
 walked_item(x: Node, is_item: bool, f: function, maps: map): Node := {
 	if is_item { rule_next_item = x }
 	placed_map_scoped(x, f, maps)
+}
+# `div{ "a" on click {…} }`: a handler among a structure's spaced items, `on click {…}`, is one item of them, as
+# `div{ "a", on click {…} }` is (card markup-handler-spacing)
+handler_words = ["on", "once"]
+with_handler_items(n: Node): Node := match value_of(n) {
+	List(items, Bracket.Curly, Separator.Space): {
+		grouped = handler_runs(items)
+		if #grouped == #items then n else Key(key_of(n), op_of(n), placed(List(grouped, Bracket.Curly, Separator.Space), value_of(n)))
+	}
+	_: n
+}
+handler_runs(items: list): list := {
+	grouped = []
+	at = 1
+	while at <= #items {
+		if at + 2 <= #items and items#at is symbol and name_of(items#at) in handler_words and items#(at + 1) is symbol and is_curly_group(items#(at + 2)) {
+			grouped += [List(items[at - 1 ..< at + 2], Bracket.None, Separator.Space)]
+			at += 3
+		} else {
+			grouped += [items#at]
+			at += 1
+		}
+	}
+	grouped
 }
 # `div{ "a", on click {…} }`: a word nothing binds keying a block (data_blocks.warp is_free_tag), whose items are the
 # structure's items; a class's construction `Point{ x: 1 }` is none

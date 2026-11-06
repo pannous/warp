@@ -1,0 +1,3 @@
+# a handler among a structure's spaced items is one item, as with a comma (card markup-handler-spacing)
+'use markup; n = 0; div{ "a" on click { n += 1 } p{ "b" } }'	'<div data-warp-click="1">a<p>b</p></div>'
+'use markup; n = 0; button{ on click { n += 1 } }'	'<button data-warp-click="1"></button>'
