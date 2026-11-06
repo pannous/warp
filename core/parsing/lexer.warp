@@ -14,15 +14,21 @@ def spans_in(source: text): list {
 	found
 }
 
-// The source with its comments and texts blanked out, a space each
+// The source with its comments and texts blanked out, a space each; kept per source, as a parse asks it of one
+// source four or five times (the operators, types and modules it declares and reaches), each a walk of every
+// character (9 % of the self compile)
+global code_only_known = {}
 def code_only(source: text): text {
+	if code_only_known.has(source) { return code_only_known[source] }
 	parts = []
 	at = 0
 	for span in spans_in(source) {
 		parts += [source[at .. span#1], " "]
 		at = span#2
 	}
-	join(parts + [source[at .. source.length]], "")
+	code = join(parts + [source[at .. source.length]], "")
+	code_only_known[source] = code
+	code
 }
 
 // The end of the comment (`// …`, `# …`, `/* … */`, `/# … #/`) or text (`"…"`, `'…'`) starting at `at`, else `at`
