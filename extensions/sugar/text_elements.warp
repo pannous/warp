@@ -1,0 +1,5 @@
+# Texts are values (card text-element-assign): `k#i = c` rebinds k to the text with its i-th character
+# (1-based, by grapheme) replaced. Only names assigned text literals (`evident_text`); list writes stay in-place.
+# An older seed skips these rules (unknown rule word), so they do not rewrite the compiler's own list stores.
+rewrite ($x#$i = $c) => ($x = text_with_at($x, $i, $c)) where $x is value and $ok = evident_text($x, $program) and $i is int
+rewrite ($x#$i = $c) => ($x = text_with_at($x, $i, $c)) where $x is value and $ok = evident_text($x, $program) and $i is value
