@@ -217,6 +217,8 @@ function compilerHostWords(exports) {
 	return {
 		host: {
 			std_io: (module, member) => newGuestError(exports(), `the host word ${guestText(exports(), module)}.${guestText(exports(), member)} is not in the browser yet`),
+			// the library index's source hashes, sha256 (core/passes/library.warp source_hash), by the page's adapters
+			std_pure: (module, member, argumentList) => stdCall(exports(), module, member, argumentList, { warnings: [] }),
 			paint: () => { throw new Error("the compiler paints nothing"); },
 			real_path: () => -1,
 			random: Math.random,
