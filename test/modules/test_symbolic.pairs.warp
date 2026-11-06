@@ -1,0 +1,16 @@
+# The shell's symbolic mode (lib/symbolic.warp, wiki/shell.md "Symbolic mode", card shell-symbolic-mode)
+
+# wiki/shell.md's example: names replaced, then groups evaluated, step by step
+«use symbolic; symbolic_steps("z", {z: "y*y", y: "x+x", x: "3"}, e => eval(e)).steps»	["y*y", "(x+x)*(x+x)", "(3+3)*(3+3)", "6*6", "36"]
+# a call is evaluated with its name; a group left holding a value alone is unwrapped in the same step
+«use symbolic; symbolic_steps("a+1", {a: "b*2", b: "abs(c-10)", c: "4"}, e => eval(e)).steps»	["(b*2)+1", "((abs(c-10))*2)+1", "((abs(4-10))*2)+1", "(6*2)+1", "12+1", "13"]
+# no symbolic name: the value at once
+«use symbolic; symbolic_steps("3+3", {}, e => eval(e)).steps»	["6"]
+# names and groups inside quoted texts are left alone
+«use symbolic; symbolic_steps("s", {s: "'(x)' + n", n: "'!'"}, e => eval(e)).steps»	["'(x)' + n", "'(x)' + '!'", "\"(x)!\""]
+# a step that fails: the steps up to it, then its message
+«use symbolic; r = symbolic_steps("z", {z: "y*y"}, e => eval(e)); [r.steps, r.error.contains("unknown name y")]»	[["y*y"], true]
+# an assignment naming itself takes the old expression in; through another name too
+«use symbolic; [symbolic_assigned({x: "3"}, "x", "x+1"), symbolic_assigned({y: "x+1", x: "3"}, "x", "y")]»	[{x: "3+1"}, {y: "x+1", x: "3+1"}]
+# one that would still stand for itself is refused
+«use symbolic; try { symbolic_assigned({a: "b"}, "b", "a") } catch e { "" + e }»	"symbolic: b = a defines b by itself"

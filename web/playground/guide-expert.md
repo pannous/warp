@@ -137,6 +137,7 @@ for i in 1 to 3 { print i }; n = 0; while n < 3 { n += 1 }; n
 ## Functions
 
 `def f(x) = …`, calls without parentheses, `:=` with the implicit parameter `it`, recursion.
+`parse(text)` is the compiler's own parser, written in warp: code as a tree for `match … data($a + $b)`.
 
 ```warp => [55 42]
 def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2); twice := it * 2; [fib 10, twice 21]
