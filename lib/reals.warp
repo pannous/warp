@@ -10,11 +10,12 @@ class real {
 	coefficient: number
 	pi_power: number
 	radicand: int
-	# (a float's operation with it takes this at once, decision float-contagion: no root of 1 nor power of 1 taken)
+	# (a float's operation with it takes this at once, decision float-contagion: no root of 1 nor power of 1 taken; so
+	# does any other value's, an interval's: `2π * (2.0 ± 0.01)` is 12.57 ± 0.063)
 	float() := coefficient * (if radicand == 1 then 1.0 else √(radicand as float)) * (if pi_power == 1 then float_pi else float_pi ^ pi_power)
-	*(other) := if exact_real(other) then real_of(coefficient * other.coefficient, pi_power + other.pi_power, radicand * other.radicand) else if other is float then float() * other else real_of(coefficient * other, pi_power, radicand)
+	*(other) := if exact_real(other) then real_of(coefficient * other.coefficient, pi_power + other.pi_power, radicand * other.radicand) else if other is number and not (other is float) then real_of(coefficient * other, pi_power, radicand) else float() * other
 	# a / (c√r) is a√r / (c·r): the root rises above the fraction line
-	/(other) := if exact_real(other) then real_of(coefficient / (other.coefficient * other.radicand), pi_power - other.pi_power, radicand * other.radicand) else if other is float then float() / other else real_of(coefficient / other, pi_power, radicand)
+	/(other) := if exact_real(other) then real_of(coefficient / (other.coefficient * other.radicand), pi_power - other.pi_power, radicand * other.radicand) else if other is number and not (other is float) then real_of(coefficient / other, pi_power, radicand) else float() / other
 	+(other) := if alike(other) then real_of(coefficient + other.coefficient, pi_power, radicand) else float() + real_float(other)
 	-(other) := if alike(other) then real_of(coefficient - other.coefficient, pi_power, radicand) else float() - real_float(other)
 	alike(other) := exact_real(other) and other.pi_power == pi_power and other.radicand == radicand
@@ -67,8 +68,9 @@ square_parts(n: int): list := {
 	[outside, n]
 }
 # √: a perfect square's root whole, √9 is 3, any other root of an exact number kept, √2, √(3/4) is √3/2; of a float the
-# float's (the emitter's √ of a value not known to be a float)
-exact_root(x: any) := if exact_real(x) then x.root() else if x is float then √(x as float) else real(x, 0, 1).root()
+# float's (the emitter's √ of a value not known to be a float); of any other value its own root(), a real's or an
+# interval's (lib/uncertain.warp)
+exact_root(x: any) := if x is float then √(x as float) else if x is number then real(x, 0, 1).root() else x.root()
 
 # 2π, 3√2, √π, 3/π, √2/π: the powers of π and the root, a negative power of π below the fraction line; `3 as real` as
 # its number
