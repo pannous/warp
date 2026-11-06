@@ -713,13 +713,14 @@ sound_file(speakers, rate, channels, seconds) := {
 	file
 }
 // how far ahead of the speaker a voice may queue when heard (notes/sound.md PLAY_AHEAD). Offline (WARP_NO_WINDOW / CI)
-// never waits: save sound mixes by place, and tests stay fast
+// never waits: save sound mixes by place, and tests stay fast. WARP_SOUND_NOPACE: the page before a click (sounds
+// stay silent) skips the wait without taking the WAV path (getpid / sound_file), so headless samples-web stays under
+// its run_seconds (card samples-page-sound-pipes)
 PLAY_AHEAD_SECONDS = 0.5 as float
 def waited_till(start) {
-	if not quiet_run() {
-		ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
-		if ahead > clock() { sleep_ms(ahead - clock()) }
-	}
+	if quiet_run() or env("WARP_SOUND_NOPACE") != ø { return }
+	ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
+	if ahead > clock() { sleep_ms(ahead - clock()) }
 }
 
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
