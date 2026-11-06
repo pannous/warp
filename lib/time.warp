@@ -22,16 +22,59 @@ class Instant {
 	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
 	compare(other) := if other is Instant then ms - other.ms else instant_part_compare(ms, other)
 	// its calendar fields, UTC: now.year, now.month, now.day, now.hour, now.minute, now.second
-	year() := date_of(ms).year
-	month() := date_of(ms).month
-	day() := date_of(ms).day
-	hour(): int := ms % 86400000 /! 3600000
-	minute(): int := ms % 3600000 /! 60000
-	second(): int := ms % 60000 /! 1000
+	// also UFCS on a native time (`meeting.hour`) when this module is in scope: class methods become globals
+	year() := instant_or_time_field(this, 0)
+	month() := instant_or_time_field(this, 1)
+	day() := instant_or_time_field(this, 2)
+	hour(): int := instant_or_time_field(this, 5)
+	minute(): int := instant_or_time_field(this, 6)
+	second(): int := instant_or_time_field(this, 7)
 	minus(other) := if other is Instant then ms - other.ms else Instant(ms - milliseconds_of(other))
 	plus(duration) := Instant(ms + milliseconds_of(duration))
 	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
 	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
+}
+
+// Instant's field, or a native time's when UFCS `t.hour` hits the class method while this module is in scope
+instant_or_time_field(x: any, field: int): int := {
+	if x is Instant {
+		m = x.ms
+		if field == 0 { return date_of(m).year }
+		if field == 1 { return date_of(m).month }
+		if field == 2 { return date_of(m).day }
+		if field == 5 { return m % 86400000 /! 3600000 }
+		if field == 6 { return m % 3600000 /! 60000 }
+		if field == 7 { return m % 60000 /! 1000 }
+		return 0
+	}
+	time_field_of_shown(x, field)
+}
+// a native time's field from its shown text (form/position stay in the emitter; lib reads what print shows)
+time_field_of_shown(t: any, field: int): int := {
+	s = "" + t
+	head = s.split("T")
+	date_parts = head#1.split("-")
+	y = int(date_parts#1)
+	mo = int(date_parts#2)
+	d = int(date_parts#3[0: 2])
+	if field == 0 { return y }
+	if field == 1 { return mo }
+	if field == 2 { return d }
+	if field == 3 { return (days_from_date(y, mo, d) + 3) % 7 + 1 }
+	if field == 4 { return days_from_date(y, mo, d) - days_from_date(y, 1, 1) + 1 }
+	if #head < 2 { return 0 }
+	clock = head#2.split("[")#1
+	clock = clock.split("Z")#1
+	clock = clock.split("+")#1
+	clock = clock.split("-")#1
+	hm = clock.split(":")
+	h = int(hm#1)
+	mi = if #hm >= 2 then int(hm#2[0: 2]) else 0
+	sec = if #hm >= 3 then int(hm#3.split(".")#1) else 0
+	if field == 5 { return h }
+	if field == 6 { return mi }
+	if field == 7 { return sec }
+	0
 }
 // a duration as milliseconds: a plain number is one already; lib/units overloads it for its quantities, `2 seconds`
 // and `1h` counted in ms, one of another dimension a DimensionError
@@ -69,7 +112,11 @@ day_number(ms): int := ms /! 86400000
 // the date of milliseconds as {year, month, day} (lib/prelude.warp civil_from_days)
 date_of(ms) := civil_from_days(day_number(ms))
 // ISO weekday: Monday 1 … Sunday 7
-weekday(ms): int := (day_number(ms) + 3) % 7 + 1
+weekday(x): int := {
+	if x is number { return (day_number(int(x)) + 3) % 7 + 1 }
+	# native time via UFCS `d.weekday` when this module is in scope
+	time_field_of_shown(x, 3)
+}
 today() := date_of(clock())
 add_days(ms, n) := ms + n * 86400000
 days_between(from, to): int := day_number(to) - day_number(from)
