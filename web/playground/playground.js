@@ -908,12 +908,15 @@ let listening = new Set(); // the page events the shown program handles: "click"
 
 // what the shown program listens to: "on click", "on key" (page events, sent from here), "every 1 s", "at 09:00",
 // "message from …" (timers and channels, run by the worker)
+// an element's own handler (on click·1, a button's) is the element to use, not named in the note
+const ELEMENT_EVENT = /·\d+$/;
 function listenTo(labels) {
 	listening = new Set(labels.filter(label => PAGE_EVENT.test(label)).map(label => label.replace(PAGE_EVENT, "$1")));
 	$("output").classList.toggle("listening", listening.size > 0);
-	$("listening").hidden = labels.length === 0;
-	const hint = listening.has("key") ? "; click here, then type" : listening.size ? "; click here" : "";
-	$("listening").textContent = `listening: ${labels.join(", ")}${hint}`;
+	const shown = labels.filter(label => !ELEMENT_EVENT.test(label));
+	$("listening").hidden = shown.length === 0;
+	const hint = listening.has("key") ? "; click here, then type" : listening.has("click") ? "; click here" : "";
+	$("listening").textContent = `listening: ${shown.join(", ")}${hint}`;
 	// timers and channels go on by themselves: the program still runs (page events wait for the user)
 	showStop(labels.some(label => !PAGE_EVENT.test(label)));
 }
