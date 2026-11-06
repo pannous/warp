@@ -461,6 +461,7 @@ listened_through(n: Node, reads: map): Node := {
 # write changed it: `a = 2` as `(signal·old = a; signal·total = total; a = 2; if a != signal·old {
 # signal_notify("total", total, signal·total) })`; any other node as it is
 notifying(n: Node, names: list, derived: map): Node := {
+	if method_changing(n, names) { return method_notifying(n) }
 	if not writes(n) { return n }
 	name = written_target(key_of(n))
 	if not (name is symbol) { return n }
@@ -475,6 +476,18 @@ notifying(n: Node, names: list, derived: map): Node := {
 	# `x--` gives the value before the step
 	result = if op_of(n) in stepping_ops then [old] else []
 	separated(bracketed(before + [n] + notified + result, "("), ";")
+}
+# `x.add(2)` of a watched x: a method may change the list in place, so its listeners hear of it when it did; the
+# call's value stays the value (`y = x.pop()`)
+method_changing(n: Node, names: list): bool := is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and is_called_name(value_of(n))
+signal_result = "signal·result"
+method_notifying(n: Node): Node := {
+	name = key_of(n)
+	old = symbol(signal_old)
+	result = symbol(signal_result)
+	kept = plain_node(parsed("if " + name_of(name) + " is list then [] + " + name_of(name) + " else " + name_of(name)))
+	notified = Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [name_of(name), name, old]))
+	separated(bracketed([Key(old, Op.Assign, kept), Key(result, Op.Assign, n), notified, result], "("), ";")
 }
 # a write: `x = 3`, `x += 1`, `x--`
 writes(n: Node): bool := {
