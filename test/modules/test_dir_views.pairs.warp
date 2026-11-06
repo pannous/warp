@@ -1,0 +1,10 @@
+# the views of a module's words besides dir: its functions, values, classes and the operators it declares, which dir
+# leaves out (card dir-filters)
+'time.classes'	["Instant", "Zone"]
+'time.attributes.contains("day_seconds")'	yes
+'time.functions.contains("now")'	yes
+'time.functions.contains("day_seconds")'	no
+'#time.functions + #time.attributes == #dir(time)'	yes
+'list.operators.contains("∪")'	yes
+'dir(list).contains("∪")'	no
+'functions = 3; functions'	3

@@ -117,7 +117,7 @@ Text is anything in quotes: a word, a name, a sentence.
 `.length` counts the letters.
 
 ```warp => 4
-"warp".length
+"wow🤞🏽".length
 ```
 
 `$(…)` puts a value inside a text.
