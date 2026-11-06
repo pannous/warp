@@ -1406,5 +1406,7 @@ band_level(weighted, frequency) := {
 	4 * sqrt(power) / count(weighted) / loudest_sample
 }
 
-// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
-sound_samples(samples: node, rate: int, channels: int, wait: int) from host
+// PCM samples played through the same path as sounded (libwarp_sound / the page's warp_sound), so native and the
+// browser agree without a host import (card sound-samples). count is how many interleaved frames to take, as the old
+// host word and the page's sound_samples read them; rate and channels are the buffer's.
+sound_samples(samples: node, count: int, rate: int, channels: int) := sounded(samples[0..count], rate, channels)
