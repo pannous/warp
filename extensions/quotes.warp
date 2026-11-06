@@ -26,8 +26,15 @@ reads_position(n: Node): bool := {
 	if type(n) is key { return reads_position(key_of(n)) or reads_position(value_of(n)) }
 	is_group(n) and items_of(n).any(reads_position)
 }
+# a program reading `code.line` or `code.column` gets its quotes where they were written, $MetaNodes; any other
+# program pays nothing for them (decision debug-positions-auto)
 def quoted_code(body: Body, e: Node): list {
-	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
+	code = written_quote_code(body, e)
+	at = if module.reads_positions then written_at(e) else ø
+	if at == ø { return code }
+	intrinsic_of(body, "meta_node", [TypedCode(ValueKind.Node, code), number_value(at#1), number_value(at#2)]).code
+}
+def written_quote_code(body: Body, e: Node): list {
 	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
 	if type(e) is key {
 		parts = [TypedCode(ValueKind.Node, quoted_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, quoted_code(body, value_of(e)))]

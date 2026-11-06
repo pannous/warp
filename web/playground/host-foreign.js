@@ -195,10 +195,17 @@ const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
 const PAGE_LIBRARY_HANDLE = 1;
 
 // the C functions of stdio a program reaches without a file (lib/sound.warp said: fdopen(2, "w"), fputs, fflush): a
-// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv of the run's
-// environment (driver.js programEnvironment), NULL for a name it lacks
+// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv/setenv/unsetenv of
+// the run's environment (driver.js programEnvironment), NULL for a name it lacks; getpid/getppid and strerror
+const withoutVariable = (environment, name) => environment.filter(entry => !entry.startsWith(`${name}=`));
 const pageStdio = (holder, hooks) => ({
 	getenv: name => environmentValue(holder.environment ?? ENVIRONMENT, name),
+	setenv: (name, value, overwrite) => { const environment = holder.environment ?? ENVIRONMENT; if (environmentValue(environment, name) !== null && !overwrite) return 0; holder.environment = [...withoutVariable(environment, name), `${name}=${value}`]; return 0; },
+	unsetenv: name => (holder.environment = withoutVariable(holder.environment ?? ENVIRONMENT, name), 0),
+	// process ids: positive and distinct, as natively; samples/system/c_lines will print run-stable facts (decision c-lines-stable)
+	getpid: () => 1,
+	getppid: () => 2,
+	strerror: code => ({ 2: "No such file or directory" }[code] ?? `Unknown error ${code}`),
 	fdopen: descriptor => descriptor,
 	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
 	fflush: () => 0,
@@ -257,6 +264,22 @@ function wasmLibraryImports(holder, library, exportsOf, missing = "") {
 	});
 }
 
+// a package's C library the page has as lib/<name>.wasm (build.sh pack_package_libraries; natively lib<name> beside
+// warp, scripts/link-packages.sh): instantiated once per worker at its first call, else undefined
+const packedLibraries = new Map();
+function packedLibraryImports(holder, name) {
+	const file = `${PAGE_PREFIX}lib/${name}.wasm`;
+	if (!/^\w+$/.test(name) || !servedFileExists(file)) return undefined;
+	const exportsOf = () => {
+		if (!packedLibraries.has(name)) {
+			const bytes = new Uint8Array(getSync(fileUrl(file), 0, true));
+			packedLibraries.set(name, typedExports(bytes, new WebAssembly.Instance(new WebAssembly.Module(bytes), {}).exports));
+		}
+		return packedLibraries.get(name);
+	};
+	return wasmLibraryImports(holder, name, exportsOf);
+}
+
 // the exported functions of a module's bytes, each taking its arguments as its parameters' types are: a C library's
 // pointer is an i32 in wasm32 where the program declares it an i64 (sqlite3_bind_text's destructor), an i64 a BigInt
 const WASM_ARGUMENT = { 0x7f: value => Number(BigInt.asIntN(32, BigInt(value))), 0x7e: value => BigInt(value), 0x7d: Number, 0x7c: Number };
@@ -304,7 +327,10 @@ function exportedParameters(bytes) {
 function moduleImports(holder, hooks, path) {
 	const instance = () => {
 		const modules = holder.run.wasmModules ??= new Map();
-		const file = new URL(path, FILE_ROOT).href; // one instance however the path is spelled
+		// one instance however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
+		// /warp/web/playground/warp-lib/crates) is that file of the served repository
+		const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
+		const file = new URL(served, FILE_ROOT).href;
 		if (!modules.has(file)) {
 			if (file.endsWith(".wat")) throw new Error(`${path}: a module in WAT text needs the native build`);
 			const moduleHolder = { warnings: holder.warnings, run: holder.run };
@@ -364,5 +390,5 @@ addHostPart({
 			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },
 		},
 	}),
-	importModule: (holder, hooks, name) => MODULE_PATH.test(name) ? moduleImports(holder, hooks, name) : undefined,
+	importModule: (holder, hooks, name) => MODULE_PATH.test(name) ? moduleImports(holder, hooks, name) : packedLibraryImports(holder, name),
 });

@@ -12,6 +12,7 @@ set -euo pipefail
 
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
+source "$repository/scripts/lib/packages.sh"
 # the compilers: WARP_LIB, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else the
 # installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
 OWN_LIBRARY="$repository/lib"
@@ -54,12 +55,27 @@ build_compiler() {
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" --exclude=compiler/ --exclude=modules/ --exclude="*.wasm" "$repository/lib/" "$page/warp-lib/"
 	local module name
 	for module in "$page/warp-lib/modules/"*.wasm; do
+		[ -f "$module" ] || continue
 		name=$(basename "$module" .wasm)
 		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
 	done
 	write_sources "$page/warp-lib"
 	slim_compiler "$page/warp-lib/warp.wasm"
+	pack_package_libraries
 	echo "built $page/warp-lib from $INSTALLED_LIBRARY and lib/ ($(du -sh "$page/warp-lib" | cut -f1))"
+}
+
+# each package's C library as the page has it, lib/<name>.wasm (host-foreign.js packedLibraryImports): a proxy's
+# `library: "dir/name"` prebuilt as <clone>/dir/name.wasm; natively scripts/link-packages.sh builds it beside warp
+pack_package_libraries() {
+	local manifest clone library
+	for manifest in packages/*/package.warp; do
+		[ -f "$manifest" ] || continue
+		library=$(manifest_field "$manifest" library)
+		[ -n "$library" ] && clone=$(package_clone "$manifest") && [ -f "$clone/$library.wasm" ] || continue
+		cmp -s "$clone/$library.wasm" "$page/lib/$(basename "$library").wasm" ||
+			{ cp "$clone/$library.wasm" "$page/lib/" && echo "packed $page/lib/$(basename "$library").wasm"; }
+	done
 }
 
 # the compiler's commit (warp.wasm.inputs) must have this checkout's COMPILER_SOURCES, else the page runs an older
@@ -134,7 +150,7 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
 	# plus the compiler's lib/ and the packages, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; } | write_served_files "$page/served-files.js"
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
 }
 
 # the files of packages/ (scripts/link-packages.sh, the registry's folders linked in), which samples use by path,

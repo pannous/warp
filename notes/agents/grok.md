@@ -55,3 +55,5 @@ only by `todo take <card> <coder>` at once (Now + owner), never one whose Agent 
 Unexplained direct pushes to main with the user's identity (g-* cards) may be Grok Bot: ask the user.
 
 - notes/decisions.md is written only by warp-supervisor and warp-interviewer (Claude). Grok sends a user answer to warp-supervisor, never commits it there itself (b6050eb22a overwrote the user's own answer with a withdrawn relay, 2026-11-06).
+- The box needs wasm-opt (Binaryen 133, as scripts/ci-compilers.sh installs it) on PATH for web/playground/build.sh;
+  without it the page compiler keeps its C imports and fails to instantiate (card install-binaryen).
