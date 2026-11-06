@@ -77,7 +77,6 @@ samples/**/*.stored.json
 notes/OLD/
 *.bak
 **/*.bak
-test/web/task.txt
 # what tests write beside themselves (a case runs in its file's folder): the sounds they render, the files they write
 test/**/*.wav
 test/**/*_written.*

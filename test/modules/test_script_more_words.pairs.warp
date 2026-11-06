@@ -1,0 +1,6 @@
+# card more-use: set_env, eprint, temp_file and temp_dir of lib/os.warp (natively)
+
+'use script; set_env("WARP_PAIR", "fine"); command("echo $WARP_PAIR").trim() == "fine"'	true
+'use script; eprint "to stderr"'	ø
+'use script; f = temp_file(); exists(f) and not is_folder(f)'	true
+'use script; d = temp_dir(); is_folder(d)'	true

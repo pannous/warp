@@ -1077,6 +1077,12 @@ melody_samples(notes, seconds) := {
 // one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms)
 melody(notes, each duration) := sound(melody_samples(notes, si_amount(duration)))
 melody(notes) := melody(notes, note_seconds)
+// music as plain data, no parser syntax (card music-data-dsl, decision self-parser-drops): tune({ C4 E4 [C4 G4] }) is
+// the melody of its notes, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
+tune(score: data) := melody([score_pitch(item) for item in score])
+score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(str(item)) else item
+// not text.warp's capitalize: its letter test's variable `at` meets this module's function at ("at was a function")
+note_capitalized(name: text) := upper(name[0]) + name[1..]
 
 // patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.
 // `c4 e4 g4` three steps, `~` a rest, `[g4 b4]` a group sharing one step, `c4*2` twice in its step, `c4,e4,g4` a chord,
