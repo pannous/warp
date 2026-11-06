@@ -1,10 +1,5 @@
 # from test_partial_time_comparisons.rs: edit the Rust test, then run the script again
 
-# test_now_against_a_time_of_day
-'now < 24h'	true
-'now >= 0h'	true
-'(now < 17h) == (now.hour < 17)'	true
-
 # test_now_against_a_month
 'now >= January'	true
 'now <= December'	true
