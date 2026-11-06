@@ -12,3 +12,10 @@
 # `stored cups: [Cup]` declares cups as the table of that name, `in "t"` names it otherwise
 'class Cup{label: text}\nstored cups: [Cup]\ncount(cups)'	0
 'class Cup{label: text}\nstored_add("mugs", Cup("big"))\nstored cups: [Cup] in "mugs"\ncups#1.label'	"big"
+
+# a table read in part (card storage-write-through): its count, a page of its rows, the rows an SQL condition keeps
+'use storage; class U{name: text; age: int}; stored_add("u", U("Ann", 30)); stored_add("u", U("Bo", 4)); stored_count("u", U)'	2
+'use storage; class U{n: int}; stored_save("u", [U(1), U(2), U(3), U(4), U(5)]); stored_page("u", U, 1, 2).map(u => u.n)'	[2, 3]
+'use storage; class U{n: int}; stored_add("u", U(1)); stored_page("u", U, 3, 2)'	[]
+'use storage; class U{name: text; age: int}; stored_add("u", U("Ann", 30)); stored_add("u", U("Bo", 4)); stored_found("u", U, "age > ?", [20])#1.name'	"Ann"
+«use storage; class U{name: text}; stored_add("u", U("it's")); count(stored_found("u", U, "name = ?", ["it's"]))»	1
