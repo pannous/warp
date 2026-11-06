@@ -74,7 +74,8 @@ global file_texts = {}
 LIBRARY_INDEX = "index.tsv"
 INDEX_SECTIONS = ["block", "global", "class", "tag", "const", "word", "needs", "host", "hash", "alias", "sugar", "slice"]
 # the modules beside the runtime a compile runs behind, as the modules it links (compiler.warp linked_libraries)
-index_file(): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + LIBRARY_INDEX
+index_file(): text := modules_file(LIBRARY_INDEX)
+modules_file(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name
 global index_sections_held = ø
 library_index_section(section: text): map := {
 	if index_sections_held == ø { index_sections_held = index_sections_read(file_text(index_file())) }
@@ -134,13 +135,16 @@ module_hashes(): map := {
 # a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
 # under WARP_LIB, card signature-sha256)
 source_hash(source: text): text := "${#source}-" + std_pure("hash", "sha256", [source])
-# the index as lib/ lies now, written into the modules folder; this run goes on with it, the host words made anew
+# the index and the sugar's rules packed as lib/ lies now, written into the modules folder; this run goes on with
+# them, the host words made anew
 write_library_index(folder: text) := {
 	# (each section scanned, none read off an earlier index: the word section asks the host words)
 	index_sections_held = {}
 	host_words_held = ø
 	for section in INDEX_SECTIONS { library_index_section(section) }
 	write(folder + "/" + LIBRARY_INDEX, INDEX_SECTIONS.flat_map(section => index_lines(section, index_sections_held[section])).join("\n"))
+	sugar_rules_held = sugar_rules_packed()
+	write(folder + "/" + SUGAR_RULES_FILE, packed_table(sugar_rules_held))
 	host_words_held = ø
 }
 index_lines(section: text, entries: map): list := [SECTION_MARK + "\t" + section + "\t"] + entries.keys.map(key => section + "\t" + key + "\t" + entries[key])

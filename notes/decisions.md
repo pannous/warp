@@ -886,3 +886,37 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-06 library-word-visibility (user, discussed; card linked-cross-module-overloads, revises "open words" plan A): typing is the main guard against clashes between libraries. A library word with no parameter type and no return type is private to its module by default and visible only when marked `export` (wiki/keyword.md: "visible to importers"); typed words are visible. A call is resolved by argument types, then by the expected result type (`parse(t: text) -> json` vs `-> csv`, picked by `as csv`, `csv x = …` or a typed parameter; result-type overloads already work), then by module name (`csv.parse(t)`); otherwise it is refused loudly, never guessed. Internally every module word links under its module prefix (time·padded). `any` counts as untyped (user: "what else would it be?"). Still open: whether a typed helper (json's json_* readers) can be marked private.
 - 2026-11-06 user (library-word-visibility): an untyped library word is visible to importers when marked `public`; `export` keeps its one meaning, a wasm export the host calls (page_render, timer_fired). milliseconds_of(any) is replaced by typed conversions (`q: Quantity as Duration`, `t: text as Instant`), the built-in as-conversion machinery.
 - 2026-11-06 user: after the current core finishes, a card-closing sprint. Triage every open card first: still relevant? doable without core/ (lib/, extensions/, samples, tests, scripts)? or needs core/? Then iterate quickly over the cards that need no core change; core cards wait for a later sprint.
+- 2026-11-06 user (card sprint): a worker may do several cards in a quick row, one quick commit each, and skip the general tests when certain a change needs none (a small sample or tour example, a note, a wording); anything that can change compiled behavior still gets its smoke test.
+- 2026-11-06 user (card sprint, emphatic): a card whose change affects core/ is not approached in this sprint: it moves to the Core column (the worker reports 'core: <key> <reason>' to the Supervisor, who moves it in a batch) and the worker takes the next card.
+- 2026-11-06 card sprint, round 1 (user):
+  - core-dir-order: dir(module) lists names sorted alphabetically (`dir(time)#1` → "day_number"), as Python; test_dir stays.
+  - triage-pipes: `|` between two ints is bit-or (`n = 2; m = 4; n | m` → 6); it pipes only when its right side is a function.
+  - use-require-import: `use <word>` refuses with a fix-it naming the module ("square is a word of math: use math"); test_include:12-14 may change to `use math; square 7` (user OK to edit those lines).
+  - pixels-bytes: `.bytes` of a number takes the endianness as a required parameter, `1.bytes(.big)` / `1.bytes(.little)`, no default (to avoid errors); a list is its items' bytes in that order.
+  - pixels-bytes (refined, user): the endianness is an enum value read from the parameter's type, `1.bytes(big_endian)` / `1.bytes(little_endian)`, no dot and no default.
+- 2026-11-06 card sprint, round 2 (user):
+  - cargo-semver-version: bring `use cargo` back now: a crate is built to a wasm module and linked like any module (load-time linking); test_cargo_crates:4-9 are the target.
+  - class-text: a Note equals the text of its name (Note.equals): `note("C#4") == "C#4"`; it still shows unquoted; test_note_values:7 stays.
+  - play-mozart-mp3: the sample uses the decided source-relative literal `play ^/tune.mp3` (source-relative-prefix); `program.folder` is welcome as a word for the same folder ($dir). Note: inline `x = ^/tune.mp3; x` shows ['^', "/tune.mp3"] today.
+  - power-function: investigate first: exact non-integer powers in lib/reals would be perfect, but measure the cost before choosing over floats.
+- 2026-11-06 card sprint, round 3 (user):
+  - scope-use-packages: test_use_scopes:4 and :7 change tests/warp/ → test/warp/ (user OK); expected values stay.
+  - library-typed-outcome: test_polled_signal_typed and test_task_completion_typed may be rewritten to the public behaviour (user OK); the helpers value_polled/task_awaited can then turn private.
+  - immutable-tuple: round brackets are a plain list (`a = (1, 2, 3); a#1 = 9` → [9, 2, 3]); immutability comes from a declaration, not the bracket; the tuple idea leaves wiki/mutable.md.
+  - param-as-type: a parameter's type is `f(int a)` or `f(a: int)`; `as` is the PREFERRED return-type syntax (`fib i as int := …`, `fun calculate(…) as real`), not a parameter type, and not to be confused with conversion. So `f(a as int)` is not a parameter annotation (wiki/return.md:17,32 to fix).
+- 2026-11-06 card sprint, round 4 (user):
+  - backtick-strings: inside backticks `$x` interpolates the expression `$x`, the same meaning as outside (a page element's value on a page); a plain variable is `${who}`; `\$` escapes. extensions/, no core.
+  - fine-updates: a style block prints with braces as written, `style{.done{color:"green"}}`; web/playground/examples.js is updated.
+  - markup-attr-call: in markup a call to a known warp word is evaluated (`div(class: join(xs, " "))` → class="a b"); CSS functions (min, max, calc, var, rgb) inside style{} stay text; refused when both fit.
+  - quasi-text: discuss later (card stays parked).
+- 2026-11-06 card sprint, round 5 (user):
+  - xs-ys: `x = ø; x += 3` refuses with a fix-it, "ø has no +: start the sum at 0 (x = 0)", replacing the internal "node sum"; self-append `xs += xs` → [1, 2, 1, 2] stays.
+  - list-map-separator: "How expensive would it be to carry the separator through? If it's cheap, then let's do it." Finding: a Node list already carries its separator in the kind field (SEPARATOR_SHIFT bit 48, core/analysis/kinds.warp:21), so showing by it costs nothing there; typed lists ($IntList, $FloatList) have no kind field and would need one. The worker measures that cost; cheap → shown lists keep their written separator.
+  - mutable-array: closed; the list is the mutable array (in-place set O(1)), typed lists cover fixed numeric arrays.
+  - map-chain-fusion: fuse `.map(f).map(g)` only when f and g are @pure; effectful chains run stage by stage as written.
+  - map-chain-fusion (refined, user): "we also need to infer @pure from the compiler without explicit annotation where possible": purity is inferred (a function that calls only pure words and writes nothing outside its locals is pure); `@pure` is needed only where inference can't see it.
+- 2026-11-06 card sprint, round 6 (user):
+  - core-code-point-list-chars: both at once: `xs = "ab" as codepoints` gives codepoints where `xs#1 == 97` and `xs#1 == 'a'` both hold (a codepoint equals its number and its char). Today `'a' == 97` refuses ("== on char and int") and `as codepoints` is an unknown name.
+  - core-if-branch-float-widening: mixed int/float branches widen to float, as today.
+  - verify-function: a program may not name a function after a type word: `double(x) := …` refuses ("double is a type"); the law test renames it (user OK).
+  - typed-null: in discussion (wiki/null.md "Typed Null": `Person? x = null` as sugar for Person.null).

@@ -1635,8 +1635,10 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		compile_function(main, [])
 		if prepended() { linked_builders() }
 		page_builders()
-		# the host shows no ø: a program giving nothing needs no show
-		if not main.gives_nothing { shown_result(main.result) }
+		# the host shows no ø: a program giving nothing needs no show; nor a standard module being built, whose start's
+		# value is dropped (native/driver.warp instance_defined), so its own show() keeps the name: draw's show() a
+		# program links (card draw-canvas-show)
+		if not main.gives_nothing and module_written == "" { shown_result(main.result) }
 		# a function of the program never called is compiled too, its parameters of any kind, so
 		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
 		for name in module.functions.keys {
