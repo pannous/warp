@@ -23,7 +23,8 @@ mail(message, address) := print "\(message) → \(address)"
 # Arithmetic with words
 result = one plus two # got it
 total = three times four # got it
-half = ten divided by two # got it
+# half = ten divided by two  (a foreign spelling, decision esoteric-phrases-commented)
+half = ten / two
 rest = ten modulo three # got it
 
 # Boolean logic
@@ -31,12 +32,14 @@ valid = age >= 18 and has_id
 allowed = is_admin or is_owner
 
 # Comparisons
-bigger = a is greater than b
+# bigger = a is greater than b  (an esoteric phrase, decision english-comparisons)
+bigger = a > b
 equal = x equals y
 found = item is in collection
 
 # Conditional statements
-if age is at least 18 {
+# if age is at least 18  (an esoteric phrase, decision english-comparisons)
+if age >= 18 {
 	print "Adult"
 }
 
@@ -62,7 +65,7 @@ result = (numbers where it > 0)
 create_user(
 	name: "Alice"
 	email: "alice@example.com"
-	role: admin
+	role: "admin"
 )
 
 # Ranges with words
