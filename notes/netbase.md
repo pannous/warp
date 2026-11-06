@@ -25,6 +25,11 @@ debug results where country is germany
 - `lib/extra/netbase.warp`: `query(q)` / `query_at(server, q)` fetch `<server>/json/query/<q>` and parse the JSON (a
   list of records); the server is env NETBASE, else http://localhost:8181. Without a server the error names the URL
   (tests/modules/test_netbase_package.rs). `load wikidata` is not defined: loading is the server's import.
+- lib/extra/ is no module folder (`use x` looks beside the program, in lib/ and lib/native/), so the sample uses the
+  module by its path, `use "../../lib/extra/netbase.warp"`, until netbase is a package (decision P194); it now stops
+  at `load`, the server it needs (card netbase-wikidata-load).
+- Also open: `where country is germany`, the field names of a record bare in a `where` (today
+  `where it.country is "germany"`).
 
 ## Open: a server
 Someone has to run netbase with data loaded: (a) revive netbase.pannous.com (build on pannous.com, import Wikidata:
