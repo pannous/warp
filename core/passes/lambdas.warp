@@ -512,12 +512,12 @@ cell_of(name: text): Node := Key(symbol(name + cell_suffix), Op.Dot, symbol("val
 typed_suffix = "·typed"
 typed_through_local(n: Node, name: text, type: any): Node := if type == ø then n else bottom_up(n, part => through_type(part, name, type))
 through_type(part: Node, name: text, type: Node): Node := {
-	value = assigned_value(part, name)
+	value = value_given(part, name)
 	if value == ø { return part }
 	Key(symbol(name), Op.Assign, Key(Key(symbol(name + typed_suffix), Op.Colon, type), Op.Assign, value))
 }
 # the value an assignment gives the name: `name: T = v` and `name = v` give v, `name += v` name + v
-assigned_value(part: Node, name: text): any := {
+value_given(part: Node, name: text): any := {
 	if declares_typed(part, name) { return value_of(part) }
 	if not (part is key and key_of(part) == symbol(name)) { return ø }
 	if is_key(part, Op.Assign) { return value_of(part) }
