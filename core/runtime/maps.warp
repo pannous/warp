@@ -42,6 +42,8 @@ index_least(): int := 16
 # kept at most half full, made anew when the entries outgrew it or fewer are left than it covers
 map_table(entries: list): list := {
 	slot = index_slot(entries)
+	# the index as it was: nothing added since (most lookups)
+	if slot > 0 and slot_covered(slot) == #entries { return slot_table(slot) }
 	if slot == 0 {
 		slot = least_recent_slot()
 		hold_index(slot, entries, 0, new_list(4 * #entries))
@@ -62,14 +64,24 @@ map_table(entries: list): list := {
 # where a name's probe starts in a table: the hash of its bytes, mixed by Knuth's multiplier (below 2^32, so the
 # product of a hash below 2^30 stays in an i64) before it picks a slot: names a last letter apart ("text 41", "text
 # 42") hash next to each other, and their runs of neighbouring slots made each probe walk a long cluster
-name_hash(name: text, size: int): int := {
+name_hash(name: text, size: int): int := int_remainder(name_code(name), size)
+# A name keeps its hash: the text hashed last, its size then and its code, as a lookup asks for one name again and again
+# (`if not scope.has(name) { scope[name] = [] }`, then reads and sets it)
+global hashed_text = ""
+global hashed_bytes = -1
+global hashed_code = 0
+name_code(name: text): int := {
+	if same_text(name, hashed_text) == 1 and byte_count(name) == hashed_bytes { return hashed_code }
 	h = 5381
 	i = 0
 	while i < byte_count(name) {
 		h = int_remainder(h * 33 + byte_at(name, i), 1000000007)
 		i += 1
 	}
-	int_remainder(int_remainder(h * 2654435761, 4294967291), size)
+	hashed_text = name
+	hashed_bytes = byte_count(name)
+	hashed_code = int_remainder(h * 2654435761, 4294967291)
+	hashed_code
 }
 # the entry at place goes in the table, unless it is no key or an earlier entry has its name (map_index finds the first)
 add_place(entries: list, table: list, place: int): int := {
@@ -236,14 +248,17 @@ with_entries_of(m: Node, more: Node): Node := {
 	m
 }
 # `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none
-# each operator code's case, as cases (a program's Op·cases, by spelling) gives its spelling: a match binds a key's
-# operator by its code through this list, made once (node_cases.warp Op·coded)
-operator_cases(cases: Node): list := {
-	spellings = operator_spellings()
+# each code's case of a node part, as cases (a program's Op·cases, by spelling) gives the spelling of the code in the
+# table (nodes.warp spellings_of), else the spelling itself: a match binds a key's operator, a list's bracket and
+# separator by its code through this list, made once (node_cases.warp coded_functions)
+spelled_cases(cases: Node, table: int): list := {
+	spellings = spellings_of(table)
 	found = new_list(#spellings)
 	for i in 1 to #spellings { found#i = map_get_or(cases, node_text(spellings#i), node_text(spellings#i)) }
 	found
 }
+# `key·cases`, the seed's name of spelled_cases of the operators, until the seed refresh after card map-index
+operator_cases(cases: Node): list := spelled_cases(cases, 1)
 map_get_or(m: Node, key: Node, fallback: Node = ø): Node := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
