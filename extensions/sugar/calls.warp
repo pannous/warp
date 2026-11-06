@@ -78,6 +78,3 @@ rewrite sort($xs, $f) => sorted_by_key($xs, $f) where $f is function
 # partial application `x -> add(1, x)` (decision M3b)
 rewrite $f($a..., _) => ($x -> $f($a..., $x)) where $f is function
 rewrite $f(_, $b...) => ($x -> $f($x, $b...)) where $f is function
-# a function's leading asserts are its contract, checked at each call so a broken one blames the caller
-# (extensions/rules/rule_words.warp contracts_blamed, card contract-caller-blame)
-rewrite $p => $q where program and $q = contracts_blamed($p)

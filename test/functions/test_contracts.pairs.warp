@@ -1,4 +1,0 @@
-# a function's leading asserts are its contract; a broken one blames the call (decision 1319f7ad8d, card contract-caller-blame)
-'f(x) := { assert x > 0; x * 2 }; f(3)'	6
-'f(x) := { assert x > 0; x * 2 }; try f(-1) catch e { e.message }'	'assertion failed: x > 0 in the call f(-1)'
-'f(x) := { assert x > 0; x * 2 }; g(y) := f(y - 5); try g(1) catch e { e.message }'	'assertion failed: x > 0 in the call f(y - 5)'

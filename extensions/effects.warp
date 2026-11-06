@@ -91,6 +91,8 @@ effect_chain(word: text, bodies: map, foreign: map, allowed: list, seen: map): l
 # y does
 words_called(n: Node, caught: bool, found: map) := {
 	if n is symbol { found[name_of(n)] = caught and (found.get(name_of(n)) ?? yes) }
+	# (a type a colon names, `e: error = …`, is no call)
+	else if is_key(n, Op.Colon) and value_of(n) is symbol { words_called(key_of(n), caught, found) }
 	else if n is key { words_called(key_of(n), caught, found); words_called(value_of(n), caught, found) }
 	else if is_group(n) {
 		items = []
