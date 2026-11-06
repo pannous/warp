@@ -55,6 +55,7 @@ build_compiler() {
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" --exclude=compiler/ --exclude=modules/ --exclude="*.wasm" "$repository/lib/" "$page/warp-lib/"
 	local module name
 	for module in "$page/warp-lib/modules/"*.wasm; do
+		[ -f "$module" ] || continue
 		name=$(basename "$module" .wasm)
 		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
 	done

@@ -1,0 +1,6 @@
+// Rust's strsim crate as a WebAssembly module (decision samples-modules-wasm: free functions first): `scripts/warp-crate
+// wasm lib/crates/strsim.warp` writes lib/crates/strsim.wasm, which `use cargo strsim` links, natively and in the page
+crate: "strsim@0.11"
+
+levenshtein(a: text, b: text): i64 from 'rs_strsim' = strsim::levenshtein
+jaro_winkler(a: text, b: text): f64 from 'rs_strsim' = strsim::jaro_winkler
