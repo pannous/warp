@@ -28,7 +28,7 @@ def closure_value(body: Body, target: Node, captured: list): TypedCode {
 	entry = closure_entry(name, #captured, arity)
 	held = [op.i64_const] + sleb(Kind.Data) + [ref_null, any_reference, ref_null, gc_type(gc.node), op.ref_func] + relocatable(relocated.calls, entry#3.index) + text_bytes(entry#4) + gc_code(gc_ops.struct_new, [gc_type(gc.closure)])
 	items = [held] + captured.map(c => boxed(expression_code(body, c)))
-	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(target)))
+	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(symbol(written_word(name)))))
 }
 # the closure entry of a target, the first of its captured values those given: [target, captured count, the entry,
 # the text the closure shows]
@@ -115,11 +115,12 @@ closure_shown(name: text, captured: int): text := {
 	names = taken_names(f.signature)[captured..]
 	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
 }
-# the name a function value shows: `len` of a class's method that became the
-# witness `len·Point`, the last part of a nested `outer·inner`
+# the name a function value shows, as written (`twice` of the program's own `twice·own`): `len` of a class's
+# method that became the witness `len·Point`, the last part of a nested `outer·inner`
 function_name(target: text): text := {
-	parts = target.split(name_joiner)
-	if #parts == 1 { return target }
+	written = written_word(target)
+	parts = written.split(name_joiner)
+	if #parts == 1 { return written }
 	last = parts.last
 	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
 }

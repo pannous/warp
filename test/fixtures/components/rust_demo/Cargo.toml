@@ -5,8 +5,10 @@ edition = "2021"
 [workspace]
 [lib]
 crate-type = ["cdylib"]
+[features]
+component = ["dep:wit-bindgen"]
 [dependencies]
-wit-bindgen = "0.46"
+wit-bindgen = { version = "0.46", optional = true }
 [profile.release]
 opt-level = "s"
 strip = true

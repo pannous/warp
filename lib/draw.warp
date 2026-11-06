@@ -95,7 +95,7 @@ def dot(x: float, y: float, color: int) {
 	}
 }
 
-def rect(x, y, width, height, color) {
+public def rect(x, y, width, height, color) {
 	if drawing_on_gpu { draw_shape(rect_shape, x, y, width, height, color) }
 	else { for row in cell(y)..cell(y + height) { for col in cell(x)..cell(x + width) { dot(col, row, color) } } }
 }

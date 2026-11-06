@@ -75,14 +75,15 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 }
 
 # Typed parameters convert (decision as-promotes, card argument-parameter-conversion): a call's argument meeting a
-# parameter typed T the program converts to goes through `to·T`, so `f(2)` of `f(q: Quantity)` passes 2 as Quantity,
+# parameter typed T the program converts to goes through `passed·T`, so `f(2)` of `f(q: Quantity)` passes 2 as Quantity,
 # and `Instant(0) + 2 seconds` a Duration where time's plus takes one; on the caller's side, which sees every module's
 # conversions (units' Quantity as Duration beside time's number as Duration), never the callee's. A union converts to
 # the member the value has a conversion to: Instant.minus(other: Instant or Duration) takes an Instant as it is and
 # 2 seconds as a Duration (card instant-typed-duration)
-argument_conversion_name(type: text): text := "to·" + union_members(type).join("_or_")
+# (never `to·T`, the compiled name of a method `to` of class T: Quantity.to beside the conversion to Quantity)
+argument_conversion_name(type: text): text := "passed·" + union_members(type).join("_or_")
 converts_to(type: text, targets: map): bool := union_members(type).any(member => targets.has(member))
-# `to·T(it: any)`: a value of the type (of a member of the union) as it is, one of a source type converted, the first
+# `passed·T(it: any)`: a value of the type (of a member of the union) as it is, one of a source type converted, the first
 # member's conversions first; any other value as it is too, the parameter's own check says what it takes. A class
 # goes before a type word, as a member and as a source: a lib/units quantity also tests as a number, so
 # Instant.compare(other: Instant or number or Duration) takes 9h as a Duration and only a bare 5 as a number
@@ -156,7 +157,7 @@ conversions(program: Node): Node := {
 		for type in typed.values.flatten() { if converts_to(type, targets) { converting[type] = yes } }
 		functions += converting.keys.map(type => argument_conversion(type, targets))
 		# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
-		# to·Duration knowing no Quantity)
+		# passed·Duration knowing no Quantity)
 		if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
 		List(functions + kept.map(statement => converted_arguments(converting_uses(statement, targets), typed, targets)), Bracket.None, Separator.Newline)
 	}

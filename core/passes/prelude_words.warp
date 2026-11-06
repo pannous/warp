@@ -98,6 +98,8 @@ slice_spans(source: text): list := {
 # exported under its name (decision host-callback-exports)
 export_word = "export"
 is_exported_slice(slice: list): bool := leading_name(slice#2) == export_word
+# `public f(x) := …`: an untyped library word its importers may call (decision library-word-visibility), no host export
+public_word = "public"
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
@@ -106,7 +108,7 @@ name_defined_in(line: text): text := {
 	declared = operator_declared(operator_statement(blank_words(line)))
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1.glyph }
 	leading = leading_name(line)
-	if leading == export_word { return name_defined_in(line[#leading ..].trim()) }
+	if leading == export_word or leading == public_word { return name_defined_in(line[#leading ..].trim()) }
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if count(leading) == 0 or leading == rewrite_word { return "" }
 	following = line[#leading ..].trim()
@@ -332,9 +334,18 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	own = with_c_heads(own_heads(program))
 	# (a linked module's aliases from its signature, its text being none)
 	written_aliases = module_aliases(module)
-	if #linked > 0 { for signature in linked_signatures.values { for name in signature.aliases.keys { written_aliases[name] = signature.aliases[name] } } }
+	owners = {}
+	if #linked > 0 {
+		for module_name in linked_signatures.keys {
+			signature = linked_signatures[module_name]
+			for name in signature.aliases.keys {
+				written_aliases[name] = signature.aliases[name]
+				owners[name] = module_name
+			}
+		}
+	}
 	aliases = with_call_forms(written_aliases, module_names + own.keys)
-	program = aliased(program, aliases, own)
+	program = aliased_in_scope(program, aliases, own, owners)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
 	# definition replaces the module's
@@ -487,6 +498,42 @@ with_call_forms(aliases: map, names: list): any := {
 		if word and is_name_start(word#1) and word not in names { aliases[word] = name }
 	}
 	aliases
+}
+# The program aliased, each definition a used module brought by the aliases its module sees (card module-name-leak):
+# those of the modules it uses, at any depth, and the prelude's, never another used module's (math's
+# `alias log2 => binary_log` stays out of sound's plain_midi). owners: the linked module of each alias
+aliased_in_scope(program: Node, aliases: map, own: map, owners: map): Node := {
+	if not statements_in(program).any(is_brought) { return aliased(program, aliases, own) }
+	seen_by = {}
+	children(program, statement => aliased(statement, if is_brought(statement) then aliases_seen(statement, aliases, owners, seen_by) else aliases, own))
+}
+is_brought(statement: Node): bool := {
+	name = declared_name(statement)
+	name != ø and brought_names.has(name) and defined_origins.has(name)
+}
+# the aliases the module of a brought definition sees, once a module (seen_by)
+aliases_seen(statement: Node, aliases: map, owners: map, seen_by: map): map := {
+	module_name = module_of_path(defined_origins[declared_name(statement)]#1)
+	if not seen_by.has(module_name) {
+		visible = modules_used_by(module_name, ["prelude"])
+		seen = {}
+		for name in aliases.keys { if not owners.has(name) or owners[name] in visible { seen[name] = aliases[name] } }
+		seen_by[module_name] = seen
+	}
+	seen_by[module_name]
+}
+module_of_path(path: text): text := {
+	parts = path.split("/")
+	file = parts#(#parts)
+	if file.ends_with(module_extension) then file[0 ..< #file - #module_extension] else file
+}
+# the module and the modules it uses, at any depth, beside those seen
+modules_used_by(module_name: text, seen: list): list := {
+	if module_name in seen { return seen }
+	seen += [module_name]
+	signature = linked_signature(module_name)
+	for used in (if signature != ø then signature.uses else used_modules(used_module_text(module_name))) { seen = modules_used_by(used, seen) }
+	seen
 }
 # `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
 # or a function taking as many arguments (shadowing is per arity: a program's
