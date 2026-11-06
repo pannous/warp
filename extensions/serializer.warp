@@ -75,10 +75,15 @@ list_text(view: View): text := {
 	bracket = view#2
 	separator = view#3
 	items = view[3:]
-	inside = if #items == 1 then item_text(items#1, bracket) else join([item_text(item, bracket) for item in items], joint(separator))
+	inside = if #items == 1 then item_text(items#1, bracket) else join((1 to #items).map(at => spaced_item(items, at, bracket, separator)), joint(separator))
 	opening(bracket) + inside + closing(bracket)
 }
 
+// an item after another one, spaced: a prefix form in parentheses, so `print (-42)` does not read back as print - 42
+spaced_item(items: list, at: int, bracket: text, separator: text): text := {
+	written = item_text(items#at, bracket)
+	if separator == " " and at > 1 and is_prefix_form(items#at) then "(" + written + ")" else written
+}
 // a list item: one character in single quotes, a one-character text too, as the runtime prints it (chars-codepoints);
 // in code without brackets in double quotes, as the hint `fail "?"` writes it
 item_text(item: any, bracket: text): text := {
