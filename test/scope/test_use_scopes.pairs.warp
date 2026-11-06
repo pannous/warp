@@ -1,7 +1,8 @@
+# fixtures under test/warp/ (was tests/warp/); pairs-relative ../warp/ so case_folder stays the pairs dir (root-relative test/warp/ still misses wasm exists → ".").
 # from test_use_scopes.rs: edit the Rust test, then run the script again
 
 # use_package_sees_every_file_below_the_package_folder
-'tests/warp/shapes_package/app/main.warp'	13
+'../warp/shapes_package/app/main.warp'	13
 
 # use_project_sees_every_file_below_the_project_root
-'tests/warp/project_scope/main.warp'	42
+'../warp/project_scope/main.warp'	42

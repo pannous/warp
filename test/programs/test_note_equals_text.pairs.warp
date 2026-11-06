@@ -1,0 +1,15 @@
+# decision class-text: a Note equals the text of its name (Note.equals); show stays unquoted
+
+# note_equals_its_name_text
+'use sound; note("C#4") == "C#4"'	true
+'use sound; note(E4) == "E4"'	true
+'use sound; note(C♯4) == "C#4"'	true
+
+# note_does_not_equal_a_wrong_name
+'use sound; note("C#4") == "D4"'	false
+'use sound; note(E4) == "C4"'	false
+
+# note_equals_note_still
+'use sound; note(E4) == note(E4)'	true
+'use sound; note(E4) == note(C4)'	false
+'use sound; note(E4) - 4 == note(C4)'	true
