@@ -61,14 +61,10 @@ Each step is useful on its own and is what the next ones stand on.
   whose last line is `users` show it. A fetch with `timeout` is fetched on each read.
 - A URL reading main-level variables (`"/api/users?page=" + page`) is fetched anew when one changes; a reply of an
   older fetch of the same name is dropped.
-- Lowering (src/lowering/signals/fetch_signals.rs): the variables users, users·loading, users·error, the call
-  `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
-  (src/web/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
-  system_signals await_ready; `warp run` stays until the reply arrived); in the page a task Worker fetches into shared
-  memory, which the running main reads at its check points (sleep, loop starts) as natively, so
-  `while users.loading { sleep 5 ms }` ends there too; a reply after main returned runs the handler like a timer's
-  (worker.js hooks.arrived), then the page re-renders. Without cross-origin isolation (no task Workers) the reply
-  only arrives after main.
+- Not in warp yet: the Rust lowering (fetch_signals.rs, users·loading/users·error and a handler on·fetch·N over the host
+  words fetch_start/fetch_reply, a task Worker fetching into shared memory) went with the Rust compiler, and its
+  playground half was dropped as dead code (card playground-host; in git history before it). A warp version is a
+  library word over the page's fetch, built anew when the feature is taken up.
 - Cancel on navigation: card fetch-cancel. A last line choosing between read-only values (`if users.loading then
   "Loading…" else users`) re-renders too. Open: diagnostics name users·error.
 
@@ -384,7 +380,7 @@ Each step is useful on its own and is what the next ones stand on.
   page events, values between JS and warp); the parts add themselves with addHostPart:
   host-files.js (fetch, read, std file, net, store and os), host-hashes.js (std_pure: hash, json, regex), host-timers.js
   (on every …, at 9:00), host-random.js (random, seeded), host-tasks.js (tasks, channels,
-  BroadcastChannel and WebSocket, shared arrays, fetch_start), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
+  BroadcastChannel and WebSocket, shared arrays), host-foreign.js (foreign_call, libm, libc.wasm, .wasm
   imports; needs files), host-compiler.js (warpHost, run_block; needs files), host-routes.js (page_path, navigate, a site's links and back button). A part hooks into a run through its
   steps (started, poll, finished, ended, stopped). src/web/site.rs HOST_PARTS ships a part when the module imports one of
   its words (wasmparser); the workers load all (HOST_PART_FILES). tests/web/test_host_parts.rs checks that each word
