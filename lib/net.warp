@@ -4,7 +4,3 @@ post(url: any, body: any) := std_io("net", "post", [url, body])
 // post(url, body, {"x-api-key": key}): the map's pairs are the request's headers; an answer of status >= 400 is the
 // error, with the answer's text
 post(url: any, body: any, headers: any) := std_io("net", "post", [url, body, headers])
-
-// the host words of this module, which the host answers (natively core/native/driver.warp, the playground its JS)
-fetch_start(request: int, url: node) from host
-fetch_reply(request: int): node from host
