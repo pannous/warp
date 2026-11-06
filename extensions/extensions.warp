@@ -20,7 +20,6 @@ use "percent.warp"
 use "shader_blocks.warp"
 use "phrase_definitions.warp"
 use "alias_arrows.warp"
-use "times_loops.warp"
 use "entities.warp"
 use "declared_operators.warp"
 use "list_operators.warp"
@@ -65,7 +64,6 @@ EXTENSIONS = [
 	shader_blocks_extension
 	phrase_definitions_extension
 	alias_arrows_extension
-	times_loops_extension
 	entities_extension
 	declared_operators_extension
 	list_operators_extension
