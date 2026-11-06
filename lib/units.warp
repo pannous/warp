@@ -50,8 +50,9 @@ class Force extends Quantity {}
 // pixels per length, the density of a screen or a print: dpi, ppi
 class Density extends Quantity {}
 
-// a quantity moving lib/time's Instant (`now + 1h`): its milliseconds, a DimensionError of any other dimension than time
-milliseconds_of(duration: Quantity) := duration.in("ms")
+// a duration moving lib/time's Instant (`now + 1h`): a quantity's milliseconds, a DimensionError of any other dimension
+// than time; a plain number is milliseconds already
+milliseconds_of(duration: any) := if duration is Quantity then duration.in("ms") else duration
 
 // a quantity as the class of its dimension, a plain Quantity for one without a name (kg·m, m/s²)
 measured(amount: number, dims: int, unit: text, scale: number) := {
