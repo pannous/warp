@@ -494,6 +494,11 @@ counted_question(items: Node, item: Node): Node := {
 end_refused(task: Node): Node := {
 	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
 }
+# `join xs "-"`: a braceless call of a function of several parameters, refused naming its call; ø before a block
+braceless_call(function: Node, first: Node, second: Node): Node := {
+	if is_curly_group(first) or is_curly_group(second) { return ø }
+	throw "`${function} ${as_code(first)} ${as_code(second)}` reads two ways: write its call ${function}(${as_code(first)}, ${as_code(second)})"
+}
 # a value as code to paste: a text in its quotes
 as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
 
@@ -900,6 +905,7 @@ rule_words = {
 	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
+	braceless_call: braceless_call,
 	builtin_type: builtin_type,
 	change_listens: change_listens,
 	condition_after: condition_after,
