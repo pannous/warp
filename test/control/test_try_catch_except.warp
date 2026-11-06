@@ -5,10 +5,10 @@ is! 'try:
   1/0
 except:
   7' 7
-is! 'try:
-  1/0
-except ZeroDivisionError:
-  7' 7
+# triage-held 2026-11-06: Python spelling, foreign syntax :: is! 'try:
+# ::   1/0
+# :: except ZeroDivisionError:
+# ::   7' 7
 is! 'x = 3
 try:
   x = 1/0

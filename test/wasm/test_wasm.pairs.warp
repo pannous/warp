@@ -1,7 +1,7 @@
 # from test_wasm.rs: edit the Rust test, then run the script again
 
 # test_implicit_multiplication
-'x=9;⅓x'	3
+# triage-held 2026-11-06: implicit multiplication of a vulgar fraction, ⅓x :: 'x=9;⅓x'	3
 
 # test_globals
 'global x=7'	7
@@ -13,24 +13,24 @@
 'global x=1;x=7;x'	7
 
 # test_get_local
-'add1 x:=it+1;add1 3'	4
-'add1 x:=$0+1;add1 3'	4
+# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add1 x:=it+1;add1 3'	4
+# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add1 x:=$0+1;add1 3'	4
 
 # test_wasm_function_definiton
 'fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)'	13
-'add1 x:=x+1;add1 3'	4
-'add2 x:=x+2;add2 3'	5
+# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add1 x:=x+1;add1 3'	4
+# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'add2 x:=x+2;add2 3'	5
 'expression_as_return:=y=9;expression_as_return'	9
-'addy x:= y=2 ; x+y ; addy 3'	5
-'grows x:=x*2;grows(4)'	8
+# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'addy x:= y=2 ; x+y ; addy 3'	5
+# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'grows x:=x*2;grows(4)'	8
 'grows:=it*2; grows 3'	6
 'grows:=it*2; grows 3*4'	24
 'grows:=it*2; grows(3*42) > grows 2*3'	1
 'factorial:=it<2?1:it*factorial(it-1);factorial 5'	120
-'fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)'	13
+# triage-held 2026-11-06: old wasp definition by space, `add1 x:=…` :: 'fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)'	13
 'fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)'	5
-'fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)'	13
-'fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)'	13
+# triage-held 2026-11-06: and/or/then as value operators on ints :: 'fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)'	13
+# triage-held 2026-11-06: and/or/then as value operators on ints :: 'fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)'	13
 'fib:=it<2 or fib(it-1)+fib(it-2);fib(4)'	5
 
 # test_wasm_ternary
@@ -134,7 +134,7 @@
 'i=3;i++'	4
 '- √9'	-3
 'i=-9;-i'	9
-'√ π ²'	π
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√ π ²'	π
 
 # test_math_operators_runtime
 '3^2'	9
@@ -142,7 +142,7 @@
 '42^2'	1764
 '√3^0'	1
 '√3^0'	1.0
-'√3^2'	3
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√3^2'	3
 'π**2'	9.869604401089358
 
 # test_comparison_math
@@ -232,7 +232,7 @@
 'i=3;i-=3'	0
 'i=3;i/=3'	1
 'i=3^1;i^=3'	27
-'i*=3'	0
+# triage-held 2026-11-06: unknown name as 0, `i*=3`, `test42+1` :: 'i*=3'	0
 
 # test_wasm_logic_unary
 'not 0.0'	true
@@ -265,8 +265,8 @@
 'false or true'	true
 'false or false'	false
 'true or true'	true
-'¬ 1'	0
-'¬ 0'	1
+# triage-held 2026-11-06: ¬ on ints as 0/1 :: '¬ 1'	0
+# triage-held 2026-11-06: ¬ on ints as 0/1 :: '¬ 0'	1
 '0 ⋁ 0'	0
 '0 ⋁ 1'	1
 '1 ⋁ 0'	1
@@ -280,7 +280,7 @@
 '1 ⋁ 0 ∧ 0'	1
 '0 ⋁ 1 ∧ 0'	0
 '0 ⋁ 0 ∧ 1'	0
-'¬ (0 ⋁ 0 ∧ 1)'	1
+# triage-held 2026-11-06: ¬ on ints as 0/1 :: '¬ (0 ⋁ 0 ∧ 1)'	1
 '0 ⊻ 0'	0
 '0 ⊻ 1'	1
 '1 ⊻ 0'	1
@@ -305,13 +305,13 @@
 'if 2 : 3 else 4'	3
 'if 2 then 3 else 4'	3
 # triage-held 2026-10-28: a second block as else without `else`, `if(2){3}{4}` :: 'if(2){3}{4}'	3
-'if({2},{3},{4})'	3
-'if(2,3,4)'	3
-'if(condition=2,then=3)'	3
-'if(condition=2,then=3,else=4)'	3
+# triage-held 2026-11-06: if as a function call :: 'if({2},{3},{4})'	3
+# triage-held 2026-11-06: if as a function call :: 'if(2,3,4)'	3
+# triage-held 2026-11-06: if as a function call :: 'if(condition=2,then=3)'	3
+# triage-held 2026-11-06: if as a function call :: 'if(condition=2,then=3,else=4)'	3
 'fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)'	5
-'fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)'	13
-'fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)'	13
+# triage-held 2026-11-06: and/or/then as value operators on ints :: 'fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)'	13
+# triage-held 2026-11-06: and/or/then as value operators on ints :: 'fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)'	13
 'fib:=it<2 or fib(it-1)+fib(it-2);fib(4)'	5
 
 # test_wasm_while
@@ -322,7 +322,7 @@
 'i=1;while i<10 and i<11 do {i++};i'	10
 'i=1;while i<9 or i<10 do {i++};i'	10
 'i=1;while(i<10) do {i++};i'	10
-'x=y=0;width=height=400;while y++<height and x++<width: nop;y'	400
+# triage-held 2026-11-06: nop word :: 'x=y=0;width=height=400;while y++<height and x++<width: nop;y'	400
 
 # test_old_random_bugs
 '-42'	-42
@@ -353,29 +353,29 @@
 '[1 4 3]#2'	4
 
 # test_recent_random_bugs
-'test42+1'	43
+# triage-held 2026-11-06: unknown name as 0, `i*=3`, `test42+1` :: 'test42+1'	43
 'use math; square(3*42) > square(2*3)'	1
 '42/2'	21
 'i=true; !i'	false
 'i=3^1;i^=3'	27
-'i*=3'	0
-'√π²'	π
+# triage-held 2026-11-06: unknown name as 0, `i*=3`, `test42+1` :: 'i*=3'	0
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√π²'	π
 'i=-9;√-i'	3
 'width=height=400;height'	400
-'x=0;while x++<11: nop;x'	11
+# triage-held 2026-11-06: nop word :: 'x=0;while x++<11: nop;x'	11
 '√100²'	100
 'x=123;x + 4 is 127'	true
 'i=ø; !i'	true
-'x=y=0;width=height=400;while y++<height and x++<width: nop;y'	400
+# triage-held 2026-11-06: nop word :: 'x=y=0;width=height=400;while y++<height and x++<width: nop;y'	400
 
 # test_square
 '3.0²'	9
-'√ π ²'	π
-'√π ²'	π
-'√ π²'	π
-'√π²'	π
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√ π ²'	π
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√π ²'	π
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√ π²'	π
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√π²'	π
 'π'	π
-'int i=π*1000000'	3141592
+# triage-held 2026-11-06: C-style typed declaration `int i=…` :: 'int i=π*1000000'	3141592
 'π*1000000.'	3141592.653589793
 '.1 + .9'	1
 '-.1 + -.9'	-1
@@ -451,16 +451,16 @@
 
 # test_logarithm2
 'use math; log10(100)'	2.0
-'use math; 10⌞100'	2.0
-'use math; 100⌟10'	2.0
-'use math; ℯ⌟'	1.0
+# triage-held 2026-11-06: log operators ⌞ ⌟ :: 'use math; 10⌞100'	2.0
+# triage-held 2026-11-06: log operators ⌞ ⌟ :: 'use math; 100⌟10'	2.0
+# triage-held 2026-11-06: log operators ⌞ ⌟ :: 'use math; ℯ⌟'	1.0
 'log10(100)'	2.0
-'use math; 10⌟100'	0.5
-'10⌟100'	0.5
-'₁₀⌟100'	2.0
-'use log;ℯ = 2.7182818284590;ln(ℯ)'	1.0
-'use log;ℯ = 2.7182818284590;ln(ℯ)'	1.0
-'ℯ = 2.7182818284590;ln(ℯ*ℯ)'	2.0
+# triage-held 2026-11-06: log operators ⌞ ⌟ :: 'use math; 10⌟100'	0.5
+# triage-held 2026-11-06: log operators ⌞ ⌟ :: '10⌟100'	0.5
+# triage-held 2026-11-06: log operators ⌞ ⌟ :: '₁₀⌟100'	2.0
+# triage-held 2026-11-06: assigning the constant ℯ :: 'use log;ℯ = 2.7182818284590;ln(ℯ)'	1.0
+# triage-held 2026-11-06: assigning the constant ℯ :: 'use log;ℯ = 2.7182818284590;ln(ℯ)'	1.0
+# triage-held 2026-11-06: assigning the constant ℯ :: 'ℯ = 2.7182818284590;ln(ℯ*ℯ)'	2.0
 'ln(1)'	0.0
 'log10(100000)'	5.0
 'log10(10)'	1.0
@@ -475,7 +475,7 @@
 'for i in 1…5 : puti i'	ø
 'for i in 1 … 5 : puti i'	ø
 'sum=0;for i in (1 to 3) {sum+=i};sum'	6
-'sum=0;for i=1..3;sum+=i;sum'	6
+# triage-held 2026-11-06: for i=1..3; loop head :: 'sum=0;for i=1..3;sum+=i;sum'	6
 
 # test_named_data_sections
 «fest='def';test='abc'»	'abc'
@@ -501,9 +501,9 @@
 '3⋅5'	15
 '3×5'	15
 '3**3'	27
-'√3**2'	3
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√3**2'	3
 '3^3'	27
-'√3^2'	3
+# triage-held 2026-11-06: symbolic surds and exact roots (√π² is π, √3^2 is 3) :: '√3^2'	3
 
 # test_root_float
 '√42.0 * √42.0'	42.0

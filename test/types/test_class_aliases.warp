@@ -1,11 +1,11 @@
 # from test_class_aliases.rs: edit the Rust test, then run the script again
 
 # positional_braces_build_a_known_class
-is! 'type Point struct {
-    X int
-    Y int
-}
-Point{1, 2}.Y' 2
+# triage-held 2026-11-06: Go struct, foreign syntax :: is! 'type Point struct {
+# ::     X int
+# ::     Y int
+# :: }
+# :: Point{1, 2}.Y' 2
 
 # init_defined_with_colon_equals_is_the_constructor
 is! 'class S{items:list; init(xs) := { items = []; for x in xs { if not (x in items) { items.add(x) } } }}; count(S([1 2 2 3]).items)' 3

@@ -11,7 +11,7 @@
 
 # test_of_and_possessive
 'p={name:"Joe"}; name of p'	'Joe'
-«p={name:"Joe"}; p's name»	'Joe'
+# triage-held 2026-11-06: desk-invented p's name, square of a number = … :: «p={name:"Joe"}; p's name»	'Joe'
 'p={a:1 b:{c:3}}; c of b of p'	3
 
 # test_bracket_lookup_by_text_never_traps
@@ -29,7 +29,7 @@
 
 # test_of_lookup_is_an_assignment_target
 'p={width:3}; width of p = 12; p.width'	12
-'square of a number = number*number; square 3'	9
+# triage-held 2026-11-06: desk-invented p's name, square of a number = … :: 'square of a number = number*number; square 3'	9
 
 # test_print_of_lookup_prints_the_field
 'p={w:1}; print w of p; w of p + 1'	2

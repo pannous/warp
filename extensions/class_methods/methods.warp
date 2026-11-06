@@ -477,7 +477,7 @@ class_dispatch(owners: list, called: map, call_arguments: list, fallback: Node, 
 
 # a call `x.sum(…)` of a routed method passing as many arguments as the method takes (`x.sum` the same of a method of
 # none not also a field's name): the dispatcher's `sum·method(x, …)`, unless x is statically no instance of a class
-# declaring it, then it stays as written; a call on a class (`Math.max(a, b)`) stays
+# declaring it, then it stays as written; a call on a class, `T.of(2)`, calls the method of that class
 routed(n: Node, routing: Routing): Node := {
 	parts = (part => routed(part, routing))
 	if is_key(n, Op.Assign) and is_position(key_of(n)) and element_word(key_of(n)) + "·assigned" in routing.methods { return position_call(key_of(n), element_word(key_of(n)) + "·assigned", [parts(value_of(n))], parts) }
@@ -593,9 +593,9 @@ method_routed(n: Node, routing: Routing): Node := match n {
 		# a member call `.get(k)` is no bare call `get(k)`: only its arguments are routed
 		member = if is_called_name(right) then children(right, part => routed(part, routing)) else routed(right, routing)
 		method = routed_member(right, routing)
-		static = left is symbol and name_of(left) in routing.classes
-		type = static_type(left, routing)
-		if static or method == ø or not may_own(type, method, routing) { return Key(object, Op.Dot, member) }
+		# a call on a class, `T.of(2)`, is its static method's, the class in the instance's place
+		type = if left is symbol and name_of(left) in routing.classes then name_of(left) else static_type(left, routing)
+		if method == ø or not may_own(type, method, routing) { return Key(object, Op.Dot, member) }
 		call_of(routed_function(type, method, routing), [object] + (if member is symbol then [] else items_of(member)[1..]))
 	}
 	_: children(n, part => routed(part, routing))
