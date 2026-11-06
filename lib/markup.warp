@@ -282,9 +282,13 @@ html_is_attribute(item: any, tag: any): bool := {
 	let value = html_content(item)
 	named = starts_with(name, "data-") or starts_with(name, "aria-") or name == "key" or name == "starting-style" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
 	if not named { return false }
+	if html_is_dotted_name(value) { raise "an attribute value has no dot: " + name + ": \"" + str(value_of(value)) + "\"; fix: write the class name as text" }
 	if (name == "style" or html_attribute_name(name) == html_starting_style) and tag != "head" and html_is_declarations(value) { return true }
 	not (value is pair) and (not html_is_group(value) or not html_holds_pairs(value))
 }
+
+// `class: .card`, the CSS selector's spelling of a class name: the parser's member `.card` of nothing
+html_is_dotted_name(value: any): bool := value is pair and str(value.op) == "." and key_of(value) == ø
 
 // `class:["btn" "btn-info"]` is an attribute, `style{ ".card": {…} }` an element: its items are rules
 html_holds_pairs(value: any): bool := {
