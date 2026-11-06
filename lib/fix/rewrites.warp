@@ -11,6 +11,9 @@ class Hint { line_number: int; column: int; written: text; replacement: text; ru
 counted_types = ["int", "float"]
 # `auto x = 3` (C++) → `var x = 3`
 foreign_words = [["auto", "var"]]
+# another language's name of a warp word, called (decisions.md round 15-17, card compile-time: only foreign or
+# deprecated spellings are rewritten, warp's English aliases stay): `len(xs)` → `count(xs)`, `xs.push(3)` → `xs.add(3)`
+foreign_calls = {len: "count", strlen: "count", strip: "trim", isdigit: "is_digit", isalpha: "is_alpha", isalnum: "is_alphanumeric", isspace: "is_space", toString: "text", to_s: "text", __str__: "text", compareTo: "compare", push: "add", append: "add"}
 # `7 div 2` (Pascal) → `7 /! 2`: floor division is `/!` (decision floor-division)
 floor_division = "/!"
 floor_division_words = ["div"]
@@ -73,6 +76,7 @@ word_at(cs: list, i: int): text := {
 word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
 	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
 	if word == alias_word and starts_statement(cs, i) { return alias_arrow_hint(cs, i + #word, number) }
+	if foreign_calls.has(word) and is_foreign_call(line, cs, i, word) { return Hint(number, i, word, foreign_calls[word], word + " is " + foreign_calls[word]) }
 	if word in text_units and at(cs, i - 1) == "." { return unit_count_hint(cs, i, word, number) }
 	if word in file_words and at(cs, i - 1) != "." { return quoted_path_hint(cs, i + #word, number) }
 	for pair in foreign_words {
@@ -128,6 +132,9 @@ unit_count_hint(cs: list, i: int, word: text, number: int) := {
 	written = piece(cs, start, end - start)
 	Hint(number, start, written, counting_word + " " + written, "." + word + " is the list: " + counting_word + " it")
 }
+
+# the word at index i called, `len(xs)`, `xs.push(3)`, not the line's own definition of it (`len(x) := …`)
+is_foreign_call(line: Scanned, cs: list, i: int, word: text): bool := at(cs, i + #word) == "(" and not (starts_statement(cs, i) and line.text.contains(":="))
 
 # the quoted text right after index i (past blanks and an opening parenthesis) when it is a whole argument and a path
 quoted_path_hint(cs: list, i: int, number: int) := {
