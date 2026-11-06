@@ -112,8 +112,11 @@ name_defined_in(line: text): text := {
 	following = line[#leading ..].trim()
 	converted = conversion_target(following)
 	if converted != "" { return converted }
-	is_function = following.starts_with("(") and line.contains(":=")
+	# `convert!(n, to: byte) := …`, `is!(warp, expected) := …`: the slice name is the bang word
+	is_bang = following.starts_with("!(")
+	is_function = (following.starts_with("(") or is_bang) and line.contains(":=")
 	is_value = following.starts_with(":=") or (following.starts_with("=") and not following.starts_with("=="))
+	if is_bang and is_function { return leading + "!" }
 	if is_function or is_value then leading else ""
 }
 # the type a conversion converts to, of the line's rest after its first name: `n: number as Real := …` and
@@ -232,7 +235,7 @@ operated_within(name: text): list := {
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word] else []) + (if writes_templates then [template_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
 }
 # `data($a * 1) => a`, an arm of quoted code wherever a sugar word holds it (`rules {…}`, extensions/sugar/arms.warp): its
 # match is written only once the sugar fires
@@ -244,7 +247,19 @@ is_quoted_arm(n: Node): bool := is_key(n, Op.Arrow) and is_quote(key_of(n))
 emitted_words(program: Node): list := time_literal_words(program) + root_words(program) + extension_writes.flat_map(writes => writes(program))
 # each extension pass that writes calls of library words the program may never write declares them here, by its
 # function of the program giving them: the next such pass is one entry, no other edit
-extension_writes = [component_words]
+# `x as! T` is a call of convert! written by extensions/conversions.warp, so the prelude's overloads are reached
+# though the program never writes the word. A program whose forced casts are only the 64-bit int wrap needs none
+is_forced_as(n: Node): bool := is_key(n, Op.As) and is_key(value_of(n), Op.Not) and key_of(value_of(n)) == ø
+forced_cast_words(program: Node): list := {
+	for n in nodes_in(program) {
+		if is_forced_as(n) and value_of(value_of(n)) is symbol {
+			word = name_of(value_of(value_of(n)))
+			if word in wrapping_byte_words or not names_int(word) { return ["convert!"] }
+		}
+	}
+	[]
+}
+extension_writes = [component_words, forced_cast_words]
 # a value called, `room(signal)` (closure_call_1 once lowered), may be an instance its class's `call` takes (emitter
 # closures.warp instance_calls): the module's call is reached and kept for it
 callable_word = "call"
@@ -690,14 +705,14 @@ word_index(file: text): map := {
 	for word in words.keys { index[word] = words[word].split(" ") }
 	index
 }
-# the words each standard module defines but the prelude, each with its modules joined by spaces: a word of letters
+# the words each standard module defines (an `alias ln => natural_log` too) but the prelude, each with its modules joined by spaces: a word of letters
 # (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 module_word_definers(): map := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude") {
 		source = file_text(std_module_path(module)) ?? ""
-		for word in definition_slices(source).map(slice => slice#1) + rule_heads(source).filter(word => not has_meaning(word)) {
+		for word in definition_slices(source).map(slice => slice#1) + module_aliases(source).keys + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not is_made_name(word) {
 				known = definers.get(word) ?? []
 				if module not in known { definers[word] = known + [module] }
