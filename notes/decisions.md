@@ -893,3 +893,9 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - triage-pipes: `|` between two ints is bit-or (`n = 2; m = 4; n | m` → 6); it pipes only when its right side is a function.
   - use-require-import: `use <word>` refuses with a fix-it naming the module ("square is a word of math: use math"); test_include:12-14 may change to `use math; square 7` (user OK to edit those lines).
   - pixels-bytes: `.bytes` of a number takes the endianness as a required parameter, `1.bytes(.big)` / `1.bytes(.little)`, no default (to avoid errors); a list is its items' bytes in that order.
+  - pixels-bytes (refined, user): the endianness is an enum value read from the parameter's type, `1.bytes(big_endian)` / `1.bytes(little_endian)`, no dot and no default.
+- 2026-11-06 card sprint, round 2 (user):
+  - cargo-semver-version: bring `use cargo` back now: a crate is built to a wasm module and linked like any module (load-time linking); test_cargo_crates:4-9 are the target.
+  - class-text: a Note equals the text of its name (Note.equals): `note("C#4") == "C#4"`; it still shows unquoted; test_note_values:7 stays.
+  - play-mozart-mp3: the sample uses the decided source-relative literal `play ^/tune.mp3` (source-relative-prefix); `program.folder` is welcome as a word for the same folder ($dir). Note: inline `x = ^/tune.mp3; x` shows ['^', "/tune.mp3"] today.
+  - power-function: investigate first: exact non-integer powers in lib/reals would be perfect, but measure the cost before choosing over floats.
