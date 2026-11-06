@@ -497,7 +497,20 @@ def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data
+### Warp reads warp
+
+warp's compiler is itself a warp program, and `parse` lends any program its parser: code becomes a tree to take apart.
+
+```warp => 14
+evaluate(n) := match n {
+	data($a + $b) => evaluate(a) + evaluate(b)
+	data($a * $b) => evaluate(a) * evaluate(b)
+	_ => n
+}
+evaluate(parse("2 + 3 * 4"))
+```
+
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data, warp_reads_warp
 
 ## Closures
 
