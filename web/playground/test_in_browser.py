@@ -1184,17 +1184,18 @@ def check_examples(names, page_url=None, site=None):
 # closed" for gpu_visualizer under load)
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
-REPORT_FIELDS = ["error", "errors", "message", "value", "printed", "printedWhole", "text", "stream"]
+REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "printedWhole", "text", "stream"]
 START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
 	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
 SAMPLE_POLL_SECONDS = 0.5
 
 
 def page_output(report):
-	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø"""
+	"""what the page shows as the native warp prints it: the program's stdout, then its value unless that is ø; a page of
+	markup its HTML (driver.js pageHtml), as the native warp prints page_render's"""
 	# printedWhole: every frame's output (playground.js shows only an animation's last frame, its `printed`)
 	printed = "".join(part["text"] for part in report.get("printedWhole", report.get("printed", [])) if part.get("stream", 1) == 1)
-	value = report.get("value") or ""
+	value = report.get("html") or report.get("value") or ""
 	if value in ("ø", "") or report.get("error"):
 		return printed
 	return printed + value + "\n"  # as the native warp shows it, a text in its quotes
