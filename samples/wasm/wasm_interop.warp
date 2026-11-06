@@ -8,7 +8,7 @@ use { memory, table } from "env"
 use text
 use memory
 
-# Export function for wasm
+# Export function for wasm (library form: `export name(…) := …`, not `export def`)
 export add(a: i32, b: i32): i32 := a + b
 
 # Export with explicit wasm type
