@@ -683,25 +683,25 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 A web page is made of tags. In warp, tags are values.
 
-```warp => p: {"hello"}
+```warp => <p>hello</p>
 p{ "hello" }
 ```
 
 Attributes look like HTML.
 
-```warp => b: {class: "fat" "hello"}
+```warp => <b class="fat">hello</b>
 b{class:"fat" "hello" }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => div: {h1: {"Fruit"} p: {"Fresh " b: {"pears"} " today"}}
+```warp => <div><h1>Fruit</h1><p>Fresh <b>pears</b> today</p></div>
 div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
 A list of values makes a list of tags.
 
-```warp => ul{li:"apple" li:"pear"}
+```warp => <ul><li>apple</li><li>pear</li></ul>
 fruits = ["apple" "pear"]
 ul{ li all fruits }
 ```
