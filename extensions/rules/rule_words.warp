@@ -2,8 +2,9 @@
 # computed): `where $names = path_parameters($path)` binds the hole to the word's result, a node or a list of nodes
 # (a rest hole's items), `where routed($program)` holds when the word gives yes. Each word takes the code its rule's
 # holes bound, `$program` the whole program, and runs inside the compiler.
-# warp functions as one WGSL shader (lib/prelude.warp paint rules) are extensions/rules/wgsl.warp's words
-use wgsl
+# a shader's holes are extensions/rules/shader_holes.warp's words, packing GPU lists extensions/rules/gpu_packing.warp's
+use shader_holes
+use gpu_packing
 
 # the mark of a program's function named as a library word, its own (core/passes/prelude_words.warp own_word)
 own_mark = "·own"
@@ -319,7 +320,7 @@ signaled(program: Node): any := {
 	}
 	separated(bracketed(written, ""), ";")
 }
-# the program with each list it makes for the GPU (extensions/rules/wgsl.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
+# the program with each list it makes for the GPU (extensions/rules/gpu_packing.warp gpu_bound) made as a GPU list, else ø: a main-level assignment's
 # creating form packed (same-scope flow only, decision gpu-bound-floats)
 gpu_lists_packed(program: Node): any := {
 	statements = level_statements(program)
@@ -488,6 +489,32 @@ function_definition(name: Node, program: Node): any := {
 	if #found == 0 then ø else found#1
 }
 defines(statement: Node, name: text): bool := defined_name(statement) == name or (is_key(statement, Op.Assign) and key_of(statement) == symbol(name) and is_lambda(value_of(statement)))
+# `{name: "f", code: data [definitions], values: {sun: sun, …}}`: a function of the program with what it reaches,
+# quoted for a reader at run time (lib/shaders.warp, decision shaders-in-lib): its definition and those of the program
+# functions it calls, transitively, and the program values they name, each read anew where the map is made; ø for a
+# name the program defines no function of
+definitions_reached(f: Node, program: Node): any := {
+	if function_definition(f, program) == ø { return ø }
+	definitions = []
+	values = []
+	reached = {}
+	pending = [name_of(f)]
+	while #pending > 0 {
+		word = pending.last
+		pending = pending[0 ..< #pending - 1]
+		if not reached.has(word) {
+			reached[word] = yes
+			definition = function_definition(symbol(word), program)
+			if definition != ø {
+				definitions += [definition]
+				pending += nodes_in(definition).filter(n => n is symbol).map(name_of)
+			} else if main_level_value(word, program) != ø { values += [word] }
+		}
+	}
+	read = if #values == 0 then Node.Empty else List(values.map(word => Key(symbol(word), Op.Colon, symbol(word))), Bracket.Curly, Separator.Comma)
+	quoted = List([symbol(quote_word), List(definitions, Bracket.Square, Separator.Comma)], Bracket.None, Separator.Space)
+	List([Key(symbol("name"), Op.Colon, Text(name_of(f))), Key(symbol("code"), Op.Colon, quoted), Key(symbol("values"), Op.Colon, read)], Bracket.Curly, Separator.Comma)
+}
 # `["a", "b"]`: the names of the function's parameters as a list; ø when the program defines no such function
 parameters_named(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
@@ -790,6 +817,7 @@ rule_words = {
 	counted_question: counted_question,
 	end_refused: end_refused,
 	declared_local: declared_local,
+	definitions_reached: definitions_reached,
 	definition_text: definition_text,
 	dir_words: dir_words,
 	doc_of: doc_of,
@@ -839,8 +867,6 @@ rule_words = {
 	value_definitions: value_definitions,
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,
-	wgsl_painting: wgsl_painting,
-	wgsl_shader: wgsl_shader,
 	whenever_listens: whenever_listens
 }
 

@@ -1,0 +1,57 @@
+# A shader's holes and paint's size, read off the program at compile time (lib/prelude.warp's paint rules in
+# extensions/rules/modules/prelude.warp); the WGSL a program function paints is made at run time (lib/shaders.warp)
+use rule_words
+
+VALUES_NAME = "values"
+IDENTIFIER_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+# the value the program's main level assigns the name first, ø where it assigns none
+main_level_value(word: text, program: Node): any := {
+	found = level_statements(program).map(statement => wgsl_declared(statement)).filter(statement => is_key(statement, Op.Assign) and wgsl_assigned_name(key_of(statement)) == word)
+	if #found == 0 then ø else value_of(found#1)
+}
+# `global x = 3`, parsed `global: (x = 3)`: the assignment it declares
+wgsl_declared(statement: Node): Node := if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") then value_of(statement) else statement
+wgsl_assigned_name(target: Node): text := {
+	if target is symbol { return name_of(target) }
+	if is_group(target) and #target > 0 and target.last is symbol then name_of(target.last) else ""
+}
+
+# --- a shader's holes (decision P235b, card shader-holes; Rust twin graphics/shader_holes.rs): each `$name` of a
+# shader block the parser wrote values.name; every paint of a shader the program assigns gets `name: name` in its
+# values for each hole its map lacks, so the variable is read at each paint. A built-in hole (lib/native/foreign.c
+# values_filled, host-gpu.js builtinValues) gets one only where the program assigns that name; $previous never ---
+
+SHADER_BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"]
+SHADER_FRAME_HOLE = "previous"
+# the values of a paint of shader s with the given map: its entries, then the holes it lacks; ø where s is no shader
+# the program assigns or the map has every hole
+shader_values(s: Node, given: Node, program: Node): any := shader_holes_added(s, if is_group(given) then items_of(given) else [], program)
+# the values of a paint of shader s given none
+shader_values_of(s: Node, program: Node): any := shader_holes_added(s, [], program)
+# the size paint(s) paints at (wiki/graphics.md): the program's width and height where its main level assigns both,
+# else the size of where it shows (prelude.warp shown_width: a window's, else the view's)
+paint_size(program: Node): list := {
+	if main_level_value("width", program) != ø and main_level_value("height", program) != ø { return [symbol("width"), symbol("height")] }
+	[call_of("shown_width", []), call_of("shown_height", [])]
+}
+shader_holes_added(s: Node, entries: list, program: Node): any := {
+	shader = main_level_value(name_of(s), program)
+	if shader == ø or not (shader is text) { return ø }
+	given = entries.filter(entry => is_key(entry, Op.Colon)).map(entry => "${key_of(entry)}")
+	added = shader_holes("${shader}").filter(name => name not in given and name != SHADER_FRAME_HOLE and (name not in SHADER_BUILTIN_HOLES or main_level_value(name, program) != ø))
+	if #added == 0 { return ø }
+	List(entries + added.map(name => Key(symbol(name), Op.Colon, symbol(name))), Bracket.Curly, Separator.Comma)
+}
+# the names a shader reads as values.name, each once
+shader_holes(code: text): list := {
+	names = []
+	for part in code.split(VALUES_NAME + ".")[1 ..] {
+		name = ""
+		for letter in part {
+			if not IDENTIFIER_LETTERS.contains(letter) { break }
+			name += letter
+		}
+		if name != "" and name not in names { names += [name] }
+	}
+	names
+}

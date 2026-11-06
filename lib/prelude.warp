@@ -446,9 +446,6 @@ paint_each(f, width, height) := {
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
 // host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
 paint(picture, width, height) := if picture is list or picture is text then paint(picture, width, height, ø) else paint_each(picture, width, height)
-// paint(f, width, height) of a program function: its shader on the GPU, else f of each pixel on the CPU (the rules
-// at the sum rules above)
-paint_shader(painting: map, width, height, f) := if gpu_paints() then paint(painting.shader as text, width, height, shader_values(painting.uniform)) else paint_each(f, width, height)
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
 shader_values(values) := {
