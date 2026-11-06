@@ -1695,7 +1695,7 @@ matches_runs(rule: Rule): bool := not rule.whole and is_run_pattern(rule.pattern
 
 # a rule tried on the whole node: one not matching runs, or a run rule spelling a definition at a definition with a
 # spaced head, which spreads into the phrase it matches (head_spread)
-tried_whole(rule: Rule, n: Node): bool := not matches_runs(rule) or (defines_last(rule.pattern) and defines_spaced_head(n))
+tried_whole(rule: Rule, n: Node): bool := not matches_runs(rule) or (defines_last(rule.pattern) and head_spread(n) != ø)
 
 # a pattern of words without a rest: it matches runs of a phrase
 is_run_pattern(pattern: Node): bool := match pattern {
@@ -1984,7 +1984,8 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	# the node it marks
 	if is_attribute(code) and not is_attribute(pattern) { return rule_matches(pattern, attribute_marked(code), bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
-	if defines_last(pattern) and defines_spaced_head(code) { return rule_matches(pattern, head_spread(code), bound) }
+	spread = if defines_last(pattern) then head_spread(code) else ø
+	if spread != ø { return rule_matches(pattern, spread, bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
@@ -1994,10 +1995,18 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 # is unit(hand) := 4inch), as written for a pattern spelling it spaced, `unit $name := $value` (the phrase unit,
 # $name := $value): a used module's rule sees the form the program wrote
 defines_last(pattern: Node): bool := is_group(pattern) and bracket_of(pattern) == "" and separator_of(pattern) == " " and is_key(items_of(pattern)[#pattern - 1], Op.Define)
-defines_spaced_head(code: Node): bool := is_key(code, Op.Define) and is_called_head(key_of(code))
-head_spread(definition: Node): Node := {
-	words = items_of(key_of(definition))
-	rule_phrase(words[0 ..< #words - 1] + [placed(Key(words[#words - 1], Op.Define, value_of(definition)), definition)])
+# the code spread so, else ø; the words after the definition's value continue it, as they do a plain definition's
+# (`unit furlong := 201.168 m`, which the parser keeps as `(unit furlong := 201.168) m`)
+head_spread(code: Node): Node? := {
+	trailing = []
+	if is_group(code) and bracket_of(code) == "" and separator_of(code) == " " and #code > 1 {
+		trailing = items_of(code)[1 ..]
+		code = code#1
+	}
+	if not (is_key(code, Op.Define) and is_called_head(key_of(code))) { return ø }
+	words = items_of(key_of(code))
+	value = if #trailing == 0 then value_of(code) else rule_phrase([value_of(code)] + trailing)
+	rule_phrase(words[0 ..< #words - 1] + [placed(Key(words[#words - 1], Op.Define, value), code)])
 }
 # a tuple pattern `($a, $b)` matches a tuple, never the call `f(a, b)`, whose parentheses hold no commas
 tuple_fits(pattern: Node, code: Node): bool := not (bracket_of(pattern) == "(" and separator_of(pattern) == ",") or separator_of(code) == ","
