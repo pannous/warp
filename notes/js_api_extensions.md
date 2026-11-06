@@ -11,8 +11,9 @@ Sources at the end, fetched 2026-10-28. "?" marks a value that is not verified.
   line 530). There are no `wasm:` builtin imports and no externref values.
 - Errors: inside a `try`, a runtime error throws the tag `warp_error(i32)`, which a `try_table` catches (final
   exnref EH). Outside a try it traps (core/emitter/emitter.warp about line 88).
-- The playground still runs the Rust-era compiler: web/playground/warp.wasm is built by build.sh from src/web.
-  emitter.warp modules do not run in the browser yet (notes/self_hosting.md; card `playground-compiles`).
+- The playground runs the self-hosted compiler since 2026-11-01 (decision playground-today, card `playground-compiles`
+  done): build.sh copies the installed warp.wasm, runtime.wasm and modules into warp-lib/, driver.js runs them over
+  wasi.js and the host-*.js parts (notes/playground_plan.md).
 - The playground already uses JSPI: `WebAssembly.Suspending`/`promising` (host.js:405, host-foreign.js:272,
   host-compiler.js:42). Its comment there says "Safari has none", which Safari 27 has made out of date.
 - JS cannot read GC structs or arrays, so reader.js reads results through the module's `reflect_*` exports. It reads a
@@ -64,7 +65,7 @@ Type Imports (1), Compilation Hints (2), Multibyte Array Access (2), FP16 (2).
 | Component Model | the native, typed alternative to JS glue (WIT), which warp already has a path for | – | – |
 
 ## Recommendations (cheapest high value first)
-1. **Make the browser host of emitter.warp modules text-efficient from the start** (part of `playground-compiles`).
+1. **Make the browser host of emitter.warp modules text-efficient from the start** (the playground hosts them since `playground-compiles`; reader.js still reads a text byte by byte).
    Cross a text in one call: the module copies it into linear memory (`text_address`, which exists) and JS runs
    `TextDecoder` over `memory.buffer`. Do not use a `reflect_text_byte` call per byte. Plan the text crossing as one
    function of the host, so it can later become `wasm:text-encoding` without touching callers.

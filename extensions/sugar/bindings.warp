@@ -1,0 +1,4 @@
+# `input{ bind: name }` (card input-bind-name): the variable as code to read and to write, the field's two-way binding
+# (lib/markup.warp Binding). Main sugar, not the early events: the early pass runs only for programs whose phrases
+# name a rule word, and a key's word is no phrase word
+rewrite bind: $v => bind: binding(() => $v, entered => { $v = entered }) where item and $v is symbol

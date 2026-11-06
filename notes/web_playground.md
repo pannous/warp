@@ -160,7 +160,7 @@ gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a mea
   (`?slow_start=2000` reproduces them locally). A change that may behave differently there:
   `gh workflow run Playground -R pannous/warp --ref <branch>` first.
 - Firefox logs a bare "uncaught exception: undefined" when Stop terminates a Worker busy inside a JSPI promising call
-  (probes/firefox_jspi_terminate.html); test_in_browser.py expects the line for STOP_BUTTON.
+  (report and repro: notes/firefox_jspi_bug.md); test_in_browser.py expects the line for STOP_BUTTON.
 - Not ours: `TypeError … shiftKey … inject.js` in a user's Firefox is a browser extension's content script.
 
 ## test/ in the browser: `scripts/tests-web.sh` (test_in_browser.py --tests)

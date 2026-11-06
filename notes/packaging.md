@@ -15,10 +15,11 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid). Each one ships warp-runtime next to warp.
   - PyPI `pip install warp-language` (warp-lang is NVIDIA's Warp on PyPI):
-    packaging/pypi/build_wheels.py writes one wheel per target, no Python inside, the binaries in
-    `.data/scripts/` (maturin's bin layout; zip mode needs S_IFREG or pip drops the exec bit). Tags macosx_11_0_arm64,
-    macosx_10_12_x86_64, manylinux_2_<glibc>_<arch> from the newest GLIBC_ symbol in the binary (2.35 today: the
-    ubuntu-22.04 builders). Published by trusted publishing, no token, once the repository variable PYPI_PUBLISH=true.
+    packaging/pypi/build_wheels.py writes one wheel per target, no Python inside: the release folder whole in
+    `.data/data/share/warp/` (modes kept; zip mode needs S_IFREG or pip drops the exec bit) and a launcher
+    `.data/scripts/warp` running its warp, which reads its lib/ as its own folder (card packaging-pypi). Tags
+    macosx_11_0_arm64, macosx_10_12_x86_64, manylinux_2_<glibc>_<arch> from the newest GLIBC_ symbol in the native warp
+    (2.35 today: the ubuntu-22.04 builders). Published by trusted publishing, no token, once the repository variable PYPI_PUBLISH=true.
   - `.deb`/`.rpm` warp-lang, from packaging/linux/nfpm.yaml (nfpm 2.47 in CI, `brew install nfpm` locally; run in the
     unpacked tarball, nfpm doesn't expand env vars in `src`): /usr/bin/warp, warp-runtime, warp-page-runtime, attached
     to the release as warp-lang_<v>_amd64.deb / warp-lang-<v>-1.x86_64.rpm (and arm64/aarch64).
