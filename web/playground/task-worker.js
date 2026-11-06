@@ -1,14 +1,14 @@
-// A helper Worker of a program's pool (host-tasks.js addTaskWorker): it fetches and runs GPU jobs for the program's
+// A helper Worker of a program's pool (host-tasks.js addTaskWorker): it runs GPU jobs for the program's
 // Worker, which cannot await while it runs, and answers as JSON in the shared buffer it waits on with Atomics.wait.
 
-importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
+importScripts("imports.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 // the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
 let program;
 self.onmessage = ({ data }) => {
 	if (data.paintCanvas) return paintCanvasArrived(data.paintCanvas); // host-gpu.js, from the page
 	program = data.port;
-	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : gpuJobInto(data);
+	program.onmessage = ({ data }) => gpuJobInto(data);
 	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)
 };
 
@@ -19,11 +19,3 @@ self.addEventListener("unhandledrejection", event => {
 	event.preventDefault();
 	console.error("warp task Worker: a browser API failed without saying why", event.promise);
 });
-
-
-// `users := fetch url` of a running program (host.js startFetch): the reply goes into shared memory, which the program
-// reads at its check points, and a message tells the program's Worker once it is back in its event loop
-async function fetchInto({ fetch: url, body, shared }) {
-	writeShared(shared, await fetchReplyOf(url, body));
-	program.postMessage(FETCH_DONE);
-}

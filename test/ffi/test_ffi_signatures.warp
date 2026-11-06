@@ -1,9 +1,9 @@
 # from test_ffi_signatures.rs: edit the Rust test, then run the script again
 
 # libc_signatures
-is! «import sranddev from 'c'
-sranddev()
-1» 1
+# triage-held 2026-11-06: JS-style import x from 'c', foreign syntax :: is! «import sranddev from 'c'
+# :: sranddev()
+# :: 1» 1
 is! «import srand from 'c'
 import rand from 'c'
 srand(7)

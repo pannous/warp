@@ -31,6 +31,10 @@ html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", 
 
 to_html(value: any): text := html_render(value, ø, ø)
 
+// `ul{ li all fruits }`: a tag word before all/each makes that tag of each item
+rewrite $tag all $xs => $xs.map($e -> {$tag: $e}) where $tag is symbol and $tag is unbound
+rewrite $tag each $xs => $xs.map($e -> {$tag: $e}) where $tag is symbol and $tag is unbound
+
 // A page's markup keeps its live parts as code (card markup-keeps): `p{ "count: " + count }` reading a variable a
 // handler changes is the part `() => …`, recomputed each time the markup renders; `on click { count += 1 }` is the
 // attribute `onclick: (event => …)`. The page renders the program's value with page_render, whose HTML names each
@@ -48,7 +52,10 @@ export page_render(value: any) := {
 	page_handler_labels = []
 	component_calls = {}
 	component_order = []
-	to_html(value)
+	component_current = ø
+	let html = to_html(value)
+	component_moments_run()
+	html
 }
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 // a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
@@ -100,11 +107,41 @@ component(name: text, key: any): map := {
 	id = name + "·" + str(key ?? calls)
 	if not component_states.has(id) { component_states[id] = {} }
 	instance = component_states[id]
-	component_order.add([name, instance])
+	component_order.add([name, instance, id])
+	component_current = id
 	instance
 }
 component_state(instance: map, name: text, made: function) := { if not instance.has(name) { instance[name] = made() } }
 component_instances(name: text): list := component_order.filter(entry => entry#1 == name).map(entry => entry#2)
+
+// `on mount {…}` and `on cleanup {…}` (card mount-cleanup-handlers): in a component's body the instance's own moments,
+// run once when it appears on the page and when it leaves it; outside any, the page's, which appears at its first
+// render. A body runs right after its component call and before the components it shows, so the moment is the
+// instance's whose call ran last
+page_moments_id = "·page"
+global component_current = ø
+global component_moments = {}
+// the instances on the page after the last render, by id
+global component_shown = []
+rewrite listen(data $moment, $action, $once) => component_moment(data $moment, $action) where $moment in [mount, cleanup]
+component_moment(moment: any, action: function) := {
+	let id = component_current ?? page_moments_id
+	var moments = if component_moments.has(id) then component_moments[id] else {}
+	moments[name_of(moment)] = action
+	component_moments[id] = moments
+}
+component_moments_run() := {
+	let shown = [page_moments_id] + component_order.map(entry => entry#3)
+	for id in shown { if id not in component_shown { component_moment_run(id, "mount") } }
+	for id in component_shown { if id not in shown { component_moment_run(id, "cleanup") } }
+	component_shown = shown
+}
+component_moment_run(id: text, moment: text) := {
+	if component_moments.has(id) and component_moments[id].has(moment) {
+		let action = component_moments[id][moment]
+		action(ø)
+	}
+}
 
 // what an element shows to be found by: its text, its tags left out, and its labelling attributes
 html_labels(tag: any, items: list, children: text): list := [html_shown_text(children)] + items.filter(item => html_is_attribute(item, tag) and html_name(item) in handler_label_attributes).map(item => html_plain(html_content(item)))

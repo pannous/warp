@@ -30,6 +30,8 @@ spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
 	if is_number_literal(amounted) or is_big_number_view(amounted) { return Key(amounted, Op.Mul, unit) }
+	if is_group(amounted) and bracket_of(amounted) == "(" { throw unit_ambiguous(amounted, unit) }
+	if amounted is key and op_of(amounted) in unit_ambiguous_ops { throw unit_ambiguous(amounted, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
 	if right == ø then ø else Key(key_of(amounted), op_of(amounted), right)
@@ -38,6 +40,13 @@ starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_bin
 # `km/h`, `m²`, `cm`: code led by a unit word, the unit part of `2 km/h is speed` (lib/units.warp)
 unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else code is symbol and "units" in defining_modules("${code}")
 unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
+# a unit after a group, a product, a quotient or a power reads two ways, `(50/3) ms` and `10 / 2 ms`: refused with a fix-it
+# (unit symbols bind only after a number, notes/decisions.md)
+unit_ambiguous_ops = [Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
+unit_ambiguous(amounted: Node, unit: Node): text := {
+	written = if is_group(amounted) then as_code(amounted) else "(${as_code(amounted)})"
+	"DimensionError: a unit binds only after a number: write ${written} * 1${unit}, or glue the unit to the number it measures"
+}
 # `km/h`, `kg·m/s^2`, `cm^2`: a unit written whole, each part a unit word, each power a number (`km/2` is no unit)
 unit_written(code: Node): bool := {
 	if code is key and op_of(code) == Op.Pow { return unit_written(key_of(code)) and is_number_literal(value_of(code)) }

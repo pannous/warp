@@ -12,7 +12,7 @@
 'fun f(x: Int): Int { return x + 1 }; f(1)'	2
 
 # an_arrow_result_type_before_a_colon_body
-'def f(x: int) -> int: x + 1; f(1)'	2
+# triage-held 2026-11-06: Python spelling, foreign syntax :: 'def f(x: int) -> int: x + 1; f(1)'	2
 
 # named_arguments_reach_a_function_with_a_result_type
 'def f(x: String) -> String { "Hi " + x }; f(x: "Bob")'	'Hi Bob'

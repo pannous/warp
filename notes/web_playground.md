@@ -72,12 +72,9 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
   playground.js rejects workerReady on the Worker's error event, restarts a start silent for STALLED_START_MS (60 s,
   every message restarts the clock) once with a console warning naming its stage, and a second silent start fails the
   run naming the stage.
-- Reading a GC result: JavaScript cannot read struct fields, so modules built without `native` export 13 `reflect_*`
-  getters (src/wasm_emitter/reflection/exports.rs, EmitterConfig.emit_reflection). reader.js walks the result into
-  `{kind, data, chain}` (chain = the value-field cells, flat, so long lists need no recursion), web::node_from_tree
-  mirrors Node::from_gc_object. Floats travel as text when JSON cannot hold them (NaN, ±Infinity, -0).
-- Traps: the JS error's stack names the wasm functions (name section), plus the `trap_detail` global read through the
-  reflection getters → wasm_emitter::trap_error, the same reading wasmtime's trace gets (failed_run).
+- Reading a GC result: JavaScript cannot read struct fields, so a host word reads values through the module's exports
+  (values.js, below).
+- Traps: the JS error's stack names the wasm functions (name section), plus the `trap_detail` global.
 - Asks: web::evaluate runs with a PageAsker: answers the page sent are taken (and hinted, as on the terminal), every
   other Ask is reported with its readings and falls back. Clicking a reading stores `topic = explicit form` in
   localStorage and runs again. educate_once notes get a "got it" button (`ack:<topic> = acknowledged`).
@@ -102,7 +99,7 @@ guestCount/guestItem/guestInts (item_count, item_at, int_item_at), guestBytes; g
 shown text (maps, lists, texts, yes/no, ø, numbers, ratios; a list too long to show item by item). Built back with
 the constructors of core/emitter/host.warp host_builders (newGuestText, newGuestList from the last item on,
 newGuestMap by new_spelled_key/new_spelled_list, newGuestFloats, newGuestError, newGuestValue of plain JS).
-plainValue/builtValue/errorValue pick reader.js for a Rust-era module until none runs in the page (card
+Every host word reads and builds so (reader.js and exact.js, the Rust-era tree reading, went with card
 drop-readnode-branch). Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
 sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its rest) and floats are read by shown
 text, so a million-item GPU list stops the run (samples/gpu/gpu_million; bulk exports asked of core).

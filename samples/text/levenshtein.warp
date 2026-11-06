@@ -23,11 +23,8 @@ fun levenshtein(a, b) {
 	return prev[n]
 }
 
-# warp: `let` binds once (error "prev is let (immutable)"); a changing variable is plain `total = 0` or `var total = 0`
-var total = 0
-total += levenshtein("kitten", "sitting")   # 3
-total += levenshtein("flaw", "lawn")        # 2
-total += levenshtein("", "abc")             # 3
-total += levenshtein("abc", "abc")          # 0
-total += levenshtein("saturday", "sunday")  # 3
-total
+print levenshtein("kitten", "sitting")   # 3
+print levenshtein("flaw", "lawn")        # 2
+print levenshtein("", "abc")             # 3
+print levenshtein("abc", "abc")          # 0
+print levenshtein("saturday", "sunday")  # 3
