@@ -50,8 +50,8 @@ STOPPED = "stopped after"  # playground.js: the report of a run the page stopped
 # a section of a test file the browser cannot run (a C window library, a shell command) says why in its heading,
 # `# raylib_calls — native only: raylib, a C library the browser has not`: EXP instead of PAGE for the cases below it, up
 # to the next blank line (night decision N20, as the samples' EXPECTED_FAILURE; in the heading, as a line of its own
-# would move the cases' lines the native verdicts are stored by)
-NATIVE_ONLY = re.compile(r"^#.* native only: ")
+# would move the cases' lines the native verdicts are stored by); a sample with such a line is EXP instead of FAIL
+NATIVE_ONLY = re.compile(r"^#.* native only: ", re.M)
 CASE_PLACE = re.compile(r"^(\S+):(\d+) ")
 PAGE_LOST = "playground is not defined"  # a report of a page that lost its API mid-batch: no verdict, the case runs again
 # a test-verdicts line: its mark, then the case; a failure's ends in what it got (scripts/baseline.sh case_of)
@@ -1287,7 +1287,7 @@ def check_samples(paths, tree):
 			compared = native.get(path) == "ok" and os.path.isfile(native_file)
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
 			status, detail = sample_verdict(report, native_output)
-			if status == "FAIL" and EXPECTED_FAILURE.search(source):
+			if status == "FAIL" and (EXPECTED_FAILURE.search(source) or NATIVE_ONLY.search(source)):
 				status = "EXP"
 			with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
 				shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
