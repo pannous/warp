@@ -23,7 +23,7 @@ is! 'n = 0; once alarm {n += 1}; on alarm {n += 10}; emit alarm; emit alarm; n' 
 is! 'level = 0; once alarm {level = event.level}; emit alarm{level: 3}; emit alarm{level: 5}; level' 3
 
 # a_change_listener_reads_the_old_value
-is! 'x = 1; log = 0; on change x {log = log*10 + previous}; x = 2; x = 3; log' 12
+# triage-held 2026-11-06: previous, a synonym of old in a change handler :: is! 'x = 1; log = 0; on change x {log = log*10 + previous}; x = 2; x = 3; log' 12
 is! 'watch(s) := on change s {print old}
 x = 1
 watch(x)

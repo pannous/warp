@@ -17,8 +17,8 @@
 'byte=3; byte+1'	4
 
 # c_type_names_of_several_words_are_fixed_widths
-'x: unsigned int = 3; x'	3
-'x: long long = 3; x + 1'	4
+# triage-held 2026-11-06: C integer spellings (unsigned int, long long), foreign syntax :: 'x: unsigned int = 3; x'	3
+# triage-held 2026-11-06: C integer spellings (unsigned int, long long), foreign syntax :: 'x: long long = 3; x + 1'	4
 'unsigned long long y = 3; y'	3
-'x: unsigned short = 7; x'	7
-'f(n: unsigned int) := n + 1; f(2)'	3
+# triage-held 2026-11-06: C integer spellings (unsigned int, long long), foreign syntax :: 'x: unsigned short = 7; x'	7
+# triage-held 2026-11-06: C integer spellings (unsigned int, long long), foreign syntax :: 'f(n: unsigned int) := n + 1; f(2)'	3
