@@ -1,3 +1,6 @@
 #!/usr/bin/env warp
 use sound
-play "samples/sound/tune.mp3"
+use file
+# beside this program (decision source-relative-prefix: play ^/tune.mp3 once path literals take ^/;
+# program.folder is the same folder $dir names)
+play(program.folder + "/tune.mp3")

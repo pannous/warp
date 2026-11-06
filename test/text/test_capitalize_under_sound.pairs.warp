@@ -1,0 +1,5 @@
+# capitalize / upper under use sound: letter-range local must not meet sound.at (card capitalize-failure)
+'use sound; capitalize("hi")'	'Hi'
+'use sound; capitalize("élan")'	'Élan'
+'use sound; upper("hi")'	'HI'
+'use sound; title("hello world")'	'Hello World'
