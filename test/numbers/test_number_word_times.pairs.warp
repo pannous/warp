@@ -1,0 +1,3 @@
+# number words pick an overload as digits do: `three times four` multiplies as `3 times 4` does
+'three times four'	12
+'x = three times four; x'	12

@@ -1,7 +1,8 @@
 #!/usr/bin/env warp
-// code.golf sierpiński-triangle: order 4, each order two copies of the last one under a centered copy
+// code.golf sierpiński-triangle: order 4, each order two copies of the last one under a centered copy; no space after a row's last ▲
 rows = ["▲"]
 for 1 to 4:
 	pad = " " * rows.count
-	rows = rows.map(row => pad + row + pad) + rows.map(row => row + " " + row)
+	width = 2 * rows.count - 1
+	rows = rows.map(row => pad + row) + rows.map(row => row + " " * (width - #row + 1) + row)
 print rows.join("\n")

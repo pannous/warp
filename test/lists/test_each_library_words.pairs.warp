@@ -1,0 +1,3 @@
+# the explicit broadcast maps any function, a library word's too (decision each-all-broadcast)
+'xs = ["a", "bb"]; count each xs'	[1, 2]
+'abs all [-1, 2]'	[1, 2]
