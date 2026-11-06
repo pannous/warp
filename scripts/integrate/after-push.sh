@@ -168,6 +168,8 @@ pruned() {
 # The seed stays beside ~/dev/bin/warp, where the native `warp rebuild` looks (the link's folder)
 NATIVE_PREFIX=native-
 # native_built <folder> <builder>: the native warp built from the folder's core/native/warp.warp into <folder>/warp
+# put_back <folder>: the folder set aside as <folder>.old in its place again, the failed new one gone
+put_back() { [ -d "$1.old" ] || { rm -rf "$1"; return; }; rm -rf "$1" && mv "$1.old" "$1"; }
 native_built() {
 	(cd "$1/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$1 "$2" build native warp.warp >/dev/null 2>&1) &&
 		mv "$1/compiler/native/warp" "$1/warp"
@@ -200,10 +202,14 @@ install_native() {
 	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
-	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
+	# a folder of this tip already there (the installed one, a second install of one tip) is set aside and put back when
+	# the new one fails its checks: removed, ~/dev/bin/warp would point nowhere (card after-push-leave)
+	rm -rf "$folder.old" && { [ ! -d "$folder" ] || mv "$folder" "$folder.old"; } && mv "$folder.new" "$folder" ||
+		{ put_back "$folder"; return 1; }
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
-	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
-	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; rm -rf "$folder"; return 1; }
+	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; put_back "$folder"; return 1; }
+	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; put_back "$folder"; return 1; }
+	rm -rf "$folder.old"
 	older_than_installed && { say "native warp of ${tip:0:10} not linked: the installed one is newer"; return 2; }
 	linked "$folder/warp" "$MAIN_WARP" && linked "$folder" "$MAIN_LIB" || return 1
 	pruned
