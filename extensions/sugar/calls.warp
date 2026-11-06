@@ -12,6 +12,9 @@ rewrite ($f ()) => $f() where $f is function
 rewrite ($f $x) => $f($x) where $f takes one
 # `3 then twice` is no pipe (decision then-not-pipe): a function after `then` is refused naming `|>`
 rewrite $x then $f => $refused where $f is function and $refused = then_not_pipe($x, $f)
+# a method of more than its receiver keeps the function after it as its argument: `xs.map length` is xs.map(length),
+# while `xs.first abs` applies backward below, abs(xs.first)
+rewrite ($x.$m $f) => $x.$m($f) where $f is function and $m is function and not $m takes one
 # backward application (decision postfix-words): a phrase of exactly two items, a value then a library word of one
 # typed value, is its call, `16 sqrt` is sqrt(16), `-7 abs` abs(-7); a function first keeps the prefix meaning above,
 # and a use line is none: `use keys` names the module, never keys(use)
