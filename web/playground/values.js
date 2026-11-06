@@ -134,6 +134,8 @@ function newGuestBytes(program, text, builder) {
 }
 const newGuestText = (program, text) => newGuestBytes(program, text, "new_text");
 const newGuestError = (program, message) => program.error_of(newGuestText(program, message));
+// a text's NFC (decision nfc-slot, for text ==): JavaScript's own normalize, where the module builds texts (warp.wasm)
+const canonicalText = (program, text) => newGuestText(program, guestText(program, text).normalize("NFC"));
 // a [list] of the module's values, built from its last item on, a cell at a time (driver.warp code_list_built)
 function newGuestList(program, items) {
 	if (items.length === 0) return program.new_bytes(0, 0, SQUARE_BRACKET);
