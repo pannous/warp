@@ -938,3 +938,18 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - markup-done-selector: in a data block a `.name` / `#name` key is always a CSS selector, never a variable: `done = 3; style{ .done { color: "green" } }` keeps .done. Core (core/passes/data_blocks), after the sprint.
   - program-test (test-program-value): a program of `test …` lines ends with the summary value "✓ N tests passed" / "K of N failed", the wording of `warp test`; an ending rule in extensions/ + a counter in lib.
   - js-webidl-bindings: `use js` binds the JS globals from lib/web.webidl through an extension (typed signatures from the standard WebIDL), playground only.
+- 2026-11-06 card sprint, round 11 (user):
+  - clock-plain: clock() itself returns a Time quantity, so `clock() - started < 2s` works; prelude's clock uses lib/units' Quantity; lib/time's ms-number uses and the samples comparing with ms change.
+  - ordinal-index-words: "An important edge case. Ignore. Don't do anything." (`second xs` → 1s [1, 2, 3] stays; no work.)
+  - mutation-phrases: `increase x by: 2` should work out of the box as an unimportant example English definition with named parameters (lib). The general mechanism, prepositions as parameter markers without a colon, is its own big Soon card (preposition-words).
+  - map-pair-iteration → type-name loop variables (card loop-variable): `for x in y` checks whether y.x or y.xs is defined and iterates that: `for char in "ab"` chars, `for byte in "ab"` bytes (y.bytes), `for pair in m` pairs (m.pairs); otherwise y itself. For all general types.
+- 2026-11-06 card sprint, round 12 (user):
+  - program-test: a plain `warp prog.warp` run counts `test` lines too: a program ending in a test line ends with the summary (`test 1 == 2` → "1 of 1 failed"; test_soft_tests:4 changes from ø, user OK); a program ending in another value keeps it; test blocks `test "name" {…}` still run only under `warp test`.
+  - with-do-block: later: see whether a Python-like `with` can be a library over warp primitives, `with context: block, actions: block`; probably hard, since the actions depend on the variables of the first block. Card to Later.
+  - catch-blocks: parked (Later); try/catch covers it; the wiki marks the body-wide handler as planned.
+  - constant-define-operator: drop `::=`; `constant x = 3` says it; the wiki line goes.
+- 2026-11-06 card sprint, round 13 (user):
+  - it-last-result: both meanings: inside a lambda `it` is the implicit parameter; outside one, `it` is the last statement's value (`3 + 4; it * 2` → 14).
+  - purity-predicates: `f.effects is empty` is the predicate (no `?` name suffix); `purely` is an alias of `@pure`; purity stays inferred when unmarked.
+  - test-case-timeout: instead of a lower threshold: exclude library loading from a case's timing, or better warm all libraries up once so a case's `use markup` costs ~0 s while `warp test` iterates (one compiler instance reused for all cases, loaded modules cached). Then the 1 s rule (no-slow-tests) applies to the code itself.
+  - render-pdf-string: `x = 3 as pdf` with pdf undeclared refuses clearly, "unknown type pdf: use a library that defines it"; an unknown type name is never invented.

@@ -16,9 +16,9 @@ class Quantity {
 	// a sum or a difference of temperatures counts one zero: `20°C + 5°C` is 25°C
 	+(other) := measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
 	-(other) := measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
-	*(other) := if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_product(unit, other.unit), scale * other.scale) else measured(amount * other, dims, unit, scale)
+	*(other) := if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_combined(unit, other.unit, 1), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
-	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
+	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_raised(unit, exponent), scale ^ exponent)
 	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
 	compare(other) := amount - same_quantity(this, other, "compare").amount
 	// the same quantity shown in another unit of its kind: `q.to("m")`, `q as m`, `q as cm^2` shown in cm²
@@ -42,24 +42,37 @@ class Mass extends Quantity {}
 class Time extends Quantity {}
 class Temperature extends Quantity {}
 class Pixels extends Quantity {}
+class Area extends Quantity {}
+class Volume extends Quantity {}
+class Speed extends Quantity {}
+class Frequency extends Quantity {}
+class Force extends Quantity {}
+// pixels per length, the density of a screen or a print: dpi, ppi
+class Density extends Quantity {}
 
 // a quantity moving lib/time's Instant (`now + 1h`): its milliseconds, a DimensionError of any other dimension than time
 milliseconds_of(duration: Quantity) := duration.in("ms")
 
-// a quantity as the class of its dimension, a plain Quantity for a compound one (speed, area …)
+// a quantity as the class of its dimension, a plain Quantity for one without a name (kg·m, m/s²)
 measured(amount: number, dims: int, unit: text, scale: number) := {
 	if dims == length_dimension { return Length(amount, dims, unit, scale) }
 	if dims == mass_dimension { return Mass(amount, dims, unit, scale) }
 	if dims == duration_dimension { return Time(amount, dims, unit, scale) }
 	if dims == temperature_dimension { return Temperature(amount, dims, unit, scale) }
 	if dims == pixels_dimension { return Pixels(amount, dims, unit, scale) }
+	if dims == area_dimension { return Area(amount, dims, unit, scale) }
+	if dims == volume_dimension { return Volume(amount, dims, unit, scale) }
+	if dims == speed_dimension { return Speed(amount, dims, unit, scale) }
+	if dims == frequency_dimension { return Frequency(amount, dims, unit, scale) }
+	if dims == force_dimension { return Force(amount, dims, unit, scale) }
+	if dims == density_dimension { return Density(amount, dims, unit, scale) }
 	Quantity(amount, dims, unit, scale)
 }
 // a plain number as the dimensionless quantity it is: an operator meeting a number and a quantity promotes the number
 // (decision as-promotes), so `2.0 / 4m` is 0.5/m and `1.0 - 4m` a DimensionError, never a plain number
 n: number as Quantity := measured(n, 0, "", 1)
 // `6km / 2000m` of one dimension is the plain number 3; `90km / h` a speed
-quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, above.unit + "/" + below.unit, above.scale / below.scale)
+quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, unit_combined(above.unit, below.unit, -1), above.scale / below.scale)
 
 // other when it measures what q measures, else the loud DimensionError
 same_quantity(q: Quantity, other: any, action: text) := {
@@ -80,9 +93,36 @@ summand(q: Quantity, other: any, action: text) := {
 // "5km": the amount in its own unit
 quantity_text(q: Quantity) := str(q.shown()) + q.unit
 
-// `m·m` is `m²`, `m²·m` `m³`
-unit_product(first: text, second: text) := if first == second then unit_power(first, 2) else first + "·" + second
-unit_power(u: text, power: int) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
+// the unit of a product (sign 1) or a quotient (sign -1), its factors' powers summed: `m·m` is `m²`, `m/s · s` is
+// `m`, `m/s / s` is `m/s²`, `km/h · h` is `km`
+unit_combined(first: text, second: text, sign: int) := unit_shown(unit_powers(second, sign, unit_powers(first, 1, {})))
+// `(m/s)^2` is `m²/s²`
+unit_raised(u: text, exponent: number) := unit_shown(unit_powers(u, exponent, {}))
+// the powers of a unit's factors, each times the exponent, added to powers: `kg·m/s²` gives kg 1, m 1, s -2; the
+// factors after a `/` are all below it (`kg/m·s` is kg/(m·s), as unit_named reads it)
+unit_powers(u: text, exponent: number, powers: map): map := {
+	parts = u.split("/")
+	added(parts#1, exponent, powers)
+	for below in parts[1 ..] { added(below, 0 - exponent, powers) }
+	powers
+}
+// the factors of `kg·m` or `s²`, each to its power times the exponent, added to powers
+added(factors: text, exponent: number, powers: map) := {
+	for factor in factors.split("·") {
+		if factor is empty { continue }
+		base = factor_base(factor)
+		powers[base] = (powers.get(base) ?? 0) + exponent * factor_power(factor)
+	}
+}
+factor_base(factor: text): text := factor.split("^")#1.replace("²", "").replace("³", "")
+factor_power(factor: text): number := if factor.ends_with("²") then 2 else if factor.ends_with("³") then 3 else if factor.contains("^") then factor.split("^")#2 as number else 1
+// the factors of positive power, then a `/` and those of negative power: `m/s²`; `/m` of a reciprocal
+unit_shown(powers: map): text := {
+	above = powers.keys.filter(k => powers[k] > 0).map(k => unit_power(k, powers[k]))
+	below = powers.keys.filter(k => powers[k] < 0).map(k => unit_power(k, 0 - powers[k]))
+	if below is empty then above.join("·") else above.join("·") + "/" + below.join("·")
+}
+unit_power(u: text, power: number) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
 
 // the unit of that symbol, shown by it: `known_unit("km")` is the Length of 1000 m shown in km
 known_unit(symbol: text) := { entry = unit_entry_of(symbol); measured(entry#1, entry#2, symbol, entry#1) }
@@ -136,11 +176,11 @@ rewrite $a / $b => $converted where raw and $u = converted_unit($a) and $u in [m
 rewrite $a * $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a * $b)
 rewrite $a ^ $b => $converted where raw and $u = converted_unit($a) and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and $converted = unit_regrouped($a ^ $b)
 // `3 cm is Length` and `2 km/h is speed` parse as 3 (cm is Length): the unit goes with its amount first
-rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, Quantity, Length, Mass, Time, Temperature, Pixels]
+rewrite $e $u is $t => ($e $u) is $t where $e is number and unit_led($u) and $t in [length, area, volume, mass, duration, time, temperature, speed, frequency, force, density, Quantity, Length, Mass, Time, Temperature, Pixels, Area, Volume, Speed, Frequency, Force, Density]
 // `3 cm is length`, `2 km/h is speed`: a quantity measures a named dimension, after its unit went with its amount (no
 // `cm is length` alone); a program's own `length` stays its own
-rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, area, volume, mass, duration, time, temperature, speed, frequency] and not unit_led($q) and $name = spelled($d)
-named_dimensions() := {"length": length_dimension, "area": 2 * length_dimension, "volume": 3 * length_dimension, "mass": mass_dimension, "duration": duration_dimension, "time": duration_dimension, "temperature": temperature_dimension, "speed": length_dimension - duration_dimension, "frequency": 0 - duration_dimension}
+rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, area, volume, mass, duration, time, temperature, speed, frequency, force, density] and not unit_led($q) and $name = spelled($d)
+named_dimensions() := {"length": length_dimension, "area": area_dimension, "volume": volume_dimension, "mass": mass_dimension, "duration": duration_dimension, "time": duration_dimension, "temperature": temperature_dimension, "speed": speed_dimension, "frequency": frequency_dimension, "force": force_dimension, "density": density_dimension}
 measures(q: any, dimension: text) := q is Quantity and q.dims == named_dimensions()[dimension]
 // `unit furlong := 201.168m`: a program's own unit, the quantity of one of it shown by its name (`1km as furlong` waits
 // for card module-rule-unnamed), `quantity(1, "furlong")` (decision unit-definitions); `raw`: the spaced amount
@@ -170,7 +210,7 @@ h() := known_unit("h")
 day() := known_unit("day")
 Hz() := known_unit("Hz")
 kHz() := known_unit("kHz")
-N() := known_unit("N") # todo add the long Names for ALL Units  known_unit("N","Newton","Force") (?) !! (card unit-dimension-names)
+N() := known_unit("N")
 L() := known_unit("L")
 ml() := known_unit("ml")
 ha() := known_unit("ha")
@@ -183,7 +223,7 @@ shown_in(value: any, unit: text) := if value is Quantity then shown_in_dimension
 shown_in_dimension(q: Quantity, unit: text) := if q.dims == unit_named(unit).dims then q.to(unit) else q
 
 // a unit word names a type too, its dimension's class (card unit-fields): a field `distance: km` holds a Length,
-// `time: min` a Time, `load: kg` a Mass; a unit of another quantity, a speed or an area, a Quantity
+// `time: min` a Time, `load: kg` a Mass, `area: ha` an Area, `push: N` a Force
 type m = Length
 type mm = Length
 type cm = Length
@@ -212,14 +252,14 @@ type hours = Time
 type day = Time
 type K = Temperature
 type px = Pixels
-type Hz = Quantity
-type kHz = Quantity
-type N = Quantity # todo Newton is Force (card unit-dimension-names)
-type L = Quantity
-type ml = Quantity # todo  milli-liter  (card unit-dimension-names)
-type ha = Quantity # todo hectar is Area (card unit-dimension-names)
-type dpi = Quantity # todo dots-per-inch is Density (card unit-dimension-names)
-type ppi = Quantity # todo pixel-per-inch is Density (card unit-dimension-names)
+type Hz = Frequency
+type kHz = Frequency
+type N = Force
+type L = Volume
+type ml = Volume
+type ha = Area
+type dpi = Density
+type ppi = Density
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {
