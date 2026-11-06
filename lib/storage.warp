@@ -122,7 +122,15 @@ column_values(name: text, instance: any, fields: list) := fields.map(field => co
 column_value(name: text, field: text, value: any) := {
 	if not (value is Quantity) { return value }
 	run_bound(units_database(), "insert or replace into " + quoted_name(UNITS_TABLE) + " (tbl, field, unit) values (?, ?, ?)", [name, field, value.unit])
-	value.float()
+	column_amount(value.amount)
+}
+// a quantity's amount in SI units as its column holds it: a float, a tolerance (lib/uncertain's Interval) its value and
+// bounds as the text "5000.0 ± 4990.0..5010.0", which amount_of reads back
+column_amount(amount: any) := if amount is Interval then "${amount.value} ± ${amount.low}..${amount.high}" else amount as float
+amount_of(stored: any) := {
+	if not (stored is text and stored.contains(" ± ")) { return stored }
+	bounds = stored.split(" ± ")#2.split("..")
+	Interval(stored.split(" ± ")#1 as float, bounds#1 as float, bounds#2 as float)
 }
 units_database() := {
 	run_query(opened_database(), "create table if not exists " + quoted_name(UNITS_TABLE) + " (tbl TEXT, field TEXT, unit TEXT, primary key (tbl, field))")
@@ -135,9 +143,9 @@ units_of(name: text) := {
 	found
 }
 // an amount in SI units as the quantity shown in the unit
-quantity_in(amount: number, unit: text) := {
+quantity_in(amount: any, unit: text) := {
 	one = unit_named(unit)
-	measured(amount, one.dims, unit, one.scale)
+	measured(amount_of(amount), one.dims, unit, one.scale)
 }
 // the instance's row deleted, the instance keeping its fields with id 0; the instance
 stored_removed(name: text, instance: any) := {
