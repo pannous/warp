@@ -117,8 +117,8 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 
 ## Open
 
-- `use crate "regex@1"` doesn't build on demand: the shim must be built first (`warp-crate build`, or fetched once
-  precompiled-crates lands). The version after @ isn't checked against the built one.
+- `use crate "regex@1"` doesn't build on demand: the shim must be built (`warp-crate build`) or fetched
+  (`warp-crate fetch regex`) first. The version after @ isn't checked against the built one.
 - Byte and list results cost one FFI call per item. A host result type for bytes (pointer + length out) would make
   them one call.
 - A one-letter text from C prints as a codepoint ('1' in find_all's list): a pure-lane printing quirk, not the shim's.
@@ -146,3 +146,14 @@ Goal: `use rs_regex` works on a fresh install without cargo, so warp gains libra
    FFI, with the browser's host.js twins kept for wasm in the browser.
 6. Third-party crates: users write a manifest (`warp-crate scan` drafts it) and build locally. A community index of
    manifests could later get the same CI treatment.
+
+Status (2026-11-06): steps 1-3 are in. `warp-crate publish <dir> <manifests>` builds per target (library and native
+file named `<library>-<target>`, entries in `crates-<target>.json`: name, library, crate, resolved version, key, target,
+file, sha256, native, native_sha256); `warp-crate index <dir>` merges them into crates.json (JSON, not json5: python's
+own reader); .github/workflows/crates.yml runs both over the four targets and replaces the assets of the pre-release
+`crates` when lib/crates or the generator changes on main. `warp-crate fetch <name>` downloads this target's entry whose
+key is the local manifest's (WARP_CRATES_URL names another place, also file://), checks both sha256, installs as
+`build` does, and builds with cargo where nothing matching is shipped; without cargo it names the crate, the target and
+why. Open: the native warp fetching on a `use rs_x` itself (step 3's launcher half), packaging (step 4), retiring the
+bridges (step 5); and the native warp's FFI still refuses the shims' handle words (`sha256_bytes_handle`), shipped or
+built.
