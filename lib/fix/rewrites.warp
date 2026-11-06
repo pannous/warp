@@ -17,6 +17,12 @@ floor_division_words = ["div"]
 # `alias acos = arc_cosine` → `alias acos => arc_cosine`: an alias says its direction (decision alias-arrows)
 alias_word = "alias"
 alias_arrow = "=>"
+# `t.codepoints > 3` → `count t.codepoints > 3`; `t.bytes == 5` → `t.bytecount == 5` (decision text-unit-plurals)
+unit_list_words = ["codepoints", "graphemes"]
+unit_bytes_word = "bytes"
+unit_count_words = unit_list_words + [unit_bytes_word]
+# compare / arithmetic that read the field as a number (not bare `=` assignment)
+numeric_op_starts = ["+", "-", "*", "/", "%", "<", ">", "=", "!"]
 
 # every hint of the scanned lines, in the order of the source
 hints_of(lines: list): list := {
@@ -75,6 +81,7 @@ word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) 
 			if is_word_character(after) or after == "(" { return Hint(number, i, word, floor_division, "floor division " + floor_division) }
 		}
 	}
+	if word in unit_count_words { return unit_count_hint(cs, i, word, number) }
 	ø
 }
 
@@ -103,6 +110,80 @@ alias_arrow_hint(cs: list, i: int, number: int) := {
 	sign = at_name + #name + blanks_after(cs, at_name + #name)
 	if at(cs, sign) != "=" or at(cs, sign + 1) in ["=", ">"] { return ø }
 	Hint(number, sign, "=", alias_arrow, "an alias says its direction: " + alias_arrow)
+}
+
+# `t.codepoints` / `t.graphemes` / `t.bytes` read as a number → `count t.codepoints` / `t.bytecount`
+unit_count_hint(cs: list, i: int, word: text, number: int) := {
+	if at(cs, i - 1) != "." { return ø }
+	dot = i - 1
+	recv = receiver_start(cs, dot)
+	if recv < 0 { return ø }
+	if already_counted_unit(cs, recv) { return ø }
+	if listish_after_unit(cs, i + #word) { return ø }
+	if not numeric_unit_context(cs, recv, i + #word) { return ø }
+	written = piece(cs, recv, i + #word - recv)
+	if word == unit_bytes_word {
+		replacement = piece(cs, recv, dot - recv) + ".bytecount"
+		return Hint(number, recv, written, replacement, "t.bytes as a number is t.bytecount")
+	}
+	Hint(number, recv, written, "count " + written, "t." + word + " as a number is count t." + word)
+}
+
+# the start of the word right before the `.` at dot; -1 when none (quoted / `)` left for later)
+receiver_start(cs: list, dot: int): int := {
+	before = at(cs, dot - 1)
+	if not is_word_character(before) { return -1 }
+	pos = dot - 1
+	while is_word_character(at(cs, pos - 1)) { pos -= 1 }
+	pos
+}
+
+# already `count t.codepoints` (blanks allowed between count and the receiver)
+already_counted_unit(cs: list, recv: int): bool := {
+	before = character_before_blanks(cs, recv)
+	if not is_word_character(before) { return no }
+	end = recv - 1 - blanks_before(cs, recv)
+	start = end
+	while is_word_character(at(cs, start - 1)) { start -= 1 }
+	piece(cs, start, end - start + 1) == "count"
+}
+
+# list use: another field, index, call — prefer leaving these
+listish_after_unit(cs: list, after: int): bool := {
+	c = character_after_blanks(cs, after)
+	c == "." or c == "[" or c == "("
+}
+
+# compare / arithmetic around the field (bare `=` assignment stays a list)
+numeric_unit_context(cs: list, recv: int, after: int): bool := {
+	if numeric_op_at(cs, after + blanks_after(cs, after)) { return yes }
+	before_at = recv - 1 - blanks_before(cs, recv)
+	numeric_op_ending_at(cs, before_at)
+}
+
+# an operator starting at index i that reads a number (not bare `=` / `+=` …)
+numeric_op_at(cs: list, i: int): bool := {
+	c = at(cs, i)
+	if c == "" or not (c in numeric_op_starts) { return no }
+	n = at(cs, i + 1)
+	if c == "=" { return n == "=" }  # ==
+	if c == "!" { return n == "=" }  # !=
+	if c == "<" or c == ">" { return yes }  # < <= > >=
+	if c in ["+", "-", "*", "/", "%"] { return n != "=" }  # arithmetic, not += -= …
+	no
+}
+
+# an operator ending at index i (`==` `!=` `<=` `>=` or a single `+` `-` `*` `/` `%` `<` `>`; not bare `=` / `+=`)
+numeric_op_ending_at(cs: list, i: int): bool := {
+	if i < 0 { return no }
+	c = at(cs, i)
+	prev = at(cs, i - 1)
+	if c == "=" {
+		if prev == "=" or prev == "!" or prev == "<" or prev == ">" { return yes }
+		return no
+	}
+	if c in ["+", "-", "*", "/", "%", "<", ">"] { return yes }
+	no
 }
 
 # the number of blanks right after index i, from it on

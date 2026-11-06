@@ -1,0 +1,19 @@
+use "fixlib/fix.warp"
+checks = [
+	["t.codepoints > 3", "count t.codepoints > 3\n"],
+	["t.graphemes + 1", "count t.graphemes + 1\n"],
+	["t.bytes == 5", "t.bytecount == 5\n"],
+	["3 < t.codepoints", "3 < count t.codepoints\n"],
+	["n != t.bytes", "n != t.bytecount\n"],
+	["count t.codepoints > 3", "count t.codepoints > 3\n"],
+	["t.bytecount == 5", "t.bytecount == 5\n"],
+	["t.codepoints[0]", "t.codepoints[0]\n"],
+	["t.codepoints.map(c => c)", "t.codepoints.map(c => c)\n"],
+	["xs = t.codepoints", "xs = t.codepoints\n"],
+	["t.codepoints = xs", "t.codepoints = xs\n"],
+]
+for pair in checks {
+	got = fixed(pair#1, [], yes)#1
+	if got != pair#2 { raise "fix unit count: " + pair#1 + " → " + got + " want " + pair#2 }
+}
+yes

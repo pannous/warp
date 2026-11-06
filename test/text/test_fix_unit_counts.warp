@@ -1,0 +1,3 @@
+# warp fix rewrites t.codepoints / t.graphemes / t.bytes read as a number (decision text-unit-plurals)
+# symlink fixlib → ../../lib/fix so use works after warp test chdirs into test/text
+is! 'fix_unit_counts_check.warp' yes
