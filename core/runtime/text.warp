@@ -117,6 +117,20 @@ same_bytes(a: text, b: text): bool := {
 	}
 	yes
 }
+# `a == b` of texts (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): equal bytes, else equal NFC forms. A
+# text of code points below U+0300 only (no byte from 0xCC on) is its own NFC, so only one with such a byte asks the host
+equal_texts(a: text, b: text): bool := same_bytes(a, b) or ((maybe_decomposed(a) or maybe_decomposed(b)) and same_bytes(canonical(a), canonical(b)))
+maybe_decomposed(t: text): bool := {
+	i = 0
+	while i < byte_count(t) {
+		if byte_at(t, i) >= 204 { return yes }
+		i += 1
+	}
+	no
+}
+canonical(t: text): text := unboxed_text(canonical_text(t))
+# a text's NFC form, by lib/unicode.warp's canonical_text, which the host links on its first call
+canonical_text(t: Node): Node from runtime
 # where the bytes of part first start in t, -1 when nowhere
 text_index(t: text, part: text): int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {
