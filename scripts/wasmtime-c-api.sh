@@ -54,9 +54,11 @@ if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CA
 fi
 case $(uname -s) in
   Darwin) suffix=dylib; prefix=lib; system_libraries=""; window_libraries="-framework CoreFoundation"
+    sound_libraries="-framework CoreMIDI -framework CoreFoundation"
     gpu_libraries="-framework Metal -framework QuartzCore -framework Foundation -framework CoreGraphics -framework IOKit -framework IOSurface -lobjc" ;;
-  Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries"; window_libraries="" ;;
-  *) suffix=dll; prefix=""; system_libraries=""; gpu_libraries=""; window_libraries="" ;;
+  Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries"; window_libraries=""
+    sound_libraries="$system_libraries" ;;
+  *) suffix=dll; prefix=""; system_libraries=""; gpu_libraries=""; window_libraries=""; sound_libraries="" ;;
 esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
 sound_library=${prefix}warp_sound.$suffix
@@ -94,7 +96,7 @@ sound_library_built() {
   built=$sound_build/$sound_library
   [ "$built" -nt "$source" ] && [ "$built" -nt "$header" ] && return
   # shellcheck disable=SC2086 # the system libraries are words
-  nice -n 19 cc -O2 -shared -fPIC -I "$(dirname "$header")" -o "$built.new" "$source" $system_libraries
+  nice -n 19 cc -O2 -shared -fPIC -I "$(dirname "$header")" -o "$built.new" "$source" $sound_libraries
   mv -f "$built.new" "$built"
 }
 sound_library_built

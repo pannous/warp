@@ -2,7 +2,7 @@
 // regex natively, JS RegExp in the browser, held to what both do alike (no look-around, no backreferences)
 // `"abc" matches "a.c"` where regex is used (the parser scans a used module's operators), and `matches(s, p)`
 infix operator matches(subject: any, pattern: any) := std_pure("regex", "matches", [subject, pattern])
-first_match(subject: any, pattern: any): any := std_pure("regex", "first", [subject, pattern])
+public first_match(subject: any, pattern: any): any := std_pure("regex", "first", [subject, pattern])
 // the host answers a malformed pattern with an error value ("regex (a: Unmatched ( or \\("): raised here, before the
 // declared list or text would refuse it as "not a list" (card regex-malformed-message)
 def regex_raised(answer: any): any {

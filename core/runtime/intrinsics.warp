@@ -74,9 +74,8 @@ copy_text(to: text, at: int, source: text, start: int, count: int) from runtime
 byte_count(t: text): int from runtime
 byte_at(t: text, at: int): int from runtime
 set_byte(t: text, at: int, byte: int) from runtime
-same_text(a: text, b: text): int from runtime
-same_list(a: list, b: list): int from runtime
-same_node(a: Node, b: Node): bool from runtime
+# the one value: two texts or two lists as held, any other two as nodes (emitter runtime_words.warp same_code)
+same(a: any, b: any): bool from runtime
 # a new Int node of n, never a shared one (nodes.warp int_node shares the small ones)
 fresh_int_node(n: int): Node from runtime
 code_of(c: char): int from runtime

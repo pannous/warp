@@ -117,7 +117,7 @@ global index_hand = 0
 global index_last = 0
 global index_previous = 0
 slot_free(slot: int): bool := is_null(index_covered#slot) or unboxed_int(index_covered#slot) < 0
-holds_entries(slot: int, entries: list): bool := not is_null(index_entries#slot) and same_list(unboxed_list(index_entries#slot), entries) and not slot_free(slot)
+holds_entries(slot: int, entries: list): bool := not is_null(index_entries#slot) and same(unboxed_list(index_entries#slot), entries) and not slot_free(slot)
 # the slot holding these entries' index, 0 for none
 index_slot(entries: list): int := {
 	if index_last > 0 and holds_entries(index_last, entries) {
@@ -179,7 +179,7 @@ slot_covered(slot: int): int := unboxed_int(index_covered#slot)
 # as it was wrapped the lists anew at every lookup
 hold_index(slot: int, entries: list, covered: int, table: list): int := {
 	found_slot(slot)
-	if not holds_entries(slot, entries) or slot_covered(slot) != covered or not same_list(slot_table(slot), table) {
+	if not holds_entries(slot, entries) or slot_covered(slot) != covered or not same(slot_table(slot), table) {
 		index_entries#slot = list_node(Kind.List, entries)
 		index_tables#slot = list_node(Kind.List, table)
 		index_covered#slot = covered

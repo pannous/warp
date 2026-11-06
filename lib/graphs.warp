@@ -29,7 +29,7 @@ graph_add_edge(g, u, v, w) := {
 	g
 }
 // edges: a list of [u, v] or [u, v, weight], or a map u -> list of v or of [v, weight]
-graph_of(edges, directed) := {
+public graph_of(edges, directed) := {
 	g = graph_new(directed)
 	if edges is map {
 		for u in edges.keys {
@@ -41,13 +41,13 @@ graph_of(edges, directed) := {
 	}
 	g
 }
-graph_nodes(g) := g.nodes
+public graph_nodes(g) := g.nodes
 graph_edges(g) := g.edge_list
-graph_neighbors(g, n) := [g.nodes#(e#1) for e in g.adjacency#(graph_id(g, n))]
-graph_node_count(g) := count(g.nodes)
+public graph_neighbors(g, n) := [g.nodes#(e#1) for e in g.adjacency#(graph_id(g, n))]
+public graph_node_count(g) := count(g.nodes)
 
 // breadth-first order from start
-bfs(g, start) := {
+public bfs(g, start) := {
 	s = graph_id(g, start)
 	seen = [false for x in g.nodes]
 	seen#s = true
@@ -62,7 +62,7 @@ bfs(g, start) := {
 	order
 }
 // depth-first preorder from start, neighbours tried in insertion order (as the recursive version would)
-dfs(g, start) := {
+public dfs(g, start) := {
 	s = graph_id(g, start)
 	seen = [false for x in g.nodes]
 	order = []
@@ -79,7 +79,7 @@ dfs(g, start) := {
 	}
 	order
 }
-has_path(g, a, b) := { if graph_find(g, a) == 0 or graph_find(g, b) == 0 { return false }; graph_id(g, b) in [graph_id(g, x) for x in bfs(g, a)] }
+public has_path(g, a, b) := { if graph_find(g, a) == 0 or graph_find(g, b) == 0 { return false }; graph_id(g, b) in [graph_id(g, x) for x in bfs(g, a)] }
 graph_walk_back(g, prev, t) := {
 	path = []
 	i = t
@@ -87,7 +87,7 @@ graph_walk_back(g, prev, t) := {
 	path.reverse()
 }
 // fewest edges from a to b (BFS); [] when b is unreachable
-shortest_path(g, a, b) := {
+public shortest_path(g, a, b) := {
 	s = graph_id(g, a)
 	t = graph_id(g, b)
 	prev = [0 for x in g.nodes]
@@ -131,19 +131,19 @@ graph_search(g, s, t, h, who) := {
 }
 graph_zero(n) := 0
 // distances from source to every reachable node: a list of [node, distance] in node order
-dijkstra(g, source) := {
+public dijkstra(g, source) := {
 	r = graph_search(g, graph_id(g, source), 0, graph_zero, "dijkstra")
 	dist = r#1
 	[[g.nodes#i, dist#i] for i in 1 to count(g.nodes) if dist#i != ø]
 }
 graph_path_result(g, r, t) := { if (r#3)#t { [graph_walk_back(g, r#2, t), (r#1)#t] } else { [[], ø] } }
 // the cheapest path from a to b: [path, cost], or [[], ø] when unreachable
-dijkstra_path(g, a, b) := graph_path_result(g, graph_search(g, graph_id(g, a), graph_id(g, b), graph_zero, "dijkstra"), graph_id(g, b))
+public dijkstra_path(g, a, b) := graph_path_result(g, graph_search(g, graph_id(g, a), graph_id(g, b), graph_zero, "dijkstra"), graph_id(g, b))
 // A* with heuristic(node) (admissible: never more than the true remaining cost): [path, cost] or [[], ø]
-a_star(g, a, b, heuristic) := graph_path_result(g, graph_search(g, graph_id(g, a), graph_id(g, b), heuristic, "a_star"), graph_id(g, b))
+public a_star(g, a, b, heuristic) := graph_path_result(g, graph_search(g, graph_id(g, a), graph_id(g, b), heuristic, "a_star"), graph_id(g, b))
 
 // Kahn's order (ready nodes in insertion order); a cycle raises "topological_sort: cycle a -> b -> a"
-topological_sort(g) := {
+public topological_sort(g) := {
 	if not g.directed { raise "topological_sort: the graph is undirected" }
 	n = count(g.nodes)
 	indeg = [0 for x in g.nodes]
@@ -174,7 +174,7 @@ topological_sort(g) := {
 	order
 }
 // components ignoring direction (weakly connected for a directed graph), each in BFS order, ordered by first node
-connected_components(g) := {
+public connected_components(g) := {
 	n = count(g.nodes)
 	both = [[e#1 for e in adj] for adj in g.adjacency]
 	if g.directed { for i in 1 to n { for e in g.adjacency#i { both#(e#1) = both#(e#1) + [i] } } }
@@ -198,7 +198,7 @@ connected_components(g) := {
 }
 // iterative Tarjan: components in Tarjan's completion order (reverse topological order of the condensation),
 // each listed in node order
-strongly_connected_components(g) := {
+public strongly_connected_components(g) := {
 	n = count(g.nodes)
 	num = [0 for x in g.nodes]
 	low = [0 for x in g.nodes]
@@ -246,7 +246,7 @@ strongly_connected_components(g) := {
 }
 // Kruskal with union-find (path halving, union by size): the forest's edges [u, v, w] by weight, ties in edge order
 
-kruskal_mst(g) := {
+public kruskal_mst(g) := {
 	if g.directed { raise "kruskal_mst: the graph is directed" }
 	parent = [i for i in 1 to count(g.nodes)]
 	size = [1 for x in g.nodes]
@@ -294,4 +294,4 @@ graph_sort_by_weight(es) := {
 	}
 	order
 }
-mst_weight(tree) := { s = 0; for e in tree { s = s + e#3 }; s }
+public mst_weight(tree) := { s = 0; for e in tree { s = s + e#3 }; s }
