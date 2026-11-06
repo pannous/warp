@@ -10,6 +10,7 @@ use "index_positions.warp"
 use "property_accessors.warp"
 use "attributes.warp"
 use "sum_types.warp"
+use "record_classes.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 use "event_phrases.warp"
@@ -51,6 +52,7 @@ EXTENSIONS = [
 	property_accessors_extension
 	attributes_extension
 	sum_types_extension
+	record_classes_extension
 	radix_numbers_extension
 	time_literals_extension
 	event_phrases_extension
