@@ -1025,3 +1025,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - nfc-equality: text `==` compares after NFC normalization (`"é" == "é"` → yes, Swift's rule); bytes stay as written (`.bytes` shows the difference).
   - tzdata stamp: `t.tzdata` dropped, the line deleted.
 - 2026-11-06 nfc-tables (user, card text-equality-nfc): the NFC tables and normalizer are a prebuilt library module (lib/unicode), linked at load time like any module; a program comparing texts imports one word from it, so programs do not grow; equal bytes and pure ASCII stay on the fast path.
+- 2026-11-06 nfc-slot (user core OK, card text-equality-nfc): runtime.wasm exports an empty slot canonical·text; the native driver and the playground fill it with lib/unicode's NFC, loading unicode.wasm lazily on the first call through it; equal bytes and pure ASCII never call it (hello unchanged); an empty slot refuses loudly. No `use` line needed for "é" == "e◌́".
