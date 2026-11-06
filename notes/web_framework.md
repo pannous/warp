@@ -160,8 +160,12 @@ Each step is useful on its own and is what the next ones stand on.
 - Transitions: Step 15.
 
 ## Step 6 (web-bind)
-- `input{ bind: name }` is `input{ value: name on input { name = event.value } }` (element_events.rs); a checkbox or
-  radio binds `checked`. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
+- `input{ bind: name }` is `input{ value: name on input { name = event.value } }`; a checkbox or radio binds
+  `checked`. In warp (card input-bind-name): the main-sugar rule extensions/sugar/bindings.warp makes the item
+  `bind: binding(() => name, entered => { name = entered })`, lib/markup.warp's Binding, which html_bound renders as
+  value or checked, data-warp-input and, from the value's type unless the element names its type, type=number
+  step=1 (int), step=any (other numbers), type=checkbox (bool); an int variable stays an int. Not in the early events
+  file: the early pass runs only for programs whose phrases name a rule word, and a key's word is none. `input` is a page event (PAGE_EVENTS); the page sends {value, checked} (a number from a
   number or range field) and sets a changed field's value/checked when the markup comes back (morphElement).
 - Boolean attributes (checked, disabled, …) are present or absent (lib/markup.warp; true arrives from a run as 1).
 - Tour example "form binding" (`typed` field of examples.js).
