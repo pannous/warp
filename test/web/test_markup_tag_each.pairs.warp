@@ -1,0 +1,3 @@
+# a tag word before all/each makes that tag of each item (decision: guide Web pages)
+'use markup; fruits = ["apple" "pear"]; to_html(ul{ li all fruits })'	'<ul><li>apple</li><li>pear</li></ul>'
+'use markup; to_html(ol{ li each [1 2] })'	'<ol><li>1</li><li>2</li></ol>'
