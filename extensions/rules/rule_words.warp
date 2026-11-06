@@ -968,6 +968,17 @@ polled_word(name: Node, program: Node, source: text): any := {
 	if texts.any(text => definition_slices(text).any(cut => cut#1 == word and cut#2.starts_with(word + "()"))) then name else ø
 }
 
+
+# `xs.map(it * 2)`, `apply(it + 3, 1)` (notes/welcoming.md, card map-argument-forms): an expression that
+# mentions `it` and is not already a lambda/function becomes `it => expression`; ø otherwise so the rule misses
+it_as_lambda(expression: Node): any := {
+	if is_lambda(expression) { return ø }
+	if is_group(expression) and bracket_of(expression) == "(" and #expression == 1 and is_lambda(expression#1) { return ø }
+	if expression is symbol { return ø }
+	if not mentions(expression, "it") { return ø }
+	Key(symbol("it"), Op.Arrow, expression)
+}
+
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 
 # whether a name is assigned only text literals in the program (card text-element-assign; same idea as
@@ -1012,6 +1023,7 @@ rule_words = {
 	class_methods_listed: class_methods_listed,
 	program_functions: program_functions,
 	it_read_as: it_read_as,
+	it_as_lambda: it_as_lambda,
 	law_check: law_check,
 	leading_unit: leading_unit,
 	list_valued: list_valued,
