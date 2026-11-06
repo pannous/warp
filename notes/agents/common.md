@@ -20,6 +20,11 @@ before asking a question). After a context swap, this file and your role file be
   most beautiful, most general code would look (a library function over a general feature beats a rewrite plus core
   patches), and build that; if it needs a missing language feature, build or card the feature instead of a workaround.
   Recommended options in questions and plans are the elegant ones.
+- Never repeat code (user 2026-11-06, furious: lib/units.warp spelled one 35-unit list out 12 times): a list,
+  condition, rule head or block written a second time becomes a name (a constant, a function, a rule word) used in
+  both places. Before you commit, read your diff for copies; when the language can't name the thing (e.g. a rule
+  `where` reading only literal lists), card the missing feature and stop, never paste. smoke.sh refuses a change
+  that adds a long line or list already present in the file (scripts/repeated-code.sh).
 - Clean compiler first (user 2026-11-02): the specification unfolds from a clean compiler built on first principles, not
   the other way round. A spec form that would need special-case code in core is cut or parked, unless leaving it out
   is nonsensical; what the general rules give is the spec (the wiki follows the compiler then). Every question to the
