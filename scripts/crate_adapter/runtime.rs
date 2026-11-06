@@ -65,6 +65,35 @@ pub unsafe fn handle_in<'a, T>(pointer: *mut T, name: &str) -> Option<&'a mut T>
 	pointer.as_mut()
 }
 
+/// A field setter's value as the field's type (card use-cargo-config-structs): a number cast to any number type, a text
+/// as String or PathBuf, bytes as Vec<u8>, each also into an Option of it (Some); a handle's value goes in by `.into()`
+pub trait FieldIn<T> {
+	fn field_in(self) -> T;
+}
+macro_rules! numbers_in {
+	($($c:ty),*; $t:tt) => { $(numbers_in!(@one $c; $t);)* };
+	(@one $c:ty; [$($t:ty),*]) => { $(
+		impl FieldIn<$t> for $c { fn field_in(self) -> $t { self as $t } }
+		impl FieldIn<Option<$t>> for $c { fn field_in(self) -> Option<$t> { Some(self as $t) } }
+	)* };
+}
+numbers_in!(i32, i64, f32, f64; [i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64]);
+macro_rules! values_in {
+	($($c:ty => $t:ty: |$v:ident| $e:expr;)*) => { $(
+		impl FieldIn<$t> for $c { fn field_in(self) -> $t { let $v = self; $e } }
+		impl FieldIn<Option<$t>> for $c { fn field_in(self) -> Option<$t> { let $v = self; Some($e) } }
+	)* };
+}
+values_in! {
+	bool => bool: |v| v;
+	&str => String: |v| v.to_string();
+	&str => std::path::PathBuf: |v| v.into();
+	String => String: |v| v;
+	String => std::path::PathBuf: |v| v.into();
+	&[u8] => Vec<u8>: |v| v.to_vec();
+	Vec<u8> => Vec<u8>: |v| v;
+}
+
 /// The C value of a failed call: -1 for numbers, NaN, false, NULL
 pub trait Null {
 	fn null() -> Self;
