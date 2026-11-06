@@ -129,7 +129,15 @@ component_moment(moment: any, action: function) := {
 component_moments_run() := {
 	let shown = [page_moments_id] + component_order.map(entry => entry#3)
 	for id in shown { if id not in component_shown { component_moment_run(id, "mount") } }
-	for id in component_shown { if id not in shown { component_moment_run(id, "cleanup") } }
+	for id in component_shown {
+		if id not in shown {
+			component_moment_run(id, "cleanup")
+			if id != page_moments_id {
+				if component_states.has(id) { component_states.remove(id) }
+				if component_moments.has(id) { component_moments.remove(id) }
+			}
+		}
+	}
 	component_shown = shown
 }
 component_moment_run(id: text, moment: text) := {
@@ -190,6 +198,10 @@ html_is_handler_pair(item: any): bool := item is pair and html_is_handler_name(h
 html_is_handler_name(name: any): bool := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
+	if event == "mount" or event == "cleanup" {
+		component_moment(event, action)
+		return ""
+	}
 	page_handlers.add(action)
 	page_handler_events.add(event)
 	page_handler_labels.add([])
@@ -242,8 +254,9 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var own_handlers = []
 	for item in items {
 		if html_is_handler(item) {
-			attributes = attributes + html_handler(item)
-			own_handlers.add(#page_handlers)
+			added = html_handler(item)
+			attributes = attributes + added
+			if added != "" { own_handlers.add(#page_handlers) }
 		}
 		else if html_is_binding(item) {
 			attributes = attributes + html_bound(tag, items, html_content(item))
