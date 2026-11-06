@@ -1,0 +1,2 @@
+linux-glibc-floor	done	24e2161 release.yml linux natives on ubuntu-22.04(-arm), GLIBC_FLOOR 2.35 checked per binary; unsmoked (CI-only, takes effect at the next release)
+netbase-wikidata-load	skipped	needs a netbase server with Wikidata loaded (none runs; notes/netbase.md Open); b6f0435 made the module reachable by path, the sample now fails at load; bare record fields in where (country is germany) open too
