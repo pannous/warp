@@ -14,6 +14,10 @@ cargo, caches it under ~/.cache/warp/crates (by crate, manifest, toolchain and t
 Nothing in the native warp knows a crate. Commands:
   warp-crate build <manifest.warp>...   generate, build (cached) and install; prints the library and native file
   warp-crate source <manifest.warp>     print the generated Rust
+  warp-crate wasm <manifest.warp> [out] the crate as a WebAssembly module for `use cargo <crate>`, natively and in the
+                                        page (decision cargo-semver-version): free functions on numbers, bool and text,
+                                        its warp words in a warp.words section (notes/wasm_words.md); default out
+                                        lib/crates/<crate>.wasm
   warp-crate scan <crate@version>       draft manifest lines for the crate's public functions, methods, Default
                                         constructors and public fields (rustdoc JSON)
 A config struct (card use-cargo-config-structs) crosses as a handle: `= crate::Config::default` makes one (any path call),
@@ -58,6 +62,10 @@ HANDLE = re.compile(r"^handle(?:\((?P<rust>[\w:<>, ]+)\))?$")
 CLONE = re.compile(r"^clone\((?P<rust>[\w:<>, ]+)\)$")  # a handle whose value an item takes by value: a clone of it
 FIELD = re.compile(r"^(?P<owner>(?:\w+::)*[A-Z]\w*)\.(?P<field>\w+)(?P<set>=?)$")  # crate::Config.width, .width= to set
 STEP = re.compile(r"(\?\.|\*\.|\.)(\w+)")
+# what a crate built as a WebAssembly module crosses (warp-crate wasm, notes/wasm_words.md)
+WASM_CROSSED = (*NUMBERS, "bool", "text", "string", "void")
+WASM_TARGET = "wasm32-unknown-unknown"
+WORDS_SECTION = "warp.words"
 
 
 def fail(message):
@@ -88,6 +96,42 @@ class Function:
 			self.params.append((pname, ptype))
 		self.result = result
 		self.rust = rust.strip()
+
+	def wasm_check(self):
+		for written in [t for _, t in self.params] + [self.result]:
+			if written not in WASM_CROSSED:
+				fail(f"line {self.line_number}: {self.name}: a WebAssembly module crosses numbers, bool and text, not {written!r} "
+					"(objects wait for a handle design, decision samples-modules-wasm)")
+
+	def wasm_rust(self, lib):
+		"""the raw export <lib>__<name>: a text parameter as its bytes' place and length in the module's memory, a text
+		result as one i64 (place << 32 | length)"""
+		self.wasm_check()
+		params, args = [], []
+		for pname, ptype in self.params:
+			if ptype in NUMBERS:
+				params.append(f"p_{pname}: {NUMBERS[ptype]}")
+				args.append(f"p_{pname} as _")
+			elif ptype == "bool":
+				params.append(f"p_{pname}: i32")
+				args.append(f"p_{pname} != 0")
+			else:
+				params.append(f"p_{pname}_at: i32, p_{pname}_length: i32")
+				args.append(f"text_in(p_{pname}_at, p_{pname}_length)" + (".to_string()" if ptype == "string" else ""))
+		call = f"{self.rust}({', '.join(args)})"
+		results = {"bool": ("i32", f"{call} as i32"), "void": ("()", call)}
+		returns, body = results.get(self.result) or ((NUMBERS[self.result], f"{call} as _") if self.result in NUMBERS else ("i64", f"text_out({call})"))
+		arrow = "" if returns == "()" else f" -> {returns}"
+		return f"#[no_mangle]\npub unsafe extern \"C\" fn {lib}__{self.name}({', '.join(params)}){arrow} {{\n\t{body}\n}}"
+
+	def warp_word(self, lib):
+		"""the warp word over the raw export, one line: texts copied in and out through the module's memory"""
+		warp_types = {"bool": "bool", "void": "nothing", "text": "text", "string": "text"}
+		params = ", ".join(f"{n}: {warp_types.get(t, 'float' if t in ('f32', 'f64', 'float') else 'int')}" for n, t in self.params)
+		args = ", ".join(f"{lib}__text_in({n}), byte_size({n})" if t in ("text", "string") else n for n, t in self.params)
+		call = f"{lib}__{self.name}({args})"
+		body = f"{lib}__text_out({call})" if self.result in ("text", "string") else f"{call} != 0" if self.result == "bool" else call
+		return f"{self.name}({params}): {warp_types.get(self.result, 'float' if self.result in ('f32', 'f64', 'float') else 'int')} := {body}"
 
 	def foreign_type(self, written):
 		if written in NUMBERS:
@@ -326,6 +370,29 @@ pub unsafe extern "C" fn {lib}_bytes_free(bytes: *mut ByteList) {{
 }}""")
 		return "\n\n".join(parts) + "\n"
 
+	def wasm_words(self):
+		"""the warp.words section: the module's words in warp, over its raw exports (notes/wasm_words.md)"""
+		lib = self.library
+		return "\n".join([f"// {self.crate}'s words (scripts/warp-crate wasm {self.path.name}): texts cross through its memory",
+			f"{lib}__text_in(t: text): int := {{ bytes = t.bytes; at = {lib}__alloc(#bytes); for i in 0 ..< #bytes {{ {lib}__store(at + i, bytes[i]) }}; at }}",
+			f"{lib}__text_out(packed: int): text := {{ at = packed >> 32; from_utf8([{lib}__load(at + i) for i in 0 ..< packed % 4294967296]) }}"]
+			+ [function.warp_word(lib) for function in self.functions]) + "\n"
+
+	def wasm_rust_source(self):
+		lib = self.library
+		words = self.wasm_words().encode()
+		uses = [u.strip() for u in self.settings["uses"].split(",") if u.strip()]
+		return "\n".join([f"// Generated by scripts/warp-crate wasm from {self.path.name} ({self.crate} {self.version}); do not edit.",
+			"#![allow(clippy::missing_safety_doc)]"] + [f"#[allow(unused_imports)]\nuse {u};" for u in uses] + [
+			"// the module's memory as the warp words reach it: room for a text, a byte written, a byte read",
+			f"#[no_mangle]\npub extern \"C\" fn {lib}__alloc(length: i32) -> i32 {{\n\tBox::leak(vec![0u8; length.max(1) as usize].into_boxed_slice()).as_mut_ptr() as i32\n}}",
+			f"#[no_mangle]\npub unsafe extern \"C\" fn {lib}__store(at: i32, byte: i32) {{\n\t*(at as *mut u8) = byte as u8\n}}",
+			f"#[no_mangle]\npub unsafe extern \"C\" fn {lib}__load(at: i32) -> i32 {{\n\t*(at as *const u8) as i32\n}}",
+			"#[allow(dead_code)]\nunsafe fn text_in(at: i32, length: i32) -> &'static str {\n\tstd::str::from_utf8_unchecked(std::slice::from_raw_parts(at as *const u8, length as usize))\n}",
+			"#[allow(dead_code)]\nfn text_out(text: impl AsRef<str>) -> i64 {\n\tlet bytes = Box::leak(text.as_ref().as_bytes().to_vec().into_boxed_slice());\n\t((bytes.as_ptr() as i64) << 32) | bytes.len() as i64\n}"]
+			+ [function.wasm_rust(lib) for function in self.functions]
+			+ [f"#[link_section = \"{WORDS_SECTION}\"]\n#[used]\nstatic WARP_WORDS: [u8; {len(words)}] = [{', '.join(map(str, words))}];"]) + "\n"
+
 	def cargo_toml(self):
 		features = [f.strip() for f in self.settings["features"].split(",") if f.strip()]
 		dependency = {"version": self.version}
@@ -410,6 +477,28 @@ def installed(library, library_file, native):
 	native_file = NATIVE_DIR / native.name
 	shutil.copy2(native, native_file)
 	print(f"{placed}\n{native_file}")
+
+
+def wasm_built(manifest, out):
+	"""the crate as a WebAssembly core module with its warp.words section (`use cargo <crate>`), built once into the cache,
+	copied to out (default lib/crates/<crate>.wasm, which `use cargo` finds beside the manifest)"""
+	source, cargo = manifest.wasm_rust_source(), manifest.cargo_toml()
+	key = hashlib.sha256("\0".join([GENERATOR_VERSION, WASM_TARGET, source, cargo, toolchain()]).encode()).hexdigest()[:16]
+	entry = CACHE / "wasm" / f"{manifest.crate}-{manifest.version.replace('*', 'any')}-{key}"
+	module = entry / f"{manifest.crate}.wasm"
+	if not module.exists():
+		entry.mkdir(parents=True, exist_ok=True)
+		(entry / "lib.rs").write_text(source)
+		(entry / "Cargo.toml").write_text(cargo)
+		env = dict(os.environ, CARGO_TARGET_DIR=str(TARGET_DIR), CARGO_NET_OFFLINE=os.environ.get("CARGO_NET_OFFLINE", "false"))
+		print(f"warp-crate: building {manifest.crate} {manifest.version} for {WASM_TARGET} ({entry})", file=sys.stderr)
+		done = subprocess.run(["cargo", "build", "--release", "--quiet", "--target", WASM_TARGET, "--manifest-path", str(entry / "Cargo.toml")], env=env)
+		if done.returncode != 0:
+			fail(f"cargo could not build {manifest.crate} for {WASM_TARGET} from {manifest.path} (its source: {entry / 'lib.rs'}; rustup target add {WASM_TARGET})")
+		shutil.copy2(TARGET_DIR / WASM_TARGET / "release" / f"{manifest.library}.wasm", module)
+	out = Path(out) if out else manifest.path.with_name(f"{manifest.crate}.wasm")
+	shutil.copy2(module, out)
+	print(out)
 
 
 def build(manifest):
@@ -655,6 +744,8 @@ def main(argv):
 	if command == "build" and rest:
 		for path in rest:
 			build(Manifest(path))
+	elif command == "wasm" and len(rest) in (1, 2):
+		wasm_built(Manifest(rest[0]), rest[1] if len(rest) == 2 else None)
 	elif command == "source" and len(rest) == 1:
 		sys.stdout.write(Manifest(rest[0]).rust_source())
 	elif command == "scan" and len(rest) == 1:

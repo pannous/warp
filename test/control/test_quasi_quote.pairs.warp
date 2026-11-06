@@ -10,3 +10,4 @@
 
 # a_replacement_walks_into_quoted_blocks
 'data(f {print 1}) replace data($q) with data(7)'	7
+'q = data (n * 1); "${q.line}:${q.column}"'	"1:11"

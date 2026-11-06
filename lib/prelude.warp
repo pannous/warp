@@ -893,14 +893,15 @@ find_matches(value: any, pattern: any): list := {
 	}
 	found
 }
-// `value replace pattern with template`: the items and fields replaced first, then the value itself where it fits,
-// the template's names its bindings
+// `value replace pattern with template`: the items, fields and code parts replaced first (`n * 1 + k * 1`'s two
+// products), then the value itself where it fits, the template's names its bindings
 replace_matches(value: any, pattern: any, template: any): any := {
 	inner = value
-	if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
+	if is_type(value, "key") { inner = key(replace_matches(key_of(value), pattern, template), op_of(value), replace_matches(value_of(value), pattern, template)) }
+	else if is_type(value, "list") { inner = value.map(item => replace_matches(item, pattern, template)) }
 	else if is_type(value, "map") {
 		inner = {}
-		for key in value.keys { inner[key] = replace_matches(value[key], pattern, template) }
+		for field in value.keys { inner[field] = replace_matches(value[field], pattern, template) }
 	}
 	bound = pattern_bindings(inner, pattern)
 	if bound == ø then inner else instantiated(template, bound)

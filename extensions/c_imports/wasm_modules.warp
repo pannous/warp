@@ -38,9 +38,13 @@ wasm_module_used(statement: text, folder: text): text? := {
 # samples-modules-wasm: the long form, `wasm` before a quoted path) is "rust_demo.wasm"; an `as` name is gone by now
 # (imports.warp with_module_aliases)
 WASM_WORD = "wasm "
+CARGO_WORD = "cargo "
+CRATES_FOLDER = "/crates/"
 wasm_use_written(statement: text): text? := {
 	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
 	if word == ø or word == "" { return ø }
+	# `use cargo strsim`: the crate built as a module beside its manifest, lib/crates/strsim.wasm (scripts/warp-crate wasm)
+	if word.starts_with(CARGO_WORD) { return run_library() + CRATES_FOLDER + word.remove_prefix(CARGO_WORD).trim() + WASM_EXTENSION }
 	written = if word.starts_with(WASM_WORD) then word.remove_prefix(WASM_WORD).trim() else word
 	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { written = written.remove_prefix(quote).remove_suffix(quote) } }
 	written
@@ -57,14 +61,28 @@ is_core_wasm(bytes: list): bool := #bytes >= #wasm_header and bytes[0 ..< #wasm_
 class WasmExports {
 	functions: list = []
 	values: list = []
+	# its warp.words section's definitions, one a line: warp words over its exports (notes/wasm_words.md)
+	words: list = []
 }
+# A module's own warp words (notes/wasm_words.md): the custom section warp.words holds warp definitions, one a line,
+# compiled with the program that uses the module, `levenshtein(a: text, b: text): int := rs_strsim__levenshtein(…)`;
+# an export or word whose name holds INTERNAL_MARK is the module's own, never listed by dir or .functions
+WORDS_SECTION = "warp.words"
+INTERNAL_MARK = "__"
+wasm_words(bytes: list): list := {
+	place = section_place(bytes, section_ids.custom, WORDS_SECTION)
+	if place == ø { return [] }
+	utf8_text(bytes[place#1 ..< place#2]).split("\n").map(line => line.trim()).filter(line => line != "" and not line.starts_with("//"))
+}
+# the name a definition line defines
+wasm_word_name(line: text): text := line.split("(")#1.trim()
 wasm_exports(path: text, folder: text): WasmExports := {
 	bytes = wasm_bytes(wasm_file(path, folder))
 	types = wasm_types(bytes)
 	imported = wasm_imported(bytes)
 	function_types = imported.functions + wasm_vector(bytes, section_ids.function, reader => read_number(reader))
 	global_values = imported.globals + wasm_vector(bytes, section_ids.globals, wasm_global_value)
-	exports = WasmExports()
+	exports = WasmExports(words: wasm_words(bytes))
 	for export in wasm_vector(bytes, section_ids.export, reader => [read_name(reader), bytes[reader.offset], next_number(reader)]) {
 		name = export#1
 		index = export#3
@@ -180,7 +198,7 @@ with_wasm_module_words(line: text, uses: map): text := {
 	written = line
 	for statement in uses.keys {
 		name = module_named_by(wasm_use_written(statement))
-		functions = uses[statement].functions.map(d => d#1)
+		functions = (uses[statement].functions.map(d => d#1) + uses[statement].words.map(wasm_word_name)).filter(word => not word.contains(INTERNAL_MARK))
 		words = (functions + uses[statement].values.map(value => value.split(" = ")#1)).sort()
 		written = renamed_name(written, name + FUNCTIONS_WORD, quoted_list(functions))
 		written = written.replace(DIR_WORD + "(" + name + ")", quoted_list(words))
@@ -194,6 +212,6 @@ quoted_list(words: list): text := "[" + words.map(word => "\"" + word + "\"").jo
 USE_GIVES = "()"
 wasm_statements(statement: text, exports: WasmExports): text := {
 	runs = statement.starts_with(INCLUDE_WORD + " ") and exports.functions.any(d => d#1 == INCLUDED_MAIN)
-	if #exports.values == 0 and not runs { return "" }
-	(exports.values + [if runs then INCLUDED_MAIN + "()" else USE_GIVES]).join("; ")
+	if #exports.values == 0 and #exports.words == 0 and not runs { return "" }
+	(exports.words + exports.values + [if runs then INCLUDED_MAIN + "()" else USE_GIVES]).join("; ")
 }
