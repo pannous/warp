@@ -8,14 +8,6 @@ use reals
 use os
 use file
 use tasks
-// float words sound owns: after `use math`, aliases rewrite C names onto each_any vector wrappers (binary_log, sine, …).
-// Binding the short words here keeps hot loops on the C imports (keep short C words owned; not the wrappers).
-log2(x: float): float from 'm'
-log10(x: float): float from 'm'
-exp(x: float): float from 'm'
-sin(x: float): float from 'm'
-cos(x: float): float from 'm'
-tanh(x: float): float from 'm'
 global sample_rate = 22050
 // a frequency's or duration's plain number in SI units (Hz, seconds): a quantity's amount (lib/units.warp), a plain
 // number as it is
