@@ -1,0 +1,4 @@
+# a unit after a call or a name giving a list measures each item, as after a written list (card unit-after)
+'str([3, 4] cm)'	'[3cm, 4cm]'
+'sizes() := [1, 2]; str(sizes() cm)'	'[1cm, 2cm]'
+'xs = [1, 2]; str(xs cm)'	'[1cm, 2cm]'
