@@ -420,13 +420,22 @@ function libraryFile(name) {
 // imports read from the bytes (imports.js importDescriptors): Safari's WebAssembly.Module.imports throws for GC signatures
 // (instances: the run's linked instances by module name, filled while they start)
 function withRuntime(bytes, imports, instances) { return withLinkedInstances(importDescriptors(bytes), imports, instances); }
-// a run's holder of the fields given: its `exports` are the program's, and while its linked modules start, before the
-// program's own instance exists, runtime.wasm's, whose memory and runtime words the program imports (a module's start
-// reading os args or making a text); `linked` holds the run's linked instances
+// a run's holder of the fields given: its `exports` are the program's and those of the modules linked to it, as one
+// (markup's page_render, runtime.wasm's memory and runtime words), so they answer while the linked modules start,
+// before the program's own instance exists (a module's start reading os args or making a text); `linked` holds the
+// run's linked instances by module name
 function runHolder(fields) {
 	const linked = new Map();
 	let program;
-	return Object.defineProperty({ ...fields, linked }, "exports", { get: () => program ?? linked.get(RUNTIME_MODULE), set: exports => { program = exports; } });
+	const instances = () => [program, ...linked.values()].filter(Boolean);
+	const exportOf = name => instances().find(exports => name in exports)?.[name];
+	const exports = new Proxy({}, {
+		get: (_, name) => exportOf(name),
+		has: (_, name) => exportOf(name) !== undefined,
+		ownKeys: () => [...new Set(instances().flatMap(Object.keys))],
+		getOwnPropertyDescriptor: (_, name) => { const value = exportOf(name); return value === undefined ? undefined : { value, enumerable: true, configurable: true }; },
+	});
+	return Object.defineProperty({ ...fields, linked }, "exports", { get: () => instances().length ? exports : undefined, set: given => { program = given; } });
 }
 // (proxies, never copies: an import object may answer only through get, as withWasi's does)
 function withLinkedInstances(descriptors, imports, instances) {
