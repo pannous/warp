@@ -70,8 +70,8 @@ def money_same(currency: text, o: any, operation: text) {
 	if o.currency != currency { raise "money: " + currency + " " + operation + " " + o.currency + " mixes currencies; convert one first" }
 	o
 }
-money_add(a: any, b: any) := a + b
-money_sub(a: any, b: any) := a - b
+public money_add(a: any, b: any) := a + b
+public money_sub(a: any, b: any) := a - b
 money_negate(m: any) := Money(-m.minor, m.currency)
 // m times an int or a fraction, rounded to minor units by the mode
 def money_times(m: any, k: any, mode: text) {

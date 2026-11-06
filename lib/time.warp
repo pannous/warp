@@ -66,11 +66,11 @@ millis_fraction(millis): text := {
 
 day_number(ms): int := ms /! 86400000
 // the date of milliseconds as {year, month, day} (lib/prelude.warp civil_from_days)
-date_of(ms) := civil_from_days(day_number(ms))
+public date_of(ms) := civil_from_days(day_number(ms))
 // ISO weekday: Monday 1 … Sunday 7
 weekday(ms): int := (day_number(ms) + 3) % 7 + 1
-today() := date_of(clock())
-add_days(ms, n) := ms + n * 86400000
+public today() := date_of(clock())
+public add_days(ms, n) := ms + n * 86400000
 days_between(from, to): int := day_number(to) - day_number(from)
 two_digits(n): text := if n < 0 then "-" + two_digits(0 - n) else if n < 10 then "0" + n else "" + n
 // ISO 8601: 2026-10-07

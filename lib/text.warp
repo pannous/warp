@@ -4,9 +4,9 @@ use letter_ranges
 use slugs
 repeat(t: text, n: int) := if n < 0 then raise "repeat needs a count of at least 0, not " + str(n) else t * n
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
-pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
+public pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
 // format("{} has {} items", ["cart", 3]): each {} takes the next value
-format(template, values) := {
+public format(template, values) := {
 	parts = split(template, "{}")
 	result = parts[0]
 	for i in 1 ..< count(parts) {
@@ -38,12 +38,12 @@ letter_range_before(code: int): int := {
 	}
 	low - 1
 }
-capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
-center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
+public capitalize(t) := if t is empty then t else upper(t[0]) + t[1..]
+public center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
 title(t): text := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
 slug(t): text := slugify(t)
-truncate(t, width) := if width < 1 then raise "truncate needs a width of at least 1, not " + str(width) else if count(t) <= width then t else t[0 ..< width - 1] + "…"
+public truncate(t, width) := if width < 1 then raise "truncate needs a width of at least 1, not " + str(width) else if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text): list {
 	out = []

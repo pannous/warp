@@ -40,7 +40,7 @@ signal_notify(name: text, value: any, old: any): any := {
 // signals"): the variable itself, its name and its value as last written, which a bare read of the loop variable gives
 class Signal { name: text; value: any }
 global signal_values = {}
-signal_value(item: any): any := if item is Signal then signal_values.get(item.name) ?? item.value else item
+public signal_value(item: any): any := if item is Signal then signal_values.get(item.name) ?? item.value else item
 
 // each polled word's last value, a listener's at its position
 global polled_values = []
