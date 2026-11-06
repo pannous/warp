@@ -994,3 +994,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-06 format-as-text-definition: drop `show`; only `format … as text`, no show alias.
 - 2026-11-06 Grok integration break: the sprint holds its pushes while the Integrator lands all non-duplicate Grok Ready tips; then resume.
 - 2026-11-06 decrement-immediate (user): `n--` and `n++` take effect immediately, unlike C's post-decrement: the expression gives the new value, so `n = 2; while n-- > 0 { print n }` prints only 1 (card while-decrement-loop closed as obsolete). times-infix-operator's core OK stands.
+- 2026-11-06 wasmtime-ffi-test-deleted (user, card wasmtime-pure-compiler): test/ffi/test_wasmtime_ffi.warp is deleted (user OK): its 3 `use wasmtime` lines test the module dropped by wasmtime-dropped.
