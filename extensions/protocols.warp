@@ -96,7 +96,8 @@ protocols_applied(program: Node): Node := {
 		}
 	}
 	if #conforming == 0 and #defaults == 0 and kept == written { return program }
-	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming, converted)))
+	defined = kept.map(definition_head_of).filter(head => head != ø and head#1 is symbol).map(head => name_of(head#1))
+	resolved = (kept + functions).map(statement => bottom_up(statement, n => protocol_resolved(n, conforming, converted, defined)))
 	separated(bracketed(resolved, ""), ";")
 }
 
@@ -167,10 +168,11 @@ word_and_first_type(statement: Node): list? := {
 # `x is shape`: x is one of the conforming classes; `x: shape`, a place the protocol types, takes any value
 # `x is C` of a class, the built-in protocol's own test of its name
 instance_or_built_in(subject: Node, name: text): Node := if built_in_module(name) != "" then call_of(helper_name(name, "is"), [subject]) else Key(subject, Op.Is, symbol(name))
-protocol_resolved(n: Node, conforming: map, converted: map): Node := {
-	# a call of a word of a built-in protocol's module: each argument the default implementation
+protocol_resolved(n: Node, conforming: map, converted: map, defined: list): Node := {
+	# a call of a word of a built-in protocol's module: each argument the default implementation, a function the
+	# program defines passed as it is (`matrix(2, 4, weight)`)
 	if is_called_name(n) and #n > 1 {
-		for protocol in converted.keys { if name_of(n#1) in converted[protocol] { return call_of(name_of(n#1), items_of(n)[1..].map(argument => call_of(helper_name(protocol, "listed"), [argument]))) } }
+		for protocol in converted.keys { if name_of(n#1) in converted[protocol] { return call_of(name_of(n#1), items_of(n)[1..].map(argument => if argument is symbol and name_of(argument) in defined then argument else call_of(helper_name(protocol, "listed"), [argument]))) } }
 	}
 	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in conforming) { return n }
 	classes = conforming[name_of(value_of(n))]
