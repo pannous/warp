@@ -163,10 +163,11 @@ function callC(holder, exports, member, call, values, what) {
 }
 
 // a C function's result as the program takes it (driver.warp c_result): a text (NULL is ø, textOf reads it), a
-// handle's id, a yes/no, an i64 or an i32
+// handle's id, a yes/no, an i32, an unsigned u32 as the i64 it means, or an i64
 function crossedResult(program, call, returned, textOf) {
 	if (call?.crossing === "text" || call?.crossing === "owned_text") return !returned ? program.new_empty() : newGuestText(program, textOf(returned));
 	if (call?.crossing === "handle" || call?.register === "i32") return Number(returned ?? 0) | 0;
+	if (call?.crossing === "u32") return BigInt(Number(returned ?? 0) >>> 0);
 	if (call?.register === "bool") return Number(returned) & 0xff ? 1 : 0;
 	if (call?.register === "i64") return BigInt(returned ?? 0);
 	return returned;

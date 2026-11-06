@@ -1,0 +1,6 @@
+// the C types of zlib.wasm's functions (built by zlib.sh), which `import test/fixtures/wasm/zlib` takes for its
+// exports' i32s: zlib.h's prototypes, unsigned long being 32 bits in wasm32, Bytef an unsigned char
+zlibVersion(): text from "zlib.wasm"
+crc32(crc: u32, buf: text, len: u32): u32 from "zlib.wasm"
+adler32(adler: u32, buf: text, len: u32): u32 from "zlib.wasm"
+compressBound(source_length: u32): u32 from "zlib.wasm"

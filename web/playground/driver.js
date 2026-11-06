@@ -224,6 +224,7 @@ function compilerHostWords(exports) {
 			std_pure: (module, member, argumentList) => stdCall(exports(), module, member, argumentList, { warnings: [] }),
 			paint: () => { throw new Error("the compiler paints nothing"); },
 			real_path: () => -1,
+			canonical_text: text => canonicalText(exports(), text),
 			random: Math.random,
 			random_below: below => BigInt(Math.floor(Math.random() * Number(below))),
 			clock: () => BigInt(Date.now()),

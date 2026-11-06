@@ -243,8 +243,10 @@ field_with(m: Node, name: text, value: Node): Node := {
 	m
 }
 # a new instance of m's class holding m's fields (shared: lib/prelude.warp copy copies them), made as calling its
-# class value makes one (`type(m)()`, emitter closures.warp dispatcher_code): the class value of m's descriptor
+# class value makes one (`type(m)()`, emitter closures.warp dispatcher_code): the class value of m's descriptor;
+# a value that is no instance is m itself
 instance_copy(m: Node): Node := {
+	if not is_class_instance(m) { return m }
 	descriptor = entry_key(m)
 	maker = keyed(Marked.TypeValue, unboxed_text(descriptor), descriptor)
 	made = maker()
