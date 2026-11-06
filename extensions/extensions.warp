@@ -42,6 +42,7 @@ use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
 use "text_lints.warp"
+use "page_values.warp"
 use "effects.warp"
 use "primitive.warp"
 EXTENSIONS = [
@@ -91,6 +92,7 @@ EXTENSIONS = [
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
+	page_values_extension
 	effects_extension
 	# extensions/primitive.warp, which the compiler uses itself: its attribute `@primitive`
 	Extension{name: "primitive", attributes: [PRIMITIVE_ATTRIBUTE]}
