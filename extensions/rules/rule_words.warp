@@ -811,6 +811,7 @@ rule_words = {
 	body_of: body_of,
 	builtin_type: builtin_type,
 	change_listens: change_listens,
+	class_data: class_data,
 	class_help: class_help,
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,
@@ -843,7 +844,6 @@ rule_words = {
 	page_valued: page_valued,
 	paint_size: paint_size,
 	parameters_named: parameters_named,
-	path_parameters: path_parameters,
 	polled_word: polled_word,
 	return_kind: return_kind,
 	route_bindings: route_bindings,
@@ -860,7 +860,6 @@ rule_words = {
 	task_steps: task_steps,
 	tasked: tasked,
 	units_shown: units_shown,
-	typed_json: typed_json,
 	unit_bound: unit_bound,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
@@ -891,92 +890,60 @@ declared_class(type_name: text, program: Node): Node? := {
 	ø
 }
 
-typed_json_value(value: text, path: text, value_type: text, depth: int, program: Node, ancestors: list): text? := {
-	list_prefix = "list of "
-	if value_type.starts_with(list_prefix) {
-		item = "typed_json_item_" + depth
-		index = "typed_json_index_" + depth
-		item_path = "(" + path + " + \"[\" + " + index + " + \"]\")"
-		converted = typed_json_value(item, item_path, value_type[#list_prefix..], depth + 1, program, ancestors)
-		if converted == ø { return ø }
-		return "({ if not (" + value + " is list) { raise " + path + " + \" must be list, received \" + type(" + value + ").name }; " + index + " = 0; " + value + ".map(" + item + " => { " + index + " = " + index + " + 1; " + converted + " }) })"
-	}
-	if value_type in ["number", "int", "float", "string", "text", "bool"] {
-		expected = if value_type == "string" then "text" else value_type
-		received = "(if " + value + " is number then \"number\" else if " + value + " is text then \"text\" else type(" + value + ").name)"
-		return "({ if not (" + value + " is " + value_type + ") { raise " + path + " + \" must be " + expected + ", received \" + " + received + " }; " + value + " })"
-	}
-	statement = declared_class(value_type, program)
-	if statement == ø or ancestors.contains(value_type) { return ø }
+# `{name: "User", order: ["id", "address"], types: {id: "number", address: {…Address's…}, tags: {list: "text"}},
+# defaults: {port: 80}, make: (fields) => User{id: fields["id"], …}}`: a class the program declares as data, for a
+# reader at run time (lib/json.warp typed_json_value): its fields in order, each one's type (a type word, a class's
+# data, `{list: …}` of a list), the defaults of those that have one and its maker from the fields by name; a raise
+# naming why for a class it can't give so
+CLASS_DATA_TYPES = ["number", "int", "float", "string", "text", "bool"]
+class_data(type_name: Node, program: Node): Node := {
+	name = name_of(type_name)
+	statement = declared_class(name, program)
+	if statement == ø { return class_data_refused("typed JSON requires a declared class") }
+	if constructor_of(class_declared(statement, class_view(statement))) != ø { return class_data_refused("typed JSON does not support class constructors yet") }
+	written = class_data_text(name, program, [])
+	if written == ø then class_data_refused("typed JSON supports only required flat fields yet") else plain_node(parsed(written))
+}
+class_data_refused(why: text): Node := plain_node(parsed("raise \"" + why + "\""))
+class_data_text(name: text, program: Node, ancestors: list): text? := {
+	statement = declared_class(name, program)
+	if statement == ø or name in ancestors { return ø }
 	view = class_view(statement)
 	declared = class_declared(statement, view)
 	if constructor_of(declared) != ø { return ø }
-	fields = declared.fields
-	parts = typed_json_fields(value, view#3[3..].map(member_read), fields, field => "(" + path + " + \".\" + \"" + field + "\")", depth + 1, program, ancestors + [value_type])
-	if parts == ø { return ø }
-	checks = parts#1
-	arguments = parts#2
-	field_names = fields.map(field => "\"" + field + "\"").join(", ")
-	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + value_type + "{" + arguments.join(", ") + "} })"
-}
-
-# [the checks that each required field is there, the constructor's arguments] of the object `value` names, each field
-# converted by its declared type: a defaulted field (`port: int = 80`) missing takes its default; ø for a field whose
-# type typed JSON doesn't read
-typed_json_fields(value: text, members: list, fields: list, field_path: function, depth: int, program: Node, ancestors: list): list? := {
-	field_types = {}
-	defaults = {}
-	for member in members {
+	types = []
+	defaults = []
+	for member in view#3[3..].map(member_read) {
 		field = field_name(member)
 		if field != ø {
 			field_type = typed_json_field_type(member)
 			if field_type == ø { return ø }
-			field_types[field] = field_type
-			if is_key(member, Op.Assign) { defaults[field] = as_code(value_of(member)) }
+			written = type_data_text(field_type, program, ancestors + [name])
+			if written == ø { return ø }
+			types += [field + ": " + written]
+			if is_key(member, Op.Assign) { defaults += [field + ": " + as_code(value_of(member))] }
 		}
 	}
-	checks = []
-	arguments = []
-	for field in fields {
-		present = "keys(" + value + ").contains(\"" + field + "\")"
-		converted = typed_json_value(value + "[\"" + field + "\"]", field_path(field), field_types[field], depth, program, ancestors)
-		if converted == ø { return ø }
-		if defaults.has(field) { arguments = arguments + [field + ": (if " + present + " then " + converted + " else " + defaults[field] + ")"] } else {
-			checks = checks + ["if not " + present + " { raise " + field_path(field) + " + \" is required\" }"]
-			arguments = arguments + [field + ": " + converted]
-		}
-	}
-	[checks, arguments]
+	fields = declared.fields
+	order = fields.map(field => "\"" + field + "\"").join(", ")
+	made = name + "{" + fields.map(field => field + ": typed_fields[\"" + field + "\"]").join(", ") + "}"
+	"{name: \"" + name + "\", order: [" + order + "], types: {" + types.join(", ") + "}, defaults: {" + defaults.join(", ") + "}, make: (typed_fields => " + made + ")}"
 }
-# Generate typed JSON parsing from the class declared in the program.
-typed_json(source: Node, type_name: Node, program: Node): Node := {
-	for statement in level_statements(program) {
-		view = class_view(statement)
-		if view != ø and declared_type_name(view#2) == name_of(type_name) {
-			declared = class_declared(statement, view)
-			if constructor_of(declared) != ø { return plain_node(parsed("raise \"typed JSON does not support class constructors yet\"")) }
-			fields = declared.fields
-			parts = typed_json_fields("typed_json_value", view#3[3..].map(member_read), fields, field => "\"" + field + "\"", 0, program, [name_of(type_name)])
-			if parts == ø { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
-			required_checks = parts#1
-			arguments = parts#2
-			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
-			field_names = fields.map(field => "\"" + field + "\"").join(", ")
-			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
-			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
-			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
-		}
+type_data_text(field_type: text, program: Node, ancestors: list): text? := {
+	list_prefix = "list of "
+	if field_type.starts_with(list_prefix) {
+		item = type_data_text(field_type[#list_prefix ..], program, ancestors)
+		return if item == ø then ø else "{list: " + item + "}"
 	}
-	plain_node(parsed("raise \"typed JSON requires a declared class\""))
+	if field_type in CLASS_DATA_TYPES then "\"" + field_type + "\"" else class_data_text(field_type, program, ancestors)
 }
 
-# `law square(-x) == square(x)` (notes/laws.md, its tested level): the law tried at run time for each of
-# law_trial_values in each of its variables, a value it fails for raised with the law; a named law, `law name:` with
-# a `for x: int` line each before it, takes those variables, else they are the names the law reads and neither calls
-# nor finds defined (the program's, the library's)
-law_trial_values = "[0, 1, -1, 2, -2, 3, -7, 10, -100, 1000]"
-law_placeholder = "law_proposition_placeholder"
-law_variable_prefix = "law_"
+# `law square(-x) == square(x)` (notes/laws.md, its tested level): the law as lib/laws.warp's law_holds tries it at run
+# time, the law shown, its variables and the proposition of their values: a named law, `law name:` with a `for x: int`
+# line each before it, takes those variables, else they are the names the law reads and neither calls nor finds
+# defined (the program's, the library's)
+LAW_VALUES = "law_values"
+LAW_PLACEHOLDER = "law_proposition_placeholder"
 law_check(law: Node, program: Node): Node := {
 	is_named_law = is_key(law, Op.Colon) and key_of(law) is symbol
 	lines = if is_named_law then statements_in(value_of(law)) else [law]
@@ -986,12 +953,10 @@ law_check(law: Node, program: Node): Node := {
 	defined = level_statements(program).map(declared_name)
 	variables = if #given > 0 then given else law_variables(proposition, []).filter(name => name not in defined and not is_declared_word(name))
 	law_shown = (if is_named_law then name_of(key_of(law)) else as_code(proposition).replace("ø-", "-")).replace("\"", "'")
-	failure = "\"law " + law_shown + " fails for \"" + variables.map(name => " + \"" + name + " = \" + " + law_variable_prefix + name).join(" + \", \"")
-	code = "if not (" + law_placeholder + ") { raise " + failure + " }"
-	# each variable held as law_<name>, which no rule of a library word takes (c, m)
-	for name in variables { proposition = renamed(proposition, name, plain_node(parsed(law_variable_prefix + name))) }
-	for name in variables.reverse() { code = "for " + law_variable_prefix + name + " in " + law_trial_values + " { " + code + " }" }
-	renamed(plain_node(parsed(code)), law_placeholder, proposition)
+	# each variable an item of the values tried, which no rule of a library word takes (c, m)
+	for i in 0 ..< #variables { proposition = renamed(proposition, variables[i], plain_node(parsed(LAW_VALUES + "#${i + 1}"))) }
+	names = variables.map(name => "\"" + name + "\"").join(", ")
+	renamed(plain_node(parsed("law_holds(\"" + law_shown + "\", [" + names + "], " + LAW_VALUES + " => " + LAW_PLACEHOLDER + ")")), LAW_PLACEHOLDER, proposition)
 }
 # `for x: int` of a named law: x
 law_given(line: Node): text := {
