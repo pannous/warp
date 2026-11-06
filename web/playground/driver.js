@@ -228,9 +228,6 @@ function compilerHostWords(exports) {
 		},
 		// C's round, half away from zero
 		m: { round: x => Math.sign(x) * Math.round(Math.abs(x)) },
-		// warp.wasm imports c (setenv, fopen, …); slim_compiler drops them when wasm-opt runs, else Instantiation
-		// needs the module (box builds without binaryen). Unused by the kept exports; no-ops are enough.
-		c: new Proxy({}, { get: () => () => 0 }),
 	};
 }
 
