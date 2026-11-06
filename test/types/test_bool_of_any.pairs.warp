@@ -1,0 +1,11 @@
+# bool(x) is the truthiness of any value, a text read as a word (wiki/bool.md, card bool-of-collection)
+'bool([])'	no
+'bool([0])'	yes
+'bool({})'	no
+'bool(ø)'	no
+'bool(0)'	no
+'bool(2)'	yes
+'bool("")'	no
+'bool("0")'	no
+'bool("no")'	no
+'bool("hello")'	yes

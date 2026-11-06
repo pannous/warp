@@ -546,6 +546,12 @@ then_not_pipe(value: Node, function: Node): Node := {
 	if is_key(value, Op.If) or is_key(value, Op.While) { return ø }
 	throw "`${spelled(value)} then ${spelled(function)}` is no pipe: `then` is only the branch word, pipe with `${spelled(value)} |> ${spelled(function)}`"
 }
+# `x > 2 then 5` (decision then-not-pipe): a branch needs its `if`, refused naming `if x > 2 then 5`; ø where `if c`
+# or `while c` heads it already
+then_without_if(condition: Node, value: Node): Node := {
+	if is_key(condition, Op.If) or is_key(condition, Op.While) { return ø }
+	throw "`${spelled(condition)} then ${spelled(value)}` has no if: write `if ${spelled(condition)} then ${spelled(value)}`"
+}
 # `twice.description`: a word a function has none of, the compile refused with the word it means
 misnamed(function: Node, word: Node, meant: Node): Node := {
 	throw "${function}.${word} is no word of a function: did you mean ${function}.${meant}?"
@@ -718,6 +724,7 @@ rule_words = {
 	definition_text: definition_text,
 	dir_words: dir_words,
 	doc_of: doc_of,
+	effects_named: effects_named,
 	exited: exited,
 	framed: framed,
 	full_definition: full_definition,
@@ -731,6 +738,7 @@ rule_words = {
 	leading_unit: leading_unit,
 	misnamed: misnamed,
 	then_not_pipe: then_not_pipe,
+	then_without_if: then_without_if,
 	module_help: module_help,
 	module_named: module_named,
 	module_word_help: module_word_help,
