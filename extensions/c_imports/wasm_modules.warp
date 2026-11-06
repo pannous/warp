@@ -91,7 +91,30 @@ wasm_exports(path: text, folder: text): WasmExports := {
 		if export#2 == EXPORTED_FUNCTION { exports.functions += wasm_declaration(name, path, types[function_types[index]]) }
 		if export#2 == EXPORTED_GLOBAL and global_values[index] != ø { exports.values += [name + " = " + global_values[index]] }
 	}
+	exports.functions = with_c_types(exports.functions, path, folder)
 	exports
+}
+# A C module's types: zlib.wasm's exports take i32s, its pointers among them; the foreign lines of zlib.warp beside it,
+# `zlibVersion(): text from "zlib.wasm"`, say which cross as texts (a copy in the module's memory, its malloc's), which
+# give one back, which are unsigned (web/playground/host-foreign.js callC; natively card native-driver)
+with_c_types(functions: list, path: text, folder: text): list := {
+	typed = c_declarations_in(file_text(wasm_file(path.remove_suffix(WASM_EXTENSION) + module_extension, folder)) ?? "")
+	functions.map(d => {
+		lines = typed.filter(line => line#1 == d#1)
+		if #lines == 0 then d else [d#1, path, lines#1#3, lines#1#4, lines#1#5]
+	})
+}
+# the words the wasm modules a source uses give it: their functions and warp words
+wasm_module_words(source: text, folder: text): list := {
+	words = []
+	for statement in c_statements(with_module_aliases(source)) {
+		path = wasm_module_used(statement, folder)
+		if path != ø {
+			exports = wasm_exports(path, folder)
+			words += exports.functions.map(d => d#1) + exports.words.map(wasm_word_name)
+		}
+	}
+	words
 }
 # the number after the byte the reader is at
 next_number(reader: ByteReader): int := {
