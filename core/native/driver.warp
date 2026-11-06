@@ -464,11 +464,12 @@ single_at(address: pointer): Single := address
 
 # The GC heap a run starts with: reserved, committed lazily, growing as the
 # run needs (decision heap-per-run). A compiler building the compiler starts large: one starting small collects at each
-# of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild; at 128 MB 698 -> 1408 s).
+# of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild; at 128 MB 698 -> 1408 s);
+# 1 GB over 512 MB: the self compile 75.6 -> 68.6 s CPU (-9%), peak RSS 595 -> 1107 MB (card gc-heap-measure).
 # A compiler compiling a program starts small, as a program does: one that never fills its heap never collects, so
 # every byte it makes stays (hello 218 -> 101 MB RSS, sudoku 663 -> 106 MB, as fast; card compile-memory-limit). The
 # machine code holds the size, so each is kept apart (machine_code_file)
-BUILDER_GC_HEAP_BYTES = 536870912
+BUILDER_GC_HEAP_BYTES = 1073741824
 COMPILER_GC_HEAP_BYTES = 67108864
 PROGRAM_GC_HEAP_BYTES = 67108864
 # A program's fuel when it counts steps (decision fuel-metering): wasmtime burns about one

@@ -3,7 +3,7 @@
 # executables, tests.warp lists and judges `warp test`'s cases. compiler.warp runs each command it does not know
 # itself through this extension's row (extensions/extensions.warp): extension_command below
 # warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
-VERSION = "1.6.1"
+VERSION = "1.7.0"
 REPL_PROMPT = "warp> "
 NATIVE = "the native warp"
 HELP_COLUMN = 38
