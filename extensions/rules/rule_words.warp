@@ -559,6 +559,14 @@ return_kind(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
 	if definition == ø then ø else function_result_kind(name, definition)
 }
+# `[3, 4]`, `sizes()`, `xs`: code giving a list, written out or a call or a name the analyzer infers a list for at the
+# program's level, as a hole typed list would take it (decision typed-rule-holes); `[3, 4] cm` and `sizes() cm` alike
+list_valued(code: Node, program: Node): bool := {
+	if is_group(code) and bracket_of(code) == "[" { return yes }
+	if not (code is symbol or is_call(code)) { return no }
+	analyze(program)
+	inferred_kind(code, scopes[""]) == ValueKind.List
+}
 # the kinds as data, spelled: {functions: {f: {params: [kind…], result: kind}}, variables: {x: kind}, value: kind}
 kinds(program: Node): map := {
 	analyze(program)
@@ -868,6 +876,7 @@ rule_words = {
 	it_read_as: it_read_as,
 	law_check: law_check,
 	leading_unit: leading_unit,
+	list_valued: list_valued,
 	misnamed: misnamed,
 	missed_cases: missed_cases,
 	then_not_pipe: then_not_pipe,

@@ -988,3 +988,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-06 user (furious, lib/units.warp's unit list repeated 12x): never repeat code; agents name a repeated list/condition/rule head; a check refuses repeated long lines (common.md Principles).
 - 2026-11-06 Supervisor (core OK, bent sprint rule): rule where `$u is <Class>` sees a module's top-level `name = Class(…)` constants (~15 lines in core/passes/rewrites.warp has_property + module scan), so lib/units' 35-name lists become one typed rule (card units-list-repeated, user-demanded).
 - 2026-11-06 as-forced-dispatch (user core OK): `as! T` dispatches to forced overloads that libraries define, mirroring how `as T` reaches lib conversions; map→class and int wrap (`300 as! byte` → 44; today 300) are lib bodies. Small core change, then lib.
+- 2026-11-06 inline-block-library-words (user core OK, card times-infix-operator): prelude words with a block parameter they call (or an explicit `inline` mark) keep their bodies, so they inline like a program's own; `times` becomes a plain `infix operator times(n: int, b: block)` in the prelude; the times reader in extensions/ and the times_loops pass go.
+- 2026-11-06 convert-bang (user): a library's forced conversion is named `convert!(x, to: T)` and reached by `as! T`, mirroring `convert(x, to: T)` for `as T`; no `forced` flag (a default would clash with plain convert).
+- 2026-11-06 time-fields-before-ufcs: user doesn't care which runs first (no mandate).
+- 2026-11-06 format-as-text-definition: drop `show`; only `format … as text`, no show alias.
+- 2026-11-06 Grok integration break: the sprint holds its pushes while the Integrator lands all non-duplicate Grok Ready tips; then resume.
