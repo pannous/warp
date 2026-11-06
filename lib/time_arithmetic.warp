@@ -170,14 +170,15 @@ month_limit = 1048576
 # `a + b`, `a - b`, `a * b` (operator 0, 1, 2) of two run-time operands, each its form code (-1 a whole number, its
 # position the number), position, months and days: the time node or whole number they make
 # an operand of a time's + - * the emitter holds as a node, before its parts are read: a time, a duration or a whole
-# number as it is; a quantity of lib/units the duration it lasts by its milliseconds (milliseconds_of, as it moves lib/time's
-# Instant): `2024-01-31T10:00 + 1 h`. Its milliseconds are a float, its amount scaled to the unit (`24 h` is 86400000.0
-# ms): a duration counts whole nanoseconds, so they are rounded to the nearest one
+# number as it is; a quantity of lib/units the duration it lasts, by the Duration it converts to (as it moves lib/time's
+# Instant): `2024-01-31T10:00 + 1 h`. Its milliseconds are a float (`24 h` is 86400000.0 ms): a duration counts whole nanoseconds,
+# so they are rounded to the nearest one
 time_operand(x: any) := {
 	if x is number and not (x is int) { raise not_arithmetic }
-	milliseconds = milliseconds_of(x)
-	if milliseconds is number and not (x is number) then lasting_nanos(round(milliseconds * 1000000) as int) else x
+	if x is int then x else lasting_of(x)
 }
+# a Duration as the exact duration it lasts; a value converting to one too, any other, a time, as it is
+lasting_of(d: Duration or any) := if d is Duration then lasting_nanos(round(d.ms * 1000000) as int) else d
 # the exact duration of nanoseconds, as a quantity of time moves a time
 lasting_nanos(nanos: int) := time_of(duration_form_code, nanos)
 time_operation(a_form: int, a_position: int, a_months: int, a_days: int, b_form: int, b_position: int, b_months: int, b_days: int, operator: int) := operand_value(time_arithmetic(operand_of(a_form, a_position, a_months, a_days), operand_of(b_form, b_position, b_months, b_days), time_operator(operator)))
