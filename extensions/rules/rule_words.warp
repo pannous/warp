@@ -703,6 +703,25 @@ class_methods_listed(name: Node, program: Node, source: text): any := {
 	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
 	List((own + outside).map(symbol), Bracket.Square, Separator.Comma)
 }
+# `functions()` (card functions-list, user 2026-10-15): the program's own functions as function values, in their
+# order, as written (the program holds the library words it reached by now), a list to filter
+# (`functions().filter(f => f.name.starts_with("test_"))`); ø where it has its own word. A function taking nothing is
+# `function f`, as its bare name calls it
+program_functions(program: Node, source: text): any := {
+	if owns_word("functions", program) { return ø }
+	statements = level_statements(plain_node(parsed(source)))
+	names = distinct(statements.map(defined_function).filter(name => name != ø))
+	taking_nothing = statements.filter(statement => defined_function(statement) != ø and #listed_function_head(statement) == 1).map(defined_function)
+	if #names == 0 { return List([], Bracket.Square, Separator.Comma) }
+	plain_node(parsed("[" + names.map(name => if taking_nothing.contains(name) then "function " + name else name).join(", ") + "]"))
+}
+# the function a statement defines with parameters, `f(x) := …` or `f(x): T := …`, else ø
+defined_function(statement: Node): text? := {
+	if not is_key(statement, Op.Define) { return ø }
+	head = listed_function_head(statement)
+	if is_called_name(head) then name_of(head#1) else ø
+}
+listed_function_head(definition: Node): Node := if is_key(key_of(definition), Op.Colon) then key_of(key_of(definition)) else key_of(definition)
 # the class of that name and the classes it extends, nearest first; [] when the program (as written: the class methods
 # pass may have lifted its classes by now) declares none
 class_lineage(name: text, program: Node): list := {
@@ -873,6 +892,7 @@ rule_words = {
 	instance_members: instance_members,
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
+	program_functions: program_functions,
 	it_read_as: it_read_as,
 	law_check: law_check,
 	leading_unit: leading_unit,

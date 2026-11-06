@@ -26,6 +26,8 @@ rewrite $p.methods => [$names...] where $p is symbol and $names = instance_membe
 # among them) as function values (extensions/rules/rule_words.warp class_fields_listed, class_methods_listed)
 rewrite fields($c) => [$names...] where $c is symbol and $names = class_fields_listed($c, $program, $source)
 rewrite methods($c) => [$functions...] where $c is symbol and $functions = class_methods_listed($c, $program, $source)
+# `functions()`: the program's own functions as function values (extensions/rules/rule_words.warp program_functions)
+rewrite functions() => [$functions...] where $functions = program_functions($program, $source)
 # `type(sqrt)`: a library word's signature, `builtin: (x:number) -> number` (extensions/rules/rule_words.warp builtin_type)
 rewrite type($f) => $t where $f is symbol and $t = builtin_type($f, $program)
 rewrite $f.dump => $refused where $f is symbol and $f is function and $refused = misnamed($f, dump, definition)
