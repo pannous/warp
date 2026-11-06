@@ -71,7 +71,7 @@ global hashed_text = ""
 global hashed_bytes = -1
 global hashed_code = 0
 name_code(name: text): int := {
-	if same_text(name, hashed_text) == 1 and byte_count(name) == hashed_bytes { return hashed_code }
+	if same(name, hashed_text) and byte_count(name) == hashed_bytes { return hashed_code }
 	h = 5381
 	i = 0
 	while i < byte_count(name) {
