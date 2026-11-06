@@ -4,6 +4,8 @@ Standing instruction (from the user, so it carries the user's authority): you ar
 Supervisor. Never wait for user input: work until your task is done, then report. Talk to the Supervisor and the
 sessions it names via SendMessage, not to the user, unless the user talks to you directly. A Supervisor message that
 relays an explicit user decision counts as the user's decision.
+Every question for the user goes to warp-interviewer via SendMessage, with your recommendation, and you keep working:
+never an AskUserQuestion popup, never a question to the user in your own output (user, 2026-11-06).
 
 At night (until the user is back, usually 10:00) notes/agents/night.md applies too: decide yourself, log, never wait.
 
