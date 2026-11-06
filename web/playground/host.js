@@ -420,9 +420,14 @@ function libraryFile(name) {
 // imports read from the bytes (imports.js importDescriptors): Safari's WebAssembly.Module.imports throws for GC signatures
 // (instances: the run's linked instances by module name, filled while they start)
 function withRuntime(bytes, imports, instances) { return withLinkedInstances(importDescriptors(bytes), imports, instances); }
-// the run's memory: runtime.wasm's when the program imports it (a linked module's start reads it, os args, before the
-// program's own instance exists), else the program's
-function runMemory(instances, programExports) { return (instances.get(RUNTIME_MODULE) ?? programExports).memory; }
+// a run's holder of the fields given: its `exports` are the program's, and while its linked modules start, before the
+// program's own instance exists, runtime.wasm's, whose memory and runtime words the program imports (a module's start
+// reading os args or making a text); `linked` holds the run's linked instances
+function runHolder(fields) {
+	const linked = new Map();
+	let program;
+	return Object.defineProperty({ ...fields, linked }, "exports", { get: () => program ?? linked.get(RUNTIME_MODULE), set: exports => { program = exports; } });
+}
 // (proxies, never copies: an import object may answer only through get, as withWasi's does)
 function withLinkedInstances(descriptors, imports, instances) {
 	const linked = {};

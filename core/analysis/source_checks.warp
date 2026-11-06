@@ -44,13 +44,17 @@ charged_assignments(block: Node) := {
 	ø
 }
 # decisions let-reassign, const-deep: a name declared `let k = 7` (also const, constant, final, val) binds once, so
-# assigning it again in its block, `k = 8`, `k += 1`, is an error whose fix is the variable, `var k = 7`
+# assigning it again in its block, `k = 8`, `k += 1`, is an error whose fix is the variable, `var k = 7`; a function's
+# body keeps its own locals (lambda-assign-writes-through)
 constant_words = ["let", "const", "constant", "final", "val"]
 constant_assignments(block: Node) := {
-	constants = items_of(block).map(plain_node).map(declared_constant).filter(name => name != ø)
+	statements = items_of(block)
+	constants = statements.map(plain_node).map(declared_constant).filter(name => name != ø)
 	if #constants == 0 { return ø }
-	for n in nodes_in(block) {
-		if n is key and op_of(n) in assigning_operators and "${without_mark(key_of(n))}" in constants { diagnose(call_of("constant_assignment", ["${without_mark(key_of(n))}"]), n) }
+	for statement in statements.filter(statement => declared_constant(plain_node(statement)) == ø) {
+		for n in outer_nodes_in(statement) {
+			if n is key and op_of(n) in assigning_operators and "${without_mark(key_of(n))}" in constants { diagnose(call_of("constant_assignment", ["${without_mark(key_of(n))}"]), n) }
+		}
 	}
 	ø
 }
