@@ -50,5 +50,6 @@ repo); it prints "sent to Grok Bot Supervisor" and wakes it through its fleet in
 changes only when the user regenerates it: a 401 means exactly that, so ask the user to have Grok refresh the file
 and write to data/grok-cards.md meanwhile (a 401 hid every message from 2026-11-02 to 11-03). Grok answers by typing
 into the warp-supervisor tmux pane. Hand its coders simple library-only cards: `todo take <card> <coder>`, write the task into data/grok-cards.md,
-ping with grok-msg; they land their branches themselves. At most 1 active + 1 queued card per Grok coder.
+ping with grok-msg; they land their branches themselves. Grok is the Claude Supervisor's helper (user 2026-11-06): its Supervisor and coders never pick a card
+themselves, only the ones handed to them, and never one whose Agent field names someone else (one owner per card). At most 1 active + 1 queued card per Grok coder.
 Unexplained direct pushes to main with the user's identity (g-* cards) may be Grok Bot: ask the user.

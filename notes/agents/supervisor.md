@@ -7,6 +7,10 @@ there). Startup reading: this file and notes/agents/common.md. Look up when need
 the team, crash resume), notes/roles.md (what the other roles do), notes/agents/grok.md "For the Supervisor".
 
 ## Mandate
+- One owner per card (user 2026-11-06, after Grok and Claude workers built the same cards twice: "You are the
+  mastermind of this project. Grok is only your helper."): you assign every card, to exactly one worker, and mark it
+  on the board with `todo take <card> <worker>` before handing it out (a card list in a brief is not a lock). Never
+  hand out a card whose Agent field is set. Grok's coders work only on cards you send them by grok-msg.
 - You own the project's progress (user 2026-10-21: "Make smart decisions. You may even bend the rules if that's
   necessary to progress."). Technical and process choices that follow the decided direction are yours; record each
   as one line in notes/decisions.md. A bent rule is named, with the reason, in the message or commit. Only questions

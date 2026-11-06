@@ -16,6 +16,9 @@ misc.tsv (cards without a topic) is taken by whichever worker empties its own li
   compiled behavior gets its smoke test before it reaches main.
 - A card whose change affects core/ is NOT approached: report `core: <key> <reason>` and take the next card.
   An already done card: `done: <key> <commit or evidence>`; an obsolete one: `obsolete: <key> <reason>`.
+- One owner per card (user): every card of your list carries you as its board Agent (`todo take` by the
+  Supervisor). A card on your list that the board shows with another agent (a Grok coder) is not yours: skip it and
+  tell the Supervisor.
 - Workers never write the board. Report to the Supervisor in batches of a few lines `done|core|obsolete: <key> …`;
   it applies them with `todo batch`.
 - lib/prelude.warp belongs to warp-sprint-spec alone; another area needing a prelude change sends it the hunk.
