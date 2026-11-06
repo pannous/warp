@@ -1,0 +1,12 @@
+# purity predicates and `purely` (extensions/effects.warp, card purity-predicates, wiki/pure.md)
+'square(x) := x*x; square.pure?'	yes
+'shout(t) := print t; shout.pure?'	no
+'shout(t) := print t; shout.output?'	yes
+'square(x) := x*x; square.output?'	no
+'stamp() := clock(); stamp.input?'	yes
+'roll() := random(); roll.random?'	yes
+'roll() := random(); roll.pure?'	no
+'purely sq(x) := x*x; sq(3)'	9
+'purely sq x := x*x; sq 4'	16
+'square(x) := x*x; purely cube(x) := x*square(x); (cube.pure?) and cube(2) == 8'	yes
+'helper(t) := print t; purely loud(t) := helper(t); 1'	error	loud is marked @pure but does IO via loud → helper → print
