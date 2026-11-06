@@ -447,7 +447,7 @@ def bind_library_words() {
 		for entry in image.classes {
 			# (a class the program never reached: its struct declared as the module wrote it)
 			if entry#1 not in module.class_structs { module.class_structs[entry#1] = [struct_read(entry#2), instance_fields] }
-			if struct_written(entry#1) != entry#2 { refuse("the class struct " + entry#1 + " of the linked module " + image.name + ", " + entry#2 + ", is " + struct_written(entry#1) + " in the program") }
+			if struct_written(entry#1) != entry#2 { link_refusal("the class struct " + entry#1 + " of the linked module " + image.name + ", " + entry#2 + ", is " + struct_written(entry#1) + " in the program") }
 			gc_type(entry#1)
 		}
 		for k in 0..<#image.functions {

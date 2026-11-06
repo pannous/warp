@@ -282,11 +282,21 @@ def fresh_module() {
 	file = module.program_file
 	module = Module({}, [])
 	module.program_file = file
+	link_refused = no
 }
 
 refuse(why: text): any := {
 	throw outside_the_core + why + module.emitting_at
 }
+# a refusal of binding a linked module's word to the program, marked: the compile is retried from the modules' sources
+# (compiler.warp), a program's own error never (a global: a Module field more fails the seed's compile)
+global link_refused = no
+link_refusal(why: text): any := {
+	link_refused = yes
+	refuse(why)
+}
+# a linked module's word, declared in the program, its code the module's
+is_linked_word(f: Function): bool := f.body == Node.Empty and f.name in module.linked_words
 
 # the file the program comes from, which a refusal names
 def emitting_file(file: text) { module.program_file = file }

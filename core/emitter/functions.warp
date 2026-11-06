@@ -82,6 +82,8 @@ def passed(f: Function, i: int, value: TypedCode): list {
 		if value.kind == ValueKind.Node and f.kinds[i] != ValueKind.Node and slot in module.unannotated { refuse("a node where a " + f.kinds[i] + " is needed") }
 		converted(if declared == "" then value else settled(value, f.kinds[i]), f.kinds[i])
 	} catch refusal {
+		# (a linked word takes the kinds its module was built with, never widened here)
+		if is_linked_word(f) { link_refused = yes }
 		joint = parameter_joint(f.kinds[i], value.kind)
 		if slot not in module.unannotated or not widens_later(slot, joint) { throw refusal }
 		value.code
@@ -293,7 +295,7 @@ is_letter(c: text): bool := (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
 names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: list): any := {
 	# a linked module's word the program only declares (no body): its code is the module's (bind_library_words)
-	if f.name in module.linked_words and f.body == Node.Empty { return refuse(linked_arity_refusal(f.name, #f.signature.parameters)) }
+	if is_linked_word(f) { return link_refusal(linked_arity_refusal(f.name, #f.signature.parameters)) }
 	placed(f)
 	if is_primitive_function(f) { return primitive_compiled(f) }
 	parameter_kinds = []

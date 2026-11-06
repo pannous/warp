@@ -105,9 +105,9 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words(), c_functions), emitter_kinds(program))
 	timed("emit done")
 	# a linked module whose words won't take the program's values: said, and the program compiled anew with the
-	# modules' sources, nothing of the linked attempt kept; a refusal naming no linked word is the program's own error,
-	# never retried (every program links the prelude)
-	if made is text and module.linked_words.keys.any(word => mentions_word(made, word)) {
+	# modules' sources, nothing of the linked attempt kept; only a binding refusal (emitter.warp link_refusal) is
+	# retried, a program's own error never (every program links the prelude)
+	if made is text and link_refused {
 		warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source"
 		return compile(written, folder, library_runtime, no)
 	}
