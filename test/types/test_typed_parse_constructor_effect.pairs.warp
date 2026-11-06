@@ -1,0 +1,4 @@
+# a typed parse constructs its result once, through the class's init (card typed-parse-constructor)
+'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; c = parse("{value:7}", Counter); c.value + hits'	8
+'global hits = 0; class Inner { n: number; init() { hits += 1 } }; class Outer { inner: Inner }; o = parse("{inner:{n:1}}", Outer); hits'	1
+'class P { x: int; init(a) { x = a } }; try { parse("{x:1}", P) } catch e { e.message }'	'typed JSON takes no class whose init has parameters'
