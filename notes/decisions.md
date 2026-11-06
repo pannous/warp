@@ -141,7 +141,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Bee/wasp entity names go into uniscript and are regenerated into core/entities.tsv, never by hand.
 - P13 libm FFI: header-driven linking first, the LIBM tables only as fallback and as examples of hand-linked FFI.
 - uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
-- browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (probes/firefox_jspi_terminate.html).
+- browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (report and repro: notes/firefox_jspi_bug.md).
 - deploy-hook: watch-playground-deploy.sh reports the finished run's conclusion and failed jobs, one stderr line on no answer.
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 

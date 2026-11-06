@@ -27,11 +27,4 @@ storage-write-through	storage-write-through	lib/storage.warp:7 'Waiting: lazy lo
 try-click	web	lib/markup.warp:76-78 click and its `click $who` rule: inside a try block the argument reaches click as a text where a list is expected
 wasmtime-self-hosted	connectors	same root as wasmtime-pure-compiler: declare lib/wasmtime.warp's C words as foreign lines (driver.warp:80 pattern), then re-add wasmtime to std_module_names (core/compiler.warp:254 reads it; a one-word list entry)
 who-handler-read	web	samples/web/page_elements.warp:7 uses $who but lib/markup.warp has only `click $who` (line 78); a rule reading $<id> as the page element's value in a handler belongs in lib/markup.warp
-component-calls	web	web framework holes are lib/markup.warp work (run-time hole lists from page·shown); only shrinks patches, no core/ need
-components-on-the-fly	connectors	run-time component loading is a library host word (lib/wasmtime.warp, lib/native) plus research; part 1 goes with card module-linking
-firefox-tour	web	fewer gpu_compute jobs or a longer limit for that check: scripts/browser-dry-run.sh / web/playground
-server-build	web	extensions/commands/build.warp:62-71 refuses unbuilt kinds; a plain warp app.warp already serves routes (core/native/warp.warp:471); detection of routes belongs in the build command extension
-site-wagi-build	hosting	extensions/commands/build.warp:63 UNBUILT_OPTIONS --site/--wagi; lib/wagi.warp exists; build kinds detected per decision build-kinds-detected
-use-cargo-config-structs	connectors	the crate binding generator (crates/, lib/crates/) needs Default constructors, field setters, &Struct handles; no core change
-use-cargo-playground	connectors	serving prebuilt crate components to web/playground and leaving excluded_samples.txt is web/ work
 js-webidl-bindings	user-decided	user (round 9-10): use js binds from web.webidl via an extension

@@ -7,7 +7,7 @@ This supersedes decision playground-after-parity (the user: "the bigger local is
 - web/playground still serves the Rust-era compiler (warp.wasm of 2026-10-21; build.sh builds src/ with cargo, gone).
 - The native warp runs the self-hosted compiler warp.wasm (core/compiler.warp) through core/native/driver.warp, which
   answers its host words (54 `warp_wasmtime` imports, WASI, files, modules, FFI) over libc.
-- Cards: wasm-playground-build, playground-compiles (both say: host warp.wasm in JavaScript).
+- Cards: wasm-playground-build, playground-compiles (both say: host warp.wasm in JavaScript; done by step 1).
 
 ## Steps
 1. Host the self-hosted compiler in the page: warp.wasm (the installed one, beside ~/dev/bin/warp) compiles in a
