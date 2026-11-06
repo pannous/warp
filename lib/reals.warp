@@ -124,5 +124,6 @@ const pi() := π
 const τ() := real(2, 1, 1)
 const tau() := τ
 ∞() := 1.0 / 0.0
-const ℯ() := 2.718281828459045
+// ℯ reads as a character, never a variable (an assignment to it is refused anyway)
+ℯ() := 2.718281828459045
 const euler() := ℯ
