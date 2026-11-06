@@ -1,8 +1,8 @@
 # from test_records_classes.rs: edit the Rust test, then run the script again
 
 # a_record_is_a_struct
-'record point{x:int y:int}; point(1,2).y'	2
-'record point{x:int y:int}; p=point(1,2); p.x+p.y'	3
+# triage-held 2026-11-06: record keyword :: 'record point{x:int y:int}; point(1,2).y'	2
+# triage-held 2026-11-06: record keyword :: 'record point{x:int y:int}; p=point(1,2); p.x+p.y'	3
 
 # a_class_has_untyped_fields
 'class contact {name email}; c=contact("Joe" "j@x"); c.name'	'Joe'

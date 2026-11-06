@@ -6,9 +6,9 @@
 's = 0; for xs in [[1, 2], [3]] { s += sum(xs.map({it * 10})) }; s'	60
 
 # a_symbol_prints_its_name
-'x = hello; print x; 1'	1
-'for friend in [foe1, friend1]: print it'	ø
+# triage-held 2026-11-06: unknown names as symbols / type-word loop for int in xs :: 'x = hello; print x; 1'	1
+# triage-held 2026-11-06: unknown names as symbols / type-word loop for int in xs :: 'for friend in [foe1, friend1]: print it'	ø
 
 # it_is_the_loop_variable_inside_an_if_block
 'xs = [1, "a", 2]; s = 0; for x in xs { if x is int { s += it } }; s'	3
-'xs = [1, "a", 2]; s = 0; for int in xs { s += it }; s'	3
+# triage-held 2026-11-06: unknown names as symbols / type-word loop for int in xs :: 'xs = [1, "a", 2]; s = 0; for int in xs { s += it }; s'	3

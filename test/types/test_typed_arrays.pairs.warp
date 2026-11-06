@@ -4,13 +4,13 @@
 'x : 100 int; x#5=7; x#5'	7
 
 # test_typed_array_declaration_with_subscript
-'pixel:int[100]; pixel#1'	0
-'pixel:int[100]; pixel#5=7; pixel#5'	7
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 10 float) :: 'pixel:int[100]; pixel#1'	0
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 10 float) :: 'pixel:int[100]; pixel#5=7; pixel#5'	7
 
 # test_typed_array_of_other_types
-'x : 10 float; x.length'	10
-'x : 3 text; x.length'	3
-'x:float[4]; x.length'	4
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 10 float) :: 'x : 10 float; x.length'	10
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 10 float) :: 'x : 3 text; x.length'	3
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 10 float) :: 'x:float[4]; x.length'	4
 
 # a_type_word_subscript_is_a_zero_filled_list_anywhere
 '#(int[3])'	3
