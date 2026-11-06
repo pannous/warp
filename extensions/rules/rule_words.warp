@@ -822,6 +822,49 @@ typed_words(kind: text): list := {
 }
 # a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
 is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
+
+# The views of a module's words (card dir-filters): `time.functions`, `time.attributes` (its values, `day_seconds`),
+# `time.classes` and `list.operators`, the operators it declares (`∪` of `infix operator ∪(a, b) := …`), which dir
+# leaves out; ø of a name the program binds, of a view the module or program defines itself, and of no module
+module_view(name: Node, view: Node, program: Node): any := {
+	kind = spelled(view)
+	if owns_word(kind, program) or "${name}" in names_bound_in_kept(program) { return ø }
+	source = used_module_text("${name}")
+	if source == "" { return ø }
+	listed = {}
+	if kind == "classes" { for class_name in class_names(source) { listed[class_name] = yes } }
+	if kind == "operators" { for glyph in declared_operator_glyphs(source) { listed[glyph] = yes } }
+	# a type's words of the prelude, as dir lists them (`upper` of text)
+	if kind == "functions" { for word in typed_words("${name}") { if is_listed_word(word) { listed[word] = yes } } }
+	for cut in definition_slices(source) {
+		if cut#1 == kind { return ø }
+		if viewed_word(kind, cut#1, cut#2) { listed[cut#1] = yes }
+	}
+	List(listed.keys, Bracket.Square, Separator.Comma)
+}
+viewed_word(kind: text, word: text, definition: text): bool := {
+	if kind == "classes" or kind == "operators" or not is_listed_word(word) { return no }
+	value = defines_value(word, definition)
+	if kind == "attributes" then value else not value
+}
+# `∪` of a line `infix operator ∪(a, b) := …`, and of prefix, suffix and postfix operators, each declared operator once
+declared_operator_glyphs(source: text): list := {
+	glyphs = []
+	for line in source.split("\n") {
+		for head in ["infix operator ", "prefix operator ", "suffix operator ", "postfix operator "] {
+			if line.starts_with(head) and line.contains(":=") {
+				glyph = line[#head ..].split("(")#1.trim()
+				if #glyph > 0 and not glyph.contains(" ") and not (glyph in glyphs) { glyphs += [glyph] }
+			}
+		}
+	}
+	glyphs
+}
+# `day_seconds = 86400`: a definition of a value, not a function
+defines_value(word: text, definition: text): bool := {
+	after = definition[#word ..].trim()
+	after.starts_with("=") and not after.starts_with("==") and not after.starts_with("=>")
+}
 # `text` of `upper(t: text): text from warp`, "" of an untyped first parameter
 first_parameter_type(word: text, definition: text): text := {
 	if not definition.starts_with(word + "(") { return "" }
@@ -889,6 +932,7 @@ rule_words = {
 	then_without_if: then_without_if,
 	module_help: module_help,
 	module_named: module_named,
+	module_view: module_view,
 	module_word_help: module_word_help,
 	once_listens: once_listens,
 	page_valued: page_valued,

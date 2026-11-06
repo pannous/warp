@@ -1,0 +1,26 @@
+# Records (card pure-record-keyword): `record Point { x: int; y: int }`, C#'s `record Point(int X, int Y);`, Java's
+# `record Point(int x, int y) {}` declare the class of those fields. A warp class compares by value already, as a record
+# does (and as Kotlin's `data class`, foreign_forms.warp), so a record is read as that class declaration. Only a
+# statement `record Name {…}` or `record Name(…)` declares one: `record = 5`, `f(record)` keep the word a name
+
+record_class_word = "class"
+
+# the class a record declares, else ø, nothing read
+read_record(p: Parser, word: text): Node := {
+	if not (starts_statement(p) and record_declared(p, word)) { return ø }
+	start = p.at
+	# the class declaration read on from where `record` ends: type_declaration steps over its word by the word's length
+	p.at += word.length - record_class_word.length
+	declared = type_declaration(p, record_class_word)
+	if declared == ø { p.at = start }
+	declared
+}
+# a name after the word, then its fields: `{` or `(`
+record_declared(p: Parser, word: text): bool := {
+	name = name_after_blanks(p, word)
+	if count(name) == 0 { return no }
+	fields = char_at(p, spaces_end(p, spaces_end(p, p.at + word.length) + name.length))
+	fields == '{' or fields == '('
+}
+
+record_classes_extension = Extension{name: "record_classes", keyword_readers: {"record": read_record}}
