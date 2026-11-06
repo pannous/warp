@@ -7,7 +7,7 @@ contact{ name: James  age: 33 }
 assert contact.age + 1 == 34
 ```
 
-The same notation holds your config, your markup and your program. Warp compiles it to WebAssembly GC structs (no linear-memory runtime, no JS glue), and the compiler is itself a WebAssembly module [written in warp itself](#self-hosted)!
+The same notation holds your config, your markup and your program. Warp compiles it to WebAssembly GC structs (no linear-memory runtime, no JS glue), and the warp compiler is itself a WebAssembly module [written in warp itself](#self-hosted)!
 
 ▶ **[Try it in your browser](https://warp.pannous.com/)**: nothing to install. The compiler runs locally in a Web
 Worker.
