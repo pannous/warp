@@ -26,8 +26,10 @@ last_results(program: Node): Node := {
 	if changed then group_like(program, out) else program
 }
 
-# where `it` names something else: a definition, a lambda, a block, quoted code
-binds_it(n: Node): bool := is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_curly_group(n) or is_quote(n)
+# where `it` names something else: a definition, a lambda, a block, quoted code, and a phrase or call of a word that
+# gives `it` each item, `xs where it > 1`, `xs.filter(it > 2)`, `xs each it * 2`
+binds_it(n: Node): bool := is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_curly_group(n) or is_quote(n) or (n is list and items_of(n).any(item => item is symbol and name_of(item) in ITEM_IT_WORDS))
+ITEM_IT_WORDS = ["where", "each", "by", "filter", "map", "select", "every", "any", "all", "find", "sort", "sorted", "having", "until", "while", "when"]
 # the statement reads the last result: `it` outside what binds it
 reads_last_result(n: Node): bool := n == IT or (not binds_it(n) and parts_of(n).any(reads_last_result))
 with_last_result(n: Node): Node := if n == IT then LAST_RESULT else if binds_it(n) then n else children(n, with_last_result)
