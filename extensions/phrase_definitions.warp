@@ -24,6 +24,12 @@ def to_definition(p: Parser): Node := {
 	while true {
 		skip_spaces(p)
 		if at_to_header_end(p) { break }
+		# `to add number a, number b: …`: a comma ends a slot as a preposition does, labelling none
+		if at_char(p, ',') and #words > 0 {
+			advance(p)
+			words += [slot_comma]
+			continue
+		}
 		if not is_name_start(char_here(p)) {
 			p.at = before
 			return ø
@@ -96,6 +102,9 @@ def shaped(parameter: Node, shapes: list): Node := {
 #   `number: number`, `a photo` → `photo` (typed once `class photo` is declared); `to add a b: a+b` keeps `a`
 # - several nouns after an article are one name, typed and named by the last: `a phone number` → `number: number`;
 #   when together they name a declared type, by all of them: `a full name` → `full-name: full-name`
+# - a known type before a name is its type, written type-first: `number a` → `a: number`; an article after the type is
+#   the name when the slot ends there: `to add number a to number b`
+# - a comma ends a slot as a preposition does, labelling none: `to add number a, number b`
 # - a lone typed slot the body reads as `it` alone is `it`: `to square a number: it*it`
 # Rust twin: type_name_matching.rs parameter_slots (labelled)
 def phrase_slots(words: list, body: Node, types: list): list {
@@ -104,9 +113,21 @@ def phrase_slots(words: list, body: Node, types: list): list {
 	at = 1
 	while at <= #words {
 		word = words#at
+		if word == slot_comma {
+			preposition = ""
+			at += 1
+			continue
+		}
 		if phrase_prepositions.contains(word) {
 			preposition = word
 			at += 1
+			continue
+		}
+		if type_first(words, at, types) {
+			slot = Key(symbol(words#(at + 1)), Op.Colon, symbol(word))
+			parameters += [if preposition == "" then slot else spaced([symbol(preposition), slot])]
+			preposition = ""
+			at += 2
 			continue
 		}
 		noun = [word]
@@ -140,8 +161,19 @@ def phrase_slots(words: list, body: Node, types: list): list {
 	parameters
 }
 
-# Whether the head word at `at` belongs to the slot before it: no preposition, not past the end
-def in_slot(words: list, at: int): bool := at <= #words and not phrase_prepositions.contains(words#at)
+# Whether the head word at `at` belongs to the slot before it: no preposition or comma, not past the end
+def in_slot(words: list, at: int): bool := at <= #words and not phrase_prepositions.contains(words#at) and words#at != slot_comma
+slot_comma = ","
+
+# Whether the word at `at` is a type written before its parameter's name (notes/matching.md rule 3): a known type, no
+# article, followed in its slot by a name that is no type; an article there is the name only when the slot ends with it
+def type_first(words: list, at: int, types: list): bool {
+	word = words#at
+	if phrase_articles.contains(word) or not known_type(word, types) or not in_slot(words, at + 1) { return false }
+	name = words#(at + 1)
+	if known_type(name, types) { return false }
+	not phrase_articles.contains(name) or not in_slot(words, at + 2)
+}
 
 # The name a slot gives its parameter: `a`, `number` of `number: number`, `b` of `to b`
 def slot_name(parameter: Node): text := match parameter {
