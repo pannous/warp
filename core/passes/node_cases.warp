@@ -220,9 +220,9 @@ comparing_functions(enum_name: text): list := {
 	spelled_of = side => chosen(type_test(side, "symbol"), applied(text_of, side), side)
 	is_case = chosen(type_test(value, "symbol"), Key(value, Op.Eq, case_written), Key(value, Op.Eq, symbol("case_spelled")))
 	both_cases = Key(type_test(value, "symbol"), Op.And, type_test(other, "symbol"))
-	same = chosen(both_cases, Key(value, Op.Eq, other), Key(spelled_of(value), Op.Eq, spelled_of(other)))
+	compared = chosen(both_cases, Key(value, Op.Eq, other), Key(spelled_of(value), Op.Eq, spelled_of(other)))
 	[Key(call_of(spelled_function(enum_name, "is"), [value, case_written, symbol("case_spelled")]), Op.Define, is_case),
-		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, same)]
+		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, compared)]
 }
 
 # whether the enum, `op: Op`, a case of it, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
