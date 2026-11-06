@@ -31,9 +31,9 @@ html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", 
 
 to_html(value: any): text := html_render(value, ø, ø)
 
-// `ul{ li all fruits }`: a tag word before all/each makes that tag of each item
-rewrite $tag all $xs => $xs.map($e -> {$tag: $e}) where $tag is symbol and $tag is unbound
-rewrite $tag each $xs => $xs.map($e -> {$tag: $e}) where $tag is symbol and $tag is unbound
+// `ul{ li all fruits }`: a tag word before all/each makes that tag of each item; only the tags an item repeats in, so
+// `await all jobs` (lib/tasks.warp) stays the tasks' word
+rewrite $tag $every $xs => $xs.map($e -> {$tag: $e}) where $every in [all, each] and $tag in [li, tr, td, th, option, dt, dd, p, div, span, a, img, button, label, section, article, figure, pre, code, h1, h2, h3, h4, h5, h6] and $tag is unbound
 
 // A page's markup keeps its live parts as code (card markup-keeps): `p{ "count: " + count }` reading a variable a
 // handler changes is the part `() => …`, recomputed each time the markup renders; `on click { count += 1 }` is the

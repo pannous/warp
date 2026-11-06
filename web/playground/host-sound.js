@@ -207,6 +207,14 @@ function soundLibrary(holder) {
 		warp_sound_decoded_rate: file => files[file].rate,
 		warp_sound_decoded_channels: file => files[file].channels,
 		warp_sound_decoded_value: (file, at) => files[file].values[Number(at)] ?? 0,
+		// MIDI (card midi-output-native): the message to the page's Web MIDI on the voice's clock, as STD_ADAPTERS.midi
+		// sends; the device lists stay the page's, refused as there
+		warp_midi_send: (port, bytes) => {
+			self.sendMidi?.(guestText(program(), port), Array.from(guestBytes(program(), bytes)), self.voiceSounded?.(0).at);
+			return 0;
+		},
+		warp_midi_outputs: () => STD_ADAPTERS.midi.outputs(),
+		warp_midi_inputs: () => STD_ADAPTERS.midi.inputs(),
 	};
 }
 // {rate, channels, values}: the file's 16-bit values interleaved, at the rate and channel count asked

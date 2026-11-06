@@ -138,8 +138,8 @@ back_reach(): int := 256
 # character: nothing joins an ASCII character to what precedes it, \r\n aside) and the characters counted from there;
 # a walk over another text, or none within back_reach, starts over at t's start
 walk_back(t: text, index: int): int := {
-	if not same_text(t, walked_text) and same_text(t, other_text) { swap_walks() }
-	if not same_text(t, walked_text) or byte_count(t) < walked_bytes { return walk_from_start(t) }
+	if not same(t, walked_text) and same(t, other_text) { swap_walks() }
+	if not same(t, walked_text) or byte_count(t) < walked_bytes { return walk_from_start(t) }
 	while walked_index > index {
 		back = walked_at - 1
 		while back >= 0 and back + back_reach() > walked_at and (byte_at(t, back) >= Utf8.Continuation or byte_at(t, back) == Ascii.Newline) { back -= 1 }
@@ -165,7 +165,7 @@ walk_from_start(t: text): int := {
 # 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one
 # past it
 walk_reaches(t: text, index: int): int := {
-	if not same_text(t, walked_text) or byte_count(t) < walked_bytes or index < walked_index - 1 { return 0 }
+	if not same(t, walked_text) or byte_count(t) < walked_bytes or index < walked_index - 1 { return 0 }
 	if index == walked_index - 1 and walked_before < 0 { return 0 }
 	1
 }

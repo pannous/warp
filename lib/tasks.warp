@@ -113,7 +113,7 @@ slept(ms) := {
 }
 // the queued steps, the earliest due first, while the condition holds (ø: always) and each is due before the deadline
 // (ø: none): sleeping until each is due, and until the deadline at the end
-tasks_run_while(holds: any, deadline: any) := {
+public tasks_run_while(holds: any, deadline: any) := {
 	while #task_queue > 0 and (holds == ø or holds()) {
 		ready = task_queue.filter(t => not t.paused)
 		if #ready == 0 { break }
@@ -146,7 +146,7 @@ task_stepped(task: Task) := {
 handlers_run(handlers: list) := for handler in handlers { handler() }
 // `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is. The
 // emitter calls it too where a place typed as a value takes a task, `n: int = go f(3)` (decision task-to-value-awaits)
-task_awaited(x: any): any := if x is Task then task_value(x) else x
+public task_awaited(x: any): any := if x is Task then task_value(x) else x
 task_value(x: Task): any := {
 	x.paused = no
 	tasks_run_while(() => not x.done, ø)
