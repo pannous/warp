@@ -7,6 +7,7 @@
 
 use unit_names
 use uncertain
+use reals
 
 class Quantity {
 	amount: number
@@ -18,7 +19,7 @@ class Quantity {
 	-(other) := measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
 	*(other) := if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_product(unit, other.unit), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
-	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_power(unit, exponent), scale ^ exponent)
+	power(exponent) := measured(amount ^ exponent, dims * exponent, power_text(unit, exponent), scale ^ exponent)
 	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
 	compare(other) := amount - same_quantity(this, other, "compare").amount
 	// the same quantity shown in another unit of its kind: `q.to("m")`, `q as m`, `q as cm^2` shown in cm²
@@ -81,8 +82,7 @@ summand(q: Quantity, other: any, action: text) := {
 quantity_text(q: Quantity) := str(q.shown()) + q.unit
 
 // `m·m` is `m²`, `m²·m` `m³`
-unit_product(first: text, second: text) := if first == second then unit_power(first, 2) else first + "·" + second
-unit_power(u: text, power: int) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
+unit_product(first: text, second: text) := if first == second then power_text(first, 2) else first + "·" + second
 
 // the unit of that symbol, shown by it: `known_unit("km")` is the Length of 1000 m shown in km
 known_unit(symbol: text) := { entry = unit_entry_of(symbol); measured(entry#1, entry#2, symbol, entry#1) }
