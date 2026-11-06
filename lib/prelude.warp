@@ -904,7 +904,7 @@ is_text_cut(pattern: any): bool := {
 // the text cut at its literal pieces, each hole taking what lies between, its type converting or testing it
 fits_text_cut(value: any, pieces: list, bound: map): bool := {
 	if not is_type(value, "text") { return no }
-	rest = value
+	rest: text = value
 	for i in 0..<#pieces {
 		piece = pieces#(i + 1)
 		if is_type(piece, "text") {
