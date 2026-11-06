@@ -4,4 +4,4 @@ ordinal-index-words	obsolete	user decision 2026-11-06 round 11 (notes/decisions.
 phrase-typed-params	done	46642e6 (type enforcement of number params is a separate gap: plus(a: number, …) takes "x" too)
 print-in-script	done	6c0f520 (in lib/i18n.warp; wiki/in.md "not yet" line can go: wiki is outside this repo)
 purity-predicates	done	7d19b13 (a zero-parameter stamp() := now() is no function by then, so stamp.input? is not answered; clock() is; wiki/pure.md "Planned" line can go)
-root-power-warning	core	the lint itself fits extensions/text_lints.warp, but every diagnose() message is a row of core/analysis/warnings.data (diagnostics.warp message_files, no generic row): needs e.g. `ungrouped_root($written, $grouped)	"{written} takes the root of the first operand only"	"{grouped}"` there first
+root-power-warning	core	the lint itself fits extensions/text_lints.warp, but every diagnose() message is a row of core/analysis/warnings.data (diagnostics.warp message_files, no generic row): needs e.g. `ungrouped_root($written, $grouped) ⇥ "{written} takes the root of the first operand only" ⇥ "{grouped}"` there first
