@@ -1,0 +1,3 @@
+# a use line names its module, never a backward application of a module word (use keys is no keys(use))
+'use keys; key_name(63234)'	"ArrowLeft"
+'use frames; 1'	1

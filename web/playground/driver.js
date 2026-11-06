@@ -217,6 +217,8 @@ function compilerHostWords(exports) {
 	return {
 		host: {
 			std_io: (module, member) => newGuestError(exports(), `the host word ${guestText(exports(), module)}.${guestText(exports(), member)} is not in the browser yet`),
+			// the library index's source hashes, sha256 (core/passes/library.warp source_hash), by the page's adapters
+			std_pure: (module, member, argumentList) => stdCall(exports(), module, member, argumentList, { warnings: [] }),
 			paint: () => { throw new Error("the compiler paints nothing"); },
 			real_path: () => -1,
 			random: Math.random,
@@ -280,7 +282,7 @@ function programRan(bytes, file, hooks) {
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(module, withWasi(withRuntime(bytes, programImports(holder, hooks)), wasi)).exports;
+		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, withWasi(programImports(holder, hooks), wasi))).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}

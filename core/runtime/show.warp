@@ -111,6 +111,15 @@ shown_at(n: Node): int := {
 	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
 	(output_address() + c_text_at()) * 4294967296 + byte_count(t)
 }
+# n as print shows it from byte `start` on, as much as the output area holds, where shown_at puts it and packed as its:
+# a host reads a text of any length part by part so (the native driver's shown; lib/sound.warp, 67 KB, outgrew one)
+shown_from(n: Node, start: int): int := {
+	t = node_text(n)
+	count = byte_count(t) - start
+	if count > output_room() - c_text_at() { count = output_room() - c_text_at() }
+	for i in 0..<count { output_byte(c_text_at() + i, byte_at(t, start + i)) }
+	(output_address() + c_text_at()) * 4294967296 + count
+}
 # a picture's pixels (paint's int list) from item `from` (1-based) on, `count` of them, each 4 bytes (a color keeps its
 # alpha byte) where shown_at puts its text, for a host to copy a chunk at once instead of one call a pixel (the native
 # driver's paint, card native-show-paint): their address; count is at most pixel_chunk()

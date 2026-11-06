@@ -54,13 +54,13 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"new_text": TypedCode(ValueKind.Text, index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)]))
 		"byte_count": TypedCode(ValueKind.Int, converted(values#1, ValueKind.Text) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u])
 		"byte_at": TypedCode(ValueKind.Int, converted(values#1, ValueKind.Text) + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc_type(gc.text)]) + [op.i64_extend_i32_u])
-		"kind_code": TypedCode(ValueKind.Int, kind_code_of(values#1.code))
+		"kind_code": TypedCode(ValueKind.Int, kind_code_of(boxed(values#1)))
 		"unboxed_int": TypedCode(ValueKind.Int, unboxed(values#1.code, gc_type(gc.int_box)))
 		"fresh_int_node": TypedCode(ValueKind.Node, fresh_int_code(converted(values#1, ValueKind.Int)))
-		"marked_kind": TypedCode(ValueKind.Int, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]))
+		"marked_kind": TypedCode(ValueKind.Int, boxed(values#1) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]))
 		"unboxed_list": unboxed_list_code(body, values#1)
-		"unboxed_text": TypedCode(ValueKind.Text, payload(values#1.code, gc_type(gc.text)))
-		"unboxed_char": TypedCode(ValueKind.Char, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, []) + [i31_type] + gc_code(gc_ops.i31_get_u, []))
+		"unboxed_text": TypedCode(ValueKind.Text, payload(boxed(values#1), gc_type(gc.text)))
+		"unboxed_char": TypedCode(ValueKind.Char, boxed(values#1) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, []) + [i31_type] + gc_code(gc_ops.i31_get_u, []))
 		"char_of": TypedCode(ValueKind.Char, index_code(values#1))
 		"new_list": {
 			count = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
@@ -81,8 +81,8 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 			TypedCode(no_kind, code + taken(0) + taken(1))
 		}
 		# an entry's name, a symbol, text or character (name_node), as a text
-		"key_name": TypedCode(ValueKind.Text, runtime_call("node_text", [TypedCode(ValueKind.Node, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]))]).code)
-		"key_value": TypedCode(ValueKind.Node, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 2]))
+		"key_name": TypedCode(ValueKind.Text, runtime_call("node_text", [TypedCode(ValueKind.Node, entered_node(boxed(values#1) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])))]).code)
+		"key_value": TypedCode(ValueKind.Node, boxed(values#1) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 2]))
 		"map_of": TypedCode(ValueKind.Node, node(Marked.Map, values#1.code))
 		"new_key": TypedCode(ValueKind.Node, entry_code(values#1.code, values#2.code))
 		# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
@@ -92,11 +92,11 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		# with_kind(n, kind): n's data and value in a $Node of that whole kind field
 		"with_kind": {
 			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
-			part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
+			part = i => held + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
 			TypedCode(ValueKind.Node, values#1.code + [op.local_set] + held[1..] + converted(values#2, ValueKind.Int) + part(1) + part(2) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]))
 		}
-		"keyed": TypedCode(ValueKind.Node, values#1.code + values#2.code + as_node(values#3.code) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]))
-		"entry_key": TypedCode(ValueKind.Node, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]))
+		"keyed": TypedCode(ValueKind.Node, values#1.code + values#2.code + boxed(values#3) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]))
+		"entry_key": TypedCode(ValueKind.Node, entered_node(boxed(values#1) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])))
 		"symbol_of": TypedCode(ValueKind.Node, node(Kind.Symbol, values#1.code))
 		# error_of(t): the Error of the message t, of no class
 		"error_of": TypedCode(ValueKind.Node, node(Kind.Error, values#1.code))
@@ -105,7 +105,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
 		"meta_node": {
 			held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
-			part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
+			part = i => held + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
 			code = values#1.code + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, ValueKind.Int) + converted(values#3, ValueKind.Int)
 			TypedCode(ValueKind.Node, code + [ref_null, gc_type(gc.node), ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)]))
 		}
@@ -125,11 +125,11 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		# same_list(a, b): the one list, not two lists of the same items (a map index finds its map so)
 		"same_list": TypedCode(ValueKind.Bool, values#1.code + values#2.code + [op.ref_eq])
 		# same_node(a, b): the one node, an enum case made once (decision enum-identity)
-		"same_node": TypedCode(ValueKind.Bool, as_node(boxed(values#1)) + as_node(boxed(values#2)) + [op.ref_eq])
+		"same_node": TypedCode(ValueKind.Bool, boxed(values#1) + boxed(values#2) + [op.ref_eq])
 		# the error is the word's: a variant of it by arity is named `word·arity`
 		"fail": TypedCode(pending, error_throw(body.function.name.split("·")#1) + [op.unreachable])
-		"is_ratio": TypedCode(ValueKind.Bool, ratio_test(values#1.code))
-		"is_plain_int": TypedCode(ValueKind.Bool, plain_int_test(values#1.code))
+		"is_ratio": TypedCode(ValueKind.Bool, ratio_test(boxed(values#1)))
+		"is_plain_int": TypedCode(ValueKind.Bool, plain_int_test(boxed(values#1)))
 		"ratio_of": {
 			ratio_node(converted(values#1, ValueKind.Int), converted(values#2, ValueKind.Int))
 		}
@@ -138,15 +138,15 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		# ratio_of_parts(n, d): the $Ratio of two Int nodes, plain or big (a decimal past 10^18); numerator_part(r),
 		# denominator_part(r) one of them as an Int node (extensions/big_numbers/big_ratios.warp)
 		"ratio_of_parts": made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, node_payload(values#1) + node_payload(values#2) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))))
-		"numerator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(values#1.code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 0])))
-		"denominator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(values#1.code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 1])))
+		"numerator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(boxed(values#1), gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 0])))
+		"denominator_part": TypedCode(ValueKind.Node, node(Kind.Int, payload(boxed(values#1), gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), 1])))
 		# has_plain_parts(r) of a local r: both parts in an $i64box (its code read twice)
 		"has_plain_parts": TypedCode(ValueKind.Bool, plain_part_test(values#1.code, 0) + plain_part_test(values#1.code, 1) + [op.i32_and])
 		# big_int_of(negative, count): an Int $Node of a $BigInt of count zero limbs; limb(n, i), set_limb(n, i, v) one
 		# limb as an int from 0 to 2^32 - 1 (extensions/big_numbers/big_ints.warp)
 		"big_int_of": made_by("BigInt", TypedCode(ValueKind.Node, node(Kind.Int, converted(values#1, ValueKind.Bool) + index_code(values#2) + gc_code(gc_ops.array_new_default, [gc_type(gc.limbs)]) + gc_code(gc_ops.struct_new, [gc_type(gc.big_int)]))))
-		"is_big_int": TypedCode(ValueKind.Bool, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.big_int)]))
-		"big_int_negative": TypedCode(ValueKind.Bool, payload(values#1.code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 0]))
+		"is_big_int": TypedCode(ValueKind.Bool, boxed(values#1) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.big_int)]))
+		"big_int_negative": TypedCode(ValueKind.Bool, payload(boxed(values#1), gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 0]))
 		"limb_count": TypedCode(ValueKind.Int, limbs_of(values#1.code) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u])
 		"limb": TypedCode(ValueKind.Int, limbs_of(values#1.code) + index_code(values#2) + gc_code(gc_ops.array_get, [gc_type(gc.limbs)]) + [op.i64_extend_i32_u])
 		"set_limb": TypedCode(no_kind, limbs_of(values#1.code) + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc_type(gc.limbs)]))
@@ -255,7 +255,7 @@ def held_kind_bit_code(body: Body, held: list): list {
 	kind = field + [op.i64_const] + sleb(kind_mask) + [op.i64_and]
 	is_field = marked => field + [op.i64_const] + sleb(marked) + [op.i64_eq]
 	ratio = kind + [op.i64_const] + sleb(Kind.Int) + [op.i64_eq] + ratio_test(held) + [op.i32_and]
-	marked = as_node(held) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
+	marked = held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
 	marked += unless_held(HeldBit.Bool, is_field(Marked.Bool)) + unless_held(HeldBit.TypeValue, is_field(Marked.TypeValue))
 	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio)
 	held + [op.ref_is_null, op.if] + value_type(ValueKind.Int) + held_bit(Kind.List) + [op.else] + marked + [op.end]
@@ -264,31 +264,32 @@ def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }
 # the bit on the stack, or the place's bit when the test holds
 def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
-def as_node(code: list): list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
-def kind_code_of(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
+# an anyref entering as a node, a $Node's data or a list's item (every value of kind node is a $Node already, emitter.warp references)
+def entered_node(code: list): list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
+def kind_code_of(code: list): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
 # a list node's $list; a range's ends and a GPU list's cells are no $list: a range's items are made, a GPU list refuses
 # loudly naming it (runtime/lists.warp unlisted_items) rather than casting
 def unboxed_list_code(body: Body, value: TypedCode): TypedCode {
 	held = uleb(fresh_local(body, ValueKind.Node))
-	data = [op.local_get] + held + as_node([]) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
+	data = [op.local_get] + held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
 	code = value.code + [op.local_set] + held + data + gc_code(gc_ops.ref_test, [gc_type(gc.list)]) + [op.if] + gc_bytes(references.list)
 	code += data + gc_code(gc_ops.ref_cast_null, [gc_type(gc.list)]) + [op.else]
 	code += runtime_call("unlisted_items", [TypedCode(ValueKind.Node, [op.local_get] + held)]).code + [op.end]
 	TypedCode(ValueKind.List, code)
 }
-def payload(code: list, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
+def payload(code: list, held: int): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
 def unboxed(code: list, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # an Int node's data, its $i64box or $BigInt, as a $Ratio holds a part
-def node_payload(value: TypedCode): list { as_node(boxed(value)) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) }
+def node_payload(value: TypedCode): list { boxed(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) }
 # whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
 # whether an Int $Node holds its number in an $i64box (an i32), neither a ratio nor a big int
-def plain_int_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
+def plain_int_test(code: list): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
 # an Int $Node of the $Ratio of the two ints' code, numerator and denominator, the program then making ratios
 def ratio_node(numerator: list, denominator: list): TypedCode {
 	box = code => code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
 	made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, box(numerator) + box(denominator) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))))
 }
-def ratio_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
+def ratio_test(code: list): list { code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
 def plain_part_test(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
 def ratio_part(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
 # the $Limbs array of an Int $Node holding a $BigInt
