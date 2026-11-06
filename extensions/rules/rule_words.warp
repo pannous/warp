@@ -29,11 +29,13 @@ spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 # a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no number, or starts with a unit
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
-	if is_number_literal(amounted) or is_big_number_view(amounted) { return Key(amounted, Op.Mul, unit) }
+	if is_number_literal(amounted) or is_big_number_view(amounted) or is_parenthesized(amounted) { return Key(amounted, Op.Mul, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
 	if right == ø then ø else Key(key_of(amounted), op_of(amounted), right)
 }
+# `(50/3)`: an amount in parentheses, which a unit after it measures whole, `(50/3) ms` as 50/3 ms (card sleep-ms)
+is_parenthesized(code: Node): bool := is_group(code) and bracket_of(code) == "(" and #items_of(code) == 1
 starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_binding_ops then starts_with_unit(key_of(code)) else code is symbol and "units" in defining_modules("${code}")
 # `km/h`, `m²`, `cm`: code led by a unit word, the unit part of `2 km/h is speed` (lib/units.warp)
 unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else code is symbol and "units" in defining_modules("${code}")

@@ -1,0 +1,4 @@
+# a unit after an amount in parentheses measures it whole (card sleep-ms)
+'str((50/3) ms)'	'50/3ms'
+'(50/3) ms > 16 ms'	true
+'sleep (50/3) ms; 1'	1

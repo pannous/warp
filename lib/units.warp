@@ -313,9 +313,10 @@ exact_decimal(t: text) := {
 	if t.starts_with("-") then - magnitude else magnitude
 }
 
-// a duration sleeps that long, `sleep(300ms)`; a plain number its seconds, as the prelude's sleep (one word: a module's
+// a duration sleeps that long, `sleep(300ms)`, `sleep (50/3) ms`; a plain number its seconds, as the prelude's sleep;
+// a quantity of another dimension, `sleep 5 kg`, is the DimensionError of milliseconds_of (one word: a module's
 // sleep(d: Time) beside the prelude's sleep(x) would replace it, card typed-overload-replace)
-sleep(duration) := slept((if duration is Time then duration.amount else duration) * 1000)
+sleep(duration) := slept(if duration is Quantity then milliseconds_of(duration) else duration * 1000)
 
 // `6.0m ± 0.3`: a tolerance of a quantity, its amount an interval; a plain spread counts in the value's unit, a
 // quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
