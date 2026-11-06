@@ -943,3 +943,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - ordinal-index-words: "An important edge case. Ignore. Don't do anything." (`second xs` → 1s [1, 2, 3] stays; no work.)
   - mutation-phrases: `increase x by: 2` should work out of the box as an unimportant example English definition with named parameters (lib). The general mechanism, prepositions as parameter markers without a colon, is its own big Soon card (preposition-words).
   - map-pair-iteration → type-name loop variables (card loop-variable): `for x in y` checks whether y.x or y.xs is defined and iterates that: `for char in "ab"` chars, `for byte in "ab"` bytes (y.bytes), `for pair in m` pairs (m.pairs); otherwise y itself. For all general types.
+- 2026-11-06 card sprint, round 12 (user):
+  - program-test: a plain `warp prog.warp` run counts `test` lines too: a program ending in a test line ends with the summary (`test 1 == 2` → "1 of 1 failed"; test_soft_tests:4 changes from ø, user OK); a program ending in another value keeps it; test blocks `test "name" {…}` still run only under `warp test`.
+  - with-do-block: later: see whether a Python-like `with` can be a library over warp primitives, `with context: block, actions: block`; probably hard, since the actions depend on the variables of the first block. Card to Later.
+  - catch-blocks: parked (Later); try/catch covers it; the wiki marks the body-wide handler as planned.
+  - constant-define-operator: drop `::=`; `constant x = 3` says it; the wiki line goes.
