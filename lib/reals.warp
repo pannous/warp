@@ -81,7 +81,24 @@ real_text(coefficient: number, pi_power: number, radicand: int) := {
 	power = (if whole == 0 then "" else pi_power_text(whole)) + radical
 	if power == "" then str(coefficient) else coefficient_text(coefficient, power)
 }
-pi_power_text(pi_power: int) := if pi_power == 1 then "π" else "π^" + str(pi_power)
+pi_power_text(pi_power: int) := power_text("π", pi_power)
+# a base raised to a power as written, in superscript digits: π, π², m⁻¹ (lib/units.warp shows its units so too)
+power_text(base: text, power: int) := if power == 1 then base else base + superscript(power)
+superscript_digits = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+superscript(n: int): text := if n < 0 then "⁻" + superscript(-n) else if n < 10 then superscript_digits#(n + 1) else superscript(n /! 10) + superscript(n % 10)
+# the superscripts' raised marks, and the int they write: "²" 2, "⁻¹" -1, "" 1 (a factor written without one)
+raised_marks = superscript_digits + "⁻"
+superscript_value(raised: text): int := {
+	if raised is empty { return 1 }
+	if raised.starts_with("⁻") { return 0 - superscript_value(raised.chars()[1 ..].join("")) }
+	value = 0
+	for c in raised { value = value * 10 + superscript_digit(c) }
+	value
+}
+superscript_digit(c: any): int := {
+	for digit in 0 to 9 { if superscript_digits#(digit + 1) == c { return digit } }
+	0
+}
 inverse_text(coefficient: number, power: text, radical: text) := {
 	denominator = denominator_of(coefficient)
 	numerator = coefficient * denominator
@@ -102,11 +119,7 @@ coefficient_text(coefficient: number, power: text) := {
 }
 largest_shown_denominator = 10000
 # the least whole number making x whole, 1 for a float or a fraction of a larger denominator
-denominator_of(x: number) := {
-	denominator = 1
-	while not ((x * denominator) is int) and denominator < largest_shown_denominator { denominator += 1 }
-	if denominator < largest_shown_denominator then denominator else 1
-}
+denominator_of(x: number) := if x is float or denominator(x) >= largest_shown_denominator then 1 else denominator(x)
 
 // sin and cos of a whole number of half π exactly, `sin π` is 0, `cos π` -1; of any other real the float's
 sin(x: real) := if half_turns(x) then half_turns_sine(2 * x.coefficient) else sin(real_float(x) as float)
