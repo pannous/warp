@@ -5,6 +5,9 @@ one local worker session each (tmux warp-sprint-<area>), card list in areas/<are
 misc.tsv (cards without a topic) is taken by whichever worker empties its own list first (tell the Supervisor).
 
 ## Rules (decisions.md, 2026-11-06 card sprint)
+- Judge each card first (user): an esoteric feature (foreign syntax, desk-invented phrasing, bloat) or important to
+  the language? Esoteric: don't build it, report `obsolete: <key> esoteric: <why>`. Unsure: ask warp-interviewer
+  (cloud: mark the result line `question`) and take the next card meanwhile.
 - Simple to complex (user): first sort your list by effort and clear every easy card before touching a bigger one;
   a card that turns out bigger than ~30 minutes goes to the end of your list.
 - Work on branch sprint-<area> in the worktree /Volumes/Worktrees/sprint-<area> (`cowtree add`).
