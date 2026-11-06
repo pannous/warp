@@ -489,12 +489,13 @@ missed_cases(arms: Node, program: Node): any := {
 }
 # the case an arm `Penny: 1` or `Penny => 1` names, "" for any other arm (a default, a value, a pattern)
 arm_case_name(arm: Node): text := if (is_key(arm, Op.Colon) or is_key(arm, Op.Arrow)) and key_of(arm) is symbol and not (name_of(key_of(arm)) in ["_", "default", "else"]) then name_of(key_of(arm)) else ""
-# `for byte in t`: walked_by(t, "bytes"), the value's list of that unit when its type has one, else its own items
-# (decision loop-variable: `for byte in bytes` of a list of bytes); ø for any other loop variable or a list literal
+# `for byte in t`: the unit the loop walks by, "bytes" for the rule's walked_by(t, "bytes"), the value's list of that
+# unit when its type has one, else its own items (decision loop-variable: `for byte in bytes` of a list of bytes); ø
+# for any other loop variable or a list literal
 unit_lists = {byte: "bytes", char: "chars", codepoint: "codepoints", pair: "pairs"}
-unit_items(variable: Node, iterable: Node): any := {
+unit_list_word(variable: Node, iterable: Node): any := {
 	if not unit_lists.has(name_of(variable)) or (is_group(iterable) and bracket_of(iterable) == "[") { return ø }
-	call_of("walked_by", [iterable, Text(unit_lists[name_of(variable)])])
+	Text(unit_lists[name_of(variable)])
 }
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
 are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))
@@ -922,7 +923,7 @@ rule_words = {
 	units_shown: units_shown,
 	typed_json: typed_json,
 	unit_bound: unit_bound,
-	unit_items: unit_items,
+	unit_list_word: unit_list_word,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	value_definitions: value_definitions,
