@@ -171,11 +171,12 @@ month_limit = 1048576
 # position the number), position, months and days: the time node or whole number they make
 # an operand of a time's + - * the emitter holds as a node, before its parts are read: a time, a duration or a whole
 # number as it is; a quantity of lib/units the duration it lasts by its milliseconds (milliseconds_of, as it moves lib/time's
-# Instant): `2024-01-31T10:00 + 1 h`
+# Instant): `2024-01-31T10:00 + 1 h`. Its milliseconds are a float, its amount scaled to the unit (`24 h` is 86400000.0
+# ms): a duration counts whole nanoseconds, so they are rounded to the nearest one
 time_operand(x: any) := {
 	if x is number and not (x is int) { raise not_arithmetic }
 	milliseconds = milliseconds_of(x)
-	if milliseconds is number and not (x is number) then lasting_nanos(milliseconds * 1000000) else x
+	if milliseconds is number and not (x is number) then lasting_nanos(round(milliseconds * 1000000) as int) else x
 }
 # the exact duration of nanoseconds, as a quantity of time moves a time
 lasting_nanos(nanos: int) := time_of(duration_form_code, nanos)
