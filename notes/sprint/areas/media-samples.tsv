@@ -1,0 +1,34 @@
+gpu-metal-layer	graphics-shaders	crates/warp-window/warp_window.c:3,183 still gives only a Metal layer; an X11/Wayland surface for Linux goes in crates/warp-window and crates/warp-gpu, not core
+python-ffi-import	sample-gaps	test/samples.txt: python/numpy_matrix and python_modules now FAIL with "no C function Py_IsInitialized in its library, or the library not found": library lookup in lib/native/python.warp (or the box lacks libpython)
+sample-gaps-raylib	sample-gaps	lib/native/raylib.warp:4 declares InitWindow from 'raylib'; test/samples.txt lists the raylib/SDL samples as WIN (window samples skipped), so they need a check on a machine with raylib/SDL; any gap is lib/native or scripts/samples.sh WARP_NO_WINDOW
+computed-tag	sample-gaps	the ': on text and node' error is gone; samples/web/computed_tags.warp now fails at lib/markup.warp:371 html_escape call (test/samples.txt:249)
+draw-canvas-show	graphics-shaders	lib/draw.warp show() collides with the emitter's result-text show export under load-time linking; rename/route draw's show in lib/draw.warp (or export naming)
+graphics-shaders	graphics-shaders	view_width/window_width answered natively (core/native/driver.warp:1048-1050) but paint/draw_shader have no lib/ graphics module; library host words belong in lib/
+julia-compat	julia-compat	umbrella; ÷ floored is done (core/runtime/arithmetic.warp:95); remaining items are split into julia-* cards, mostly prelude aliases and rules
+julia-dict	julia-compat	no Dict in core/extensions/lib; `Dict(pairs…)` as a prelude alias building a map
+julia-isa	julia-compat	no isa in core/extensions/lib; `isa(x, T) := x is T` with an alias note in the prelude (decision foreign-type-names covers Int, Float64 …)
+julia-text-times-hint	julia-compat	text * text concatenating with a got-it warning: a prelude overload or extensions/text_lints.warp
+libwarp-sound-handle	sound	native sound player handle for fade_sound/stop_sound lives in lib/sound.warp and the native sound library (lib/native), not core
+list-word-methods	sample-gaps	queens, sorting, primes, quicksort, dijkstra ok now (test/samples.txt); left: samples/advanced/test.warp array(…) FAIL and samples/lists/dot.warp TIME: lib words/sample fixes
+midi-send-native	sound	native MIDI over CoreMIDI as a C library binding in lib/ (like libwarp_sound) plus driver host words for sound module; no core/ compiler change
+music-data-dsl	sound	sound library function taking data (`tune d: data := play d`) and note constants in lib/sound.warp; no parser syntax by decision self-parser-drops
+native-window	graphics-shaders	crates/warp-window/warp_window.c has no signal handling (grep SIGTERM/signal empty); the still-picture loop lives in crates/, not core/
+play-wrong-arguments	sound	lib/sound.warp:875 play(tone, for duration) takes a signal through is_signal (a function) and :881 play(fill: (samples, float) -> any, …); no test pins `play(t => 0.0, 0.01s)`: add one in test/ and fix lib/sound.warp overloads if it still picks the wrong arity
+sample-gaps	sample-gaps	umbrella topic; sub-cards and notes/sample_status.md; samples work, close when the sub-cards close
+sample-gaps-types	sample-gaps	each is an 'outside the core … (no owner)' refusal: owners belong in extensions/ (xor on bool, data(…), enum members, dir, as returns)
+samples-dogfood-open-hours	samples-dogfood	samples/apps/open_hours.warp not landed; blocked by the units Instant > 9h trap
+save-named-as	sound	save(sound(), as: …) picks lib/file.warp:12 save(content: text, as file) over lib/sound.warp:982 save(made: Recording, as file); fix the overloads in lib; draw's save_picture host word (lib/draw.warp:165) needs a native answer in a library
+sleep-ms-playground	samples-dogfood	web/playground/playground.js:377 startsFrame treats lib/tasks.warp's sleep_ms as a text frame; tell scheduler sleeps from frame sleeps
+sound-native-clock	sound	audio clock in lib/sound.warp (sound.at, rest, voices, buses); parked under the plan-only hold
+sound-native-library	sound	lib/sound.warp:1404 sound_samples is still 'from host'; a CoreAudio FFI library answers it natively (decision libraries-not-core)
+code-golf-short	sample-gaps	terse forms (`for` without in-block, `int : char`, `char * node`) as rules in extensions/sugar or golf-only samples; check each short sample against current main
+compute-toys-passes	samples	lib/compute_toys.warp:96 still refuses #storage/#dispatch and lib/compute_toys.warp:99 more than one @compute; wire gpu_compute passes in lib
+compute-toys-slang	samples	lib/compute_toys.warp reads WGSL only; a slangc-to-WGSL step or dialect reader belongs in lib/compute_toys.warp
+compute-toys-textures	samples	lib/compute_toys.warp:97 still refuses channel0/channel1; bind images as channel0/1 in lib, then add the samples
+quantity-dimension-types	sample-gaps	compile-time dimension check for quantity-typed parameters: lib/units.warp + extensions/rules (dimension types); Later
+rust-generic-result	rust-reading	-> Vec<i32> / Option<i32> as result types: a sugar/type-alias rule in extensions/sugar (rust forms welcome, decision rust-forms-welcome); Vec<i32> annotation already works
+rust-generics	rust-reading	decision rust-forms-welcome: read <T> as type parameters dropped to untyped warp forms; extensions/sugar rule (table notes/rust_reading.md)
+rust-map-insert	rust-reading	m.insert(k, v) on a map: add a map overload insert(m: map, k, v) in lib/collections.warp next to prelude's insert(xs: list, at: int, x) (lib/prelude.warp:72)
+rust-map-type	rust-reading	lib/collections.warp:43 aliases HashSet => Set only as a constructor; generic HashMap<K,V>/HashSet<T> as type annotations need aliases there like Vec<i32>
+rust-vec-repeat	rust-reading	vec![0; n] repeat form: a sugar rule beside the existing vec!/format! macros (test/parser/test_rust_macros.pairs.warp), extensions/sugar
+sample-gaps-modules	sample-gaps	C/JS imports, crates, wasm imports in samples/modules, samples/crates: extensions/c_imports owner claims + lib/crates; after load-time linking (L5) re-run the samples, no core per gap

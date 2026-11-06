@@ -1,0 +1,41 @@
+lib-hash-endian-via-bits	no	lib/hash.warp:21-23 still own big_endian/from_big_endian loops; branch origin/lib-hash-endian-via-bits 405c27c50 ready but parked by zero-bake-hold-kept; its smoke blocker 'host word arg too long' fixed by 5394b6d
+lib-money-gcd-via-math	no	lib/money.warp:21 money_gcd copy still on main; branch d7359379a smoke green, parked by zero-bake-hold-kept
+bug-290783643-factorial	?	samples/numbers/factorial.warp ok natively (test/samples.txt); playground stack overflow at factorial(10000): lower the sample to 1000 as the user suggests or raise web/playground stack
+bug-290809712-gpu-arrays	?	samples/gpu/gpu_arrays.warp still the raw WGSL string example; rewrite it with warp functions compiled to a shader
+bug-290813455-music-ipad	?	web/playground WebAudio on iPad (iOS needs an audio unlock on user gesture); samples/sound/music.warp also FAIL natively 'no field address' (see pass-rate)
+bug-gpu-visualizer-error	?	samples/sound/gpu_visualizer_warp.warp FAIL 'sound file: samples/sound/tune.mp3' (test/samples.txt); sample/playground file path, card text truncated
+bug-measurements-tolerance	?	samples/numbers/measurements.warp:3-5 still '6.0m ± 0.3'; write the tolerance with its unit (± 0.3m) to rule out a percent reading
+bug-levenshtein-total	?	samples/text/levenshtein.warp:27-33 still sums into total; print the five distances instead
+bug-290859067-palindrome	?	samples/text/palindrome.warp ok natively (test/samples.txt); the 10 s playground timeout needs a check in web/playground
+bug-290864867-sort-words	?	samples/text/sort_words.warp uses 'sorted "…".split(" ")', not the user's given 'sort split "the quick brown fox"'; update the sample
+bug-290877074-advanced-test	?	samples/advanced/test.warp FAIL 'outside the core: the call array(…)' (test/samples.txt); line 2 comment to become a card/bug report, sample to valid warp
+bb-trees	no	evaluation + a lib module (node class with size); nothing tree-like in lib/ yet
+refactoring-tool	no	no refactoring tool exists; an outside tool over parse(code) as node with positions, belongs in lib/ or scripts/, not the compiler
+slices	no	a style hint (name[#prefix..] → name from: …), lint text that fits extensions/text_lints.warp; low value, could also be dropped
+typed-parse-constructor	no	no typed parse in lib/ or extensions/ on main (grep typed_parse / parse<T>: none); work saved in data/patches/typed-parse.patch on the Mac; typed JSON construction belongs in lib/json.warp or an extension
+typed-parse-generic	no	same as typed-parse-constructor: nothing on main, patch data/patches/typed-parse.patch; a parse<T> rule in lib/extension
+typed-parse-optional	no	same as typed-parse-constructor: nothing on main, patch data/patches/typed-parse.patch; optional/defaulted fields in the lib validator
+untitled:time-command	?	🌀time 3+3 like the shell's time: an overload of time in lib/time.warp (or lib/shell.warp), not core
+untitled:string-from-utf8	?	still red: test/text/test_utf8_bytes.pairs.warp:6 "string.from_utf8([104, 105])" outside the core; a string.from_utf8 alias in lib/text.warp (use text; from_utf8 works)
+after-push-leave	no	install_native in scripts/integrate/after-push.sh still runs `rm -rf "$folder"` on a failed hello/prebuilt-parts check after the folder was moved in place, which can remove what ~/dev/bin/warp links to; links are atomic (linked(), line 142) but the folder removal is not guarded
+code-completing	no	playground editor completion layout (web/playground/)
+empty-json	no	json("[]") is list: lib/json.warp parse result / is_type of a json list; no result line in test/results.txt, needs a pairs line
+gap-long-double-ffi	no	sqrtl still refused ('long double'); long double marshalling in extensions/c_imports (C side via a shim in the native build)
+gap-span-units-compare	no	no span-with-unit reading of `1900 - 2000 cm` anywhere; spans and units are libraries (lib/intervals.warp, lib/units.warp, extensions/uncertain); Rust-lane part of the card is moot
+package-includes	no	REPL keeping earlier 'use' lines across lines: lib/repl.warp (console line step)
+suffix-operator	no	extensions/declared_operators.warp:31-33 read_declared_infix already accepts a word glyph (is_name_start); no test pins `suffix operator beats := …; 2 beats`: verify and add a test in test/operators, fix in the extension if red
+summarizer-titles	no	concerns the todo tool's title summarizer (~/dev/bin/todo / scripts), not the compiler: give its prompt the context of a programming project
+tree-find	no	the Rust file is gone; now all forms fail: `page find {type: "image", src}` fits no variant of find (test/results.txt:2229); a pattern overload of find belongs in lib
+type-argument-ambiguity	no	decided (user 2026-11-03: `type int` / `the type int`); implementable as a sugar rule in extensions/sugar plus the ambiguity warning
+clipboard-read	no	clipboard_text declared in lib/keys.warp:66 / lib/prelude.warp:517; verify `print clipboard` by hand on the Mac (no code change)
+db-wasm	no	wasm database extensions are lib/storage.warp + samples work after card orm; nothing in core
+dotted-list	no	give list(x) = x as list or a welcoming error in lib/list.warp (user 2026-10-12); no core change
+fix-buttons	no	web/playground Fix buttons with several edits; parked by the user ('leave for now')
+infinity-even	no	the self-hosted ^ for float exponents calls extended_float_power, which extensions/big_numbers.warp:34 defines as float_pow (f64): an exact or big pow for a non-integer exponent can go there with no core/ change
+matrix-should	no	lib/matrix.warp:3 `# TODO Implement as class with operator overload (card matrix-class)`: a lib/ class with declared operators
+netbase-first	no	no netbase package anywhere in lib/; an outside package like egraph (decision egraph-outside-library, warp-packages registry)
+netbase-package	no	samples/storage/netbase.warp stops at 'unknown name query': the query word lives in the outside netbase package (warp-packages), no core part
+pure-as-exact	no	`7 as exact` is a conversion: extensions/conversions.warp / lib exact numbers (extensions/big_numbers) can own `as exact` on int
+scripted-integration	no	scripts/integrate/ automation (merge batch, queue suite, bisect, push) with timeouts and watchdog; scripts only
+stroke-start	no	samples/graphics/finger_paint.warp:40 polls mouse_down per frame; a press point word in lib/draw.warp plus the hosts (web/) fixes it
+write-hook	no	.claude/hooks/claudeignore-hook.sh is a repo hook script, no core change

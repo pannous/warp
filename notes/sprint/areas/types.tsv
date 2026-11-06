@@ -1,0 +1,30 @@
+capitalized-field-list	types-2	decided (Parameters = [] is parameters: list[Parameter]), not implemented (no hit); a class-shorthand rewrite in extensions/ like extensions/protocols.warp
+forced-overloads-refused	types-2	only `as! int` exists (core/runtime/conversions.warp:168); the per-type forced rules (bytes wrap, colour/audio saturate, bytes→text U+FFFD, map→class) are lib overloads per decision checked-forced-conversions; the compile-time warning could be an extension lint
+channel-class-instead	types	class Channel exists (lib/channels.warp:14) and classes iterate by next() (extensions/sugar/iteration.warp:26); the remaining rules lib/channels.warp:11-12,41 can go
+class-traps	types-3	test_approximately:4/5 trap: lib/math.warp alike (line 21) needs an instance branch over keys(a); a public is-instance test in lib
+clock-time	types	time_of no longer exists; time fields now fail 'outside the core: the field time of a time' (test_time_now:14-16): clock time + duration in lib/time_arithmetic.warp / lib/time.warp
+enum-without	types-2	extensions/sugar/enums.warp:19 as(n, e: enum) checks indices only; add a text-to-case overload that raises for an unknown case
+eval-inherited-methods	types	not eval-specific now: methods(B) itself has no owner (test_one_method_form:4, test_empty_reflection:7 in test/results.txt); reflection word methods() in a lib/extension
+functions-list	types	no functions() word exists (only analyzer-internal analyzed_functions at core/analysis/analyzer.warp:920); a reflection extension (extensions/sugar/reflection.warp) over the name section; may need a core hook
+functions-reflection	reflection-words	same word as functions-list (duplicate in purpose); then lib/router.warp default routes from it
+how-we	types	extensions/conversions.warp:1 already takes `Person as text := it.name` at top level; the form inside a class body is the open part (extensions/conversions.warp or class_methods)
+int-def	types-3	`def twice = x*2` inside a class body is a class method form: extensions/class_methods; test/types/test_class_forms_ported.pairs.warp:9 pins it
+introspection-reflection	introspection-reflection	decision domains-plain-libraries; design in notes/reflection_plain.md; step 3 waits
+matrix-class	types-2	lib/matrix.warp:3 TODO class with operator overloads; operator method heads exist (core/parsing/parser.warp:1918 operator_method_head)
+nested-class	types-3	no 'no field ø' text in core/ or lib/json.warp; typed JSON decode should refuse the empty-init constructor in lib/json.warp (not verified by run)
+pure-lane-class-2	types-2	test_one_dispatch.pairs.warp:19 setter still ignored (gives 5, results.txt:15865); setters are class methods: extensions/class_methods.warp (or extensions/property_accessors.warp) must route b.w = 5 through set w
+pure-lane-shape	types-2	test_enum_cases.pairs.warp:6-7 refused 'a test of the type Shape, which has cases' (results.txt); extensions/sum_types.warp can lower `x is Shape` to a test of its cases/subclasses
+pure-static-members	types-2	static fields work (test_class_cases_ported.pairs.warp:33-34 pass); static methods T.of(…) lift in extensions/class_methods.warp (statics live there per core/passes/classes.warp:2)
+rust-unmatched	types	Rust inference gone, but test/results.txt:16370 ✗ '"post" as symbol' outside the core: as-conversions belong to extensions/conversions.warp
+samples-functions	introspection-reflection	extensions/quotes.warp:30 refuses 'quoted code whose position or comment is read'; core already has positioned_node/node_line/node_column runtime words (core/emitter/runtime_words.warp:196), so the extension can build $MetaNodes
+type-text	types-2	lib/agent.warp:23 agent_as exists; no companion rewrite `x: T = f …` → f_as(…, "T") anywhere: doable as an extension rule
+type-zoned	types	the zone offset is packed in extensions/time_values.warp (offset_shift = 11, :61); mask it so it cannot sign-extend over CODE_MARK (core/analysis/kinds.warp:22)
+use-uncertain	types-3	no fix commit; lib/uncertain.warp lacks a comparison for ± values (a > b traps); add > < to lib/uncertain.warp
+whole-number-type	types-2	no rule for `whole number` anywhere; a two-word type alias of nat can be a phrase rule in extensions/sugar or lib/aliases.warp (needs a parsable pattern for the rule)
+binding-local	types	no warning for binding a local to a type word; a lint in extensions/text_lints.warp (decision (b), hint 'name it e.g. op')
+counter-struct	types-2	test/types/test_class_forms_ported.warp:12 swift mutating func still open; class forms belong in extensions/class_methods.warp ('mutating' already a member word in core/passes/sugar.warp:63)
+dir-filters	reflection-words	dir hints and filtered views are reflection words (extensions/sugar/reflection.warp / lib), no core change
+enum-case	types-2	the fix is a sugar rule in extensions/sugar/enums.warp (patch data/stray/enum-case-65c5db729f.patch); O.W(3) still refused by core/emitter/instances.warp:36 until the rule fires
+pure-record-keyword	types-2	extensions/sugar rule rewriting record/data class to class with value equality (card asks for a lib/sugar rule, no new pass); nothing defines record today
+unit-after	types	lib/units.warp:113 rule $xs $u where $xs is list; a typed hole for a call returning a list (typed-rule-holes) instead of a literal list
+verify-law	type-theory	warp verify and its Lean side (lean/, lib/laws.warp) are outside core; an Int.emod nonnegativity lemma/tactic for the law
