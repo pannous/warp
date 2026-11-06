@@ -177,6 +177,40 @@ used_word(statement: text): any := {
 	ø
 }
 comment_marks = ["#", "//"]
+
+# `use math as m`, `use wasm "rust_demo.wasm" as demo`: the name after `as` is a second spelling of the module in its
+# qualified words and its dir (decision samples-modules-wasm, test_use_modules): the use without it, each `m.` and
+# `dir(m)` of the source the module's own name, the last part of what the use names (`math`, `rust_demo`)
+ALIAS_MARK = " as "
+with_module_aliases(source: text): text := {
+	aliased = source
+	for statement in c_statements(source) {
+		used = used_word(statement)
+		if used == ø or not used.contains(ALIAS_MARK) { continue }
+		parts = used.split(ALIAS_MARK)
+		alias = parts#2.trim()
+		module = module_named_by(parts#1)
+		aliased = renamed_name(aliased.replace(statement, statement.split(ALIAS_MARK)#1), alias + ".", module + ".").replace("dir(" + alias + ")", "dir(" + module + ")")
+	}
+	aliased
+}
+# `math`, `"list"`, `wasm "../x/rust_demo.wasm"`: the module's name, its file's name without folders and extension
+module_named_by(written: text): text := {
+	file = written.trim().split(" ").last().split("/").last()
+	for mark in ["\"", "'"] { file = file.replace(mark, "") }
+	file.split(".")#1
+}
+# each `old` of the text standing as a name of its own as `new`: `sq.` in `sq.square(7)` but not in `msq.x`, `m.fib`
+# but not `m.fibs`
+renamed_name(text: text, old: text, new: text): text := {
+	parts = text.split(old)
+	written = parts#1
+	for part in parts[1..] {
+		glued = (#written > 0 and is_name_char(written[#written - 1])) or (is_name_char(old[#old - 1]) and #part > 0 and is_name_char(part[0]))
+		written += (if glued then old else new) + part
+	}
+	written
+}
 # `use sqlite3` → "sqlite3", `import raylib` too, `use crate "regex@1"` → "rs_regex"; ø for another statement
 c_use(statement: text): any := {
 	crate = c_crate_use(statement)
@@ -205,7 +239,8 @@ quoted_lines(source: text): list := {
 # [the source without its foreign lines (each an empty line, so the positions stay) and each `use sqlite3` of a
 # library with a lib/native/sqlite3.warp a `use` of that file, the C functions it calls: name → declaration, the
 # names the imports name that no line declares]
-c_functions_of(source: text, library_folder: text, folder: text = "."): list := {
+c_functions_of(written: text, library_folder: text, folder: text = "."): list := {
+	source = with_module_aliases(written)
 	statements = c_statements(source)
 	libraries = []
 	# the wasm modules it uses, each statement standing for the values the module gives
@@ -281,7 +316,8 @@ c_functions_of(source: text, library_folder: text, folder: text = "."): list := 
 		replaced[statement] = wasm_statements(statement, wasm_uses[statement])
 	}
 	declared_c_functions = functions.keys.map(name => functions[name]) + catalog
-	[c_without(kept, resolved, replaced).join("\n"), functions, missing]
+	lines_out = c_without(kept, resolved, replaced).map(line => with_wasm_module_words(line, wasm_uses))
+	[lines_out.join("\n"), functions, missing]
 }
 # the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)
 reached_within(source: text): list := {

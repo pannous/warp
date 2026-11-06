@@ -257,6 +257,22 @@ function wasmLibraryImports(holder, library, exportsOf, missing = "") {
 	});
 }
 
+// a package's C library the page has as lib/<name>.wasm (build.sh pack_package_libraries; natively lib<name> beside
+// warp, scripts/link-packages.sh): instantiated once per worker at its first call, else undefined
+const packedLibraries = new Map();
+function packedLibraryImports(holder, name) {
+	const file = `${PAGE_PREFIX}lib/${name}.wasm`;
+	if (!/^\w+$/.test(name) || !servedFileExists(file)) return undefined;
+	const exportsOf = () => {
+		if (!packedLibraries.has(name)) {
+			const bytes = new Uint8Array(getSync(fileUrl(file), 0, true));
+			packedLibraries.set(name, typedExports(bytes, new WebAssembly.Instance(new WebAssembly.Module(bytes), {}).exports));
+		}
+		return packedLibraries.get(name);
+	};
+	return wasmLibraryImports(holder, name, exportsOf);
+}
+
 // the exported functions of a module's bytes, each taking its arguments as its parameters' types are: a C library's
 // pointer is an i32 in wasm32 where the program declares it an i64 (sqlite3_bind_text's destructor), an i64 a BigInt
 const WASM_ARGUMENT = { 0x7f: value => Number(BigInt.asIntN(32, BigInt(value))), 0x7e: value => BigInt(value), 0x7d: Number, 0x7c: Number };
@@ -364,5 +380,5 @@ addHostPart({
 			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },
 		},
 	}),
-	importModule: (holder, hooks, name) => MODULE_PATH.test(name) ? moduleImports(holder, hooks, name) : undefined,
+	importModule: (holder, hooks, name) => MODULE_PATH.test(name) ? moduleImports(holder, hooks, name) : packedLibraryImports(holder, name),
 });

@@ -26,18 +26,28 @@ LIMITS_WITH_MAXIMUM = 1
 # .wasm: its path in the program's folder, a `•/` path as written, which the native warp roots at the project root
 # where it runs, so a program and a module it links (greeter.wat's import) name one file alike; ø for another statement
 wasm_module_used(statement: text, folder: text): text? := {
-	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
-	if word == ø or word == "" { return ø }
-	bare = word
-	for quote in c_quotes { if word.starts_with(quote) and word.ends_with(quote) and #word > 2 { bare = word.remove_prefix(quote).remove_suffix(quote) } }
+	bare = wasm_use_written(statement)
+	if bare == ø { return ø }
 	for written in [bare, bare + WASM_EXTENSION] {
 		name = if rooted(written, folder) == written then path_in(folder, written) else written
 		if name.ends_with(WASM_EXTENSION) and is_core_wasm(wasm_bytes(wasm_file(name, folder))) { return name }
 	}
 	ø
 }
-# the file of a module name
-wasm_file(name: text, folder: text): text := path_in(folder, rooted(name, folder))
+# the module as a use statement writes it, unquoted, ø for no use: `use wasm "rust_demo.wasm"` (decision
+# samples-modules-wasm: the long form, `wasm` before a quoted path) is "rust_demo.wasm"; an `as` name is gone by now
+# (imports.warp with_module_aliases)
+WASM_WORD = "wasm "
+wasm_use_written(statement: text): text? := {
+	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
+	if word == ø or word == "" { return ø }
+	written = if word.starts_with(WASM_WORD) then word.remove_prefix(WASM_WORD).trim() else word
+	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { written = written.remove_prefix(quote).remove_suffix(quote) } }
+	written
+}
+# the file of a module name, which is already in the program's folder (wasm_module_used): joined again, a program run
+# from another folder (`warp samples/wasm/x.warp` from the root) read samples/wasm/samples/wasm/…
+wasm_file(name: text, folder: text): text := rooted(name, folder)
 # a file's bytes, none for a file that isn't there
 wasm_bytes(path: text): list := try read_bytes(path) else []
 is_core_wasm(bytes: list): bool := #bytes >= #wasm_header and bytes[0 ..< #wasm_header] == wasm_header
@@ -160,6 +170,25 @@ wasm_declaration(name: text, path: text, type: list?): list := {
 	parameters = type#1
 	[[name, path, parameters, range_list(#parameters).map(i => "p" + (i + 1)), if #type#2 == 0 then "void" else type#2#1]]
 }
+# A used wasm module is a module as `math` is, named by its file: `rust_demo.fib(20)` is its word's own
+# call, `rust_demo.functions` lists its functions and `dir(rust_demo)` all its words, sorted (decisions samples-modules-wasm,
+# core-dir-order; samples/wasm/component_reflection)
+DIR_WORD = "dir"
+FUNCTIONS_WORD = ".functions"
+# a line with each used module's qualified words bare and its word lists as list literals; uses: statement → WasmExports
+with_wasm_module_words(line: text, uses: map): text := {
+	written = line
+	for statement in uses.keys {
+		name = module_named_by(wasm_use_written(statement))
+		functions = uses[statement].functions.map(d => d#1)
+		words = (functions + uses[statement].values.map(value => value.split(" = ")#1)).sort()
+		written = renamed_name(written, name + FUNCTIONS_WORD, quoted_list(functions))
+		written = written.replace(DIR_WORD + "(" + name + ")", quoted_list(words))
+		for word in words { written = renamed_name(written, name + "." + word, word) }
+	}
+	written
+}
+quoted_list(words: list): text := "[" + words.map(word => "\"" + word + "\"").join(", ") + "]"
 # the statements a use of the module stands for: its constant globals' values, then an include's run of its main,
 # else nothing, which a use gives (`import fourty_two` is ø, not its last value)
 USE_GIVES = "()"
