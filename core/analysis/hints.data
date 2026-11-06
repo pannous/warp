@@ -4,3 +4,5 @@ alias_word($written, $canonical)	"warp says {canonical}"	"{canonical}"	"alias-{w
 implicit_use($word, $module)	"{word} is {module}'s"	"use {module}"
 # a foreign type name of the prelude (prelude_words.warp foreign_types): `x: Int`
 foreign_type($written, $canonical)	"{written} is {canonical} in warp"	"{canonical}"	"foreign-type-{written}@{written}"
+# dir of a module, the views of one kind of its words (extensions/dir_hints.warp, card dir-filters)
+dir_views($module)	"dir({module}) lists all its words; {module}.functions, {module}.attributes, {module}.classes and {module}.operators list one kind each"
