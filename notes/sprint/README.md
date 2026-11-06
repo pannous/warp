@@ -19,5 +19,8 @@ misc.tsv (cards without a topic) is taken by whichever worker empties its own li
 - Land often: merge origin/main into the branch, smoke test on that merge (scripts/rebuild.sh pure <worktree>, then
   WARP_LIB=<worktree>/lib warp samples/hello/hello.warp prints Hello), push to main. Feedback tests: `nice -n 19`,
   at most two folders a run, in the background, never a merge condition.
+- Every push that changes lib/, extensions/, core/ or a sample is smoked on the very merge being pushed, even when
+  the merged-in origin commits touch nothing: no landing script skips the smoke (2026-11-06: da1e8f51c2 went in
+  unsmoked that way).
 - Build slots are 4 for the whole Mac (rebuild.sh waits for one): skip the rebuild for a change that needs none.
 - Questions for the user go to warp-interviewer, never to the user; never block on one: take the next card.
