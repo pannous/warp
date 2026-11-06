@@ -17,10 +17,13 @@ operator ≠ := !=
 operator ≟ := ==
 operator ≡ := ==
 operator ﹦ := ==
-// `a ≈ b` with tolerance 1e-9 (alike below); `a ~ b` (also `a ~~ b`) the looser, tolerance 0.01 (decision approx-zero)
-infix operator ≈(a: any, b: any) := alike(a, b, 0.000000001, no)
-infix operator ~(a: any, b: any) := alike(a, b, 0.01, yes)
-infix operator ⋍(a: any, b: any) := alike(a, b, 0.000000001, no)
+// `a ≈ b` within tolerance 1e-9 (alike below); `a ~ b` (also `a ~~ b`) the looser, within rough_tolerance 0.01; a
+// program sets either: `tolerance = 0.1; 1 ≈ 1.05` holds (decision approx-zero)
+global tolerance = 0.000000001
+global rough_tolerance = 0.01
+infix operator ≈(a: any, b: any) := alike(a, b, tolerance, no)
+infix operator ~(a: any, b: any) := alike(a, b, rough_tolerance, yes)
+infix operator ⋍(a: any, b: any) := alike(a, b, tolerance, no)
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
 // pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
