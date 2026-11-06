@@ -390,10 +390,12 @@ def own_words_unlinked(names: list) {
 		}
 	}
 }
-# the names the program needs of each linked module even when it never says them: its classes and globals
+# the names the program needs of each linked module even when it never says them: its classes
 def linked_needs(): list {
 	names = []
-	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) + image.globals.map(entry => entry#1).filter(name => name.starts_with(program_global_prefix)).map(name => name[#program_global_prefix ..]) }
+	# (never its globals: each is imported from the module, whose warp/start ran its initializer; brought, every
+	# program ran the prelude's tables again, half of hello's compile)
+	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) }
 	names
 }
 # a linked module's image, the part of its warp.signature (signature.warp) its linked form's compile writes: its
