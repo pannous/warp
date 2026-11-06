@@ -369,16 +369,16 @@ def link_libraries(images: list, own_names: list) {
 			if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) and not shadowed {
 				module.linked_words[word.name] = known + [word]
 				arity = word.name + "/" + #word.kinds
-				extended = (defined_in.get(arity) ?? []).any(other => other#1 != image.name and other#2 != word.kinds)
+				extended = (defined_in.get(arity) ?? []).any(other => other != image.name)
 				if image.name != PRELUDE_MODULE and extended and word.name not in linked_extended { linked_extended += [word.name] }
-				defined_in[arity] = (defined_in.get(arity) ?? []) + [[image.name, word.kinds]]
+				defined_in[arity] = (defined_in.get(arity) ?? []) + [image.name]
 			}
 		}
 	}
 }
-# the words two linked modules define of as many values of other kinds, which a program compiles from their sources:
-# a module calls its own variant directly, never one another module adds (Instant's plus calling units'
-# milliseconds_of(Quantity))
+# the words two linked modules define of as many values (whose kinds a signature holds alike, any and a class), which
+# a program compiles from their sources: a module calls its own variant directly, never one another module adds
+# (Instant's plus calling units' milliseconds_of(Quantity))
 global linked_extended = []
 # the images, the prelude's last: a word is bound to the first of them defining it
 by_precedence(images: list): list := images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE)
