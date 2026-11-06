@@ -161,6 +161,7 @@ methods_lifted(program: Node): Node := {
 			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, reads_field, spelled_operator(operator_table, name), promotions, floaters)]
 		}
 	}
+	spelled_ordering = {}
 	for word in entry_words {
 		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
 		owners = []
@@ -172,10 +173,18 @@ methods_lifted(program: Node): Node := {
 			}
 		}
 		operator = spelled_operator(operator_table, spellings#1)
+		# a class's own `<` (its less(o)) beside another's compare(o): the one dispatcher of the glyph orders each class
+		# by its own (derived_dispatchers)
+		if operator#2 in ordering_operators and #orderers_of(classes, liftable) > 0 {
+			named = {}
+			for i in 0..<#owners { named[owners[i]] = owned_name(owned_spellings[i], owners[i]) }
+			spelled_ordering[operator#2] = named
+			continue
+		}
 		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, no, operator, promotions, floaters)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, liftable, name, routes) }
-	dispatchers += derived_dispatchers(classes, liftable, routes, promotions, operator_table)
+	dispatchers += derived_dispatchers(classes, liftable, routes, promotions, spelled_ordering, operator_table)
 	# a dispatcher is the program's own over all its classes, a linked module's among them: the module's of that name
 	# knows its own classes only (card bind-linked)
 	own_words_unlinked(dispatchers.map(defined_word))
@@ -224,9 +233,11 @@ constructor_functions(classes: map, names: list, owning_class: text, routes: lis
 	made = block_of([Key(self_node, Op.Assign, call_of(owning_class, [])), call_of(initializer, [self_node] + given), self_node])
 	[lifted, Key(call_of(constructor_name(owning_class), parameters), Op.Define, made)]
 }
+# the classes ordering their instances by compare(o)
+orderers_of(classes: map, names: list): list := owners_of(classes, names, ordering_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], ordering_method)) == 1)
 # the dispatchers a class's compare(o), text() and float() give: its instances ordered by <, <=, >, >=, shown by their
 # text, converted to a float
-derived_dispatchers(classes: map, names: list, routes: list, promotions: list, operator_table: map): list := {
+derived_dispatchers(classes: map, names: list, routes: list, promotions: list, spelled_ordering: map, operator_table: map): list := {
 	made = []
 	other = symbol("other")
 	# `a != b` of instances equal by their equal(other): not a == b, unless a class spells != itself
@@ -234,15 +245,17 @@ derived_dispatchers(classes: map, names: list, routes: list, promotions: list, o
 		head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
 		made += [Key(call_of("!=·operator", head), Op.Define, Key(ø, Op.Not, call_of("==·operator", [self_node, other])))]
 	}
-	orderers = owners_of(classes, names, ordering_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], ordering_method)) == 1)
+	orderers = orderers_of(classes, names)
 	if #orderers > 0 {
 		called = {}
 		for owning_class in orderers { called[owning_class] = lifted_name(classes, names, ordering_method, owning_class, routes) }
 		for glyph in ordering_operators {
 			ordered = {}
 			for owning_class in orderers { ordered[owning_class] = Key(call_of(called[owning_class], [self_node, other]), glyph as Op, 0) }
+			spelled = spelled_ordering.get(glyph) ?? {}
+			for owning_class in spelled.keys { ordered[owning_class] = call_of(spelled[owning_class], [self_node, other]) }
 			head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
-			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, orderers), ordered, promoted(Key(self_node, glyph as Op, other), promotions, glyph + "·operator")))]
+			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, ordered.keys), ordered, promoted(Key(self_node, glyph as Op, other), promotions, glyph + "·operator")))]
 		}
 	}
 	for conversion in conversion_methods {
@@ -283,7 +296,6 @@ value_dispatch(owners: list, values: map, fallback: Node): Node := {
 instance_test(subject: Node, class_name: text): Node := call_of(HiddenWord.InstanceOf as text, [subject, class_name])
 # the function a class's method was lifted to: its own name when one class declares it and it is not routed
 lifted_name(classes: map, names: list, method: text, owning_class: text, routes: list): text := if #owners_of(classes, names, method) == 1 and method not in routes then method else owned_name(method, owning_class)
-
 
 # a class, its parent, the parent's parent… among the program's classes
 lineage(classes: map, name: text): list := if name in classes and classes[name].parent in classes then [name] + lineage(classes, classes[name].parent) else [name]

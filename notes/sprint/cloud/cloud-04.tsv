@@ -1,0 +1,7 @@
+mutation-phrases	spec-gaps	increase x by 2, divide x by 2 are lib/ phrase rewrites (rewrite increase $x by $n => $x += $n); reduce clashes with fold, decide or drop that one	spec
+once-english-task	spec-gaps	once $x finishes is lib/tasks.warp:42; the job-less form `once the download finishes` is one more rewrite there	spec
+ordinal-index-words	spec-gaps	xs nr 2, 2nd xs, second xs are rewrites/aliases a library can declare (lib/prelude.warp rewrite pattern); xs.2nd parsing as '3 nd' is the unit reader	spec
+phrase-typed-params	spec-gaps	extensions/phrase_definitions.warp owns `to …` phrases; typed parameters (number a, number b as real) are a rule there	spec
+print-in-script	spec-gaps	a lib word (e.g. lib/scripts or transliteration table) mapping chars to Cyrillic; wiki/in.md example, no core	spec
+purity-predicates	spec-gaps	square.pure?, .input?, .random?, purely keyword: extensions/effects.warp already computes 'effects of f'; predicates and purely are words/rules there	spec
+root-power-warning	spec-gaps	a lint in extensions/text_lints.warp (or rules) warning on ungrouped √1+2 / 2^x+1; no warning exists today	spec

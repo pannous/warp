@@ -3,7 +3,7 @@
 lib/uncertain.warp (`use uncertain`, registered in src/modules/std_modules.rs) writes the run-time ± of
 src/wasm_emitter/numbers/uncertain.rs as typed warp classes with operator methods:
 - `Interval { value, low, high }`: plus/minus/times/divide take the worst case of the endpoints (x - x is 0 ± 2),
-  less/more are `certainly`, possibly_less/possibly_more the `possibly` forms, approximately (≈) is overlap.
+  less/greater (the `<` and `>` of ± values) are `certainly`, possibly_less/possibly_greater the `possibly` forms, approximately (≈) is overlap.
 - `Gaussian { value, contributions }` with `Contribution { id, amount }`: linear propagation, contributions of one id
   summed (x + x doubles, x - x cancels), σ = √Σ amount². Ids from `global gaussian_count`.
 - Constructors `plus_minus(value, radius)` and `gaussian(value, σ)`; a plain number operand becomes an exact one;

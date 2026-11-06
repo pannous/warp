@@ -1,0 +1,6 @@
+component-build	codegen	build kinds live in extensions/commands/build.warp; a WIT-world component output is a build-command/extension addition, nothing in core/ grep finds	runtime-cleanup
+hot-reload-slots	runtime-speed	warp dev hot reload via funcref slots fits lib web framework / extensions/commands; idea card	runtime-cleanup
+parallel-module-builds	runtime-speed-2	still open: no WARP_JOBS anywhere; the modules step is a driver/rebuild concern (scripts/rebuild.sh or core/native/warp.warp rebuild step) — opt-in parallel processes in dependency order; mostly scripts/	runtime-cleanup
+playground-compiles	self-hosted-3	decision playground-today (2026-11-01) supersedes playground-after-parity: web/playground moves to the self-hosted compiler; work is in web/, no core change	runtime-cleanup
+variable-signals-tests	parallel-runtime	lib/signals.warp (whenever, watched fields, hooks); 9 red lines of test_variable_signals.warp	runtime-cleanup
+amp-compose	spec-gaps	decided (wiki/&.md): square & print 2 = print(square(2)); `|` composition exists in extensions/sugar/calls.warp:46, & between functions can be a rule beside it	spec

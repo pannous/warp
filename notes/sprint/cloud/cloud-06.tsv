@@ -1,0 +1,4 @@
+browser-json	format	web/playground/host.js:338 keyOfTree re-implements serialize; make it call the module's json_key (lib/json.warp:300) or align its forms, web/ only	text-collections
+completion-order	lookup	no completion code in core/ or lib/ (only lib/graphs.warp unrelated); completion lives in web/playground / lib/repl.warp: order declared methods first	text-collections
+function-signatures	format	signature text is reflection (extensions/sugar/reflection.warp); type(sqrt) currently even fails 'unknown name sqrt' (test_function_objects.pairs.warp:4)	text-collections
+pattern-direct-tests	matching	optimization: per-form rewrite of compile-time-known patterns in extensions/match_patterns.warp (rewrite per form in lib/extensions per card); pattern_bindings stays for run time	text-collections

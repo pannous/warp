@@ -5,6 +5,8 @@ one local worker session each (tmux warp-sprint-<area>), card list in areas/<are
 misc.tsv (cards without a topic) is taken by whichever worker empties its own list first (tell the Supervisor).
 
 ## Rules (decisions.md, 2026-11-06 card sprint)
+- Simple to complex (user): first sort your list by effort and clear every easy card before touching a bigger one;
+  a card that turns out bigger than ~30 minutes goes to the end of your list.
 - Work on branch sprint-<area> in the worktree /Volumes/Worktrees/sprint-<area> (`cowtree add`).
 - Cards in a quick row, one quick commit each, the card key in the message (`fix(<key>): …`).
 - No general tests when certain a change needs none (sample, tour example, note, wording). Anything that can change
