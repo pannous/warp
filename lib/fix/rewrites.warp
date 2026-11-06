@@ -22,6 +22,11 @@ alias_arrow = "=>"
 text_units = ["chars", "codepoints", "graphemes", "bytes", "words", "lines"]
 numeric_operators = ["<", ">", "<=", ">=", "==", "!=", "≤", "≥", "≠", "+", "-", "*", "/", "%"]
 counting_word = "count"
+# `read("data/a.txt")` → `read(./data/a.txt)`: a path given to a file word is a path literal, a relative one from
+# `./` (decision path-literals-preferred); a path with a blank or anything but these characters stays quoted
+file_words = ["read", "write", "exists", "list_files"]
+path_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/~"
+path_starts = ["/", "./", "../", "~/"]
 
 # every hint of the scanned lines, in the order of the source
 hints_of(lines: list): list := {
@@ -69,6 +74,7 @@ word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) 
 	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
 	if word == alias_word and starts_statement(cs, i) { return alias_arrow_hint(cs, i + #word, number) }
 	if word in text_units and at(cs, i - 1) == "." { return unit_count_hint(cs, i, word, number) }
+	if word in file_words and at(cs, i - 1) != "." { return quoted_path_hint(cs, i + #word, number) }
 	for pair in foreign_words {
 		if word == pair[0] and starts_statement(cs, i) and is_word_character(character_after_blanks(cs, i + #word)) and is_blank_character(at(cs, i + #word)) {
 			return Hint(number, i, word, pair[1], word + " is " + pair[1])
@@ -121,6 +127,21 @@ unit_count_hint(cs: list, i: int, word: text, number: int) := {
 	if not (number_follows(cs, end) or number_precedes(cs, start)) { return ø }
 	written = piece(cs, start, end - start)
 	Hint(number, start, written, counting_word + " " + written, "." + word + " is the list: " + counting_word + " it")
+}
+
+# the quoted text right after index i (past blanks and an opening parenthesis) when it is a whole argument and a path
+quoted_path_hint(cs: list, i: int, number: int) := {
+	quote = i + blanks_after(cs, i)
+	if at(cs, quote) == "(" { quote += 1 + blanks_after(cs, quote + 1) }
+	if at(cs, quote) != "\"" { return ø }
+	n = 0
+	while at(cs, quote + 1 + n) != "" and at(cs, quote + 1 + n) != "\"" { n += 1 }
+	path = piece(cs, quote + 1, n)
+	after = character_after_blanks(cs, quote + 2 + n)
+	if n == 0 or at(cs, quote + 1 + n) != "\"" or not (after in ["", ",", ")", "{", ";"]) { return ø }
+	if not path.all(c => path_characters.contains(c)) or path.contains("//") or path in ["~", ".", ".."] { return ø }
+	literal = if path_starts.any(start => path.starts_with(start)) then path else "./" + path
+	Hint(number, quote, "\"" + path + "\"", literal, "a path is written as a path literal: " + literal)
 }
 
 # where the receiver ending before index dot starts: a quoted text, or names joined by dots
