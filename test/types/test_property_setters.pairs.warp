@@ -1,0 +1,4 @@
+# a property's setter is its one-parameter overload, called by assigning or by its call (decisions property-accessors, setter-calls)
+«class T { c = 0.0; f := c * 9 / 5 + 32; f(v) := { c = (v - 32) * 5 / 9 } }; w = T(); w.f = 212; w.c»	100
+«class T { c = 0.0; f := c * 9 / 5 + 32; f(v) := { c = (v - 32) * 5 / 9 } }; w = T(); w.f = 212; w.f»	212
+«class T { c = 0; f := c * 2; f(v) := { c = v / 2 } }; w = T(); w.f(8); w.c»	4
