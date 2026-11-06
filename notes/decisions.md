@@ -131,7 +131,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-reexport (card module-own): a package's own `use` lines reach the programs that use it.
   `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
 - laws-file: the human-owned laws live in samples/laws/project_laws.warp
-  (samples/laws/laws.warp already exists), keeping the "AI agents must not edit this file" header; test_bend_laws runs
+  (samples/laws/basic_laws.warp already exists), keeping the "AI agents must not edit this file" header; test_bend_laws runs
   `warp verify samples/laws/project_laws.warp`.
 - Language name: warp everywhere; `.wasp` files still read; URLs/domains and wisp unchanged.
 - P180 split-debuginfo "unpacked" plus the hourly sweep. P90 ./test.wasm is written at every compile. P91 one shared analysis per compile, refreshed only when a pass changed the program.
