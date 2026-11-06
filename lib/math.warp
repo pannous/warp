@@ -183,7 +183,7 @@ lerp(a, b, t) := a .+ (b .- a) .* t
 mix=&lerp
 // shader math (card compile-shaders, WGSL's words): the fractional part, 0 below the edge and 1 from it, and the smooth
 // Hermite step from 0 at low to 1 at high
-fract(x) := x - floor(x)
+fract(x) := each_any(x, e -> e - floor(e))
 step(edge, x) := if x < edge then 0 else 1
 smoothstep(low, high, x) := { var t = clamp((x - low) / (high - low), 0, 1); t * t * (3 - 2 * t) }
 // `norm x`, `‖x‖`: a number's absolute value, a list's Euclidean length (decision S3: `count`/`length` stay the number
