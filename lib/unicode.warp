@@ -143,6 +143,8 @@ def unicode_composed(ns: list): list {
 nfd(t: text): text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), no))
 nfkd(t: text): text := text_of_codepoints(unicode_decomposed(codepoint_numbers(t), yes))
 nfc(t: text): text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), no)))
+// the word the hosts call for text == (decision nfc-slot, notes/text_equality_nfc.md): a text node's NFC
+canonical_text(t: any): any := nfc(t)
 nfkc(t: text): text := text_of_codepoints(unicode_composed(unicode_decomposed(codepoint_numbers(t), yes)))
 def unicode_normalize(t: text, form: text): text {
 	f = upper(form)

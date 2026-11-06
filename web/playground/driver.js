@@ -282,7 +282,9 @@ function programRan(bytes, file, hooks) {
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, withWasi(programImports(holder, hooks), wasi), holder.linked)).exports;
+		// (kept: a module the run links on a host word's first call, unicode for canonical_text, takes the same imports)
+		holder.imports = withWasi(programImports(holder, hooks), wasi);
+		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, holder.imports, holder.linked)).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
