@@ -36,6 +36,7 @@ env:
   BINARYEN: 133    # wasm-opt, which `warp build` runs
   WARP_NO_WINDOW: 1
   WARP_HINTS: 0
+  GLIBC_FLOOR: 2.35 # the oldest glibc the linux binaries run on (card linux-glibc-floor)
 
 permissions:
   contents: write
@@ -93,9 +94,10 @@ jobs:
         include:
         - { os: macos-latest, target: aarch64-apple-darwin, wabt: macos-arm64, binaryen: arm64-macos, library: libwarp_wasmtime.dylib }
         - { os: macos-15-intel, target: x86_64-apple-darwin, wabt: brew, binaryen: x86_64-macos, library: libwarp_wasmtime.dylib }
-        # pinned: the runner's glibc is the oldest the binaries run on
-        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, wabt: linux-x64, binaryen: x86_64-linux, library: libwarp_wasmtime.so }
-        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, wabt: linux-arm64, binaryen: aarch64-linux, library: libwarp_wasmtime.so }
+        # pinned: the runner's glibc is the oldest the binaries run on (card linux-glibc-floor): 22.04's 2.35, so
+        # Ubuntu 22.04, Debian 12 and their kin run them; the previous release's warp, which bootstraps, asks only 2.34
+        - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, wabt: linux-x64, binaryen: x86_64-linux, library: libwarp_wasmtime.so }
+        - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, wabt: linux-arm64, binaryen: aarch64-linux, library: libwarp_wasmtime.so }
     runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -138,6 +140,17 @@ jobs:
       run: .workflow/scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
     - name: the native warp
       run: WARP_LIB=$PWD/lib "$RUNNER_TEMP/bootstrap/warp" build native core/native/warp.warp
+    - name: the glibc floor
+      # no binary or library may ask a glibc newer than the promised floor (notes/packaging.md), whatever the runner;
+      # weak symbols (Rust std's pidfd_*) bind to none
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        floor=$GLIBC_FLOOR
+        for f in core/native/warp lib/*.so; do
+          newest=$(objdump -T "$f" | grep -v ' w ' | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
+          echo "$f: glibc $newest (floor $floor)"
+          [ "$(printf '%s\n%s\n' "$newest" "$floor" | sort -V | tail -1)" = "$floor" ]
+        done
     - name: the release folder, gated
       run: |
         packaging/native_dist.sh dist
@@ -151,7 +164,7 @@ jobs:
       run: gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:
-    # the linux tarballs repackaged as .deb and .rpm of warp-lang, attached to the release
+    # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, attached to the release
     needs: native
     if: ${{ !cancelled() && !inputs.dry && contains(fromJSON('["success", "skipped"]'), needs.native.result) }}
     runs-on: ubuntu-latest
@@ -160,9 +173,12 @@ jobs:
       NFPM: https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
     steps:
     - uses: actions/checkout@v7 # the workflow's own commit (the tag, on a tag push), with its packaging/ files
+    - name: wheels
+      run: |
+        gh release download "$TAG" -p 'warp-*.tar.gz' -D dist/tarballs
+        python3 packaging/pypi/build_wheels.py "${TAG#v}" dist/tarballs dist/wheels
     - name: deb and rpm
       run: |
-        gh release download "$TAG" -p 'warp-*linux-gnu.tar.gz' -D dist/tarballs
         curl -sSfL "$NFPM" | sudo tar -xz -C /usr/local/bin nfpm
         mkdir -p dist/linux # nfpm writes a file of that name when the directory is missing
         for arch in x86_64:amd64 aarch64:arm64; do
@@ -173,9 +189,34 @@ jobs:
             (cd "dist/$target" && VERSION=${TAG#v} ARCH=${arch#*:} nfpm package -f "$GITHUB_WORKSPACE/packaging/linux/nfpm.yaml" -p "$format" -t "$GITHUB_WORKSPACE/dist/linux")
           done
         done
-    - name: check the amd64 .deb
+    - name: check the amd64 .deb and wheel
       run: |
         sudo dpkg -i dist/linux/warp-lang_*_amd64.deb
         (cd "$RUNNER_TEMP" && warp '6*7' | grep -q 42)
+        pip install --no-deps --break-system-packages --prefix "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
+        (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/pip/bin/warp" '6*7' | grep -q 42)
     - name: upload
       run: gh release upload "$TAG" dist/linux/* --clobber
+    - uses: actions/upload-artifact@v7
+      with:
+        name: wheels
+        path: dist/wheels
+
+  pypi:
+    # trusted publishing: no token, PyPI trusts this workflow (one-time setup in notes/packaging.md, then the repository
+    # variable PYPI_PUBLISH=true turns this job on)
+    needs: packages
+    if: ${{ !cancelled() && needs.packages.result == 'success' && vars.PYPI_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        name: wheels
+        path: dist/wheels
+    - uses: pypa/gh-action-pypi-publish@v1.14.0
+      with:
+        packages-dir: dist/wheels
+        skip-existing: true

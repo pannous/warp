@@ -141,7 +141,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Bee/wasp entity names go into uniscript and are regenerated into core/entities.tsv, never by hand.
 - P13 libm FFI: header-driven linking first, the LIBM tables only as fallback and as examples of hand-linked FFI.
 - uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
-- browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (probes/firefox_jspi_terminate.html).
+- browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (report and repro: notes/firefox_jspi_bug.md).
 - deploy-hook: watch-playground-deploy.sh reports the finished run's conclusion and failed jobs, one stderr line on no answer.
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 
@@ -959,3 +959,13 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - implicit-copy-call: `copy` is a built-in word, always available, never pulling lib/memory in (no bloat: unused words are shaken out); memory's byte copy is `memory.copy`.
   - program-defining: C-style typed parameters `f(double x)` are definitely warp ("f(type x) definitely for parameters"); a C-style return type in front (`double sin(…)`) is not decided: the preferred return form is `f(type x) as type := …`. test_wasm:69,85 stay as they are for now.
 - 2026-11-06 card sprint, round 15 (user): parallel-compilation: compile independent modules in parallel (each needs only its imports' signatures); a program's passes stay sequential. wasm-linker: not now (linking stays in warp, card parked). package-manager: no preference → stays parked (after the module manager). module-manager: the user asked what module vs package manager meant; explained, answer pending.
+
+- 2026-11-06 Supervisor (user widget): warnings-meaning-question → hard error when prebuilt module has no warp.module / won’t link; no compile-from-source fallback ("This must never happen").
+  - module-manager (user): keep the card in Next (the missing module-manager parts after zero-bake: module blocks, use *, aliases of non-lib modules, conditional use, versions).
+- 2026-11-06 user (card sprint): simple to complex: get rid of all the easy cards first; whoever picks or distributes cards orders them so.
+- 2026-11-06 card sprint, round 16 (user):
+  - compile-time: no preference; interviewer default (undoable): only deprecated/foreign spellings (len, strlen, push…) warn and are rewritten by `warp fix`; English aliases of lib/aliases.warp stay silent.
+  - error-gaps: split into three: the Fail effect first (extensions/effects.warp), WIT result<T, string> at the linked-module edge, catch-in-body (= catch-blocks, parked); the broad card closes.
+  - jsx: now, as an extension: `<tag …>…</tag>` in expression position reads into the same markup nodes, `{expr}` holes.
+  - investigate-concept (contracts): the user asked how assert, check, require and ensure differ; explained, answer pending.
+  - jsx (refined, user): inline `<div …>` HTML is accepted with a warning that `warp format` turns HTML into warp markup (`div{ … }`) as well; warp format does that rewrite.
