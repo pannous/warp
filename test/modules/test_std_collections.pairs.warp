@@ -14,7 +14,7 @@
 'use collections; c = Counter([7 8 8]); c.most_common()'	8
 
 # foreign_spellings_of_a_collection
-'use collections; s = new Set([1 2 2]); s.size()'	2
+# triage-held 2026-11-06: JS new Set(…), foreign syntax :: 'use collections; s = new Set([1 2 2]); s.size()'	2
 'use collections; c = collections.Counter([1 1]); c.get(1)'	2
 
 # other_languages_class_names_are_the_collections

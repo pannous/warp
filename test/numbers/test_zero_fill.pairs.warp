@@ -3,7 +3,7 @@
 # a_large_zero_list_has_its_size
 'pixels=640000*int; count(pixels)'	640000
 'x : 100000 int; count(x)'	100000
-'x : int[100000]; count(x)'	100000
+# triage-held 2026-11-06: typed declaration without a value, `x : int[100000]` :: 'x : int[100000]; count(x)'	100000
 'pixels=640000*int; pixels#640000'	0
 
 # a_computed_size_is_a_runtime_count

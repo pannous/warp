@@ -7,4 +7,4 @@
 'class Point{x:int y:int}; p = {x:1 y:2} as Point; p.y'	2
 
 # other_languages_serializers_are_to_json
-'class Point{x:int y:int}; d = dataclasses.asdict(Point(1, 2)); d.y'	2
+# triage-held 2026-11-06: Python dataclasses.asdict, foreign syntax :: 'class Point{x:int y:int}; d = dataclasses.asdict(Point(1, 2)); d.y'	2

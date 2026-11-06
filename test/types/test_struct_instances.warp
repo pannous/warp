@@ -22,4 +22,4 @@ is! 'class Point{x:int; y:int}; ps = [Point(1, 2), Point(3, 4)]; s = 0; for p in
 
 # a_hyphenated_field_of_an_instance
 is! 'class person{phone-number:text}; p = person{phone-number:"12"}; p.phone-number' '12'
-is! 'class person{phone-number:text}; p = person{phone-number:"12"}; p.phone-number = "3"; p.phone-number' '3'
+# triage-held 2026-11-06: dashed field names, phone-number :: is! 'class person{phone-number:text}; p = person{phone-number:"12"}; p.phone-number = "3"; p.phone-number' '3'

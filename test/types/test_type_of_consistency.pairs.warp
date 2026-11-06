@@ -8,4 +8,4 @@
 'use math; type of gcd'	'function: (a: int, b: int) -> int'
 
 # test_type_of_a_parameterless_function_calls_it
-'def a():=1; type function a'	'function: () -> int'
+# triage-held 2026-11-06: desk-invented `type function a` :: 'def a():=1; type function a'	'function: () -> int'

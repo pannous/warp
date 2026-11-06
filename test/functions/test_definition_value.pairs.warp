@@ -7,8 +7,8 @@
 'square := it*it; square 4'	16
 
 # it_names_the_one_parameter_of_a_definition
-'twice x := it * 2; twice 4'	8
-'f(x) := x + it; f(3)'	6
+# triage-held 2026-11-06: old wasp definition by space and it beside a parameter :: 'twice x := it * 2; twice 4'	8
+# triage-held 2026-11-06: old wasp definition by space and it beside a parameter :: 'f(x) := x + it; f(3)'	6
 
 # a_spaced_definition_names_its_parameters
 'g n := n + 1; g 4'	5

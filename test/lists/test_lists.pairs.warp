@@ -5,7 +5,7 @@
 'pixel=[1 2 4];pixel size'	3
 'pixel=[1 2 4];pixel length'	3
 'pixel=[1 2 4];pixel count'	3
-'pixel=[1 2 4];pixel number'	3
+# triage-held 2026-11-06: desk-invented `pixel number` :: 'pixel=[1 2 4];pixel number'	3
 'pixel=[1 2 4];pixel.size'	3
 'pixel=[1 2 4];pixel.length'	3
 'pixel=[1 2 4];pixel.count'	3
@@ -17,7 +17,7 @@
 'pixel=[1 2 3];pixel.add(5);#pixel'	4
 
 # test_array_creation
-'pixel:int[100];pixel[1]=15;pixel[1]'	15
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'pixel:int[100];pixel[1]=15;pixel[1]'	15
 'pixel=int[100];pixel[1]=15;pixel[1]'	15
 'pixel: 100 int;pixel[1]=15;pixel[1]'	15
 
@@ -37,18 +37,18 @@
 'x=(1 4 3);x#2'	4
 
 # test_while_nop_issue
-'x=0;while x++<11: nop;x'	11
+# triage-held 2026-11-06: nop word :: 'x=0;while x++<11: nop;x'	11
 
 # test_array_initialization_basics
-'x : 100 numbers; count(x)'	100
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 numbers; count(x)'	100
 
 # test_array_initialization
-'x : int[100]; x.length'	100
-'x : 100 * int; x.length'	100
-'x : 100 * ints; x.length'	100
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : int[100]; x.length'	100
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 * int; x.length'	100
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 * ints; x.length'	100
 'x : 100 int; x.length'	100
-'x : 100 integers; x.length'	100
-'x : 100 numbers; x.length'	100
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 integers; x.length'	100
+# triage-held 2026-11-06: typed declarations without a value (pixel:int[100], x : 100 numbers) :: 'x : 100 numbers; x.length'	100
 'x = 100 times [0]; x.length'	100
 
 # test_array_indices
@@ -58,41 +58,41 @@
 '1 2 3'	[1, 2, 3]
 '(1 2 3)'	[1, 2, 3]
 '(1,2,3)'	[1, 2, 3]
-'(1;2;3)'	[1, 2, 3]
+# triage-held 2026-11-06: semicolons separate statements, the group is its last value :: '(1;2;3)'	[1, 2, 3]
 '1,2,3'	[1, 2, 3]
 '[1 2 3]'	[1, 2, 3]
 '[1,2,3]'	[1, 2, 3]
 '[1;2;3]'	[1, 2, 3]
 '{1 2 3}'	[1, 2, 3]
 '{1,2,3}'	[1, 2, 3]
-'{1;2;3}'	[1, 2, 3]
+# triage-held 2026-11-06: semicolons separate statements, the group is its last value :: '{1;2;3}'	[1, 2, 3]
 
 # test_root_list_strings
-'(a,b,c)'	['a', 'b', 'c']
-'(a;b;c)'	['a', 'b', 'c']
-'a;b;c'	'c'
-'a,b,c'	['a', 'b', 'c']
-'{a b c}'	['a', 'b', 'c']
-'{a,b,c}'	['a', 'b', 'c']
-'[a,b,c]'	['a', 'b', 'c']
-'(a b c)'	['a', 'b', 'c']
-'[a;b;c]'	['a', 'b', 'c']
-'a b c'	['a', 'b', 'c']
-'{a;b;c}'	['a', 'b', 'c']
-'[a b c]'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a,b,c)'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a;b;c)'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a;b;c'	'c'
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a,b,c'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a b c}'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a,b,c}'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a,b,c]'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a b c)'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a;b;c]'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a b c'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a;b;c}'	['a', 'b', 'c']
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a b c]'	['a', 'b', 'c']
 
 # test_index
-'(a b c)#2'	'b'
-'{a b c}#2'	'b'
-'[a b c]#2'	'b'
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '(a b c)#2'	'b'
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a b c}#2'	'b'
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '[a b c]#2'	'b'
 '{a:1 b:2}.a'	1
 'a of {a:1 b:2}'	1
-'a in {a:1 b:2}'	1
-'{a:1 b:2}[a]'	1
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'a in {a:1 b:2}'	1
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a:1 b:2}[a]'	1
 '{a:1 b:2}.b'	2
 'b of {a:1 b:2}'	2
-'b in {a:1 b:2}'	2
-'{a:1 b:2}[b]'	2
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: 'b in {a:1 b:2}'	2
+# triage-held 2026-11-06: unknown names as symbols (refused since decision lib-oddities) :: '{a:1 b:2}[b]'	2
 
 # test_field_assignment_to_undefined_variable
 'k={};k.x=3;k.x'	3

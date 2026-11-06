@@ -10,5 +10,5 @@
 
 # an_operator_word_ends_the_phrase
 'number of chars in "héllo"'	5
-'"äb".size in bytes'	3
+# triage-held 2026-11-06: desk-invented count phrasings (number of bytes in t, .size in bytes) :: '"äb".size in bytes'	3
 'xs = [1, 2]; xs.count in [2, 3]'	true
