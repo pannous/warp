@@ -1,4 +1,4 @@
-# todo Implement as simple infix operator (card times-infix-operator)
+# DONE Implement as simple infix operator (card times-infix-operator)
 # infix operator times(n:int,b:block):= while n-->0 : b()
 
 # `n times {…}` (card parser-cold-forms, decision core-is-self): the prelude's infix times, read after its count; a
