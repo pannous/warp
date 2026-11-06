@@ -30,7 +30,9 @@ wasm_module_used(statement: text, folder: text): text? := {
 	if bare == ø { return ø }
 	for written in [bare, bare + WASM_EXTENSION] {
 		name = if rooted(written, folder) == written then path_in(folder, written) else written
-		if name.ends_with(WASM_EXTENSION) and is_core_wasm(wasm_bytes(wasm_file(name, folder))) { return name }
+		# (one carrying a warp.signature is a module warp compiled, linked as a standard module is: compiler.warp own_module_beside)
+		bytes = wasm_bytes(wasm_file(name, folder))
+		if name.ends_with(WASM_EXTENSION) and is_core_wasm(bytes) and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) == ø { return name }
 	}
 	ø
 }
