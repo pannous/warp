@@ -17,6 +17,11 @@ floor_division_words = ["div"]
 # `alias acos = arc_cosine` → `alias acos => arc_cosine`: an alias says its direction (decision alias-arrows)
 alias_word = "alias"
 alias_arrow = "=>"
+# `t.codepoints > 3` → `count t.codepoints > 3`: a text unit plural is the list, read as a number it is counted
+# (decision text-unit-plurals)
+text_units = ["chars", "codepoints", "graphemes", "bytes", "words", "lines"]
+numeric_operators = ["<", ">", "<=", ">=", "==", "!=", "≤", "≥", "≠", "+", "-", "*", "/", "%"]
+counting_word = "count"
 
 # every hint of the scanned lines, in the order of the source
 hints_of(lines: list): list := {
@@ -63,6 +68,7 @@ word_at(cs: list, i: int): text := {
 word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
 	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
 	if word == alias_word and starts_statement(cs, i) { return alias_arrow_hint(cs, i + #word, number) }
+	if word in text_units and at(cs, i - 1) == "." { return unit_count_hint(cs, i, word, number) }
 	for pair in foreign_words {
 		if word == pair[0] and starts_statement(cs, i) and is_word_character(character_after_blanks(cs, i + #word)) and is_blank_character(at(cs, i + #word)) {
 			return Hint(number, i, word, pair[1], word + " is " + pair[1])
@@ -103,6 +109,64 @@ alias_arrow_hint(cs: list, i: int, number: int) := {
 	sign = at_name + #name + blanks_after(cs, at_name + #name)
 	if at(cs, sign) != "=" or at(cs, sign + 1) in ["=", ">"] { return ø }
 	Hint(number, sign, "=", alias_arrow, "an alias says its direction: " + alias_arrow)
+}
+
+# the unit plural at index i, its receiver before the dot, compared with or computed with a number: counted; a chain
+# going on (`t.bytes.count`), a count already written and a list operand (`t.chars + [c]`) stay
+unit_count_hint(cs: list, i: int, word: text, number: int) := {
+	end = i + #word
+	if is_word_character(at(cs, end)) or at(cs, end) in [".", "(", "["] { return ø }
+	start = receiver_start(cs, i - 1)
+	if start == i - 1 or word_before(cs, start) == counting_word or at(cs, start - 1) == "#" { return ø }
+	if not (number_follows(cs, end) or number_precedes(cs, start)) { return ø }
+	written = piece(cs, start, end - start)
+	Hint(number, start, written, counting_word + " " + written, "." + word + " is the list: " + counting_word + " it")
+}
+
+# where the receiver ending before index dot starts: a quoted text, or names joined by dots
+receiver_start(cs: list, dot: int): int := {
+	last = at(cs, dot - 1)
+	if last == "\"" or last == "»" {
+		opener = if last == "»" then "«" else "\""
+		j = dot - 2
+		while j >= 0 and at(cs, j) != opener { j -= 1 }
+		return if j >= 0 then j else dot
+	}
+	j = dot
+	while is_word_character(at(cs, j - 1)) or (at(cs, j - 1) == "." and is_word_character(at(cs, j - 2))) { j -= 1 }
+	j
+}
+
+# the word ending right before index i, past blanks
+word_before(cs: list, i: int): text := {
+	end = i - blanks_before(cs, i)
+	j = end
+	while is_word_character(at(cs, j - 1)) { j -= 1 }
+	piece(cs, j, end - j)
+}
+
+# an operator of numbers right after index i, then a numeral
+number_follows(cs: list, i: int): bool := {
+	at_operator = i + blanks_after(cs, i)
+	operator = numeric_operator_at(cs, at_operator)
+	operator != "" and is_digit_character(character_after_blanks(cs, at_operator + #operator))
+}
+
+# a numeral, then an operator of numbers, right before index i
+number_precedes(cs: list, i: int): bool := {
+	operator_end = i - blanks_before(cs, i)
+	for operator in numeric_operators.filter(o => piece(cs, operator_end - #o, #o) == o) {
+		if is_digit_character(character_before_blanks(cs, operator_end - #operator)) { return yes }
+	}
+	no
+}
+
+# the longest operator of numbers at index i, "" when none
+numeric_operator_at(cs: list, i: int): text := {
+	two = piece(cs, i, 2)
+	if two in numeric_operators { return two }
+	one = at(cs, i)
+	if one in numeric_operators then one else ""
 }
 
 # the number of blanks right after index i, from it on
