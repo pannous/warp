@@ -293,147 +293,141 @@ void* c_function(char* name) { return native_function(name); }
 // warp's own libraries (libwarp_sound) beside the executable first, as libwarp_wasmtime is
 static const char* LIBRARY_PATHS[] = {"@executable_path/lib%s.dylib", "$ORIGIN/lib%s.so", "lib%s.dylib","/opt/homebrew/lib/lib%s.dylib", "/usr/local/lib/lib%s.dylib", "lib%s.so", "lib%s.so.0"};
 static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
-// Linux folders scanned for versioned / version-named sonames (c_calls.rs library_paths)
 static const char* SYSTEM_LIBRARY_FOLDERS[] = {
 	"/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/lib/x86_64-linux-gnu", "/lib/aarch64-linux-gnu",
-	"/usr/lib64", "/usr/lib", "/usr/local/lib"
+	"/usr/lib64", "/usr/lib", "/usr/local/lib", "/opt/homebrew/lib",
+	"/Library/Frameworks", "/usr/local/Frameworks", "/opt/homebrew/Frameworks",
+	"/opt/homebrew/opt", "/usr/local/opt"
 };
-enum { SONAME_VERSION_PARTS = 8, SONAME_CANDIDATES = 64 };
-struct soname_candidate { char path[4096]; uint32_t version[SONAME_VERSION_PARTS]; int version_parts; int path_length; };
-static int version_cmp_desc(const uint32_t* a, int an, const uint32_t* b, int bn) {
-	int n = an < bn ? an : bn;
-	for (int i = 0; i < n; i++) if (a[i] != b[i]) return a[i] > b[i] ? -1 : 1;
-	if (an != bn) return an > bn ? -1 : 1;
-	return 0;
+enum { LIB_VER = 8, LIB_PATH = 1024 };
+
+// newest lib<name>*.so/.dylib or <Name>.framework under WARP_LIBRARY_PATH + system folders (one scan, one best path)
+struct lib_pick { char path[LIB_PATH]; uint32_t ver[LIB_VER]; int parts, len, ok; };
+
+static int ver_newer(const uint32_t* a, int an, const uint32_t* b, int bn) {
+	for (int i = 0, n = an < bn ? an : bn; i < n; i++) if (a[i] != b[i]) return a[i] > b[i];
+	return an > bn;
 }
-static int soname_versioned_less(const void* left, const void* right) {
-	const struct soname_candidate* a = left, *b = right;
-	return a->path_length - b->path_length;
-}
-static int soname_named_less(const void* left, const void* right) {
-	const struct soname_candidate* a = left, *b = right;
-	int by_version = version_cmp_desc(a->version, a->version_parts, b->version, b->version_parts);
-	return by_version ? by_version : a->path_length - b->path_length;
-}
-// version between name and `.so` as numbers: "3.13" of libpython3.13.so.1; -1 when not version-named
-static int named_soname_version(const char* file, const char* prefix, uint32_t* out, int out_room) {
-	size_t prefix_length = strlen(prefix);
-	if (strncmp(file, prefix, prefix_length)) return -1;
-	const char* rest = file + prefix_length;
-	const char* so = strstr(rest, ".so");
-	if (!so) return -1;
-	while (rest < so && (*rest == '.' || *rest == '-')) rest++;
-	if (rest == so) return -1;
-	int count = 0;
-	const char* p = rest;
-	while (p < so) {
-		if (!isdigit((unsigned char)*p)) return -1;
-		uint32_t value = 0;
-		while (p < so && isdigit((unsigned char)*p)) value = value * 10 + (uint32_t)(*p++ - '0');
-		if (count >= out_room) return -1;
-		out[count++] = value;
-		if (p < so) { if (*p != '.') return -1; p++; }
+static int ver_parse(const char* s, const char* end, uint32_t* out, int room) {
+	int n = 0;
+	while (s < end && (*s == '.' || *s == '-')) s++;
+	if (s >= end) return 0;
+	while (s < end) {
+		if (!isdigit((unsigned char)*s)) return -1;
+		uint32_t v = 0;
+		while (s < end && isdigit((unsigned char)*s)) v = v * 10 + (uint32_t)(*s++ - '0');
+		if (n >= room) return -1;
+		out[n++] = v;
+		if (s < end) { if (*s != '.') return -1; s++; }
 	}
-	return count > 0 ? count : -1;
+	return n;
 }
+static void lib_pick_take(struct lib_pick* best, const char* path, const uint32_t* ver, int parts) {
+	int len = (int)strlen(path);
+	if (len <= 0 || len >= LIB_PATH) return;
+	if (best->ok && (ver_newer(best->ver, best->parts, ver, parts) ||
+		(!ver_newer(ver, parts, best->ver, best->parts) && len >= best->len))) return;
+	memcpy(best->path, path, (size_t)len + 1);
+	best->len = len; best->parts = parts; best->ok = 1;
+	for (int i = 0; i < parts; i++) best->ver[i] = ver[i];
+}
+static void capitalized(const char* name, char* out, size_t room) {
+	size_t n = strlen(name);
+	if (n >= room) { out[0] = 0; return; }
+	memcpy(out, name, n + 1);
+	if (out[0] >= 'a' && out[0] <= 'z') out[0] = (char)(out[0] - 'a' + 'A');
+}
+static void consider_path(struct lib_pick* best, const char* path, const uint32_t* ver, int parts) {
+	lib_pick_take(best, path, ver, parts);
+}
+static void consider_lib_name(struct lib_pick* best, const char* folder, const char* file, const char* library) {
+	size_t n = strlen(library);
+	if (strncmp(file, "lib", 3) || strncmp(file + 3, library, n)) return;
+	const char* rest = file + 3 + n;
+	const char* so = strstr(rest, ".so"), *dylib = strstr(rest, ".dylib"), *ext = so && dylib ? (so < dylib ? so : dylib) : so ? so : dylib;
+	if (!ext) { if (*rest) return; }
+	else if (rest != ext && *rest != '.' && *rest != '-' && !isdigit((unsigned char)*rest)) return;
+	uint32_t ver[LIB_VER];
+	int parts = ext ? ver_parse(rest, ext, ver, LIB_VER) : 0;
+	if (parts < 0) return;
+	if (ext) {
+		const char* after = ext + (ext[1] == 's' ? 3 : 6);
+		if (*after == '.') {
+			uint32_t more[LIB_VER];
+			int extra = ver_parse(after, after + strlen(after), more, LIB_VER);
+			if (extra < 0) return;
+			for (int i = 0; i < extra && parts < LIB_VER; i++) ver[parts++] = more[i];
+		} else if (*after) return;
+	}
+	char path[LIB_PATH];
+	if (snprintf(path, sizeof path, "%s/%s", folder, file) < (int)sizeof path) consider_path(best, path, ver, parts);
+}
+static void consider_framework_at(struct lib_pick* best, const char* folder, const char* Name, const uint32_t* ver, int parts) {
+	char path[LIB_PATH];
+	if (snprintf(path, sizeof path, "%s/%s.framework/%s", folder, Name, Name) < (int)sizeof path)
+		consider_path(best, path, ver, parts);
+	if (snprintf(path, sizeof path, "%s/%s.framework/Versions/Current/%s", folder, Name, Name) < (int)sizeof path)
+		consider_path(best, path, ver, parts);
+}
+static void scan_folder(const char* folder, const char* library, struct lib_pick* best) {
+	DIR* dir = opendir(folder);
+	if (!dir) return;
+	char Name[256];
+	capitalized(library, Name, sizeof Name);
+	size_t n = strlen(library);
+	int homebrew_opt = !strcmp(folder, "/opt/homebrew/opt") || !strcmp(folder, "/usr/local/opt");
+	for (struct dirent* entry; (entry = readdir(dir));) {
+		const char* file = entry->d_name;
+		if (file[0] == '.') continue;
+		if (homebrew_opt) {
+			if (strncmp(file, library, n)) continue;
+			const char* rest = file + n;
+			if (!(*rest == 0 || *rest == '@' || isdigit((unsigned char)*rest))) continue;
+			uint32_t ver[LIB_VER];
+			int parts = 0;
+			if (*rest == '@') parts = ver_parse(rest + 1, rest + 1 + strlen(rest + 1), ver, LIB_VER);
+			else if (isdigit((unsigned char)*rest)) parts = ver_parse(rest, rest + strlen(rest), ver, LIB_VER);
+			if (parts < 0) parts = 0;
+			char frameworks[LIB_PATH];
+			if (snprintf(frameworks, sizeof frameworks, "%s/%s/Frameworks", folder, file) < (int)sizeof frameworks)
+				consider_framework_at(best, frameworks, Name, ver, parts);
+			continue;
+		}
+		consider_lib_name(best, folder, file, library);
+	}
+	closedir(dir);
+	if (!homebrew_opt) consider_framework_at(best, folder, Name, (uint32_t[]){0}, 0);
+}
+
 static void* open_library_symbol(const char* path, const char* name) {
 	void* loaded = dlopen(path, RTLD_NOW | RTLD_LOCAL);
 	return loaded ? dlsym(loaded, name) : NULL;
 }
-// folders: WARP_LIBRARY_PATH (`:`-separated) first, then the system library folders
-static void each_library_folder(void (*visit)(const char* folder, void* data), void* data) {
-	const char* extra = getenv("WARP_LIBRARY_PATH");
-	if (extra && *extra) {
-		char* copy = strdup(extra);
-		for (char* folder = strtok(copy, ":"); folder; folder = strtok(NULL, ":"))
-			if (*folder) visit(folder, data);
-		free(copy);
-	}
-	for (size_t i = 0; i < sizeof SYSTEM_LIBRARY_FOLDERS / sizeof *SYSTEM_LIBRARY_FOLDERS; i++)
-		visit(SYSTEM_LIBRARY_FOLDERS[i], data);
-}
-struct soname_scan { const char* library; struct soname_candidate* found; int* count; int named; };
-static void collect_sonames_in_folder(const char* folder, void* data) {
-	struct soname_scan* scan = data;
-	DIR* dir = opendir(folder);
-	if (!dir) return;
-	char prefix[256];
-	if (scan->named) snprintf(prefix, sizeof prefix, "lib%s", scan->library);
-	else snprintf(prefix, sizeof prefix, "lib%s.so.", scan->library);
-	size_t prefix_length = strlen(prefix);
-	for (struct dirent* entry; (entry = readdir(dir));) {
-		const char* file = entry->d_name;
-		if (*scan->count >= SONAME_CANDIDATES) break;
-		struct soname_candidate* slot = &scan->found[*scan->count];
-		if (scan->named) {
-			if (!strstr(file, ".so")) continue;
-			int parts = named_soname_version(file, prefix, slot->version, SONAME_VERSION_PARTS);
-			if (parts < 0) continue;
-			slot->version_parts = parts;
-		} else {
-			if (strncmp(file, prefix, prefix_length)) continue;
-			slot->version_parts = 0;
-		}
-		int written = snprintf(slot->path, sizeof slot->path, "%s/%s", folder, file);
-		if (written < 0 || (size_t)written >= sizeof slot->path) continue;
-		slot->path_length = written;
-		(*scan->count)++;
-	}
-	closedir(dir);
-}
-static void* symbol_from_sonames(char* library, char* name, int named) {
-	struct soname_candidate found[SONAME_CANDIDATES];
-	int count = 0;
-	struct soname_scan scan = {library, found, &count, named};
-	each_library_folder(collect_sonames_in_folder, &scan);
-	qsort(found, (size_t)count, sizeof *found, named ? soname_named_less : soname_versioned_less);
-	for (int i = 0; i < count; i++) {
-		void* symbol = open_library_symbol(found[i].path, name);
-		if (symbol) return symbol;
-	}
-	return NULL;
-}
-static void try_plain_so_in_folder(const char* folder, void* data) {
-	struct { char* library; char* name; void** symbol; }* ask = data;
-	if (*ask->symbol) return;
-	char path[4096];
-	snprintf(path, sizeof path, "%s/lib%s.so", folder, ask->library);
-	*ask->symbol = open_library_symbol(path, ask->name);
-	if (*ask->symbol) return;
-	snprintf(path, sizeof path, "%s/lib%s.so.0", folder, ask->library);
-	*ask->symbol = open_library_symbol(path, ask->name);
-}
+
 // a library's function, NULL when the library has none of that name: never another library's
-// plain LIBRARY_PATHS first, then WARP_LIBRARY_PATH, then Linux versioned / version-named sonames (c_calls.rs)
 void* library_function(char* library, char* name) {
 	for (size_t i = 0; i < sizeof PROCESS_LIBRARIES / sizeof *PROCESS_LIBRARIES; i++)
 		if (!strcmp(library, PROCESS_LIBRARIES[i])) return dlsym(RTLD_DEFAULT, name);
-	char path[4096];
+	char path[LIB_PATH];
 	for (size_t i = 0; i < sizeof LIBRARY_PATHS / sizeof *LIBRARY_PATHS; i++) {
 		snprintf(path, sizeof path, LIBRARY_PATHS[i], library);
 		void* symbol = open_library_symbol(path, name);
 		if (symbol) return symbol;
 	}
-	void* symbol = NULL;
-	struct { char* library; char* name; void** symbol; } plain = {library, name, &symbol};
-	each_library_folder(try_plain_so_in_folder, &plain);
-	if (symbol) return symbol;
-	if (!strcmp(library, "python")) {
-		static const char* python_frameworks[] = {
-			"/Library/Frameworks/Python.framework/Python",
-			"/opt/homebrew/opt/python3/Frameworks/Python.framework/Python",
-			"/opt/homebrew/opt/python@3.13/Frameworks/Python.framework/Python",
-			"/opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Python",
-			"/usr/local/Frameworks/Python.framework/Python",
-		};
-		for (size_t i = 0; i < sizeof python_frameworks / sizeof *python_frameworks; i++) {
-			symbol = open_library_symbol(python_frameworks[i], name);
-			if (symbol) return symbol;
+	struct lib_pick best;
+	memset(&best, 0, sizeof best);
+	const char* extra = getenv("WARP_LIBRARY_PATH");
+	if (extra && *extra) {
+		char* copy = strdup(extra);
+		if (copy) {
+			for (char* folder = strtok(copy, ":"); folder; folder = strtok(NULL, ":"))
+				if (*folder) scan_folder(folder, library, &best);
+			free(copy);
 		}
 	}
-	symbol = symbol_from_sonames(library, name, 0);
-	if (symbol) return symbol;
-	return symbol_from_sonames(library, name, 1);
+	for (size_t i = 0; i < sizeof SYSTEM_LIBRARY_FOLDERS / sizeof *SYSTEM_LIBRARY_FOLDERS; i++)
+		scan_folder(SYSTEM_LIBRARY_FOLDERS[i], library, &best);
+	return best.ok ? open_library_symbol(best.path, name) : NULL;
 }
 // a C function called with up to 8 integers and pointers and up to 8 floats in their registers (the ARM64 and x86-64
 // conventions keep the two apart, `ldexp(double, int)` takes d0 and x0): it reads only the ones its parameters name.
