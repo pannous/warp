@@ -12,7 +12,7 @@ rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where statement
 rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where element
 # a map's loop names its key and value as a pair, `for (k, v) in m`, or as an entry, `for k: v in m`: the key and
 # value loop over its keys (card for-kv-iteration)
-rewrite for $k: $v in $m {$body...} => for $k in $m { $v = $m[$k]; $body... } where $k is symbol and $v is symbol
+rewrite (for $k: $v in $m {$body...}) => (for $k in $m { $v = $m[$k]; $body... }) where $k is symbol and $v is symbol
 rewrite for ($k, $v) in $m {$body...} => for $k in $m { $v = $m[$k]; $body... } where $k is symbol and $v is symbol and $m is map
 # a loop's tuple or list of names takes each item apart: `for (dx, dy) in [(1, 0), (2, 1)] {…}`
 rewrite for ($names...) in $xs {$body...} => for $item in $xs { ($n = $item#$i) for $n at $i in $names...; $body... }
