@@ -1343,7 +1343,7 @@ midi_notes(bytes) := {
 			started = sounding.filter(m => m#3 == message#3 and m#4 == message#4)
 			if count(started) > 0 {
 				first = started#1
-				sounding = sounding.filter(m => not same_node(m, first))
+				sounding = sounding.filter(m => not same(m, first))
 				notes = notes + [[milliseconds(first#1), first#4, milliseconds(message#1) - milliseconds(first#1), first#5]]
 			}
 		}

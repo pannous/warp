@@ -253,7 +253,7 @@ children(n: Node, f: function): Node := match n {
 		if left == opaque_symbol { return n }
 		walked_left = f(left)
 		walked_right = f(right)
-		if same_node(walked_left, left) and same_node(walked_right, right) then n else Key(walked_left, op, walked_right)
+		if same(walked_left, left) and same(walked_right, right) then n else Key(walked_left, op, walked_right)
 	}
 	List(items, bracket, separator): {
 		if is_quote(n) or is_spliced_quote(n) { return n }
@@ -264,7 +264,7 @@ children(n: Node, f: function): Node := match n {
 }
 # whether each item is the very same node as the other's at its place
 same_items(items: list, others: list): bool := {
-	for i in 0..<#items { if not same_node(items[i], others[i]) { return no } }
+	for i in 0..<#items { if not same(items[i], others[i]) { return no } }
 	yes
 }
 
