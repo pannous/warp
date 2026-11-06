@@ -64,6 +64,7 @@ export page_of(value: any): any := if html_is_page(value) then page_render(value
 // an element, or a group of nothing but elements (`{div{…}}`, `[li{…} li{…}]`)
 html_is_page(value: any): bool := html_is_element(value) or (html_is_group(value) and #html_elements_in(value) > 0 and #html_elements_in(value) == #value)
 export page_event(n: int, detail: any) := {
+	if detail is map and detail.has(page_ids_key) { for id in detail[page_ids_key].keys { page_values[id] = detail[page_ids_key][id] } }
 	action = page_handlers#n
 	action(detail)
 }
@@ -81,6 +82,19 @@ render(value: any) := {
 	page_render(value)
 }
 click(label: any) := page_act("click", name_of(label), ø)
+// `$who` (decision page-ids, extensions/page_values.warp): the value of the page's field with the id who, what was
+// typed into it, which every element event brings as its detail's ids (web/playground/markup.js idValues); `$who =
+// "Ann"` writes it, shown as the field's value
+page_ids_key = "ids"
+global page_values = {}
+page_value(id: text) := if page_values.has(id) then page_values[id] else ""
+page_value_set(id: text, value: any) := { page_values[id] = value }
+// ` value="…"` of a field whose id has a value written or typed, unless the markup writes its own
+html_page_value(items: list, tag: any, written: any): text := {
+	if written != ø { return "" }
+	for item in items { if html_is_attribute(item, tag) and html_name(item) == "id" and page_values.has(html_plain(html_content(item))) { return " value=\"" + html_escaped(str(page_values[html_plain(html_content(item))])) + "\"" } }
+	""
+}
 // `click plus`: an id, a word the program binds nothing to
 rewrite click $who => click(data $who) where $who is symbol and $who is unbound
 
@@ -133,7 +147,15 @@ component_moment(moment: any, action: function) := {
 component_moments_run() := {
 	let shown = [page_moments_id] + component_order.map(entry => entry#3)
 	for id in shown { if id not in component_shown { component_moment_run(id, "mount") } }
-	for id in component_shown { if id not in shown { component_moment_run(id, "cleanup") } }
+	for id in component_shown {
+		if id not in shown {
+			component_moment_run(id, "cleanup")
+			if id != page_moments_id {
+				if component_states.has(id) { component_states.remove(id) }
+				if component_moments.has(id) { component_moments.remove(id) }
+			}
+		}
+	}
 	component_shown = shown
 }
 component_moment_run(id: text, moment: text) := {
@@ -194,6 +216,10 @@ html_is_handler_pair(item: any): bool := item is pair and html_is_handler_name(h
 html_is_handler_name(name: any): bool := name is text and starts_with(name, handler_prefix) and #name > #handler_prefix
 html_handler(item: any) := if item is Handler then html_handler_attribute(item.event, item.action) else html_handler_attribute(html_name(item)[#handler_prefix ..], html_raw_content(item))
 html_handler_attribute(event: text, action: function) := {
+	if event == "mount" or event == "cleanup" {
+		component_moment(event, action)
+		return ""
+	}
 	page_handlers.add(action)
 	page_handler_events.add(event)
 	page_handler_labels.add([])
@@ -246,8 +272,9 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var own_handlers = []
 	for item in items {
 		if html_is_handler(item) {
-			attributes = attributes + html_handler(item)
-			own_handlers.add(#page_handlers)
+			added = html_handler(item)
+			attributes = attributes + added
+			if added != "" { own_handlers.add(#page_handlers) }
 		}
 		else if html_is_binding(item) {
 			attributes = attributes + html_bound(tag, items, html_content(item))
@@ -265,6 +292,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
 	for own in own_handlers { page_handler_labels#own = html_labels(tag, items, children) }
+	attributes = attributes + html_page_value(items, tag, value)
 	// the option whose value, else text, is the select's
 	if #styles > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
 	if tag == "option" and chosen != ø and (if value == ø then children else html_escaped(value)) == html_escaped(chosen) { attributes = attributes + " selected" }

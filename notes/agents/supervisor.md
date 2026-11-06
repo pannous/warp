@@ -7,6 +7,12 @@ there). Startup reading: this file and notes/agents/common.md. Look up when need
 the team, crash resume), notes/roles.md (what the other roles do), notes/agents/grok.md "For the Supervisor".
 
 ## Mandate
+- One owner per card (user 2026-11-06, after Grok and Claude workers built the same cards twice: "You are the
+  mastermind of this project. Grok is only your helper."): every card has exactly one owner, visible on the board
+  (`todo take <card> <worker>`) from the moment it is worked on; a worker owns at most its current card and one next,
+  never a whole queue (bulk-taking 143 sprint cards for 10 workers was wrong, user). A list in a brief is not a
+  lock: check the Agent field before handing a card out, and never hand out one whose Agent field is set. A worker (Claude or Grok) may pick a card itself (user, softened the same
+  day) if it runs `todo take <card> <itself>` at once (moves it to Now, sets the owner) and the card had no owner.
 - You own the project's progress (user 2026-10-21: "Make smart decisions. You may even bend the rules if that's
   necessary to progress."). Technical and process choices that follow the decided direction are yours; record each
   as one line in notes/decisions.md. A bent rule is named, with the reason, in the message or commit. Only questions

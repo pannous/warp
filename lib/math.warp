@@ -25,7 +25,7 @@ infix operator ≈(a: any, b: any) := alike(a, b, tolerance, no)
 infix operator ~(a: any, b: any) := alike(a, b, rough_tolerance, yes)
 infix operator ⋍(a: any, b: any) := alike(a, b, tolerance, no)
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
-// pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
+// instances of one class field by field, pairs part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
 alike(a: any, b: any, tolerance: float, rough: bool) := {
 	if bracket_of(a) == "{" and bracket_of(b) == "{" {
@@ -33,6 +33,9 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 	}
 	if bracket_of(a) != ø and bracket_of(a) == bracket_of(b) {
 		return #a == #b and (1 to #a).all(i => alike(a#i, b#i, tolerance, rough))
+	}
+	if is_instance(a) and is_instance(b) {
+		return class_name(a) == class_name(b) and a.keys.all(k => alike(a[k], b[k], tolerance, rough))
 	}
 	if type(a) is key and type(b) is key {
 		keys_alike = alike(key_of(a), key_of(b), tolerance, rough)
@@ -55,6 +58,8 @@ numbers_alike(a: float, b: float, tolerance: float): bool := {
 	d <= tolerance * abs(a) or d <= tolerance * abs(b) or d <= 0.000000000001
 }
 truthy(x: any): bool := if x then yes else no
+// an instance of a class, a pair of its class name and its fields as a value: P(1), 5km
+is_instance(x: any): bool := type(x) is key and class_name(x) != "key"
 text_alike(t: text, rough: bool): text := case_fold(if rough then rough_trimmed(t) else t)
 rough_trimmed(t: text): text := {
 	first = 1; last = #t
@@ -125,7 +130,6 @@ sin(x: float): float from warp
 cos(x: float): float from warp
 tan(x: float): float from warp
 exp(x: float): float from warp
-ln(x: float): float from warp
 min(a: number, b: number, more...): number from warp
 max(a: number, b: number, more...): number from warp
 
@@ -191,8 +195,55 @@ smoothstep(low, high, x) := { var t = clamp((x - low) / (high - low), 0, 1); t *
 norm(x: any) := if x is list then { var total = 0; for i in 1 to count(x) { total = total + x#i * x#i }; sqrt(total) } else abs(x)
 magnitude(x: any) := norm(x)
 // vectors are lists of numbers: their dot product, their distance, the vector of length 1 along v, the cross product of
-// two 3-vectors and the direction i reflected at a surface of normal n
-dot(u: list, v: list) := sum([u#i * v#i for i in 1 to count(u)])
+// two 3-vectors and the direction i reflected at a surface of normal n. Small vectors stay a fused GC loop (exact
+// ints). From DOT_LINEAR_FEWEST up, items are copied into linear memory and multiplied as f64 there (~80× the GC
+// loop on 10^5; samples/lists/dot.warp). The emitter's linear_dotf (f64x2, no copy) still wins once auto-linear
+// pairs float[n] by dot — that path is core, not lib (card dot-compose-fix)
+DOT_LINEAR_FEWEST = 64
+dot_cell_bytes() := 8
+dot_page_bytes() := 65536
+dot_cell_at(address: int): float := wasm f64.load
+dot_set_cell(address: int, value: float) := wasm f64.store
+dot_count_at(address: int): int := wasm i64.load
+dot_set_count_at(address: int, count: int) := wasm i64.store
+dot_memory_pages(): int := wasm memory.size
+dot_grown_pages(pages: int): int := wasm memory.grow
+// n zeroed f64 cells behind a count, never freed (as sound's sample blocks)
+dot_new_block(n: int): int := {
+	let address = dot_memory_pages() * dot_page_bytes
+	dot_grown_pages(dot_cell_bytes * (n + 1) /! dot_page_bytes + 1)
+	dot_set_count_at(address, n)
+	address
+}
+dot_fill_block(list, address) := {
+	let n = count(list)
+	for i in 1 to n { dot_set_cell(address + dot_cell_bytes * i, list#i as float) }
+}
+dot_blocks(au: int, av: int): float := {
+	let n = dot_count_at(au)
+	if n != dot_count_at(av) { raise "dot: the lists differ in length" }
+	var total = 0.0
+	var i = 1
+	while i <= n {
+		total = total + dot_cell_at(au + dot_cell_bytes * i) * dot_cell_at(av + dot_cell_bytes * i)
+		i = i + 1
+	}
+	total
+}
+dot(u: list, v: list) := {
+	let n = count(u)
+	if n != count(v) { raise "dot: the lists differ in length" }
+	if n >= DOT_LINEAR_FEWEST {
+		let au = dot_new_block(n)
+		let av = dot_new_block(n)
+		dot_fill_block(u, au)
+		dot_fill_block(v, av)
+		return dot_blocks(au, av)
+	}
+	var total = 0
+	for i in 1 to n { total = total + u#i * v#i }
+	total
+}
 // of two numbers their product: `x·y` of numbers multiplies (decision middot-scalars)
 dot(u: number, v: number) := u * v
 // `u ∘ v`, the dot product's canonical spelling, and `u·v` (decision dot-glyphs); `u * v` of two lists stays refused

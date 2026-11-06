@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
 # the length of each word
-length "the quick brown fox".split(" ")
+print length split "the quick brown fox"
 # Very good example to show when broadcasting does not apply and we need the special extra keyword :
-length all "the quick brown fox".split(" ")
+print length all (split "the quick brown fox")

@@ -28,6 +28,8 @@ def read_list_operator(p: Parser, left: Node, min_power: int): Node := {
 # the operator glued after the `\` or `/` at the parser's position as [written, canonical], one computing a value
 # and followed by a blank, else []
 def list_operator_at(p: Parser): list := {
+	# a longer operator of the `/` is that one: `/!`, `/=`, `/!=`
+	if char_here(p) == '/' and spelled_operator_at(p)#1 != "/" { return [] }
 	advance(p)
 	op = spelled_operator_at(p)
 	p.at -= 1

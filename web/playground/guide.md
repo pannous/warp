@@ -117,7 +117,7 @@ Text is anything in quotes: a word, a name, a sentence.
 `.length` counts the letters.
 
 ```warp => 4
-"warp".length
+"wow🤞🏽".length
 ```
 
 `$(…)` puts a value inside a text.
@@ -284,11 +284,11 @@ age = 15
 match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" }
 ```
 
-A case can list several values, or name a type.
+A case can list several values, or name a type. Here `day` is today's weekday (Monday = 1).
 
-```warp => "weekend"
+```warp
 enum Day { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
-day = Sunday
+day = [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]#weekday(clock())
 match day { Saturday | Sunday => "weekend"; other => "workday" }
 ```
 

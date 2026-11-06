@@ -15,8 +15,20 @@ class Quantity {
 	unit: text
 	scale: number
 	// a sum or a difference of temperatures counts one zero: `20°C + 5°C` is 25°C
-	+(other) := measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
-	-(other) := measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
+	# a ± / span Quantity + plain number: shift both ends by n of its unit (`1900 - 2000 cm + 1`)
+	+(other) := {
+		if not (other is Quantity) and (amount is Interval) {
+			return measured(as_interval(amount).plus(other * scale), dims, unit, scale)
+		}
+		measured(amount + summand(this, other, "add").amount - unit_zero(unit), dims, unit, scale)
+	}
+	# number - Quantity via as-promotes (dims 0, empty unit): a span in the quantitys unit, `1900 - 2000 cm`
+	-(other) := {
+		if dims == 0 and unit is empty and (other is Quantity) and other.dims != 0 {
+			return number_quantity_span(amount, other)
+		}
+		measured(amount - summand(this, other, "subtract").amount + unit_zero(unit), dims, unit, scale)
+	}
 	*(other) := if other is Quantity then measured(amount * other.amount, dims + other.dims, unit_combined(unit, other.unit, 1), scale * other.scale) else measured(amount * other, dims, unit, scale)
 	/(other) := if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_raised(unit, exponent), scale ^ exponent)
@@ -35,6 +47,16 @@ class Quantity {
 	low() := measured(as_interval(amount).low, dims, unit, scale)
 	high() := measured(as_interval(amount).high, dims, unit, scale)
 	value() := measured(as_interval(amount).value, dims, unit, scale)
+}
+
+
+# `1900 - 2000 cm`: the closed span as a Quantity whose amount is the ± interval of those ends (SI), shown in qs unit.
+# Same shape as `1950 m ± 50`, so equality and conversion reuse Quantity.equal / to / low / high.
+number_quantity_span(n: number, q: Quantity): Quantity := {
+	a = measured(n * q.scale + unit_zero(q.unit), q.dims, q.unit, q.scale)
+	lo = if q.amount < a.amount then q.amount else a.amount
+	hi = if q.amount < a.amount then a.amount else q.amount
+	measured(plus_minus((lo + hi) / 2, (hi - lo) / 2), q.dims, q.unit, q.scale)
 }
 
 // the dimensions, each a class of its own: a parameter `duration: Time` takes a duration only
@@ -70,7 +92,7 @@ measured(amount: number, dims: int, unit: text, scale: number) := {
 	Quantity(amount, dims, unit, scale)
 }
 // a plain number as the dimensionless quantity it is: an operator meeting a number and a quantity promotes the number
-// (decision as-promotes), so `2.0 / 4m` is 0.5/m and `1.0 - 4m` a DimensionError, never a plain number
+// (decision as-promotes), so `2.0 / 4m` is 0.5/m; `1.0 - 4m` is a span (card gap-span-units-compare), never a plain number
 n: number as Quantity := measured(n, 0, "", 1)
 // `6km / 2000m` of one dimension is the plain number 3; `90km / h` a speed
 quotient(above: Quantity, below: Quantity) := if above.dims == below.dims then above.amount / below.amount else measured(above.amount / below.amount, above.dims - below.dims, unit_combined(above.unit, below.unit, -1), above.scale / below.scale)
@@ -152,17 +174,19 @@ ns() := known_unit("ns")
 // starts away from zero, so `20°C` is the temperature 20 on it, not 20 times one degree
 °C = known_unit("°C")
 °F = known_unit("°F")
-rewrite $e * $u => quantity($e, $name) where $e is number and $u is symbol and $u in [°C, °F] and $name = spelled($u)
 // `2 hours in minutes`: `in` is a word of the phrase, so the run is taken whole, before `2 hours` alone (rules try
 // a phrase's runs in their order)
 rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `20°C`, `20 °C`, `68 °F`: a temperature counts from its scale's zero (quantity), never a multiple of one degree
+// `100 °C in °F`, `-40 °F as °C`: the temperature taken whole before the conversion, as `2 hours in minutes` is
+rewrite $e $u in $t => ($e $u) in $t where $e is number and $u in [°C, °F]
+rewrite $e $u as $t => ($e $u) as $t where $e is number and $u in [°C, °F]
 rewrite $e * $u => quantity($e, $name) where $e is number and $u in [°C, °F] and $name = spelled($u)
 rewrite $e $u => quantity($e, $name) where $e is number and $u in [°C, °F] and $name = spelled($u)
-rewrite $q as $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
-rewrite $q in $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
-// `[3, 4] cm`: a unit after a list measures each of its items
-rewrite $xs $u => $xs.map(item => item * $u) where $xs is list and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+rewrite $q as $u => $q.to($name) where $u in [°C, °F] and not $q in [°C, °F] and $name = spelled($u)
+rewrite $q in $u => $q.to($name) where $u in [°C, °F] and not $q in [°C, °F] and $name = spelled($u)
+// `[3, 4] cm`, `sizes() cm`: a unit after a list, written out or given by a call or a name, measures each of its items
+rewrite $xs $u => $xs.map(item => item * $u) where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and list_valued($xs, $program)
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is; a unit
 // after an expression belongs to its last amount, through comparisons, sums and assignments: `x > 1500 m` is
 // x > 1500m (wiki/unit.md, extensions/rules/rule_words.warp unit_bound). A unit is a word, never the char 's' of `f(at + 1, 's')`
@@ -323,3 +347,5 @@ sleep(duration) := slept((if duration is Time then duration.amount else duration
 // quantity's converts to it: `5m ± 1cm` is 5.00 ± 0.01 m (notes/plus_minus.md P220)
 infix operator ±(q: Quantity, spread: number) := measured(plus_minus(q.amount, spread * q.scale), q.dims, q.unit, q.scale)
 infix operator ±(q: Quantity, spread: Quantity) := measured(plus_minus(q.amount, same_quantity(q, spread, "spread").amount), q.dims, q.unit, q.scale)
+# `1900 - 2000 cm == 1950 m ± 50`: ± binds the value on the right of ==, and the span on the left stays one quantity
+rewrite $a == $b ± $c => $a == ($b ± $c) where raw

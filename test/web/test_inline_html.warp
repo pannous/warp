@@ -1,0 +1,9 @@
+# Inline HTML where an expression starts reads as warp markup (card jsx, decision jsx, notes/inline_html.md)
+is! 'use markup; to_html(<p class="x">Hi</p>)' '<p class="x">Hi</p>'
+is! 'use markup; n = 2; to_html(<b>n is {n}</b>)' '<b>n is 2</b>'
+is! 'use markup; to_html(<ul><li>a</li><li>b</li></ul>)' '<ul><li>a</li><li>b</li></ul>'
+is! 'use markup; page = <div>\n  one\n  two\n</div>\nto_html(page)' '<div>one two</div>'
+is! 'b = 2; 1 <b' yes
+is! 'use web; n = 0; page = <button onClick={() => n += 1}>add</button>; render page; click "add"; n' 1
+# warp format writes inline HTML as the markup it reads as
+is! 'use "../../lib/fix/fix.warp"; fixed("p = <p>Hi {name}</p>", layout_rules, no)#1' 'p = p{ "Hi ", (name) }\n'
