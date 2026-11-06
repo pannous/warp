@@ -30,7 +30,7 @@ collection_position(t: text, part): int from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
 field_with(object, name, value): same as object from warp
-instance_copy(x, shallow): same as x from warp
+instance_copy(x): same as x from warp
 wasi_environment(): text from warp
 
 // The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and

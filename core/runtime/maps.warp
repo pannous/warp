@@ -246,7 +246,7 @@ field_with(m: Node, name: text, value: Node): Node := {
 # class value makes one (`type(m)()`, emitter closures.warp dispatcher_code): the class value of m's descriptor
 instance_copy(m: Node): Node := {
 	descriptor = entry_key(m)
-	maker = with_kind(new_key(key_name(descriptor), descriptor), Marked.TypeValue)
+	maker = keyed(Marked.TypeValue, unboxed_text(descriptor), descriptor)
 	made = maker()
 	entries = unboxed_list(instance_entries(m))
 	for i in 1 to #entries { field_with(made, key_name(entries#i), key_value(entries#i)) }
