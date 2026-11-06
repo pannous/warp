@@ -37,6 +37,9 @@ state=$installed_state
 [ -n "$slow" ] && { TREE=$SLOW_TREE; state=$SLOW_TREE/data/integrate; }
 say() { echo "after-push: $(date '+%H:%M:%S') $*"; }
 main_tip() { git -C "$TREE" ls-remote origin refs/heads/main | cut -f1; }
+# origin's main fetched, only its ref: a concurrent push of another branch can't fail the fetch on that branch's ref
+# lock ("cannot lock ref … expected old tip", card after-push); a race on main itself is fetched once more a moment later
+fetched_main() { git -C "$TREE" fetch -q origin main || { sleep 5; git -C "$TREE" fetch -q origin main; }; }
 handled() { cat "$state/handled" 2>/dev/null; }
 
 [ -d "$TREE" ] || cowtree add --detach "$TREE" origin/main >/dev/null || exit 1
@@ -295,16 +298,16 @@ slow_tiers() {
 SLOW_PAUSE=$HOME/.cache/warp/slow-tiers-paused-until
 if [ -n "$slow" ]; then
 	[ "$(cat "$SLOW_PAUSE" 2>/dev/null || echo 0)" -gt "$(date +%s)" ] && { say "slow tiers paused until $(date -r "$(cat "$SLOW_PAUSE")" +%H:%M)"; exit 0; }
-	git -C "$TREE" fetch -q origin || exit 1
+	fetched_main || exit 1
 	installed=$(cat "$installed_state/watched")
 	[ "$installed" = "$(cat "$state/tested" 2>/dev/null)" ] || slow_tiers "$installed"
 	exit 0
 fi
 
-git -C "$TREE" fetch -q origin || exit 1
+fetched_main || exit 1
 watch "$(git -C "$TREE" rev-parse "${1:-origin/main}")"
 [ $# -gt 0 ] && exit 0
 while newest=$(main_tip) && [ "$newest" != "$(handled)" ]; do
 	rerun_if_changed
-	git -C "$TREE" fetch -q origin && watch "$newest"
+	fetched_main && watch "$newest"
 done
