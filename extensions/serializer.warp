@@ -83,7 +83,7 @@ list_text(view: View): text := {
 // so `print (-42)` does not read back as print - 42
 spaced_item(items: list, at: int, bracket: text, separator: text): text := {
 	written = item_text(items#at, bracket)
-	if separator == " " and at > 1 and prefix_operators.any(op => written.starts_with(op)) then "(" + written + ")" else written
+	if separator == " " and at > 1 and prefix_operators.any(op => not is_word_operator(op) and written.starts_with(op)) then "(" + written + ")" else written
 }
 // a list item: one character in single quotes, a one-character text too, as the runtime prints it (chars-codepoints);
 // in code without brackets in double quotes, as the hint `fail "?"` writes it
