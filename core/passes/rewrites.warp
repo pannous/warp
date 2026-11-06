@@ -826,7 +826,7 @@ needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
 needed_words(rule: Rule): list := {
 	word = needed_word(rule)
 	if word != "" { return [word] }
-	given = rule.conditions.filter(is_computed_binding).flat_map(binding => items_of(value_of(binding))[1 ..].filter(argument => argument is symbol and rule_hole(argument) == ø).map(name_of))
+	given = rule.conditions.filter(condition => is_computed_binding(condition)).flat_map(binding => items_of(value_of(binding))[1 ..].filter(argument => argument is symbol and rule_hole(argument) == ø).map(argument => name_of(argument)))
 	if #given > 0 { return given }
 	listed = rule.conditions.map(membership).filter(listing => listing != ø).flat_map(listing => listing.words)
 	if #listed > 0 then listed else rule.conditions.map(class_tested).filter(name => name != ø).flat_map(instance_words)
