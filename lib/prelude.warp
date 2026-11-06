@@ -184,6 +184,8 @@ alias size => count
 alias len => count
 alias length => count
 alias sorted => sort
+alias squared => square
+alias cubed => cube
 alias clone => copy
 alias ordinal => ord
 alias codepoint => ord
@@ -295,6 +297,9 @@ infix operator ↓(x: number, b: number) := log(x, b)
 log(x: number, base: number): float := log(x) / log(base)
 // the natural logarithm, a standard word without `use math`, as sin is (math's alias ln => natural_log maps it over lists)
 ln(x: number): float := log(x)
+// `3 squared`, `2 cubed` (suffix words, decision postfix-words)
+square(x: number): number := x * x
+cube(x: number): number := x * x * x
 // ∜x (lib/math.warp prefix operator)
 fourth_root(x) := sqrt(sqrt(x))
 fourth_root(x: float): float := sqrt(sqrt(x))
