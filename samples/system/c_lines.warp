@@ -1,11 +1,12 @@
 #!/usr/bin/env warp
 # lib/c.warp's sorted C surface (`use c`), plus a function it has no line of declared in the program:
 # `name(parameter: type…): result from 'library'`, the C function's own shape.
+# Process ids as run-stable facts (decision c-lines-stable), not raw ids that differ per run and host.
 getppid(): i32 from 'c'
 use c
 
 setenv("GREETING", "hi", 1)
-print "process", getpid()
-print "parent", getppid()
+print "process ok", getpid() > 0
+print "parent distinct", getpid() != getppid()
 print "GREETING is", getenv("GREETING")
 print "errno 2 is", strerror(2)

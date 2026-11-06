@@ -195,10 +195,17 @@ const OWN_LIBRARY = /\blib(warp_\w+)\.(dylib|so)$/;
 const PAGE_LIBRARY_HANDLE = 1;
 
 // the C functions of stdio a program reaches without a file (lib/sound.warp said: fdopen(2, "w"), fputs, fflush): a
-// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv of the run's
-// environment (driver.js programEnvironment), NULL for a name it lacks
+// FILE * is its descriptor, what it puts goes to the run's output; dlopen of warp's own libraries; getenv/setenv/unsetenv of
+// the run's environment (driver.js programEnvironment), NULL for a name it lacks; getpid/getppid and strerror
+const withoutVariable = (environment, name) => environment.filter(entry => !entry.startsWith(`${name}=`));
 const pageStdio = (holder, hooks) => ({
 	getenv: name => environmentValue(holder.environment ?? ENVIRONMENT, name),
+	setenv: (name, value, overwrite) => { const environment = holder.environment ?? ENVIRONMENT; if (environmentValue(environment, name) !== null && !overwrite) return 0; holder.environment = [...withoutVariable(environment, name), `${name}=${value}`]; return 0; },
+	unsetenv: name => (holder.environment = withoutVariable(holder.environment ?? ENVIRONMENT, name), 0),
+	// process ids: positive and distinct, as natively; samples/system/c_lines will print run-stable facts (decision c-lines-stable)
+	getpid: () => 1,
+	getppid: () => 2,
+	strerror: code => ({ 2: "No such file or directory" }[code] ?? `Unknown error ${code}`),
 	fdopen: descriptor => descriptor,
 	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
 	fflush: () => 0,
