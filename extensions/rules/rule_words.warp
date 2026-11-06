@@ -442,6 +442,15 @@ signature_text(name: Node, program: Node): any := {
 	if returned == ø { return ø }
 	"(" + function_parameters_written(definition).map(parameter_shown).join(", ") + ") -> " + returned
 }
+# `type(sqrt)` of a library word the program neither defines nor binds: "builtin: (x:number) -> number", its first typed
+# line (`sqrt(x: number): number from warp`, lib/math.warp); ø for any other name (card function-signatures)
+builtin_type(name: Node, program: Node): any := {
+	word = spelled(name)
+	if function_definition(name, program) != ø or word in names_bound_in_kept(program) or not word_lines().has(word) { return ø }
+	signature = word_lines()[word]#1.signature
+	shown = signature.parameters.map(p => (if p.rest then p.name + "..." else p.name) + (if p.type_name == "" then "" else ":" + p.type_name))
+	"builtin: (" + shown.join(", ") + ") -> " + (if signature.result == "" then "any" else signature.result)
+}
 # `int` of `twice(x) := x*2`: the kind the analyzer infers for the function's result
 return_kind(name: Node, program: Node): any := {
 	definition = function_definition(name, program)
@@ -699,6 +708,7 @@ rule_words = {
 	awaited_operand: awaited_operand,
 	bare_fields_read: bare_fields_read,
 	body_of: body_of,
+	builtin_type: builtin_type,
 	change_listens: change_listens,
 	class_help: class_help,
 	compound_unit: compound_unit,
