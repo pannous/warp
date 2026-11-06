@@ -1,0 +1,93 @@
+# Open words (card linked-cross-module-overloads, decision open-words): a linked module calls its own words directly,
+# so a variant another module or the program adds for its class, units' milliseconds_of(duration: Quantity) beside
+# time's milliseconds_of(duration: any), would never reach time's Instant.plus. Each word a module writes with a
+# parameter open to other classes (untyped, any, a class) and calls itself is called through a slot, its global
+# open·<module>·<word>, empty until a program fills it: `if open·time·milliseconds_of == ø then milliseconds_of(d) else
+# open·time·milliseconds_of(d)`, after arity_overloads named the variant each call takes. A program linking the module fills the slot with its own view of the word,
+# `open·time·milliseconds_of = (a) => milliseconds_of(a)`, before the modules' words are reached, only when it
+# holds a variant typed for a class, its own or another module's: an untyped or same-typed definition of the program
+# shadows the word for its own calls only
+
+OPEN_PREFIX = "open·"
+
+# a module being built: its calls of its open words through their slots
+open_calls(program: Node): Node := if module_written != "" then slotted(program, module_written) else program
+# a program linking modules: the slots it extends filled
+open_slots(program: Node): Node := if module_written == "" and #module.linked_images > 0 then with_slots_filled(program) else program
+
+# --- a module being built ---
+slotted(program: Node, name: text): Node := {
+	open = opened_words(program, definition_slices(library_text(name + module_extension)).map(slice => slice#1))
+	if #open == 0 { return program }
+	called = {}
+	rewritten = children(program, n => slotted_calls(n, open, name, called))
+	if #called == 0 { return rewritten }
+	slots = called.keys.map(word => Key(symbol("global"), Op.Colon, Key(symbol(slot_name(name, word)), Op.Assign, Node.Empty)))
+	separated(bracketed(slots + statements_in(rewritten), ""), ";")
+}
+slot_name(module_name: text, word: text): text := OPEN_PREFIX + module_name + "·" + word
+# name → its parameter count, for each word the module writes once, a parameter of it open to other classes
+opened_words(program: Node, written: list): map := {
+	counts = {}
+	for statement in statements_in(program) {
+		call = definition_call(statement)
+		# (its own definitions: another module's, declared only, have no body)
+		if call != ø and call#1 is symbol and name_of(call#1) in written and value_of(statement) != Node.Empty {
+			word = name_of(call#1)
+			counts[word] = if counts.has(word) then -1 else (if parameter_types(call).any(is_open_type) then #call - 1 else -1)
+		}
+	}
+	without_keys(counts, counts.keys.filter(word => counts[word] < 0))
+}
+# untyped, any, or a class (a capitalized name, as a class is written)
+is_open_type(type: text): bool := type == any_word or is_capitalized(type)
+slotted_calls(n: Node, open: map, name: text, called: map): Node := {
+	# (a definition's head names its parameters, no call)
+	if definition_call(n) != ø { return Key(key_of(n), Op.Define, slotted_calls(value_of(n), open, name, called)) }
+	n = children(n, x => slotted_calls(x, open, name, called))
+	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 is symbol) { return n }
+	word = name_of(n#1)
+	if not open.has(word) or #n - 1 != open[word] { return n }
+	called[word] = yes
+	# (an expression, no block: a call stands as an argument, `f(g(x))`, as a lambda's body, an operand)
+	slot = slot_name(name, word)
+	chosen(Key(symbol(slot), Op.Eq, Node.Empty), n, call_of(slot, items_of(n)[1 ..]))
+}
+
+# --- a program linking modules ---
+# each linked module's slot of a word a variant typed for a class extends, another linked module's or the program's
+# own, filled with the program's view of the word; before the modules' definitions are reached (passes.warp
+# with_used), so the fill's call brings every variant of the word
+with_slots_filled(program: Node): Node := {
+	fills = []
+	for image in module.linked_images {
+		for entry in image.globals {
+			# (held as the emitter holds a program's global, program·open·time·milliseconds_of)
+			prefix = program_global_prefix + OPEN_PREFIX + image.name + "·"
+			if entry#1.starts_with(prefix) {
+				word = entry#1[#prefix ..]
+				count = extended_count(program, word, image.name)
+				if count != ø { fills += [Key(symbol(slot_name(image.name, word)), Op.Assign, filled_lambda(word, count))] }
+			}
+		}
+	}
+	if #fills == 0 then program else separated(bracketed(fills + statements_in(program), ""), ";")
+}
+# `(a1, a2) => word(a1, a2)`
+filled_lambda(word: text, count: int): Node := {
+	parameters = range_list(count).map(i => symbol(OPEN_PREFIX + (i + 1)))
+	Key(List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, call_of(word, parameters))
+}
+# how many values a variant of the word typed for a class takes, the program's own or another linked module's than
+# the slot's; ø when none is
+extended_count(program: Node, word: text, owner: text): int? := {
+	definitions = statements_in(program)
+	for image in module.linked_images.filter(image => image.name != owner) {
+		for slice in linked_signature(image.name).slices.filter(slice => slice#1 == word) { definitions += statements_in(unpack(slice#3)) }
+	}
+	for statement in definitions {
+		call = definition_call(statement)
+		if call != ø and call#1 is symbol and name_of(call#1) == word and parameter_types(call).any(type => type != any_word and is_open_type(type)) { return #call - 1 }
+	}
+	ø
+}

@@ -357,7 +357,7 @@ def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
 	module.linked_own_names = own_names
 	module.linked_words = {}
-	linked_extended = []
+	linked_extended = {}
 	defined_in = {}
 	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
 	# (the program's own word beats a used module's, which beats the prelude's of as many values, as with_own_words sets
@@ -371,17 +371,17 @@ def link_libraries(images: list, own_names: list) {
 				module.linked_words[word.name] = known + [word]
 				if image.name != PRELUDE_MODULE and written.has(word.name) {
 					arity = word.name + "/" + #word.kinds
-					for other in (defined_in.get(arity) ?? []).filter(other => other != image.name) { linked_extended += [word.name + " (" + other + " and " + image.name + ")"] }
+					if (defined_in.get(arity) ?? []).any(other => other != image.name) { linked_extended[word.name] = yes }
 					defined_in[arity] = (defined_in.get(arity) ?? []) + [image.name]
 				}
 			}
 		}
 	}
 }
-# the words two linked modules wrote of as many values (whose kinds a signature holds alike, any and a class), which
-# a program compiles from their sources, saying so: a module calls its own variant directly, never one another module
-# adds (Instant's plus calling units' milliseconds_of(Quantity)); card linked-cross-module-overloads binds them late
-global linked_extended = []
+# the words two linked modules wrote of as many values (whose kinds a signature holds alike, any and a class): the
+# program calls each module's as its typed variant, and a module's own calls reach the other's through its slot
+# (passes/open_words.warp, card linked-cross-module-overloads)
+global linked_extended = {}
 # the words a linked module wrote, by name: its definitions, never what its compile generated (each class's
 # +·operator dispatcher, its _start)
 written_words(name: text): map := {
@@ -464,7 +464,6 @@ def behind_libraries() {
 # the module's class structs the program's of their names, which it declares alike (its classes from the module's
 # text), else the program compiles the module from its source
 def bind_library_words() {
-	if #linked_extended > 0 { link_refusal("two linked modules define " + linked_extended.join(", ") + " of as many values: a module's own call would miss the other's variant (card linked-cross-module-overloads)") }
 	# (in link_libraries' order: two variants alike, the prelude's clear(x) and draw's clear(color), compare equal)
 	for image in by_precedence(module.linked_images) {
 		for entry in image.classes {
@@ -476,13 +475,27 @@ def bind_library_words() {
 		for k in 0..<#image.functions {
 			word = image.functions[k]
 			f = module.functions.get(word.name)
-			if f != ø and f.kinds == ø and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word {
-				f.index = linked_index(image, k)
-				f.kinds = word.kinds
-				f.result = word.result
-			}
+			if f != ø and f.kinds == ø and linkable(image, word) and linked_variant(word.name, #f.signature.parameters) == word { bound_to(f, image, k) }
+			# (a word two modules write: the program's typed variant of it, arity_overloads' milliseconds_of·Quantity)
+			variant = if linked_extended.has(word.name) then module.functions.get(typed_variant_written(image.name, word)) else ø
+			if variant != ø and variant.kinds == ø { bound_to(variant, image, k) }
 		}
 	}
+}
+def bound_to(f: Function, image: LibraryImage, k: int) {
+	f.index = linked_index(image, k)
+	f.kinds = image.functions[k].kinds
+	f.result = image.functions[k].result
+}
+# the typed variant a program names a module's word by, of its written parameter types: `milliseconds_of·Quantity`
+typed_variant_written(module_name: text, word: Function): text := {
+	for slice in linked_signature(module_name).slices.filter(slice => slice#1 == word.name) {
+		for statement in statements_in(unpack(slice#3)) {
+			call = definition_call(statement)
+			if call != ø and #call - 1 == #word.kinds { return typed_variant(word.name, parameter_types(call)) }
+		}
+	}
+	word.name
 }
 # the program's index of a linked module's k-th function
 def linked_index(image: LibraryImage, k: int): int := #module.imports + image.base#1 + k - dropped()
