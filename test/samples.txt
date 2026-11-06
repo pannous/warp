@@ -250,7 +250,7 @@ FAIL samples/servers/route_headers.warp: hint: status is router's fix: use route
 FAIL samples/servers/worker.warp: warp: Out-of-bounds access in linear memory or a table, or call stack exhausted while running samples/servers/worker.warp
 FAIL samples/storage/orm_units.warp: outside the core: the operator as on int
 FAIL samples/wasm/import_compiled.warp: no module, library or package named shapes: no shapes.warp beside the program or in lib/; a package is used by its path, use "…"
-FAIL samples/wasm/wasm_interop.warp: outside the core: the unknown name def
+ok   samples/wasm/wasm_interop.warp
 FAIL samples/web/component_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
 FAIL samples/web/computed_tags.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
 FAIL samples/web/counter.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)

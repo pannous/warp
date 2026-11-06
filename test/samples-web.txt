@@ -248,7 +248,7 @@ ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 FAIL samples/wasm/component_reflection.warp
 FAIL samples/wasm/import_compiled.warp
-FAIL samples/wasm/wasm_interop.warp
+ok   samples/wasm/wasm_interop.warp
 FAIL samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 FAIL samples/web/computed_tags.warp
