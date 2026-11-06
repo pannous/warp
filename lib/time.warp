@@ -1,4 +1,6 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
+// its durations are Durations, lib/units' Time quantities converting to them
+use units
 
 // `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it)
 now(): Instant := Instant(wall_clock_ms())
@@ -17,6 +19,7 @@ wall_clock_ms(): int := {
 // its quantities of time (`Instant(0) + 2 seconds`), one of another dimension a DimensionError (card instant-typed-duration)
 class Duration { ms: number }
 n: number as Duration := Duration(n)
+q: Quantity as Duration := Duration(q.in("ms"))
 
 // a point in time: milliseconds since 1970-01-01T00:00:00Z. Everything on it is plain warp: ordering through
 // compare (<, <=, >, >=), equality structural, the difference of two instants in milliseconds, a duration in

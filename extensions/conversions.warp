@@ -14,9 +14,6 @@ converted_value = HiddenWord.ConvertedValue as text
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
 names_type(n: Node, scope: map): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
 
-# a class's name as written, declared or not: units' `q: Quantity as Duration` names lib/time's Duration, which a program
-# without lib/time lacks and so leaves the conversion out
-names_class(n: Node): bool := n is symbol and is_capitalized(name_of(n))
 # [source, target, body, the body's name of the value] of `A as B := body` with A and B types, of `n: A as B := body`
 # naming the value, also of `text(p: A) := body`, else ø
 conversion_of(n: Node, scope: map): list? := {
@@ -24,7 +21,7 @@ conversion_of(n: Node, scope: map): list? := {
 	head = key_of(n)
 	if is_key(head, Op.Colon) and key_of(head) is symbol and is_key(value_of(head), Op.As) {
 		types = value_of(head)
-		return if names_type(key_of(types), scope) and (names_type(value_of(types), scope) or names_class(value_of(types))) then [name_of(key_of(types)), name_of(value_of(types)), value_of(n), name_of(key_of(head))] else ø
+		return if names_type(key_of(types), scope) and names_type(value_of(types), scope) then [name_of(key_of(types)), name_of(value_of(types)), value_of(n), name_of(key_of(head))] else ø
 	}
 	if is_call(head) and #head == 2 and head#1 == symbol("text") and is_key(head#2, Op.Colon) and key_of(head#2) is symbol {
 		return if names_type(value_of(head#2), scope) then [name_of(value_of(head#2)), "text", value_of(n), name_of(key_of(head#2))] else ø
@@ -77,7 +74,7 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 # Typed parameters convert (decision as-promotes, card argument-parameter-conversion): a call's argument meeting a
 # parameter typed T the program converts to goes through `to·T`, so `f(2)` of `f(q: Quantity)` passes 2 as Quantity,
 # and `Instant(0) + 2 seconds` a Duration where time's plus takes one; on the caller's side, which sees every module's
-# conversions (units' Quantity as Duration beside time's number as Duration), never the callee's. A union converts to
+# conversions (a program's own beside lib/time's Quantity as Duration), never the callee's. A union converts to
 # the member the value has a conversion to: Instant.minus(other: Instant or Duration) takes an Instant as it is and
 # 2 seconds as a Duration (card instant-typed-duration)
 argument_conversion_name(type: text): text := "to·" + union_members(type).join("_or_")
@@ -130,14 +127,13 @@ conversions(program: Node): Node := {
 	targets = {}
 	order = []
 	kept = []
-	# (a conversion to a class the program lacks, units' Quantity as Duration without lib/time, is left out)
 	for statement in statements_in(program) {
 		conversion = conversion_of(statement, scope)
 		if conversion == ø {
 			kept += [statement]
 		} else if conversion#1 == conversion#2 {
 			kept += [diagnose(call_of("own_type_conversion", [conversion#2]), statement)]
-		} else if names_type(symbol(conversion#2), scope) {
+		} else {
 			if not targets.has(conversion#2) {
 				targets[conversion#2] = []
 				order += [conversion#2]
