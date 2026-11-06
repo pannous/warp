@@ -59,3 +59,11 @@ def counter(start) {
 		return count
 	}
 }
+
+print greet("Ann")      # Hello, Ann!
+print factorial(5)      # 120
+print result            # 50: 9 + 16 + 25
+print increment(41)     # 42
+next = counter(0)
+next()
+print next()            # 2
