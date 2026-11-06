@@ -1,0 +1,4 @@
+# `$who` is the value of the page's field with the id who (card who-handler-read, decision page-ids)
+is! 'use web; greeting = "-"; page = div{ input{ id: "who" } button{ on click { greeting = "Hello " + $who }, "Greet" } }; render page; $who = "Ann"; click "Greet"; greeting' "Hello Ann"
+is! 'use web; page = div{ input{ id: "who" } }; $who = "Ann"; render page' '<div><input id="who" value="Ann"></div>'
+is! 'use web; $who' ""

@@ -4,17 +4,22 @@
 use "scan.warp"
 use "layout.warp"
 use "rewrites.warp"
+# inline HTML written as the warp markup it reads as (decision jsx), as the compiler reads it
+use "../compiler/parsing/lexer.warp"
+use "../extensions/inline_html/markup.warp"
 
 final_newline_rule = "final newline"
+inline_html_rule = "inline html"
 
 # the code fixed and what changed: [text, changes], each change "<line> <rule>", the line in the code as given; by
 # the layout rules given, after the hints' replacements when rewriting (warp format lays out only)
 fixed(code: text, rules: list = layout_rules, rewriting: bool = yes): list := {
-	lines = code.split("\n")
+	markup = markup_of_inline_html(code, no)
+	changes = markup#3.map(found => "" + found#2#1 + " " + inline_html_rule)
+	lines = markup#1.split("\n")
 	if code.ends_with("\n") { lines = lines[0 ..< #lines - 1] }
 	numbers = []
 	for k in 0 ..< #lines { numbers += [k + 1] }
-	changes = []
 	hints = if rewriting then hints_of(scanned(lines)) else []
 	for hint in hints { changes += ["" + hint.line_number + " " + hint.rule] }
 	lines = with_hints_applied(lines, hints)
