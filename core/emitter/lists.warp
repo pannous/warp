@@ -28,8 +28,10 @@ def element_assignment(body: Body, list: TypedCode, index: TypedCode, value: Typ
 def element(body: Body, list: TypedCode, index: TypedCode): TypedCode {
 	if list.kind == ValueKind.Node { return runtime_call("node_at", [list, index]) }
 	if list.kind != ValueKind.List { return refuse("an element of a " + kind_spelling(list.kind)) }
-	TypedCode(ValueKind.Node, checked_item(body, list, index) + gc_code(gc_ops.array_get, [gc_type(gc.items)]))
+	TypedCode(ValueKind.Node, item_read(checked_item(body, list, index)))
 }
+# the item of an $items array at an index, both on the stack: an anyref, a $Node but for a closure's entry (closure_item)
+def item_read(array_and_index: list): list { entered_node(array_and_index + gc_code(gc_ops.array_get, [gc_type(gc.items)])) }
 # a list's items and the 0-based place of its index-th item; an index outside 1…count fails in index_out_of_range_of
 def checked_item(body: Body, list: TypedCode, index: TypedCode): list {
 	held = uleb(fresh_local(body, ValueKind.List))

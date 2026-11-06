@@ -143,8 +143,9 @@ rewrite $q is $d => measures($q, $name) where $d is symbol and $d in [length, ar
 named_dimensions() := {"length": length_dimension, "area": 2 * length_dimension, "volume": 3 * length_dimension, "mass": mass_dimension, "duration": duration_dimension, "time": duration_dimension, "temperature": temperature_dimension, "speed": length_dimension - duration_dimension, "frequency": 0 - duration_dimension}
 measures(q: any, dimension: text) := q is Quantity and q.dims == named_dimensions()[dimension]
 // `unit furlong := 201.168m`: a program's own unit, the quantity of one of it shown by its name (`1km as furlong` waits
-// for card module-rule-unnamed), `quantity(1, "furlong")` (decision unit-definitions)
-rewrite (unit $name := $value $u) => (unit $name := ($value $u))
+// for card module-rule-unnamed), `quantity(1, "furlong")` (decision unit-definitions); `raw`: the spaced amount
+// `201.168 m`, whose unit the parser leaves after the definition, joins its value before the definition is rewritten
+rewrite (unit $name := $value $u) => (unit $name := ($value $u)) where raw
 rewrite (unit $name := $value) => $name = defined_unit($written, $value) where $name is symbol and $written = spelled($name)
 global program_units = {}
 defined_unit(name: text, one: Quantity) := {

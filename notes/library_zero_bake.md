@@ -3,6 +3,30 @@
 The goal: the core binary bakes the library zero times. No LIBRARY_FILES, no LIBRARY_PARSES. Each module publishes
 its signatures, and the compiler loads it as compiled wasm when a program uses it.
 
+## Final state (main c25c72d181, 2026-11-06; card library-removal-core done)
+
+**Baked into warp.wasm** (2.15 MB, from 5.05 MB): SUGAR_RULES, the packed rules of extensions/sugar by file with each
+file's hash (rewrites.warp; parsing them each compile was ~0.3 s), and the data files `module_source("…")` reads at the
+compiler's own build: lib/entities.tsv, lib/modes.data, core/analysis/{errors,warnings,hints}.data. Everything else
+of lib/ is read from disk once a compile (library.warp library_text) or linked as compiled wasm: every program links
+modules/prelude.wasm (171 KB, 222 words) and the modules it uses, each declared from its warp.signature.
+**Trusted, hashed only under WARP_LIB:** modules/index.tsv (its `slice` spans of the prelude and the type modules) and
+SUGAR_RULES, as rule_needs_by_module trusts the index; a linked module's text is checked by its length otherwise.
+**Numbers** (instructions retired, paired, against main before each landing): L4 hello −1.1 %, use units −4.4 %,
+self compile −2.0 %; step 2 (prelude linked) hello +0.8 %, use units −0.5 %, numeric loop −3.9 %, self compile
+−0.15 %; on the way, for every linked program, 2d.1 (lazy host words) hello −4.3 % and 2d.2 (no whole module first,
+warp.fingerprint) use units −18 %.
+**Measured, not done:**
+- signature-sha256 (own card): source_hash, djb2 in warp, ~1.3 K instructions a byte, is ~1 % of hello without
+  WARP_LIB but 5.3 % of `use units` under WARP_LIB (every agent and test run of a worktree; built_of_text 3.2 %).
+  The host's sha256 would make it free, but c_bytes reads a text through shown_at, whose scratch refuses long
+  texts ("a host word's argument too long to show", driver.warp shown_packed): it needs a text passed by its bytes
+  (text_address), not shown.
+- SUGAR_RULES unbaked: parsing extensions/sugar each compile costs ~0.3 s; a prebuilt rules file beside the modules
+  (like warp.signature's packed rules) would drop the last bake.
+- pixel-channel-sums (own card): the prelude compiled from source into a program summed pixel_channel differently
+  (25500128) from a typed or linked one (25500130, IEEE); linked, programs now give the latter.
+
 ## Assessment (main c0a082, 2026-11-05)
 
 warp.wasm is 5.05 MB, and 3.04 MB of it (60%) is baked library tables:
@@ -196,6 +220,13 @@ The emitter must guarantee these for L3–L5:
   seed-compiles).
 - L3: warp.signature goes right after the wasm header (a custom section may be first), so reading a signature costs
   a few KB, not the whole module.
+- L3 landed (core/passes/signature.warp): both forms of a module carry warp.signature, pack() of {source hash, uses,
+  slices [name, head line, parse], rules, foreign}; unpacked, never parsed. linked_libraries links a module when the
+  hash is its file's, else warns one line why (no signature, or lib/<m>.warp differs) and compiles it from source; the
+  hash test replaced L5c's same_but_comments. A linked module's words reach the program as its signature's parses
+  (prelude_words.warp with_reached), its rules from the signature: no text of it is read. `warp signature <m>` shows
+  one as warp text. The hash moves to sha256 once the host takes long texts (card signature-sha256). With `use units`
+  the compile went from 19.6 G to 19.3 G instructions.
 - Measured before L3 (2026-11-05): the prelude's untyped parameters compiled as nodes, as a linked prelude would
   take them (a switch in emitter/functions.warp call_values, never committed; data/boxed-measurement.patch of the
   worktree). The emitter types a function by its first call's argument kinds (call_values), not the analyzer's slots.
@@ -206,3 +237,34 @@ The emitter must guarantee these for L3–L5:
     about +20% of its run, the compile being ~5.1 G).
   So L4 stays small: typed overloads only for the prelude's numeric words a hot loop calls (fourth_root, round_to,
   pixel_channel, is_digit and the like, random_*, mean); the compiler itself doesn't feel it.
+- L4 (L4b; L4a, typed overloads, left out: the prelude is reached from source, typed by its calls, so they buy
+  nothing until it links): the compiler bakes no library. lib/ is read from disk, once a file a compile (library.warp
+  library_text, file_source); LIBRARY_FILES/PARSES/SLICES/RULES, their readers and the comment blanking are gone.
+  warp.wasm 4.05 MB → 2.14 MB. What a bake had hidden, each found by scripts/profile.sh (paired runs, own and
+  callee time) and moved, never baked back but for one:
+  - the sugar's rules, parsed every compile (~0.3 s): the one bake left, SUGAR_RULES (rewrites.warp), by file with
+    its source hash; `baked-current`/`rebake` keep it current.
+  - cutting the prelude and the type modules into definitions (~70 ms): their spans are the index's section `slice`
+    (prelude_words.warp spans_of), used while the text is the file the index was written of.
+  - a used module parsed whole for its `use` lines; the prelude's statements all split for them; a used module cut
+    for the words it defines (implicit uses): use lines read off the lines a use may start (parser.warp
+    use_candidates), a linked module's uses off its signature (modules_used_by), its words off the index.
+  - parses of the prelude's reached definitions taken from its signature cost more than parsing the few reached.
+  Trust: the index and the sugar bake are trusted as rule_needs_by_module trusts the index, hashed only under
+  WARP_LIB (a lib/ edited since the build); djb2 in warp is ~1.3 K instructions a byte (by byte_at; 3.3 K over
+  source.bytes), so the host's sha256 (card signature-sha256) would make the hash free everywhere.
+  Paired against main (instructions retired): hello 5.20 G → 5.14 G (−1.1%; under WARP_LIB 5.15 → 5.03), `use units`
+  17.82 G → 17.03 G (−4.4%); compiler.warp compiling itself 2577.6 G → 2526.3 G (−2.0%).
+- L4 step 2 (2026-11-06), the prelude linked: 2a a signature's definitions packed one by one; 2b prelude.wasm
+  exports every word (built as `use prelude`, given the prelude, never reaching it twice; the dead kind_* words gone);
+  2d every program links it (linked_libraries names it first, with_used declares what it reaches from its signature),
+  with what that exposed fixed for every linked module: 2d.1 a host word the driver doesn't answer finds its library
+  at its first call (hello opened libwarp_gpu and libwarp_window every run); 2d.2 a program linked apart never builds
+  the whole module first, runtime.wasm carries warp.fingerprint (use units −18 %); 2d.3 a linked module's globals are
+  imported, never brought in and re-run (linked_needs, pre-L5c); link precedence program > used module > prelude
+  (link_libraries and bind_library_words, `by_precedence`); only a refusal marked by link_refusal retries from source.
+  2c float/codepoint overloads of the hot numeric words. Against main before step 2: hello +0.8 %, use units −0.5 %,
+  the numeric loop −3.9 % (+6 % without 2c), compiler.warp compiling itself −0.15 %; prelude.wasm 171 KB, 222 words.
+- L5 (wasm-module-linking): points 1 (closure funcref), 3 (Instance), 2 (class descriptors) landed; L5c programs and
+  modules import their modules' words (notes/runtime_linking.md "Load-time linking"); L5d the playground links them
+  too; L5e the splice path and .splice.wasm are gone, a module's image lives in its warp.signature.

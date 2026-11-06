@@ -49,9 +49,11 @@ closure_entry_code(f: Function): any := {
 	f.code = boxed(call_values(module.functions[made#1], values))
 }
 # the item i of a closure's list: 0 its entry, then its captured values
-def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)])) }
+# a closure's list item i, an anyref: its entry (0) a $Closure, its captured values (from 1) nodes
+def closure_slot(closure: list, i: int): list { payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)]) }
+def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, entered_node(closure_slot(closure, i))) }
 # a field of a closure's entry: 0 the reference it calls, 1 its text
-def entry_field(closure: list, field: int): list { closure_item(closure, 0).code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.closure)]) + gc_code(gc_ops.struct_get, [gc_type(gc.closure), field]) }
+def entry_field(closure: list, field: int): list { closure_slot(closure, 0) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.closure)]) + gc_code(gc_ops.struct_get, [gc_type(gc.closure), field]) }
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
 def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
@@ -141,18 +143,18 @@ dispatcher_code(f: Function): any := {
 	arguments = parameters_code(#f.kinds)
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
 	# a type value's value is its class's descriptor, ø of a type that is no class
-	type_value = as_node(closure) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(Marked.TypeValue) + [op.i64_eq]
-	described = as_node(closure) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 2])
+	type_value = closure + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(Marked.TypeValue) + [op.i64_eq]
+	described = closure + gc_code(gc_ops.struct_get, [gc_type(gc.node), 2])
 	construct = described + gc_code(gc_ops.ref_cast, [gc_type(gc.class)]) + gc_code(gc_ops.struct_get, [gc_type(gc.class), slot_field("construct")])
 	values = node(Kind.List, vector_code(range_list(arity).map(i => [op.local_get] + uleb(i + 1))))
-	constructed = closure + values + construct + gc_code(gc_ops.ref_cast, [gc_type(closure_call_type_prefix + 1)]) + [op.call_ref] + relocatable(relocated.types, gc_type(closure_call_type_prefix + 1))
+	constructed = entered_node(closure + values + construct + gc_code(gc_ops.ref_cast, [gc_type(closure_call_type_prefix + 1)]) + [op.call_ref] + relocatable(relocated.types, gc_type(closure_call_type_prefix + 1)))
 	code += type_value + [op.if, no_value] + described + gc_code(gc_ops.ref_test, [gc_type(gc.class)]) + [op.if, no_value] + constructed + [op.return, op.end] + not_a_function + [op.end]
 	call_type = gc_type(closure_call_type_prefix + arity)
 	# an instance: its descriptor's call, of this arity
 	called = descriptor_of(closure) + gc_code(gc_ops.ref_cast, [gc_type(gc.class)]) + gc_code(gc_ops.struct_get, [gc_type(gc.class), slot_field("call")])
-	instance = called + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end] + called + gc_code(gc_ops.ref_test, [call_type]) + [op.i32_eqz, op.if, no_value] + wrong_arity + [op.end] + arguments + called + gc_code(gc_ops.ref_cast, [call_type]) + [op.call_ref] + relocatable(relocated.types, call_type) + [op.return]
+	instance = called + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end] + called + gc_code(gc_ops.ref_test, [call_type]) + [op.i32_eqz, op.if, no_value] + wrong_arity + [op.end] + entered_node(arguments + called + gc_code(gc_ops.ref_cast, [call_type]) + [op.call_ref] + relocatable(relocated.types, call_type)) + [op.return]
 	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + is_described(closure) + [op.if, no_value] + instance + [op.end] + not_a_function + [op.end]
 	entry = entry_field(closure, 0)
 	code += entry + gc_code(gc_ops.ref_test, [call_type]) + [op.i32_eqz, op.if, no_value] + wrong_arity + [op.end]
-	f.code = code + arguments + entry + gc_code(gc_ops.ref_cast, [call_type]) + [op.call_ref] + relocatable(relocated.types, call_type)
+	f.code = code + entered_node(arguments + entry + gc_code(gc_ops.ref_cast, [call_type]) + [op.call_ref] + relocatable(relocated.types, call_type))
 }

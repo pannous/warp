@@ -146,7 +146,7 @@ written_type(n: Node, classes: map): text? := {
 	if n is int { return "int" }
 	if n is float { return "float" }
 	if n is text { return "text" }
-	if is_group(n) and bracket_of(n) == "[" { return "list" }
+	if is_empty_list(n) or (is_group(n) and bracket_of(n) == "[") { return "list" }
 	if is_called_name(n) {
 		constructed = classes.keys.filter(owning_class => name_of(n#1) in [owning_class, constructor_name(owning_class), made_name(owning_class)])
 		return if #constructed > 0 then constructed#1 else ø

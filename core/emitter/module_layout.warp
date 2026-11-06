@@ -9,12 +9,15 @@ def zero_code_of(kind: ValueKind): list {
 	# a node global holds 0 until assigned, as `global x; x` gives (struct.new is a constant expression)
 	if kind == ValueKind.Node { return fresh_int_code(number_value(0).code) }
 	if kind == ValueKind.List { return vector_code([]) }
-	if is_reference(kind) { return [ref_null] + (if kind == ValueKind.Time then [110] else uleb(gc_type(reference_of(kind)#2))) }
+	if is_reference(kind) { return [ref_null] + uleb(gc_type(reference_of(kind)#2)) }
 	[op.i32_const, 0]
 }
 # (a first value names only the fixed GC types: no relocation, its marks dropped)
 def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2).filter(byte => byte >= 0) + [op.end] }
-def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
+def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + returned_type(f)) }
+# a word called by reference (a closure's entry, a class word) gives an anyref, as the closure call types do
+# (emitter.warp gc_types): a class word's place or set is a small number, an i31
+def returned_type(f: Function): list := if is_referenced_word(f.name) then [any_reference] else value_type(f.result)
 # a function's entry of the code section, which starts at the offset `at` of the section's content: each relocatable
 # operand noted in module.relocations as [offset, kind, space], its mark dropped
 def function_body(f: Function, at: int): list {
@@ -59,19 +62,17 @@ def names_section(functions: list): list {
 
 # the type section's entries of the GC types, in index order: each its own, but the class structs (contiguous:
 # instances.warp declare_class_structs) one recursion group, its types told apart by their place in it
-def type_entries(): list {
-	entries = []
-	group = []
-	for name in module.gc_order {
-		if name in module.class_structs { group += [gc_bytes(gc_definition(name))] } else { entries += [gc_bytes(gc_definition(name))] }
-	}
-	if #group == 0 { return entries }
-	first = module.gc_indices[module.gc_order.filter(name => name in module.class_structs)#1]
-	entries[0 ..< first] + [[rec_group_byte] + uleb(#group) + concatenated(group)] + entries[first ..< #entries]
-}
+# each type its own recursion group, a class's struct too: wasm tells types of two modules apart by their groups, so a
+# class's struct in a group with the module's other classes (lib/time.wasm's Instant beside Duration) was another type
+# than the same class's in a program declaring only it, and an instance made by one failed the other's casts
+def type_entries(): list { module.gc_order.map(name => gc_bytes(gc_definition(name))) }
+# the name a module exports its global under
+def exported_global_name(name: text): text := "global/" + name
 # main (a standard module's warp/start), memory, the globals the runner reads after a trap, then the program's functions
-# under the names left free: a module imported compiled calls them
-def program_exports(functions: list, entry: text = "main"): list {
+# under the names left free: a module imported compiled calls them. Linked (separate_module.warp linked_bytes): its
+# functions numbered by `linked`, a linked module's word exported only if imported, its own globals exported as
+# `global/<name>` (another module's code reads them; a global may share a function's name: descriptor·<Class>)
+def program_exports(functions: list, entry: text = "main", linked: any = ø, own_globals: list = []): list {
 	exports = [name_bytes(entry) + [export_function_byte] + uleb(functions#1.index), name_bytes("memory") + [export_memory_byte, 0]]
 	for name in exported_globals {
 		if name in module.globals { exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)] }
@@ -94,12 +95,14 @@ def program_exports(functions: list, entry: text = "main"): list {
 	for image in module.linked_images {
 		for k in 0..<#image.functions {
 			name = image.functions[k].name
-			if name in module.linked_words and name not in taken {
-				exports += [name_bytes(name) + [export_function_byte] + uleb(linked_index(image, k))]
+			index = if linked == ø then linked_index(image, k) else linked.get(linked_index(image, k))
+			if name in module.linked_words and name not in taken and index != ø {
+				exports += [name_bytes(name) + [export_function_byte] + uleb(index)]
 				taken[name] = yes
 			}
 		}
 	}
+	for name in own_globals { exports += [name_bytes(exported_global_name(name)) + [export_global_byte] + uleb(module.globals[name]#1)] }
 	exports
 }
 def module_bytes(functions: list): list {
@@ -265,8 +268,9 @@ def section_place(wasm: list, id: int, name: text = ""): list? {
 # the functions the code refers to (ref.func: closure entries, class words), of these [name, index]: declared, as wasm
 # wants such a function, in one declarative element segment, none without them
 declarative_segment = 3
+is_referenced_word(name: text): bool := name.starts_with(closure_entry_prefix) or name.starts_with(class_word_prefix)
 def references_declared(functions: list): list {
-	entries = functions.filter(f => f#1.starts_with(closure_entry_prefix) or f#1.starts_with(class_word_prefix))
+	entries = functions.filter(f => is_referenced_word(f#1))
 	if #entries == 0 then [] else [[declarative_segment, 0] + vector(entries.map(f => uleb(f#2)))]
 }
 def element_section(segments: list): list := if #segments == 0 then [] else section(section_ids.element, vector(segments))

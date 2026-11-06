@@ -44,6 +44,8 @@ PATH_BYTES = 4096
 SLASH = 47
 SPACE = 32
 TEXT_SHIFT = 4294967296
+# the most bytes shown_from gives at once: the output area past its scratch (runtime/text.warp output_room, c_text_at)
+SHOWN_PART = 65488
 # the host words the driver answers, the number its callback is defined with (answered_word); exit(code) ends the run
 # with that status
 STD_IO_WORD = 1
@@ -149,7 +151,7 @@ library_system_value(name: text, value: pointer): i32 from "c"
 library_system_value_set(name: text, value: i64): i32 from "c"
 shader_shown(shader: pointer, values: pointer, width: i64, height: i64): i32 from "c"
 pixels_shown(pixels: pointer, width: i64, height: i64): i32 from "c"
-library_word(name: pointer): handle from "c"
+lazy_library_word(name: pointer, engine: handle, unanswered: i64): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 atoll(digits: text): i64 from "c"
 atof(digits: pointer): f64 from "c"
@@ -586,10 +588,11 @@ unanswered(name: text): nothing := {
 # values in place (lib/native/warp_node.h, decision library-direct-refs); else a word naming it when called
 host_word_defined(linker: handle, engine: handle, import: handle, name: text, trap: pointer): nothing := {
 	word = answered_word(name)
-	library = if word < 0 then library_word(c_string(name)) else 0
-	if library == 0 { return word_defined(linker, import, word, trap) }
+	if word >= 0 { return word_defined(linker, import, word, trap) }
+	# (its library looked for at its first call, lib/native/foreign.c warp_lazy_host_callback: a module importing it
+	# whose program never calls it opens none)
 	type = wasm_externtype_as_functype_const(wasm_importtype_type(import))
-	checked(wasmtime_linker_define_func(linker, "host", 4, name, name.length, type, library, engine, 0), trap)
+	checked(wasmtime_linker_define_func(linker, "host", 4, name, name.length, type, c_function("warp_lazy_host_callback"), lazy_library_word(c_string(name), engine, word), 0), trap)
 }
 # the import defined as warp_host_callback, `word` its data
 word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing := {
@@ -1729,8 +1732,22 @@ shown_packed(caller: handle, context: handle, value: pointer): i64 := {
 	}
 	packed
 }
-# a value of the module as print shows it
-shown(caller: handle, context: handle, value: pointer): text := text_in(guest_memory(caller, context), shown_packed(caller, context, value))
+# a value of the module as print shows it, of any length: part by part through the output area (runtime/show.warp
+# shown_from), a whole file's text for sha256 too; a module built before shown_from shows it at once (shown_at)
+shown(caller: handle, context: handle, value: pointer): text := {
+	probe = allocate(EXTERN_BYTES)
+	if not wasmtime_caller_export_get(caller, "shown_from", 10, probe) { return text_in(guest_memory(caller, context), shown_packed(caller, context, value)) }
+	whole = ""
+	at = 0 as i64
+	part = SHOWN_PART
+	while part == SHOWN_PART {
+		chunk = text_in(guest_memory(caller, context), long_at(indexed(caller, context, "shown_from", value, at) + VALUE_OFFSET).value)
+		whole = joined(whole, chunk)
+		part = chunk.length as i64
+		at = at + part
+	}
+	whole
+}
 # the text shown_at packed (address, length) in the module's memory at `memory`, copied out
 text_in(memory: handle, packed: i64): text := {
 	length = packed % TEXT_SHIFT

@@ -30,6 +30,9 @@ data/
 /lib/warp.wasm*
 /lib/warp-self.wasm*
 /lib/runtime.wasm.cwasm
+# the machine code a linked run keeps beside runtime.wasm and each prebuilt module (driver.warp machine_code_file)
+/lib/runtime.wasm.driver.*
+/lib/modules/*.cwasm*
 # warp's wasmtime C API and sound library, copied in by scripts/wasmtime-c-api.sh (cards wasmtime-bundled, sound-plays)
 /lib/libwarp_wasmtime.*
 /lib/libwarp_sound.*

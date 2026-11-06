@@ -1,0 +1,11 @@
+# a module's classes linked at load time (card wasm-module-linking, L5c): a class of the same shape in the program or
+# another module is another class; a module's instances are its own class's wherever they go
+
+'use signals; class S { name: text; value: any }; S("a", 1) is Signal'	no
+'use signals; class S { name: text; value: any }; Signal("a", 1) is S'	no
+'use signals; s = Signal("a", 1); s is Signal'	yes
+'use shell; class Q { name: text }; Q("a") is Path'	no
+'use shell; p = Path("a"); p.name'	'a'
+'use units; x = 3m; x is Quantity'	yes
+'use units; 3m + 2m'	5m
+'use units; use sound; 3m + 2m'	5m

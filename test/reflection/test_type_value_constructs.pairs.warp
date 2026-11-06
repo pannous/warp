@@ -1,0 +1,3 @@
+# a class value as type(instance) gives it constructs as the class name does (its descriptor in the type value)
+'class U{n: int}; u = U(5); type(u)().n'	0
+'class U{n: int}; f(i: any) := type(i)(); f(U(5))'	U{n: 0}
