@@ -110,7 +110,7 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	kind = if ints.kind == ValueKind.Bool then ValueKind.Bool else ValueKind.Node
 	exact = exact_operation(body, symbol, left, right, floats)
 	# two Ints in $i64boxes stay ints; a ratio or a big int on either side takes the exact word
-	integers = plain_int_test(left.code) + plain_int_test(right.code) + [op.i32_and] + if_else_code(kind, ints, exact)
+	integers = plain_int_test(boxed(left)) + plain_int_test(boxed(right)) + [op.i32_and] + if_else_code(kind, ints, exact)
 	numbers = both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats)
 	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
 	# (a runtime built before marks_kept, the seed's, keeps none)
@@ -251,11 +251,11 @@ analyzed_list_type(body: Body, n: Node): text? := {
 def described_type(body: Body, type_code: list, value: list): list {
 	type = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
 	described = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
-	part = i => as_node(type) + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
-	descriptor = as_node(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
-	code = as_node(type_code) + [op.local_set] + type[1..] + [ref_null, gc_type(gc.node), op.local_set] + described[1..]
+	part = i => type + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
+	descriptor = value + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
+	code = type_code + [op.local_set] + type[1..] + [ref_null, gc_type(gc.node), op.local_set] + described[1..]
 	code += value + [op.ref_is_null, op.i32_eqz, op.if, no_value] + descriptor + gc_code(gc_ops.ref_test, [gc_type(gc.class)]) + [op.if, no_value] + descriptor + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) + [op.local_set] + described[1..] + [op.end, op.end]
-	code + part(0) + part(1) + as_node(described) + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
+	code + part(0) + part(1) + described + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # a whole number is a nat but where it is a fast int, declared int (decision nat-and-int)
 def type_value_of(body: Body, n: Node): TypedCode {
@@ -263,7 +263,7 @@ def type_value_of(body: Body, n: Node): TypedCode {
 	if value.kind == ValueKind.Node {
 		held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
 		named = runtime_call(if int_member_slot(body, n) then "int_slot_type_name" else "node_type_name", [TypedCode(ValueKind.Node, held), list_value(body, module.classes.keys)])
-		return TypedCode(ValueKind.Node, as_node(value.code) + [op.local_set] + held[1..] + described_type(body, named.code, held))
+		return TypedCode(ValueKind.Node, value.code + [op.local_set] + held[1..] + described_type(body, named.code, held))
 	}
 	listed = if value.kind == ValueKind.List then analyzed_list_type(body, n) else ø
 	if value.kind == ValueKind.List and listed == ø { return runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)]) }

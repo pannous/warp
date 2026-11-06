@@ -3,7 +3,7 @@
 # `name: value` as a map entry: its name a symbol, its value boxed
 def entry_code(name_code: list, value_code: list): list { keyed_code(node(Kind.Symbol, name_code), value_code) }
 def keyed_code(name_node: list, value_code: list): list { key_code(Marked.Entry, name_node, value_code) }
-def key_code(kind: int, name_node: list, value_code: list): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]) }
+def key_code(kind: int, name_node: list, value_code: list): list { [op.i64_const] + sleb(kind) + name_node + value_code + gc_code(gc_ops.struct_new, [gc_type(gc.node)]) }
 # an entry's name as a map holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 def name_node(name: any): list {
 	if name is symbol { return node(Kind.Symbol, text_bytes(name_of(name))) }
@@ -62,7 +62,7 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		field_type = if given[field_name] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
 		value = texted(field_type, expression_code(body, given[field_name]))
 		if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + kind_spelling(value.kind) + " for a typed field of " + class_name) }
-		codes += [as_node(boxed(field_value(field_type, value)))]
+		codes += [boxed(field_value(field_type, value))]
 	}
 	TypedCode(ValueKind.Node, instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [class_struct_index(class_name)]))
 }
@@ -250,7 +250,7 @@ def field_getter_code(f: Function) {
 field_setter_prefix = "set·"
 def field_setter_code(f: Function) {
 	name = f.name[#field_setter_prefix ..]
-	write = (instance, struct_index, place) => instance + as_node([op.local_get, 1]) + gc_code(gc_ops.struct_set, [struct_index, place]) + [op.local_get, 0, op.return]
+	write = (instance, struct_index, place) => instance + [op.local_get, 1] + gc_code(gc_ops.struct_set, [struct_index, place]) + [op.local_get, 0, op.return]
 	f.code = each_class_declaring(name, write) + runtime_call("field_with", [TypedCode(ValueKind.Node, [op.local_get, 0]), text_value_of(name), TypedCode(ValueKind.Node, [op.local_get, 1])]).code
 }
 
@@ -377,11 +377,11 @@ def class_set_code(class_name: text): list {
 	struct_index = class_struct_index(class_name)
 	fields = module.classes[class_name].keys
 	code = []
-	for i in 0..<#fields { code += names_field(fields[i]) + [op.if, no_value] + instance_cast(class_name) + as_node([op.local_get, 2]) + gc_code(gc_ops.struct_set, [struct_index, i + #instance_fields]) + small_number([op.i64_const, 1]) + [op.return, op.end] }
+	for i in 0..<#fields { code += names_field(fields[i]) + [op.if, no_value] + instance_cast(class_name) + [op.local_get, 2] + gc_code(gc_ops.struct_set, [struct_index, i + #instance_fields]) + small_number([op.i64_const, 1]) + [op.return, op.end] }
 	base = gc_type(instance_struct())
 	name = payload([op.local_get, 1], gc_type(gc.text))
-	put = runtime_call("field_with", [extra_of(), TypedCode(ValueKind.Text, name), TypedCode(ValueKind.Node, as_node([op.local_get, 2]))]).code
-	code + [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + as_node(put) + gc_code(gc_ops.struct_set, [base, extra_field]) + small_number([op.i64_const, 0])
+	put = runtime_call("field_with", [extra_of(), TypedCode(ValueKind.Text, name), TypedCode(ValueKind.Node, [op.local_get, 2])]).code
+	code + [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + put + gc_code(gc_ops.struct_set, [base, extra_field]) + small_number([op.i64_const, 0])
 }
 # construct(type, values): the class's instance of the values, as `P(3, "a")` makes it, for each count up to its fields;
 # ø for more values
@@ -407,7 +407,7 @@ def instance_converted_code(dispatcher: text): list {
 }
 # runtime.wasm's words over any instance: its descriptor's word of the slot called on the parameters
 # (the value's descriptor, ø when it is no instance of a class: an AST key without an operator is marked so too)
-def descriptor_of(value: list): list := as_node(value) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
+def descriptor_of(value: list): list := value + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])
 def is_described(value: list): list := descriptor_of(value) + gc_code(gc_ops.ref_test, [gc_type(gc.class)])
 def slot_call(slot: text, arguments: list): list {
 	type = gc_type(closure_call_type_prefix + slot_arity(slot))
@@ -418,8 +418,8 @@ def parameters_code(count: int): list := concatenated(range_list(count).map(i =>
 def small_result(code: list): list := code + gc_code(gc_ops.ref_cast, []) + [i31_type] + gc_code(gc_ops.i31_get_u, []) + [op.i64_extend_i32_u]
 def not_described(otherwise: list): list := is_described([op.local_get, 0]) + [op.i32_eqz, op.if, no_value] + otherwise + [op.return, op.end]
 def instance_set_code(f: Function) { f.code = not_described([op.i64_const, 2]) + small_result(slot_call("set", parameters_code(3))) }
-def instance_entries_code(f: Function) { f.code = not_described([ref_null, gc_type(gc.node)]) + slot_call("entries", parameters_code(1)) }
-def instance_field_at_code(f: Function) { f.code = not_described([ref_null, gc_type(gc.node)]) + slot_call("field_at", parameters_code(2)) }
+def instance_entries_code(f: Function) { f.code = not_described([ref_null, gc_type(gc.node)]) + entered_node(slot_call("entries", parameters_code(1))) }
+def instance_field_at_code(f: Function) { f.code = not_described([ref_null, gc_type(gc.node)]) + entered_node(slot_call("field_at", parameters_code(2))) }
 def instance_place_code(f: Function) { f.code = not_described([op.i64_const, 0]) + small_result(slot_call("place", parameters_code(2))) }
 # is_class_instance(m): every map lookup asks it, mostly of maps and lists: a node's kind other than a key's answers
 # before the descriptor's test runs (card tests-class)
@@ -433,7 +433,7 @@ def instance_show_code(f: Function) { f.code = optional_slot_call("show") }
 def instance_float_code(f: Function) { f.code = optional_slot_call("float") }
 def optional_slot_call(slot: text): list {
 	word = descriptor_of([op.local_get, 0]) + gc_code(gc_ops.ref_cast, [gc_type(gc.class)]) + gc_code(gc_ops.struct_get, [gc_type(gc.class), slot_field(slot)])
-	not_described([ref_null, gc_type(gc.node)]) + word + [op.ref_is_null, op.if, no_value, ref_null, gc_type(gc.node), op.return, op.end] + slot_call(slot, parameters_code(1))
+	not_described([ref_null, gc_type(gc.node)]) + word + [op.ref_is_null, op.if, no_value, ref_null, gc_type(gc.node), op.return, op.end] + entered_node(slot_call(slot, parameters_code(1)))
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }

@@ -120,11 +120,18 @@ mutable = 1
 # runtime-split): gc names each type by its name, and gc_type gives the index the module takes it under. A type
 # another type refers to is written as that type's name in gc_types (gc_bytes), and comes first
 gc = {text: "text", items: "items", list: "list", node: "Node", int_box: "i64box", float_box: "f64box", ratio: "Ratio", meta_node: "MetaNode", limbs: "Limbs", big_int: "BigInt", closure: "Closure", instance: "Instance", class: "Class"}
-node_fields = [126, 0, 110, 0, 99, gc.node, 0]
+# the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as a $Node, so passing
+# one costs no cast (wasmtime casts even a value statically a $Node, the subtype test of a $MetaNode or an instance a
+# libcall: decision node-wasm-type); a cast only where an anyref enters (entered_node)
+# anyref, as the host holds a node
+any_reference = 110
+# a time, a $Node of Kind time like a node, is its own kind so that only what handles times takes one
+references = {text: [99, gc.text], list: [99, gc.list], node: [99, gc.node], time: [99, gc.node]}
+node_fields = [126, 0, any_reference, 0, 99, gc.node, 0]
 gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
 	[79, 1, gc.node, 95, 7] + node_fields + [126, 0, 126, 0, 99, gc.node, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0],
 	[95, 2, funcref_byte, 0, 99, gc.text, 0], [80, 1, gc.node, 95, 4] + node_fields + [99, gc.node, 1],
-	[79, 1, gc.node, 95, 11] + node_fields + concatenated(range_list(8).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + range_list(arity + 1).map(i => 110) + [1, 110])
+	[79, 1, gc.node, 95, 11] + node_fields + concatenated(range_list(8).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
 # a closure's entry (closures.warp): the funcref it calls and the text it shows; $Instance, every class's struct's
 # supertype (instances.warp); $Class, a class's descriptor (instances.warp class_slots); the closure calls' function types, (closure, argument…) to a node. Each the same in every
 # module, so one module's instances and closures pass into another's code
@@ -133,9 +140,6 @@ gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node",
 	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call"]],
 	["closure_call_type_0", []], ["closure_call_type_1", []], ["closure_call_type_2", []], ["closure_call_type_3", []], ["closure_call_type_4", []],
 	["closure_call_type_5", []], ["closure_call_type_6", []], ["closure_call_type_7", []], ["closure_call_type_8", []]]
-# the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
-# a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
-references = {text: [99, gc.text], list: [99, gc.list], node: [110], time: [110]}
 # a kind's wasm value type: a number's, a yes/no's or a character's own byte, else its reference (decision kinds-as-cases)
 number_byte(kind: ValueKind): int? := match kind {
 	ValueKind.Int: type_bytes.int
@@ -153,6 +157,8 @@ reference_of(kind: ValueKind): list? := match kind {
 	_: ø
 }
 is_reference(kind: ValueKind): bool := reference_of(kind) != ø
+# a kind held as a $Node: a node or a time
+is_node_kind(kind: ValueKind): bool := kind == ValueKind.Node or kind == ValueKind.Time
 # a kind the emitter holds a value as: a number, a yes/no, a character or a reference
 is_held_kind(kind: ValueKind): bool := number_byte(kind) != ø or is_reference(kind)
 # a text or a character
@@ -674,14 +680,14 @@ def node(kind_code: int, payload: list): list { node_code([op.i64_const] + sleb(
 def node_code(kind: list, payload: list): list { kind + payload + [ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.node)]) }
 # a type value: a class's holds its descriptor, which a call of it constructs by (closures.warp dispatcher_code)
 def type_value_code(name: text): list {
-	described = if name in module.classes then as_node(descriptor_code(name)) else [ref_null, gc_type(gc.node)]
+	described = if name in module.classes then descriptor_code(name) else [ref_null, gc_type(gc.node)]
 	[op.i64_const] + sleb(Marked.TypeValue) + text_bytes(name) + described + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # a value boxed as a $Node: a number or yes/no in its box, a character as an i31
 def boxed(value: TypedCode): list {
 	kind = value.kind
 	code = value.code
-	if kind == ValueKind.Node or kind == ValueKind.Time { return code }
+	if is_node_kind(kind) { return code }
 	# a statement's value (`x = print "a"`): ø
 	if kind == no_kind { return code + [ref_null, gc_type(gc.node)] }
 	if kind == ValueKind.Text { return node(Kind.Text, code) }

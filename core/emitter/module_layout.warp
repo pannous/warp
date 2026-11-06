@@ -9,12 +9,15 @@ def zero_code_of(kind: ValueKind): list {
 	# a node global holds 0 until assigned, as `global x; x` gives (struct.new is a constant expression)
 	if kind == ValueKind.Node { return fresh_int_code(number_value(0).code) }
 	if kind == ValueKind.List { return vector_code([]) }
-	if is_reference(kind) { return [ref_null] + (if kind == ValueKind.Time then [110] else uleb(gc_type(reference_of(kind)#2))) }
+	if is_reference(kind) { return [ref_null] + uleb(gc_type(reference_of(kind)#2)) }
 	[op.i32_const, 0]
 }
 # (a first value names only the fixed GC types: no relocation, its marks dropped)
 def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2).filter(byte => byte >= 0) + [op.end] }
-def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
+def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + returned_type(f)) }
+# a word called by reference (a closure's entry, a class word) gives an anyref, as the closure call types do
+# (emitter.warp gc_types): a class word's place or set is a small number, an i31
+def returned_type(f: Function): list := if is_referenced_word(f.name) then [any_reference] else value_type(f.result)
 # a function's entry of the code section, which starts at the offset `at` of the section's content: each relocatable
 # operand noted in module.relocations as [offset, kind, space], its mark dropped
 def function_body(f: Function, at: int): list {
@@ -271,8 +274,9 @@ def section_place(wasm: list, id: int, name: text = ""): list? {
 # the functions the code refers to (ref.func: closure entries, class words), of these [name, index]: declared, as wasm
 # wants such a function, in one declarative element segment, none without them
 declarative_segment = 3
+is_referenced_word(name: text): bool := name.starts_with(closure_entry_prefix) or name.starts_with(class_word_prefix)
 def references_declared(functions: list): list {
-	entries = functions.filter(f => f#1.starts_with(closure_entry_prefix) or f#1.starts_with(class_word_prefix))
+	entries = functions.filter(f => is_referenced_word(f#1))
 	if #entries == 0 then [] else [[declarative_segment, 0] + vector(entries.map(f => uleb(f#2)))]
 }
 def element_section(segments: list): list := if #segments == 0 then [] else section(section_ids.element, vector(segments))

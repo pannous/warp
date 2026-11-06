@@ -9,7 +9,8 @@ def host_import(name: text): list {
 f32_type = 125
 f32_demote = 182
 f64_promote = 187
-def host_type(kind: ValueKind): list { if kind == ValueKind.I32 or kind == ValueKind.CText then [type_bytes.char] else if kind == ValueKind.F32 then [f32_type] else value_type(kind) }
+# a node as anyref: the driver defines a host word of the import's own type, which names no module's $Node
+def host_type(kind: ValueKind): list { if kind == ValueKind.I32 or kind == ValueKind.CText then [type_bytes.char] else if kind == ValueKind.F32 then [f32_type] else if is_node_kind(kind) then [any_reference] else value_type(kind) }
 
 # a host word's last parameters a call may leave out, their values: `exit()` is exit(0)
 host_defaults = {exit: [0]}
@@ -31,7 +32,7 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 	result = signature#2#1
 	if result == ValueKind.I32 { return TypedCode(ValueKind.Int, code + [op.i64_extend_i32_s]) }
 	if result == ValueKind.F32 { return TypedCode(ValueKind.Float, code + [f64_promote]) }
-	TypedCode(result, code)
+	TypedCode(result, if is_node_kind(result) then entered_node(code) else code)
 }
 # the constructors a host word builds nodes with: [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
 host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
