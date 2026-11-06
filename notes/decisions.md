@@ -1032,3 +1032,7 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-06 wasm-fixture-paths (user OK, card wasm-module-uses): the ~10 old lines `import test/fixtures/wasm/…` are rewritten to the project-root form `•/test/fixtures/wasm/…`; a wasm module resolves like a warp file (program folder, `•/` from the project root), no silent fallback.
 - 2026-11-06 dir-membership-test (user OK): test_std_prelude:24 `dir(prelude)#1` → "first" is rewritten to `"first" in dir(prelude)` → yes (dir is sorted, core-dir-order); moving `first` to the top of lib/prelude.warp is not needed.
 - 2026-11-06 samples-focus (user): stop test-line work; next tasks are all failing samples, native and playground; workers wind down (land what is done), not stopped.
+- 2026-11-06 samples-modules-wasm (user, card samples-modules-wasm):
+  - import-compiled: a module warp compiled from the user's code carries the same warp.signature section as a library module (classes with fields, method heads, parents); `import shapes` links it like `use math`, its class P is usable directly, values cross by reference with no copying; no separate class-source meta section.
+  - components: core module first: rust_demo is rebuilt as a core module so `use wasm "…" as demo`, exports and dir() work now; the component model waits for the component study.
+  - rust crates: free functions on numbers and texts first through a generated wrapper (strsim); crates with objects (regex.Regex, semver.Version) wait for a handle design.
