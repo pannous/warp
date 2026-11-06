@@ -1006,3 +1006,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - wasm-load (core OK): a host word `wasm.load` in core/native/driver.warp so `use x.wasm` / `import fourty_two` load a compiled module; the python host later (its lines held).
   - test_wasm forms: `¬ 1` → no (logical not on any value; the line's expected 0 becomes no); `ln(1)` works without `use math` (implicit standard word, like sin) → 0. Held: `if(2,3,4)` as a call, `x:41; x+1` as a declaration.
   - stale lines: the 5 test_ffi lines naming tests/warp/ffi/*.warp and test_host_words' read("Cargo.toml") are deleted (user OK).
+- 2026-11-06 rough-fallback (user, card instances-compared): a class that defines only one of approximately(o) / similar(o) uses it for both ≈ and ~ (test_rough_similarity:24-29 stay); with both defined each serves its own operator.
