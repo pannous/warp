@@ -159,6 +159,9 @@ type fraction = rational
 alias keys => map_keys
 alias values => map_values
 alias contains => collection_contains
+// JavaScript's names of the list tests
+alias every => all
+alias some => any
 alias has => collection_contains
 alias includes => collection_contains
 alias get => map_get_or
@@ -248,8 +251,6 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else fold(xs, 0, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
-// `xs.sum { |x| x * 2 }`, `xs.sum(x => x * 2)`: the sum of what the function gives each item, as count takes one
-sum(xs: list, f: function) := sum(xs.map(f))
 // dir(v) of a value only the run knows (extensions/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
 // help(x), function(x).definition of a value only the run knows (extensions/sugar/reflection.warp gives the program's and its
@@ -435,12 +436,12 @@ pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 pixel_channel(c: float): int := round(255 * min(max(c, 0.0), 1.0)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
 // row) of every pixel, row by row; in a frame without a window (lib/frames.warp frames_end) at most the window's size,
-// f sampled across the size asked
+// f sampled across the size asked; the coordinates are floats as a fragment shader's are (a mandelbrot's z² + c in exact fractions never ends; decision gpu-first-asap)
 global painting_headless_frame = no
 paint_each(f, width, height) := {
 	columns = if painting_headless_frame then min(width, window_width(), window_height() * width /! height) else width
 	rows = columns * height /! width
-	paint([pixel_color(f((i % columns) * width /! columns, (i /! columns) * height /! rows)) for i in 0..columns * rows], columns, rows)
+	paint([pixel_color(f(float((i % columns) * width /! columns), float((i /! columns) * height /! rows))) for i in 0..columns * rows], columns, rows)
 }
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
 // host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
