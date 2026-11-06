@@ -100,11 +100,16 @@ def is_count(n: TypedCode): bool := n.kind == ValueKind.Int or n.kind == ValueKi
 def repeated(piece: TypedCode, count: TypedCode): TypedCode := runtime_call("repeated_text", [TypedCode(ValueKind.Int, converted(count, ValueKind.Int)), TypedCode(ValueKind.Node, boxed(piece))])
 
 def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
-	if symbol == "+" { return runtime_call("node_add", [TypedCode(ValueKind.Node, a), TypedCode(ValueKind.Node, b)]) }
+	if symbol == "+" {
+		left = TypedCode(ValueKind.Node, fresh_node_local(body))
+		right = TypedCode(ValueKind.Node, fresh_node_local(body))
+		held = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
+		return TypedCode(ValueKind.Node, held + by_class(body, symbol, left, right, ValueKind.Node, runtime_call("node_add", [left, right]).code))
+	}
 	# a bit operator takes ints only: `1 << place` of a value known only at run time reads it as an int
 	if symbol in bit_operators { return operation_code(body, symbol, TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, a), ValueKind.Int)), TypedCode(ValueKind.Int, converted(TypedCode(ValueKind.Node, b), ValueKind.Int))) }
-	left = TypedCode(ValueKind.Node, [op.local_get] + uleb(fresh_local(body, ValueKind.Node)))
-	right = TypedCode(ValueKind.Node, [op.local_get] + uleb(fresh_local(body, ValueKind.Node)))
+	left = TypedCode(ValueKind.Node, fresh_node_local(body))
+	right = TypedCode(ValueKind.Node, fresh_node_local(body))
 	plain = [TypedCode(ValueKind.Int, unboxed(left.code, gc_type(gc.int_box))), TypedCode(ValueKind.Int, unboxed(right.code, gc_type(gc.int_box)))]
 	# two plain ints past 64 bits make a big int (D16): the runtime's grown words
 	ints = if symbol in grown_words then runtime_call(grown_words[symbol], plain) else operation_code(body, symbol, plain#1, plain#2)
@@ -113,7 +118,7 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	exact = exact_operation(body, symbol, left, right, floats)
 	# two Ints in $i64boxes stay ints; a ratio or a big int on either side takes the exact word
 	integers = plain_int_test(boxed(left)) + plain_int_test(boxed(right)) + [op.i32_and] + if_else_code(kind, ints, exact)
-	numbers = both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats)
+	numbers = by_class(body, symbol, left, right, kind, both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats))
 	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
 	# (a runtime built before marks_kept, the seed's, keeps none)
 	if symbol not in comparisons and module.runtime.has("marks_kept") { return runtime_call("marks_kept", [TypedCode(kind, code + numbers), left, right]) }
@@ -121,6 +126,19 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
+}
+# `a + b`, `a - b`, `a * b`, `a / b` of a class instance: its class's own operator through its descriptor
+# (decision class-operators-generic: the prelude's sum of quantities keeps their unit), else the code given
+class_operator_numbers = {"+": 0, "-": 1, "*": 2, "/": 3}
+# a new local of the function holding a node, as its read
+def fresh_node_local(body: Body): list := [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+def by_class(body: Body, symbol: text, left: TypedCode, right: TypedCode, kind: ValueKind, otherwise: list): list {
+	if not class_operator_numbers.has(symbol) { return otherwise }
+	held = fresh_node_local(body)
+	number = TypedCode(ValueKind.Node, boxed(TypedCode(ValueKind.Int, [op.i64_const] + sleb(class_operator_numbers[symbol]))))
+	operated = call_values(late_word(instance_operated_name), [left, left, right, number])
+	tested = call_values(late_word(is_class_instance_name), [left]).code + if_else_code(ValueKind.Node, operated, TypedCode(ValueKind.Node, [ref_null, gc_type(gc.node)]))
+	tested + [op.local_set] + held[1..] + held + [op.ref_is_null] + if_else_code(kind, TypedCode(kind, otherwise), TypedCode(ValueKind.Node, held))
 }
 # `x == ø`, `x === ø` and their negations (a match's `ø:` case): x is ø itself, missing; an empty list, text or map
 # is a value (decision empty-is-not-missing)
@@ -286,7 +304,7 @@ def described_type(body: Body, type_code: list, value: list): list {
 def type_value_of(body: Body, n: Node): TypedCode {
 	value = expression_code(body, n)
 	if value.kind == ValueKind.Node {
-		held = [op.local_get] + uleb(fresh_local(body, ValueKind.Node))
+		held = fresh_node_local(body)
 		named = runtime_call(if int_member_slot(body, n) then "int_slot_type_name" else "node_type_name", [TypedCode(ValueKind.Node, held), list_value(body, module.classes.keys)])
 		return TypedCode(ValueKind.Node, value.code + [op.local_set] + held[1..] + described_type(body, named.code, held))
 	}

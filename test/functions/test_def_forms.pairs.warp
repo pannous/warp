@@ -23,3 +23,4 @@
 'reduce(xs, f, initial) := initial; [1, 2].reduce((a, b) => a + b, 7)'	7
 # a_rest_pattern_binds_no_library_word
 'total([]) := 0; total([first, rest...]) := first + total(rest); total([1, 2, 3])'	6
+'result = 1; def f() { var result = []; result += [2]; result }; f()'	[2]
