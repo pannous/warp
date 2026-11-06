@@ -699,7 +699,7 @@ wgsl_assign_components(word: text, letters: text, value: list, n: Node, scope: W
 		wgsl_refused(n, "${letters} of ${word} takes ${letter_count} numbers")
 		return
 	}
-	if scope.parameters.has(word) { scope.assigned[word] = yes }
+	wgsl_parameter_assigned(word, scope)
 	indent = wgsl_indent(depth)
 	spelled = wgsl_name(word)
 	if letter_count == 1 {
@@ -720,9 +720,13 @@ wgsl_component_place(letter: text): int := {
 wgsl_block(block: Node, scope: WgslScope, depth: int) := {
 	for statement in wgsl_statements_of(block) { wgsl_statement(statement, scope, depth) }
 }
+# a parameter the function assigns is copied into a variable of its own (WGSL's parameters are constant)
+wgsl_parameter_assigned(word: text, scope: WgslScope) := {
+	if scope.parameters.has(word) { scope.assigned[word] = yes }
+}
 # `name = value`: a new variable of the function declared at its top (WGSL's blocks would hide it after a branch)
 wgsl_assign(word: text, value: list, n: Node, scope: WgslScope, depth: int) := {
-	if scope.parameters.has(word) { scope.assigned[word] = yes }
+	wgsl_parameter_assigned(word, scope)
 	if not scope.widths.has(word) {
 		scope.widths[word] = if scope.hints.has(word) and scope.hints[word] > value#2 then scope.hints[word] else value#2
 		scope.locals += [word]
