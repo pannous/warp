@@ -4,7 +4,9 @@
 // made or widened from User's fields first; `stored_add("users", u)` inserts u; `stored_save("users", users)` makes the
 // list the table's rows. `stored users: [User]` declares users so, its table named as it is, or `in "people"`.
 // A table's add, remove and its instances' field writes are written through, `transaction {…}` lands whole or not
-// at all. Waiting: lazy loading and filters as SQL (card storage-write-through).
+// at all. Read in part: `stored_count("users", User)` counts the rows, `stored_page("users", User, 100, 50)` reads rows
+// 100 ..< 150, `stored_found("users", User, "age > ?", [20])` the rows an SQL condition keeps. Waiting: `users` read
+// lazily and `users where it.age > 20` as SQL, rules of extensions/rules/rule_words.warp (card storage-write-through).
 use os
 use sqlite3
 use signals
@@ -92,9 +94,20 @@ has_row_id(instance: any) := ROW_ID in keys(instance)
 selected(fields: list) := (fields.map(quoted_name) + [ROWID]).join(", ")
 
 // the table's rows as instances of the class, each kept for a rollback
-stored_table(name: text, model: any) := {
+stored_table(name: text, model: any) := stored_selected(name, model, "", [])
+// the rows an SQL condition on the table's columns keeps, its `?`s bound to the values: `"age > ?"`, [20]
+stored_found(name: text, model: any, condition: text, values: list) := stored_selected(name, model, " where " + condition, values)
+// the rows start ..< start + size in the table's order (0-based start), one page read
+stored_page(name: text, model: any, start: int, size: int) := stored_selected(name, model, " order by " + ROWID + " limit ? offset ?", [size, start])
+// the number of the table's rows, none read
+stored_count(name: text, model: any) := {
+	migrated(name, model)
+	rows(opened_database(), "select count(*) from " + quoted_name(name))#1#1
+}
+// the rows the select's tail (its where, order and limit) keeps, as instances of the class, each kept for a rollback
+stored_selected(name: text, model: any, tail: text, values: list) := {
 	fields = migrated(name, model)
-	rows(opened_database(), "select " + selected(fields) + " from " + quoted_name(name)).map(row => kept_instance(row_read(model(), fields, row, units_of(name))))
+	rows_bound(opened_database(), "select " + selected(fields) + " from " + quoted_name(name) + tail, values).map(row => kept_instance(row_read(model(), fields, row, units_of(name))))
 }
 kept_instance(instance: any) := {
 	kept_instances += [instance]
