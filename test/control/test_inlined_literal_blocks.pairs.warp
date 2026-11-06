@@ -1,0 +1,6 @@
+# a literal block given to a block parameter that is only called runs in place (card inline-literal-block), the same as a closure would
+'s = 0; 3 times { 2 times { s += 1 } }; s'	6
+'i = 10; 2 times { i += 1 }; i'	12
+'f(x) := { r = 0; 4 times { r += x }; r }; f(5)'	20
+'k = 0; repeat(n: int, body: block) := for j in 1 to n { body() }; repeat(4, { k += 2 }); k'	8
+'xs = []; 3 times { xs = xs + [7] }; xs'	[7, 7, 7]

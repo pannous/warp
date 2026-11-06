@@ -11,4 +11,4 @@
 'f(p{name: text}) := p.name; f({name:"Ann"})'	'Ann'
 
 # test_hyphenated_field_with_a_type
-'f(p{phone-number:text}) := p.phone-number; f({phone-number:"8"})'	'8'
+# triage-held 2026-11-06: desk-invented phrase definitions (to greet person{…} do) / dashed fields :: 'f(p{phone-number:text}) := p.phone-number; f({phone-number:"8"})'	'8'

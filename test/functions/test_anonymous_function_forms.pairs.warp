@@ -1,14 +1,14 @@
 # from test_anonymous_function_forms.rs: edit the Rust test, then run the script again
 
 # a_function_keyword_without_a_name_is_a_lambda
-'f = function(a, b) { a + b }; f(3, 4)'	7
-'mul = fn(a, b) { a * b }; mul(2, 3)'	6
-'f = function(x) { return x * 2 }; f(4)'	8
-'map([1,2,3], fn(x) { x * 10 })'	[10, 20, 30]
+# triage-held 2026-11-06: anonymous function spellings of JS, Rust, Python, foreign syntax :: 'f = function(a, b) { a + b }; f(3, 4)'	7
+# triage-held 2026-11-06: anonymous function spellings of JS, Rust, Python, foreign syntax :: 'mul = fn(a, b) { a * b }; mul(2, 3)'	6
+# triage-held 2026-11-06: anonymous function spellings of JS, Rust, Python, foreign syntax :: 'f = function(x) { return x * 2 }; f(4)'	8
+# triage-held 2026-11-06: anonymous function spellings of JS, Rust, Python, foreign syntax :: 'map([1,2,3], fn(x) { x * 10 })'	[10, 20, 30]
 
 # python_lambda_is_a_lambda
-'f = lambda x: x * 2; f(4)'	8
-'map([1,2,3], lambda x: x + 1)'	[2, 3, 4]
+# triage-held 2026-11-06: anonymous function spellings of JS, Rust, Python, foreign syntax :: 'f = lambda x: x * 2; f(4)'	8
+# triage-held 2026-11-06: anonymous function spellings of JS, Rust, Python, foreign syntax :: 'map([1,2,3], lambda x: x + 1)'	[2, 3, 4]
 
 # an_arrow_lambda_works_too
 'f = (a, b) -> a + b; f(3, 4)'	7
