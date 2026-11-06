@@ -71,12 +71,12 @@ class animal { name; speak := name + " makes a sound" }
 class dog extends animal { speak := super.speak + ": woof" }
 dog("Rex").speak` },
 	properties: { value: "[100 51]", code: `// computed properties, generic classes, extension methods
-class Temperature { celsius = 0.0; fahrenheit:{celsius * 9 / 5 + 32} set{celsius = (it - 32) * 5 / 9} }
+class Temperature { celsius = 0.0; fahrenheit := celsius * 9 / 5 + 32; fahrenheit(f) := { celsius = (f - 32) * 5 / 9 } }
 water = Temperature()
 water.fahrenheit = 212
 class Box<T>{item:T}
 extension Int { func squared() -> Int { self * self } }
-[water.celsius, Box<int>(42).item + 3.squared()]` },
+[water.celsius, Box(42).item + 3.squared()]` },
 	"welcoming errors": { value: '`say 3 == 3` reads two ways: say(3 == 3) or (say 3) == 3; say\'s parameter is untyped: write the parentheses or declare its type', code: `// an unclear line is an error that offers its readings
 say(x) := x
 say 3 == 3` },
