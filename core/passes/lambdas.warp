@@ -264,7 +264,7 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 	given = arguments_of(call)
 	arguments = (1 to #given).map(at => passed_value(given#at, at, call#1, locals, lowering))
 	signature = call#1
-	if signature is symbol and is_variable(name_of(signature), locals, lowering) { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
+	if signature is symbol and is_variable(name_of(signature), if is_inserted_word(signature) then [] else locals, lowering) { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
 	if signature is symbol { return call_node(signature, arguments) }
 	callee = lowered_lambdas(signature, locals, lowering)
 	if is_callee(signature) or is_lambda(signature) { return call_node(symbol(closure_call_word + #arguments), [callee] + arguments) }
@@ -273,6 +273,7 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 
 # a variable in scope: a local, or a global no function of the program is named as (`global filler = ø`, set to a
 # function value elsewhere)
+# (a word a pass inserted, walk.warp call_of, is looked up among the globals only: an open·… slot is one)
 is_variable(name: text, locals: list, lowering: Lowering): bool := name in locals or (lowering.globals.has(name) and name not in lowering.arities)
 
 # `xs = a b 3` of variables a and b (the parser's `a (b 3)`): a name bound to a value heads no call, the values side by
@@ -518,8 +519,16 @@ celled_scope(statements: list, parameters: list, positions: map, read_elsewhere:
 	made_global = shared.filter(name => name in read_elsewhere and first_assignment(statements, name) >= 0)
 	statements = made_global.fold(statements, with_global_declaration)
 	shared = shared.filter(name => name not in made_global)
-	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(part, name, cell_of(name))))
+	celled = statements.map(statement => shared.fold(cell_declaration(statement, shared), (part, name) => renamed(part, name, cell_of(name))))
 	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
+}
+# a shared name's typed declaration, `guests: int = 2`, its cell's value given the typed value: `guests = 2 as int`
+# (a cell holds any value; `input{ bind: guests }` writes it from a lambda, samples/web/typed_form)
+cell_declaration(statement: Node, shared: list): Node := {
+	if not (is_key(statement, Op.Assign) and is_key(key_of(statement), Op.Colon)) { return statement }
+	declared = key_of(statement)
+	if not (key_of(declared) is symbol and name_of(key_of(declared)) in shared) { return statement }
+	Key(key_of(declared), Op.Assign, Key(value_of(statement), Op.As, value_of(declared)))
 }
 # where the scope first assigns the name as a statement of its own, `price = 3`, else -1
 first_assignment(statements: list, name: text): int := {

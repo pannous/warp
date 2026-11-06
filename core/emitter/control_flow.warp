@@ -197,9 +197,18 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	if target.kind == ValueKind.List and added.kind == ValueKind.Node { added = runtime_call("appended_items", [added]) }
 	if target.kind == ValueKind.List { return runtime_call("list_append", [target, added]) }
 	# an instance whose class defines `+` adds by it, `total += run.distance` (the compound operators' arithmetic)
-	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return ø }
+	# beside a class's `+` a list held as a node still grows in place, so `xs += [o]` reaches the caller's list: decided
+	# by the value at run time, any other value added by the class's `+`
+	if target.kind == ValueKind.Node and adds_by_dispatcher(body) { return if target_name is symbol then appended_or_added(body, target_name, addition) else ø }
 	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
+}
+# (the addition evaluated once, held in a local of its own)
+appended_or_added(body: Body, name: Node, addition: Node): TypedCode := {
+	added = fresh_name("added", fresh_number())
+	appends = Key(ø, Op.If, call_of("appends_in_place", [name, added]))
+	chosen = Key(Key(appends, Op.Then, name), Op.Else, Key(name, Op.Assign, Key(name, Op.Add, added)))
+	expression_code(body, separated(bracketed([Key(added, Op.Assign, addition), chosen], ""), ";"))
 }
 adds_by_dispatcher(body: Body): bool := plus_dispatcher in module.functions and body.function.name != plus_dispatcher
 # the statements in order, the value that of the last
