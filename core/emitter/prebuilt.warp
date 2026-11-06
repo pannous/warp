@@ -357,16 +357,38 @@ def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
 	module.linked_own_names = own_names
 	module.linked_words = {}
+	linked_extended = []
+	defined_in = {}
 	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
 	# (the program's own word beats a used module's, which beats the prelude's of as many values, as with_own_words sets
 	# the prelude's aside: draw's clear(color) is called, never the prelude's clear(x))
 	for image in by_precedence(images) {
+		written = written_words(image.name)
 		for word in image.functions {
 			known = module.linked_words.get(word.name) ?? []
 			shadowed = image.name == PRELUDE_MODULE and known.any(other => #other.kinds == #word.kinds)
-			if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) and not shadowed { module.linked_words[word.name] = known + [word] }
+			if linkable(image, word) and word.name not in own_names and not is_lifted_lambda(word.name) and not shadowed {
+				module.linked_words[word.name] = known + [word]
+				if image.name != PRELUDE_MODULE and written.has(word.name) {
+					arity = word.name + "/" + #word.kinds
+					for other in (defined_in.get(arity) ?? []).filter(other => other != image.name) { linked_extended += [word.name + " (" + other + " and " + image.name + ")"] }
+					defined_in[arity] = (defined_in.get(arity) ?? []) + [image.name]
+				}
+			}
 		}
 	}
+}
+# the words two linked modules wrote of as many values (whose kinds a signature holds alike, any and a class), which
+# a program compiles from their sources, saying so: a module calls its own variant directly, never one another module
+# adds (Instant's plus calling units' milliseconds_of(Quantity)); card linked-cross-module-overloads binds them late
+global linked_extended = []
+# the words a linked module wrote, by name: its definitions, never what its compile generated (each class's
+# +·operator dispatcher, its _start)
+written_words(name: text): map := {
+	words = {}
+	signature = linked_signature(name)
+	if signature != ø { for slice in signature.slices { words["${slice#1}"] = yes } }
+	words
 }
 # the images, the prelude's last: a word is bound to the first of them defining it
 by_precedence(images: list): list := images.filter(image => image.name != PRELUDE_MODULE) + images.filter(image => image.name == PRELUDE_MODULE)
@@ -442,6 +464,7 @@ def behind_libraries() {
 # the module's class structs the program's of their names, which it declares alike (its classes from the module's
 # text), else the program compiles the module from its source
 def bind_library_words() {
+	if #linked_extended > 0 { link_refusal("two linked modules define " + linked_extended.join(", ") + " of as many values: a module's own call would miss the other's variant (card linked-cross-module-overloads)") }
 	# (in link_libraries' order: two variants alike, the prelude's clear(x) and draw's clear(color), compare equal)
 	for image in by_precedence(module.linked_images) {
 		for entry in image.classes {

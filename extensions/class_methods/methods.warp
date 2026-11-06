@@ -153,9 +153,12 @@ methods_lifted(program: Node): Node := {
 			owners = owners_taking(classes, liftable, name, count)
 			# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 			# call (list.warp's tally(xs) beside a class's tally(x))
-			# (a module's method routed only as a word of another module's falls back to nothing it reaches)
-			falls_back = name in routes and (is_library_word(name) or name in functions or (not names_syntax(name) and module_routing(classes, liftable, name, operator_methods) == ø)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
-			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
+			# (a module's method routed only as a word of another module's reaches no function of it: an instance of none
+			# of the classes reads its field, a map's `d.day` beside Instant's day() and units' day())
+			reached = is_library_word(name) or name in functions or (not names_syntax(name) and module_routing(classes, liftable, name, operator_methods) == ø)
+			reads_field = not reached and count == 0 and not names_syntax(name) and name not in position_words
+			falls_back = name in routes and (reached or reads_field) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
+			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, reads_field, spelled_operator(operator_table, name), promotions, floaters)]
 		}
 	}
 	for word in entry_words {
@@ -169,7 +172,7 @@ methods_lifted(program: Node): Node := {
 			}
 		}
 		operator = spelled_operator(operator_table, spellings#1)
-		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator, promotions, floaters)]
+		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, no, operator, promotions, floaters)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, liftable, name, routes) }
 	dispatchers += derived_dispatchers(classes, liftable, routes, promotions, operator_table)
@@ -407,7 +410,7 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
 # instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
 # `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
-method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: list?, promotions: list, floaters: list): Node := {
+method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, reads_field: bool, operator: list?, promotions: list, floaters: list): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
@@ -417,7 +420,7 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
-	fallback = if not falls_back then ø else if operated then reflected else builtin_call(spellings#1, call_arguments)
+	fallback = if not falls_back then ø else if operated then reflected else if reads_field then Key(self_node, Op.Dot, symbol(spellings#1)) else builtin_call(spellings#1, call_arguments)
 	# a dispatcher with a fallback takes any values in every place: a number reaches the builtin, an instance its class's
 	# method, compiled for any values, never for the kinds of a call no instance makes (`m[name] = v` of a map beside a
 	# class's position(p, v), whose `p` would be a text); so a list `[3, 1].sort()` passes none of the owners' methods
