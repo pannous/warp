@@ -186,6 +186,28 @@ c_use(statement: text): any := {
 	c_library_aliases.get(word) ?? word
 }
 
+# the numbers of the lines that start inside a text literal or a block comment, by the lexer's own ends of texts and
+# comments: a foreign line there is text, never a declaration
+quoted_lines(source: text): list := {
+	quoted = []
+	n = source.length
+	line = 1
+	at = 0
+	while at < n {
+		c = source[at]
+		next = if opens_text(c) then text_end(source, at + 1, closing_of(c), n) else comment_end(source, at, n)
+		if next == at { next = at + 1 }
+		for i in at ..< next {
+			if source[i] == '\n' {
+				line += 1
+				if i + 1 < next { quoted += [line] }
+			}
+		}
+		at = next
+	}
+	quoted
+}
+
 # [the source without its foreign lines (each an empty line, so the positions stay) and each `use sqlite3` of a
 # library with a lib/native/sqlite3.warp a `use` of that file, the C functions it calls: name → declaration, the
 # names the imports name that no line declares]
@@ -206,8 +228,11 @@ c_functions_of(source: text, library_folder: text): list := {
 	}
 	kept = []
 	functions = {}
-	for line in source.split("\n") {
-		declaration = c_declaration(line)
+	quoted = quoted_lines(source)
+	lines = source.split("\n")
+	for i in 0 ..< #lines {
+		line = lines[i]
+		declaration = if i + 1 in quoted then ø else c_declaration(line)
 		if declaration == ø { kept += [native_uses(line, native)] } else {
 			kept += [""]
 			functions[declaration#1] = declaration
