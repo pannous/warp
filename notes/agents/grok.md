@@ -53,3 +53,5 @@ into the warp-supervisor tmux pane. Hand its coders simple library-only cards: `
 ping with grok-msg; they land their branches themselves. Grok is the Claude Supervisor's helper (user 2026-11-06): one owner per card: a coder may pick a free card itself
 only by `todo take <card> <coder>` at once (Now + owner), never one whose Agent field names someone else. At most 1 active + 1 queued card per Grok coder.
 Unexplained direct pushes to main with the user's identity (g-* cards) may be Grok Bot: ask the user.
+
+- notes/decisions.md is written only by warp-supervisor and warp-interviewer (Claude). Grok sends a user answer to warp-supervisor, never commits it there itself (b6050eb22a overwrote the user's own answer with a withdrawn relay, 2026-11-06).
