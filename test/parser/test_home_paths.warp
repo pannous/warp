@@ -23,4 +23,4 @@ x ~ 1' true
 is! 'show(p) := p
 show /tmp' '/tmp'
 is! 'area(w, h) := w /h
-area(6, 2)' 3
+area(6, 2)' error
