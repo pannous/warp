@@ -641,7 +641,7 @@ Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_num
 
 A module is a ready-made toolbox. `use` opens it.
 
-```warp => 1.4142135623730951
+```warp => √2
 use math
 max(√2 arc_cosine(π/4))
 ```
