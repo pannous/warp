@@ -17,3 +17,5 @@ all-filter-iteration	spec-gaps	test/results.txt:26 'all numbers > 2: s += it' st
 constant-define-operator	spec-gaps	no ::= anywhere in core/ extensions/ lib/; declare it as an operator row (lib/aliases.warp, decision operator-rows-stay) lowered by extensions/sugar/declarations.warp; core/parsing only if the tokenizer refuses '::'
 map-pair-iteration	spec-gaps	`for key, value in m` works; giving the loop item of a map a key/value pair is a for-sugar in extensions/ (pair.key field)
 find-fallback	user-decided	user (round 9-10): or 0, ?? 0, default 0, try … else 0 all give 0; result? means null or error → ø
+error-gaps	user-decided	user (rounds 15-17): split into cards; the Fail effect first (extensions/effects.warp); the broad card closes
+investigate-concept	user-decided	user (rounds 15-17): contracts = leading asserts on parameters: caller blamed, compile-time refusal when the arguments are known; no require/ensure words (1319f7ad8d); report core if it needs the analyzer
