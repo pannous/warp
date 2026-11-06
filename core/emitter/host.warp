@@ -22,7 +22,7 @@ left_out(name: text, missing: int): list := {
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: list): TypedCode {
 	signature = module.host[name]
-	if ValueKind.Node in signature#1 or ValueKind.Node in signature#2 { exported_builders() }
+	if (ValueKind.Node in signature#1 or ValueKind.Node in signature#2) and not module.prebuilding { exported_builders() }
 	arguments = arguments + left_out(name, #signature#1 - #arguments)
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []

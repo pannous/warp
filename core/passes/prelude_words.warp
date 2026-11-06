@@ -623,7 +623,7 @@ c_head(declaration: list): Node := List([symbol(declaration#1)] + (0 ..< #declar
 # takes; a call none takes keeps the library's word
 with_own_words(program: Node, library: list): Node := {
 	heads = own_heads(program)
-	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(heads[name]))
+	owned = heads.keys.filter(name => is_group(heads[name]) and name in library and not brought_names.has(name) and not name.starts_with(OPERATOR_FUNCTION_PREFIX) and not is_typed_overload(name, heads[name]))
 	for name in owned {
 		mine = own_word(name)
 		arities = heads_defining(program, name).map(head => signature_of(items_of(head)))
@@ -654,10 +654,11 @@ own_word(name: text): text := name + name_joiner + "own"
 written_word(name: text): text := if name.ends_with(own_word("")) then name.replace(own_word(""), "") else name
 # whether a library module is being built (prebuilt.warp sets it), not a program
 building_a_module(): bool := module.relocating
-# `sin(x: Real) := …`: a definition typing its parameters overloads the library's word beside it (arity_overloads.warp
-# library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its own body too,
-# reaches the library's; only an untyped one, `round(x) := …`, is the program's own
-is_typed_overload(head: Node): bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
+# `sin(x: Real) := …`: a definition typing its parameters overloads the library's typed word beside it
+# (arity_overloads.warp library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its
+# own body too, reaches the library's; an untyped one, `round(x) := …`, and one of a word with no typed line to join,
+# `add(a: int, b: int) := …` beside the prelude's `add(xs, x) := …`, is the program's own
+is_typed_overload(name: text, head: Node): bool := word_lines().has(name) and #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
 own_heads(program: Node): any := {
@@ -994,23 +995,24 @@ with_used_modules(program: Node, folder: text): Node := {
 	if #sources#1 == 0 and #sources#3 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(std_module_path), sources#3)
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen, the
-# slices of the linked ones (signature.warp), whose text is never read]
-used_module_sources(statements: any, folder: text, seen: any): list := {
+# slices of the linked ones (signature.warp), whose text is never read]; a file in the program's folder takes a use of
+# the program's own, never a standard module's (`within_module`): samples/web/html.warp is no lib/html for markup's `use html`
+used_module_sources(statements: any, folder: text, seen: any, within_module: bool = no): list := {
 	sources = []
 	linked = []
 	for statement in statements {
 		used = use_target(statement)
-		if used is symbol and file_used(statement, folder) == ø and name_of(used) not in seen {
+		if used is symbol and not taken_as_file(statement, folder, within_module) and name_of(used) not in seen {
 			seen += [name_of(used)]
 			signature = linked_signature(name_of(used))
 			source = if signature == ø then used_module_text(name_of(used)) else ""
 			if signature != ø {
-				inner = used_module_sources(use_statements(signature.uses), folder, seen)
+				inner = used_module_sources(use_statements(signature.uses), folder, seen, yes)
 				sources += inner#1
 				seen = inner#2
 				linked += inner#3 + signature.slices
 			} else if source != "" {
-				inner = used_module_sources(use_statements(used_modules(source)), folder, seen)
+				inner = used_module_sources(use_statements(used_modules(source)), folder, seen, yes)
 				sources += inner#1 + [source]
 				seen = inner#2
 				linked += inner#3
@@ -1020,6 +1022,12 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 		}
 	}
 	[sources, seen, linked]
+}
+# whether a file the folder holds takes the use (uses.warp file_used): of the program's own uses any file, of a standard
+# module's uses only the module's own file (a module built in lib/ uses its neighbours so)
+taken_as_file(statement: Node, folder: text, within_module: bool): bool := {
+	file = file_used(statement, folder)
+	file != ø and (not within_module or without_steps_up(file) == without_steps_up(std_module_path(name_of(use_target(statement)))))
 }
 # `use <module>` of each module, as a program's statements say them (a module's own read off its use lines, no parse
 # of all of it)

@@ -52,6 +52,9 @@ one() {
 	local out=$results/out/$(echo "$1" | tr / _) wall
 	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
 	wall=$(wall_seconds)
+	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
+	# storage does: a counter prints its first run's value, not the sweep count's
+	rm -f "$tree/${1%.warp}.database.sqlite"
 	(cd "$tree" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }

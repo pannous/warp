@@ -627,12 +627,13 @@ builtin_type(name: Node, program: Node): any := builtin_shown(name, program, "bu
 builtin_shown(name: Node, program: Node, before: text): any := {
 	signature = builtin_signature(name, program)
 	if signature == ø { return ø }
-	shown = signature.parameters.map(p => (if p.rest then p.name + "..." else p.name) + (if p.type_name == "" then "" else ":" + p.type_name))
+	shown = signature.parameters.map(p => (if p.rest then p.name + "..." else p.name) + (if p.type_name == "" then "" else ":" + p.type_name) + default_shown(p))
 	before + "(" + shown.join(", ") + ") -> " + (if signature.result == "" then "any" else signature.result)
 }
 # that first typed line's signature, ø of a word the program defines or binds or no library word
 builtin_signature(name: Node, program: Node): any := {
-	word = spelled(name)
+	# an alias answers with its word's (`sorted` with sort's)
+	word = unaliased(spelled(name))
 	if function_definition(name, program) != ø or word in names_bound_in_kept(program) or not word_lines().has(word) { return ø }
 	word_lines()[word]#1.signature
 }
@@ -668,7 +669,14 @@ function_result_kind(name: Node, definition: Node): any := {
 }
 parameter_shown(written: Node): text := {
 	parameter = parameter_of(written)
-	if parameter.type_name == "" then parameter.name else parameter.name + ": " + parameter.type_name
+	(if parameter.type_name == "" then parameter.name else parameter.name + ": " + parameter.type_name) + default_shown(parameter)
+}
+# ` = 1000000` of a parameter with a default (decision signature-defaults), "" of one without
+default_shown(parameter: any): text := {
+	given = parameter.defaulted_to
+	if given == ø { return "" }
+	# (a default as written is the group of its one value)
+	" = " + "${if is_group(given) and #given == 1 then given#1 else given}"
 }
 # the code the function computes, `x*2` of `twice(x) := x*2`; ø when the program defines no such function
 body_of(name: Node, program: Node): any := {

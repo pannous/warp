@@ -68,6 +68,15 @@ builtin_call(method: text, arguments: list): Node := {
 	element = Key(arguments#1, Op.Hash, if method.starts_with(index_method) then Key(arguments#2, Op.Add, 1) else arguments#2)
 	if method.ends_with("·assigned") then Key(element, Op.Assign, arguments#3) else element
 }
+# an operator spelled as a word a list changes itself by, `add` (+): on a list the list's own, `people.add(p)` appending
+# in place, on any other value the operator. (The append is an insert at the end: `self.add(o)` is `self += [o]`, which
+# beside a class's `+` rebinds self to a new list, card list-param-add-assign)
+listed_in_place(method: text, arguments: list, operation: Node): Node := {
+	if method not in in_place_methods { return operation }
+	list = arguments#1
+	appended = call_of("list_insert", [list, call_of("count", [list])] + arguments[1..])
+	Key(Key(Key(ø, Op.If, Key(list, Op.Is, symbol("list"))), Op.Then, appended), Op.Else, operation)
+}
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # a method named by a type word or a word of the syntax, `float()`, `in(u)`, is routed: lifted as itself it would change
@@ -463,7 +472,7 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
-	fallback = if not falls_back then ø else if operated then reflected else if reads_field then Key(self_node, Op.Dot, symbol(spellings#1)) else builtin_call(spellings#1, call_arguments)
+	fallback = if not falls_back then ø else if operated then listed_in_place(spellings#1, call_arguments, reflected) else if reads_field then Key(self_node, Op.Dot, symbol(spellings#1)) else builtin_call(spellings#1, call_arguments)
 	# a dispatcher with a fallback takes any values in every place: a number reaches the builtin, an instance its class's
 	# method, compiled for any values, never for the kinds of a call no instance makes (`m[name] = v` of a map beside a
 	# class's position(p, v), whose `p` would be a text); so a list `[3, 1].sort()` passes none of the owners' methods
