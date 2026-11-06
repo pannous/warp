@@ -1,0 +1,48 @@
+# Function entries of an object (card object-functions): `o = {a: 10, f := it*a}; o.f(3)` is 30. An entry that
+# defines a function holds it as a lambda, `f: it => it*o.a`, which `o.f(3)` calls; the object's fields it mentions
+# are read off the object, late, so a field set afterwards counts:
+#   f := body           f: it => body
+#   f := x => body      f: x => body          (and `f = x => body`)
+#   f(x, y) := body     f: (x, y) => body
+object_functions_extension = Extension{name: "object_functions", passes_before: {"rules_rewritten": object_functions}}
+
+IMPLICIT_PARAMETER = "it"
+
+object_functions(program: Node): Node := bottom_up(program, with_function_entries)
+
+# `o = {…}` with its function entries as lambdas
+with_function_entries(n: Node): Node := {
+	if not (is_key(n, Op.Assign) and key_of(n) is symbol and is_curly_group(value_of(n))) { return n }
+	entries = items_of(value_of(n))
+	if not entries.any(is_function_entry) { return n }
+	fields = entries.filter(entry => is_key(entry, Op.Colon) and key_of(entry) is symbol).map(entry => name_of(key_of(entry)))
+	lambdas = entries.map(entry => if is_function_entry(entry) then entry_lambda(entry, key_of(n), fields) else entry)
+	Key(key_of(n), Op.Assign, group_like(value_of(n), lambdas))
+}
+
+is_function_entry(entry: Node): bool := (is_key(entry, Op.Define) and function_entry_name(entry) != "") or (is_key(entry, Op.Assign) and key_of(entry) is symbol and is_lambda(value_of(entry)))
+
+# the name an entry defines: `f := …` and `f(x) := …`, else ""
+function_entry_name(entry: Node): text := {
+	head = key_of(entry)
+	if head is symbol { return name_of(head) }
+	if is_group(head) and bracket_of(head) == "(" and head#1 is symbol then name_of(head#1) else ""
+}
+
+# `name: parameters => body`, the object's fields in the body read off the object
+entry_lambda(entry: Node, object: Node, fields: list): Node := {
+	head = key_of(entry)
+	written = value_of(entry)
+	arrow = if is_lambda(written) then lambda_of(written) else Key(entry_parameters(head), Op.Arrow, written)
+	parameters = lambda_parameter_names(arrow)
+	body = arrow_result(arrow)
+	for field in fields.filter(field => not (field in parameters)) { body = renamed(body, field, Key(object, Op.Dot, symbol(field))) }
+	Key(symbol(function_entry_name(entry)), Op.Colon, Key(arrow_parameters(arrow), Op.Arrow, body))
+}
+
+# the parameters of `f(x, y) :=`, `it` of `f :=`
+entry_parameters(head: Node): Node := {
+	if head is symbol { return symbol(IMPLICIT_PARAMETER) }
+	parameters = items_of(head)[1 ..]
+	if #parameters == 1 then parameters#1 else List(parameters, Bracket.Round, Separator.Comma)
+}

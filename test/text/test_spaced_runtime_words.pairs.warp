@@ -1,0 +1,4 @@
+# a word warp computes, called spaced, is its call (join, split)
+'join ["ä" "ö"] "-"'	'ä-ö'
+'xs = ["a" "b"]; join xs "+"'	'a+b'
+'split "a-b" "-"'	['a', 'b']

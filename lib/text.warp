@@ -193,9 +193,11 @@ human_size(bytes: any): text := {
 	shown + " " + units#u
 }
 
-// Pattern values (card pattern-parameters, notes/pattern_values.md): find/replace as plain warp
-// functions. A parameter typed `data` keeps the pattern unevaluated (decision data-parameter), so
-// bare names bind: find(page, {type: "image", src}) is ["logo.png", …]. The infix `x find p` sugar
-// still rewrites to find_matches; these call forms take a pattern value the same way.
-find(value: any, p: data): list := find_matches(value, p)
-replace(value: any, p: data, template: data): any := replace_matches(value, p, template)
+// the text with its i-th character replaced (1-based, by grapheme): texts are values, so a new text
+// (card text-element-assign). c may be a character, a one-character text, or a codepoint number (97 → 'a')
+text_with_at(t: text, i: int, c: any): text := {
+	ch = if c is int then "" + chr(c) else "" + c
+	parts = chars(t)
+	parts#i = ch
+	join(parts, "")
+}
