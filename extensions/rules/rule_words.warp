@@ -73,9 +73,16 @@ route_verb(method: Node): text := "${method}".upper()
 # `n = route_parameter("/fib/:n:int", request.path, "n")`
 route_bindings(path: Node): list := path_parameters(path).map(name => Key(symbol(name), Op.Assign, List([symbol("route_parameter"), path, Key(symbol("request"), Op.Dot, symbol("path")), name], Bracket.Round, Separator.None)))
 # a program with routes, ending in serving them (lib/web.warp routes_end) once all of it ran; ø for a program without
-# routes or served already
-routes_end_word = "routes_end"
-served(program: Node): any := ended_by(program, "route_add", routes_end_word)
+# routes or served already. `warp build` ends them otherwise (extensions/commands/build.warp, decision
+# build-kinds-detected): an executable serving them always (routes_served), a WAGI module answering one request
+# (lib/wagi.warp routes_wagi); routes_seen says it found routes
+global routes_end_word = "routes_end"
+global routes_seen = no
+served(program: Node): any := {
+	ended = ended_by(program, "route_add", routes_end_word)
+	if ended != ø { routes_seen = yes }
+	ended
+}
 # a program with frame listeners, ending in its frames (lib/frames.warp frames_end): one, as no window opens
 frames_end_word = "frames_end"
 framed(program: Node): any := ended_by(program, "frame_listened", frames_end_word)
