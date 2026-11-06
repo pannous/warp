@@ -103,8 +103,26 @@ code, which the stub tells apart by PACKED_SITE) and showing it in the system's 
 window `warp app` uses too). `page --check` prints the page text from a hidden window (tests/web/test_built_app.rs,
 probe probes/build_app/hello_app.warp). The web view (wry, winit, ~170 KB) is in a stub of its own,
 `warp-page-runtime` (warp-runtime's feature webview, built and shipped next to warp-runtime, WARP_PAGE_RUNTIME_STUB),
-so plain executables stay small. macOS only for now (elsewhere build writes the console executable). Later:
-`warp build --app`, a .app bundle (card build-app-bundle).
+so plain executables stay small. macOS only for now (elsewhere build writes the console executable). `warp build app app.warp` (extensions/commands/build.warp build_app, card build-app-bundle) writes app.app:
+Contents/MacOS/app (the executable `warp build` makes) with warp's libraries beside it (libwarp_*, found by
+@executable_path), Contents/Info.plist (CFBundleExecutable app, identifier warp.app.app), ad-hoc signed on macOS. A
+word, not a flag (decision build-kinds-detected). The page's app in the web view is card page-app-build.
+
+State of the page kinds in the warp compiler (2026-11-06, cloud sprint 07; decision build-kinds-detected: detected,
+no flag, Later). The Rust page stub (wry) went with the Rust harness; `warp build --page|--site` is refused
+(extensions/commands/build.warp UNBUILT_OPTIONS) and scripts/build-site.sh builds a static site from the whole module.
+- Detection: a page is a program whose module exports `page_render` (lib/markup.warp's export, kept whenever markup is
+  used; web/playground/driver.js renders by it). With load-time linking that export sits in modules/markup.wasm, so
+  `warp build` asks the program's imports (`warp/markup`) instead.
+- page-wasm-build: the browser host already links at load time (web/playground/host.js libraryFile/libraryUrl): a
+  deployed page finds runtime.wasm and modules/<m>.wasm beside itself. So the build is: compile linked (`warp build`
+  sets modules_linked = no, a page build keeps it yes), then copy runtime.wasm and each `warp/<m>` the program and its
+  modules import from the library folder, plus the page scripts. Open: an installed lib/ has no web/playground scripts
+  (build-site.sh copies them from the checkout), and x.mod.wasm (linked_bytes) carries exact references only wasmtime
+  loads (build-site.sh), so the linked compile must be the ordinary one, checked in Chromium (scripts/tests-web.sh).
+- page-app-build: the page in the system's web view needs a native host again: a libwarp_webview (WKWebView on macOS,
+  WebKitGTK on Linux) beside libwarp_window, loading the page build above from the executable; macOS first, so it is
+  built and checked on the Mac, not in a Linux cloud box.
 
 ## Alternatives (WASM GC + exceptions are both required by warp output)
 | tool | GC | exceptions (try_table) | AOT | verdict |

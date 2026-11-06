@@ -61,7 +61,11 @@ infix operator |(a: type, b: type) := a | b
 infix operator |(f: function, g: function) := x => x | f | g
 infix operator |(x: any, g: function) := g(x)
 # `&` between two functions composes them too, in reading order (wiki/&.md, card amp-compose): (square & print)(2)
-# prints 4; between whole numbers it stays the bits, between truth values and
+# prints 4; between whole numbers it stays the bits, between truth values and. Applied, the value after the last
+# function goes to the first, `square & print 2` is print(square(2)) (decision D6), as is `inc & dbl(3)`
+rewrite ($it => $body) & $g => $it => $body | $g where $g is function
+rewrite $f & $g $x => $g($f($x)) where $f is function and $g is function
+rewrite $f & $g($x) => $g($f($x)) where $f is function and $g is function
 infix operator &(f: function, g: function) := x => x | f | g
 
 # A block reading `it` applied to the value beside it: `{it*2} 5` and `{it*2}(5)` are (it => {it*2}) 5, called as a
