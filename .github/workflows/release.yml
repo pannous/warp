@@ -151,7 +151,7 @@ jobs:
       run: gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:
-    # the linux tarballs repackaged as .deb and .rpm of warp-lang, attached to the release
+    # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, attached to the release
     needs: native
     if: ${{ !cancelled() && !inputs.dry && contains(fromJSON('["success", "skipped"]'), needs.native.result) }}
     runs-on: ubuntu-latest
@@ -160,9 +160,12 @@ jobs:
       NFPM: https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
     steps:
     - uses: actions/checkout@v7 # the workflow's own commit (the tag, on a tag push), with its packaging/ files
+    - name: wheels
+      run: |
+        gh release download "$TAG" -p 'warp-*.tar.gz' -D dist/tarballs
+        python3 packaging/pypi/build_wheels.py "${TAG#v}" dist/tarballs dist/wheels
     - name: deb and rpm
       run: |
-        gh release download "$TAG" -p 'warp-*linux-gnu.tar.gz' -D dist/tarballs
         curl -sSfL "$NFPM" | sudo tar -xz -C /usr/local/bin nfpm
         mkdir -p dist/linux # nfpm writes a file of that name when the directory is missing
         for arch in x86_64:amd64 aarch64:arm64; do
@@ -173,9 +176,34 @@ jobs:
             (cd "dist/$target" && VERSION=${TAG#v} ARCH=${arch#*:} nfpm package -f "$GITHUB_WORKSPACE/packaging/linux/nfpm.yaml" -p "$format" -t "$GITHUB_WORKSPACE/dist/linux")
           done
         done
-    - name: check the amd64 .deb
+    - name: check the amd64 .deb and wheel
       run: |
         sudo dpkg -i dist/linux/warp-lang_*_amd64.deb
         (cd "$RUNNER_TEMP" && warp '6*7' | grep -q 42)
+        pip install --no-deps --break-system-packages --prefix "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
+        (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/pip/bin/warp" '6*7' | grep -q 42)
     - name: upload
       run: gh release upload "$TAG" dist/linux/* --clobber
+    - uses: actions/upload-artifact@v7
+      with:
+        name: wheels
+        path: dist/wheels
+
+  pypi:
+    # trusted publishing: no token, PyPI trusts this workflow (one-time setup in notes/packaging.md, then the repository
+    # variable PYPI_PUBLISH=true turns this job on)
+    needs: packages
+    if: ${{ !cancelled() && needs.packages.result == 'success' && vars.PYPI_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        name: wheels
+        path: dist/wheels
+    - uses: pypa/gh-action-pypi-publish@v1.14.0
+      with:
+        packages-dir: dist/wheels
+        skip-existing: true
