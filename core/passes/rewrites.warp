@@ -550,7 +550,7 @@ rule_needs(source: text): list := {
 			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not is_rule_word(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
 			listed = listed_in_text(rule)
-			needs += if word != "" then [word] else if #listed > 0 then listed else classes_in_text(rule).flat_map(class_words)
+			needs += if word != "" then [word] else if #listed > 0 then listed else classes_in_text(rule).flat_map(instance_words)
 		}
 	}
 	needs
@@ -818,7 +818,7 @@ needed_words(rule: Rule): list := {
 	word = needed_word(rule)
 	if word != "" { return [word] }
 	listed = rule.conditions.map(membership).filter(listing => listing != ø).flat_map(listing => listing.words)
-	if #listed > 0 then listed else rule.conditions.map(class_tested).filter(name => name != ø).flat_map(class_words)
+	if #listed > 0 then listed else rule.conditions.map(class_tested).filter(name => name != ø).flat_map(instance_words)
 }
 # `$u is Unit`: the class a condition tests its hole an instance of, else ø
 class_tested(condition: Node): text? := {
@@ -1224,7 +1224,7 @@ program_typing(): list := {
 	rule_types
 }
 # the words that may be a class's instance, needing a rule `where $u is Unit`: the class, the library's constants of it
-class_words(class_name: text): list := [class_name] + library_typed_constants().keys.filter(word => library_typed_constants()[word] == class_name)
+instance_words(class_name: text): list := [class_name] + library_typed_constants().keys.filter(word => library_typed_constants()[word] == class_name)
 
 # The program's names and functions that may give a list (notes/broadcasting.md "Vector parameters"): a name assigned
 # a value that may be one, a parameter some call passes one, a function whose result may be one; worked out to a
