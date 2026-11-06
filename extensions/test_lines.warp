@@ -1,0 +1,12 @@
+# A program's `test C` lines (decisions test-soft, program-test) are lib/laws.warp's test checks (its rules in
+# extensions/rules/modules/laws.warp), so a source with a test line uses laws without saying so, a one-line program
+# too, whose lone statement implicit_uses.warp's leads_statement does not see as one
+TESTS_MODULE = "laws"
+TEST_LINE_START = "test "
+is_test_line_text(line: text): bool := {
+	rest = line.trim()
+	# (`test = []`, `test := …` assign a variable named test)
+	rest.starts_with(TEST_LINE_START) and not [":", "="].any(sign => rest.remove_prefix(TEST_LINE_START).trim().starts_with(sign))
+}
+tests_module_used(source: text, folder: text = "."): list := if source.split("\n").any(is_test_line_text) then [TESTS_MODULE] else []
+test_lines_extension = Extension{name: "test_lines", implicit_uses: [tests_module_used]}
