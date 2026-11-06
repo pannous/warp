@@ -54,7 +54,10 @@ def same_code(a: TypedCode, b: TypedCode): TypedCode {
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 	if name == "made_case" { return made_case(body, arguments) }
-	values = arguments.map(a => expression_code(body, a))
+	intrinsic_of(body, name, arguments.map(a => expression_code(body, a)))
+}
+# the word of values already made (quotes.warp's meta_node of a quote)
+def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 	if name in late_words { return call_values(late_word(name), values) }
 	match name {
 		"new_text": TypedCode(ValueKind.Text, index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)]))

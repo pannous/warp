@@ -31,7 +31,7 @@ reads_position(n: Node): bool := {
 def quoted_code(body: Body, e: Node): list {
 	code = written_quote_code(body, e)
 	if not module.reads_positions or not is_positioned(e) { return code }
-	runtime_call("meta_node", [TypedCode(ValueKind.Node, code), number_value(line_of(e)), number_value(column_of(e))]).code
+	intrinsic_of(body, "meta_node", [TypedCode(ValueKind.Node, code), number_value(line_of(e)), number_value(column_of(e))]).code
 }
 def written_quote_code(body: Body, e: Node): list {
 	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
