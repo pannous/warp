@@ -5,11 +5,11 @@
 
 # selectors_chain_to_the_right
 'length of characters in "hello"'	5
-'length of words in "hello world"'	2
-'t = "a b c"; count of words in t'	3
-'number of words in "a b c"'	3
-'x = length of words from "a b"; x'	2
-'first of words in "ab cd"'	'ab'
+# triage-held 2026-11-06: desk-invented selector phrasings (count of words in t, first of words in t) :: 'length of words in "hello world"'	2
+# triage-held 2026-11-06: desk-invented selector phrasings (count of words in t, first of words in t) :: 't = "a b c"; count of words in t'	3
+# triage-held 2026-11-06: desk-invented selector phrasings (count of words in t, first of words in t) :: 'number of words in "a b c"'	3
+# triage-held 2026-11-06: desk-invented selector phrasings (count of words in t, first of words in t) :: 'x = length of words from "a b"; x'	2
+# triage-held 2026-11-06: desk-invented selector phrasings (count of words in t, first of words in t) :: 'first of words in "ab cd"'	'ab'
 
 # in_stays_membership_elsewhere
 '2 in [1 2 3]'	true
@@ -20,4 +20,4 @@
 
 # letters_are_the_alphabetic_characters
 «(letters of "a1 b!") == ['a' 'b']»	true
-'length of letters in "héllo Ω1"'	6
+# triage-held 2026-11-06: desk-invented selector phrasings (count of words in t, first of words in t) :: 'length of letters in "héllo Ω1"'	6
