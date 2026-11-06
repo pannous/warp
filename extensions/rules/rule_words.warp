@@ -513,8 +513,9 @@ counted_question(items: Node, item: Node): Node := {
 end_refused(task: Node): Node := {
 	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
 }
-# a value as code to paste: a text in its quotes
-as_code(n: Node): text := if n is text then "\"${n}\"" else "${n}"
+# a value as code to paste: a text in its quotes, no attribute of the parser's (`float[n * m]`'s marked `+ 1` would
+# read back as `view·attribute: …`)
+as_code(n: Node): text := if n is text then "\"${n}\"" else "${plain_node(n)}"
 
 # `people where age > 18` (decision P223, extensions/sugar/lists.warp): a name the program binds nothing to that a class of it
 # declares as a field reads the item's field, `it.age`; a name the program binds keeps its value
