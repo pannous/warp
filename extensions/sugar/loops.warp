@@ -15,4 +15,4 @@ rewrite $xs.each $body => for $xs $body where statement and $body is block and a
 # results its value (`xs.map(e -> print(e))`); `each character of t` (`t.character` by then, of_lookups) walks the
 # text's characters
 rewrite each $t.character => each chars($t)
-rewrite $f each $xs => $xs.map($f)
+rewrite $f each $xs => $xs.map($e -> $f($e))
