@@ -30,3 +30,13 @@ rewrite random $t => random_of_type($t) where $t is symbol and $t in [int, bool,
 # their difference (extensions/rules/rule_words.warp hyphen_difference), noted; a bound one stays the name, warned when its parts
 # are bound too; a function can't say it, as the lexer reads one word
 rewrite $n => $d where $n is symbol and $d = hyphen_difference($n, $program)
+# Chained orderings (test test_equality_never_chains): `1 < x < 3` is `1 < x and x < 3`, the middle evaluated once, `<`
+# and `<=` chain together, as `>` and `>=` do; an equality never chains (`1 < 2 == 2` compares yes with 2)
+rewrite $a < $b < $c => ($m = $b; $a < $m and $m < $c)
+rewrite $a < $b <= $c => ($m = $b; $a < $m and $m <= $c)
+rewrite $a <= $b < $c => ($m = $b; $a <= $m and $m < $c)
+rewrite $a <= $b <= $c => ($m = $b; $a <= $m and $m <= $c)
+rewrite $a > $b > $c => ($m = $b; $a > $m and $m > $c)
+rewrite $a > $b >= $c => ($m = $b; $a > $m and $m >= $c)
+rewrite $a >= $b > $c => ($m = $b; $a >= $m and $m > $c)
+rewrite $a >= $b >= $c => ($m = $b; $a >= $m and $m >= $c)
