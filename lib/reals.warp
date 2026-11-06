@@ -126,4 +126,4 @@ const tau() := τ
 ∞() := 1.0 / 0.0
 // ℯ reads as a character, never a variable (an assignment to it is refused anyway)
 ℯ() := 2.718281828459045
-const euler() := ℯ
+const euler() := 2.718281828459045
