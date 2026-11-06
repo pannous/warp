@@ -2,3 +2,6 @@
 «class T { c = 0.0; f := c * 9 / 5 + 32; f(v) := { c = (v - 32) * 5 / 9 } }; w = T(); w.f = 212; w.c»	100
 «class T { c = 0.0; f := c * 9 / 5 + 32; f(v) := { c = (v - 32) * 5 / 9 } }; w = T(); w.f = 212; w.f»	212
 «class T { c = 0; f := c * 2; f(v) := { c = v / 2 } }; w = T(); w.f(8); w.c»	4
+«class P{birthday:int; age := 2026 - birthday; age(v) := { birthday = 2026 - v }}; P(2000).age»	26
+«class P{birthday:int; age := 2026 - birthday; age(v) := { birthday = 2026 - v }}; p = P(2000); p.age = 30; p.birthday»	1996
+«class P{birthday:int; age := 2026 - birthday; age(v) := { birthday = 2026 - v }}; p = P(2000); p.age = 30; p.age»	30
