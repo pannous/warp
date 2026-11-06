@@ -1,0 +1,33 @@
+# todo Implement as simple infix operator (card times-infix-operator)
+# infix operator times(n:int,b:block):= while n-->0 : b()
+
+# `n times {…}` (card parser-cold-forms, decision core-is-self): the prelude's infix times, read after its count; a
+# suffix reader, so a context binding tighter leaves it alone (`3 times 4` multiplies)
+read_times(p: Parser, count: Node, min_power: int): Node := {
+	if count == ø or not keyword_at(p, "times") or not times_binds(p, min_power) { return ø }
+	p.at += 5
+	skip_spaces(p)
+	operator_call("times", [count, repeated(p)])
+}
+times_loops_extension = Extension{name: "times_loops", suffix_readers: {"t": read_times}}
+
+# `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
+# Rust twin: suffixes.rs try_parse_control_suffix
+def times_binds(p: Parser, min_power: int): bool {
+	at = blank_end(p, p.at + 5)
+	c = char_at(p, at)
+	value_follows = is_digit(c) or opens_text(c) or is_name_start(c)
+	min_power <= TIMES_POWER or c == '[' or (value_follows and min_power <= 150)
+}
+
+TIMES_POWER = 50
+
+# What `n times` repeats, the prelude's infix times: a block, `: body` as a block, a list or a value
+# Rust twin: suffixes.rs parse_times_loop
+def repeated(p: Parser): Node := {
+	if at_char(p, ':') {
+		body = colon_body(p, 1)
+		return if is_block(body) then body else listed(Bracket.Curly, Separator.Semicolon, [body])
+	}
+	atom(p)
+}
