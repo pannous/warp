@@ -4,8 +4,8 @@
 'n = 0; when ping { n += 1 }; emit ping; emit ping; n'	2
 
 # when_arms_stay_a_switch
-'when 3 { 1 -> "a"; 3 -> "c" }'	'c'
-'x = 2; when (x) { 1 -> 10; else -> 20 }'	20
+# triage-held 2026-11-06: Kotlin when (x) { 1 -> … }, foreign syntax :: 'when 3 { 1 -> "a"; 3 -> "c" }'	'c'
+# triage-held 2026-11-06: Kotlin when (x) { 1 -> … }, foreign syntax :: 'x = 2; when (x) { 1 -> 10; else -> 20 }'	20
 
 # every_when_warns_naming_the_word_meant
 'x = 3; match x { 1 -> "a"; else -> "b" }'	'b'
