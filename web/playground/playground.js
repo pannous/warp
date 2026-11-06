@@ -604,6 +604,7 @@ function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
+const ANIMATION_STOPPED = "animation stopped";
 function stopRun(run, message, failed = !run.animating) {
 	worker.terminate();
 	startWorker();
@@ -1022,7 +1023,7 @@ function showEventOutput(data) {
 async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
-		if (pending?.animating) stopRun(pending, "animation stopped");
+		if (pending?.animating) stopRun(pending, ANIMATION_STOPPED);
 		else if (playsLive(pending)) handOver(pending);
 		return;
 	}
@@ -1321,6 +1322,9 @@ function initialize() {
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
 window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
+	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
+	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
