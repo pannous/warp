@@ -33,5 +33,8 @@
 2. After the installed binary has (1) (after-push.sh installs it): the runtime's equal_texts and the emitter's
    equalities use it. Landing (2) first would make a compiler built from it trap under an older driver the first
    time it compares two differing texts with a byte ≥ 0xCC (the compiler compares `→`, `≤`, `÷` …).
+- (2) needed one more step first: the runtime calling a host word of nodes made its prebuild export the node builders
+  and fail ("index out of range", core/emitter/host.warp host_call). That fix (1be0715b8e) has to be in the seed
+  before (2) builds, since the seed's step compiles the runtime with its own emitter: landed, then a seed refresh.
 - Measure the compiler's self-build time before/after (2): it compares operator spellings with bytes ≥ 0xCC.
 - Un-hold the test/welcoming line (test_footguns «'é'=='é'», Grok C holds it) when (2) lands.

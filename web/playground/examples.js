@@ -301,12 +301,10 @@ use sound
 melody([C4 E4 G4], 100ms)
 play([C4 E4 G4], 300ms)
 "done"` },
-	"wasm components": { value: '[12586269025 [\'a\' "bc" \'d\'] 7]', code: `// a Rust library compiled to a WebAssembly component
-use rust_demo as demo
-c = demo.counter(5)
-c.increment(2)
-[demo.fib(50), demo.words("a bc d"), c.value()]` },
-	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
+	"wasm modules": { value: '[["fib"], 12586269025]', code: `// a Rust library compiled to WebAssembly: its exports are warp words
+use wasm "test/fixtures/components/rust_demo.wasm" as demo
+[demo.functions, fib(50)]` },
+	"C libraries": { value: '["stack", "/b/c", 3400449319, "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
 use c
 import test/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },

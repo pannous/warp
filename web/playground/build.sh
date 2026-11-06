@@ -217,6 +217,9 @@ case "${1:-all}" in
 	*) echo "usage: $0 [compiler|served <site>|site <site>]" >&2; exit 2 ;;
 esac
 
+# the compiled module samples/wasm/import_compiled.warp links (samples/wasm/shapes.wasm, a link to it), built behind the
+# page's runtime.wasm, as scripts/samples.sh builds it natively
+WARP_LIB="$INSTALLED_LIBRARY" warp build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones

@@ -163,10 +163,11 @@ function callC(holder, exports, member, call, values, what) {
 }
 
 // a C function's result as the program takes it (driver.warp c_result): a text (NULL is ø, textOf reads it), a
-// handle's id, a yes/no, an i64 or an i32
+// handle's id, a yes/no, an i32, an unsigned u32 as the i64 it means, or an i64
 function crossedResult(program, call, returned, textOf) {
 	if (call?.crossing === "text" || call?.crossing === "owned_text") return !returned ? program.new_empty() : newGuestText(program, textOf(returned));
 	if (call?.crossing === "handle" || call?.register === "i32") return Number(returned ?? 0) | 0;
+	if (call?.crossing === "u32") return BigInt(Number(returned ?? 0) >>> 0);
 	if (call?.register === "bool") return Number(returned) & 0xff ? 1 : 0;
 	if (call?.register === "i64") return BigInt(returned ?? 0);
 	return returned;
@@ -324,13 +325,16 @@ function exportedParameters(bytes) {
 // the exports of a WebAssembly module the program imports by path (src/modules/wasm_modules.rs link): instantiated once per
 // run at the first call, with its own imports linked like the program's; a global reads through a getter and is set
 // through `set g`
+// one file however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
+// /warp/web/playground/warp-lib/crates) is that file of the served repository
+function servedModuleUrl(path) {
+	const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
+	return new URL(served, FILE_ROOT).href;
+}
 function moduleImports(holder, hooks, path) {
 	const instance = () => {
 		const modules = holder.run.wasmModules ??= new Map();
-		// one instance however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
-		// /warp/web/playground/warp-lib/crates) is that file of the served repository
-		const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
-		const file = new URL(served, FILE_ROOT).href;
+		const file = servedModuleUrl(path);
 		if (!modules.has(file)) {
 			if (file.endsWith(".wat")) throw new Error(`${path}: a module in WAT text needs the native build`);
 			const moduleHolder = { warnings: holder.warnings, run: holder.run };

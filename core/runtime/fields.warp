@@ -39,7 +39,7 @@ is_position_part(m: Node, name: text): bool := {
 }
 position_part(m: Node, name: text): int := if same_bytes(name, "line") then meta_line(m) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
-is_entry(n: Node): bool := kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
+is_entry(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
 # `n.bracket`, `n.separator` of any node: a list's own, ø of any other node; a map's entry or a
 # key's name of that name wins
 is_list_part(m: Node, name: text): bool := {
