@@ -92,8 +92,12 @@ superscript_value(raised: text): int := {
 	if raised is empty { return 1 }
 	if raised.starts_with("⁻") { return 0 - superscript_value(raised.chars()[1 ..].join("")) }
 	value = 0
-	for c in raised { value = value * 10 + superscript_digits.find(c) - 1 }
+	for c in raised { value = value * 10 + superscript_digit(c) }
 	value
+}
+superscript_digit(c: any): int := {
+	for digit in 0 to 9 { if superscript_digits#(digit + 1) == c { return digit } }
+	0
 }
 inverse_text(coefficient: number, power: text, radical: text) := {
 	denominator = denominator_of(coefficient)
