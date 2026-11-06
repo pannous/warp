@@ -18,8 +18,12 @@ agent(prompt: text, model: text) := {
 	text
 }
 
-// card int-let: a call with an expected type calls this companion (lowering/overloads.rs): `x:int = agent "33/3"`
+// card int-let: a call with an expected type calls this companion (the rules below, card type-text): `x:int = agent "33/3"`
 // asks for a value of that type written as JSON and gives it as that value; text asks as agent does
+rewrite ($x: $t = agent $p) => ($x: $t = agent_as($p, $name) as $t) where $name = spelled($t)
+rewrite ($x: $t = agent($p)) => ($x: $t = agent_as($p, $name) as $t) where $name = spelled($t)
+rewrite (agent $p) as $t => agent_as($p, $name) as $t where $name = spelled($t)
+rewrite agent($p) as $t => agent_as($p, $name) as $t where $name = spelled($t)
 agent_as(prompt: text, type: text) := {
 	if type == "text" or type == "string" { return agent(prompt) }
 	parse_json(trim(agent(prompt + "\n\nAnswer with only the value, of type " + type + ", written as JSON: no words, no code fence.")))
