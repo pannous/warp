@@ -268,7 +268,7 @@ run_to = env(RUN_TO_VARIABLE) ?? ""
 match command {
 	"": if run_to then compile_written(args.join(" ") + "\n", run_to, ".") else compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
 	"baked-current": write_baked_current(args#2)
-	"rebake": write_rebaked(args#2)
+	"rebake": ø
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
