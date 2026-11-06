@@ -20,7 +20,7 @@ repeats() {
 		if (line ~ /^(#|\/\/)/) next
 		if (length(line) >= long_line && seen(line)) next
 		rest = line
-		while (match(rest, /\[[^][]*\]/)) { list = substr(rest, RSTART, RLENGTH); if (length(list) >= long_list) seen(list); rest = substr(rest, RSTART + RLENGTH) }
+		while (match(rest, /\[[^][]*\]/)) { list = substr(rest, RSTART, RLENGTH); if (length(list) >= long_list && list != line) seen(list); rest = substr(rest, RSTART + RLENGTH) }
 	}' "$1"
 }
 shown() { awk -F'\t' -v file="$1" '{ printf "%s:%d repeats line %d: %s\n", file, $1, $2, substr($3, 1, 100) }'; }
