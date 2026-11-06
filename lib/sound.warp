@@ -850,7 +850,7 @@ wav_bytes(speakers, rate, channels) := {
 pcm_bytes(speakers) := [byte for sample in speakers for byte in little_endian(pcm_sample(sample), 2)]
 // a sample crossing as amplitude + 32768, as the 16 bits of the signed amplitude
 pcm_sample(sample) := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
-little_endian(n, width) := [(n / (256 ** i)) as int % 256 for i in 0..width]
+little_endian(n, width): list := [(n / (256 ** i)) as int % 256 for i in 0..width]
 codes(t) := [ord(c) for c in t]
 hundredths(x) := {
 	n = round(x * 100) as int

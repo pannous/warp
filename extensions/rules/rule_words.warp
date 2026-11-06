@@ -489,14 +489,15 @@ missed_cases(arms: Node, program: Node): any := {
 }
 # the case an arm `Penny: 1` or `Penny => 1` names, "" for any other arm (a default, a value, a pattern)
 arm_case_name(arm: Node): text := if (is_key(arm, Op.Colon) or is_key(arm, Op.Arrow)) and key_of(arm) is symbol and not (name_of(key_of(arm)) in ["_", "default", "else"]) then name_of(key_of(arm)) else ""
-# `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable or a list literal
+# `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable or a list, written out or
+# given by a call (`for byte in little_endian(n, 2)` walks that list, lib/sound.warp)
 unit_lists = {byte: "bytes", codepoint: "codepoints"}
-unit_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_lists)
+unit_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, program, unit_lists)
 # `for bytes in t {… it …}`: a plural unit word walks the text by that unit, each item `it`
 unit_plurals = {bytes: "bytes", codepoints: "codepoints", chars: "chars", characters: "chars"}
-unit_plural_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_plurals)
-units_of(variable: Node, iterable: Node, units: map): any := {
-	if not units.has(name_of(variable)) or (is_group(iterable) and bracket_of(iterable) == "[") { return ø }
+unit_plural_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, program, unit_plurals)
+units_of(variable: Node, iterable: Node, program: Node, units: map): any := {
+	if not units.has(name_of(variable)) or list_valued(iterable, program) { return ø }
 	Key(iterable, Op.Dot, symbol(units[name_of(variable)]))
 }
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
