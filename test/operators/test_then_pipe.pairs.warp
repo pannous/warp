@@ -5,11 +5,11 @@
 'xs = [1,6,9]; xs then filter(x => x > 5)'	error	no pipe, `|>` is (decision then-not-pipe)
 'twice(x) := x * 2; 3 then twice then twice'	error	no pipe, `|>` is (decision then-not-pipe)
 
-# then_without_if_is_the_condition
-'x = 3; x > 2 then 5'	5
-'x = 1; x < 2 then 1 else 2'	1
-'x = 3; x < 2 then 1 else 2'	2
-'twice(x) := x * 2; x = 3; x > 2 then twice(x) else 0'	6
+# a bare condition then a value is refused, naming its if (decision then-not-pipe)
+'x = 3; x > 2 then 5'	error	a bare then is refused, naming `if x > 2 then 5`
+'x = 1; x < 2 then 1 else 2'	error	a bare then is refused (decision then-not-pipe)
+'x = 3; x < 2 then 1 else 2'	error	a bare then is refused (decision then-not-pipe)
+'twice(x) := x * 2; x = 3; x > 2 then twice(x) else 0'	error	a bare then is refused (decision then-not-pipe)
 
 # nor into a word operator
 '4 then sqrt'	error	no pipe, `|>` is (decision then-not-pipe)

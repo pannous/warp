@@ -1,0 +1,7 @@
+# a line inside a multi-line text that reads like a foreign line stays text (card pure-text-literal-from-line)
+
+# a_foreign_line_inside_a_text_stays_text
+is! «t = "a
+f(x: text): text from 'c'
+b"
+#t.split("\n")» 3

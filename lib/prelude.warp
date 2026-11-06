@@ -70,6 +70,8 @@ each(t: text, f: (any) -> any) from emitter
 // the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
 insert(xs: list, at: int, x) := list_insert(xs, at, x)
+// Rust's HashMap::insert (card rust-map-insert): key set to value in place, the map back
+insert(m: map, key, value) := { m[key] = value; m }
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
@@ -95,6 +97,10 @@ str(x): text from emitter
 text_form(x): text from emitter
 int(x): int from emitter
 float(x): float from emitter
+// bool(x), the truthiness of any value (wiki/bool.md; a call only, extensions/sugar/calls.warp, as a function named bool
+// would hide the type in `x: bool = …`): bool([]) is no, bool([0]) yes; a text or character is read as a word,
+// bool("0") and bool("no") are no
+truth_of(x) := if x is text or x is codepoint then str(x) as bool else if x then yes else no
 symbol(name): symbol from emitter
 // the emitter's text builtins
 trim(t: text): text from emitter
@@ -153,6 +159,9 @@ type fraction = rational
 alias keys => map_keys
 alias values => map_values
 alias contains => collection_contains
+// JavaScript's names of the list tests
+alias every => all
+alias some => any
 alias has => collection_contains
 alias includes => collection_contains
 alias get => map_get_or
@@ -184,11 +193,11 @@ alias is_alnum => is_alphanumeric
 alias isalnum => is_alphanumeric
 alias is_whitespace => is_space
 alias isspace => is_space
-// C's put words, as print: puts and putf answer 0 as C's puts does, puti and putl their number
-puts(t) := { print t; 0 }
-puti(n: int) := { print n; n }
-putl(n: int) := { print n; n }
-putf(x: float) := { print x; 0 }
+// C's put words, as print: each gives nothing, as print does (decision output-words-nothing)
+puts(t) := print t
+puti(n: int) := print n
+putl(n: int) := print n
+putf(x: float) := print x
 first(xs: list or text) := xs#1
 last(xs: list or text) := xs#(count(xs))
 // decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
@@ -427,12 +436,12 @@ pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 pixel_channel(c: float): int := round(255 * min(max(c, 0.0), 1.0)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
 // row) of every pixel, row by row; in a frame without a window (lib/frames.warp frames_end) at most the window's size,
-// f sampled across the size asked
+// f sampled across the size asked; the coordinates are floats as a fragment shader's are (a mandelbrot's z² + c in exact fractions never ends; decision gpu-first-asap)
 global painting_headless_frame = no
 paint_each(f, width, height) := {
 	columns = if painting_headless_frame then min(width, window_width(), window_height() * width /! height) else width
 	rows = columns * height /! width
-	paint([pixel_color(f((i % columns) * width /! columns, (i /! columns) * height /! rows)) for i in 0..columns * rows], columns, rows)
+	paint([pixel_color(f(float((i % columns) * width /! columns), float((i /! columns) * height /! rows))) for i in 0..columns * rows], columns, rows)
 }
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
 // host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
@@ -864,13 +873,21 @@ instantiated(template: any, bound: map): any := {
 	}
 	template
 }
-// code with each part rewritten by the rule, then itself again while the rule gives code (ø: no rule fits)
+// code with each part rewritten by the rule, then itself again while the rule gives code (ø: no rule fits); a rule
+// set that never settles stops loudly after a thousand steps, naming the rewrite that keeps firing (decision rewrite-rules)
 rewritten_everywhere(code: any, rule: function): any := {
-	inner = code
-	if is_type(code, "key") { inner = key(rewritten_everywhere(key_of(code), rule), op_of(code), rewritten_everywhere(value_of(code), rule)) }
-	else if is_type(code, "list") { inner = separated(bracketed(code.map(part => rewritten_everywhere(part, rule)), bracket_of(code)), separator_of(code)) }
-	rewritten = rule(inner)
-	if rewritten == ø then inner else rewritten_everywhere(rewritten, rule)
+	settle_cap = 1000
+	steps = 0
+	while yes {
+		inner = code
+		if is_type(code, "key") { inner = key(rewritten_everywhere(key_of(code), rule), op_of(code), rewritten_everywhere(value_of(code), rule)) }
+		else if is_type(code, "list") { inner = separated(bracketed(code.map(part => rewritten_everywhere(part, rule)), bracket_of(code)), separator_of(code)) }
+		rewritten = rule(inner)
+		if rewritten == ø { return inner }
+		steps += 1
+		if steps == settle_cap { raise "the rules never settle: after ${settle_cap} steps one still rewrites ${inner} to ${rewritten}" }
+		code = rewritten
+	}
 }
 // a code template's holes filled (extensions/code_templates.warp): `$a` by the value of a, `$xs...` by xs's items
 filled_template(code: any, values: map): any := {
