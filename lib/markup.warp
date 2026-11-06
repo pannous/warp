@@ -301,7 +301,17 @@ html_attribute(item: any): text := {
 	let value = html_content(item)
 	if html_is_declarations(value) { return " " + name + "=\"" + html_escaped(html_css(value)) + "\"" }
 	if contains(html_boolean_attributes, name) { return if html_is_true(value) then " " + name else "" }
+	if name == "class" { value = html_class_names(value) }
 	" " + name + "=\"" + html_escaped(html_attribute_value(value)) + "\""
+}
+
+// `class: ".box"`: a class name has no dot, the selector `.box` has (card div-class): the hint, and the name without it
+html_class_names(value: any): any := {
+	if html_is_group(value) { return [html_class_names(item) for item in value] }
+	if not (value is text and starts_with(value, ".")) { return value }
+	named = value[1 ..]
+	warning("a class name has no dot: class: \"" + named + "\" (the selector ." + named + " styles it)")
+	named
 }
 
 // `li{ key: todo.id … }` names a list item: the attribute data-warp-key, by which the page moves its element

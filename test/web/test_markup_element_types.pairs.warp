@@ -4,3 +4,4 @@
 'use markup; to_html(div{data-id: "a", "ok"})'	'<div data-id="a">ok</div>'
 # a tag named like a function that can't take its block stays the element: lib/markup's form(method, action, body) (card core-markup-form-word)
 'use markup; to_html(form{ method: "post" action: "/t" })'	'<form method="post" action="/t"></form>'
+'use markup; to_html(div{ class: ".box", "Hello" })'	'<div class="box">Hello</div>'
