@@ -1,0 +1,4 @@
+# a function of several parameters before two values reads two ways, its call or a phrase: refused naming its call
+'join ["ä" "ö"] "-"'	error
+'join(["ä", "ö"], "-")'	'ä-ö'
+'["ä", "ö"].join "-"'	'ä-ö'
