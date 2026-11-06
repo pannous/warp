@@ -49,9 +49,9 @@ yohei = shader {
 		return vec4f(color, 1.0);
 	}
 }
-# ten seconds by the clock, however long a frame takes
-started = clock()
-while clock() - started < 10000 {
+# three paints so time moves; a ten-second clock loop of this march outlasts the sample wall on a software GPU
+n = 0
+while n < 3 {
 	paint(yohei)
-	sleep(1 / 60)
+	n += 1
 }

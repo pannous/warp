@@ -323,8 +323,14 @@ function stopLoading() {
 
 const megabytes = bytes => (bytes / 1e6).toFixed(1);
 
-// the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes
-const tellEnvironment = () => worker.postMessage(programEnvironment());
+// the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes.
+// WARP_SOUND_NOPACE before a click: lib/sound.warp env() reads pageEnvironment (host-files os.env), not WASI
+// (card samples-page-sound-pipes)
+const tellEnvironment = () => {
+	const payload = programEnvironment();
+	if (beforeUserActivation()) payload.environment = { ...payload.environment, WARP_SOUND_NOPACE: "1" };
+	worker.postMessage(payload);
+};
 
 // `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed
 // line, so the text never goes missing; the first one asks for the permission
@@ -344,7 +350,7 @@ const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : docume
 const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), window_fullscreen: Number(document.fullscreenElement === $("painted")), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
 document.addEventListener("visibilitychange", () => worker && tellSystemValues());
-["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
+["pointerdown", "keydown"].forEach(type => addEventListener(type, () => { if (!worker) return; tellSystemValues(); tellEnvironment(); }, { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
 
@@ -396,7 +402,8 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
-const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
+// missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
+const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
 function playSound({ samples, rate, channels, at, handle, loop }, from) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
