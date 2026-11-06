@@ -549,11 +549,19 @@ sharing_declarations = ["global", "nonlocal"]
 celled_definition(statement: Node, positions: map): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return statement }
-	statements = if is_curly_group(parts.body) then items_of(parts.body) else [parts.body]
+	statements = (if is_curly_group(parts.body) then items_of(parts.body) else [parts.body]).map(local_function)
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, block_of(celled_scope(statements, parts.parameters.map(parameter_name), positions, [])))
 		_: statement
 	}
+}
+# `inner(x) := e` among a function's statements is its local function `inner = (x) => e`, a closure sharing what it
+# changes (decision P124), its own local functions so too
+local_function(statement: Node): Node := {
+	parts = definition_of(statement)
+	if parts == ø { return statement }
+	body = if is_curly_group(parts.body) then group_like(parts.body, items_of(parts.body).map(local_function)) else parts.body
+	Key(symbol(parts.name), Op.Assign, Key(List(parts.parameters, Bracket.Round, Separator.Comma), Op.Arrow, body))
 }
 
 # a definition with its body lowered, its parameters and variables the locals, and the program's variables it sees: a
