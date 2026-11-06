@@ -186,24 +186,18 @@ c_use(statement: text): any := {
 	c_library_aliases.get(word) ?? word
 }
 
-# the numbers of the lines that start inside a text literal or a block comment, by the lexer's own ends of texts and
-# comments: a foreign line there is text, never a declaration
+# the numbers of the lines that start inside a text literal or a block comment: a foreign line there is text, never a
+# declaration
 quoted_lines(source: text): list := {
+	spans = texts_and_comments(source)
 	quoted = []
-	n = source.length
-	line = 1
-	at = 0
-	while at < n {
-		c = source[at]
-		next = if opens_text(c) then text_end(source, at + 1, closing_of(c), n) else comment_end(source, at, n)
-		if next == at { next = at + 1 }
-		for i in at ..< next {
-			if source[i] == '\n' {
-				line += 1
-				if i + 1 < next { quoted += [line] }
-			}
-		}
-		at = next
+	lines = source.split("\n")
+	offset = 0
+	s = 0
+	for k in 0 ..< #lines {
+		while s < #spans and spans[s]#2 <= offset { s += 1 }
+		if s < #spans and spans[s]#1 < offset { quoted += [k + 1] }
+		offset += lines[k].length + 1
 	}
 	quoted
 }
