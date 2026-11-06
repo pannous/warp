@@ -973,6 +973,15 @@ polled_word(name: Node, program: Node, source: text): any := {
 }
 
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
+
+# whether a name is assigned only text literals in the program (card text-element-assign; same idea as
+# extensions/text_lints.warp is_evident_text). yes when so, else ø, so a sugar `where` can bind it
+evident_text(name: Node, program: Node): any := {
+	if not (name is symbol) { return ø }
+	given = assigned_values(program, name_of(name))
+	if #given > 0 and given.all(value => value is text) then yes else ø
+}
+
 rule_words = {
 	are_arms: are_arms,
 	awaited_operand: awaited_operand,
@@ -993,6 +1002,7 @@ rule_words = {
 	dir_words: dir_words,
 	doc_of: doc_of,
 	effects_named: effects_named,
+	evident_text: evident_text,
 	exited: exited,
 	framed: framed,
 	full_definition: full_definition,
@@ -1081,9 +1091,9 @@ class_data(type_name: Node, program: Node): Node := {
 	name = name_of(type_name)
 	statement = declared_class(name, program)
 	if statement == ø { return class_data_refused("typed JSON requires a declared class") }
-	if constructor_of(class_declared(statement, class_view(statement))) != ø { return class_data_refused("typed JSON does not support class constructors yet") }
+	if takes_parameters(class_declared(statement, class_view(statement))) { return class_data_refused("typed JSON takes no class whose init has parameters") }
 	written = class_data_text(name, program, [])
-	if written == ø then class_data_refused("typed JSON supports only required flat fields yet") else plain_node(parsed(written))
+	if written == ø then class_data_refused("typed JSON supports only required flat fields yet") else constructed_through(plain_node(parsed(written)))
 }
 class_data_refused(why: text): Node := plain_node(parsed("raise \"" + why + "\""))
 class_data_text(name: text, program: Node, ancestors: list): text? := {
@@ -1091,7 +1101,7 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 	if statement == ø or name in ancestors { return ø }
 	view = class_view(statement)
 	declared = class_declared(statement, view)
-	if constructor_of(declared) != ø { return ø }
+	if takes_parameters(declared) { return ø }
 	types = []
 	defaults = []
 	for member in view#3[3..].map(member_read) {
@@ -1107,9 +1117,20 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 	}
 	fields = declared.fields
 	order = fields.map(field => "\"" + field + "\"").join(", ")
-	made = name + "{" + fields.map(field => field + ": typed_fields[\"" + field + "\"]").join(", ") + "}"
+	made = constructed(name, fields.map(field => field + ": typed_fields[\"" + field + "\"]"), declared)
 	"{name: \"" + name + "\", order: [" + order + "], types: {" + types.join(", ") + "}, defaults: {" + defaults.join(", ") + "}, make: (typed_fields => " + made + ")}"
 }
+# the instance built from its fields; a class with a constructor is marked to construct through it (constructed_through)
+constructed(type_name: text, arguments: list, declared: Declared): text := {
+	made = type_name + "{" + arguments.join(", ") + "}"
+	if constructor_of(declared) == ø then made else class_data_constructor + "(" + made + ")"
+}
+class_data_constructor = "class_data_constructed"
+# a construction this late (after extensions/class_methods.warp wrapped each) runs its class's init once as theirs do,
+# C·made(C{…}), a name parsed text can't spell
+constructed_through(data: Node): Node := bottom_up(data, part => if is_called_name(part) and name_of(part#1) == class_data_constructor then call_of(made_name(name_of(key_of(part#2))), [part#2]) else part)
+# a constructor taking parameters has no fields to take them from
+takes_parameters(declared: Declared): bool := constructor_of(declared) != ø and #method_parameters(method_in(declared, constructor_method)) > 0
 type_data_text(field_type: text, program: Node, ancestors: list): text? := {
 	list_prefix = "list of "
 	if field_type.starts_with(list_prefix) {

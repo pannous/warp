@@ -1,0 +1,23 @@
+# `$who` (card who-handler-read, decision page-ids): the value of the page's field with the id who, `$who = "Ann"`
+# writes it (lib/markup.warp page_value, page_value_set). After the program's rules are rewritten, so a rule's own
+# `$holes` are gone; a `$name` left is the page's
+page_values_extension = Extension{name: "page_values", passes: {"rules_rewritten": page_values_read}}
+
+PAGE_MARK = "$"
+PAGE_VALUE = "page_value"
+PAGE_VALUE_SET = "page_value_set"
+
+page_values_read(program: Node): Node := bottom_up(program, page_value_of)
+# (bottom up: an assignment's `$who` is a read already, `page_value("who")`, when the assignment is reached)
+page_value_of(n: Node): Node := {
+	if is_key(n, Op.Assign) and is_page_value(key_of(n)) { return call_of(PAGE_VALUE_SET, [key_of(n)#2, value_of(n)]) }
+	id = page_id(n)
+	if id == "" then n else call_of(PAGE_VALUE, [id])
+}
+is_page_value(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol(PAGE_VALUE)
+# the id `$who` names, "" for any other node
+page_id(n: Node): text := {
+	if not (n is symbol) { return "" }
+	name = name_of(n)
+	if name.length > 1 and name.starts_with(PAGE_MARK) and is_alpha(name[1]) then name[1 ..] else ""
+}
