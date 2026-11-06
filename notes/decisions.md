@@ -953,3 +953,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - purity-predicates: `f.effects is empty` is the predicate (no `?` name suffix); `purely` is an alias of `@pure`; purity stays inferred when unmarked.
   - test-case-timeout: instead of a lower threshold: exclude library loading from a case's timing, or better warm all libraries up once so a case's `use markup` costs ~0 s while `warp test` iterates (one compiler instance reused for all cases, loaded modules cached). Then the 1 s rule (no-slow-tests) applies to the code itself.
   - render-pdf-string: `x = 3 as pdf` with pdf undeclared refuses clearly, "unknown type pdf: use a library that defines it"; an unknown type name is never invented.
+- 2026-11-06 card sprint, round 14 (user):
+  - add-xs: drop the phrase `add x to: xs` (its rule recursed: "call stack exhausted"); `xs.add(2)` is the form.
+  - methods-declared: both ways: any function whose first parameter is typed is callable as a method (`shout(t: text) := …; "a".shout()` → 'A', as today), and `extend text { shout() := upper(self) }` is built too, for grouping; Text.methods lists both. Revises declared-belonging (b11c2fbe40).
+  - implicit-copy-call: `copy` is a built-in word, always available, never pulling lib/memory in (no bloat: unused words are shaken out); memory's byte copy is `memory.copy`.
+  - program-defining: C-style typed parameters `f(double x)` are definitely warp ("f(type x) definitely for parameters"); a C-style return type in front (`double sin(…)`) is not decided: the preferred return form is `f(type x) as type := …`. test_wasm:69,85 stay as they are for now.
