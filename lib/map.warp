@@ -64,3 +64,6 @@ set_path(m: any, path: list, value: any): any := {
 	out[step] = set_path(inner, rest, value)
 	out
 }
+// Rust's HashMap::insert (card rust-map-insert): key set to value in place, the map back; a list's insert(xs, at, x)
+// is the prelude's
+insert(m: map, key: any, value: any): any := { m[key] = value; m }
