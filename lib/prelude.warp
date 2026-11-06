@@ -188,11 +188,11 @@ alias is_alnum => is_alphanumeric
 alias isalnum => is_alphanumeric
 alias is_whitespace => is_space
 alias isspace => is_space
-// C's put words, as print: puts and putf answer 0 as C's puts does, puti and putl their number
-puts(t) := { print t; 0 }
-puti(n: int) := { print n; n }
-putl(n: int) := { print n; n }
-putf(x: float) := { print x; 0 }
+// C's put words, as print: each gives nothing, as print does (decision output-words-nothing)
+puts(t) := print t
+puti(n: int) := print n
+putl(n: int) := print n
+putf(x: float) := print x
 first(xs: list or text) := xs#1
 last(xs: list or text) := xs#(count(xs))
 // decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
