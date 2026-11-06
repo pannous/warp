@@ -50,6 +50,7 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if textual and (a.kind == ValueKind.Node or b.kind == ValueKind.Node) and symbol not in comparisons { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	if a.kind == ValueKind.Node or b.kind == ValueKind.Node { return node_operation(body, symbol, boxed(a), boxed(b)) }
 	if symbol in comparisons and a.kind == ValueKind.Char and b.kind == ValueKind.Char { return operation_code(body, symbol, code_point(a), code_point(b)) }
+	if symbol in equalities and textual and is_textual(a.kind) and is_textual(b.kind) { return tested_as(symbol, runtime_call("equal_texts", [shown_text(a), shown_text(b)])) }
 	if symbol in comparisons and textual and is_textual(a.kind) and is_textual(b.kind) {
 		return operation_code(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
 	}
