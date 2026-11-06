@@ -1,0 +1,2 @@
+# `mᵀ` is the transpose (card matrix-should)
+'use matrix; a = [[1,2],[3,4]]; aᵀ'	[[1, 3], [2, 4]]
