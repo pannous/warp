@@ -22,6 +22,7 @@ command_help = [
 	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
 	["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
 	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
+	["build app <file>", "The executable as the macOS application bundle <file>.app, warp's libraries inside"],
 	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
 	["optimize <in.wasm> <out.wasm>", "The module optimized by Binaryen's wasm-opt, as warp rebuild optimizes warp.wasm"],
 	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
