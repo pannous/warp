@@ -11,7 +11,7 @@
 # those these use in turn, compiled in, and the lib/ data it reads at its own build (CODE_DATA: the prelude, the
 # aliases, module_source's files), and the seed; the rest of lib/ left out: two lib/ trees of one baked hash compile
 # compiler.warp alike, so a self test passed for one holds for the other (scripts/rebuild.sh self), and a lib/-only
-# change rebakes a stored compiler of that code (rebuild.sh rebaked_stored). --baked-files [<lib>]: those lib/ files,
+# change reuses a stored compiler of that code (rebuild.sh reused_stored). --baked-files [<lib>]: those lib/ files,
 # one a line, of <lib> or this tree's (scripts/smoke.sh, integrate/land.sh)
 set -euo pipefail
 CODE_DATA=(prelude.warp aliases.warp entities.tsv modes.data)

@@ -12,7 +12,7 @@
 #   warp docs|wiki|home   where the documentation is, opened
 #   warp repl|start       the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
-#   warp rebuild from <step>  the same from that step on (seed, stage-two, optimize, runtime, modules)
+#   warp rebuild from <step>  the same from that step on (seed, optimize, runtime, modules)
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
 #   warp rebuild seed     the seed's machine code made (seed_shipped)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp and extensions/commands/commands.warp), any
@@ -90,7 +90,6 @@ rebuilt(first: text): nothing := {
 		unlink(seed_runtime)
 		rmdir(seed_folder)
 	}
-	if step_runs("stage-two", start) { rebaked(built, compiler, library) }
 	if step_runs("optimize", start) {
 		optimized = joined(built, ".optimized")
 		file_ran(built, words(built, "optimize", built, optimized, "", ""))
@@ -115,43 +114,13 @@ step_runs(name: text, start: int): bool := {
 # a rebuild step's place in the order; the first step for no name, and an unknown name refused
 step_number(name: text): int := {
 	if name.length == 0 or same_text(name, "seed") { return 1 }
-	if same_text(name, "stage-two") { return 2 }
-	if same_text(name, "optimize") { return 3 }
-	if same_text(name, "runtime") { return 4 }
-	if same_text(name, "modules") { return 5 }
-	complain(joined(joined("warp rebuild: no step ", name), "; the steps are seed, stage-two, optimize, runtime, modules"))
+	if same_text(name, "optimize") { return 2 }
+	if same_text(name, "runtime") { return 3 }
+	if same_text(name, "modules") { return 4 }
+	complain(joined(joined("warp rebuild: no step ", name), "; the steps are seed, optimize, runtime, modules"))
 	exit(1)
 	0
 }
-# the seed's build carries the library as the seed cut and parsed it: where its own cut differs (a changed slicer or
-# parser), it writes its own tables over the baked ones (rebake); only a build whose tables are no segments of their
-# own (an older seed's) compiles compiler.warp once more, so the library baked into warp.wasm is always its own (card
-# once-seed, decision rebake-tables)
-rebaked(built: text, compiler: text, library: text): nothing := {
-	if not baked_current(built) {
-		builder_ran(built, words(built, "rebake", built, "", "", ""))
-		said = baked_said(built)
-		if not same_text(said, "yes") { compiled_once_more(built, compiler, library, said) }
-	}
-}
-compiled_once_more(built: text, compiler: text, library: text, said: text): nothing := {
-	print(joined(joined("rebuild: the baked library is not this compiler's (", said), "), built once more"))
-	runtime = joined(built, ".runtime.wasm")
-	file_ran(built, words(built, "runtime", runtime, "", "", ""))
-	again = joined(built, ".again")
-	builder_ran(built, words(built, compiler, again, folder_of(compiler), library, runtime))
-	rename(c_string(again), c_string(built))
-	unlink(runtime)
-}
-# what `baked-current` says of a build: yes, or no and the tables it baked otherwise
-baked_said(built: text): text := {
-	answer = joined(built, ".baked")
-	file_ran(built, words(built, "baked-current", answer, "", "", ""))
-	said = read_file(answer)
-	unlink(answer)
-	said
-}
-baked_current(built: text): bool := same_text(baked_said(built), "yes")
 # the build stamp appended to a build file, a custom section warp.build of lines:
 # lib/, its compiler inputs hash (left empty: no run compares it, decision
 # compilers-delivered), the warp that built it, lib/'s commit, then when it was built. `warp version` shows it
