@@ -1,0 +1,5 @@
+# a spaced /name after an operand is a path, show /tmp is show(/tmp); a / b, a/b and x /2 divide, and a variable's
+# name after it asks for the division (decision path-after-operand, card tmp-path-spacing)
+'show(p) := p; show /tmp'	"/tmp"
+'a = 6; b = 2; [a / b, a/b, a /2]'	[3, 3, 3]
+'width = 6; height = 2; width /height'	error
