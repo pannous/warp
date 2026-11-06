@@ -927,3 +927,14 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - park: fung-friday, polish-notation, modular-integration.
   - dynamic-language stays open.
 - 2026-11-06 card sprint, round 8 (user): close def-items (workaround items_until stays; module-prefixed words remove the cause), local-check-assignment (no repro), use-prelude (fixed: the repro prints 1 per frame since zero-bake). wasm-becomes: measure the levers (generate_address_map, native_unwind_info off, Cranelift speed_and_size) on size, memory and compile speed; keep only what helps and keeps backtraces; warp.wasm.driver.cwasm is still 31 MB.
+- 2026-11-06 card sprint, round 9 (user):
+  - all-words-in, are-words-in: no preference; interviewer default (undoable): `xs are in t` means every item of xs is in t, one sugar rule in extensions/; `all xs in t` not built.
+  - find-fallback: "all should be 0": `"abc".find("x") or 0`, `?? 0`, `default 0` and `try … else 0` all give 0 (today only `or` and `try … else` do). "result? means null or error": an optional result type catches the error as ø.
+  - plural-singular-check: units as names: lib/units declares each unit's singular and plural words as aliases (`kilogram`, `kilograms` → kg; `meter`, `meters` → m), no stem guessing (test_unit_literals:11).
+  - stem-lookup-ed: "We do want a general rule for all functions." Finding: today only library words that define their -ed form work (`xs sorted`, `xs reversed`); a program's own `twice(x)` gives "unknown name twiced", `stop` → `stopped` too. So the -ed stem lookup is the general rule: any unknown `<f>ed`/`<f>d` (doubled consonant: stopped → stop) applies f to the value before it, for every function taking an argument. Core name resolution (~20 lines) → Core column.
+- 2026-11-06 Supervisor (sprint): bare-comparison-refusal also refuses the bare `c then v else w` form (test_then_pipe:10-12), the same form the decision refuses at :9. puts-prints: test_wasm.pairs.warp:345/:475 are upgraded to nothing per output-words-nothing.
+- 2026-11-06 card sprint, round 10 (user):
+  - callable-bus-wav-leftover, test-web: test_callable_instances:4 and test_task_files save into `temp_folder()` instead of the repo (user OK to change those tests); expected values stay; the .gitignore line for task.txt goes.
+  - markup-done-selector: in a data block a `.name` / `#name` key is always a CSS selector, never a variable: `done = 3; style{ .done { color: "green" } }` keeps .done. Core (core/passes/data_blocks), after the sprint.
+  - program-test (test-program-value): a program of `test …` lines ends with the summary value "✓ N tests passed" / "K of N failed", the wording of `warp test`; an ending rule in extensions/ + a counter in lib.
+  - js-webidl-bindings: `use js` binds the JS globals from lib/web.webidl through an extension (typed signatures from the standard WebIDL), playground only.
