@@ -43,3 +43,14 @@ global temp_folder(): text := {
 // (lib/c.warp), so a page, which has no C library, has no delete_file yet
 unlink(path: text): i32 from 'c'
 global delete_file(path: any): bool := unlink(home_expanded(path)) == 0
+// the program file this run was started from (WARP_PROGRAM), "" when none (inline code / some playground snippets)
+program_file(): text := std_io("os", "env", ["WARP_PROGRAM"]) ?? ""
+// the folder holding the program file (decision play-mozart-mp3, source-dir-words): same place $dir and ^/ name
+// at compile time; the working folder when there is no program file
+program_folder(): text := {
+	file = program_file()
+	if file == "" then std_io("os", "cwd", []) else dirname(file)
+}
+// `program.folder` / `program.file`: the decided words for that folder and file (card play-mozart-mp3)
+rewrite program.folder => program_folder()
+rewrite program.file => program_file()
