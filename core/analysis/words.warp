@@ -5,6 +5,9 @@ type_words = ["int", "nat", "integer", "long", "i64", "i32", "rational", "exact"
 	"float32", "float64", "fast", "number", "text", "str", "string", "codepoint", "char", "character", "bool", "boolean", "symbol",
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
 	"uint64"]
+# `as! byte` (also u8, uint8) wraps into 0..255 through convert!, not the 64-bit wrap of the other int names
+# (decision checked-forced-conversions)
+wrapping_byte_words = ["byte", "u8", "uint8"]
 any_word = "any"
 # the type an optional type word holds when it holds a value, `int` of `int?`
 required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word

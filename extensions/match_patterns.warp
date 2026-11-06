@@ -95,6 +95,10 @@ structural_bindings(pattern: Node, result: Node): list := structural_names(patte
 
 # `{port: "80"} as Config`: the prelude's converter of a value field by field to a named pattern's types
 pattern_converter_word = "converted_to_pattern"
+# `{port: "80", extra: 1} as! Config`: the same, after the fields the pattern does not name are dropped
+kept_pattern_word = "kept_pattern"
+# `word(value, data(pattern))`
+pattern_call(word: text, subject: Node, pattern: Node): Node := List([symbol(word), subject, List([quote_symbol, pattern], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
 
 # [name, pattern] of `pattern Definition = …`, else ø
 named_pattern(statement: Node): list? := if is_pattern_definition(statement) then named_definition(statement#2) else ø
@@ -123,7 +127,12 @@ with_named_patterns(n: Node, patterns: map): Node := match n {
 	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
 	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
 	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
-	Key(subject, Op.As, Symbol(name)): if name in patterns then List([symbol(pattern_converter_word), subject, List([quote_symbol, patterns[name]], Bracket.Round, Separator.None)], Bracket.Round, Separator.None) else n
+	Key(subject, Op.As, right): {
+		if right is symbol and name_of(right) in patterns { return pattern_call(pattern_converter_word, subject, patterns[name_of(right)]) }
+		# `value as! Config`: the parser's `value as !Config`. Unknown fields are dropped, then the pattern's types bind
+		forced = if is_key(right, Op.Not) and key_of(right) == ø and value_of(right) is symbol then name_of(value_of(right)) else ""
+		if forced != "" and forced in patterns then pattern_call(kept_pattern_word, subject, patterns[forced]) else n
+	}
 	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))
 	_: n
 }

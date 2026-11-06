@@ -272,5 +272,8 @@ match command {
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
 	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
 	"optimize": trim(args#2, args#3, "optimize")
+	# a native warp from before rebake was dropped still asks, and skips its second compile when the answer is yes
+	# (decision rebake-tables, removed: nothing is baked)
+	"baked-current": write(args#2, "yes")
 	_: run_extension_command(command)
 }

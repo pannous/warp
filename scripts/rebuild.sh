@@ -25,6 +25,7 @@
 # memory) and its function profile (profile.txt, sample.gz, perf.map: scripts/build-slot.sh WARP_BUILD_RECORD).
 set -uo pipefail
 STEPS=(seed optimize runtime modules)  # core/native/warp.warp rebuilt, in order
+WARMING_PROGRAM=samples/hello/hello.warp  # run once before a measured self build (compiler_warmed)
 SHOWN_LINES=60  # of a failed step's output, printed before its log's path
 ERROR_LINE='[Ee]rror|refus|trap|panic|is missing|failed'  # the line of a longer failed step's output printed first
 check= force= which=pure tree=
@@ -53,6 +54,9 @@ hash=$("$scripts/compiler-inputs.sh" "$lib") || exit 1
 baked=$("$scripts/compiler-inputs.sh" "$lib" --baked) || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
+# wasmtime's machine code of lib's warp.wasm cached before a measured self build: a cold cache costs ~110 G instructions
+# more (data: hello cold 112 G, warm 3 G), which made two records of one commit differ by 6% (card build-record-variance)
+compiler_warmed() { (cd "$tree" && WARP_NO_WINDOW=1 WARP_LIB=$lib "$warp" "$WARMING_PROGRAM" >/dev/null 2>&1); }
 copied() { clone "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 # the commit a build is of: the tree's HEAD, `<sha>+dirty` when its inputs hold uncommitted changes (inputs.txt lists
 # them), so a build of a worktree's edits is never taken for its base commit's ([--short])
@@ -303,6 +307,7 @@ one() {
 	from=$(resumed_step "$name")
 	[ -n "$from" ] && lane=(from "$from")
 	logged "$name" "miss-building${from:+-from-$from}"
+	[ "$name" = warp-self ] && compiler_warmed
 	: >"$log"
 	(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash WARP_COMPILER_STORE=$store WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log" "$warp" rebuild "${lane[@]}")
 	status=$?
