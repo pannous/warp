@@ -29,6 +29,9 @@ rewrite ($f $g $x) => $f(($g $x)) where $f is function and $g takes one
 # (braceless and braced calls take one path). Its line takes any value, `int(x): int from emitter`, so `takes one`
 # (one typed value) leaves it out. Not a name nothing binds: `int x = 3` declares x; before several words it takes
 # the phrase they make, `int float 3` is int(float(3))
+# `bool(x)`, `bool x`: the truthiness of any value (lib/prelude.warp truth_of)
+rewrite bool($x) => truth_of($x)
+rewrite (bool $x) => truth_of($x) where $x is not unbound
 rewrite (int $x) => int($x) where $x is not unbound
 rewrite (float $x) => float($x) where $x is not unbound
 rewrite (double $x) => double($x) where $x is not unbound

@@ -95,9 +95,10 @@ str(x): text from emitter
 text_form(x): text from emitter
 int(x): int from emitter
 float(x): float from emitter
-// the truthiness of any value (wiki/bool.md): bool([]) is no, bool([0]) yes; a text or character is read as a word,
+// bool(x), the truthiness of any value (wiki/bool.md; a call only, extensions/sugar/calls.warp, as a function named bool
+// would hide the type in `x: bool = …`): bool([]) is no, bool([0]) yes; a text or character is read as a word,
 // bool("0") and bool("no") are no
-bool(x) := if x is text or x is codepoint then str(x) as bool else if x then yes else no
+truth_of(x) := if x is text or x is codepoint then str(x) as bool else if x then yes else no
 symbol(name): symbol from emitter
 // the emitter's text builtins
 trim(t: text): text from emitter

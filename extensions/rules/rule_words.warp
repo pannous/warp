@@ -715,6 +715,7 @@ rule_words = {
 	definition_text: definition_text,
 	dir_words: dir_words,
 	doc_of: doc_of,
+	effects_named: effects_named,
 	exited: exited,
 	framed: framed,
 	full_definition: full_definition,

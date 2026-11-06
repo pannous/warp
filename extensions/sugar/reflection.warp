@@ -8,6 +8,10 @@ rewrite $f.params => [$names...] where $f is symbol and $f is function and $name
 rewrite $f.parameters => [$names...] where $f is symbol and $f is function and $names = parameters_named($f, $program)
 rewrite $f.body => data $b where $f is symbol and $f is function and $b = body_of($f, $program)
 rewrite $f.doc => $d where $f is symbol and $f is function and $d = doc_of($f, $program, $source)
+# `square.effects`, `effects of square`: what the function does besides giving its value, ["IO"], [] when pure
+# (extensions/effects.warp effects_named, card effects-lists)
+rewrite $f.effects => [$effects...] where $f is symbol and $f is function and $effects = effects_named($f, $program)
+rewrite effects of $f => [$effects...] where $f is symbol and $f is function and $effects = effects_named($f, $program)
 rewrite $f.signature => $s where $f is symbol and $f is function and $s = signature_text($f, $program)
 rewrite $f.return_type => $r where $f is symbol and $f is function and $r = return_kind($f, $program)
 rewrite $f.description => $refused where $f is symbol and $f is function and $refused = misnamed($f, description, doc)
