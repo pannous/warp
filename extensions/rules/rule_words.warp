@@ -723,12 +723,12 @@ class_members(class_name: text, source: text): any := {
 # classes and every function whose first parameter is typed with one of them (`def x(a: A)` of B extends A). ø where
 # the program has its own word or declares no class of that name
 class_fields_listed(name: Node, program: Node, source: text): any := {
-	lineage = class_lineage(spelled(name), plain_node(parsed(source)))
+	lineage = written_lineage(name, source)
 	if owns_word("fields", program) or #lineage == 0 { return ø }
 	texts_list(lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")))
 }
 class_methods_listed(name: Node, program: Node, source: text): any := {
-	lineage = class_lineage(spelled(name), plain_node(parsed(source)))
+	lineage = written_lineage(name, source)
 	if owns_word("methods", program) or #lineage == 0 { return ø }
 	own = lineage.flat_map(owner => (class_members(owner, source) ?? [[], []])#2)
 	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
@@ -755,6 +755,7 @@ defined_function(statement: Node): text? := {
 listed_function_head(definition: Node): Node := if is_key(key_of(definition), Op.Colon) then key_of(key_of(definition)) else key_of(definition)
 # the class of that name and the classes it extends, nearest first; [] when the program (as written: the class methods
 # pass may have lifted its classes by now) declares none
+written_lineage(name: Node, source: text): list := class_lineage(spelled(name), plain_node(parsed(source)))
 class_lineage(name: text, program: Node): list := {
 	statement = declared_class(name, program)
 	if statement == ø { return [] }
