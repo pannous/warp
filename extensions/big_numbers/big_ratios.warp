@@ -19,8 +19,10 @@ big_ratio(n: Node, d: Node): Node := {
 	if big_int_order(d, 0) == 0 { divide_by_zero() }
 	divisor = big_int_gcd(n, d)
 	if big_int_order(d, 0) < 0 { divisor = big_int_difference(0, divisor) }
-	n = big_int_quotient(n, divisor)
-	d = big_int_quotient(d, divisor)
+	lowest_ratio(big_int_quotient(n, divisor), big_int_quotient(d, divisor))
+}
+# n/d already in lowest terms, d positive: an int when d is 1
+lowest_ratio(n: Node, d: Node): Node := {
 	if big_int_order(d, 1) == 0 { return n }
 	# a denominator past 10^18 stays big even where it fits 64 bits, so that every word on the ratio takes the big
 	# words: exact_text's and the plain operations' products of it would leave 64 bits (1 - 0.00000000000000000025)
@@ -33,13 +35,22 @@ either_ratio(a: Node, b: Node): bool := is_ratio(a) or is_ratio(b)
 # a·d of one exact number's numerator by the other's denominator, the cross products of a sum and an order
 cross(a: Node, b: Node): Node := big_int_product(numerator(a), denominator(b))
 common_denominator(a: Node, b: Node): Node := big_int_product(denominator(a), denominator(b))
-big_exact_sum(a: Node, b: Node): Node := {
-	if not either_ratio(a, b) { return big_int_sum(a, b) }
-	big_ratio(big_int_sum(cross(a, b), cross(b, a)), common_denominator(a, b))
-}
-big_exact_difference(a: Node, b: Node): Node := {
-	if not either_ratio(a, b) { return big_int_difference(a, b) }
-	big_ratio(big_int_difference(cross(a, b), cross(b, a)), common_denominator(a, b))
+big_exact_sum(a: Node, b: Node): Node := if either_ratio(a, b) then ratio_sum(a, b, no) else big_int_sum(a, b)
+big_exact_difference(a: Node, b: Node): Node := if either_ratio(a, b) then ratio_sum(a, b, yes) else big_int_difference(a, b)
+# a ± b of two exact numbers in lowest terms, by Henrici's way: with g the gcd of their denominators, the sum is
+# (a's numerator · b's denominator/g ± b's numerator · a's denominator/g) over a's denominator/g · b's denominator, and only
+# a factor the numerator shares with g is left to take out: a gcd with g, never with the whole product (card floor:
+# 1/1 + … + 1/1000 took 41 s by the gcd of two 430-digit parts at each step)
+ratio_sum(a: Node, b: Node, subtracted: bool): Node := {
+	shared = big_int_gcd(denominator(a), denominator(b))
+	a_part = big_int_quotient(denominator(a), shared)
+	b_part = big_int_quotient(denominator(b), shared)
+	left = big_int_product(numerator(a), b_part)
+	right = big_int_product(numerator(b), a_part)
+	n = if subtracted then big_int_difference(left, right) else big_int_sum(left, right)
+	if big_int_order(n, 0) == 0 { return 0 }
+	common = big_int_gcd(n, shared)
+	lowest_ratio(big_int_quotient(n, common), big_int_product(a_part, big_int_quotient(denominator(b), common)))
 }
 big_exact_product(a: Node, b: Node): Node := {
 	if not either_ratio(a, b) { return big_int_product(a, b) }

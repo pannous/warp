@@ -1,0 +1,8 @@
+# a round group of items is the list of its items (decision immutable-tuple, card triage-round-groups)
+'(1, 2) == (3, 2)'	no
+'(1, 2) != (1, 3)'	yes
+'([1, 2], [3, 4])[1][0]'	3
+'snake = [(1, 2)]; is_free(position) := not (position in snake); is_free((1, 2))'	no
+'add = (a, b) => a + b; add(2, 3)'	5
+'m = {a: 1}; s = 0; for (k, v) in m { s += v }; s'	1
+'(q, r) = [7, 2]; q * r'	14
