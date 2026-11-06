@@ -289,18 +289,59 @@ void* c_function(char* name) { return native_function(name); }
 // The C calls of a module the driver runs (core/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
 // where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
 // warp's own libraries (libwarp_sound) beside the executable first, as libwarp_wasmtime is
-static const char* LIBRARY_PATHS[] = {"@executable_path/lib%s.dylib", "$ORIGIN/lib%s.so", "lib%s.dylib","/opt/homebrew/lib/lib%s.dylib", "/usr/local/lib/lib%s.dylib", "lib%s.so", "lib%s.so.0"};
+// Fixed short folders per platform (user 2026-11-06 library-search-paths): no scan/sort/computed from.
+// macOS: homebrew + local + opt/<name>/Frameworks/<Name>.framework/<Name>. Linux: /usr/lib(+triple) + local,
+// lib<name>.so / lib<name>3.so (versioned sonames e.g. libpython3.13.so.1.0 still need a symlink or WARP path).
+// Windows native uses LoadLibrary's System32+PATH (not this dlopen list).
+static const char* LIBRARY_PATHS[] = {
+	"@executable_path/lib%s.dylib",
+	"$ORIGIN/lib%s.so",
+	"lib%s.dylib",
+	"lib%s.so",
+	"lib%s.so.0",
+	"lib%s3.so",
+	"/opt/homebrew/lib/lib%s.dylib",
+	"/usr/local/lib/lib%s.dylib",
+	"/usr/local/lib/lib%s.so",
+	"/usr/local/lib/lib%s3.so",
+	"/usr/lib/lib%s.so",
+	"/usr/lib/lib%s3.so",
+	"/usr/lib/x86_64-linux-gnu/lib%s.so",
+	"/usr/lib/x86_64-linux-gnu/lib%s3.so",
+	"/usr/lib/aarch64-linux-gnu/lib%s.so",
+	"/usr/lib/aarch64-linux-gnu/lib%s3.so",
+};
 static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
 // a library's function, NULL when the library has none of that name: never another library's
 void* library_function(char* library, char* name) {
 	for (size_t i = 0; i < sizeof PROCESS_LIBRARIES / sizeof *PROCESS_LIBRARIES; i++)
 		if (!strcmp(library, PROCESS_LIBRARIES[i])) return dlsym(RTLD_DEFAULT, name);
+	// path as given: contains '/', dlopen that file (kept from samples-python tip)
+	int flags = RTLD_NOW | ((!strcmp(library, "python") || strchr(library, '/')) ? RTLD_GLOBAL : RTLD_LOCAL);
+	if (strchr(library, '/')) {
+		void* loaded = dlopen(library, flags);
+		return loaded ? dlsym(loaded, name) : NULL;
+	}
 	char path[4096];
 	for (size_t i = 0; i < sizeof LIBRARY_PATHS / sizeof *LIBRARY_PATHS; i++) {
 		snprintf(path, sizeof path, LIBRARY_PATHS[i], library);
-		void* loaded = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+		void* loaded = dlopen(path, flags);
 		if (loaded) return dlsym(loaded, name);
 	}
+#ifdef __APPLE__
+	// Homebrew framework: /opt/homebrew/opt/<name>/Frameworks/<Name>.framework/<Name>
+	{
+		char Name[256];
+		size_t n = strlen(library);
+		if (n > 0 && n < sizeof Name) {
+			memcpy(Name, library, n + 1);
+			if (Name[0] >= 'a' && Name[0] <= 'z') Name[0] = (char)(Name[0] - 32);
+			snprintf(path, sizeof path, "/opt/homebrew/opt/%s/Frameworks/%s.framework/%s", library, Name, Name);
+			void* loaded = dlopen(path, flags);
+			if (loaded) return dlsym(loaded, name);
+		}
+	}
+#endif
 	return NULL;
 }
 // a C function called with up to 8 integers and pointers and up to 8 floats in their registers (the ARM64 and x86-64
