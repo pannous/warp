@@ -1,3 +1,4 @@
 browser-json	done	b6cc9c9 web/ only: keyOfTree aligned to json_key forms (self-hosted path already reads shown keys)
 completion-order	done	ae3ed80 web/ only: member choices rank the code's own names first; dir already lists a type's module words before typed prelude words
 div-class	done	389d68a lib/markup.warp html_class_names: warning + name without dot; test_markup_element_types 5/5 from source (markup.wasm not rebuilt in the cloud)
+friends-print	done	a91b565 extensions/sugar/methods.warp: print/puts of unwrap(x) prints x (a map no longer refused as running a node); print_bang+mutating_bang 16/17, the failing puts-text line 5 fails the same on origin/main (prints ab, value 0)
