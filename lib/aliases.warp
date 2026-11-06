@@ -14,8 +14,8 @@
 # The data format's own `.`, `?.`, `::` and `:` bind as parser.warp STRUCTURE_POWERS says: reading this table needs them.
 
 # arithmetic
-add { operator: "+", symbol: Op.Add, aliases: [plus], power: [140, 141] } # todo rename power to precedence, explain why TWO via interviewer (card aliases-rename-precedence)
-subtract { operator: "-", symbol: Op.Sub, aliases: [minus, "‐", "‑", "‒", "–", "—", "―"], power: [140, 141] }
+add { operator: "+", symbol: Op.Add, aliases: [plus], infix: yes, power: [140, 141] } # todo rename power to precedence, explain why TWO via interviewer (card aliases-rename-precedence)
+subtract { operator: "-", symbol: Op.Sub, aliases: [minus, "‐", "‑", "‒", "–", "—", "―"], infix: yes, power: [140, 141] }
 multiply { operator: "*", symbol: Op.Mul, aliases: [times, "×", "⋅"], power: [150, 151] }
 divide { operator: "/", symbol: Op.Div, power: [150, 151] }
 div { operator: "/!", symbol: Op.FloorDiv, aliases: ["÷"], infix: yes, power: [150, 151] }
@@ -34,7 +34,7 @@ position { operator: "#", symbol: Op.Hash, power: [170, 182] }
 ">>" { power: [135, 136] }
 
 # comparison and logic
-equal { operator: "==", symbol: Op.Eq, aliases: [equals, Equals], power: [115, 116] }
+equal { operator: "==", symbol: Op.Eq, aliases: [equals, Equals], infix: yes, power: [115, 116] }
 compare { aliases: [compareTo, compare_to] }
 # a class's less(o) and greater(o) are its `<` and `>` (extensions/class_methods)
 less { operator: "<", power: [120, 121] }
@@ -59,7 +59,7 @@ contains { aliases: [has, includes] }
 text { aliases: [toString, to_s, __str__] }
 
 # ranges, pipes, conversion and arrows
-"to" { symbol: Op.To, aliases: ["...", "..=", "…"], power: [130, 131] }
+"to" { symbol: Op.To, aliases: ["...", "..=", "…", through], infix: yes, power: [130, 131] }
 upto { operator: "..", symbol: Op.Range, aliases: ["..<"], infix: yes, power: [130, 131] }
 "|>" { power: [127, 128] }
 "as" { power: [125, 250] }
