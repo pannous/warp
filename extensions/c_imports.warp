@@ -4,3 +4,4 @@
 # compiles a program. Its parts name core words without a use of core paths (lib/extensions has no ../core).
 use "c_imports/imports.warp"
 use "c_imports/section.warp"
+use "c_imports/wasm_modules.warp"
