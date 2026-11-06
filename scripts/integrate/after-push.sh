@@ -24,6 +24,7 @@ MAIN_CHECKOUT=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 TREE=/Volumes/Worktrees/integrate2
 SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
+PAGE_SMOKE=(samples/hello/hello.warp samples/web/component_totals.warp)  # the page's check after each refresh: hello and markup
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
 BUILDS=$HOME/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
 
@@ -286,8 +287,18 @@ playground_refreshed() {
 	folder=$(installed_folder) || return 1
 	WARP_LIB=$TREE/lib "$TREE/web/playground/build.sh" compiler >"$log" 2>&1 &&
 		rm -rf "$folder/playground-lib" && mv "$built" "$folder/playground-lib" &&
-		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" ||
+		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" &&
+		page_smoked ||
 		say "the user's playground not refreshed: $(tail -1 "$log" | cut -c1-160)"
+}
+
+# page_smoked: the refreshed playground runs PAGE_SMOKE as the native warp does (card after-push-playground); a host
+# import the page lacks fails every sample here, hello first (canonical_text, 2026-11-06), so this is the import check too
+page_smoked() {
+	local got
+	got=$(nice -n 10 "$scripts/samples-web.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" 2>&1 | tail -1)
+	[[ $got == *"${#PAGE_SMOKE[@]} of ${#PAGE_SMOKE[@]} print"* ]] || red "page smoke: ${got:0:160}"
+	return 0
 }
 
 # the samples that run, the gap to 2.0 (decision night-samples-modules): test/samples.txt committed on main when it
