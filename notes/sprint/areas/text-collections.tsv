@@ -27,3 +27,4 @@ uniscript-ownership	unicode-strings	test_versions:18,19 still 'the call uniscrip
 empty-equality-hint	format	no such hint yet; a lint in extensions (as extensions/text_lints.warp) suggesting 'is empty' / plain truthy 'if x'
 are-words-in	user-decided	user (round 9-10): one rule xs are in t, together with all-words-in
 all-words-in	user-decided	user (round 9-10): one rule xs are in t, together with are-words-in
+compile-time	user-decided	user (rounds 15-17) (interviewer default, undoable): only foreign/deprecated spellings warn + warp fix rewrites them

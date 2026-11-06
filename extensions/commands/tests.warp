@@ -39,7 +39,7 @@ test_listed(work: text, words: list) := {
 	cases = test_cases_of(words)
 	for n in 0 ..< #cases {
 		case = cases[n]
-		folder = folder_of(case.file) or "."
+		folder = case_folder(case)
 		write(work + "/" + n + ".code", case.code)
 		runs += [n + "\t" + folder]
 		if needs_run(case.expected) {
@@ -49,6 +49,13 @@ test_listed(work: text, words: list) := {
 	}
 	write(work + "/runs", runs.join("\n"))
 	write(work + "/" + LISTED, places_of(cases))
+}
+# a case runs in its test file's folder; a file case whose path names a file only from the tree root, where
+# `warp test` runs (`'samples/lists/sorting.warp'`), runs there
+case_folder(case: TestCase): text := {
+	folder = folder_of(case.file) or "."
+	if case.code.ends_with(".warp") and not exists(folder + "/" + case.code) and exists(case.code) { return "." }
+	folder
 }
 # where each case stands, one a line: the verdicts judge the cases of the run's own list, never a tree changed meanwhile
 places_of(cases: list): text := cases.map(case => case.file + ":" + case.line + " " + case.code).join("\n")
