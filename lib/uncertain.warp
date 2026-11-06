@@ -132,3 +132,18 @@ place_text(x: float, scale: float, decimals: int) := {
 }
 // neither ∞ nor NaN: ∞ - ∞ is NaN
 is_finite(x: float): bool := x - x == 0.0
+
+// `area certainly > 10m²`: the whole interval beyond (P224b), as `>` of a tolerance answers; `area possibly > 14m²`:
+// some of it beyond
+rewrite $a certainly > $b => $a > $b
+rewrite $a certainly < $b => $a < $b
+rewrite $a possibly > $b => $a.possibly_greater($b)
+rewrite $a possibly < $b => $a.possibly_less($b)
+
+// `6.0 ± 0.3σ`: a spread counted in standard deviations makes a Gaussian (P217); σ is one of them, `0.3σ` 0.3
+class Deviation {
+	amount: float
+	*(other) := Deviation(amount * other)
+}
+σ = Deviation(1.0)
+infix operator ±(value: number, spread: Deviation) := gaussian(value, spread.amount)
