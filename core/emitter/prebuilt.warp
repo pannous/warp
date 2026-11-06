@@ -327,13 +327,20 @@ def runtime_counts(): list := [module.runtime_image.imports + module.runtime_ima
 # what a module was built behind: where its items start, and runtime.wasm itself by its fingerprint; a runtime of the
 # same counts in another order (the seed's own beside lib/'s) moves its words, so a module of another one is refused
 def runtime_behind(): list := runtime_counts() + [runtime_fingerprint()]
-# runtime.wasm's bytes folded to one number, once per runtime (prepend_runtime forgets it)
+# runtime.wasm's code folded to one number, as `warp runtime` wrote it in its warp.fingerprint (folding its bytes at
+# every compile linking a module was ~6 % of hello's); once per runtime (prepend_runtime forgets it)
 global fingerprint_read = ø
+fingerprint_section = "warp.fingerprint"
 def runtime_fingerprint(): int {
 	if fingerprint_read != ø { return fingerprint_read }
+	place = section_place(module.runtime_image.wasm, section_ids.custom, fingerprint_section)
+	if place == ø { throw "runtime.wasm without its " + fingerprint_section + " section: warp rebuild writes it anew" }
+	fingerprint_read = uleb_read(module.runtime_image.wasm, place#1)#1
+	fingerprint_read
+}
+def folded_bytes(bytes: list): int {
 	folded = 0
-	for byte in module.runtime_image.wasm { folded = (folded * 257 + byte) % 1000000007 }
-	fingerprint_read = folded
+	for byte in bytes { folded = (folded * 257 + byte) % 1000000007 }
 	folded
 }
 
@@ -562,7 +569,8 @@ def with_call_sites(wasm: list): list {
 	prepend_runtime(wasm)
 	sites = worked_out_call_sites().map(site => concatenated([site#1#1, site#2, site#3].map(uleb)))
 	raisers = worked_out_raisers().map(uleb)
-	wasm + section(section_ids.custom, name_bytes(call_sites_section) + vector(sites)) + section(section_ids.custom, name_bytes(raisers_section) + vector(raisers))
+	fingerprint = section(section_ids.custom, name_bytes(fingerprint_section) + uleb(folded_bytes(wasm)))
+	wasm + section(section_ids.custom, name_bytes(call_sites_section) + vector(sites)) + section(section_ids.custom, name_bytes(raisers_section) + vector(raisers)) + fingerprint
 }
 # the call sites read off runtime.wasm's relocations and code
 def worked_out_call_sites(): list {

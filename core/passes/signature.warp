@@ -1,8 +1,8 @@
 # warp.signature (notes/library_zero_bake.md "The module interface", L3): what a program needs of a prebuilt standard
 # module, so linking it reads none of its text: the hash of the source it was built from, the modules it uses, each
-# definition's parse (declared_only at link time, prelude_words.warp with_reached, as a slice of its text was), the
-# rewrite rules of its file (those the compiler keeps for it stay the compiler's, rewrites.warp module_rule_paths)
-# and its foreign type names. One warp value, packed (pack): reading it is an unpack, no parse (a 40 KB parse was
+# definition's parse (declared_only at link time, prelude_words.warp with_reached, as a slice of its text was), packed
+# on its own so a compile unpacks only the definitions it reaches, the rewrite rules of its file (those the compiler
+# keeps for it stay the compiler's, rewrites.warp module_rule_paths) and its foreign type names. One warp value, packed (pack): reading it is an unpack, no parse (a 40 KB parse was
 # ~0.3 s). The first section behind the header, so a reader reads its bytes first. `warp signature <m>` shows it as
 # warp text
 SIGNATURE_SECTION = "warp.signature"
@@ -14,7 +14,7 @@ module_signature_node(name: text, image: list): Node := {
 	path = std_module_path(name)
 	source = file_text(path) ?? ""
 	uses = use_lines(source)
-	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), plain_node(parsed(slice#2, uses))]))
+	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), Text(pack(plain_node(parsed(slice#2, uses))))]))
 	curly_list([
 		field_node("source", Text(source_hash(try read(path) else ""))),
 		field_node("uses", square_list(used_modules(source).map(module => Text(module)))),
@@ -33,7 +33,7 @@ module_signature(name: text, wasm: list): ModuleSignature? := {
 	fields = {}
 	for entry in items_of(unpack(utf8_text(wasm[place#1 ..< place#2]))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", slice#3, module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"))
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])

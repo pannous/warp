@@ -364,3 +364,25 @@ void* warp_host_callback(void* word, void* caller, const void* values, size_t co
 	*top = before;
 	return NULL;
 }
+// A host word the driver doesn't answer, owned by a library beside warp or by none, found at its first call: opening
+// libwarp_gpu and libwarp_window to look was half of hello's run once every program linked prelude.wasm, which
+// imports clipboard_text. Its data: the word's name, the engine its owner reads values with, the owner once found,
+// and the word naming it when none owns it (driver.warp unanswered_word)
+typedef void* (*wasm_callback_t)(void*, void*, const void*, size_t, void*, size_t);
+struct lazy_word { char* name; void* engine; wasm_callback_t owner; int64_t unanswered; int asked; };
+void* lazy_library_word(char* name, void* engine, int64_t unanswered) {
+	struct lazy_word* word = calloc(1, sizeof *word);
+	word->name = strdup(name);
+	word->engine = engine;
+	word->unanswered = unanswered;
+	return word;
+}
+void* warp_lazy_host_callback(void* data, void* caller, const void* values, size_t count, void* results, size_t results_count) {
+	struct lazy_word* word = data;
+	if (!word->asked) {
+		word->asked = 1;
+		word->owner = (wasm_callback_t)library_word(word->name);
+	}
+	if (word->owner) return word->owner(word->engine, caller, values, count, results, results_count);
+	return warp_host_callback((void*)(intptr_t)word->unanswered, caller, values, count, results, results_count);
+}
