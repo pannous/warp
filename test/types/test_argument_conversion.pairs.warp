@@ -1,0 +1,7 @@
+# An argument meeting a parameter typed T converts through the program's conversions to T (decision as-promotes, card
+# argument-parameter-conversion); an instance of T, and a value of no source type, pass as they are
+'class C { n: int }; k: int as C := C(k * 10); g(c: C) := c.n; g(4)'	40
+'class C { n: int }; k: int as C := C(k * 10); g(c: C) := c.n; g(C(3))'	3
+'class P { name: text }; p: P as text := p.name; shout(t: text) := t + "!"; shout(P("ada"))'	"ada!"
+'use units; f(q: Quantity) := q.dims; f(2)'	0
+'use units; f(q: Quantity) := q.unit; f(2 km)'	"km"
