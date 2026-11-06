@@ -157,6 +157,8 @@ global rule_enums = {}
 global rule_instances = {}
 # the program's classes, whose construction `Counter(3)` is an instance (`where $o is instance`)
 global rule_classes = {}
+# the words taking a block as data, lib/markup's style(sheet: data): `style: {…}` holds data, no structure's items
+global rule_data_words = {}
 # the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
 global rule_program = Node.Empty
 # the classes and the program's names assigned an instance of one, name → class (`where $u is Unit`), worked out when a
@@ -310,6 +312,7 @@ sugar_applied(program: Node, rules: list): Node := {
 	rule_case_holders = case_holders_in(nodes)
 	rule_instances = instance_names_in(program, outer_nodes_in(program))
 	rule_classes = class_names_of(program)
+	rule_data_words = data_positions_called(program)
 	rule_program = program
 	rule_types = ø
 	rule_varying_known = no
@@ -1386,6 +1389,8 @@ written_later(n: Node, inside: bool): list := {
 read_now(code: Node): list := {
 	if code is symbol { return [name_of(code)] }
 	if is_lambda(code) or is_curly_group(code) { return [] }
+	# `style: { color: c }`: a word's data block is read as it is made, no code run later
+	if is_data_block(code) { return items_of(value_of(code)).flat_map(read_now) }
 	parts_of(code).flat_map(read_now)
 }
 # [name, the names it mentions] of a function or value definition, else ø
@@ -1710,8 +1715,11 @@ handler_runs(items: list): list := {
 	grouped
 }
 # `div{ "a", on click {…} }`: a word nothing binds keying a block (data_blocks.warp is_free_tag), whose items are the
-# structure's items; a class's construction `Point{ x: 1 }` is none
-is_word_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n)) and not binds_any(rule_scope, name_of(key_of(n)))
+# structure's items; a class's construction `Point{ x: 1 }` is none, nor a word's data `style: { color: c }`, which
+# is live as a whole when it reads a varying value
+is_word_block(n: Node): bool := is_keyed_block(n) and not binds_any(rule_scope, name_of(key_of(n))) and not rule_data_words.has(name_of(key_of(n)))
+is_data_block(n: Node): bool := is_keyed_block(n) and rule_data_words.has(name_of(key_of(n)))
+is_keyed_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))
 binds_any(scope: map, name: text): bool := binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type) or rule_classes.has(name)
 
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
