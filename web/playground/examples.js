@@ -51,12 +51,12 @@ def total(xs...) = sum xs
 def area(r) = r * r * 3
 def area(w, h) = w * h
 [greet("Ada"), greet(greeting: "Hi", name: "Bob"), total(1, 2, 3), area(2), area(2, 3)]` },
-	"polyglot calls": { value: '[3 42 [10 20 30] [11 12 13] "Hello Swift"]', code: `// write functions the way you know them from Rust, Swift, Kotlin…
+	"polyglot calls": { value: '[3, 42, [10, 20, 30], [11, 12, 13], "Hello Swift"]', code: `// write functions the way you know them from Rust, Swift, Kotlin…
 add = |a, b| a + b
 twice = { |x| x * 2 }
 func greet(person name: String) -> String { "Hello " + name }
 fun Int.plus(n: Int) = this + n
-[add(1, 2), twice(21), [1 2 3].map { $0 * 10 }, plus.([1 2 3], 10), greet(person: "Swift")]` },
+[add(1, 2), twice(21), [1 2 3].map { $0 * 10 }, plus([1 2 3], 10), greet(person: "Swift")]` },
 	broadcasting: { value: '[[1, 4, 9], [1, 4, 9, 16]]', code: `// a function of one number works on a whole list
 square := it * it
 xs = [1 2 3 4]
