@@ -352,6 +352,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 				if slice#4 == ø and uses == ø { uses = use_lines(module) }
 				# (a linked one's parse packed alone in its signature, unpacked once reached)
 				slice_node = early_sugared(if slice#4 != ø then unpack(slice#4) else plain_node(parsed(slice#2, uses)))
+				word_reached(slice#4 != ø and slice#1 == slice#3)
 				# (a linked module's word under its library_word is compiled here: the module exports its written name)
 				if slice#1 != slice#3 { slice_node = renamed(slice_node, slice#3, symbol(slice#1)) }
 				else if slice#4 != ø { slice_node = declared_only(slice_node) }

@@ -14,6 +14,9 @@ WARP=${WARP:-$warp_binary}
 LOCK=$HOME/.cache/warp/full-suite.lock
 STORE=$warp_store
 SUMMARY='failed in [0-9]* files\|tests passed in [0-9]* files'
+# one row per run of how its compiles linked the standard modules (card vitals-module-compile): the module words linked
+# and compiled from source, the fallbacks and why, summed over the compiles' WARP_LINKS lines; scripts/vitals.py reads it
+LINKING=data/vitals/linking.jsonl
 
 commit=0
 [ "${1:-}" = --commit ] && { commit=1; shift; }
@@ -51,7 +54,8 @@ installed=$(dirname "$(readlink -f "$WARP")")
 mkdir -p "$(dirname "$pinned")" && cp -Rc "$installed" "$pinned" || { echo "full-suite: no copy of $installed" >&2; exit 1; }
 # the registry's packages, which tests use by path (`use "packages/colors/colors.warp"`, decision package-use-by-path)
 "$tree/scripts/link-packages.sh" "$snapshot" >/dev/null || echo "full-suite: no packages linked: the package tests fail" >&2
-(cd "$snapshot" && WARP_NO_WINDOW=1 WARP_HINTS=0 "$pinned/$(basename "$(readlink -f "$WARP")")" test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
+rm -f "$scratch/links.jsonl"
+(cd "$snapshot" && WARP_LINKS="$scratch/links.jsonl" WARP_NO_WINDOW=1 WARP_HINTS=0 "$pinned/$(basename "$(readlink -f "$WARP")")" test --each test) >"$scratch/results.txt" 2>"$scratch/errors.txt"
 summary=$(tail -1 "$scratch/results.txt" | grep "$SUMMARY")
 if [ -z "$summary" ]; then
 	echo "full-suite: the run at $tip died without its summary; test/results.txt kept. Last errors:" >&2
@@ -60,6 +64,15 @@ if [ -z "$summary" ]; then
 fi
 mv "$scratch/results.txt" "$report"
 echo "full-suite: $summary at $tip"
+mkdir -p "$(dirname "$LINKING")" && python3 - "$scratch/links.jsonl" "$tip" >>"$LINKING" <<'SUMMED'
+import collections, datetime, json, re, sys
+lines = [json.loads(line) for line in open(sys.argv[1]) if line.strip()] if __import__("os").path.exists(sys.argv[1]) else []
+reasons = collections.Counter(re.sub(r" \(.*", "", said) for line in lines for said in line["fallbacks"])
+print(json.dumps({"date": datetime.datetime.now().isoformat(timespec="minutes"), "commit": sys.argv[2], "compiles": len(lines),
+	"linked": sum(line["linked"] for line in lines), "source": sum(line["source"] for line in lines),
+	"fallbacks": sum(len(line["fallbacks"]) for line in lines), "reasons": dict(reasons.most_common(10))}))
+SUMMED
+echo "full-suite: linking coverage of the run in $LINKING: $(tail -1 "$LINKING")"
 # the baseline of the compiler that ran: its store record keeps these results, so a branch compares its touched tests
 # against the record of its merge base's compiler instead of rerunning them on main
 compiler_hash=$(cut -d' ' -f1 "$pinned/warp.wasm.inputs" 2>/dev/null)

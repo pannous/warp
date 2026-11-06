@@ -63,6 +63,7 @@ left_out_runtime_words(kept: list): list := {
 # `links`; a program links them unless a `warp build` compiles them in (modules_linked)
 compile(source: text, folder: text, library_runtime: any = ø, links: any = ø): any := {
 	fresh_module()
+	links_reset()
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
@@ -108,7 +109,8 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	# modules' sources, nothing of the linked attempt kept; only a binding refusal (emitter.warp link_refusal) is
 	# retried, a program's own error never (every program links the prelude)
 	if made is text and link_refused {
-		warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source"
+		fallback_warned(module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source")
+		links_recorded()
 		return compile(written, folder, library_runtime, no)
 	}
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
@@ -119,7 +121,13 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	# and its hints: `A4 is sound's; fix: use sound`, the use warp beautify writes
 	# unless the run asked for none (`warp --no-hints`, WARP_HINTS=0: wiki/warning.md)
 	if env("WARP_HINTS") != "0" { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
+	links_recorded()
 	made
+}
+# a prebuilt module compiled from its source after all: said, and counted (passes.warp WARP_LINKS)
+def fallback_warned(said: text) := {
+	warn said
+	link_fallback(said)
 }
 
 # what the checks diagnosed past the first `known` facts; an error among them fails the compile with its text (card
@@ -155,7 +163,7 @@ linked_libraries(source: text): list := {
 		signature = module_signature(name, wasm)
 		image = if signature == ø then "no " + SIGNATURE_SECTION + " (built before it)" else if not built_of_text(name, signature.source) then "lib/" + name + module_extension + " differs from the text it was built of" else library_image_of(name, signature)
 		if image is text {
-			warn name + ".wasm not linked: " + image + "; compiled from source"
+			fallback_warned(name + ".wasm not linked: " + image + "; compiled from source")
 			continue
 		}
 		images += [image]

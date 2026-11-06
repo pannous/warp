@@ -82,6 +82,18 @@ lowered_node(n: Node): Node := {
 # WARP_TIMES set: `§T <milliseconds> <label>` printed where a phase of the compile starts, so a build's log (its
 # record's build.log) holds its phases; scripts/phase-times.py sums the spans (notes/compile_speed.md). Silent unset
 TIMES = env("WARP_TIMES") ?? ""
+# WARP_LINKS=<file>: each compile appends a line saying how many module words it linked, how many it compiled from
+# their source, and why a prebuilt module fell back to its source (card vitals-module-compile, scripts/vitals.py)
+LINKS = env("WARP_LINKS") ?? ""
+global words_linked = 0
+global words_from_source = 0
+global link_fallbacks = []
+def links_reset() := { words_linked = 0; words_from_source = 0; link_fallbacks = [] }
+def word_reached(linked: bool) := { if linked { words_linked += 1 } else { words_from_source += 1 } }
+def link_fallback(said: text) := { link_fallbacks += [said] }
+def links_recorded() := {
+	if LINKS != "" { append_file(LINKS, "{\"linked\": ${words_linked}, \"source\": ${words_from_source}, \"fallbacks\": [" + link_fallbacks.map(said => "\"" + said.replace("\"", "'") + "\"").join(", ") + "]}\n") }
+}
 def timed(label: text) := { if TIMES != "" { print "§T " + "${clock()}" + " " + label } }
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
