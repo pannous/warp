@@ -16,9 +16,9 @@ class Interval {
 	divide(o: any): Interval := { b = as_interval(o); interval_spanned(value / b.value, [low / b.low, low / b.high, high / b.low, high / b.high]) }
 	// `y < x` certainly: the whole interval below (P224b); possibly_less for some of it
 	less(o: any): bool := high < as_interval(o).low
-	more(o: any): bool := low > as_interval(o).high
+	greater(o: any): bool := low > as_interval(o).high
 	possibly_less(o: any): bool := low < as_interval(o).high
-	possibly_more(o: any): bool := high > as_interval(o).low
+	possibly_greater(o: any): bool := high > as_interval(o).low
 	// `a ≈ b`: the intervals overlap
 	approximately(o: any): bool := { b = as_interval(o); low <= b.high and b.low <= high }
 	equals(o: any): bool := o is Interval and value == o.value and low == o.low and high == o.high
@@ -44,7 +44,7 @@ class Gaussian {
 	times(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value * b.value, this, b.value, b, value) }
 	divide(o: any): Gaussian := { b = as_gaussian(o); gaussian_combined(value / b.value, this, 1.0 / b.value, b, -value / (b.value * b.value)) }
 	less(o: any): bool := high() < as_gaussian(o).low()
-	more(o: any): bool := low() > as_gaussian(o).high()
+	greater(o: any): bool := low() > as_gaussian(o).high()
 	approximately(o: any): bool := { b = as_gaussian(o); low() <= b.high() and b.low() <= high() }
 	equals(o: any): bool := o is Gaussian and value == o.value and deviation() == o.deviation()
 	// σ: √(Σ contribution²)
