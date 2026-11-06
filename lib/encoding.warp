@@ -48,9 +48,7 @@ def base64_decode_bytes(t: text): list {
 				digits = digits + 1
 				n = n * 64 + v
 				bits = bits + 6
-				flushed = encoding_flush_byte(bits, n, out)
-				bits = flushed#1
-				n = flushed#2
+				if bits >= 8 { bits = bits - 8; p = 2 ** bits; out.add(n /! p); n = n % p }
 			}
 		}
 	}
@@ -103,16 +101,6 @@ hex_decode(t: text): text := from_utf8(hex_decode_bytes(t))
 BASE32_DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 BASE32HEX_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUV"
 encoding_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
-// one byte from the bit buffer when at least 8 bits are held; returns [bits left, n left]
-encoding_flush_byte(bits: int, n: int, out: list): list := {
-	if bits >= 8 {
-		bits = bits - 8
-		p = 2 ** bits
-		out.add(n /! p)
-		n = n % p
-	}
-	[bits, n]
-}
 def base32_with(subject: text or list, digits: text): text {
 	b = encoding_bytes(subject)
 	out = ""
@@ -139,9 +127,7 @@ def base32_bytes_with(t: text, digits: text, name: text): list {
 		if v < 0 { raise name + ": " + written[i] + " at " + str(i + 1) + " is no " + name + " digit" }
 		n = n * 32 + v
 		bits = bits + 5
-		flushed = encoding_flush_byte(bits, n, out)
-		bits = flushed#1
-		n = flushed#2
+		if bits >= 8 { bits = bits - 8; p = 2 ** bits; out.add(n /! p); n = n % p }
 	}
 	out
 }
