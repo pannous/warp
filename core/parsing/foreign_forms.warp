@@ -5,9 +5,12 @@
 // A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
 
 // Modifiers of other languages with no meaning in warp ; `static` marks the statement
-FOREIGN_MODIFIERS = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local", "virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"]
-// Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant)
-DEFINITION_MODIFIERS = ["global", "export", "import", "const", "final", "mutable", "mut"]
+FOREIGN_MODIFIERS = ["private", "protected", "internal", "static", "extern", "external", "C", "inline", "local", "virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"]
+// Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant);
+// `public f(x) := …` marks an untyped library word its importers may call, read off the module's text (decision
+// library-word-visibility), the definition the same without it
+DEFINITION_MODIFIERS = ["global", "export", "import", "const", "final", "mutable", "mut", "public"]
+PUBLIC_WORD = "public"
 // Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 // `open`, `abstract`, `sealed`, `final`, visibility
 CLASS_MODIFIERS = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"]
@@ -62,7 +65,8 @@ def without_foreign_modifiers(p: Parser, first: text): Node := {
 		next = p.code[start .. at]
 		if not is_modifier(next) {
 			foreign_only = words.all(word => FOREIGN_MODIFIERS.contains(word))
-			if foreign_only or not function_keywords.contains(next) { return ø }
+			public_definition = #words == 1 and first == PUBLIC_WORD and char_at(p, at) == "("
+			if foreign_only or not (function_keywords.contains(next) or public_definition) { return ø }
 			p.at = start
 			statement = expression(p, 0)
 			return if words.contains(STATIC_WORD) then attributed(STATIC_WORD, true, statement) else statement

@@ -98,6 +98,8 @@ slice_spans(source: text): list := {
 # exported under its name (decision host-callback-exports)
 export_word = "export"
 is_exported_slice(slice: list): bool := leading_name(slice#2) == export_word
+# `public f(x) := …`: an untyped library word its importers may call (decision library-word-visibility), no host export
+public_word = "public"
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
@@ -106,7 +108,7 @@ name_defined_in(line: text): text := {
 	declared = operator_declared(operator_statement(blank_words(line)))
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1.glyph }
 	leading = leading_name(line)
-	if leading == export_word { return name_defined_in(line[#leading ..].trim()) }
+	if leading == export_word or leading == public_word { return name_defined_in(line[#leading ..].trim()) }
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if count(leading) == 0 or leading == rewrite_word { return "" }
 	following = line[#leading ..].trim()
