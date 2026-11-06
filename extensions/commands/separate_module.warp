@@ -82,7 +82,7 @@ def value_types_end(content: list, at: int): int {
 # the program importing only the host words, runtime functions and types its code uses: its code emitted relocatable
 # (relocates), each index moved to the linked numbering: the called imports, the linked modules' words it calls
 # (imported from `warp/<module>` by name), its own functions; the fixed GC types, the runtime's function types used,
-# each linked module's class group as that module declares it, its own classes, its own function types; its texts
+# each linked module's classes, its own classes, its own function types; its texts
 # behind the runtime's and the linked modules' segments (card wasm-module-linking, L5c)
 def linked_bytes(functions: list, entry: text = "main"): list {
 	calls = relocated_operands(functions, relocated.calls)
@@ -109,7 +109,7 @@ def linked_bytes(functions: list, entry: text = "main"): list {
 	types_move = Move(0, retyped)
 	fixed_entries = range_list(fixed).map(i => gc_bytes(gc_definition(module.gc_order[i])))
 	runtime_types = runtime_function_type_entries(concatenated(fixed_entries))
-	class_types = groups.filter(group => #group > 0).map(group => [rec_group_byte] + uleb(#group) + concatenated(group.map(name => gc_bytes(gc_definition(name)))))
+	class_types = classes.map(name => gc_bytes(gc_definition(name)))
 	first_own_type = fixed + #used + #classes
 	c_types = c_import_types()
 	first_word_type = first_own_type + #functions + #c_types
@@ -151,8 +151,8 @@ def linked_globals_imported(): list {
 	}
 	owned
 }
-# the classes, each linked module's whole group, then the program's own; every group in one canonical order (by
-# name, each class behind its supertype), so a module's group here and in the module itself canonicalize to one type
+# the classes, each linked module's, then the program's own; each group in one order (by name, each class behind its
+# supertype, which a type of its own group must follow: module_layout.warp type_entries)
 def class_groups(fixed: int): list {
 	# (the images come dependencies first: a class two carry, sound's copy of units' Length, is the first's)
 	theirs = []

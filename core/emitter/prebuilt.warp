@@ -274,7 +274,7 @@ def prepended_bytes(functions: list): list {
 	if relocates() and not module.relocating and not shaken() { drop_imports(functions) }
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
-	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
+	class_types = classes.map(name => gc_bytes(gc_definition(name)))
 	types = section(section_ids.type, with_section_entries(runtime_part(section_ids.type), class_types + function_types + c_import_types()))
 	c_entries = c_import_entries(module.runtime_image.types + #classes + #functions)
 	declared = section(section_ids.function, with_section_entries(if shaken() then shaken_function_types() else runtime_part(section_ids.function), functions.map(f => uleb(own_function_type(f))) + stub_types()))

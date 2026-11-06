@@ -62,16 +62,10 @@ def names_section(functions: list): list {
 
 # the type section's entries of the GC types, in index order: each its own, but the class structs (contiguous:
 # instances.warp declare_class_structs) one recursion group, its types told apart by their place in it
-def type_entries(): list {
-	entries = []
-	group = []
-	for name in module.gc_order {
-		if name in module.class_structs { group += [gc_bytes(gc_definition(name))] } else { entries += [gc_bytes(gc_definition(name))] }
-	}
-	if #group == 0 { return entries }
-	first = module.gc_indices[module.gc_order.filter(name => name in module.class_structs)#1]
-	entries[0 ..< first] + [[rec_group_byte] + uleb(#group) + concatenated(group)] + entries[first ..< #entries]
-}
+# each type its own recursion group, a class's struct too: wasm tells types of two modules apart by their groups, so a
+# class's struct in a group with the module's other classes (lib/time.wasm's Instant beside Duration) was another type
+# than the same class's in a program declaring only it, and an instance made by one failed the other's casts
+def type_entries(): list { module.gc_order.map(name => gc_bytes(gc_definition(name))) }
 # the name a module exports its global under
 def exported_global_name(name: text): text := "global/" + name
 # main (a standard module's warp/start), memory, the globals the runner reads after a trap, then the program's functions
