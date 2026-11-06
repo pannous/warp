@@ -7,4 +7,4 @@
 'class D { ms: int }; n: int as D := D(n); class I { ms: int; minus(o: I or D) := if o is I then ms - o.ms else I(ms - o.ms) }; [I(9) - I(2), (I(9) - 2).ms]'	[7, 7]
 # a bare number beside an Instant names no unit (decision instant-bare-number); a duration compares the time of day
 'use time; try { Instant(0) > 5 } catch e { e.message }'	"5 what? write t > 5 h, or 5 AM"
-'use time; use units; [Instant(36000000) > 9h, Instant(0) > Duration(1)]'	[yes, no]
+'use time; [Instant(36000000) > Duration(32400000), Instant(0) > Duration(1)]'	[yes, no]
