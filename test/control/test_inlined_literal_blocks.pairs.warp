@@ -4,3 +4,5 @@
 'f(x) := { r = 0; 4 times { r += x }; r }; f(5)'	20
 'k = 0; repeat(n: int, body: block) := for j in 1 to n { body() }; repeat(4, { k += 2 }); k'	8
 'xs = []; 3 times { xs = xs + [7] }; xs'	[7, 7, 7]
+'[1 2 3].map(x => { t = 0; x times { t += 1 }; t })'	[1, 2, 3]
+'f = x => { t = 0; 3 times { t += 1 }; t }; f(2)'	3

@@ -18,6 +18,9 @@ test/results.txt of 03:46, 2630 red lines of 15269.
 ## How
 - Cluster first: run your folders (`nice -n 19 warp test <folder>`, at most two folders a run), group the red lines by
   their error message, and fix the biggest cluster first. One cause fixed often clears dozens of lines.
+- Question every card and red line first (user, praised the rejections of Rust-era examples and esoteric edge cases
+  nobody needs): is it really worth it? Unsure → warp-interviewer with a recommendation; never build it just because
+  it is listed.
 - Judge each red line (notes/agents/common.md, memory judge-failing-tests): a line pinning esoteric old syntax or a
   known flaw goes to warp-interviewer as a question, never a quiet test edit. Never modify an existing test without
   the user's OK; a test may be upgraded when the code now does better.

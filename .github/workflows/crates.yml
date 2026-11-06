@@ -1,0 +1,72 @@
+# .github/workflows/crates.yml
+name: Crates
+
+# Precompiled crate shims (card precompiled-crates, notes/crate_adapter.md "Plan: precompiled crates"): each target builds
+# the C libraries of lib/crates/*.warp with scripts/warp-crate publish, and the release `crates` gets them, their native
+# files and the index crates.json, from which `scripts/warp-crate fetch <name>` installs them without cargo. A shipped
+# build's key is generator, manifest and target, never the toolchain: only the C ABI crosses. Runs when a manifest or
+# the generator changes on main, or by hand (dry: build only, publish nothing).
+on:
+  push:
+    branches: [ main ]
+    paths: [ "lib/crates/**", "scripts/warp-crate", "scripts/crate_adapter/**", ".github/workflows/crates.yml" ]
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: build the shims as workflow artifacts, publish nothing
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE: crates
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+        - { os: macos-latest, target: aarch64-apple-darwin }
+        - { os: macos-15-intel, target: x86_64-apple-darwin }
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v7
+    - uses: dtolnay/rust-toolchain@stable
+    - name: build the shims
+      env:
+        WARP_CRATES_CACHE: ${{ runner.temp }}/crates
+      run: python3 scripts/warp-crate publish dist lib/crates/*.warp
+    - name: the target is the one the matrix names
+      run: test -f "dist/crates-${{ matrix.target }}.json"
+    - uses: actions/upload-artifact@v7
+      with:
+        name: crates-${{ matrix.target }}
+        path: dist/
+
+  publish:
+    needs: build
+    if: ${{ !inputs.dry }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        pattern: crates-*
+        path: dist
+        merge-multiple: true
+    - name: the index of all targets
+      run: python3 scripts/warp-crate index dist
+    - name: the release crates, its assets replaced
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        shopt -s nullglob
+        gh release view "$RELEASE" >/dev/null 2>&1 || gh release create "$RELEASE" --prerelease --title "crate shims" \
+          --notes "Precompiled Rust crate shims for warp's FFI (scripts/warp-crate fetch, notes/crate_adapter.md); the index is crates.json."
+        gh release upload "$RELEASE" dist/*.so dist/*.dylib dist/*.warp dist/crates.json --clobber
