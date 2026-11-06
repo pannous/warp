@@ -888,3 +888,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-06 user: after the current core finishes, a card-closing sprint. Triage every open card first: still relevant? doable without core/ (lib/, extensions/, samples, tests, scripts)? or needs core/? Then iterate quickly over the cards that need no core change; core cards wait for a later sprint.
 - 2026-11-06 user (card sprint): a worker may do several cards in a quick row, one quick commit each, and skip the general tests when certain a change needs none (a small sample or tour example, a note, a wording); anything that can change compiled behavior still gets its smoke test.
 - 2026-11-06 user (card sprint, emphatic): a card whose change affects core/ is not approached in this sprint: it moves to the Core column (the worker reports 'core: <key> <reason>' to the Supervisor, who moves it in a batch) and the worker takes the next card.
+- 2026-11-06 card sprint, round 1 (user):
+  - core-dir-order: dir(module) lists names sorted alphabetically (`dir(time)#1` → "day_number"), as Python; test_dir stays.
+  - triage-pipes: `|` between two ints is bit-or (`n = 2; m = 4; n | m` → 6); it pipes only when its right side is a function.
+  - use-require-import: `use <word>` refuses with a fix-it naming the module ("square is a word of math: use math"); test_include:12-14 may change to `use math; square 7` (user OK to edit those lines).
+  - pixels-bytes: `.bytes` of a number takes the endianness as a required parameter, `1.bytes(.big)` / `1.bytes(.little)`, no default (to avoid errors); a list is its items' bytes in that order.
