@@ -342,7 +342,8 @@ def runtime_fingerprint(): int {
 }
 def folded_bytes(bytes: list): int {
 	folded = 0
-	for byte in bytes { folded = (folded * 257 + byte) % 1000000007 }
+	# `part`, not `byte`: `for byte in xs` walks xs.bytes (decision text-unit-plurals)
+	for part in bytes { folded = (folded * 257 + part) % 1000000007 }
 	folded
 }
 

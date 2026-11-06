@@ -1,0 +1,82 @@
+# The definitions of lib/web.webidl (card js-webidl-bindings) as extensions/js_globals.warp checks `use js` with:
+# each interface, mixin, namespace and dictionary with its partials, its members and the types they give
+# (a type WebIDL does not define, a text, a number, gives UNCHECKED)
+UNCHECKED = ""
+# the member `new Name(…)` reaches
+CONSTRUCTOR_MEMBER = ""
+DEFINITION_WORDS = ["interface", "namespace", "dictionary", "enum", "callback", "typedef"]
+
+class WebIdlMember {
+	type: text
+	operation: bool
+}
+class WebIdlDefinition {
+	members: map = {}
+	parents: list = []
+}
+# the statements between `;`, each opening a definition `interface Name : Parent {` before its first member, closing
+# it `}`, a member of the open one, or `Name includes Mixin`
+webidl_read(source: text): map := {
+	definitions = {}
+	open = ""
+	for written in webidl_code(source).split(";") {
+		statement = written.trim()
+		if statement.starts_with("}") { open = "" }
+		else {
+			head = webidl_words(statement.split("{")#1)
+			kind = webidl_definition_word_at(head)
+			if statement.contains("{") and kind >= 0 {
+				open = webidl_opened(definitions, head, kind)
+				statement = statement.split("{")[1 ..].join("{")
+			} else if #head == 3 and head#2 == "includes" { webidl_definition(definitions, head#1).parents += [head#3] }
+			if open != "" { webidl_add_member(webidl_definition(definitions, open), statement) }
+		}
+	}
+	definitions
+}
+# where a definition's word stands in a head, -1 where none does
+webidl_definition_word_at(head: list): int := {
+	for at in 0 ..< #head { if head[at] in DEFINITION_WORDS { return at } }
+	-1
+}
+# the name of the definition its head opens, its parent noted: `partial interface mixin Name`, `interface Name : Parent`
+webidl_opened(definitions: map, head: list, kind: int): text := {
+	at = if #head > kind + 1 and head#(kind + 2) == "mixin" then kind + 3 else kind + 2
+	name = head#at
+	definition = webidl_definition(definitions, name)
+	if #head > at + 1 and head#(at + 1) == ":" { definition.parents += [head#(at + 2)] }
+	name
+}
+webidl_definition(definitions: map, name: text): WebIdlDefinition := {
+	if not definitions.has(name) { definitions[name] = WebIdlDefinition() }
+	definitions[name]
+}
+# a member statement: `constructor(…)`, `readonly attribute Type name` (its type `(A or B)` too), `const Type NAME = 1`, `Type name(…)`
+webidl_add_member(definition: WebIdlDefinition, written: text) := {
+	statement = written.trim()
+	if statement == "" { return }
+	if statement.starts_with("constructor") {
+		definition.members[CONSTRUCTOR_MEMBER] = WebIdlMember(UNCHECKED, yes)
+		return
+	}
+	attribute = "attribute" in webidl_words(statement)
+	operation = not attribute and statement.contains("(")
+	words = webidl_words(if operation then statement.split("(")#1 else statement.split("=")#1)
+	if #words < 2 { return }
+	definition.members[words#(#words)] = WebIdlMember(webidl_type(words#(#words - 1)), operation)
+}
+# a type as the definitions name it: `Document?` is Document; `Promise<X>`, `(A or B)` none of them
+webidl_type(written: text): text := written.replace("?", "").replace(")", "")
+# the words of a statement, its extended attributes `[…]` left out, a `:` a word of its own
+webidl_words(statement: text): list := {
+	plain = ""
+	depth = 0
+	for c in statement.chars() {
+		if c == "[" { depth += 1 }
+		else if c == "]" { depth -= 1 }
+		else if depth == 0 { plain += if c == ":" then " : " else if c == "\n" or c == "\t" then " " else c }
+	}
+	plain.split(" ").filter(word => word != "")
+}
+# the source without its `//` comments
+webidl_code(source: text): text := source.split("\n").map(line => line.split("//")#1).join("\n")

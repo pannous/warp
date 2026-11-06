@@ -175,15 +175,17 @@ ns() := known_unit("ns")
 // starts away from zero, so `20°C` is the temperature 20 on it, not 20 times one degree
 °C = known_unit("°C")
 °F = known_unit("°F")
-rewrite $e * $u => quantity($e, $name) where $e is number and $u is symbol and $u in [°C, °F] and $name = spelled($u)
 // `2 hours in minutes`: `in` is a word of the phrase, so the run is taken whole, before `2 hours` alone (rules try
 // a phrase's runs in their order)
 rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `20°C`, `20 °C`, `68 °F`: a temperature counts from its scale's zero (quantity), never a multiple of one degree
+// `100 °C in °F`, `-40 °F as °C`: the temperature taken whole before the conversion, as `2 hours in minutes` is
+rewrite $e $u in $t => ($e $u) in $t where $e is number and $u in [°C, °F]
+rewrite $e $u as $t => ($e $u) as $t where $e is number and $u in [°C, °F]
 rewrite $e * $u => quantity($e, $name) where $e is number and $u in [°C, °F] and $name = spelled($u)
 rewrite $e $u => quantity($e, $name) where $e is number and $u in [°C, °F] and $name = spelled($u)
-rewrite $q as $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
-rewrite $q in $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
+rewrite $q as $u => $q.to($name) where $u in [°C, °F] and not $q in [°C, °F] and $name = spelled($u)
+rewrite $q in $u => $q.to($name) where $u in [°C, °F] and not $q in [°C, °F] and $name = spelled($u)
 // `[3, 4] cm`, `sizes() cm`: a unit after a list, written out or given by a call or a name, measures each of its items
 rewrite $xs $u => $xs.map(item => item * $u) where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and list_valued($xs, $program)
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is; a unit

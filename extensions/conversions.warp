@@ -147,16 +147,179 @@ conversions(program: Node): Node := {
 			targets[conversion#2] = targets[conversion#2] + [conversion]
 		}
 	}
-	if not order { return if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline) }
-	functions = order.map(target => conversion_functions(target, targets[target], targets, scope)).flatten()
-	typed = typed_parameters(kept, targets)
-	converting = {}
-	for type in typed.values.flatten() { if converts_to(type, targets) { converting[type] = yes } }
-	functions += converting.keys.map(type => argument_conversion(type, targets))
-	# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
-	# to·Duration knowing no Quantity)
-	if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
-	List(functions + kept.map(statement => converted_arguments(converting_uses(statement, targets), typed, targets)), Bracket.None, Separator.Newline)
+	checked = if not order {
+		if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline)
+	} else {
+		functions = order.map(target => conversion_functions(target, targets[target], targets, scope)).flatten()
+		typed = typed_parameters(kept, targets)
+		converting = {}
+		for type in typed.values.flatten() { if converts_to(type, targets) { converting[type] = yes } }
+		functions += converting.keys.map(type => argument_conversion(type, targets))
+		# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
+		# to·Duration knowing no Quantity)
+		if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
+		List(functions + kept.map(statement => converted_arguments(converting_uses(statement, targets), typed, targets)), Bracket.None, Separator.Newline)
+	}
+	forced_conversions(checked)
+}
+
+# --- forced conversions, `x as! T` (decision checked-forced-conversions, convert-bang) ---
+# A library writes `convert!(n: number, to: byte) := …`, the twin of `n: number as byte := …`. `to: T` names the target
+# type, not a value of that type. Every such declaration becomes one function `convert!(value, to)`, and `x as! T`
+# becomes `convert!(x, to: T)`. The 64-bit int wrap stays `as! int` (the emitter's wrapped_int). A named pattern stays
+# for match_patterns. A map forced to a class the program declares, and no convert! of that class, drops unknown fields.
+
+# [source type or "", target, body, the body's name of the value] of `convert!(n: number, to: byte) := body`, else ø
+forced_conversion_of(n: Node): list? := {
+	if not is_key(n, Op.Define) { return ø }
+	head = key_of(n)
+	if not is_call(head) or not (head#1 is symbol) or not is_convert_name(name_of(head#1)) { return ø }
+	arguments = items_of(head)[1 ..]
+	if #arguments != 2 { return ø }
+	target = ""
+	param = ""
+	source = ""
+	for argument in arguments {
+		if is_key(argument, Op.Colon) and key_of(argument) is symbol and name_of(key_of(argument)) == "to" and value_of(argument) is symbol {
+			target = name_of(value_of(argument))
+		} else if argument is symbol {
+			param = name_of(argument)
+		} else if is_key(argument, Op.Colon) and key_of(argument) is symbol and value_of(argument) is symbol {
+			param = name_of(key_of(argument))
+			source = name_of(value_of(argument))
+		} else { return ø }
+	}
+	if target == "" or param == "" { return ø }
+	[source, target, value_of(n), param]
+}
+# the type of `x as! T`, else ø
+forced_type_name(n: Node): text? := {
+	if not is_forced_as(n) { return ø }
+	type = value_of(value_of(n))
+	if type is symbol then name_of(type) else ø
+}
+# `convert!` as written, and the program's own copy of it once a library defines the same word (`convert!·own`)
+convert_word = "convert!"
+is_convert_name(name: text): bool := name == convert_word or name == own_word(convert_word)
+# `convert!·byte`: one function per target, so a linked prelude `convert!` is not what `as! byte` calls when this
+# program adds a target, and a literal `to: T` needs no run-time name test
+clause_name(target: text): text := convert_word + "·" + target
+# the target of `convert!(x, to: byte)` or `convert!(x, to: symbol("tiny"))` when it is written out, else ø
+literal_forced_target(call: Node): text? := {
+	if not is_call(call) or not (call#1 is symbol) or not is_convert_name(name_of(call#1)) { return ø }
+	arguments = items_of(call)[1 ..]
+	if #arguments < 2 { return ø }
+	argument = arguments#2
+	if not is_key(argument, Op.Colon) or not (key_of(argument) is symbol) or name_of(key_of(argument)) != "to" { return ø }
+	value = value_of(argument)
+	if value is symbol { return name_of(value) }
+	if value is text { return value }
+	if is_call(value) and #value == 2 and value#1 is symbol and name_of(value#1) == "symbol" and value#2 is text { return value#2 }
+	ø
+}
+# `x as! T` and a literal `convert!(x, to: T)` call `convert!·T` when this program has that target; a target only the
+# linked prelude converts (`as! byte` with no local clause) stays `convert!(x, to: symbol(T))`
+forced_uses(n: Node, patterns: map, written: map): Node := {
+	walked = children(n, x => forced_uses(x, patterns, written))
+	literal = literal_forced_target(walked)
+	if literal != ø and written.has(literal) {
+		arguments = items_of(walked)[1 ..]
+		return call_of(clause_name(literal), [arguments#1])
+	}
+	name = forced_type_name(walked)
+	if name == ø or name in patterns or keeps_wrapped_int(name) { return walked }
+	if written.has(name) { return call_of(clause_name(name), [key_of(walked)]) }
+	call_of(convert_word, [key_of(walked), Key(symbol("to"), Op.Colon, call_of("symbol", [name]))])
+}
+forced_value = symbol("value")
+# `raise "no forced conversion to T of that value"`
+forced_refusal(target: text): Node := call_of(raise_word, ["no forced conversion to " + target + " of that value"])
+# a field's zero when a map omits it: 0, 0.0, "", no, [], and ø for an optional or unknown type
+forced_field_zero(type: text?): Node := {
+	if type == ø or type == "" or type != required_type(type) { return ø }
+	if type in ["int", "integer", "long", "i64", "i32", "nat", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32", "uint64", "hex", "binary", "octal"] { return 0 }
+	if type in ["float", "double", "f64", "f32", "float32", "float64"] { return 0.0 }
+	if type in ["text", "str", "string"] { return "" }
+	if type in ["bool", "boolean"] { return no }
+	if type == "list" { return [] }
+	ø
+}
+# `Person{name: map_get_or(value, "name", ""), …}`: the declared fields, unknown map keys left out
+forced_instance(class_name: text, declared: Declared, value: Node): Node := {
+	entries = []
+	for name in declared.fields {
+		if name != ø and name != "" {
+			zero = forced_field_zero(if name in declared.field_types then declared.field_types[name] else ø)
+			entries += [Key(symbol(name), Op.Colon, call_of("map_get_or", [value, name, zero]))]
+		}
+	}
+	fields = if #entries == 0 then ø else List(entries, Bracket.Curly, Separator.Newline)
+	Key(symbol(class_name), Op.None, fields)
+}
+# the branch of one target: typed sources in the order written (the last tried first), then an untyped source, then a
+# class built from a map, then the refusal
+forced_branch(target: text, clauses: list, classes: map, patterns: map, written: map): Node := {
+	typed = clauses.filter(conversion => conversion#1 != "")
+	untyped = clauses.filter(conversion => conversion#1 == "")
+	branch = if #untyped > 0 then forced_body(untyped.last, patterns, written) else if target in classes then chosen(Key(forced_value, Op.Is, symbol("map")), forced_instance(target, classes[target], forced_value), forced_refusal(target)) else forced_refusal(target)
+	for conversion in typed.reverse() {
+		branch = chosen(Key(forced_value, Op.Is, symbol(conversion#1)), forced_body(conversion, patterns, written), branch)
+	}
+	branch
+}
+forced_body(conversion: list, patterns: map, written: map): Node := forced_uses(renamed(conversion#3, conversion#4, forced_value), patterns, written)
+# `convert!·T(value)` for each target this program converts by force
+forced_functions(order: list, written: map, classes: map, patterns: map): list := order.map(target => Key(call_of(clause_name(target), [forced_value]), Op.Define, forced_branch(target, written.get(target) ?? [], classes, patterns, written)))
+# the classes still declared in these statements, by name
+forced_classes(statements: list): map := {
+	classes = {}
+	for statement in statements {
+		view = class_view(statement)
+		if view != ø {
+			name = declared_type_name(view#2)
+			if name != ø and name != "" { classes[name] = class_declared(statement, view) }
+		}
+	}
+	classes
+}
+# the program with its convert! declarations as the one dispatcher, and `x as! T` as calls of it
+forced_conversions(program: Node): Node := {
+	patterns = named_patterns_of(program)
+	found = []
+	kept = []
+	for statement in statements_in(program) {
+		conversion = forced_conversion_of(statement)
+		if conversion == ø { kept += [statement] } else { found += [conversion] }
+	}
+	asked = []
+	seen = {}
+	for n in nodes_in(program) {
+		name = forced_type_name(n)
+		if name != ø and name not in patterns and not keeps_wrapped_int(name) and not seen.has(name) {
+			seen[name] = yes
+			asked += [name]
+		}
+	}
+	if #found == 0 and #asked == 0 { return program }
+	classes = forced_classes(kept)
+	written = {}
+	order = []
+	for conversion in found {
+		target = conversion#2
+		if not written.has(target) {
+			written[target] = []
+			order += [target]
+		}
+		written[target] = written[target] + [conversion]
+	}
+	for name in asked {
+		if name in classes and not written.has(name) {
+			written[name] = []
+			order += [name]
+		}
+	}
+	rewritten = kept.map(statement => forced_uses(statement, patterns, written))
+	List(forced_functions(order, written, classes, patterns) + rewritten, Bracket.None, Separator.Newline)
 }
 
 conversions_extension = Extension{name: "conversions", passes: {"definition_heads": conversions}}
