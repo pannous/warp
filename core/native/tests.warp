@@ -9,13 +9,10 @@
 # prints the verdicts, the cases over a second and the total (test-verdicts), the exit status 1 when one failed
 
 creat(path: pointer, mode: i32): i32 from "c"
-dup2(from: i32, to: i32): i32 from "c"
-close(descriptor: i32): i32 from "c"
 chdir(path: pointer): i32 from "c"
 flock(descriptor: i32, operation: i32): i32 from "c"
 kill(child: i32, signal: i32): i32 from "c"
 usleep(microseconds: i32): i32 from "c"
-_exit(status: i32) from "c"
 setrlimit(resource: i32, limit: pointer): i32 from "c"
 getloadavg(loads: pointer, count: i32): i32 from "c"
 
