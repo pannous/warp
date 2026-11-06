@@ -553,14 +553,23 @@ def instance_number(n: Node, value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Node and float_converting_word in module.functions { return instance_cast(n, value, ValueKind.Float) }
 	value
 }
-# `x as! int` (decision cast-checks): converted no matter what, a whole number past 64 bits to its low 64 bits, where
-# `x as int` raises "too big for int"
+# `x as! int` (decision cast-checks): a whole number past 64 bits keeps its low 64 bits, where `x as int` raises
+# "too big for int". byte, u8 and uint8 are not that wrap: they call convert! (0..255). Any other target calls
+# convert! too, or refuses where the program declares none (decision checked-forced-conversions)
 def forced_cast(body: Body, subject: Node, type: Node): TypedCode {
 	value = expression_code(body, subject)
-	if value.kind == ValueKind.Node and type is symbol and names_int(name_of(type)) { return runtime_call("wrapped_int", [value]) }
-	expression_code(body, Key(subject, Op.As, type))
+	word = if type is symbol then name_of(type) else ""
+	if keeps_wrapped_int(word) {
+		if value.kind == ValueKind.Node { return runtime_call("wrapped_int", [value]) }
+		return expression_code(body, Key(subject, Op.As, type))
+	}
+	forced = if "convert!" in module.functions then "convert!" else if own_word("convert!") in module.functions then own_word("convert!") else ""
+	if type is symbol and forced != "" { return call(body, module.functions[forced], [subject, Key(symbol("to"), Op.Colon, type)]) }
+	refuse("no forced conversion to " + (if word != "" then word else "that type"))
 }
 names_int(word: text): bool := core_type_words.get(word) == "int" or word in int_spellings
+# an int name whose forced cast is the 64-bit wrap; byte, u8 and uint8 go through convert! instead
+keeps_wrapped_int(word: text): bool := word != "" and names_int(word) and word not in wrapping_byte_words
 def cast(value: TypedCode, to: ValueKind): TypedCode {
 	if value.kind == ValueKind.Text { return runtime_call(text_reader(to), [value]) }
 	# '7' as int is 7, the text it is
