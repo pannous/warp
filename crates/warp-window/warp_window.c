@@ -38,6 +38,8 @@ static int held_count;
 static int64_t presses, last_pressed;
 static float mouse_x, mouse_y, wheel;
 static int mouse_down;
+// where the button last went down, in the window's points: a stroke starts there (mouse_down_x, mouse_down_y)
+static float down_x, down_y;
 static uint64_t frames, frames_since_title, last_frame_ns, title_ns;
 
 static int windows_refused(void) { return getenv("WARP_NO_WINDOW") || getenv("CI"); }
@@ -103,7 +105,7 @@ static void events_taken(void) {
 		case SDL_EVENT_KEY_DOWN: key_went_down(key_code(event.key.key), event.key.repeat); break;
 		case SDL_EVENT_KEY_UP: key_released(key_code(event.key.key)); break;
 		case SDL_EVENT_MOUSE_MOTION: mouse_x = event.motion.x; mouse_y = event.motion.y; break;
-		case SDL_EVENT_MOUSE_BUTTON_DOWN: mouse_down = 1; break;
+		case SDL_EVENT_MOUSE_BUTTON_DOWN: mouse_down = 1; down_x = event.button.x; down_y = event.button.y; break;
 		case SDL_EVENT_MOUSE_BUTTON_UP: mouse_down = 0; break;
 		case SDL_EVENT_MOUSE_WHEEL: wheel += event.wheel.y; break;
 		}
@@ -153,10 +155,12 @@ int32_t warp_system_value(const char* name, int64_t* value) {
 	else if (named(name, "key code held")) *value = open_now && held_count ? held[held_count - 1] : 0;
 	else if (named(name, "keys pressed")) *value = presses;
 	else if (named(name, "key code pressed")) *value = last_pressed;
-	else if (named(name, "mouse_x") || named(name, "mouse_y")) {
+	else if (named(name, "mouse_x") || named(name, "mouse_y") || named(name, "mouse_down_x") || named(name, "mouse_down_y")) {
 		int points_wide = 0, points_high = 0;
 		if (open_now) SDL_GetWindowSize(window, &points_wide, &points_high);
-		*value = !open_now ? 0 : named(name, "mouse_x") ? in_painting(mouse_x, painted_width, points_wide) : in_painting(mouse_y, painted_height, points_high);
+		int across = named(name, "mouse_x") || named(name, "mouse_down_x"), pressed = named(name, "mouse_down_x") || named(name, "mouse_down_y");
+		float point = across ? (pressed ? down_x : mouse_x) : (pressed ? down_y : mouse_y);
+		*value = !open_now ? 0 : across ? in_painting(point, painted_width, points_wide) : in_painting(point, painted_height, points_high);
 	} else if (named(name, "window_fullscreen")) *value = full_screen();
 	else if (named(name, "dark mode")) *value = dark_mode();
 	else if (named(name, "mouse_down")) *value = open_now && mouse_down;
