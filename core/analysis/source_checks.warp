@@ -56,9 +56,9 @@ constant_assignments(block: Node) := {
 }
 # the name `let k = 7` declares a constant, else ø
 declared_constant(statement: Node): any := {
-	if not (statement is key and op_of(statement) == "=") { return ø }
-	head = key_of(statement)
-	if is_group(head) and #head == 2 and head#1 is symbol and name_of(head#1) in constant_words and head#2 is symbol then name_of(head#2) else ø
+	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in constant_words) { return ø }
+	bound = statement#2
+	if bound is key and op_of(bound) == "=" and key_of(bound) is symbol then name_of(key_of(bound)) else ø
 }
 # an error the parser leaves in the tree (a negative index), the program's value
 located_error(n: Node) := {
