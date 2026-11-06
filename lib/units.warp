@@ -51,6 +51,10 @@ class Force extends Quantity {}
 // pixels per length, the density of a screen or a print: dpi, ppi
 class Density extends Quantity {}
 
+// a quantity moving lib/time's Instant (`now + 1h`) as the Duration it lasts, a DimensionError of any other dimension
+// than time; a program without lib/time has no Duration and leaves it out (card instant-typed-duration)
+q: Quantity as Duration := Duration(q.in("ms"))
+
 // a quantity as the class of its dimension, a plain Quantity for one without a name (kg·m, m/s²)
 measured(amount: number, dims: int, unit: text, scale: number) := {
 	if dims == length_dimension { return Length(amount, dims, unit, scale) }

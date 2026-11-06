@@ -1,6 +1,4 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
-// its durations are Durations, lib/units' Time quantities converting to them
-use units
 
 // `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it)
 now(): Instant := Instant(wall_clock_ms())
@@ -19,7 +17,6 @@ wall_clock_ms(): int := {
 // its quantities of time (`Instant(0) + 2 seconds`), one of another dimension a DimensionError (card instant-typed-duration)
 class Duration { ms: number }
 n: number as Duration := Duration(n)
-q: Quantity as Duration := Duration(q.in("ms"))
 
 // a point in time: milliseconds since 1970-01-01T00:00:00Z. Everything on it is plain warp: ordering through
 // compare (<, <=, >, >=), equality structural, the difference of two instants in milliseconds, a duration in
@@ -28,7 +25,7 @@ class Instant {
 	ms: int
 	// another Instant: the earlier first. A duration (`now > 9.hours`, `now > 17h`) compares the matching part
 	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
-	compare(other: Instant or Duration) := if other is Instant then ms - other.ms else instant_part_compare(ms, other)
+	compare(other: Instant or number or Duration) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else instant_part_compare(ms, other)
 	// its calendar fields, UTC: now.year, now.month, now.day, now.hour, now.minute, now.second
 	year() := date_of(ms).year
 	month() := date_of(ms).month
@@ -41,8 +38,10 @@ class Instant {
 	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
 	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
 }
-// a duration (`now > 9.hours`, `now > 17h`, a plain number of milliseconds) compared with the matching part, with a
-// warning: a bare duration is mostly a clock time meant
+// a bare number beside an Instant names no unit (decision instant-bare-number): `t > 5` is refused
+bare_number_refused(n: number) := raise "" + n + " what? write t > " + n + " h, or " + n + " AM"
+// a duration (`now > 9.hours`, `now > 17h`) compared with the matching part, with a warning: a bare duration is
+// mostly a clock time meant
 instant_part_compare(ms: int, other: Duration) := {
 	d = int(other.ms)
 	if d < 86400000 { warning("comparing an Instant with the duration " + format_duration(d) + " compares the time of day: did you mean " + clock_words(d) + "?") }

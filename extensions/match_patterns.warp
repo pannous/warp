@@ -36,6 +36,7 @@ guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
 	else if is_value_pattern(pattern, variants) { test = value_test(subject, pattern) }
 	else if is_type_pattern(pattern) { test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None) }
 	else if case_pattern(pattern) != ø { test = arm_test(case_pattern(pattern), subject); bound = part_bindings(case_pattern(pattern), subject) }
+	else if direct_items(pattern, variants) != ø { test = items_test(subject, direct_items(pattern, variants)); bound = item_bindings(subject, direct_items(pattern, variants)) }
 	else { test = structural_test(subject, pattern); bound = structural_bindings(pattern, List([guard, result], Bracket.Square, Separator.Comma)) }
 	if guard != ø {
 		guarded = List(bound + [guard], Bracket.Round, Separator.Semicolon)
@@ -43,6 +44,44 @@ guarded_arm(arm: Node, subject: Node, variants: map, otherwise: Node): Node := {
 	}
 	value = if #bound == 0 then result else List(bound + [result], Bracket.Round, Separator.Semicolon)
 	if test == ø then value else chosen(test, value, otherwise)
+}
+
+# A list pattern known whole at compile time, `[a, b]`, `["add", x, y]`, `[_, 0]`: tested and bound in place, item by
+# item, with no call of the prelude's matcher (card pattern-direct-tests). Its items are names binding once, `_`, and
+# numbers, texts or characters the item equals; any other list (a rest, a type word, a class of characters, a name
+# twice, a nested pattern) stays pattern_bindings's at run time
+direct_items(pattern: Node, variants: map): list? := match pattern {
+	List(items, Bracket.Square, separator): if #items > 0 and items.all(item => is_direct_item(item, variants)) and distinct_names(items) then items else ø
+	_: ø
+}
+is_direct_item(item: Node, variants: map): bool := match item {
+	Number(value): yes
+	Text(value): yes
+	Char(value): yes
+	Symbol(name): is_binding_word(name, variants)
+	_: no
+}
+# a word binding the item as itself: no hole `$x`, rest `*xs`, type word, class of characters or declared variant
+is_binding_word(name: text, variants: map): bool := not (name.starts_with("$") or name.starts_with("*") or name.starts_with(".")) and not is_tested_type_word(name) and not (name in character_class_words) and not (name in variants)
+distinct_names(items: list): bool := {
+	names = items.filter(item => item is symbol and name_of(item) != other_arm).map(item => name_of(item))
+	#names == #names.unique()
+}
+# a list of as many items, each literal one equal
+items_test(subject: Node, items: list): Node := {
+	test = Key(List([symbol("is_type"), subject, "list"], Bracket.Round, Separator.None), Op.And, Key(applied("count", subject), Op.Eq, #items))
+	for at in 1 to #items {
+		if not (items#at is symbol) { test = Key(test, Op.And, Key(Key(subject, Op.Hash, at), Op.Eq, items#at)) }
+	}
+	test
+}
+# each name the item at its place
+item_bindings(subject: Node, items: list): list := {
+	bound = []
+	for at in 1 to #items {
+		if items#at is symbol and name_of(items#at) != other_arm { bound += [Key(items#at, Op.Assign, Key(subject, Op.Hash, at))] }
+	}
+	bound
 }
 
 # the structural pattern fits: what it binds is held in match·bound
