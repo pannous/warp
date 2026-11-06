@@ -1,3 +1,6 @@
+# todo Implement as simple infix operator (card times-infix-operator)
+# infix operator times(n:int,b:block):= while n-->0 : b()
+
 # `n times {…}` (card parser-cold-forms, decision core-is-self): the prelude's infix times, read after its count; a
 # suffix reader, so a context binding tighter leaves it alone (`3 times 4` multiplies)
 read_times(p: Parser, count: Node, min_power: int): Node := {
@@ -6,7 +9,30 @@ read_times(p: Parser, count: Node, min_power: int): Node := {
 	skip_spaces(p)
 	operator_call("times", [count, repeated(p)])
 }
-times_loops_extension = Extension{name: "times_loops", suffix_readers: {"t": read_times}}
+times_loops_extension = Extension{name: "times_loops", suffix_readers: {"t": read_times}, passes_before: {"lambdas": times_looped}}
+
+# `n times {…}` with a literal block is the loop itself, `for round in 1 to n {…}`: the block runs in place, its writes
+# the enclosing function's own (a closure in a lambda lost them, card lambda-times-local-write) and no closure is
+# called per round (card inline-literal-block). The prelude's times reaches a program declared only, so
+# block_inlining.warp cannot inline its body; a program defining its own times keeps its calls. Quoted code stays as
+# written (children never enters a quote); a block that reads `it` or leaves early stays the prelude's call.
+times_looped(program: Node): Node := if defines_times(program) then program else looped_times(program)
+looped_times(n: Node): Node := {
+	walked = children(n, looped_times)
+	looped = looped_call(walked)
+	if looped != ø then looped else walked
+}
+defines_times(program: Node): bool := statements_in(program).any(statement => is_times_definition(definition_of(statement)))
+is_times_definition(parts: Definition?): bool := parts != ø and parts.body != ø and is_times_word(parts.name)
+is_times_word(name: text): bool := name.starts_with(OPERATOR_FUNCTION_PREFIX + "times")
+# the loop of a times call on a literal block, else ø
+looped_call(n: Node): Node? := {
+	if not is_group(n) or bracket_of(n) != "(" or #n != 3 or not (n#1 is symbol) or not is_times_word(name_of(n#1)) { return ø }
+	body = n#3
+	if not is_block(body) or BLOCK_EXITS.any(word => mentions(body, word)) { return ø }
+	spaced([symbol("for"), fresh_name("round", fresh_number()), symbol("in"), Key(1, Op.To, n#2), body])
+}
+BLOCK_EXITS = ["it", "return", "break", "continue"]
 
 # `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
 # Rust twin: suffixes.rs try_parse_control_suffix

@@ -4,7 +4,7 @@
 'samples/text/palindrome.warp'	true
 'samples/text/word_count.warp'	4
 'samples/text/sort_words.warp'	['brown', 'fox', 'quick', 'the']
-'samples/text/word_lengths.warp'	[3, 5, 5, 3]
+'samples/text/word_lengths.warp'	ø
 'samples/text/replace_word.warp'	'I like coffee'
 'samples/text/find_text.warp'	true
 

@@ -10,6 +10,7 @@ use "index_positions.warp"
 use "property_accessors.warp"
 use "attributes.warp"
 use "sum_types.warp"
+use "record_classes.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 use "event_phrases.warp"
@@ -25,6 +26,7 @@ use "entities.warp"
 use "declared_operators.warp"
 use "list_operators.warp"
 use "last_results.warp"
+use "operator_folds.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
 use "function_clauses.warp"
@@ -41,6 +43,7 @@ use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
 use "text_lints.warp"
+use "dir_hints.warp"
 use "effects.warp"
 use "primitive.warp"
 EXTENSIONS = [
@@ -54,6 +57,7 @@ EXTENSIONS = [
 	property_accessors_extension
 	attributes_extension
 	sum_types_extension
+	record_classes_extension
 	radix_numbers_extension
 	time_literals_extension
 	event_phrases_extension
@@ -68,6 +72,8 @@ EXTENSIONS = [
 	entities_extension
 	declared_operators_extension
 	list_operators_extension
+	# first in the used stage: a fold of an operator alone, `sum := fold +`
+	operator_folds_extension
 	tasks_extension
 	typed_templates_extension
 	function_clauses_extension
@@ -88,6 +94,7 @@ EXTENSIONS = [
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
+	dir_hints_extension
 	effects_extension
 	# extensions/primitive.warp, which the compiler uses itself: its attribute `@primitive`
 	Extension{name: "primitive", attributes: [PRIMITIVE_ATTRIBUTE]}

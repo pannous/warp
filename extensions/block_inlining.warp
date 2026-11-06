@@ -1,4 +1,4 @@
-# A literal block given to a function whose block parameter is only ever called, `3000000 times { s += 1 }`: the call
+# A literal block given to a function of the program whose block parameter is only ever called, `repeat(4, { k += 2 })`: the call
 # becomes the function's body with the block's statements where it calls the parameter, so each round runs them in
 # place instead of calling a closure (card inline-literal-block). Beside iteration_inlining.warp, before lambdas,
 # which would make the block a closure. Left alone: a block that leaves early (return, break, continue) or reads
@@ -9,7 +9,8 @@ class BlockFunction { names: list; at: int; body: Node }
 block_function(parts: Definition): BlockFunction? := {
 	names = parts.parameters.map(parameter_name)
 	at = block_parameter_at(parts.parameters)
-	if at == 0 or mentions(parts.body, parts.name) { return ø }
+	# (a library word linked declared-only, the prelude's, has no body here)
+	if at == 0 or parts.body == ø or mentions(parts.body, parts.name) { return ø }
 	block = names#at
 	if mention_count(parts.body, block) != block_call_count(parts.body, block) { return ø }
 	BlockFunction(names, at, parts.body)

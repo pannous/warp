@@ -133,22 +133,3 @@ function parsedHtml(html) {
 	return template.content;
 }
 
-// one hole of the markup shown in `root` anew (card web-fine-holes; the playground, built sites: card web-fine-rest):
-// the element at `path`, its element indices from the root down, morphed to `html`; or the text node after `after`
-// children of that element set to `text` (card web-fine-text-nodes)
-function showPatch(root, { path, html, text, after }) {
-	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
-	if (text !== undefined) return shown ? showText(shown, after, text) : console.error(`markup hole ${path.join("·")}: no element there`);
-	const wanted = parsedHtml(html).children[0];
-	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
-	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
-}
-
-// the text node after `after` children of the element set to `text`; an empty text has none, so one is made or dropped
-function showText(element, after, text) {
-	const next = after === 0 ? element.firstChild : element.children[after - 1]?.nextSibling;
-	const node = next?.nodeType === Node.TEXT_NODE ? next : null;
-	if (node && text) node.data = text;
-	else if (node) node.remove();
-	else if (text) element.insertBefore(document.createTextNode(text), after === 0 ? element.firstChild : next ?? null);
-}

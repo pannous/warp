@@ -1,4 +1,4 @@
-// The standard library module wagi (card fermyon-hosting, notes/hosting.md "Fermyon"): `warp build --wagi` makes a
+// The standard library module wagi (card fermyon-hosting, notes/hosting.md "Fermyon"): `warp build wagi app.warp` makes a
 // program's routes answer one request the WAGI way (Spin's wagi executor, Akamai Functions): the request comes in the
 // environment (REQUEST_METHOD, PATH_INFO, QUERY_STRING), the answer goes CGI-style to stdout: headers, a blank line, the
 // body. A text answers as text, anything else as JSON, as `warp serve` answers (rust-harness:src/web/web_server.rs Answer::of).
@@ -70,3 +70,10 @@ wagi_body(value: any) := if value is text then value else wagi_json(value)
 
 // lowering/serve.rs page·submitted throws "no route answers …" for a request no route takes
 wagi_failed(message: any) := wagi_reply(if starts_with(message, "no route answers") then 404 else 500, "text/plain; charset=utf-8", message)
+
+// the end of a program with routes built for WAGI (`warp build wagi app.warp`, card site-wagi-build): the module
+// answers the one request its environment holds, and gives no value of its own to print after the answer
+routes_wagi(value: any = ø) := {
+	try wagi_answer(route_answer(wagi_request())) catch e { wagi_failed(str(e)) }
+	ø
+}

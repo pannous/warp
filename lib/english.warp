@@ -6,3 +6,14 @@
 rewrite set $field of $object to $value => $object.$field = $value
 // `add 4 to pixel` is `pixel.add(4)`; the parser reads `add $x to $l => …` as arithmetic, so the pattern is grouped
 rewrite (add $x to $list) => $list.add($x)
+// `increase x by: 2`, `decrease x by: 2`, `multiply x by: 3`, `divide x by: 2`: the place changed in place (decision
+// mutation-phrases, an example English definition; the colon names the parameter, preposition-words drops it later).
+// `reduce` is fold's (`reduce xs by f`), never a phrase here
+rewrite increase $x by: $n => $x += $n
+rewrite increase $x by $n => $x += $n
+rewrite decrease $x by: $n => $x -= $n
+rewrite decrease $x by $n => $x -= $n
+rewrite multiply $x by: $n => $x *= $n
+rewrite multiply $x by $n => $x *= $n
+rewrite divide $x by: $n => $x /= $n
+rewrite divide $x by $n => $x /= $n

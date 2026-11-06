@@ -1,0 +1,9 @@
+# warp fix counts a text unit plural read as a number (decision text-unit-plurals: `.codepoints` is the list, its
+# count `count t.codepoints`; card rewrite-codepoints)
+is! 'use "../../lib/fix/fix.warp"; fixed("if t.codepoints > 3 { print t }", [], yes)#1' "if count t.codepoints > 3 { print t }\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("n = name.bytes * 2", [], yes)#1' "n = count name.bytes * 2\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("ok = 10 >= «שָלוֹם».graphemes", [], yes)#1' "ok = 10 >= count «שָלוֹם».graphemes\n"
+# the list itself, a counted one and a chain stay
+is! 'use "../../lib/fix/fix.warp"; fixed("xs = t.chars + [c]", [], yes)#1' "xs = t.chars + [c]\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("count t.codepoints > 3", [], yes)#1' "count t.codepoints > 3\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("t.bytes.count > 3", [], yes)#1' "t.bytes.count > 3\n"

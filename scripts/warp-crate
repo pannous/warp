@@ -14,10 +14,25 @@ cargo, caches it under ~/.cache/warp/crates (by crate, manifest, toolchain and t
 Nothing in the native warp knows a crate. Commands:
   warp-crate build <manifest.warp>...   generate, build (cached) and install; prints the library and native file
   warp-crate source <manifest.warp>     print the generated Rust
-  warp-crate scan <crate@version>       draft manifest lines for the crate's public functions and methods (rustdoc JSON)
+  warp-crate scan <crate@version>       draft manifest lines for the crate's public functions, methods, Default
+                                        constructors and public fields (rustdoc JSON)
+A config struct (card use-cargo-config-structs) crosses as a handle: `= crate::Config::default` makes one (any path call),
+`= crate::Config.width` reads its public field, `= crate::Config.width=` sets it from the line's second parameter, and a
+parameter `clone(crate::Config)` hands an item the handle's value by value (a clone, the handle stays the caller's).
   warp-crate dirs                       print the cache, library and native folders
+Precompiled crates (card precompiled-crates, notes/crate_adapter.md "Plan: precompiled crates"), so `use rs_regex`
+works without cargo: CI (.github/workflows/crates.yml) builds lib/crates/*.warp per target and publishes the libraries
+with the index crates.json as assets of the release `crates`; a shipped build's key leaves the toolchain out (only the C
+ABI crosses).
+  warp-crate fetch <name>...            the shipped build of lib/crates/<name>.warp (name `regex` or `rs_regex`) for
+                                        this target: downloaded, sha256 checked, installed as `build` installs; a
+                                        local build where none is shipped and cargo is there
+  warp-crate publish <dir> <manifest.warp>...  build and put each library and native file in <dir>, with its index
+                                        entries for this target, crates-<target>.json
+  warp-crate index <dir>                merge <dir>/crates-*.json into the index <dir>/crates.json
+WARP_CRATES_URL names where fetch finds the index and the files (default the release `crates` of pannous/warp).
 """
-import hashlib, json, os, re, shutil, subprocess, sys
+import hashlib, json, os, platform, re, shutil, subprocess, sys, urllib.request
 from pathlib import Path
 
 GENERATOR_VERSION = "1"
@@ -26,6 +41,13 @@ RUNTIME = HERE / "crate_adapter" / "runtime.rs"
 CACHE = Path(os.environ.get("WARP_CRATES_CACHE", Path.home() / ".cache" / "warp" / "crates"))
 LIB_DIR, NATIVE_DIR, TARGET_DIR = CACHE / "lib", CACHE / "native", CACHE / "target"
 DYLIB = ("lib", ".dylib") if sys.platform == "darwin" else ("lib", ".so")
+MANIFESTS = HERE.parent / "lib" / "crates"
+RELEASE_URL = os.environ.get("WARP_CRATES_URL", "https://github.com/pannous/warp/releases/download/crates")
+INDEX = "crates.json"
+# this machine's target triple, known without rustc (fetch runs where there is none); the targets CI builds
+TARGETS = {("linux", "x86_64"): "x86_64-unknown-linux-gnu", ("linux", "aarch64"): "aarch64-unknown-linux-gnu",
+	("linux", "arm64"): "aarch64-unknown-linux-gnu", ("darwin", "arm64"): "aarch64-apple-darwin",
+	("darwin", "x86_64"): "x86_64-apple-darwin"}
 
 # a manifest type → [the foreign line's type, the C parameter type, the C result type]
 BYTES = ("bytes", "bytes_vec")
@@ -33,6 +55,8 @@ NUMBERS = {"i32": "i32", "int": "i32", "i64": "i64", "long": "i64", "f64": "f64"
 FOREIGN = re.compile(r"^\s*(?P<name>\w+)\s*\((?P<params>(?:[^()]|\([^()]*\))*)\)\s*:\s*(?P<result>[\w:()]+)\s+from\s+'(?P<library>\w+)'\s*=\s*(?P<rust>\S.*?)\s*$")
 SETTING = re.compile(r'^\s*(crate|library|features|default_features|uses)\s*:\s*(.*?)\s*$')
 HANDLE = re.compile(r"^handle(?:\((?P<rust>[\w:<>, ]+)\))?$")
+CLONE = re.compile(r"^clone\((?P<rust>[\w:<>, ]+)\)$")  # a handle whose value an item takes by value: a clone of it
+FIELD = re.compile(r"^(?P<owner>(?:\w+::)*[A-Z]\w*)\.(?P<field>\w+)(?P<set>=?)$")  # crate::Config.width, .width= to set
 STEP = re.compile(r"(\?\.|\*\.|\.)(\w+)")
 
 
@@ -74,10 +98,10 @@ class Function:
 			return "text"
 		if written in BYTES:
 			return "bytes"
-		if written == "list" or HANDLE.match(written):
+		if written == "list" or HANDLE.match(written) or CLONE.match(written):
 			return "handle"
 		fail(f"line {self.line_number}: {self.name}: the type {written!r} is not one warp-crate crosses "
-			"(i32 i64 f32 f64 bool text string bytes bytes_vec hex list handle handle(rust::Type) void)")
+			"(i32 i64 f32 f64 bool text string bytes bytes_vec hex list handle handle(rust::Type) clone(rust::Type) void)")
 
 	def wrapped(self):
 		"""Whether the result comes back through a handle the shim keeps (a list, bytes): then the C function is
@@ -108,8 +132,15 @@ class Function:
 			lines.append(f"{self.name}({params}) := {self.library}_take_{take}({self.c_name()}({args}))")
 		return lines
 
+	def field(self):
+		"""(owner, field, sets) of a field item: `crate::Config.width` reads the field, `crate::Config.width=` sets it"""
+		found = FIELD.match(self.rust)
+		return (found.group("owner"), found.group("field"), found.group("set") == "=") if found else None
+
 	def owner(self):
-		"""`regex::Regex` of the path `regex::Regex::is_match`, when that names a type's method"""
+		"""`regex::Regex` of the path `regex::Regex::is_match` (or the field `crate::Config.width`), when that names a type's method"""
+		if self.field():
+			return self.field()[0]
 		path = re.split(r"(?=\?\.|\*\.|\.\w)", self.rust, maxsplit=1)[0]
 		segments = path.split("::")
 		return "::".join(segments[:-1]) if len(segments) > 1 and segments[-2][:1].isupper() else None
@@ -138,6 +169,11 @@ class Function:
 			elif ptype in BYTES:
 				c_params.append(f"{var}: *const u8, {var}_size: usize")
 				args.append(f"bytes_in({var}, {var}_size)" + (".to_vec()" if ptype == "bytes_vec" else ""))
+			elif CLONE.match(ptype):
+				rust_type = CLONE.match(ptype).group("rust")
+				c_params.append(f"{var}: *mut {rust_type}")
+				lets.append(f"let {var} = handle_in({var}, {json.dumps(self.name)})?.clone();")
+				args.append(var)
 			elif HANDLE.match(ptype):
 				rust_type = self.handle_type(index, ptype)
 				c_params.append(f"{var}: *mut {rust_type}")
@@ -154,9 +190,20 @@ class Function:
 				fail(f"line {self.line_number}: {self.name}: `= drop` takes one handle")
 			body = f"if !p_{self.params[0][0]}.is_null() {{ drop(Box::from_raw(p_{self.params[0][0]})) }}; Some(())"
 			c_result = "()"
+		elif self.field() and self.field()[2]:
+			_, field, _ = self.field()
+			if len(self.params) != 2 or not HANDLE.match(self.params[0][1]) or result != "void":
+				fail(f"line {self.line_number}: {self.name}: a field setter `= Type.{field}=` takes the handle and the value, and gives void")
+			value = f"{args[1]}.into()" if CLONE.match(self.params[1][1]) else f"FieldIn::field_in({args[1].removesuffix(' as _')})"
+			body = f"p_{self.params[0][0]}.{field} = {value}; Some(())"
+			c_result = "()"
 		else:
 			path, *_ = re.split(r"(?=\?\.|\*\.|\.\w)", self.rust, maxsplit=1)
 			expression = f"{path}({', '.join(args)})"
+			if self.field():
+				if len(self.params) != 1 or not HANDLE.match(self.params[0][1]):
+					fail(f"line {self.line_number}: {self.name}: a field `= Type.{self.field()[1]}` takes the one handle it reads")
+				path, expression = self.rust, f"{args[0]}.{self.field()[1]}.clone()"
 			for kind, method in STEP.findall(self.rust[len(path):]):
 				expression += {"?.": f".map(|v| v.{method}())", "*.": f".into_iter().map(|v| v.{method}())", ".": f".{method}()"}[kind]
 			if result in NUMBERS or result == "bool":
@@ -207,7 +254,7 @@ class Manifest:
 				function = Function(number, **foreign.groupdict())
 				self.functions.append(function)
 				self.native_lines += function.native_lines()
-			elif re.search(r"\bfrom\s+'\w+'\s*=", line):
+			elif re.search(r"\bfrom\s+'\w+'\s*=", line) and not line.lstrip().startswith("//"):
 				fail(f"{path}:{number}: not a foreign line warp-crate reads: {line.strip()}")
 			else:
 				self.native_lines.append(line)
@@ -314,13 +361,25 @@ def toolchain():
 	return subprocess.run(["rustc", "-vV"], capture_output=True, text=True, check=True).stdout
 
 
-def build(manifest):
+def target():
+	machine = platform.machine().lower()
+	found = TARGETS.get((sys.platform.replace("linux2", "linux"), "x86_64" if machine == "amd64" else machine))
+	return found or fail(f"no shipped crates for {sys.platform} {machine}: build them with cargo (warp-crate build)")
+
+
+def shipped_key(manifest):
+	"""a shipped build's key: generator, manifest (its source and Cargo.toml: crate, version, features) and target"""
+	source, cargo = manifest.rust_source(), manifest.cargo_toml()
+	return hashlib.sha256("\0".join([GENERATOR_VERSION, source, cargo, target()]).encode()).hexdigest()[:16]
+
+
+def built(manifest):
+	"""the cache entry holding the manifest's library, built with cargo once: [entry, library file]"""
 	source, cargo = manifest.rust_source(), manifest.cargo_toml()
 	key = hashlib.sha256("\0".join([GENERATOR_VERSION, source, cargo, toolchain()]).encode()).hexdigest()[:16]
 	entry = CACHE / manifest.library / f"{manifest.crate}-{manifest.version.replace('*', 'any')}-{key}"
 	library_file = DYLIB[0] + manifest.library + DYLIB[1]
-	built = entry / library_file
-	if not built.exists():
+	if not (entry / library_file).exists():
 		entry.mkdir(parents=True, exist_ok=True)
 		(entry / "lib.rs").write_text(source)
 		(entry / "Cargo.toml").write_text(cargo)
@@ -329,20 +388,116 @@ def build(manifest):
 		done = subprocess.run(["cargo", "build", "--release", "--quiet", "--manifest-path", str(entry / "Cargo.toml")], env=env)
 		if done.returncode != 0:
 			fail(f"cargo could not build {manifest.library} from {manifest.path} (its source: {entry / 'lib.rs'})")
-		shutil.copy2(TARGET_DIR / "release" / library_file, built)
+		shutil.copy2(TARGET_DIR / "release" / library_file, entry / library_file)
 		locked = (entry / "Cargo.lock").read_text() if (entry / "Cargo.lock").exists() else ""
 		resolved = re.search(rf'name = "{re.escape(manifest.crate)}"\nversion = "([^"]+)"', locked)
 		(entry / "resolved").write_text((resolved.group(1) if resolved else "?") + "\n")
+	return entry, library_file
+
+
+def native_text(manifest, resolved):
+	return f"// Generated by scripts/warp-crate from {manifest.path.name}: {manifest.crate} {resolved} as lib{manifest.library}\n" + "\n".join(manifest.native_lines).rstrip() + "\n"
+
+
+def installed(library, library_file, native):
+	"""the library and the native file put where the native warp finds them; prints both"""
 	LIB_DIR.mkdir(parents=True, exist_ok=True)
 	NATIVE_DIR.mkdir(parents=True, exist_ok=True)
-	installed = LIB_DIR / library_file
-	temporary = installed.with_suffix(".tmp")
-	shutil.copy2(built, temporary)
-	os.replace(temporary, installed)  # a running the native warp keeps its mapped copy
-	native = NATIVE_DIR / f"{manifest.library}.warp"
-	header = f"// Generated by scripts/warp-crate from {manifest.path.name}: {manifest.crate} {(entry / 'resolved').read_text().strip()} as lib{manifest.library}\n"
-	native.write_text(header + "\n".join(manifest.native_lines).rstrip() + "\n")
-	print(f"{installed}\n{native}")
+	placed = LIB_DIR / library_file
+	temporary = placed.with_suffix(".tmp")
+	shutil.copy2(library, temporary)
+	os.replace(temporary, placed)  # a running the native warp keeps its mapped copy
+	native_file = NATIVE_DIR / native.name
+	shutil.copy2(native, native_file)
+	print(f"{placed}\n{native_file}")
+
+
+def build(manifest):
+	entry, library_file = built(manifest)
+	native = entry / f"{manifest.library}.warp"
+	native.write_text(native_text(manifest, (entry / "resolved").read_text().strip()))
+	installed(entry / library_file, library_file, native)
+
+
+def sha256_of(path):
+	return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def publish(folder, manifests):
+	"""each manifest built, its library (named for the target) and native file in the folder, and the target's index
+	entries beside them, which `index` merges"""
+	folder = Path(folder)
+	folder.mkdir(parents=True, exist_ok=True)
+	entries = []
+	for manifest in manifests:
+		entry, library_file = built(manifest)
+		resolved = (entry / "resolved").read_text().strip()
+		shipped = f"{manifest.library}-{target()}{DYLIB[1]}"
+		shutil.copy2(entry / library_file, folder / shipped)
+		# per target too: each target's build resolves the crate on its own
+		native = folder / f"{manifest.library}-{target()}.warp"
+		native.write_text(native_text(manifest, resolved))
+		entries.append({"name": manifest.path.stem, "library": manifest.library, "crate": manifest.crate, "version": resolved,
+			"key": shipped_key(manifest), "target": target(), "file": shipped, "sha256": sha256_of(folder / shipped),
+			"native": native.name, "native_sha256": sha256_of(native)})
+	(folder / f"crates-{target()}.json").write_text(json.dumps(entries, indent=1) + "\n")
+	print(folder / f"crates-{target()}.json")
+
+
+def index(folder):
+	"""the targets' entries in one index, crates.json, sorted so a merge of the same builds is the same file"""
+	folder = Path(folder)
+	entries = [entry for part in sorted(folder.glob("crates-*.json")) for entry in json.loads(part.read_text())]
+	entries.sort(key=lambda entry: (entry["name"], entry["target"]))
+	(folder / INDEX).write_text(json.dumps({"generator": GENERATOR_VERSION, "crates": entries}, indent=1) + "\n")
+	print(folder / INDEX)
+
+
+def downloaded(name, expected_sha256):
+	"""a file of the release, checked against its sha256; ø where it can't be had"""
+	try:
+		with urllib.request.urlopen(f"{RELEASE_URL}/{name}", timeout=60) as response:
+			data = response.read()
+	except OSError as error:
+		print(f"warp-crate: could not download {RELEASE_URL}/{name}: {error}", file=sys.stderr)
+		return None
+	if expected_sha256 is not None and hashlib.sha256(data).hexdigest() != expected_sha256:
+		fail(f"{RELEASE_URL}/{name} is not the file the index names (sha256 {hashlib.sha256(data).hexdigest()}, expected {expected_sha256})")
+	return data
+
+
+def manifest_named(name):
+	"""lib/crates/<name>.warp, by its file name (`regex`) or its library (`rs_regex`)"""
+	for path in sorted(MANIFESTS.glob("*.warp")):
+		manifest = Manifest(path)
+		if name in (path.stem, manifest.library):
+			return manifest
+	fail(f"no crate manifest {name} in {MANIFESTS}")
+
+
+def fetch(name):
+	"""the shipped build of the manifest for this target, else a local build where cargo is there"""
+	manifest = manifest_named(name)
+	key, here = shipped_key(manifest), target()
+	listed = downloaded(INDEX, None)
+	shipped = [entry for entry in json.loads(listed)["crates"] if entry["library"] == manifest.library and entry["target"] == here] if listed else []
+	matching = [entry for entry in shipped if entry["key"] == key]
+	if matching:
+		entry = matching[0]
+		folder = CACHE / manifest.library / f"shipped-{key}"
+		folder.mkdir(parents=True, exist_ok=True)
+		library = downloaded(entry["file"], entry["sha256"])
+		native = downloaded(entry["native"], entry["native_sha256"])
+		if library is not None and native is not None:
+			library_file = DYLIB[0] + manifest.library + DYLIB[1]
+			(folder / library_file).write_bytes(library)
+			(folder / f"{manifest.library}.warp").write_bytes(native)
+			return installed(folder / library_file, library_file, folder / f"{manifest.library}.warp")
+	why = "is not shipped" if not shipped else ("is shipped for another version of its manifest" if not matching else "could not be downloaded")
+	if shutil.which("cargo"):
+		print(f"warp-crate: {manifest.library} for {here} {why}: building it with cargo", file=sys.stderr)
+		return build(manifest)
+	fail(f"{manifest.library} ({manifest.crate}) for {here} {why}, and there is no cargo to build it")
 
 
 # ---------- scan: draft manifest lines from rustdoc JSON ----------
@@ -370,7 +525,9 @@ def scan(spec):
 	prefix = crate.replace("-", "_")
 	print(f'crate: "{crate}@{version or "*"}"')
 
-	def mapped(ty, owner, is_result):
+	def mapped(ty, owner, is_result, field=False):
+		"""the manifest type of a Rust type, None when it does not cross; a field's (field) also as an Option of it and,
+		read, a struct as a handle of its clone"""
 		if not isinstance(ty, dict):
 			return None
 		if "primitive" in ty:
@@ -388,7 +545,8 @@ def scan(spec):
 				return f"handle({prefix}::{named['path'].split('::')[-1]})"
 			return None
 		if ty == {"generic": "Self"}:
-			return f"handle({owner})" if is_result else None
+			# a method taking self by value (a builder's) takes a clone of the handle's value
+			return f"handle({owner})" if is_result else (f"clone({owner})" if owner else None)
 		path = ty.get("resolved_path")
 		if path:
 			name = path.get("path") or path.get("name", "")
@@ -400,9 +558,14 @@ def scan(spec):
 			if last == "Vec" and first == {"primitive": "u8"}:
 				return "bytes" if is_result else "bytes_vec"
 			if last in ("Option", "Result") and first is not None:
-				return mapped(first, owner, is_result) if is_result else None
+				return mapped(first, owner, is_result, field) if is_result or (field and last == "Option") else None
 			if is_result and owner and last == owner.split("::")[-1]:
 				return f"handle({owner})"
+			if is_result and field and not args and last[:1].isupper():
+				return f"handle({prefix}::{last})"
+			# a struct by value (a config handed to a constructor): a clone of a handle's value
+			if not is_result and not args and last[:1].isupper():
+				return f"clone({prefix}::{last})"
 		return None
 
 	def line(name, function, rust_path, owner):
@@ -420,6 +583,28 @@ def scan(spec):
 		result = "void" if output is None else mapped(output, owner, True)
 		text = f"{name}({', '.join(params)}): {result or '?'} from '{library}' = {rust_path}"
 		print(text if cross and result else f"// skipped: {text}")
+
+	def fields(name, struct, owner):
+		"""a getter and a setter line for each public field of a plain struct (a config struct's)"""
+		plain = struct.get("kind", {}).get("plain", {}) if isinstance(struct.get("kind"), dict) else {}
+		own = name.lower()
+		for field_id in plain.get("fields", []):
+			field = index.get(str(field_id))
+			if not field or field.get("visibility") != "public" or "struct_field" not in field["inner"]:
+				continue
+			fname, ftype = field["name"], field["inner"]["struct_field"]
+			getter, setter = mapped(ftype, owner, True, True), mapped(ftype, owner, False, True)
+			get_line = f"{own}_{fname}({own}: handle): {getter or '?'} from '{library}' = {owner}.{fname}"
+			set_line = f"{own}_set_{fname}({own}: handle, {fname}: {setter or '?'}): void from '{library}' = {owner}.{fname}="
+			print(get_line if getter and getter not in ("bytes",) else f"// skipped: {get_line}")
+			print(set_line if setter else f"// skipped: {set_line}")
+
+	def implements(struct, trait):
+		for impl_id in struct.get("impls", []):
+			found = (index.get(str(impl_id), {}).get("inner", {}).get("impl", {}).get("trait") or {})
+			if (found.get("path") or found.get("name") or "").split("::")[-1] == trait:
+				return True
+		return False
 
 	def public_items(module_id, seen):
 		"""(name, item) of a module's public items, through `pub use` re-exports and globs"""
@@ -449,6 +634,9 @@ def scan(spec):
 		if "struct" in inner and not inner["struct"].get("generics", {}).get("params"):
 			owner = f"{prefix}::{name}"
 			print(f"{name.lower()}_free({name.lower()}: handle({owner})): void from '{library}' = drop")
+			if implements(inner["struct"], "Default"):
+				print(f"{name.lower()}_default(): handle({owner}) from '{library}' = {owner}::default")
+			fields(name, inner["struct"], owner)
 			for impl_id in inner["struct"].get("impls", []):
 				impl = index.get(str(impl_id), {}).get("inner", {}).get("impl", {})
 				if impl.get("trait") is not None or impl.get("is_synthetic") or impl.get("synthetic") or impl.get("blanket_impl"):
@@ -471,6 +659,13 @@ def main(argv):
 		sys.stdout.write(Manifest(rest[0]).rust_source())
 	elif command == "scan" and len(rest) == 1:
 		scan(rest[0])
+	elif command == "fetch" and rest:
+		for name in rest:
+			fetch(name)
+	elif command == "publish" and len(rest) >= 2:
+		publish(rest[0], [Manifest(path) for path in rest[1:]])
+	elif command == "index" and len(rest) == 1:
+		index(rest[0])
 	elif command == "dirs":
 		print(f"cache {CACHE}\nlib {LIB_DIR}\nnative {NATIVE_DIR}")
 	else:

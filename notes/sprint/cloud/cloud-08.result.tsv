@@ -1,0 +1,6 @@
+enum-case	done	6de6827
+counter-struct	done	ab23ce7 (aside, not this card: `c = Counter()` without var gives c.count 3 and warns no field count)
+binding-local	done	2267475 (touches core/analysis/warnings.data: one message row, where every extension lint keeps its message; self-compile clean)
+pure-record-keyword	done	baf43bf (aside: C#-typed parameters record/class Point(int X, int Y) still fail, a class-form gap)
+dir-filters	done	805ad35 (views m.functions/attributes/classes/operators + hint; touches core/analysis/hints.data: one message row. Not done: views inherited/overridden for instances; add stays listed, it is the list append. Baseline fails seen: test_dir:5, test_dir_builtin_members:5,7,20-24)
+precompiled-crates	done	968a615 (plan steps 1-3: CI matrix, release crates + crates.json, warp-crate fetch; CI not run from here. Open in notes/crate_adapter.md: the native warp fetching on use itself, packaging, retiring bridges; its FFI refuses the shims handle words, shipped or built)
