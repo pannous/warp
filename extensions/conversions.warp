@@ -14,6 +14,9 @@ converted_value = HiddenWord.ConvertedValue as text
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
 names_type(n: Node, scope: map): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
 
+# a class's name as written, declared or not: units' `q: Quantity as Duration` names lib/time's Duration, which a program
+# without lib/time lacks and so leaves the conversion out
+names_class(n: Node): bool := n is symbol and is_capitalized(name_of(n))
 # [source, target, body, the body's name of the value] of `A as B := body` with A and B types, of `n: A as B := body`
 # naming the value, also of `text(p: A) := body`, else ø
 conversion_of(n: Node, scope: map): list? := {
@@ -21,7 +24,7 @@ conversion_of(n: Node, scope: map): list? := {
 	head = key_of(n)
 	if is_key(head, Op.Colon) and key_of(head) is symbol and is_key(value_of(head), Op.As) {
 		types = value_of(head)
-		return if names_type(key_of(types), scope) and names_type(value_of(types), scope) then [name_of(key_of(types)), name_of(value_of(types)), value_of(n), name_of(key_of(head))] else ø
+		return if names_type(key_of(types), scope) and (names_type(value_of(types), scope) or names_class(value_of(types))) then [name_of(key_of(types)), name_of(value_of(types)), value_of(n), name_of(key_of(head))] else ø
 	}
 	if is_call(head) and #head == 2 and head#1 == symbol("text") and is_key(head#2, Op.Colon) and key_of(head#2) is symbol {
 		return if names_type(value_of(head#2), scope) then [name_of(value_of(head#2)), "text", value_of(n), name_of(key_of(head#2))] else ø
@@ -62,25 +65,40 @@ conversion_functions(target: text, written: list, targets: map, scope: map): lis
 	refused = call_of(raise_word, ["no conversion to " + target + " of that value"])
 	tried = if not binds_as(scope, target, Meaning.Type) then Key(it, Op.As, symbol(target)) else chosen(Key(it, Op.Is, symbol(target)), it, refused)
 	functions = []
-	for conversion in written.reverse() {
+	for conversion in class_first(written).reverse() {
 		name = conversion_name(target) + "·" + conversion#1
 		body = converting_uses(renamed(conversion#3, conversion#4, it), targets)
 		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
 		tried = chosen(Key(it, Op.Is, symbol(conversion#1)), call_of(name, [it]), tried)
 	}
-	# (an argument meeting a parameter typed `target`: an instance as it is, any other value of no source type too,
-	# the parameter's own check says what it takes)
-	passed = it
-	for conversion in written.reverse() { passed = chosen(Key(it, Op.Is, symbol(conversion#1)), call_of(conversion_name(target) + "·" + conversion#1, [it]), passed) }
-	if binds_as(scope, target, Meaning.Type) { passed = chosen(Key(it, Op.Is, symbol(target)), it, passed) }
-	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried), Key(call_of(argument_conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, passed)]
+	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
 }
 
 # Typed parameters convert (decision as-promotes, card argument-parameter-conversion): a call's argument meeting a
 # parameter typed T the program converts to goes through `to·T`, so `f(2)` of `f(q: Quantity)` passes 2 as Quantity,
 # and `Instant(0) + 2 seconds` a Duration where time's plus takes one; on the caller's side, which sees every module's
-# conversions (units' Quantity as Duration beside time's int as Duration), never the callee's
-argument_conversion_name(target: text): text := "to·" + target
+# conversions (units' Quantity as Duration beside time's number as Duration), never the callee's. A union converts to
+# the member the value has a conversion to: Instant.minus(other: Instant or Duration) takes an Instant as it is and
+# 2 seconds as a Duration (card instant-typed-duration)
+argument_conversion_name(type: text): text := "to·" + union_members(type).join("_or_")
+converts_to(type: text, targets: map): bool := union_members(type).any(member => targets.has(member))
+# `to·T(it: any)`: a value of the type (of a member of the union) as it is, one of a source type converted, the first
+# member's conversions first; any other value as it is too, the parameter's own check says what it takes. A class
+# goes before a type word, as a member and as a source: a lib/units quantity also tests as a number, so
+# Instant.compare(other: Instant or number or Duration) takes 9h as a Duration and only a bare 5 as a number
+argument_conversion(type: text, targets: map): Node := {
+	it = symbol(converted_value)
+	# (`Duration or any`: a Duration, a value converting to one, else any value as it is)
+	members = union_members(type).filter(member => member != any_word)
+	passes = members.map(member => [member, it])
+	conversions = members.filter(member => targets.has(member)).flat_map(member => targets[member].map(conversion => [conversion#1, call_of(conversion_name(member) + "·" + conversion#1, [it])]))
+	steps = class_first(passes + conversions)
+	passed = it
+	for step in steps.reverse() { passed = chosen(Key(it, Op.Is, symbol(step#1)), step#2, passed) }
+	Key(call_of(argument_conversion_name(type), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, passed)
+}
+# conversions (or [type, …] steps) from a class first, then from a type word, each in the order written
+class_first(steps: list): list := steps.filter(step => is_capitalized(step#1)) + steps.filter(step => not is_capitalized(step#1))
 # name → the parameter types of a function defined once, for each one taking a type the program converts to
 typed_parameters(statements: list, targets: map): map := {
 	found = {}
@@ -91,7 +109,7 @@ typed_parameters(statements: list, targets: map): map := {
 			found[name] = if found.has(name) then ø else parameter_types(call)
 		}
 	}
-	without_keys(found, found.keys.filter(name => found[name] == ø or not found[name].any(type => targets.has(type)) or has_builtin_variant(name)))
+	without_keys(found, found.keys.filter(name => found[name] == ø or not found[name].any(type => converts_to(type, targets)) or has_builtin_variant(name)))
 }
 # a word the runtime or C also takes, `exp(x: real)` beside math's `exp(x: float)`: the overload passes choose among
 # them by the argument as written, so it stays unconverted
@@ -104,7 +122,7 @@ converted_arguments(n: Node, typed: map, targets: map): Node := {
 	types = typed[name_of(walked#1)]
 	arguments = items_of(walked)[1 ..]
 	if #arguments != #types or arguments.any(argument => is_key(argument, Op.Colon) or is_key(argument, Op.Assign)) { return walked }
-	group_like(walked, [walked#1] + (1 to #arguments).map(at => if targets.has(types#at) then call_of(argument_conversion_name(types#at), [arguments#at]) else arguments#at))
+	group_like(walked, [walked#1] + (1 to #arguments).map(at => if converts_to(types#at, targets) then call_of(argument_conversion_name(types#at), [arguments#at]) else arguments#at))
 }
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
@@ -114,13 +132,14 @@ conversions(program: Node): Node := {
 	targets = {}
 	order = []
 	kept = []
+	# (a conversion to a class the program lacks, units' Quantity as Duration without lib/time, is left out)
 	for statement in statements_in(program) {
 		conversion = conversion_of(statement, scope)
 		if conversion == ø {
 			kept += [statement]
 		} else if conversion#1 == conversion#2 {
 			kept += [diagnose(call_of("own_type_conversion", [conversion#2]), statement)]
-		} else {
+		} else if names_type(symbol(conversion#2), scope) {
 			if not targets.has(conversion#2) {
 				targets[conversion#2] = []
 				order += [conversion#2]
@@ -133,6 +152,12 @@ conversions(program: Node): Node := {
 	} else {
 		functions = order.map(target => conversion_functions(target, targets[target], targets, scope)).flatten()
 		typed = typed_parameters(kept, targets)
+		converting = {}
+		for type in typed.values.flatten() { if converts_to(type, targets) { converting[type] = yes } }
+		functions += converting.keys.map(type => argument_conversion(type, targets))
+		# (a program's conversions are its own, seeing every module's: never a linked module's of the same name, time's
+		# to·Duration knowing no Quantity)
+		if module_written == "" { own_words_unlinked(functions.map(f => name_of(definition_call(f)#1))) }
 		List(functions + kept.map(statement => converted_arguments(converting_uses(statement, targets), typed, targets)), Bracket.None, Separator.Newline)
 	}
 	forced_conversions(checked)

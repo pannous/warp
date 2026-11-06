@@ -329,7 +329,7 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# beside sqlite3's)
 	if in_front or not building_a_module() { program = with_own_words(program, module_names + (if in_front then [] else runtime_words_of_math)) }
 	own_names = statements_in(program).map(declared_name)
-	own = own_heads(program)
+	own = with_c_heads(own_heads(program))
 	# (a linked module's aliases from its signature, its text being none)
 	written_aliases = module_aliases(module)
 	if #linked > 0 { for signature in linked_signatures.values { for name in signature.aliases.keys { written_aliases[name] = signature.aliases[name] } } }
@@ -519,8 +519,9 @@ aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
 	count = #n - 1 + receivers
 	# an arity variant fits the call's count, before the module's word: first(xs, 2) of a program's own first(x) is first_items
 	word = arity_variant(called, count) ?? aliases.get(called)
-	if word == ø or shadows(own, called, count) { return n }
-	group_like(n, [symbol(if word in own and not word.starts_with(OPERATOR_FUNCTION_PREFIX) then library_word(word) else word)] + items_of(n)[1 ..])
+	if word == ø or shadows(own, called, count, if receivers == 0 then items_of(n)[1 ..] else []) { return n }
+	# (a C function is never set aside as a program's definition is: its name stays the alias's word)
+	group_like(n, [symbol(if word in own and not word.starts_with(OPERATOR_FUNCTION_PREFIX) and not used_c_functions.has(word) then library_word(word) else word)] + items_of(n)[1 ..])
 }
 is_global_declaration(statement: Node): bool := is_key(statement, Op.Colon) and key_of(statement) == symbol("global")
 # a module's definition with each of the program's globals it binds itself renamed apart (card module-hygiene)
@@ -545,12 +546,29 @@ arity_variant(name: text, count: int): any := {
 }
 
 # whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
-# function when it takes them (a parameter `b = 1` may be left out, a rest one takes any more)
-shadows(own: map, name: text, count: int): bool := {
+# function when it takes them (a parameter `b = 1` may be left out, a rest one takes any more) and no argument written
+# into the call is of a kind its parameter's type refuses: an alias and the program's word are one overload set
+# picked by the arguments' types (decision library-word-visibility: `use c; isdigit('7')` is the prelude's is_digit)
+shadows(own: map, name: text, count: int, arguments: list): bool := {
 	if name not in own { return no }
 	head = own[name]
-	not is_group(head) or takes(signature_of(items_of(head)), count)
+	if not is_group(head) { return yes }
+	signature = signature_of(items_of(head))
+	if not takes(signature, count) { return no }
+	for at in 0 ..< min(#arguments, #signature.parameters) { if refuses_written(signature.parameters[at].type_name, arguments[at]) { return no } }
+	yes
 }
+# a value written into a call that a parameter's type refuses: a character or text given a number, a number given a text
+NUMBER_PARAMETER_TYPES = ["i32", "i64", "f32", "f64", "int", "float", "number"]
+refuses_written(type: text, argument: Node): bool := if type in NUMBER_PARAMETER_TYPES then argument is codepoint or argument is text else type == "text" and argument is number
+# the C functions the program's modules declare (`use c`'s `isdigit(c: i32): i32 from 'c'`), own words as the
+# program's are: a library alias of the name (the prelude's isdigit => is_digit) no longer hides them
+with_c_heads(own: map): map := {
+	for name in used_c_functions.keys { if not own.has(name) { own[name] = c_head(used_c_functions[name]) } }
+	own
+}
+# the head `isdigit(c: i32)` of a C declaration [name, library, types, names, result]
+c_head(declaration: list): Node := List([symbol(declaration#1)] + (0 ..< #declaration#3).map(at => Key(symbol(declaration#4[at]), Op.Colon, symbol(declaration#3[at]))), Bracket.Round, Separator.Comma)
 
 # the program with each function it defines named as one of `library` under its own name (name·own): its definitions,
 # one overload set of the program's when it defines the name by several arities, its value and the calls one of them
@@ -687,14 +705,14 @@ word_index(file: text): map := {
 	for word in words.keys { index[word] = words[word].split(" ") }
 	index
 }
-# the words each standard module defines but the prelude, each with its modules joined by spaces: a word of letters
+# the words each standard module defines (an `alias ln => natural_log` too) but the prelude, each with its modules joined by spaces: a word of letters
 # (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 module_word_definers(): map := {
 	definers = {}
 	for module in std_module_names.filter(name => name != "prelude") {
 		source = file_text(std_module_path(module)) ?? ""
-		for word in definition_slices(source).map(slice => slice#1) + rule_heads(source).filter(word => not has_meaning(word)) {
+		for word in definition_slices(source).map(slice => slice#1) + module_aliases(source).keys + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not is_made_name(word) {
 				known = definers.get(word) ?? []
 				if module not in known { definers[word] = known + [module] }

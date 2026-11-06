@@ -49,6 +49,7 @@ use "page_values.warp"
 use "js_globals.warp"
 use "dir_hints.warp"
 use "effects.warp"
+use "optional_unwraps.warp"
 use "object_functions.warp"
 use "primitive.warp"
 EXTENSIONS = [
@@ -105,6 +106,7 @@ EXTENSIONS = [
 	js_globals_extension
 	dir_hints_extension
 	effects_extension
+	optional_unwraps_extension
 	object_functions_extension
 	# extensions/primitive.warp, which the compiler uses itself: its attribute `@primitive`
 	Extension{name: "primitive", attributes: [PRIMITIVE_ATTRIBUTE]}
