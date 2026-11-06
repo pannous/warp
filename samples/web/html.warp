@@ -4,11 +4,11 @@ html{ lang: "en"
 	body{
 		form{
 			div{ class: "form-group" # free form values need to be quoted
-				label{ for:email "Email address:"} # html text appears as free string (without key:)
+				label{ for: email, "Email address:" } # html text appears as free string (without key:), apart from the attribute
 				input{ type: email id: email } # single values need no quotes
 			}
 			div{ class: "form-group"
-				label(for: pwd): "Password"
+				label{ for: pwd, "Password" }
 				input{ id: pwd type: password}
 			}
 			button{ class: ['btn' 'btn-info']      # property with value list

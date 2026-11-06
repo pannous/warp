@@ -1,9 +1,9 @@
-# 5bf92df2c7 2026-11-06 17:26 192/265 72.5%
+# 00c4ac6995 2026-11-06 21:37 222/266 83.5%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
+ok   samples/advanced/neural_net.warp
 ok   samples/advanced/particles.warp
-ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
 ok   samples/advanced/test.warp
@@ -20,6 +20,7 @@ ok   samples/apps/meeting_planner.warp
 ok   samples/apps/name_matcher.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
+ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
 ok   samples/conditions/control_flow.warp
@@ -79,10 +80,14 @@ ok   samples/golf/quine.warp
 ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
+ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/domain_warp.warp
+ok   samples/gpu/fluid_smear_dsl.warp
+ok   samples/gpu/fluid_smear.warp
 ok   samples/gpu/gpu_arrays.warp
 ok   samples/gpu/gpu_map.warp
 ok   samples/gpu/gpu_million.warp
+ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
@@ -90,9 +95,11 @@ ok   samples/gpu/manual_3d_object_viewer.warp
 ok   samples/gpu/northern_lights.warp
 ok   samples/gpu/ocean.warp
 ok   samples/gpu/ringed_planet.warp
+ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
+ok   samples/gpu/watercolor.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
@@ -105,7 +112,9 @@ ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
+ok   samples/laws/basic_laws.warp
 ok   samples/laws/kitchensink.warp
+ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
@@ -120,6 +129,8 @@ ok   samples/loops/life_idiomatic.warp
 ok   samples/loops/life_kotlin_ranges.warp
 ok   samples/loops/mandelbrot.warp
 ok   samples/matching/code_templates.warp
+ok   samples/matching/matching.warp
+ok   samples/matching/pattern_clauses.warp
 ok   samples/matching/pattern_values.warp
 ok   samples/matching/text_patterns.warp
 ok   samples/matching/tree_patterns.warp
@@ -130,6 +141,7 @@ ok   samples/modules/free_slots.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
+ok   samples/modules/packages.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi_comprehensive.warp
@@ -152,13 +164,32 @@ ok   samples/numbers/simple.warp
 ok   samples/numbers/sin.warp
 ok   samples/numbers/sine.warp
 ok   samples/numbers/sum.warp
-ok   samples/numbers/units_dynamic.warp
 ok   samples/objects/binary_tree.warp
 ok   samples/objects/data_structures.warp
 ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/dijkstra.warp
 ok   samples/objects/json_parser.warp
+ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
+ok   samples/sound/arrangement.warp
+ok   samples/sound/filters.warp
+ok   samples/sound/gpu_visualizer_warp.warp
+ok   samples/sound/harmony.warp
+ok   samples/sound/hum_blocks.warp
+ok   samples/sound/midi.warp
+ok   samples/sound/music.warp
+ok   samples/sound/play_mp3.warp
+ok   samples/sound/rhythm.warp
+ok   samples/sound/signal_graph.warp
+ok   samples/sound/siren_sound.warp
+ok   samples/sound/sound_features.warp
+ok   samples/sound/sound_kick_samples.warp
+ok   samples/sound/sound_patterns.warp
+ok   samples/sound/sound_pipes.warp
+ok   samples/sound/stereo_sound.warp
+ok   samples/sound/synth.warp
+ok   samples/sound/visualizer.warp
+ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
@@ -176,14 +207,16 @@ ok   samples/text/palindrome.warp
 ok   samples/text/regexes.warp
 ok   samples/text/replace_word.warp
 ok   samples/text/sort_words.warp
+ok   samples/text/uniscript_text.warp
 ok   samples/text/word_count.warp
+ok   samples/text/word_lengths.warp
 ok   samples/types/dispatch.warp
 ok   samples/types/polymorphism.warp
 ok   samples/types/reflection.warp
 ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
-ok   samples/wasm/wasm_interop.warp
+ok   samples/wasm/component_reflection.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/keyed_counters.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
@@ -197,70 +230,38 @@ WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
-SRV  samples/servers/hosting.warp
-SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
-SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/neural_net.warp: not a function
-FAIL samples/apps/site_generator.warp: text of node
+FAIL samples/advanced/raytracer.warp: outside the core: the unknown name a
 FAIL samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
-FAIL samples/functions/functions.warp: outside the core: a call of reduce with 3 arguments
-ok   samples/golf/sierpiński-triangle.warp
-FAIL samples/gpu/fluid_smear_dsl.warp: outside the core: the call operator_·(…)
-FAIL samples/gpu/fluid_smear.warp: outside the core: the call operator_·(…)
-FAIL samples/gpu/gpu_visualizer.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/gpu/scene_3d.warp: paint of a shader: the shader: Validation Error
-FAIL samples/gpu/watercolor.warp: outside the core: the unknown name view
-ok   samples/hello/natural.warp
-FAIL samples/laws/laws.warp: outside the core: the call law_holds(…)
-FAIL samples/laws/project_laws.warp: outside the core: the call law_holds(…)
-FAIL samples/matching/matching.warp: `(find rest (text next))` fits no single variant of find(text, text), find(list, function), find(text, function)
-FAIL samples/matching/pattern_clauses.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
+FAIL samples/functions/functions.warp: outside the core: the unknown name a
+TIME samples/gpu/yohei_tweet_glsl.warp: still running after 184 s
+FAIL samples/hello/natural.warp: outside the core: a function value in +
 FAIL samples/modules/javascript.warp: the host word foreign_call is not in warp yet
-FAIL samples/modules/packages.warp: packages/colors/colors.warp: no such file to use
 FAIL samples/modules/rust_crates.warp: outside the core: the call levenshtein(…)
 FAIL samples/numbers/dates.warp: outside the core: a time where a int is needed
 FAIL samples/numbers/measurements.warp: outside the core: the unknown name certainly
+FAIL samples/numbers/units_dynamic.warp: wasm trap: null reference
 FAIL samples/objects/references.warp: outside the core: the field members of a int
-FAIL samples/python/numpy_matrix.warp: no C function Py_IsInitialized in its library, or the library not found
-FAIL samples/python/python_modules.warp: no C function Py_IsInitialized in its library, or the library not found
-FAIL samples/sound/arrangement.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/filters.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/gpu_visualizer_warp.warp: outside the core: the call binary_log(…) at lib/sound.warp:303 (in plain_midi)
-FAIL samples/sound/harmony.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/hum_blocks.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/midi.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/music.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/play_mp3.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/rhythm.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/signal_graph.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/siren_sound.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/sound_features.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/sound_kick_samples.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/sound_patterns.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/sound_pipes.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/stereo_sound.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/synth.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/sound/visualizer.warp: outside the core: the call binary_log(…) at lib/sound.warp:303 (in plain_midi)
-FAIL samples/sound/voices.warp: outside the core: waited_till giving a mixed at lib/sound.warp:718 (in waited_till)
-FAIL samples/storage/orm_units.warp: hint: m is units's fix: use units
-ok   samples/text/uniscript_text.warp
-ok   samples/text/word_lengths.warp
-FAIL samples/wasm/component_reflection.warp: outside the core: the unknown name demo
+FAIL samples/python/numpy_matrix.warp: python ModuleNotFoundError: No module named 'numpy'
+FAIL samples/servers/hosting.warp: exit 137, nothing on stderr
+FAIL samples/servers/route_headers.warp: hint: status is router's fix: use router
+FAIL samples/servers/worker.warp: warp: Out-of-bounds access in linear memory or a table, or call stack exhausted while running samples/servers/worker.warp
+FAIL samples/storage/orm_units.warp: outside the core: the operator as on int
 FAIL samples/wasm/import_compiled.warp: no module, library or package named shapes: no shapes.warp beside the program or in lib/; a package is used by its path, use "…"
-FAIL samples/web/component_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/computed_tags.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/counter.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/form_submit.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/hello_div.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/html_dsl.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/html.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:585 (in style_as_written)
-FAIL samples/web/keyframes.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:585 (in style_as_written)
-FAIL samples/web/leaving_list.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/live_region.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/page_custom_event.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/page_elements.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
-FAIL samples/web/select_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:460 (in html_escaped)
+ok   samples/wasm/wasm_interop.warp
+FAIL samples/web/component_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/computed_tags.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/counter.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/form_submit.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/hello_div.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/html_dsl.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/html.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:600 (in style_as_written)
+FAIL samples/web/keyframes.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:600 (in style_as_written)
+FAIL samples/web/leaving_list.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/live_region.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/page_custom_event.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/page_elements.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+FAIL samples/web/select_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
 FAIL samples/web/typed_form.warp: outside the core: an assignment to `… : …`

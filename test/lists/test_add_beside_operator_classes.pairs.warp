@@ -1,0 +1,3 @@
+# a list's add appends in place also where a class's + is spelled add (units, reals): the stored tables of samples/storage/orm
+'use units; f() := [1]; xs = f(); xs.add(2); xs'	[1, 2]
+'use units; f() := [1]; xs = f(); xs.add(2); count(xs)'	2
