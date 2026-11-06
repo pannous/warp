@@ -886,30 +886,42 @@ typed_json_value(value: text, path: text, value_type: text, depth: int, program:
 	declared = class_declared(statement, view)
 	if constructor_of(declared) != ø { return ø }
 	fields = declared.fields
-	members = view#3[3..].map(member_read)
+	parts = typed_json_fields(value, view#3[3..].map(member_read), fields, field => "(" + path + " + \".\" + \"" + field + "\")", depth + 1, program, ancestors + [value_type])
+	if parts == ø { return ø }
+	checks = parts#1
+	arguments = parts#2
+	field_names = fields.map(field => "\"" + field + "\"").join(", ")
+	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + value_type + "{" + arguments.join(", ") + "} })"
+}
+
+# [the checks that each required field is there, the constructor's arguments] of the object `value` names, each field
+# converted by its declared type: a defaulted field (`port: int = 80`) missing takes its default; ø for a field whose
+# type typed JSON doesn't read
+typed_json_fields(value: text, members: list, fields: list, field_path: function, depth: int, program: Node, ancestors: list): list? := {
 	field_types = {}
+	defaults = {}
 	for member in members {
 		field = field_name(member)
 		if field != ø {
 			field_type = typed_json_field_type(member)
-			if field_type == ø or is_key(member, Op.Assign) { return ø }
+			if field_type == ø { return ø }
 			field_types[field] = field_type
+			if is_key(member, Op.Assign) { defaults[field] = as_code(value_of(member)) }
 		}
 	}
-	field_names = fields.map(field => "\"" + field + "\"").join(", ")
 	checks = []
 	arguments = []
 	for field in fields {
-		field_path = "(" + path + " + \".\" + \"" + field + "\")"
-		field_value = value + "[\"" + field + "\"]"
-		converted = typed_json_value(field_value, field_path, field_types[field], depth + 1, program, ancestors + [value_type])
+		present = "keys(" + value + ").contains(\"" + field + "\")"
+		converted = typed_json_value(value + "[\"" + field + "\"]", field_path(field), field_types[field], depth, program, ancestors)
 		if converted == ø { return ø }
-		checks = checks + ["if not keys(" + value + ").contains(\"" + field + "\") { raise " + field_path + " + \" is required\" }"]
-		arguments = arguments + [field + ": " + converted]
+		if defaults.has(field) { arguments = arguments + [field + ": (if " + present + " then " + converted + " else " + defaults[field] + ")"] } else {
+			checks = checks + ["if not " + present + " { raise " + field_path(field) + " + \" is required\" }"]
+			arguments = arguments + [field + ": " + converted]
+		}
 	}
-	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + value_type + "{" + arguments.join(", ") + "} })"
+	[checks, arguments]
 }
-
 # Generate typed JSON parsing from the class declared in the program.
 typed_json(source: Node, type_name: Node, program: Node): Node := {
 	for statement in level_statements(program) {
@@ -918,24 +930,10 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			declared = class_declared(statement, view)
 			if constructor_of(declared) != ø { return plain_node(parsed("raise \"typed JSON does not support class constructors yet\"")) }
 			fields = declared.fields
-			members = view#3[3..].map(member_read)
-			field_types = {}
-			for member in members {
-				field = field_name(member)
-				if field != ø {
-					field_type = typed_json_field_type(member)
-					if field_type == ø or is_key(member, Op.Assign) { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
-					field_types[field] = field_type
-				}
-			}
-			required_checks = fields.map(field => "if not keys(typed_json_value).contains(\"" + field + "\") { raise \"" + field + " is required\" }")
-			arguments = []
-			for field in fields {
-				value = "typed_json_value[\"" + field + "\"]"
-				converted = typed_json_value(value, "\"" + field + "\"", field_types[field], 0, program, [name_of(type_name)])
-				if converted == ø { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
-				arguments = arguments + [field + ": " + converted]
-			}
+			parts = typed_json_fields("typed_json_value", view#3[3..].map(member_read), fields, field => "\"" + field + "\"", 0, program, [name_of(type_name)])
+			if parts == ø { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
+			required_checks = parts#1
+			arguments = parts#2
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
