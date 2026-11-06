@@ -1218,8 +1218,25 @@ pattern(text, duration) := sound(pattern_samples(pattern_events(parse_pattern(te
 pattern(text) := pattern(text, bar_seconds(1))
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
-// Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127
-midi_send(status, data1, data2 = 0, port = "") := std_io("midi", "send", [port, if status < 192 or status >= 224 then [status, data1, data2] else [status, data1]])
+// Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. libwarp_sound sends natively
+// over CoreMIDI, to warp's own virtual source "warp" when there is no output (decision midi-native); the page's
+// libwarp_sound to its Web MIDI
+warp_midi_send(port: text, message: bytes, size: length): i32 from 'warp_sound'
+warp_midi_outputs(): text from 'warp_sound'
+warp_midi_inputs(): text from 'warp_sound'
+MIDI_NO_OUTPUT = -2
+MIDI_UNSUPPORTED = -3
+MIDI_NOT_BUILT_IN = "MIDI is not built into this warp's sound library yet (macOS has it; ALSA on Linux to come)"
+midi_send(status, data1, data2 = 0, port = "") := {
+	message = if status < 192 or status >= 224 then [status, data1, data2] else [status, data1]
+	if not sound_library_loads() { return std_io("midi", "send", [port, message]) }
+	sent = warp_midi_send(port, message)
+	if sent == MIDI_NO_OUTPUT { raise "no MIDI output named " + port + ": midi_outputs() names them" }
+	if sent == MIDI_UNSUPPORTED { raise MIDI_NOT_BUILT_IN }
+	if sent != 0 { raise "MIDI message not sent" }
+}
+// the names of the devices, a list; refused where the sound library has no MIDI
+midi_devices(names) := if names == ø then raise MIDI_NOT_BUILT_IN else names.split("\n").filter(name => name != "")
 midi_on(pitch, velocity = 100, channel = 1) := midi_send(143 + channel, midi(pitch), velocity)
 midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
 // a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
@@ -1228,8 +1245,8 @@ midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	silence(duration)
 	midi_off(pitch, channel)
 }
-midi_outputs() := std_io("midi", "outputs", [])
-midi_inputs() := std_io("midi", "inputs", [])
+midi_outputs() := if sound_library_loads() then midi_devices(warp_midi_outputs()) else std_io("midi", "outputs", [])
+midi_inputs() := if sound_library_loads() then midi_devices(warp_midi_inputs()) else std_io("midi", "inputs", [])
 // the next message [status, data1, data2] from the input port ("" the first, else by name), waiting for it; seconds > 0
 // waits that long at most, then ø (card midi-receive); the input stays open, so no message between two calls is lost
 midi_receive(port = "", seconds = 0) := std_io("midi", "receive", [port, seconds])
