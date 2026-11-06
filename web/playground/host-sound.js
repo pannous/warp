@@ -265,7 +265,7 @@ addHostPart({
 			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
 			// speakers and stays silent, as natively save sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate, channels) => {
-				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainValue(program(), samples), Number(rate), Number(channels));
+				holder.sounded(intsOfList(program(), samples, Number(count)) ?? guestPlain(program(), samples), Number(rate), Number(channels));
 			},
 		};
 	},

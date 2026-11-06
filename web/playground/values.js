@@ -2,15 +2,7 @@
 // as core/native/driver.warp reads and builds them natively: through the module's exports, never its GC layout.
 // Reading: shown_at (a value's text, packed as address · 2^32 + length in the module's memory), is_textual, item_count,
 // item_at and int_item_at (1-based). Building: the constructors of core/emitter/host.warp host_builders (new_empty,
-// new_int, new_bool, new_float, new_text, new_list, error_of, new_bytes …). reader.js reads the Rust-era modules
-// (reflect_* exports), which these have not.
-
-// a module of the Rust-era compiler, which reader.js reads, has reflect_* exports: plainValue and builtValue serve both
-// until the page compiles with the self-hosted compiler only (card wasm-playground-build), then they are these
-const selfHosted = program => !program.reflect_value;
-const plainValue = (program, value) => selfHosted(program) ? guestPlain(program, value) : plainOfTree(readNode(program, value));
-const errorValue = (program, reason) => selfHosted(program) ? newGuestError(program, reason) : errorInProgram(program, reason);
-const builtValue = (program, plain) => selfHosted(program) ? newGuestValue(program, plain) : buildValue(program, treeOfPlain(plain));
+// new_int, new_bool, new_float, new_text, new_list, error_of, new_bytes …).
 
 const SHOWN_TEXT_SHIFT = 2n ** 32n; // driver.warp TEXT_SHIFT
 const SQUARE_BRACKET = 1n; // the bracket info of a [list] (core/node.warp Bracket: Curly 0, Square 1, Round 2)
@@ -159,9 +151,14 @@ function newGuestMap(program, entries) {
 	const keys = entries.map(([name, value]) => program.new_spelled_key(newGuestBytes(program, name, "new_symbol"), newGuestText(program, ":"), value));
 	return program.new_spelled_list(newGuestList(program, keys), newGuestText(program, "{"), newGuestText(program, ","));
 }
-// a plain JavaScript value as the module's: ø, yes/no, Int (a whole number), Float, text, list, map (an object)
+// a plain JavaScript value as the module's: ø, yes/no, Int (a whole number, also a foreign runtime's `{$int: digits}`),
+// Float, a codepoint `{$char}`, text, list, map (an object); an object of the page without a plain form (a Date, a
+// function) as its handle (host.js handleOf)
 function newGuestValue(program, plain) {
 	if (plain === null || plain === undefined) return program.new_empty();
+	if (isCodepoint(plain)) return program.new_codepoint(plain.$char.codePointAt(0));
+	if (typeof plain === "function" || (typeof plain === "object" && !ArrayBuffer.isView(plain) && !Array.isArray(plain) && !isPlainObject(plain))) return newGuestValue(program, handleOf(plain));
+	if (typeof plain === "object" && Object.keys(plain).length === 1 && typeof plain.$int === "string") return program.new_int(BigInt(plain.$int));
 	if (typeof plain === "boolean") return program.new_bool(plain ? 1n : 0n);
 	if (typeof plain === "bigint") return program.new_int(plain);
 	if (typeof plain === "number") return Number.isInteger(plain) ? program.new_int(BigInt(plain)) : program.new_float(plain);
