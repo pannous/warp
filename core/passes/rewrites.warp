@@ -202,6 +202,9 @@ own_rules_applied(program: Node, source: text): Node := {
 	ruled = statements_ruled(statements_in(program), "", source)
 	rules = ruled#1
 	if #rules > 0 { program = separated(bracketed(ruled#2, ""), ";") }
+	# data as written, never rewritten by a rule or pass: `style{ td { padding: 6px } }` no units' quantity(6, "px")
+	# (decision data-parameter), `li{ animation: pop 400ms }` no call of the list word pop (decision tag-items-calls)
+	program = data_spliced(program)
 	mentioned = word_set(symbol_words(program))
 	module_rules = []
 	needs = rule_needs_by_module()
@@ -215,8 +218,6 @@ own_rules_applied(program: Node, source: text): Node := {
 	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
 	rules += unbound_rules(module_rules, program)
 	if #rules == 0 { return program }
-	# a data argument as written, `style{ td { padding: 6px } }` never the units' quantity(6, "px") (decision data-parameter)
-	program = data_spliced(program)
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_signatures = definitions_signatures(program)
@@ -1222,7 +1223,8 @@ has_property(code: Node, property: text): bool := {
 	if property == "value" { return binds_value(rule_scope, word) }
 	# the program's function, else a builtin or the prelude's where the program binds nothing of the name (`x.upper!`'s upper)
 	if property == "function" { return (binds_as(rule_scope, word, Meaning.Function) or (not rule_scope.has(word) and (is_declared_word(word) or word in prelude_definitions()))) and not locally_bound(code) }
-	if program_typing()#1.has(property) { return typed_as(word, property) }
+	# a library word in an attribute's value is data, as with `takes`: `animation: pop 400ms` keeps units' ms a CSS word
+	if program_typing()#1.has(property) { return typed_as(word, property) and not (rule_in_attribute and not program_word(word)) }
 	not rule_scope.has(word)
 }
 # `$u is Unit`: a name the program assigns an instance of the class, else, unbound by it, a library module's,

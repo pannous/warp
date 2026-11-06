@@ -304,7 +304,7 @@ play([C4 E4 G4], 300ms)
 	"wasm modules": { value: '[["fib"], 12586269025]', code: `// a Rust library compiled to WebAssembly: its exports are warp words
 use wasm "test/fixtures/components/rust_demo.wasm" as demo
 [demo.functions, fib(50)]` },
-	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
+	"C libraries": { value: '["stack", "/b/c", 3400449319, "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
 use c
 import test/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },
