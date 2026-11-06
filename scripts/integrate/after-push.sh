@@ -155,13 +155,17 @@ linked() {
 # too, and any folder a process still has open: a run started on the previous build reads its warp.wasm and modules
 # until it ends (a full suite wrote an empty results.txt, "No module at …/native-fb9bda25b/warp.wasm", 2026-10-29)
 KEPT_BUILDS=3
+# in_use <folder>: a process has a file of it open (a run's warp, its wasmtime library). By the pids lsof lists, never
+# its status: macOS lsof +D exits 1 even when it lists some, so every folder looked unused and a long `warp test` lost
+# its build mid-run ("…/native-8e0263694/warp.wasm is missing", card test-run-binary-swap)
+in_use() { [ -n "$(lsof -t +D "$1" 2>/dev/null)" ]; }
 pruned() {
 	local kept=() link folder
 	for link in "$MAIN_WARP"; do kept+=("$(basename "$(dirname "$(readlink "$link")")")"); done
 	for folder in $(ls -dt "$BUILDS"/*/ | tail -n +$((KEPT_BUILDS + 1))); do
 		folder=${folder%/}
 		[[ " ${kept[*]} " == *" $(basename "$folder") "* ]] && continue
-		lsof +D "$folder" >/dev/null 2>&1 && continue
+		in_use "$folder" && continue
 		rm -rf "$folder"
 	done
 }
