@@ -21,6 +21,9 @@ cli_kind(o: map): text := if "kind" in o then o["kind"] else "text"
 cli_is_flag(o: map): bool := cli_kind(o) == "flag"
 cli_is(o: map, key: text): bool := key in o and o[key] == yes
 cli_shown(o: map): text := if cli_is(o, "positional") then o["name"] else "--" + o["name"]
+// a flag option refuses --name=…; body is the text after --
+cli_flag_rejects_value(name: text, body: text) := if "=" in body { raise "cli: --" + name + " takes no value" }
+cli_positionals(spec: list): list := [o for o in spec if cli_is(o, "positional")]
 
 // the option a long name names, ø when none
 // whether an argument is an option, not a value: -x and --x are, - and a negative number (-5, -2.5) are not (argparse)
@@ -84,12 +87,12 @@ def cli_parse(spec: list, argv: list, stop: bool, rest_out: list): map {
 			if o == ø and name.starts_with("no-") {
 				o = cli_long(spec, name[3..])
 				if o == ø or not cli_is_flag(o) { raise "cli: unknown option --" + name }
-				if "=" in body { raise "cli: --" + name + " takes no value" }
+				cli_flag_rejects_value(name, body)
 				result[o["name"]] = no
 			} else {
 				if o == ø { raise "cli: unknown option --" + name }
 				if cli_is_flag(o) {
-					if "=" in body { raise "cli: --" + name + " takes no value" }
+					cli_flag_rejects_value(name, body)
 					result[o["name"]] = yes
 				} else {
 					value = ø
@@ -127,7 +130,7 @@ def cli_parse(spec: list, argv: list, stop: bool, rest_out: list): map {
 		}
 	}
 	// positionals in spec order; a many one takes what the later single ones leave
-	slots = [o for o in spec if cli_is(o, "positional")]
+	slots = cli_positionals(spec)
 	singles_after = 0
 	p = 0
 	for s in 0 ..< count(slots) {
@@ -174,7 +177,7 @@ def cli_help(program: text, spec: list): text {
 			usage = usage + " " + (if cli_is(o, "required") then "" else "[") + "--" + o["name"] + value + (if cli_is(o, "required") then "" else "]")
 		}
 	}
-	pos = [o for o in spec if cli_is(o, "positional")]
+	pos = cli_positionals(spec)
 	if count(pos) > 0 {
 		lines = ["", "positional arguments:"] + [cli_line(o["name"], if "help" in o then o["help"] else "") for o in pos] + lines
 	}

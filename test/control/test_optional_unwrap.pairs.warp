@@ -1,0 +1,4 @@
+# `x!` of an optional: its value, else "x is missing" raised (decision x-unwrap, wiki/optional.md)
+'x: int? = 5; x! * 2'	10
+'x: text? = "a"; x!'	'a'
+'x: int? = ø; try { x! } catch e { e.message }'	'x is missing'

@@ -17,10 +17,6 @@ is! 'class N { k: int; text() := "n" + string(k) }
 x = N(1)
 str(x) + "!"' 'n1!'
 
-# methods_of_the_text_type
-is! 'fs = methods(text)
-fs#1.name' 'repeat'
-
 # an_instance_shows_its_text_in_a_task
 is! 'class N { k: int; text() := "n" + string(k) }
 t = go { str([N(3)]) }

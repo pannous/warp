@@ -56,8 +56,10 @@ class Set { items = []
 	// the set algebra (card lib-data-structures): new sets, the receiver's elements first, in their order
 	union(other) := { merged = items; for x in other.items { if not (x in merged) { merged = merged + [x] } }; Set(merged) }
 	intersection(other) := Set([x for x in items if x in other.items])
-	difference(other) := Set([x for x in items if not (x in other.items)])
-	symmetric_difference(other) := Set([x for x in items if not (x in other.items)] + [x for x in other.items if not (x in items)])
+	// the receiver's elements that are not in other (shared by difference and symmetric_difference)
+	difference_from(other) := [x for x in items if not (x in other.items)]
+	difference(other) := Set(difference_from(other))
+	symmetric_difference(other) := Set(difference_from(other) + other.difference_from(this))
 	is_subset(other) := { for x in items { if not (x in other.items) { return false } }; true }
 	is_superset(other) := other.is_subset(this)
 	equals(other) := count(items) == count(other.items) and is_subset(other)

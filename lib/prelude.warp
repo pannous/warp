@@ -281,6 +281,14 @@ rewrite ($xs: [u32] = $v) => ($xs = $packed) where $packed = gpu_packed_as(u32, 
 mean(xs) := if count(xs) == 0 then raise "mean of an empty list" else sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
 bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
+// `for byte in t` (decision loop-variable): the value walked by that unit when its type has one, a text's bytes,
+// chars or code points, a map's [key, value] pairs; else by its own items, a map's keys, a list's items (a list of bytes
+// stays one), so the loop needs no type at the sugar
+walked_by(value: any, unit: text): list := {
+	if value is text { return if unit == "bytes" then bytes(value) else if unit == "codepoints" then code_point_list(value) else chars(value) }
+	if value is map { return if unit == "pairs" then map_keys(value).map(key => [key, value[key]]) else map_keys(value) }
+	value
+}
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
@@ -638,9 +646,6 @@ byte_wrapped(n) := {
 	rest = whole % 256
 	if rest < 0 then rest + 256 else rest
 }
-convert!(n, to: byte) := byte_wrapped(n)
-convert!(n, to: u8) := byte_wrapped(n)
-convert!(n, to: uint8) := byte_wrapped(n)
 
 // bytes as! text: invalid UTF-8 becomes U+FFFD, one replacement per bad byte. from_utf8 stays strict
 lossy_utf8(bytes) := {
@@ -674,7 +679,16 @@ lossy_utf8(bytes) := {
 	}
 	out
 }
-convert!(bytes: list, to: text) := lossy_utf8(bytes)
+// `x as! T` is convert!(x, to: T), the target a value (decision checked-forced-conversions, convert-bang): one
+// definition for every target the prelude forces, as typed parameters cannot tell targets apart; T a type or its
+// symbol (`as!` passes symbol("byte")), named alike
+byte_names = ["byte", "u8", "uint8"]
+convert!(value, to) := {
+	target = to.name
+	if byte_names.contains(target) { return byte_wrapped(value) }
+	if target == "text" { return lossy_utf8(value) }
+	raise "no forced conversion to " + target + " of that value"
+}
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
 class Error { message: text }

@@ -49,7 +49,8 @@ alike(a: any, b: any, tolerance: float, rough: bool) := {
 // folded (lower case without accents), the rough ones trimmed of blanks and punctuation at both ends first
 values_alike(a: any, b: any, tolerance: float, rough: bool): bool := {
 	if a is bool or b is bool { return truthy(a) == truthy(b) }
-	if a is number and b is number { return numbers_alike(a as float, b as float, tolerance) }
+	# real: an exact value too, π or 2π, which `is number` leaves out
+	if a is real and b is real { return numbers_alike(a as float, b as float, tolerance) }
 	if (a is text or a is char) and (b is text or b is char) { return text_alike(str(a), rough) == text_alike(str(b), rough) }
 	a == b
 }
