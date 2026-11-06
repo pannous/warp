@@ -6,7 +6,7 @@
 // (`serving`) and answers each (`served`), HTTP text both ways (host-routes.js).
 // The site mirrors the repository's layout, this file at web/playground/, so FILE_ROOT (host-files.js) is the site's root.
 
-importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
+importScripts("imports.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js", "wasi.js", "driver.js");
 prepareTaskPool(); // host-tasks.js
 

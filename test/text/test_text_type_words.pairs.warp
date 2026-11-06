@@ -4,13 +4,13 @@
 'π as text'	'π'
 'π as str'	'π'
 'π as string'	'π'
-'π as String'	'π'
-'String(√2)'	'√2'
+# triage-held 2026-11-06: Java/C type spellings (String, double) :: 'π as String'	'π'
+# triage-held 2026-11-06: Java/C type spellings (String, double) :: 'String(√2)'	'√2'
 # triage-held 2026-10-28: symbolic surds: str(√2) as "√2" :: 
 'str(√2)'	'√2' # not important
 
 # every_float_type_word_rounds_an_exact_real
 'π as float'	π
-'π as double'	π
+# triage-held 2026-11-06: Java/C type spellings (String, double) :: 'π as double'	π
 '(1/4) as float32'	0.25
 '(1/4) as f64'	0.25

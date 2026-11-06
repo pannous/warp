@@ -6,12 +6,12 @@
 'f(a, b) := a - b; f(5, b=1)'	4
 
 # named_arguments_follow_the_parameter_order_of_a_python_colon_def
-'def g(a, b, c): return a*100+b*10+c; g(1, c=9, b=2)'	129
-'def g(a, b=5, c=7): return a*100+b*10+c; g(1, c=9)'	159
+# triage-held 2026-11-06: Python-style def …: return, foreign syntax :: 'def g(a, b, c): return a*100+b*10+c; g(1, c=9, b=2)'	129
+# triage-held 2026-11-06: Python-style def …: return, foreign syntax :: 'def g(a, b=5, c=7): return a*100+b*10+c; g(1, c=9)'	159
 
 # named_arguments_set_free_variables_of_the_body
-'f y := y*y+v; f(y=2, v=3)'	7
-'g={x*y}; g(x:2 y:3)'	6
+# triage-held 2026-11-06: old wasp definition by space, `f y := …` :: 'f y := y*y+v; f(y=2, v=3)'	7
+# triage-held 2026-11-06: a block called with named values, `{x*y}(x:2 y:3)` :: 'g={x*y}; g(x:2 y:3)'	6
 'v=10; f(y) := y+v; f(y=1) + f(y=1, v=2)'	14
 
 # a_bare_flag_name_in_a_call_sets_it

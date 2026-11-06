@@ -9,6 +9,7 @@
 # after-push still builds the installed warp.wasm anew, so the lib it bundles is main's. Exit 0: hello printed.
 set -uo pipefail
 source "$(dirname "$0")/lib/platform.sh"
+source "$(dirname "$0")/lib/hello-footprint.sh"
 INSTALLED=$warp_binary
 COMPILERS=(warp.wasm warp.wasm.cwasm warp.wasm.driver.cwasm warp.wasm.driver.cwasm.key warp.wasm.driver.build.cwasm warp.wasm.driver.build.cwasm.key runtime.wasm runtime.wasm.cwasm modules)
 EXPECTED=Hello
@@ -43,6 +44,9 @@ else
 		way="$way, the changed lib's modules prebuilt"
 	fi
 fi
-got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 timeout 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+peak=$tree/data/smoke-hello-footprint
+mkdir -p "$tree/data"
+got=$(cd "$tree" && WARP_LIB=$tree/lib WARP_NO_WINDOW=1 footprint_run "$peak" 120 "$INSTALLED" samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
 [[ $got == *$EXPECTED* ]] || { echo "smoke: hello got ${got:0:160}" >&2; exit 1; }
+footprint_checked "$(cat "$peak" 2>/dev/null)" "this branch's hello"
 echo "smoke: $got ($way, WARP_LIB=$tree/lib)"
