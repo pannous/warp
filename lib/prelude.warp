@@ -70,6 +70,8 @@ each(t: text, f: (any) -> any) from emitter
 // the call form of xs.add(x), which extensions/sugar/methods.warp appends in place (the emitter has no call add)
 add(xs, x) := { xs.add(x); xs }
 insert(xs: list, at: int, x) := list_insert(xs, at, x)
+// Rust's HashMap::insert (card rust-map-insert): key set to value in place, the map back
+insert(m: map, key, value) := { m[key] = value; m }
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)

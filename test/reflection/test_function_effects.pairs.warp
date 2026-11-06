@@ -1,4 +1,4 @@
 # a function's effects, what it does besides giving its value (card effects-lists, notes/effects.md)
 'square(x) := x * x; square.effects'	[]
 'shout(t) := print t; shout.effects'	['IO']
-'shout(t) := print t; loud(t) := shout(t); effects of loud'	['IO']
+'shout(t) := print t; loud(t) := shout(t); loud.effects'	['IO']
