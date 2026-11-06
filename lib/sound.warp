@@ -715,8 +715,7 @@ sound_file(speakers, rate, channels, seconds) := {
 // how far ahead of the speaker a voice may queue when heard (notes/sound.md PLAY_AHEAD). Offline (WARP_NO_WINDOW / CI)
 // never waits: save sound mixes by place, and tests stay fast
 PLAY_AHEAD_SECONDS = 0.5 as float
-waited_till(start) := {
-	# one result kind: never return ø on one path and fall through on the other (Mixed refuses the module)
+def waited_till(start) {
 	if not quiet_run() {
 		ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
 		if ahead > clock() { sleep_ms(ahead - clock()) }
@@ -997,8 +996,8 @@ render_sound(path) := save(Recording(), path)
 at(time, actions: block) := { sound_at(time); actions!; sound_at_end() }
 sound_at(seconds) := clock_at(si_amount(seconds))
 sound_at_end() := clock_at_end()
-// silence of that length on the voice's clock: the next sound or MIDI message follows (host sound.rest; card sound-native-clock)
-rest(seconds) := scheduled(si_amount(seconds))
+// silence of that length on the voice's clock: the next sound or MIDI message follows (host sound.silence; card sound-native-clock)
+silence(seconds) := scheduled(si_amount(seconds))
 // a live loop says this first each cycle: the playground hands the loop over to the next run at its next cycle (card
 // playground-live), natively it does nothing
 live_cycle_started(name) := std_io("sound", "live_cycle", [name])
@@ -1201,7 +1200,7 @@ def pattern_cycle(text) {
 	patterns_played.push(text)
 	cycle
 }
-silence(n) := [sample_offset for i in 0..n]
+silent_samples(n) := [sample_offset for i in 0..n]
 // the samples of the events one after another, each ending at the sample its cumulated seconds reach: no drift
 def pattern_samples(events) {
 	samples = []
@@ -1210,7 +1209,7 @@ def pattern_samples(events) {
 	for event in events {
 		elapsed = elapsed + event[1]
 		target = round(elapsed * sample_rate) as int
-		if target > done { samples = samples + (if count(event[0]) == 0 then silence(target - done) else chord_samples(event[0], (target - done) / sample_rate, wave_shape)) }
+		if target > done { samples = samples + (if count(event[0]) == 0 then silent_samples(target - done) else chord_samples(event[0], (target - done) / sample_rate, wave_shape)) }
 		done = target
 	}
 	samples
@@ -1226,7 +1225,7 @@ midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
 // a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
 midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	midi_on(pitch, velocity, channel)
-	rest(duration)
+	silence(duration)
 	midi_off(pitch, channel)
 }
 midi_outputs() := std_io("midi", "outputs", [])

@@ -97,11 +97,21 @@ json_after_item(source: text, at: int, closing: text): int := {
 	if at <= #source and source#at != closing { raise json_refusal(source, "no , or " + closing + " after an item") }
 	at
 }
+// the place after a run of characters that need no escape handling inside a quoted text
+json_scan_plain(source: text, at: int, quote: text): int := {
+	while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+	at
+}
+// skip a leading + or - of a number text
+json_skip_sign(digits: text, at: int): int := {
+	if at <= #digits and (digits#at == "-" or digits#at == "+") { at += 1 }
+	at
+}
 // a run of plain characters joins the text as one slice, not character by character (card lib-perf-bench)
 json_text_read(source: text, at: int, quote: text): list := {
 	// no-escape fast path: one slice, no builder (card lib-json-read-perf)
 	start0 = at
-	while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+	at = json_scan_plain(source, at, quote)
 	if at <= #source and source#at == quote { return [source[start0 - 1..<at - 1], at + 1] }
 	read = source[start0 - 1..<at - 1]
 	while at <= #source and source#at != quote {
@@ -120,7 +130,7 @@ json_text_read(source: text, at: int, quote: text): list := {
 			}
 		} else {
 			start = at
-			while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
+			at = json_scan_plain(source, at, quote)
 			read += source[start - 1..<at - 1]
 		}
 	}
@@ -158,7 +168,7 @@ json_number_read(source: text, at: int): list := {
 json_number_valid(digits: text): bool := {
 	at = 1
 	n = #digits
-	if at <= n and (digits#at == "-" or digits#at == "+") { at += 1 }
+	at = json_skip_sign(digits, at)
 	whole = at
 	while at <= n and is_digit(digits#at) { at += 1 }
 	if at - whole > 1 and digits#whole == "0" { return no }
@@ -172,7 +182,7 @@ json_number_valid(digits: text): bool := {
 	if not some { return no }
 	if at <= n and (digits#at == "e" or digits#at == "E") {
 		at += 1
-		if at <= n and (digits#at == "-" or digits#at == "+") { at += 1 }
+		at = json_skip_sign(digits, at)
 		exponent = at
 		while at <= n and is_digit(digits#at) { at += 1 }
 		if at == exponent { return no }

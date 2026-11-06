@@ -28,3 +28,6 @@ test/results.txt of 03:46, 2630 red lines of 15269.
   form) is an FYI to warp-interviewer and needs self-check.sh; anything bigger asks first.
 - One owner per card and per cluster: `todo take` the card of a cluster you work on (add one if none exists).
 - Report `fixed: <cluster> <commit> <red lines before → after>`; land as before (smoke on the merge, push).
+
+## Samples focus (user 2026-11-06 evening)
+The pass-rate sprint ends: every next task is a failing sample, native (test/samples.txt) or playground (test/samples-web.txt). Workers land what is done and wind down their card, then take their samples-* card (data/sprint/samples-cards.tsv, brief data/sprint/samples-brief.md).
