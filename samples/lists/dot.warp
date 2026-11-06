@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
-# dot(xs, ys) is sum(xs .* ys) in one loop, no list of the products. Over two linear float arrays it multiplies and
-# adds two pairs at a time in SIMD lanes (f64x2), after checking both have the same length. A dot is too light for
-# the GPU: copying the two arrays there costs more than the CPU's whole loop. Float arrays paired by dot or .* live in
-# linear memory by themselves, as long as every other use reads, writes or counts their items
+use math
+# dot(xs, ys) is sum(xs .* ys) in one multiply-add loop, no list of the products (lib/math.warp). Large float lists
+# are copied into linear memory and dotted as f64 there; once the emitter pairs float[n] by dot, linear_dotf (f64x2,
+# no copy) replaces that. A dot is too light for the GPU: uploading the two arrays costs more than the CPU's whole loop
 n = 1000000
 xs = float[n]
 ys = float[n]
@@ -13,7 +13,7 @@ d = dot(xs, ys)
 d1 = xs ∘ ys
 assert d1 == d
 t1 = clock()
-print "dot of \(n) items: \(d) in \(t1 - t0) ms (about n/6)"
+print "dot of \(n) items: \(d) in \(t1 - t0) ms"
 
 zs = xs .* ys
-print "xs .* ys pairs the items: \(#zs) products, the middle one \(zs#(n /! 2))"
+print "xs .* ys pairs the items: \(count(zs)) products, the middle one \(zs#(n /! 2))"

@@ -238,7 +238,7 @@ div{ button{ "+1", on click { count += 1 } } button{ "reset", on click { count =
 use web
 done = false
 toggles = 0
-div{ style{ .done = "green" } button{ on click { done = not done; toggles += 1 }, "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
+div{ style{ .done{ color: "green" } } button{ on click { done = not done; toggles += 1 }, "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
 	components: { value: '<div><div><button data-warp-click="1">+</button><p>Apples: 1</p></div><div><button data-warp-click="2">+</button><p>Pears: 5</p></div></div>', clicks: ["+"], clicked: '<div><div><button data-warp-click="1">+</button><p>Apples: 2</p></div><div><button data-warp-click="2">+</button><p>Pears: 5</p></div></div>', kept: true, code: `// a component is a function that returns markup; each keeps its own count
 use web
 def Counter(label, start) {
