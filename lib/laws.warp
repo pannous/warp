@@ -1,5 +1,17 @@
 # A law (notes/laws.md): `law square(-x) == square(x)` and a named one, `law name:` with a `for x: int` line each, are
-# tried for a few ints of each variable at run time (extensions/rules/rule_words.warp law_check), a value one fails for raised.
+# tried for a few ints of each variable at run time (extensions/rules/rule_words.warp law_check hands law_holds below the law), a value one fails for raised.
+# the values a law is tried for, in each of its variables
+LAW_TRIAL_VALUES = [0, 1, -1, 2, -2, 3, -7, 10, -100, 1000]
+# a law tried for each LAW_TRIAL_VALUES of each variable, the proposition given their values as a list in the
+# variables' order (its rule, extensions/rules/modules/laws.warp): the first values it fails for raised with the law
+law_holds(shown: text, names: list, proposition: function) := law_tried(shown, names, proposition, [])
+law_tried(shown: text, names: list, proposition: function, chosen: list) := {
+	if #chosen == #names {
+		if not proposition(chosen) { raise "law " + shown + " fails for " + [names[i] + " = ${chosen[i]}" for i in 0 ..< #names].join(", ") }
+		return
+	}
+	for value in LAW_TRIAL_VALUES { law_tried(shown, names, proposition, chosen + [value]) }
+}
 
 # A program's own tests, `test C` lines (decisions test-soft, program-test), checks as its laws are: each checked where
 # it stands, a raise failing it, and a program with tests ending in their summary, as `warp test` words it: "✓ 3 tests

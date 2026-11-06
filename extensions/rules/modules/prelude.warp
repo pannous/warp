@@ -1,16 +1,11 @@
 # lib/prelude.warp's rules that run code at compile time, its whole program or a rule word of extensions/rules/rule_words.warp:
 # the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
-// paint(f, width, height) of a program function f(x, y) (card warp-to-shaders, decision shaders-in-lib): the WGSL shader
-// that wgsl_shader of extensions/rules/wgsl.warp compiles f to, the program values it reads the values of paint, read again
-// at each paint; on the GPU, else f of each pixel on the CPU, by paint_shader below. shader_of(f) is the text of that
-// shader. Rules of the prelude, so they meet paint before arity_overloads names its overloads, in every program
 // paint(s) and paint(s, values) paint at the program's own width and height where it assigns both, else at the view's
-// size (wiki/graphics.md): the rules below then fill the shader's holes or compile the function
+// size (wiki/graphics.md): the rules below then fill the shader's holes, or lib/shaders' rules paint the function.
+// Rules of the prelude, so they meet paint before arity_overloads names its overloads, in every program
 rewrite paint($s) => paint($s, $size...) where $s is symbol and $size = paint_size($program)
 rewrite paint($s, $v) => paint($s, $size..., $v) where $s is symbol and $size = paint_size($program)
-rewrite paint($f, $w, $h) => paint_shader($painting, $w, $h, $f) where $f is symbol and $f is function and $painting = wgsl_painting($f, $program)
-rewrite shader_of($f) => $shader where $f is symbol and $f is function and $shader = wgsl_shader($f, $program)
-// a paint of a shader the program assigns reads its holes from the variables of their names (extensions/rules/wgsl.warp shader_values)
+// a paint of a shader the program assigns reads its holes from the variables of their names (extensions/rules/shader_holes.warp shader_values)
 rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values($s, $v, $program)
 rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
 // gpu_render(s, width, height): a shader's render without values of its own, its holes read as paint's

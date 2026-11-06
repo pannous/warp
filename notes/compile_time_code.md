@@ -82,3 +82,23 @@ Lines by domain (counting non-blank lines):
    files so each one's size is visible to scripts/vitals.py.
 - In total, the compiler's 1880 lines become about 540: 415 that stay, about 30 for the three generic words, and the
   90-line GPU-lists tail. Without step 3, about 950.
+
+## Done (e799249b58, 2026-11-06)
+- (a) The translator is lib/shaders.warp (765 lines, a std module, at run time, once per painted function). The
+  rules are in extensions/rules/modules/shaders.warp. The rule word definitions_reached quotes f, its callees and the
+  names of the values it reads. A value's width comes from the value it holds at run time: `tint = [1, 2, 3].map(…)`
+  is now the vec3f it is; the compile-time version read it as f32.
+- What stays in the compiler: shader holes and paint's size (extensions/rules/shader_holes.warp, 57 lines) and
+  GPU-list packing (extensions/rules/gpu_packing.warp, 94 lines). The packing is not in extensions/gpu_lists/, because
+  compiler modules are found by name only in extensions/rules/ (core/passes/uses.warp COMPILER_MODULES).
+- "shaders" joined std_module_names (core/passes/rewrites.warp). The list is hard-coded, and a module's rules and
+  prebuild count only when it's listed.
+- (b) Typed JSON: the rule word class_data hands the class over as data, and lib/json.warp typed_json_value checks it
+  at run time. Laws: law_check hands lib/laws.warp law_holds the law shown, its variables and a proposition lambda.
+  The path_parameters table line is gone.
+- Gotchas met: a lambda parameter named `class·…` or `typed·…` (a `·` name) fails at run time
+  ("index out of range" / "wrong number of arguments"), so generated code uses plain names. A lib module is
+  prebuilt whole, so it must avoid compiler-only words (flat_map); run `warp module <name>` with WARP_LIB of a lib
+  copy to check it before a build.
+- rule_words.warp has since grown again (1185 lines): new areas keep adding compile-time words (tests_ended,
+  written_after, …). Module rule words (Recommendation 3) would stop that.
