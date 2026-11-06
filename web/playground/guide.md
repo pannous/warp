@@ -821,7 +821,7 @@ The compiler that runs your program is written in warp and compiles itself. `par
 the tree comes back as plain data:
 
 ```warp => "(+ 1 (* 2 x))"
-shown(code) := if code is key then "(" + code.op + " " + shown(code.key) + " " + shown(code.value) + ")" else str(code)
+shown(code) := if code is key then "(" + code.op + " " + shown(code.key) + " " + shown(code.value) + ")" else text(code)
 shown(parse("1 + 2 * x"))
 ```
 
