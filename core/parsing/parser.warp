@@ -1759,8 +1759,10 @@ def blank_words(statement: text): list := statement.replace("\t", " ").split(" "
 // uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
 // expected-type-names: a parameter typed Time finds its values there); "tags", tag → its module, each text of a global
 // list, `global html_elements = ["div", …]` of markup (decision html-render-mode: a program writing `div{…}` uses it);
-// "constants", constant → its module, `const pi() := π` of reals (decision library-constant-refused: `pi = 4` is refused)
+// "constants", constant → its module, `const pi() := π` of reals (decision library-constant-refused: `pi = 4` is refused);
+// "typed", a name assigned an instance of a class → that class, `km = Unit("km")` of units (a rule's `$u is Unit`)
 def global_words(): map := library_index_section("global")
+def library_typed_constants(): map := library_index_section("typed")
 def library_constants(): map := library_index_section("const")
 def declared_classes_modules(): map := library_index_section("class")
 def declarations_scanned(files: map): map {
@@ -1768,6 +1770,7 @@ def declarations_scanned(files: map): map {
 	classes = {}
 	tags = {}
 	constants = {}
+	assigned = []
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
@@ -1787,10 +1790,21 @@ def declarations_scanned(files: map): map {
 				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
 				if line.starts_with(CONSTANT_MARK) { constants[name_starting(line[#CONSTANT_MARK ..])] = module }
+				instance = instance_constant(line)
+				if instance != ø { assigned += [instance] }
 			}
 		}
 	}
-	{"words": words, "classes": classes, "tags": tags, "constants": constants}
+	typed = {}
+	for instance in assigned { if classes.has(instance#2) { typed[instance#1] = instance#2 } }
+	{"words": words, "classes": classes, "tags": tags, "constants": constants, "typed": typed}
+}
+// a top-level line `km = Unit("km")`: [the name, the word called], else ø
+def instance_constant(line: text): list? {
+	sides = line.split(" = ")
+	if #sides < 2 or sides#1 == "" or sides#1.contains(" ") or is_blank(line[0]) { return ø }
+	called = name_starting(sides#2)
+	if called and sides#2[#called ..].starts_with("(") then [sides#1, called] else ø
 }
 def declared_tags(): map := library_index_section("tag")
 // the texts quoted in a line of a list, `"a", "b",` → ["a", "b"]: every other piece between its quotes

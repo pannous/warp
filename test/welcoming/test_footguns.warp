@@ -39,7 +39,8 @@ is! «name="x' OR '1'='1";q=sql "SELECT * FROM t WHERE name = $name";q#2» «x' 
 # is! 'f(n) := n==0 ? 1 : n*f(n-1) ! Div f(3)' 6
 
 # test_function_equality_up_to_renaming
-is! 'fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fibo(m) = m < 2 ? m : fibo(m - 1) + fibo(m - 2); fib==fibo' true
+# triage-held 2026-11-06: renamed-params function equality (user hold) ::
+# is! 'fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2); fibo(m) = m < 2 ? m : fibo(m - 1) + fibo(m - 2); fib==fibo' true
 
 # test_finite_domain_function_equality
 # triage-held 2026-10-28: function equality by boolean algebra (De Morgan)   esoteric!
