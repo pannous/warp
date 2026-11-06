@@ -1,0 +1,3 @@
+# a module's rule sees a spaced definition head as written: unit hand := 4inch is units' unit line, not a definition unit(hand)
+'use units; unit hand := 4inch; x = 2 * hand; str(x.to("cm"))'	"20.32cm"
+'square x := x * x; square 4'	16

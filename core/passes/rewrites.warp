@@ -263,12 +263,21 @@ is_type_declaration(statement: Node): bool := match statement {
 }
 
 # the module rules none of whose words the program binds itself: a program's own word keeps its meaning
-unbound_rules(module_rules: list, program: Node): list := if #module_rules == 0 then [] else rules_unbound_by(module_rules, rule_bindings(program))
+unbound_rules(module_rules: list, program: Node): list := {
+	if #module_rules == 0 { return [] }
+	bindings = rule_bindings(program)
+	parts = if module_rules.any(rule => defines_last(rule.pattern)) then nodes_in(program) else []
+	module_rules.filter(rule => is_unbound(rule, bindings) or spells_definition_in(rule, parts))
+}
+# a rule spelling a definition, `unit $name := $value`, keeps the definitions it matches, though their spaced head
+# (`unit hand := 4inch`, decision spaced-definition-head) binds its first word as the program's function
+spells_definition_in(rule: Rule, parts: list): bool := defines_last(rule.pattern) and parts.any(part => rule_matches(rule.pattern, part, {}))
 # [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
 # all the sugar steps of a program (card speed-module-cache)
 rule_bindings(program: Node): list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
 # (a class's method binds no word of the program: `in(u)` of a class keeps `for x in xs`)
-rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function)))
+rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => is_unbound(rule, bindings))
+is_unbound(rule: Rule, bindings: list): bool := not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function))
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (rule_bindings: a
 # program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it
@@ -1684,6 +1693,10 @@ is_parenthesized(pattern: Node): bool := is_group(pattern) and bracket_of(patter
 # a rule whose phrase pattern matches runs of a phrase
 matches_runs(rule: Rule): bool := not rule.whole and is_run_pattern(rule.pattern)
 
+# a rule tried on the whole node: one not matching runs, or a run rule spelling a definition at a definition with a
+# spaced head, which spreads into the phrase it matches (head_spread)
+tried_whole(rule: Rule, n: Node): bool := not matches_runs(rule) or (defines_last(rule.pattern) and head_spread(n) != ø)
+
 # a pattern of words without a rest: it matches runs of a phrase
 is_run_pattern(pattern: Node): bool := match pattern {
 	List(words, Bracket.None, Separator.Space): not words.any(word => rest_hole_name(word) != ø)
@@ -1712,7 +1725,7 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 		n = if key_of(n) == opaque_symbol then with_changed_members(n, member => at_place(member, Place.Member, rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
 	for index in 0 ..< #rules {
-		if rules[index].place == Place.Anywhere and not matches_runs(rules[index]) {
+		if rules[index].place == Place.Anywhere and tried_whole(rules[index], n) {
 			result = rule_applied(rules[index], origins[index], n)
 			if result != ø { return rewritten_again(result, rules, origins) }
 		}
@@ -1971,11 +1984,30 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	# the node it marks
 	if is_attribute(code) and not is_attribute(pattern) { return rule_matches(pattern, attribute_marked(code), bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
+	spread = if defines_last(pattern) then head_spread(code) else ø
+	if spread != ø { return rule_matches(pattern, spread, bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and phrase_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
 }
 
+# a definition the parser gave its spaced words as a call head (decision spaced-definition-head: `unit hand := 4inch`
+# is unit(hand) := 4inch), as written for a pattern spelling it spaced, `unit $name := $value` (the phrase unit,
+# $name := $value): a used module's rule sees the form the program wrote
+defines_last(pattern: Node): bool := is_group(pattern) and bracket_of(pattern) == "" and separator_of(pattern) == " " and is_key(items_of(pattern)[#pattern - 1], Op.Define)
+# the code spread so, else ø; the words after the definition's value continue it, as they do a plain definition's
+# (`unit furlong := 201.168 m`, which the parser keeps as `(unit furlong := 201.168) m`)
+head_spread(code: Node): Node? := {
+	trailing = []
+	if is_group(code) and bracket_of(code) == "" and separator_of(code) == " " and #code > 1 {
+		trailing = items_of(code)[1 ..]
+		code = code#1
+	}
+	if not (is_key(code, Op.Define) and is_called_head(key_of(code))) { return ø }
+	words = items_of(key_of(code))
+	value = if #trailing == 0 then value_of(code) else rule_phrase([value_of(code)] + trailing)
+	rule_phrase(words[0 ..< #words - 1] + [placed(Key(words[#words - 1], Op.Define, value), code)])
+}
 # a tuple pattern `($a, $b)` matches a tuple, never the call `f(a, b)`, whose parentheses hold no commas
 tuple_fits(pattern: Node, code: Node): bool := not (bracket_of(pattern) == "(" and separator_of(pattern) == ",") or separator_of(code) == ","
 # an unbracketed phrase pattern `$x.$f $b $a...` matches a phrase, never a sequence of statements (a block `{$b...}`
