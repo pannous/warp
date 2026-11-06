@@ -161,8 +161,8 @@ rewrite $e * $u => quantity($e, $name) where $e is number and $u in [°C, °F] a
 rewrite $e $u => quantity($e, $name) where $e is number and $u in [°C, °F] and $name = spelled($u)
 rewrite $q as $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
 rewrite $q in $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
-// `[3, 4] cm`: a unit after a list measures each of its items
-rewrite $xs $u => $xs.map(item => item * $u) where $xs is list and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
+// `[3, 4] cm`, `sizes() cm`: a unit after a list, written out or given by a call or a name, measures each of its items
+rewrite $xs $u => $xs.map(item => item * $u) where $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °] and list_valued($xs, $program)
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is; a unit
 // after an expression belongs to its last amount, through comparisons, sums and assignments: `x > 1500 m` is
 // x > 1500m (wiki/unit.md, extensions/rules/rule_words.warp unit_bound). A unit is a word, never the char 's' of `f(at + 1, 's')`
