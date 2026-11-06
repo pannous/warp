@@ -22,6 +22,7 @@ use "phrase_definitions.warp"
 use "alias_arrows.warp"
 use "times_loops.warp"
 use "entities.warp"
+use "inline_html.warp"
 use "declared_operators.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
@@ -63,6 +64,7 @@ EXTENSIONS = [
 	alias_arrows_extension
 	times_loops_extension
 	entities_extension
+	inline_html_extension
 	declared_operators_extension
 	tasks_extension
 	typed_templates_extension

@@ -32,3 +32,5 @@ optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`
 local_or_global($name, $function)	"does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}? (taking a new local of {function})"	"let {name} = …"	"local-or-global@{name} = …"
 # a call of a function overloaded by result type whose expected type names no variant: the first declared (arity_overloads.warp)
 result_variant_taken($name, $returning, $taken, $written)	"{name} has variants returning {returning}: which does {written} mean? (taking {taken})"	"({written}) as {taken}"	"return-type@{name}"
+# inline HTML read as warp markup (extensions/inline_html.warp, decision jsx)
+inline_html($tag)	"inline HTML <{tag}> reads as warp markup; `warp format` writes it so"	"warp format"
