@@ -644,6 +644,30 @@ class_members(class_name: text, source: text): any := {
 	methods = view#3[3 ..].map(member => defined_word(node_of(member)) ?? defined_word(member_read(member))).filter(word => word != ø)
 	[class_declared(statement, view).fields, methods]
 }
+# `fields(B)`, `methods(B)` of a class the program declares (wiki/reflection.md, card eval-inherited-methods): the
+# names of its fields and those of the classes it extends; its methods as function values, the methods of those
+# classes and every function whose first parameter is typed with one of them (`def x(a: A)` of B extends A). ø where
+# the program has its own word or declares no class of that name
+class_fields_listed(name: Node, program: Node, source: text): any := {
+	lineage = class_lineage(spelled(name), plain_node(parsed(source)))
+	if owns_word("fields", program) or #lineage == 0 { return ø }
+	texts_list(lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")))
+}
+class_methods_listed(name: Node, program: Node, source: text): any := {
+	lineage = class_lineage(spelled(name), plain_node(parsed(source)))
+	if owns_word("methods", program) or #lineage == 0 { return ø }
+	own = lineage.flat_map(owner => (class_members(owner, source) ?? [[], []])#2)
+	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
+	List((own + outside).map(symbol), Bracket.Square, Separator.Comma)
+}
+# the class of that name and the classes it extends, nearest first; [] when the program (as written: the class methods
+# pass may have lifted its classes by now) declares none
+class_lineage(name: text, program: Node): list := {
+	statement = declared_class(name, program)
+	if statement == ø { return [] }
+	parent = class_declared(statement, class_view(statement)).parent
+	[name] + (if parent == "" then [] else class_lineage(parent, program))
+}
 # the classes the program declares, `Point` of a line `class Point {`
 class_names(source: text): list := source.split("\n").flat_map(line => line.split(";")).map(statement => statement.trim()).filter(line => line.starts_with("class ")).map(line => line[6 ..].split(" ")#1.split("{")#1.trim())
 # `p.fields`, `p.methods`, `dir(p)` (wiki/reflection.md): the names of the members of the class p is made of everywhere the
@@ -803,6 +827,8 @@ rule_words = {
 	gpu_packed: gpu_packed,
 	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
+	class_fields_listed: class_fields_listed,
+	class_methods_listed: class_methods_listed,
 	law_check: law_check,
 	leading_unit: leading_unit,
 	misnamed: misnamed,
