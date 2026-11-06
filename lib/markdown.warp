@@ -528,6 +528,20 @@ md_space(t: text, at: int, lines: bool): int := {
 	while at <= #t and (t#at == " " or t#at == "\t" or (lines and t#at == "\n")) { at += 1 }
 	at
 }
+// append one character of t at k, honouring a backslash escape of markdown punctuation; returns [out, k]
+md_append_escaped(t: text, k: int, out: text): list := {
+	if t#k == "\\" and k < #t and ("" + t#(k + 1)) in MD_PUNCTUATION {
+		out += t#(k + 1)
+		k += 2
+	} else {
+		out += t#k
+		k += 1
+	}
+	[out, k]
+}
+// a tag name character: a letter, or a digit/hyphen after the first character
+md_is_name_char(c: text, name: text): bool := (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-"))
+
 // [destination, place after] or []
 md_destination(t: text, at: int): list := {
 	if at > #t { return [] }
@@ -536,7 +550,7 @@ md_destination(t: text, at: int): list := {
 		out = ""
 		while k <= #t and t#k != ">" {
 			if t#k == "\n" or t#k == "<" { return [] }
-			if t#k == "\\" and k < #t and ("" + t#(k + 1)) in MD_PUNCTUATION { out += t#(k + 1); k += 2 } else { out += t#k; k += 1 }
+			r = md_append_escaped(t, k, out); out = r#1; k = r#2
 		}
 		if k > #t { return [] }
 		return [md_entities(out), k + 1]
@@ -565,7 +579,7 @@ md_title(t: text, at: int): list := {
 	out = ""
 	while k <= #t and t#k != close {
 		if open == "(" and t#k == "(" { return [] }
-		if t#k == "\\" and k < #t and ("" + t#(k + 1)) in MD_PUNCTUATION { out += t#(k + 1); k += 2 } else { out += t#k; k += 1 }
+		r = md_append_escaped(t, k, out); out = r#1; k = r#2
 	}
 	if k > #t { return [] }
 	[md_entities(out), k + 1]
@@ -633,7 +647,7 @@ md_unescape(t: text): text := {
 	out = ""
 	k = 1
 	while k <= #t {
-		if t#k == "\\" and k < #t and ("" + t#(k + 1)) in MD_PUNCTUATION { out += t#(k + 1); k += 2 } else { out += t#k; k += 1 }
+		r = md_append_escaped(t, k, out); out = r#1; k = r#2
 	}
 	out
 }
@@ -858,7 +872,9 @@ md_raw_html_at(t: text, k: int): list := {
 		name = ""
 		while j <= n {
 			c = "" + t#j
-			if (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-")) { name += c; j += 1 } else { break }
+			if not md_is_name_char(c, name) { break }
+			name += c
+			j += 1
 		}
 		if name == "" { return [] }
 		j = md_space(t, j, yes)
@@ -870,7 +886,9 @@ md_raw_html_at(t: text, k: int): list := {
 	name = ""
 	while j <= n {
 		c = "" + t#j
-		if (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-")) { name += c; j += 1 } else { break }
+		if not md_is_name_char(c, name) { break }
+		name += c
+		j += 1
 	}
 	if name == "" { return [] }
 	while yes {

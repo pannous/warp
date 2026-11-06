@@ -193,9 +193,14 @@ python_value(target: int): any := {
 	{python: target, type: kind}
 }
 
+// the builtins module (a new reference)
+python_builtins(): int := python_checked(PyImport_ImportModule("builtins"))
+// __main__'s __dict__ (a new reference)
+python_main_scope(main: int): int := python_checked(PyObject_GetAttrString(main, "__dict__"))
+
 // whether the target is an instance of the builtin type `name`
 python_instance(target: int, name: text): bool := {
-	builtins = python_checked(PyImport_ImportModule("builtins"))
+	builtins = python_builtins()
 	kind = python_checked(PyObject_GetAttrString(builtins, name))
 	found = PyObject_IsInstance(target, kind)
 	Py_DecRef(kind)
@@ -270,25 +275,18 @@ python_call_with(target: any, name: text, arguments: list, keywords: any): any :
 }
 
 // the value of a Python expression, evaluated in __main__
-python_eval(expression: text): any := {
-	python_start()
-	main = python_checked(PyImport_ImportModule("__main__"))
-	scope = python_checked(PyObject_GetAttrString(main, "__dict__"))
-	builtins = python_checked(PyImport_ImportModule("builtins"))
-	result = python_call_handle(builtins, "eval", [expression, {python: scope, type: "dict"}], {})
-	Py_DecRef(builtins)
-	Py_DecRef(scope)
-	Py_DecRef(main)
-	python_result(result)
-}
+python_eval(expression: text): any := python_run("eval", expression)
 
 // runs Python statements in __main__, whose names python_eval then sees
-python_exec(code: text): any := {
+python_exec(code: text): any := python_run("exec", code)
+
+// eval or exec in __main__'s scope
+python_run(word: text, source: text): any := {
 	python_start()
 	main = python_checked(PyImport_ImportModule("__main__"))
-	scope = python_checked(PyObject_GetAttrString(main, "__dict__"))
-	builtins = python_checked(PyImport_ImportModule("builtins"))
-	result = python_call_handle(builtins, "exec", [code, {python: scope, type: "dict"}], {})
+	scope = python_main_scope(main)
+	builtins = python_builtins()
+	result = python_call_handle(builtins, word, [source, {python: scope, type: "dict"}], {})
 	Py_DecRef(builtins)
 	Py_DecRef(scope)
 	Py_DecRef(main)
