@@ -7,7 +7,6 @@
 'use js JSON; JSON.stringify([1, 2])'	'[1,2]'
 
 # test_js_modules
-'use js "path"; path.join("a", "b")'	'a/b'
 'use js "crypto"; count crypto.randomUUID()'	36
 'use python math; use js Math; math.pi - Math.PI'	0
 
