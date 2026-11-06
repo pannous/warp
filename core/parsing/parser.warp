@@ -1664,7 +1664,7 @@ def operand_word_at_from(p: Parser, at: int): text {
 def spelled_operator_at(p: Parser): list {
 	c = char_here(p)
 	if is_name_start(c) {
-		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
+		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) or follows_naming_keyword(p) { return [] }
 		word = word_operator_at(p, c)
 		if word.length > 0 { return word }
 		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
@@ -1690,6 +1690,15 @@ def heads_rule(p: Parser): bool {
 	start = p.at
 	while start > 0 and p.code[start - 1] != '\n' { start -= 1 }
 	p.code[start .. p.at].trim() == "rewrite"
+}
+// The parser's position is the name a function keyword defines: `def add(a, b)` defines add, never `def + (a, b)`
+NAMING_KEYWORDS = function_keywords + ["override"]
+def follows_naming_keyword(p: Parser): bool {
+	end = p.at
+	while end > 0 and (p.code[end - 1] == ' ' or p.code[end - 1] == '\t') { end -= 1 }
+	start = end
+	while start > 0 and is_name_char(p.code[start - 1]) { start -= 1 }
+	end < p.at and p.code[start .. end] in NAMING_KEYWORDS
 }
 // The operator symbol at the parser's position as [written, canonical], the longest, else []
 // (`c ?.5 : 1` keeps its ternary: `?.` before a digit is `?` and the number .5)
