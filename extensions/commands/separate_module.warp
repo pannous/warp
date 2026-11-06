@@ -131,8 +131,9 @@ def linked_bytes(functions: list, entry: text = "main"): list {
 	names = vector(functions.map(f => index_name(f.index, f.name)))
 	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
 }
-# the instance a linked module's items are imported from (core/native/driver.warp instance_path)
-def module_import_name(image: LibraryImage): text := "warp/" + image.name
+# the instance a linked module's items are imported from (core/native/driver.warp instance_path): a standard
+# module's by its name, a program's own module by its file's path (uses.warp own_module)
+def module_import_name(image: LibraryImage): text := own_module_wasm.get(image.name) ?? "warp/" + image.name
 # the linked modules' words the code calls, each [its index behind the runtime, its module, the word], in index order
 def linked_words_called(calls: map): list {
 	words = []
