@@ -1,19 +1,19 @@
 // random numbers in the page (a part of host.js, which says how parts work): the host words random, random_below and
-// random_seed (crates/warp-runtime host_words.rs): after a seed, xorshift64* as natively, so a seeded program gives the
+// random_seed (core/native/driver.warp): after a seed, libc's srand48/drand48 as natively, so a seeded program gives the
 // same numbers in both; unseeded, Math.random
-const U64 = (1n << 64n) - 1n;
+// drand48: the 48-bit linear congruential generator x' = a·x + c mod 2^48, srand48(s) starting it at s's low 32 bits
+// followed by 0x330E
+const U48 = (1n << 48n) - 1n;
+const MULTIPLIER = 0x5DEECE66Dn;
+const INCREMENT = 0xBn;
 let seededRandom = null;
-const seedRandom = seed => { seededRandom = (BigInt.asUintN(64, seed) * 0x9E3779B97F4A7C15n & U64) | 1n; };
-function nextSeeded() {
-	let x = seededRandom;
-	x ^= x >> 12n;
-	x = (x ^ (x << 25n)) & U64;
-	x ^= x >> 27n;
-	seededRandom = x;
-	return x * 0x2545F4914F6CDD1Dn & U64;
+const seedRandom = seed => { seededRandom = (BigInt.asUintN(32, BigInt(seed)) << 16n) | 0x330En; };
+function drand48() {
+	seededRandom = (MULTIPLIER * seededRandom + INCREMENT) & U48;
+	return Number(seededRandom) / 2 ** 48;
 }
-const randomFloat = () => seededRandom === null ? Math.random() : Number(nextSeeded() >> 11n) / 2 ** 53;
-const randomBelow = bound => bound <= 0n ? 0n : seededRandom === null ? BigInt(Math.floor(Math.random() * Number(bound))) : nextSeeded() % bound;
+const randomFloat = () => seededRandom === null ? Math.random() : drand48();
+const randomBelow = bound => bound <= 0n ? 0n : BigInt(Math.floor(randomFloat() * Number(bound)));
 
 addHostPart({
 	started: () => { seededRandom = null; }, // each run starts unseeded
