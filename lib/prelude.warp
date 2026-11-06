@@ -514,6 +514,10 @@ dark_mode() := system_value("dark mode") != 0
 mouse_x() := system_value("mouse_x") as float
 mouse_y() := system_value("mouse_y") as float
 mouse_down() := system_value("mouse_down") != 0
+// where the button went down, while it is down: a stroke starts there, though a frame polling mouse_x saw the pointer
+// move on first; while it is up (and without a window), where the pointer is
+mouse_down_x() := if mouse_down then system_value("mouse_down_x") as float else mouse_x
+mouse_down_y() := if mouse_down then system_value("mouse_down_y") as float else mouse_y
 mouse_wheel() := system_value("mouse_wheel")
 key_down() := system_value("key_down") != 0
 window_open() := system_value("window_open") != 0
