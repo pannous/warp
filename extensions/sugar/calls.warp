@@ -82,16 +82,16 @@ rewrite sort($xs, ($a, $b) => $body) => sorted_in_order($xs, ($a, $b) => $body)
 rewrite sort($xs, $b) => sorted_by_key($xs, it => $b) where $b is function_block
 rewrite sort($xs, $f) => sorted_by_key($xs, $f) where $f is function
 # An `it` block / bare `it` expr where map/filter/find/any/all/each expect a function
-# (notes/welcoming.md, card map-argument-forms). One rule per form; word list once per form
-# (`$w in […]` — notes/rewrites.md; named constants in where are not accepted, only literal lists).
-# `xs.map({it * 10})`, `map([1,2,3], {it+1})`, `(1…3).map(it * 2)`, `map [1 2] (it * 10)`.
-rewrite $w($xs, $b) => $w($xs, it => $b) where $w in [map, filter, find, any, all, each] and $b is function_block
-rewrite $xs.$w($b) => $xs.$w(it => $b) where $w in [map, filter, find, any, all, each] and $b is function_block
-rewrite ($w $xs $b) => $w($xs, it => $b) where $w in [map, filter, find, any, all, each] and $b is function_block
+# (notes/welcoming.md, card map-argument-forms). Word list once in rule_words.it_taking;
+# call vs method vs spaced stay separate (map takes two, so spaced `map xs b` does not
+# normalize via `$f takes one`). `xs.map({it * 10})`, `map([1,2], {it+1})`, `map [1 2] (it * 10)`.
+rewrite $w($xs, $b) => $w($xs, it => $b) where it_taking($w) and $b is function_block
+rewrite $xs.$w($b) => $xs.$w(it => $b) where it_taking($w) and $b is function_block
+rewrite ($w $xs $b) => $w($xs, it => $b) where it_taking($w) and $b is function_block
 # Bare `it` expressions: it_as_lambda returns the lambda, else ø (rule skipped).
-rewrite $w($xs, $e) => $w($xs, $f) where $w in [map, filter, find, any, all, each] and $f = it_as_lambda($e)
-rewrite $xs.$w($e) => $xs.$w($f) where $w in [map, filter, find, any, all, each] and $f = it_as_lambda($e)
-rewrite ($w $xs $e) => $w($xs, $f) where $w in [map, filter, find, any, all, each] and $f = it_as_lambda($e)
+rewrite $w($xs, $e) => $w($xs, $f) where it_taking($w) and $f = it_as_lambda($e)
+rewrite $xs.$w($e) => $xs.$w($f) where it_taking($w) and $f = it_as_lambda($e)
+rewrite ($w $xs $e) => $w($xs, $f) where it_taking($w) and $f = it_as_lambda($e)
 # apply takes the function first; sort already has function_block → sorted_by_key above.
 rewrite apply($e, $x) => apply($f, $x) where $f = it_as_lambda($e)
 rewrite sort($xs, $e) => sorted_by_key($xs, $f) where $f = it_as_lambda($e)

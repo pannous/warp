@@ -973,6 +973,12 @@ polled_word(name: Node, program: Node, source: text): any := {
 }
 
 
+# words that take an `it` block / bare `it` expression as their function argument
+# (card map-argument-forms). Listed once; sugar uses `it_taking($w)` (rule-word call,
+# same pattern as `are_arms($body)`). `$w is it_taking` would need core code_properties.
+it_taking_words = ["map", "filter", "find", "any", "all", "each"]
+it_taking(w: Node): bool := w is symbol and name_of(w) in it_taking_words
+
 # `xs.map(it * 2)`, `apply(it + 3, 1)` (notes/welcoming.md, card map-argument-forms): an expression that
 # mentions `it` and is not already a lambda/function becomes `it => expression`; ø otherwise so the rule misses
 it_as_lambda(expression: Node): any := {
@@ -1028,6 +1034,7 @@ rule_words = {
 	program_functions: program_functions,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
+	it_taking: it_taking,
 	law_check: law_check,
 	leading_unit: leading_unit,
 	list_valued: list_valued,

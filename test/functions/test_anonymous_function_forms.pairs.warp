@@ -15,4 +15,4 @@
 
 # an_immediately_invoked_function_without_arguments
 '(() => 7)()'	7
-# triage-held 2026-11-06: foreign spelling (foreign-spellings, later) :: '(function(){ return 5 })()'	5
+'(function(){ return 5 })()'	5
