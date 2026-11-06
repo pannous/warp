@@ -155,4 +155,4 @@ class LRUCache { capacity = 1; keys = []; values = []
 // warp maps keep insertion order: an ordered map is a map
 alias OrderedDict => OrderedMap
 alias LinkedHashMap => OrderedMap
-OrderedMap() := {}
+public OrderedMap() := {}

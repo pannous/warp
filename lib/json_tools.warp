@@ -142,7 +142,7 @@ def json_patch(doc: any, ops: list): any {
 }
 
 // --- JSON Merge Patch (RFC 7396)
-def json_merge_patch(target: any, patch: any): any {
+public def json_merge_patch(target: any, patch: any): any {
 	if not json_is_object(patch) { return json_copy(patch) }
 	out = if json_is_object(target) then json_shallow(target) else {}
 	for k in patch.keys {
