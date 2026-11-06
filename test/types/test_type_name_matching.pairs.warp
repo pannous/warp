@@ -14,3 +14,8 @@
 
 # test_a_multi_word_noun_is_named_and_typed_by_its_head
 'to call a phone number: number+1; call 41'	42
+
+# test_a_type_written_before_the_name_types_it (notes/matching.md rule 3, card phrase-typed-params)
+'to plus number a to number b: a+b; plus(1.5, 2)'	3.5
+'to plus number a, number b as real: a+b; plus(1, 2)'	3
+'to scale int factor of number x: x*factor; scale(2, 1.5)'	3
