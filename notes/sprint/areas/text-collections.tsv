@@ -32,3 +32,5 @@ empty-equality-hint	format	no such hint yet; a lint in extensions (as extensions
 friends-print	printing	print-bang lands in extensions/sugar/methods.warp:29 (test_print_bang.pairs.warp:4 passes for a list); force of a map literal as data still open there
 function-signatures	format	signature text is reflection (extensions/sugar/reflection.warp); type(sqrt) currently even fails 'unknown name sqrt' (test_function_objects.pairs.warp:4)
 pattern-direct-tests	matching	optimization: per-form rewrite of compile-time-known patterns in extensions/match_patterns.warp (rewrite per form in lib/extensions per card); pattern_bindings stays for run time
+are-words-in	user-decided	user (round 9-10): one rule xs are in t, together with all-words-in
+all-words-in	user-decided	user (round 9-10): one rule xs are in t, together with are-words-in
