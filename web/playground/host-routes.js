@@ -73,6 +73,6 @@ if (globalThis.addHostPart) addHostPart({
 	adapters: { web: PAGE_SERVING },
 	words: (holder, hooks, { program }) => ({
 		// the path of the page shown (core/analysis/host_words.warp page_path)
-		page_path: () => buildValue(program(), treeOfPlain(holder.pagePath ?? ROOT_PATH)),
+		page_path: () => newGuestValue(program(), holder.pagePath ?? ROOT_PATH),
 	}),
 });

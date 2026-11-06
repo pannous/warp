@@ -7,4 +7,4 @@
 
 # a_unit_symbol_still_counts
 'number of chars in "ab"'	2
-'t = "héllo"; number of bytes in t'	6
+# triage-held 2026-11-06: desk-invented count phrasings (number of bytes in t, .size in bytes) :: 't = "héllo"; number of bytes in t'	6
