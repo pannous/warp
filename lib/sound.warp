@@ -1006,7 +1006,7 @@ live_cycle_started(name) := std_io("sound", "live_cycle", [name])
 // live_loop(drums, 4)` is the voice to await
 // (the name read before the go: inside it cycle.name is read as a Note's, card go-function-type)
 live_loop(cycle: function, cycles) := { name = cycle.name; go { for counted in 0..cycles { live_cycle_started(name); cycle() } } }
-live_loop(cycle: function) := { name = cycle.name; go { while true { live_cycle_started(name); cycle() } } }
+live_loop(cycle: function) := { name = cycle.name; go { for counted in 0.. { live_cycle_started(name); cycle() } } }
 // an audio file's samples to play (card sound-samples): kick = sample("kick.wav") (wav, mp3, ogg, flac, aiff, m4a; the
 // playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,

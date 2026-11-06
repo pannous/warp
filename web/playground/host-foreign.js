@@ -6,6 +6,7 @@
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
 const LIBC_LIST = "web/playground/lib/build_libc.sh lists libc.wasm's functions";
+const C_FAILED = -1; // a C file call's answer when it failed (unlink, rename, rmdir)
 const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 // the C functions a module calls, one line each: import module, library, name, parameter kinds (comma-separated),
@@ -202,6 +203,12 @@ const pageStdio = (holder, hooks) => ({
 	fputs: (text, descriptor) => (hooks.print(text, descriptor), 0),
 	fflush: () => 0,
 	dlopen: path => self.PAGE_LIBRARIES?.has(path.match(OWN_LIBRARY)?.[1]) ? PAGE_LIBRARY_HANDLE : 0,
+	// lib/file.warp's file words over the page's written files (host-files.js), as C answers: 0 done, -1 failed; folders
+	// exist by the files in them
+	unlink: path => writtenFiles.has(filePath(path)) ? (forgetWritten(path), 0) : C_FAILED,
+	rename: (from, to) => writtenFiles.has(filePath(from)) ? (keepWritten(to, writtenFiles.get(filePath(from))), forgetWritten(from), 0) : C_FAILED,
+	mkdir: () => 0,
+	rmdir: folder => isWrittenFolder(folder) ? C_FAILED : 0,
 });
 
 // `use python` (lib/native/python.warp: the Python C API, natively libpython's) answered by Pyodide's Python
