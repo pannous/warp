@@ -962,3 +962,11 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 
 - 2026-11-06 Supervisor (user widget): warnings-meaning-question → hard error when prebuilt module has no warp.module / won’t link; no compile-from-source fallback ("This must never happen").
   - module-manager (user): keep the card in Next (the missing module-manager parts after zero-bake: module blocks, use *, aliases of non-lib modules, conditional use, versions).
+- 2026-11-06 user (card sprint): simple to complex: get rid of all the easy cards first; whoever picks or distributes cards orders them so.
+- 2026-11-06 card sprint, round 16 (user):
+  - compile-time: no preference; interviewer default (undoable): only deprecated/foreign spellings (len, strlen, push…) warn and are rewritten by `warp fix`; English aliases of lib/aliases.warp stay silent.
+  - error-gaps: split into three: the Fail effect first (extensions/effects.warp), WIT result<T, string> at the linked-module edge, catch-in-body (= catch-blocks, parked); the broad card closes.
+  - jsx: now, as an extension: `<tag …>…</tag>` in expression position reads into the same markup nodes, `{expr}` holes.
+  - investigate-concept (contracts): the user asked how assert, check, require and ensure differ; explained, answer pending.
+  - jsx (refined, user): inline `<div …>` HTML is accepted with a warning that `warp format` turns HTML into warp markup (`div{ … }`) as well; warp format does that rewrite.
+- 2026-11-06 contracts-by-assert (user, card investigate-concept): no new contract words. A leading `assert`/`check` of a function body that reads only parameters is a precondition: on failure the CALLER is blamed ("f: x > 0 failed for x = -1, called at 3:5", the call site passed along, no stack walk); at a call site with known arguments the compiler substitutes them and refuses a call that folds to false (`f(-1)`), otherwise the check runs at run time; the precondition shows in the signature/help (`f(x) where x > 0`). Any other assert stays internal (the function is blamed). `require` may be an alias; `ensure` (postconditions on result) not now. User: "if it works elegantly without too many hacks, that would be unifying and great"; interviewer's judgment: it does (structural rule: the leading checks on parameters only).

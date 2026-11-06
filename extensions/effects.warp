@@ -32,18 +32,36 @@ effect_marks_given(): map := {
 checked_effects(program: Node): Node := {
 	given = effect_marks_given()
 	if #given == 0 { return program }
+	sources = effect_sources(program)
+	for name in given.keys {
+		allowed = given[name].flat_map(mark => EFFECT_MARKS[mark])
+		chain = effect_chain(name, sources#1, sources#2, allowed, {})
+		if chain != ø { raise "${name} is marked ${given[name].map(mark => "@" + mark).join(" ")} but does ${chain#(#chain)} via ${chain[0 ..< #chain - 1].join(" → ")}" }
+	}
+	program
+}
+
+# [name → body of each function the program defines, name → yes of each foreign line's word]
+effect_sources(program: Node): list := {
 	bodies = {}
 	foreign = {}
 	for statement in statements_in(program) {
 		if is_function_definition(statement) { bodies[declared_name(statement)] = value_of(statement) }
 		else if is_foreign_line(statement) { foreign[declared_name(statement)] = yes }
 	}
-	for name in given.keys {
-		allowed = given[name].flat_map(mark => EFFECT_MARKS[mark])
-		chain = effect_chain(name, bodies, foreign, allowed, {})
-		if chain != ø { raise "${name} is marked ${given[name].map(mark => "@" + mark).join(" ")} but does ${chain#(#chain)} via ${chain[0 ..< #chain - 1].join(" → ")}" }
+	[bodies, foreign]
+}
+# `effects of f`, `f.effects` (card effects-lists): what the function does besides giving its value, ["IO"], [] of a
+# pure one, each effect a chain of its calls reaches
+effects_named(function: Node, program: Node): Node := {
+	sources = effect_sources(program)
+	found = []
+	chain = effect_chain(name_of(function), sources#1, sources#2, found, {})
+	while chain != ø {
+		found += [chain#(#chain)]
+		chain = effect_chain(name_of(function), sources#1, sources#2, found, {})
 	}
-	program
+	List(found, Bracket.Square, Separator.Comma)
 }
 
 # the calls from word to an effect not allowed, the effect last: [shout, print, "IO"]; else ø
