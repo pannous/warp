@@ -24,17 +24,28 @@ open_brackets(t: text) := {
 	depth
 }
 
-// an entry the later ones need: a use, a declaration, a definition, an assignment, ++ or --; not an expression nor a
-// comparison (==, !=, <=, >=)
-state_entry(entry: text) := {
+// a declaration the session keeps silently: use / let / var / const / global / class (not an assignment or expression)
+declaration_entry(entry: text) := {
 	t = trim(entry)
 	for word in ["use ", "let ", "var ", "const ", "global ", "class "] {
 		if starts_with(t, word) { return true }
 	}
+	false
+}
+
+// an entry the later ones need: a use, a declaration, a definition, an assignment, ++ or --; not an expression nor a
+// comparison (==, !=, <=, >=)
+state_entry(entry: text) := {
+	if declaration_entry(entry) { return true }
+	t = trim(entry)
 	if ends_with(t, "++") or ends_with(t, "--") { return true }
 	plain = replace(replace(replace(replace(t, "==", ""), "!=", ""), "<=", ""), ">=", "")
 	contains(plain, "=")
 }
+
+// whether the console prints an entry's value: assignments and expressions yes; := definitions and declarations no
+should_show_repl_value(entry: text, value: any) :=
+	value != ø and not contains(entry, ":=") and not declaration_entry(entry)
 
 // the name an entry assigns: `a = 7`, `a += 2`, `a++` give a; "" for any other entry (a definition `f(x) := …`, `a.b = 1`)
 assigned_name(entry: text) := {
@@ -212,8 +223,8 @@ repl() := {
 			value = evaluated(session + entry)
 			if is_error(value) { print "Error: " + message(value, kept) }
 			else {
-				// a definition's own value is the session's last one: not shown
-				if value != ø and not contains(entry, ":=") { print value }
+				// a definition's or declaration's value is not useful to show (`use shell` is a module, not a result)
+				if should_show_repl_value(entry, value) { print value }
 				if state_entry(entry) {
 					kept_entry = kept_line(entry, value)
 					session = session + kept_entry + "\n"

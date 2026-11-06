@@ -1,0 +1,9 @@
+# a number before °C or °F, glued or spaced, is a temperature from that scale's zero (card spaced-degree)
+'str(20°C)'	'20°C'
+'str(20 °C)'	'20°C'
+'20 °C is temperature'	true
+'str(20 °C + 5 °C)'	'25°C'
+'str(100 °C in °F)'	'212°F'
+'str(-40 °F as °C)'	'-40°C'
+'t = 20°C; str(t as °F)'	'68°F'
+'212°F == 100°C'	true
