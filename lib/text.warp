@@ -192,3 +192,12 @@ human_size(bytes: any): text := {
 	if frac != 0 { shown = shown + "." + frac }
 	shown + " " + units#u
 }
+
+// the text with its i-th character replaced (1-based, by grapheme): texts are values, so a new text
+// (card text-element-assign). c may be a character, a one-character text, or a codepoint number (97 → 'a')
+text_with_at(t: text, i: int, c: any): text := {
+	ch = if c is int then "" + chr(c) else "" + c
+	parts = chars(t)
+	parts#i = ch
+	join(parts, "")
+}

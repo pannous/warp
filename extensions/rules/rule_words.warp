@@ -969,6 +969,15 @@ polled_word(name: Node, program: Node, source: text): any := {
 }
 
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
+
+# whether a name is assigned only text literals in the program (card text-element-assign; same idea as
+# extensions/text_lints.warp is_evident_text). yes when so, else ø, so a sugar `where` can bind it
+evident_text(name: Node, program: Node): any := {
+	if not (name is symbol) { return ø }
+	given = assigned_values(program, name_of(name))
+	if #given > 0 and given.all(value => value is text) then yes else ø
+}
+
 rule_words = {
 	are_arms: are_arms,
 	awaited_operand: awaited_operand,
@@ -989,6 +998,7 @@ rule_words = {
 	dir_words: dir_words,
 	doc_of: doc_of,
 	effects_named: effects_named,
+	evident_text: evident_text,
 	exited: exited,
 	framed: framed,
 	full_definition: full_definition,
