@@ -396,7 +396,8 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
-const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
+// missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
+const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
 function playSound({ samples, rate, channels, at, handle, loop }, from) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();

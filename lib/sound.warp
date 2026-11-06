@@ -718,9 +718,10 @@ sound_file(speakers, rate, channels, seconds) := {
 // its run_seconds (card samples-page-sound-pipes)
 PLAY_AHEAD_SECONDS = 0.5 as float
 def waited_till(start) {
-	if quiet_run() or env("WARP_SOUND_NOPACE") != ø { return }
-	ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
-	if ahead > clock() { sleep_ms(ahead - clock()) }
+	if not quiet_run() and env("WARP_SOUND_NOPACE") == ø {
+		ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
+		if ahead > clock() { sleep_ms(ahead - clock()) }
+	}
 }
 
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
