@@ -1,0 +1,34 @@
+triage-big-ints	numeric-operators	test/results.txt: test_big_int_bits still red ("2^70 | 1" got 1, & and xor too; 14 fails in the group); bitwise words past 64 bits go in extensions/big_numbers (no xor/or there)
+unit-dimension-names	units	lib/units.warp:173,217-221 still carry the TODOs (N, ml, ha, dpi typed Quantity, no long names)
+chained-comparison-check	numeric-operators	test_equality_never_chains:11/12 still fail (3>2>1 no, 1<3<2 yes) while 1<2<3 passes; a sugar rule a<b<c => a<b and b<c in extensions/sugar (like broadcasting.warp's comparison rules)
+clock-plain	units	clock() returns plain ms (test_async_ports.warp:5 etc. compare with ms numbers); a duration result in lib/time.warp
+dot-compose-fix	fast-numbers	samples/lists/dot.warp times out (test/samples.txt: used its 30 s of CPU); lib/math.warp:192 dot is a comprehension, SIMD path its comment promises missing; zs#(n /! 2) part needs a repro
+f32-gpu	fast-numbers	extensions/gpu_lists/ has no header/capacity/growth (no push/insert/remove on [f32]); work lives in that extension (+ host-gpu.js); float-int-power style untouched
+file-print	units	units trap at lib/units.warp:47 Time(...) named at the program file; no test or fix found; start in lib/units.warp (may reveal a core position/cast bug)
+float-int-power	numeric-operators	branch deleted, patch data/patches/float-int-power.patch; pow now lives in extensions/big_numbers/pow.warp (core/runtime/bridge.warp:34), redo there
+fract-cpu-trap	numeric-operators	still red (test_element_wise_vectors:38 cast failure); lib/math.warp:183 fract(x) := x - floor(x) is scalar only; make it element-wise over lists like floor
+gpu-lists	fast-numbers	extensions/gpu_lists/gpu_lists.warp and extensions/rules/wgsl.warp:25 (f16 already a WGSL word) are where a type spelling for f16/bf16/f8 GPU lists goes
+gpu-multipass	fast-numbers	no render/compute pass words in core/extensions/lib; the Rust-era branch gpu-multipass steps are moot; redo as the graphics library over FFI (decision libraries-not-core)
+gpu-native-library	fast-numbers	core/native/driver.warp:573 leaves gpu_compute to a library; no lib/ module provides it yet
+length-pixels	units	no 'is no type to convert' left in core; a program `A as B := body` dimension bridge with constant factor belongs in lib/units.warp / extensions conversions; recheck the repro
+min-after	units	`2 h + 30 min` still red (test/numbers/test_unit_word_keys.pairs.warp:13 unknown name min); choose unit vs extrema by arity in extensions/implicit_uses.warp
+parameter-unit	units	run-time unit conversion of an untyped parameter (x as ms) belongs to lib/units / extensions/conversions.warp
+prints	units	units product simplification (7m/s * 2s → 14m) belongs to lib/units.warp's quantity product/normal form; no core change needed
+prints-reads	time-text-civil	time-of-day literal followed by + and a unit: extensions/time_literals.warp / time_values.warp; time+duration still fails (test_time_plus_quantity.pairs.warp:2 'no field ms', test_duration_units.pairs.warp:9)
+quantity-element	units	lib/markup.warp:330-332 attribute values go through str(value); a Quantity must render with its unit or refuse there
+samples-numbers	units	date + text raises not_arithmetic in lib/time_arithmetic.warp:104-108 (b is not Whole) and extensions/time_values.warp:143; let a text operand fall through to concatenation
+sqrt-plus-minus-alone	units	lib/uncertain.warp ± values: sqrt of a lone 4 ± 1 not dispatched to the uncertain overload when no other ± links the module
+stored-optional	units	lib/storage.warp column_value/units_of (120-135) keep a unit per column; an optional km? field (samples/storage/orm_units.warp climb: m?) should restore its unit on read the same way
+stored-row	units	lib/storage.warp stores quantities by column_value (:122); a tolerance quantity (± value) is no plain Quantity there, so storing it needs a lib/storage.warp + lib/uncertain.warp case
+time-literal-plus-quantity	time-text-civil	the refusal is raised in lib/time_arithmetic.warp ('nothing else is arithmetic on times'), dispatch in extensions/time_values.warp; take a Time quantity as a duration there (test_duration_units:9 still red, results.txt:15353)
+time-text-civil	time-text-civil	extensions/times/runtime.warp:74-75 date_text keeps its own civil_from_days; lib/prelude.warp:595 has civil_from_days: share one copy
+tolerance	numeric-operators	lib/math.warp:21 ≈ hard-codes alike(…, 1e-9, no); the decided `tolerance = …` override (test_rough_similarity:9-10 red) should be read there
+triage-approx	numeric-operators	≈ and ~ are now lib infix operators (lib/math.warp:20-35 alike); class approximately (cast failure, test_rough_similarity:25-27) and int/list-item cases are lib/math.warp work
+units-arithmetic-test	units	still red test/results.txt:11987 'use units;m=5;str(3m)' gives 15; glued unit beside a program's own m: lib/units.warp unit rule guard
+xs-map-gpu	fast-numbers	host words gpu_compute/gpu_map_linear declared in lib/prelude.warp:1013-1016, nothing rewrites `xs.map(f) @gpu`; plan is a lib rule in lib/wgsl.warp per the card
+duration-made	time-text-civil	still wraps silently: lib/time_arithmetic.warp:186 takes day_count % info_day_range; trap there instead (DAYS_BITS Rust names are gone, layout core/analysis/kinds.warp:36)
+glued-parses	dimensions-units	2L as 2 litres: a number suffix reader (as extensions/durations.warp number_suffix_readers) with lib/units.warp
+now-america	units	a got-it note for `in` with a text joined to a quantity; Interviewer chose option A (no special precedence), a diagnostic in a time/zone extension or lib/time.warp
+runtime-keeps	time-text-civil	extensions/times/runtime.warp:74 date_text keeps its own civil-date arithmetic while lib/prelude.warp/lib/time.warp have civil_from_days; dedupe by calling the prelude's (extensions/, not core)
+sleep-ms	units	sleep(duration) is lib/units.warp:268 and the unit binding rules are lib/units.warp:111-117; (50/3) ms must give the same DimensionError there
+spaced-degree	units	degree atoms are extensions/degrees.warp (core/extension.warp:17 only the hook); spaced 20 °C needs a rule there or in lib/units.warp

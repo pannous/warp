@@ -1,0 +1,44 @@
+decisions-prune	cleanup	recurring round: notes/decisions.md is 888 lines again and holds superseded entries (e.g. the 11-06 'hold lifted' line corrected by c31c11d); notes-only work
+lib-consistency	lib-consistency	report-only audit of lib/ names and API overlap; no such audit in notes/ yet
+tests-library-edge	tests-library-edge	edge tests for cli, regex groups, temp/file, money_split, markup, hex, compress go in test/; no core change
+await-within	parallel-runtime	task_queue owner error gone (lib/tasks.warp:63 global); now test_async_ports:10/11 fail 'DimensionError: cannot add 100/ms and the plain number' from lib/tasks.warp:19 '$t / 1ms' mixing with clock ms
+c-entries-sort	cleanup-3	TODO still at lib/c.warp:13; sorting entries of lib/c.warp
+channel-send-native-host-word	parallel-runtime	test_channels:10 and test_named_broadcast:4 fail 'the host word channel_send is not in warp yet'; a library word beside warp (lib/native/foreign.c warp_word_<name>, core/native/driver.warp:586) answers it, as web/playground/host-tasks.js:358 does
+cleanup-stale-notes	cleanup	recurring round (every 4 days) over notes/ (notes/cleanup.md); notes only
+cleanup-web	cleanup	recurring round over web/playground/ JS (last fac85558f)
+compound-any-operator	cleanup-3	compound_bases table still in extensions/property_accessors.warp:18 with the todo; generalize there (x ⨷= y)
+consistency	cleanup	recurring docs-vs-behavior round (wiki/, notes/, samples); no code side
+count-of-split	runtime-speed	lib/prelude.warp:204 count_of(t, part) := #split(t, part) - 1 unchanged; loop with find-from-offset is lib only
+counters-sugar-removal	cleanup-3	decision instances-not-plural (notes/decisions.md:578) but extensions/components.warp:70-74 plural_instances and samples/web/component_totals.warp:3 still use counters
+definition-heads-phrases	cleanup-3	decision phrase-functions (notes/decisions.md:193); extensions/phrase_definitions.warp is the home (to-headers only today); ~99 rewrite rules still in lib/*.warp
+drop-readnode-branch	cleanup-3	web/playground/values.js:10-13 selfHosted/plainValue/builtValue/errorValue Rust-era branch and reader.js:59 readNode still present (used by host-foreign.js:331)
+exact-code-encoding	self-hosted-3	extensions/parse_words.warp:47 has code_encoding(n) but no exact/positions variant and no code_decoded decoder yet; both belong in that extension
+floor	runtime-speed-2	still times out (test/results.txt: test_unbounded_int:67 used its 30 s); exact ratio sums in extensions/big_numbers/big_ratios.warp (normalize/gcd cost)
+index-syntax-module	cleanup-3	extensions/index_positions.warp exists (a#position, xs[i]); move the trie index part flagged at extensions/checked_tries.warp:48 there and drop the TODO
+inline-literal-block	runtime-speed	an optimization pass beside extensions/iteration_inlining.warp (which inlines iteration functions already)
+lib-case-acronyms	lib-consistency	user decided 2026-11-05 keep HTTPServer -> http_server; only coverage tests for snake_case/kebab_case remain (test/ new file)
+lower-text	self-hosted-2	`warp lower` prints lowered_program as text (extensions/commands/commands.warp show_lowered); a lossless view (bracketed prefix ops or JSON) is a commands/serializer change outside core/
+lower-text-output	lowering	same printer as lower-text (extensions/commands/commands.warp show_lowered): quotes and floats lost; fix in extensions/serializer.warp or the command; probes/ folder is gone
+mandelbrot-cpu-hang	runtime-speed-2	exact fractions on the CPU for paint functions; a paint function could take floats in lib/ graphics (samples/graphics/paint_function.warp, decision gpu-first-asap) without core/
+markup-style-approx-combinator	tests-library-edge	lib/markup.warp:432 maps ≈ to ~ but ≈ arrives as operator_≈; style_combinator(node) in lib/markup.warp:434 must also read that op name
+once-alarm	parallel-runtime	still red: test/results.txt:1542 test_reactive_ports.warp:23 'the call live(…) at prelude.warp (in listen)'; fix in lib/prelude.warp listen
+parse-kb	runtime-speed-2	warp parse is extensions/commands/commands.warp:102 show_parsed -> structure(); profile first, likely the same quadratic print as parse-print-quadratic
+parse-print-quadratic	codegen	the quadratic print is structure() in extensions/commands/commands.warp:78, outside core
+peak-footprint-record	runtime-speed-2	scripts/build-slot.sh:7 records /usr/bin/time -l, but the smoke (scripts/rebuild.sh) keeps no recorded hello peak and no 10 % guard
+pi-power-text	cleanup-3	lib/reals.warp:84 pi_power_text still writes π^n, and :26 denominator_of still searches by float multiplication
+primitive-class-gc	codegen	notes/primitive.md:102 still lists it under Not yet; the primitive mode is extensions/primitive.warp (class in GC programs, (pointer,length) texts, fixed arrays, primitive use, globals, continue)
+property-accessors-as-rules	cleanup-3	the pass already left core: extensions/property_accessors.warp is an extension hooked between passes (core/passes/passes.warp:149); turning it into extensions/sugar rewrite rules is extension work
+pure-temperature-units	self-hosted-3	test_dimension_types.pairs.warp:8 `20°C is temperature` and test_unit_definitions.pairs.warp:33 fail 'unknown name °C' (quantity(…, "°C") passes, test_unit_spellings:21); unit literals and dimension tests are lib/units.warp + extensions (implicit uses)
+samples-gpu-ocean	runtime-speed	bisect samples/gpu/ocean.warp functions first (WARP_NO_WINDOW=1); stack exhaustion may turn out to be a core recursion, then re-file
+second-definition-shadowing	compiler-quality	clauses of one name are grouped by extensions/function_clauses.warp; refuse there when the clauses come from different files, naming both places (core/analysis/words.warp:19 only names the pattern·clause prefix)
+sound-start-speed	runtime-speed-2	re-measure under zero-bake prebuilt modules (linked at load time) before optimizing lib/sound.warp synthesis and pcm FFI
+test-case-timeout	runtime-speed	step 1 landed (extensions/commands/tests.warp:25-26,57 ⏱ lines); step 2, moving slow cases to test/slow/<topic>/ (folder absent), is test/ work
+test-failure-investigation	cleanup-3	a classification task over test/results*.txt and samples, no code change; report goes to the Interviewer
+test-over	lowering	the runner is extensions/commands/tests.warp (listing/verdicts); reproduce the 'text of node' over ~60 files there first, core/native/tests.warp only if the child runner is at fault
+xs-each	cleanup-3	no `.each.<field>` broadcast in extensions/sugar/broadcasting.warp (only `f each xs`); a rule `$xs.each.$f => $xs.map(…)` fits there (decision each-field-broadcast)
+component-build	codegen	build kinds live in extensions/commands/build.warp; a WIT-world component output is a build-command/extension addition, nothing in core/ grep finds
+hot-reload-slots	runtime-speed	warp dev hot reload via funcref slots fits lib web framework / extensions/commands; idea card
+parallel-module-builds	runtime-speed-2	still open: no WARP_JOBS anywhere; the modules step is a driver/rebuild concern (scripts/rebuild.sh or core/native/warp.warp rebuild step) — opt-in parallel processes in dependency order; mostly scripts/
+playground-compiles	self-hosted-3	decision playground-today (2026-11-01) supersedes playground-after-parity: web/playground moves to the self-hosted compiler; work is in web/, no core change
+self-showcase	self-hosted	no sample shows the warp-written parser yet; a samples/ program plus a guide section, no core change
+variable-signals-tests	parallel-runtime	lib/signals.warp (whenever, watched fields, hooks); 9 red lines of test_variable_signals.warp
