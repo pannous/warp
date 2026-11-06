@@ -6,6 +6,9 @@
 rewrite on $e $body: block => handler(data $e, event => $body) where $e is symbol and item
 # an item reading a variable a handler writes is live, recomputed each time it is shown (decision markup-keeps):
 # `p{ "count: " + count }`, `class: (if done then "done" else "open")`
+# `input{ bind: name }` (card web-bind): the field shows name and sets it from what is typed, a checkbox its checked
+# (lib/markup.warp Binding)
+rewrite bind: $v => binding(() => $v, value => { $v = value }) where item and $v is symbol
 rewrite $k: $v => $k: live(() => $v) where item and $v is varying
 rewrite $e => live(() => $e) where item and $e is varying
 rewrite on $e $body: block => listen(data $e, event => $body, no) where $e is symbol

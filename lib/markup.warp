@@ -130,6 +130,24 @@ class Handler {
 	show() := "on " + event + " " + handler_body_shown
 }
 handler(name: any, action: function): Handler := Handler(name_of(name), action)
+// `input{ bind: name }` (extensions/sugar/events.warp): the variable a form field shows and sets, read and written by
+// code kept for it; its element shows it as its value, a checkbox or radio as checked, and the page's input event sets it
+class Binding {
+	read: function
+	write: function
+	now() := { value = read; value() }
+	set(given: any) := { change = write; change(given) }
+}
+binding(read: function, write: function): Binding := Binding(read, write)
+html_is_binding(item: any): bool := html_now(item) is Binding
+// input types whose binding is `checked`, not `value`
+checked_input_types = ["checkbox", "radio"]
+// the attributes of a binding in an element of these items: value or checked, and the input handler setting it
+html_binding(bound: Binding, items: list, tag: any): text := {
+	checks = items.any(item => html_is_attribute(item, tag) and html_name(item) == "type" and contains(checked_input_types, html_plain(html_content(item))))
+	shown = if checks then (if html_is_true(bound.now()) then " checked" else "") else " value=\"" + html_escaped(html_attribute_value(bound.now())) + "\""
+	shown + html_handler_attribute("input", event => bound.set(if checks then event.checked else event.value))
+}
 // a live value: code kept to run each time its value is wanted, shown as its value now; an item reading a variable a
 // handler writes is one (extensions/sugar/events.warp), `p{ "count: " + count }`. A general library type, here beside
 // Handler until a module built on its own sees the prelude's classes (card prelude-class-visibility)
@@ -197,7 +215,11 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var styles = []
 	var own_handlers = []
 	for item in items {
-		if html_is_handler(item) {
+		if html_is_binding(item) {
+			attributes = attributes + html_binding(html_now(item), items, tag)
+			own_handlers.add(#page_handlers)
+		}
+		else if html_is_handler(item) {
 			attributes = attributes + html_handler(item)
 			own_handlers.add(#page_handlers)
 		}
