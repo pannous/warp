@@ -90,10 +90,6 @@ module_text(n: Node): any := {
 	source = try read(path) else ø
 	if source == ø then n else source
 }
-# `baked-current <file>`, `rebake <file>`: the steps `warp rebuild` (core/native/warp.warp rebaked, scripts/rebuild.sh
-# rebaked_stored) runs on a compiler that baked library tables in; it bakes none (the sugar's rules lie beside the
-# modules, rewrites.warp SUGAR_RULES_FILE), so it is always current and a rebake leaves it as it is
-write_baked_current(file: text) := write(file, "yes")
 # a table of texts by name packed, as `warp rebuild` writes one beside the modules, and read back
 packed_table(table: map): text := pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
 unpacked_table(body: text): map := {
