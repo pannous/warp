@@ -1,7 +1,8 @@
+# fixtures under test/warp/ (was tests/warp/); pairs-relative ../warp/ so case_folder stays the pairs dir (root-relative test/warp/ still misses wasm exists → ".").
 # from test_selective_package.rs: edit the Rust test, then run the script again
 
 # the_main_file_passes_on_the_named_words
-'tests/warp/selective_package/main.warp'	'<box 5> 6 4'
+'../warp/selective_package/main.warp'	'<box 5> 6 4'
 
 # a_registry_package_passes_on_its_chosen_words
 'use "../../packages/svg/svg.warp"; count(rainbow(3))'	3
