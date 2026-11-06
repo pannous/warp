@@ -1,10 +1,10 @@
 # from test_reflection_synonyms.rs: edit the Rust test, then run the script again
 
 # properties_lists_the_fields
-'m = {a:1}; properties(m)'	['a']
+# triage-held 2026-11-06: reflection synonyms (properties, fields, attributes, functions of), one word each is enough :: 'm = {a:1}; properties(m)'	['a']
 
 # reflection_words_as_calls
-'m = {a:1}; fields(m)'	['a']
+# triage-held 2026-11-06: reflection synonyms (properties, fields, attributes, functions of), one word each is enough :: 'm = {a:1}; fields(m)'	['a']
 
 # a_real_field_named_like_a_synonym_wins
 'class Q{properties:int}; Q(3).properties'	3

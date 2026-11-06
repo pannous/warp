@@ -14,7 +14,7 @@ SCRIPT_FOLDER="web/playground"
 # the page's scripts, in order (site.js needs the others)
 PAGE_SCRIPTS="markup.js markup-transitions.js markup-forms.js canvas.js task-workers.js host-routes.js site.js"
 # the program's Worker and its task Workers (site-worker.js, task-worker.js importScripts)
-WORKER_SCRIPTS="reader.js imports.js exact.js js-members.js std.js host.js values.js host-files.js host-sound.js
+WORKER_SCRIPTS="imports.js js-members.js std.js host.js values.js host-files.js host-sound.js
 host-hashes.js host-tasks.js host-foreign.js host-sqlite.js host-compiler.js host-routes.js host-gpu.js host-timers.js
 host-random.js host-media.js components.js wasi.js driver.js site-worker.js task-worker.js"
 LIBRARIES="lib/libc.wasm"

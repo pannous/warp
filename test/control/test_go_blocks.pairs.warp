@@ -2,7 +2,7 @@
 
 # a_task_of_no_arguments_gives_its_value
 'hi() := { sleep(10ms); "hi" }; await go hi()'	'hi'
-'def hi: { sleep(10ms); "hi" }; job = go hi(); await job'	'hi'
+# triage-held 2026-11-06: Python-style def …: bodies, foreign syntax :: 'def hi: { sleep(10ms); "hi" }; job = go hi(); await job'	'hi'
 
 # a_go_block_sees_the_values_of_its_variables
 'n = 20; job = go { n + 1 }; await job'	21

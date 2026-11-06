@@ -12,6 +12,8 @@
 # and installs the
 # warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
+source "$(dirname "$0")/../lib/platform.sh"
+source "$(dirname "$0")/../lib/hello-footprint.sh"
 # git acts on the trees named by -C, never on a caller's repository (a hook's GIT_DIR, on-push.sh)
 unset $(git rev-parse --local-env-vars)
 MAIN_WARP=$HOME/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
@@ -134,8 +136,10 @@ install_compilers() {
 			"$TREE/lib/" "$folder/" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
-		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
-		[[ $got == *$EXPECTED* ]] || red "installed $lane compiler: hello got ${got:0:120}"
+		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
+		[[ $got == *$EXPECTED* ]] || { red "installed $lane compiler: hello got ${got:0:120}"; continue; }
+		# main's hello is the record every smoke compares its branch's with (scripts/lib/hello-footprint.sh)
+		[ $lane = pure ] && footprint_recorded "$(cat "$TREE/data/hello-footprint" 2>/dev/null)" "$tip"
 	done
 	say "compilers of ${tip:0:10} installed beside $MAIN_WARP"
 }

@@ -2,9 +2,9 @@
 
 # a_unit_word_walks_the_text_by_that_unit
 't = "héllo"; n = 0; for chars in t: n += 1; n'	5
-'t = "héllo"; n = 0; for bytes in t: n += 1; n'	6
-'t = "ab"; s = 0; for bytes in t { s += it }; s'	195
-'t = "ab"; out = ""; for chars in t { out = it + out }; out'	'ba'
+# triage-held 2026-11-06: desk-invented unit loop heads (for bytes in t:) :: 't = "héllo"; n = 0; for bytes in t: n += 1; n'	6
+# triage-held 2026-11-06: desk-invented unit loop heads (for bytes in t:) :: 't = "ab"; s = 0; for bytes in t { s += it }; s'	195
+# triage-held 2026-11-06: desk-invented unit loop heads (for bytes in t:) :: 't = "ab"; out = ""; for chars in t { out = it + out }; out'	'ba'
 's = 0; for chars in [5 6] { s += chars }; s'	11
 
 # the_loop_variable_byte_walks_a_text_by_its_bytes

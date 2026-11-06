@@ -1,0 +1,6 @@
+components-on-the-fly	skipped	research parked by the user (notes/component_registries.md: public components hold nothing warp needs now); the run-time loader is part 1 of module-linking, whose host side is core/native/driver.warp (core)
+firefox-tour	done	a42f836 (Firefox runs 50 GPU jobs, others 400; not run in a browser here: no Firefox in the cloud box)
+use-cargo-config-structs	done	e727863 (scripts/warp-crate: Type.field getters, Type.field= setters, clone(T) by-value structs, scan drafts Default/fields; checked with semver on cloud Linux)
+use-cargo-playground	skipped	blocked on card cargo-semver-version: `use cargo` is not in the warp compiler (samples/modules/rust_crates.warp fails natively: 'outside the core: the call levenshtein'), so there are no crate components to prebuild or serve; the crate shims are native .so, not browser-loadable
+server-build	done	f936dd0 (a program with routes builds an executable serving them at WARP_PORT, else 8080; smoked on cloud Linux: rebuilt warp.wasm, hello + test/native/test_server_builds.sh pass)
+site-wagi-build	done	f936dd0 (wagi part: `warp build wagi app.warp`/--wagi makes app.wasm answering its environment's request, test_server_builds.sh passes; --site still refused as unbuilt: the page/site layout belongs with cards page-wasm-build/page-app-build)

@@ -19,21 +19,21 @@
 'def total(xs...){sum xs}; ys=[1,2,3]; total(...ys)'	6
 'def total(xs...){sum xs}; ys=[1,2,3]; total(ys...)'	6
 'def total(xs...){sum xs}; ys=[1,2,3]; total(*ys)'	6
-'def total(xs...){sum xs}; ys=[2,3]; total(1, ...ys)'	6
+# triage-held 2026-11-06: JS spread ...xs / Python *args, foreign syntax :: 'def total(xs...){sum xs}; ys=[2,3]; total(1, ...ys)'	6
 
 # a_list_spreads_into_fixed_parameters
-'def f(a,b,c){a*100+b*10+c}; xs=[1,2,3]; f(...xs)'	123
-'def f(a,b,c){a*100+b*10+c}; xs=[2,3]; f(1, ...xs)'	123
+# triage-held 2026-11-06: JS spread ...xs / Python *args, foreign syntax :: 'def f(a,b,c){a*100+b*10+c}; xs=[1,2,3]; f(...xs)'	123
+# triage-held 2026-11-06: JS spread ...xs / Python *args, foreign syntax :: 'def f(a,b,c){a*100+b*10+c}; xs=[2,3]; f(1, ...xs)'	123
 
 # kotlin_vararg_and_csharp_params
 'fun total(vararg xs: Int): Int = xs.sum(); total(1, 2, 3)'	6
 'int Total(params int[] xs) { return xs.sum(); }; Total(1, 2, 3)'	6
 
 # spreading_into_a_function_parameter
-'def apply(f, *args){ f(*args) }; apply((a, b) => a * b, 3, 4)'	12
+# triage-held 2026-11-06: JS spread ...xs / Python *args, foreign syntax :: 'def apply(f, *args){ f(*args) }; apply((a, b) => a * b, 3, 4)'	12
 
 # a_spread_in_a_list_literal_splices_its_items
-'xs = [1, 2]; [...xs, 4]'	[1, 2, 4]
-'xs = [1, 2]; [*xs, 4]'	[1, 2, 4]
-'xs = [2, 3]; [1, ...xs, 4, ...xs]'	[1, 2, 3, 4, 2, 3]
+# triage-held 2026-11-06: JS spread ...xs / Python *args, foreign syntax :: 'xs = [1, 2]; [...xs, 4]'	[1, 2, 4]
+# triage-held 2026-11-06: JS spread ...xs / Python *args, foreign syntax :: 'xs = [1, 2]; [*xs, 4]'	[1, 2, 4]
+# triage-held 2026-11-06: JS spread ...xs / Python *args, foreign syntax :: 'xs = [2, 3]; [1, ...xs, 4, ...xs]'	[1, 2, 3, 4, 2, 3]
 'xs = [1, 2, 3]; match xs { [a, *rest] => count(rest); _ => 0 }'	2

@@ -15,7 +15,7 @@
 'f = x ⇒ x*2; f(3)'	6
 'x ← 3; x+1'	4
 '2 ⬆ 3'	8
-'8 ⬇ 2'	3
+# triage-held 2026-11-06: log operator ⬇ :: '8 ⬇ 2'	3
 'f = x ⟶ x*2; f(3)'	6
 
 # free_unicode_symbols_parse

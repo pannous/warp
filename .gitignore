@@ -3,6 +3,7 @@ target
 *.wasm
 # the library index `warp rebuild` writes beside the prebuilt modules
 lib/modules/index.tsv
+lib/modules/sugar_rules.packed
 wiki/
 out
 
@@ -86,3 +87,5 @@ samples/tune.mid
 samples/sound/tune.mid
 
 kick.wav
+# the packed sugar rules warp rebuild writes beside the modules (build output)
+/lib/modules/sugar_rules.packed

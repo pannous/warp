@@ -1,8 +1,8 @@
 # from test_type_words.rs: edit the Rust test, then run the script again
 
 # test_type_constructor_words
-'double 2'	2
-'long 2'	2
+# triage-held 2026-11-06: Java type words double/long as functions :: 'double 2'	2
+# triage-held 2026-11-06: Java type words double/long as functions :: 'long 2'	2
 'float 2'	2
 'int 2'	2
 

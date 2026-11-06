@@ -8,3 +8,16 @@ p.width' 12
 # own_set_shadows_the_english_rule
 is! 'set = 7
 set + 1' 8
+
+# mutation_phrases_change_the_place
+is! 'x = 3
+increase x by: 2
+x' 5
+is! 'x = 12
+divide x by 4
+multiply x by: 5
+decrease x by 1
+x' 14
+is! 'p = {a: 1}
+increase p.a by 4
+p.a' 5

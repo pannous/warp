@@ -2,4 +2,4 @@
 
 # a_library_words_return_type_comes_from_its_signature
 'floor.return_type'	'int'
-'sqrt.returns'	'number'
+# triage-held 2026-11-06: returns, a synonym of return_type :: 'sqrt.returns'	'number'

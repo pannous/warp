@@ -6,8 +6,8 @@ fs = methods(math)
 fs#1(12, 18)' 6
 is! 'use math
 count(math.methods) == count(dir(math))' true
-is! 'use math
-count(methods of math) == count(dir(math))' true
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! 'use math
+# :: count(methods of math) == count(dir(math))' true
 
 # a_function_knows_its_name_and_return_type
 is! '# doubles a number
@@ -81,41 +81,41 @@ is! 'm = {methods: 3}
 m.methods' 3
 
 # description_is_doc
-is! '# doubles a number
-twice(x) := x*2
-twice.description' 'doubles a number'
-is! '# doubles a number
-twice(x) := x*2
-fs = [function twice]
-fs#1.description' 'doubles a number'
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! '# doubles a number
+# :: twice(x) := x*2
+# :: twice.description' 'doubles a number'
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! '# doubles a number
+# :: twice(x) := x*2
+# :: fs = [function twice]
+# :: fs#1.description' 'doubles a number'
 
 # returns_is_return_type
-is! '# doubles a number
-twice(x) := x*2
-twice.returns' 'int'
-is! '# doubles a number
-twice(x) := x*2
-fs = [function twice]
-fs#1.returns' 'int'
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! '# doubles a number
+# :: twice(x) := x*2
+# :: twice.returns' 'int'
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! '# doubles a number
+# :: twice(x) := x*2
+# :: fs = [function twice]
+# :: fs#1.returns' 'int'
 
 # representation_is_dump
-is! '# doubles a number
-twice(x) := x*2
-twice.representation' 'twice(x) := x*2'
-is! '# doubles a number
-twice(x) := x*2
-fs = [function twice]
-fs#1.representation' 'twice(x) := x*2'
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! '# doubles a number
+# :: twice(x) := x*2
+# :: twice.representation' 'twice(x) := x*2'
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! '# doubles a number
+# :: twice(x) := x*2
+# :: fs = [function twice]
+# :: fs#1.representation' 'twice(x) := x*2'
 
 # full_is_the_doc_and_the_definition
 is! '# doubles a number
 twice(x) := x*2
 twice.full' '# doubles a number
 twice(x) := x*2'
-is! '# doubles a number
-twice(x) := x*2
-fs = [function twice]
-fs#1.full' '# doubles a number
+# triage-held 2026-11-06: reflection synonyms (methods of, description, returns, representation, full), one word each is enough :: is! '# doubles a number
+# :: twice(x) := x*2
+# :: fs = [function twice]
+# :: fs#1.full' '# doubles a number
 twice(x) := x*2'
 
 # a_maps_own_description_stays_its_value

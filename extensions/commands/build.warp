@@ -79,8 +79,16 @@ WASM_ONLY = "--wasm"
 EXE_ONLY = "--exe"
 # what a build of inline code is called: out.wasm, the executable out
 INLINE_STEM = "out"
-# what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component, WAGI
-UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component", "--wagi"]
+# what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component
+UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component"]
+# the kinds a build detects from the program (decision build-kinds-detected): a program with routes builds as a server,
+# its executable serving them (lib/web.warp routes_served, card server-build); `warp build wagi app.warp` (the old
+# `--wagi`) as a WAGI module, app.wasm answering the one request of its environment (lib/wagi.warp routes_wagi, card
+# site-wagi-build; notes/hosting.md "Fermyon")
+WAGI_WORD = "wagi"
+WAGI_OPTION = "--wagi"
+SERVER_ENDING = "routes_served"
+WAGI_ENDING = "routes_wagi"
 DEFAULT_TRIM = "optimize"
 
 build(words: list) := {
@@ -90,6 +98,10 @@ build(words: list) := {
 	modules_linked = no
 	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
 	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
+	if targets#1 == APP_WORD { return build_app(targets#2, options) }
+	wagi = targets#1 == WAGI_WORD or WAGI_OPTION in options
+	if targets#1 == WAGI_WORD { targets = targets[1 ..] }
+	routes_end_word = if wagi then WAGI_ENDING else SERVER_ENDING
 	target = targets#1
 	is_file = exists(target)
 	source = if is_file then read(target) else target
@@ -104,10 +116,20 @@ build(words: list) := {
 	write_bytes(stem + ".mod.wasm", if is_primitive_file(source) then read_bytes(stem + ".full.wasm") else linked_bytes(module.order))
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
 	modules = [stem + ".full.wasm", stem + ".mod.wasm", stem + ".wasm"]
+	if wagi { return wagi_built(stem, modules) }
 	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", stem) }
+	if routes_seen and not (WASM_ONLY in options) { print stem + " serves its routes at WARP_PORT, else 8080" }
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
 	}
+	ø
+}
+# a WAGI build keeps app.wasm, which a WAGI host runs once a request (Spin's wagi executor: REQUEST_METHOD, PATH_INFO
+# and QUERY_STRING in, the CGI answer out)
+wagi_built(stem: text, modules: list) := {
+	if not routes_seen { raise "warp build wagi: " + stem + " has no routes to answer a request (get \"/path\" { … }, lib/web.warp)" }
+	shell("rm -f " + modules.filter(m => m != stem + ".wasm").map(quoted_path).join(" "))
+	print "compiled " + size_of(stem + ".wasm") + " bytes to " + stem + ".wasm, a WAGI module answering its routes"
 	ø
 }
 # a file's size in bytes, as text
@@ -117,6 +139,39 @@ option_of(options: list, name: text): any := {
 	for option in options { if option.starts_with(OPTION_MARK + name + "=") { return option.remove_prefix(OPTION_MARK + name + "=") } }
 	ø
 }
+
+# `warp build app app.warp`: the executable app as the macOS application bundle app.app (card build-app-bundle): the
+# executable in Contents/MacOS with warp's libraries it may load (libwarp_wasmtime, _sound, _gpu, _window), which it
+# finds there (@executable_path, native_links), and Contents/Info.plist naming it; ad-hoc signed whole on macOS. The
+# bundle is written on any system, a folder there. A word, not a flag (decision build-kinds-detected); a page's app,
+# its markup in the system's web view, is card page-app-build
+APP_WORD = "app"
+APP_SUFFIX = ".app"
+build_app(target: text, options: list) := {
+	if not exists(target) or not target.ends_with(".warp") { raise "warp build app builds a program file, app.warp, into app.app" }
+	build([target, EXE_ONLY] + options.filter(option => option != WASM_ONLY and option != EXE_ONLY))
+	executable = target.remove_suffix(".warp")
+	name = executable.split("/").last()
+	bundle = executable + APP_SUFFIX
+	contents = bundle + "/Contents"
+	shell("rm -rf " + quoted_path(bundle) + " && mkdir -p " + quoted_path(contents + "/MacOS") + " " + quoted_path(contents + "/Resources"))
+	shell("mv " + quoted_path(executable) + " " + quoted_path(contents + "/MacOS/" + name))
+	shell("for f in " + quoted_path(library_folder) + "/libwarp_*.dylib " + quoted_path(library_folder) + "/libwarp_*.so; do if [ -f \"$f\" ]; then cp \"$f\" " + quoted_path(contents + "/MacOS") + "; fi; done")
+	write(contents + "/Info.plist", info_plist(name))
+	if is_macos() { shell("codesign --sign - --force --deep " + quoted_path(bundle)) }
+	print "built " + bundle
+}
+# the bundle's Info.plist: its name, executable and identifier (warp.app.<name>, its _ and spaces -)
+info_plist(name: text): text := {
+	entries = [["CFBundleName", name], ["CFBundleDisplayName", name], ["CFBundleExecutable", name],
+		["CFBundleIdentifier", "warp.app." + bundle_identifier(name)], ["CFBundlePackageType", "APPL"],
+		["CFBundleShortVersionString", "1.0"], ["CFBundleVersion", "1"], ["CFBundleInfoDictionaryVersion", "6.0"],
+		["LSMinimumSystemVersion", "11.0"]]
+	keys = entries.map(entry => "\t<key>" + entry#1 + "</key>\n\t<string>" + plist_escaped(entry#2) + "</string>\n").join("")
+	"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n" + keys + "\t<key>NSHighResolutionCapable</key>\n\t<true/>\n</dict>\n</plist>\n"
+}
+plist_escaped(t: text): text := t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+bundle_identifier(name: text): text := name.replace("_", "-").replace(" ", "-")
 
 # A standalone executable is core/native/driver.warp built natively, carrying the program's module (notes/primitive.md
 # "Driver"), which also makes its C calls: <driver><module><its length, 8 bytes little-endian>WRPMwasm<zeros to a

@@ -1,0 +1,24 @@
+#!/usr/bin/env warp
+# warp is written in warp: the compiler (core/compiler.warp, its parser core/parsing/parser.warp) compiles itself,
+# and `parse` hands any program that same parser. A calculator of a few lines runs on the trees it gives
+
+# the value of a tree, its names read from the bindings
+evaluate(n, bindings) := match n {
+	data($a + $b) => evaluate(a, bindings) + evaluate(b, bindings)
+	data($a - $b) => evaluate(a, bindings) - evaluate(b, bindings)
+	data($a * $b) => evaluate(a, bindings) * evaluate(b, bindings)
+	data($a / $b) => evaluate(a, bindings) / evaluate(b, bindings)
+	_ => if n is symbol then bindings["${n}"] else n
+}
+print evaluate(parse("2 + 3 * 4"), {})              # 14: the parser knows * binds tighter
+print evaluate(parse("w * h - 1"), {w: 2, h: 5})     # 9
+
+# a definition is a tree too: its head, its operator and its body
+area = parse("area(r) := 3 * r * r")
+print area.key                                      # the head: (area r)
+print area.op                                       # :=
+print evaluate(area.value, {r: 2})                  # 12
+
+# warp's data format is warp code: the parser reads it as it reads the compiler
+person = parse("Person { name: \"Alice\" age: 30 }")
+print person

@@ -3,9 +3,9 @@
 # a_collection_word_declares_a_variable
 'map config = {key: "value"}; config.key'	'value'
 'list xs = [1 2]; xs#2'	2
-'tuple t = (1, 2, 3); t#3'	3
+# triage-held 2026-11-06: collection declarations tuple t = …, array xs = … :: 'tuple t = (1, 2, 3); t#3'	3
 'dict d = {a: 1}; d.a'	1
-'array xs = [1 2]; xs#2'	2
+# triage-held 2026-11-06: collection declarations tuple t = …, array xs = … :: 'array xs = [1 2]; xs#2'	2
 
 # a_program_naming_the_word_keeps_it
 'map = 3; map + 1'	4

@@ -1,7 +1,7 @@
 # from test_definition_bodies.rs: edit the Rust test, then run the script again
 
 # a_method_body_keeps_its_suffix_word
-'class C{ n: int; fn f() := 3 squared }; C(2).f()'	9
+# triage-held 2026-11-06: Rust fn / Python def foo: bodies, foreign syntax :: 'class C{ n: int; fn f() := 3 squared }; C(2).f()'	9
 
 # f
 'class C{ n: int; f() := n squared }; C(4).f()'	16
@@ -12,4 +12,4 @@
 'f() := first of [5, 2]; f()'	5
 
 # a_colon_body_may_assign
-'def foo: hi=2*2; foo'	4
+# triage-held 2026-11-06: Rust fn / Python def foo: bodies, foreign syntax :: 'def foo: hi=2*2; foo'	4

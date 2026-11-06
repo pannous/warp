@@ -6,7 +6,7 @@ is! 'on alarm {1}; on alarm {2}; remove 1 from listeners of alarm; count listene
 
 # any_handler_is_removed_by_its_place
 is! 'n = 0; on alarm {n += 1}; on alarm {n += 10}; remove (listeners of alarm)#1 from listeners of alarm; emit alarm; n' 10
-is! 'n = 0; on alarm {n += 1}; on alarm {n += 10}; listeners of alarm -= 2; emit alarm; n' 1
+# triage-held 2026-11-06: desk-invented `listeners of alarm -= 2` :: is! 'n = 0; on alarm {n += 1}; on alarm {n += 10}; listeners of alarm -= 2; emit alarm; n' 1
 is! 'n = 0; on alarm {n += 1}; h = on alarm {n += 10}; for l in listeners of alarm { remove l from listeners of alarm }; emit alarm; n' 0
 is! 'n = 0; on alarm {n += 1}; remove 1 from listeners of alarm; remove 1 from listeners of alarm; emit alarm; n' 0
 

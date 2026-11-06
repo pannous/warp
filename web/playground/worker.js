@@ -7,7 +7,7 @@
 const stage = name => self.postMessage({ type: "stage", stage: name });
 
 stage("loading its scripts");
-importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
+importScripts("imports.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js", "wasi.js", "driver.js");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
@@ -62,8 +62,7 @@ const hooks = {
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder, id => timerShown(holder, id));
-		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
-		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer))] });
 	},
 	panicked: message => { panicMessage = message; },
 };

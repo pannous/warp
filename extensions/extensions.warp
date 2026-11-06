@@ -23,6 +23,8 @@ use "alias_arrows.warp"
 use "times_loops.warp"
 use "entities.warp"
 use "declared_operators.warp"
+use "list_operators.warp"
+use "last_results.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
 use "function_clauses.warp"
@@ -35,6 +37,7 @@ use "test_lines.warp"
 use "scoped_words.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
+use "block_inlining.warp"
 use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
@@ -65,6 +68,7 @@ EXTENSIONS = [
 	times_loops_extension
 	entities_extension
 	declared_operators_extension
+	list_operators_extension
 	tasks_extension
 	typed_templates_extension
 	function_clauses_extension
@@ -77,10 +81,12 @@ EXTENSIONS = [
 	conversions_extension
 	implicit_uses_extension
 	test_lines_extension
-	# right before tries, in this order: parse words, then the checked tries the core's tries guard
+	# right before tries, in this order: the last result `it`, parse words, then the checked tries the core's tries guard
+	last_results_extension
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
 	iteration_inlining_extension
+	block_inlining_extension
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension

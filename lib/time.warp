@@ -38,7 +38,7 @@ class Instant {
 milliseconds_of(duration: any) := duration
 // a duration (`now > 9.hours`) compared with the matching part, with a warning: a bare duration is mostly a clock
 // time meant; a plain number is milliseconds since 1970
-instant_part_compare(ms, other) := {
+instant_part_compare(ms: int, other: any): int := {
 	if other is number { return ms - other }
 	// a lib/units duration quantity, counted in whole milliseconds
 	d = int(milliseconds_of(other))

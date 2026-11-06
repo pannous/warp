@@ -204,8 +204,10 @@ page_serve(port: int) := {
 
 // the end of a program with routes, its last value: served when the native warp runs it as a program (WARP_SERVE),
 // else that value, the program's result; read by env, so a program not serving calls no C (none in a browser)
-routes_end(value: any = ø) := {
-	if env("WARP_SERVE") == ø { return value }
+routes_end(value: any = ø) := if env("WARP_SERVE") == ø then value else routes_served()
+// the end of a program with routes built as a server (`warp build app.warp`): its executable serves them at WARP_PORT,
+// else 8080 (card server-build)
+routes_served(value: any = ø) := {
 	port = env("WARP_PORT")
 	serve(if port == ø then DEFAULT_PORT else int(port))
 }
