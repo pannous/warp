@@ -10,6 +10,8 @@ list_operators_extension = Extension{name: "list_operators", infix_readers: [rea
 def read_list_operator(p: Parser, left: Node, min_power: int): Node := {
 	c = char_here(p)
 	if c != '\\' and c != '/' { return ø }
+	# `// …` and `/* … */` are comments
+	if c == '/' and (char_ahead(p, 1) == '/' or char_ahead(p, 1) == '*') { return ø }
 	if p.at == 0 or not is_blank(p.code[p.at - 1]) { return ø }
 	op = list_operator_at(p)
 	if op.length == 0 { return ø }
