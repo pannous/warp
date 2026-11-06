@@ -86,3 +86,5 @@ samples/tune.mid
 samples/sound/tune.mid
 
 kick.wav
+# the packed sugar rules warp rebuild writes beside the modules (build output)
+/lib/modules/sugar_rules.packed
