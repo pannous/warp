@@ -59,8 +59,7 @@ contains { aliases: [has, includes] }
 text { aliases: [toString, to_s, __str__] }
 
 # ranges, pipes, conversion and arrows
-"to" { symbol: Op.To, aliases: ["...", "..=", "…"], power: [130, 131] }
-through { operator: "to", symbol: Op.To, infix: yes, power: [130, 131] }
+"to" { symbol: Op.To, aliases: ["...", "..=", "…", through], infix: yes, power: [130, 131] }
 upto { operator: "..", symbol: Op.Range, aliases: ["..<"], infix: yes, power: [130, 131] }
 "|>" { power: [127, 128] }
 "as" { power: [125, 250] }
