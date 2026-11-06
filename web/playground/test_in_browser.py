@@ -208,13 +208,15 @@ VIEW_STEADY_RUNS = 4  # a run measures the view as the last one's painting left 
 # without an adapter too, which `try` takes, and the last one then shows its own failure, never "Out of memory"
 GPU_JOBS = "(many GPU jobs in one run)"
 GPU_JOBS_CODE = """shader = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>; @compute @workgroup_size(1) fn main() { xs[0] = xs[0] + 1.0; }"
-400 times { try gpu_compute(shader, [1], 1) else 0 }
+JOBS times { try gpu_compute(shader, [1], 1) else 0 }
 gpu_compute(shader, [1], 1)"""
+GPU_JOBS_COUNT = 400  # twice Safari's ~200
+# Firefox on lavapipe: 400 jobs outlast RUN_TIMEOUT_MS, and the stopped run's terminate logs Firefox's anonymous
+# uncaught exception (card firefox-gpu-jobs-uncaught); 50 finish in time and log nothing (card firefox-tour). Safari's
+# bug is Safari's, so Firefox runs the jobs' path with fewer of them
+FIREFOX_GPU_JOBS_COUNT = 50
 GPU_JOBS_NEVER = "Out of memory"
 # the console lines a check makes on purpose: Chrome logs the broken shader's WGSL error itself
-# Firefox on lavapipe: the 400 jobs outlast RUN_TIMEOUT_MS, so the run is stopped and the stop's terminate logs the
-# anonymous uncaught exception below; 50 jobs finish in time and log nothing (card
-# firefox-gpu-jobs-uncaught)
 # and Firefox its own two lines of the broken shader
 # Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on
 # the page, which no listener sees (card firefox-logs). Stop does that: the
@@ -231,7 +233,7 @@ FIREFOX_SKIPPED_SAMPLES = {"warp_compiled_wgsl_shader": "its worker, replaced, l
 MEMORY_HUNGRY_SAMPLES = {"ringed_planet": "+211 MB: a 1920×1080 compute_toy painted on the CPU in headless Chrome",
 	"uniscript_text": "+195 MB: reads uniscript's 10 MB entities index", "sound_patterns": "+100 MB"}
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
-	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING,
+	STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING,
 	BUG_BUTTON: ["403"]}  # the browser logs the refused wrong token itself
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
@@ -801,8 +803,9 @@ def view_steady_wrong():
 
 def gpu_jobs_wrong():
 	"""the last of many GPU jobs gives its numbers, or says why not, but never ran out of memory"""
-	shown = run_code(GPU_JOBS_CODE)
-	return [f"after 400 GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
+	jobs = FIREFOX_GPU_JOBS_COUNT if isinstance(webdriver, FirefoxDriver) else GPU_JOBS_COUNT
+	shown = run_code(GPU_JOBS_CODE.replace("JOBS", str(jobs)))
+	return [f"after {jobs} GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
 
 
 def fix_button_wrong():
