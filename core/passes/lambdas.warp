@@ -264,7 +264,7 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 	given = arguments_of(call)
 	arguments = (1 to #given).map(at => passed_value(given#at, at, call#1, locals, lowering))
 	signature = call#1
-	if signature is symbol and is_variable(name_of(signature), locals, lowering) { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
+	if signature is symbol and is_variable(name_of(signature), if is_inserted_word(signature) then [] else locals, lowering) { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
 	if signature is symbol { return call_node(signature, arguments) }
 	callee = lowered_lambdas(signature, locals, lowering)
 	if is_callee(signature) or is_lambda(signature) { return call_node(symbol(closure_call_word + #arguments), [callee] + arguments) }
@@ -273,6 +273,7 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 
 # a variable in scope: a local, or a global no function of the program is named as (`global filler = ø`, set to a
 # function value elsewhere)
+# (a word a pass inserted, walk.warp call_of, is looked up among the globals only: an open·… slot is one)
 is_variable(name: text, locals: list, lowering: Lowering): bool := name in locals or (lowering.globals.has(name) and name not in lowering.arities)
 
 # `xs = a b 3` of variables a and b (the parser's `a (b 3)`): a name bound to a value heads no call, the values side by
