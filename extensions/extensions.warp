@@ -23,6 +23,7 @@ use "alias_arrows.warp"
 use "times_loops.warp"
 use "entities.warp"
 use "declared_operators.warp"
+use "list_operators.warp"
 use "go_tasks.warp"
 use "typed_templates.warp"
 use "function_clauses.warp"
@@ -64,6 +65,7 @@ EXTENSIONS = [
 	times_loops_extension
 	entities_extension
 	declared_operators_extension
+	list_operators_extension
 	tasks_extension
 	typed_templates_extension
 	function_clauses_extension
