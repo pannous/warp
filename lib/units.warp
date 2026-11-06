@@ -170,7 +170,7 @@ h() := known_unit("h")
 day() := known_unit("day")
 Hz() := known_unit("Hz")
 kHz() := known_unit("kHz")
-N() := known_unit("N")
+N() := known_unit("N") # todo add the long Names for ALL Units  known_unit("N","Newton","Force") (?) !! (card unit-dimension-names)
 L() := known_unit("L")
 ml() := known_unit("ml")
 ha() := known_unit("ha")
@@ -214,12 +214,12 @@ type K = Temperature
 type px = Pixels
 type Hz = Quantity
 type kHz = Quantity
-type N = Quantity
+type N = Quantity # todo Newton is Force (card unit-dimension-names)
 type L = Quantity
-type ml = Quantity
-type ha = Quantity
-type dpi = Quantity
-type ppi = Quantity
+type ml = Quantity # todo  milli-liter  (card unit-dimension-names)
+type ha = Quantity # todo hectar is Area (card unit-dimension-names)
+type dpi = Quantity # todo dots-per-inch is Density (card unit-dimension-names)
+type ppi = Quantity # todo pixel-per-inch is Density (card unit-dimension-names)
 
 // a unit as written, `km`, `km/h`, `m²`, `kg·m/s²`: the quantity of one of it
 unit_named(u: text) := {

@@ -66,13 +66,13 @@ global file_texts = {}
 
 # modules/index.tsv: what a compile has to know of the standard library before a program's uses are resolved, a cache
 # derived from lib/ by `warp rebuild` beside the modules it prebuilt (notes/library_zero_bake.md L2): the words taking
-# a block last, the global words, classes and tags of the top modules, the words each module defines (implicit uses),
+# a block last, the global words, classes, tags and constants of the top modules, the words each module defines (implicit uses),
 # the words each module's rules need, the host lines, each module's source hash, lib/aliases.warp's entries, the
 # sugar's files and the cuts of the modules every compile reads (prelude_words.warp slices_of). A line `<section>\t<key>\t<value>`,
 # read once a compile (scanning the modules' texts was the compiler's baked tables, or ~5 ms of a small compile).
 # Without one (the seed's build, a fresh lib/) a section is scanned off lib/ where it runs
 LIBRARY_INDEX = "index.tsv"
-INDEX_SECTIONS = ["block", "global", "class", "tag", "word", "needs", "host", "hash", "alias", "sugar", "slice"]
+INDEX_SECTIONS = ["block", "global", "class", "tag", "const", "word", "needs", "host", "hash", "alias", "sugar", "slice"]
 # the modules beside the runtime a compile runs behind, as the modules it links (compiler.warp linked_libraries)
 index_file(): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + LIBRARY_INDEX
 global index_sections_held = ø
@@ -98,6 +98,7 @@ index_section_scanned(section: text): map := match section {
 	"global": declarations_scanned(library_on_disk())["words"]
 	"class": declarations_scanned(library_on_disk())["classes"]
 	"tag": declarations_scanned(library_on_disk())["tags"]
+	"const": declarations_scanned(library_on_disk())["constants"]
 	"word": module_word_definers()
 	"needs": scanned_rule_needs()
 	"host": host_lines_in(library_on_disk())

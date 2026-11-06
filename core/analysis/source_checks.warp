@@ -15,6 +15,7 @@ fail_word = "fail"
 # the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
 source_checks(program: Node, prelude: text): Node := {
 	aliases = module_aliases(prelude)
+	library_constant_assignments(program)
 	for n in nodes_in(program) {
 		located_error(n)
 		for lint in hooks().lints { lint(n, program) }
@@ -59,6 +60,16 @@ constant_assignments(block: Node) := {
 			name = if n is key and op_of(n) in assigning_operators then "${without_mark(key_of(n))}" else ""
 			if constants.has(name) and not (op_of(n) == "=" and "${value_of(n)}" == constants[name]) { diagnose(call_of("constant_assignment", [name]), n) }
 		}
+	}
+	ø
+}
+# decision library-constant-refused: a library's constant, `const pi() := π` of reals, is no variable of the program, so
+# a top-level `pi = 4` is an error; a local inside a function may shadow it
+library_constant_assignments(program: Node) := {
+	constants = library_constants()
+	for statement in statements_in(program) {
+		name = if statement is key and op_of(statement) in assigning_operators then "${without_mark(key_of(statement))}" else ""
+		if name != "" and constants.has(name) { diagnose(call_of("library_constant", [name]), statement) }
 	}
 	ø
 }

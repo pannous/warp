@@ -118,10 +118,12 @@ half_turns_sine(n: int) := [0, 1, 0, -1][((n % 4) + 4) % 4]
 tan(x: real) := tan(real_float(x) as float)
 exp(x: real) := exp(real_float(x) as float)
 
-π() := real(1, 1, 1)
-pi() := π
-τ() := real(2, 1, 1)
-tau() := τ
+// the named constants (decision library-constant-refused): a program's top-level `pi = 4` is refused
+const π() := real(1, 1, 1)
+const pi() := π
+const τ() := real(2, 1, 1)
+const tau() := τ
 ∞() := 1.0 / 0.0
+// ℯ reads as a character, never a variable (an assignment to it is refused anyway)
 ℯ() := 2.718281828459045
-euler() := ℯ
+const euler() := ℯ
