@@ -32,3 +32,4 @@ rust-map-insert	rust-reading	m.insert(k, v) on a map: add a map overload insert(
 rust-map-type	rust-reading	lib/collections.warp:43 aliases HashSet => Set only as a constructor; generic HashMap<K,V>/HashSet<T> as type annotations need aliases there like Vec<i32>
 rust-vec-repeat	rust-reading	vec![0; n] repeat form: a sugar rule beside the existing vec!/format! macros (test/parser/test_rust_macros.pairs.warp), extensions/sugar
 sample-gaps-modules	sample-gaps	C/JS imports, crates, wasm imports in samples/modules, samples/crates: extensions/c_imports owner claims + lib/crates; after load-time linking (L5) re-run the samples, no core per gap
+webgpu-shader-part	user-decided	user (rounds 15-17): use shaders (split from lib/graphics)

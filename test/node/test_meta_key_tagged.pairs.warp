@@ -1,0 +1,2 @@
+# a meta key of undeclared tagged data reads as a map's does (wiki/meta.md, card meta-tagged-data)
+'p = point{x:1 y:2 @source:"gps"}; p.@source'	"gps"

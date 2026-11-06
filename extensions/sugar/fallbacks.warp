@@ -1,5 +1,7 @@
-# A value or its fallback (notes/layers.md, sugar): `a ?? b` is b where a is missing (ø), else a; 0, "" and no stay.
-# A name is tested as it is, any other operand computed once.
+# A value or its fallback (notes/layers.md, sugar; decision nullish-default): `a ?? b` is b where a is missing (ø) or
+# an Error value, else a; 0, "" and no stay. A name is tested as it is, any other operand computed once. A raise
+# (`"ab".find("x") ?? 0`) is not caught yet: `try` here would reach the runtime, which compiles without it (card
+# find-fallback)
 rewrite $a ?? $b => if $a == ø then $b else $a where $a is symbol
 rewrite $a ?? $b => ($t = $a; if $t == ø then $b else $t)
 # `a ?: b` is `a or b`: b where a is falsy (ø, 0, "", no) or raises, else a
