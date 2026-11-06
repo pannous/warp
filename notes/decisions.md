@@ -962,3 +962,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 
 - 2026-11-06 Supervisor (user widget): warnings-meaning-question → hard error when prebuilt module has no warp.module / won’t link; no compile-from-source fallback ("This must never happen").
   - module-manager (user): keep the card in Next (the missing module-manager parts after zero-bake: module blocks, use *, aliases of non-lib modules, conditional use, versions).
+- 2026-11-06 user (card sprint): simple to complex: get rid of all the easy cards first; whoever picks or distributes cards orders them so.
