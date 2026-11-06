@@ -736,9 +736,10 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasm_engine_delete(engine)
 	failure
 }
-# a run's linker, engine and linked-instances cell, and its unicode instance once canonical_text linked it (0 before)
+# a run's linker, engine and linked-instances cell, whether canonical_text linked unicode (1) and that instance, kept in
+# the run's block: what a host word allocates is given back when it returns (foreign.c warp_host_callback)
 run_state(linker: handle, engine: handle, linked: pointer): pointer := {
-	run = allocate(32)
+	run = allocate(32 + INSTANCE_BYTES)
 	long_at(run).value = linker
 	long_at(run + 8).value = engine
 	long_at(run + 16).value = linked as i64
@@ -755,11 +756,12 @@ canonical_text_answered(context: handle, given: pointer, result: pointer): nothi
 	if long_at(run + 24).value == 0 {
 		module_name = "warp/unicode"
 		instance = instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name), long_at(run + 16).value as i32, trap)
-		long_at(run + 24).value = instance as i64
+		memcpy(run + 32, native_pointer(instance), INSTANCE_BYTES)
+		long_at(run + 24).value = 1
 	}
 	function = allocate(EXTERN_BYTES)
 	word = "canonical_text"
-	if not wasmtime_instance_export_get(context, long_at(run + 24).value as i32, word, word.length, function) {
+	if not wasmtime_instance_export_get(context, run + 32, word, word.length, function) {
 		complain("modules/unicode.wasm exports no canonical_text: warp rebuild writes it anew")
 		exit(1)
 	}
