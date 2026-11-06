@@ -305,7 +305,7 @@ field-typed	core	class field typed with a class not checked on construction (R(3
 file-print	lib	units trap at lib/units.warp:47 Time(...) named at the program file; no test or fix found; start in lib/units.warp (may reveal a core position/cast bug)
 final-unnamed	core	no test pins {dist: d} keeping 3m; final value of an unnamed object literal loses the field's unit in emission/show of the program value (core/emitter, show)
 final-value-typing	core	only '"" + 30° * 2' is tested (test_marked_numbers:3 green); the program's bare final value still ignores the type's show: final-value show path (core/native/driver + core/runtime/show.warp)
-fine-updates	unclear	which serialization of a style block is right: style{.done{color:"green"}} (page value) or style:.done:color:"green" (web/playground/examples.js:237)?
+fine-updates	done	example uses style{.done{color:"green"}} brace form (user 2026-11-06); HTML value expectations kept; .done= shorthand was no field key
 firefox-jspi-bug	lib	no report written yet (no notes/web hit); write the ready-to-paste Bugzilla report in notes/ and hand the user the link; filing needs the user's account
 first-rest	core	comprehension over [first] + rest inside a match arm with recursive f (match lowering / comprehension pass in core/passes); repro probe gone, no test found
 fix-in-lib	done	lib/fix/ (fix.warp, rewrites.warp, layout.warp, command.warp): warp fix/beautify in warp, text-only; float[2] -> 2 floats hint at lib/fix/rewrites.warp:9,81
