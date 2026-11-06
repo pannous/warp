@@ -70,7 +70,7 @@ tick(); tick()
 class animal { name; speak := name + " makes a sound" }
 class dog extends animal { speak := super.speak + ": woof" }
 dog("Rex").speak` },
-	properties: { value: "[100 51]", code: `// computed properties, generic classes, extension methods
+	properties: { value: "[100, 51]", code: `// computed properties, generic classes, extension methods
 class Temperature { celsius = 0.0; fahrenheit := celsius * 9 / 5 + 32; fahrenheit(f) := { celsius = (f - 32) * 5 / 9 } }
 water = Temperature()
 water.fahrenheit = 212
