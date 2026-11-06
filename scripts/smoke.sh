@@ -18,6 +18,8 @@ scripts=$(cd "$(dirname "$0")" && pwd)
 BAKED="^(core/|extensions/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --baked-files | sed 's/\./\\./g')))"
 installed=$(dirname "$(readlink -f "$INSTALLED")")
 base=$(git -C "$tree" merge-base origin/main HEAD) || exit 2
+# a change writing code a second time in one file is refused before any build (card repeated-code-check)
+"$scripts/repeated-code.sh" "$tree" || exit 1
 baked=$({ git -C "$tree" diff --name-only "$base" HEAD; git -C "$tree" diff --name-only HEAD; } | sort -u | grep -E "$BAKED" | grep -v '^core/native/')  # the native warp is no compiler input (compiler-inputs.sh)
 if [ -n "$baked" ] || [ "$warp_installed_follows_main" != 1 ]; then
 	if [ -n "$baked" ]; then echo "smoke: REBUILDING, the compiler bakes in what this branch changed: $(echo $baked)"
