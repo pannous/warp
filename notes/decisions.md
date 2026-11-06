@@ -926,3 +926,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - close: bend-verdict, function-definition-core, patterns-second-pass, core-names, drop-keep (drop the Lean handle/abort rules), lib-reshuffle-rest (drop the branch), small-packages, add-word-positions.
   - park: fung-friday, polish-notation, modular-integration.
   - dynamic-language stays open.
+- 2026-11-06 card sprint, round 8 (user): close def-items (workaround items_until stays; module-prefixed words remove the cause), local-check-assignment (no repro), use-prelude (fixed: the repro prints 1 per frame since zero-bake). wasm-becomes: measure the levers (generate_address_map, native_unwind_info off, Cranelift speed_and_size) on size, memory and compile speed; keep only what helps and keeps backtraces; warp.wasm.driver.cwasm is still 31 MB.
