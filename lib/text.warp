@@ -192,10 +192,3 @@ human_size(bytes: any): text := {
 	if frac != 0 { shown = shown + "." + frac }
 	shown + " " + units#u
 }
-
-// Pattern values (card pattern-parameters, notes/pattern_values.md): find/replace as plain warp
-// functions. A parameter typed `data` keeps the pattern unevaluated (decision data-parameter), so
-// bare names bind: find(page, {type: "image", src}) is ["logo.png", …]. The infix `x find p` sugar
-// still rewrites to find_matches; these call forms take a pattern value the same way.
-find(value: any, p: data): list := find_matches(value, p)
-replace(value: any, p: data, template: data): any := replace_matches(value, p, template)
