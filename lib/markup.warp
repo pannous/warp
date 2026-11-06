@@ -141,12 +141,14 @@ class Live {
 live(compute: function): Live := Live(compute)
 
 // `input{ bind: name }`: a two-way binding, the field showing the variable and setting it from what is typed; the
-// rule keeps the variable as code to read and to write (card input-bind-name)
+// item rule (extensions/sugar/bindings.warp) keeps the variable as code to read and to write (card input-bind-name)
 class Binding {
 	read: function
 	write: function
+	now() := { value = read; value() }
+	set(entered: any) := { change = write; change(entered) }
 }
-rewrite bind: $v => bind: Binding(() => $v, entered => { $v = entered }) where item and $v is symbol
+binding(read: function, write: function): Binding := Binding(read, write)
 
 // an element's handler: `on click {…}` among its items (a Handler), or HTML's own spelling
 // `onclick: (event => …)`
@@ -196,7 +198,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	for item in items {
 		if html_is_attribute(item, tag) and html_name(item) == "data-warp-scope" { own_scope = html_plain(html_content(item)) }
 		if html_is_attribute(item, tag) and html_name(item) == "value" { value = html_plain(html_content(item)) }
-		if html_is_binding(item) { value = html_plain(html_content(item).read()) }
+		if html_is_binding(item) { value = html_plain(html_content(item).now()) }
 	}
 	if tag == "select" { own_chosen = value }
 	var attributes = ""
@@ -243,12 +245,12 @@ html_is_binding(item: any): bool := item is pair and html_name(item) == "bind" a
 // a bound field's attributes: its kind and step from the variable's type unless the element names its type, the
 // value it shows and its input handler (card web-validate: the browser refuses 2.5 for an int, a bool is a checkbox)
 html_bound(tag: any, items: list, binding: Binding): text := {
-	let shown = binding.read()
+	let shown = binding.now()
 	let field = tag == "input"
 	let kind = if field and not html_names_any(items, ["type"]) then html_field_type(shown) else ""
 	let step = if field and shown is number then " step=\"" + (if shown is int then "1" else "any") + "\"" else ""
 	let state = if shown is bool then (if shown then " checked" else "") else " value=\"" + html_escaped(shown) + "\""
-	kind + step + state + html_handler_attribute("input", detail => binding.write(html_entered_like(shown, if shown is bool then detail.checked else detail.value)))
+	kind + step + state + html_handler_attribute("input", detail => binding.set(html_entered_like(shown, if shown is bool then detail.checked else detail.value)))
 }
 html_field_type(value: any): text := if value is bool then " type=\"checkbox\"" else if value is number then " type=\"number\"" else ""
 // what was entered, an int variable's kept an int
