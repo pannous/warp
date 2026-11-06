@@ -1,15 +1,15 @@
-# the voice's clock in lib (card sound-native-clock): at, rest, sound_queued, save mixes by place
+# the voice's clock in lib (card sound-native-clock): at, silence, sound_queued, save mixes by place
 
-# rest_advances_the_voice
+# silence_advances_the_voice
 is! 'use sound
 sound_at(1)
-rest(0.25)
+silence(0.25)
 sound_at_end()
 7' 7
 
-# at_and_rest_keep_save_places
+# at_and_silence_keep_save_places
 is! 'use sound
 at(0) { play(C4, 5ms) }
-rest(0.01)
+silence(0.01)
 at(0.05) { play(E4, 5ms) }
 save(sound, "sound_clock_mix.wav") > 0' true
