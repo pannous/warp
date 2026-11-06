@@ -40,6 +40,11 @@ node_equal(a: Node, b: Node): bool := {
 	if not (numeric_node(a) and numeric_node(b)) { return no }
 	float_of_node(a) == float_of_node(b)
 }
+# `a === b` of values known only at run time (decision same-multi-dispatch, emitter operators.warp identity_code): a list,
+# map or object the one value; a number, text, character, yes/no or time, having no identity apart from its value,
+# an equal value of the very same type (a yes/no is no int, a float no int)
+same_identity(a: Node, b: Node): bool := same_node(a, b) or (immutable_node(a) and code_free_kind(a) == code_free_kind(b) and node_equal(a, b))
+immutable_node(n: Node): bool := not is_null(n) and (numeric_node(n) or textual_node(n) or kind_code(n) == Kind.Time)
 # a value is an enum's case (made once, emitter.warp case_value) by being that very node; a copy, another module's or
 # the host's, by its kind (the enum's number in the info byte) and name, past node_equal's tests of every other kind
 case_equal(value: Node, case: Node): bool := same_node(value, case) or (not is_null(value) and code_free_kind(value) == code_free_kind(case) and same_bytes(unboxed_text(value), unboxed_text(case)))

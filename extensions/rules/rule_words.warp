@@ -524,16 +524,20 @@ missed_cases(arms: Node, program: Node): any := {
 }
 # the case an arm `Penny: 1` or `Penny => 1` names, "" for any other arm (a default, a value, a pattern)
 arm_case_name(arm: Node): text := if (is_key(arm, Op.Colon) or is_key(arm, Op.Arrow)) and key_of(arm) is symbol and not (name_of(key_of(arm)) in ["_", "default", "else"]) then name_of(key_of(arm)) else ""
-# `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable or a list literal
+# `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable, a list literal or a name
+# the program declares of another type (`f(bytes: list)`'s `for byte in bytes` walks the list)
 unit_lists = {byte: "bytes", codepoint: "codepoints"}
-unit_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_lists)
+text_unit_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, unit_lists, program)
 # `for bytes in t {… it …}`: a plural unit word walks the text by that unit, each item `it`
 unit_plurals = {bytes: "bytes", codepoints: "codepoints", chars: "chars", characters: "chars"}
-unit_plural_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_plurals)
-units_of(variable: Node, iterable: Node, units: map): any := {
+text_unit_plural_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, unit_plurals, program)
+units_of(variable: Node, iterable: Node, units: map, program: Node): any := {
 	if not units.has(name_of(variable)) or (is_group(iterable) and bracket_of(iterable) == "[") { return ø }
+	if iterable is symbol and declared_types(name_of(iterable), program).any(type => not (type in ["text", "string"])) { return ø }
 	Key(iterable, Op.Dot, symbol(units[name_of(variable)]))
 }
+# the types the program writes a name with: a parameter or variable `xs: list`
+declared_types(name: text, program: Node): list := nodes_in(program).filter(n => is_key(n, Op.Colon) and key_of(n) is symbol and name_of(key_of(n)) == name and value_of(n) is symbol).map(n => name_of(value_of(n)))
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
 are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))
 # `for p in ps where it > 2`: the condition's `it` read as the loop's variable
@@ -1057,8 +1061,8 @@ rule_words = {
 	tests_ended: tests_ended,
 	units_shown: units_shown,
 	unit_bound: unit_bound,
-	unit_items: unit_items,
-	unit_plural_items: unit_plural_items,
+	text_unit_items: text_unit_items,
+	text_unit_plural_items: text_unit_plural_items,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	value_definitions: value_definitions,
@@ -1099,9 +1103,9 @@ class_data(type_name: Node, program: Node): Node := {
 	name = name_of(type_name)
 	statement = declared_class(name, program)
 	if statement == ø { return class_data_refused("typed JSON requires a declared class") }
-	if constructor_of(class_declared(statement, class_view(statement))) != ø { return class_data_refused("typed JSON does not support class constructors yet") }
+	if takes_parameters(class_declared(statement, class_view(statement))) { return class_data_refused("typed JSON takes no class whose init has parameters") }
 	written = class_data_text(name, program, [])
-	if written == ø then class_data_refused("typed JSON supports only required flat fields yet") else plain_node(parsed(written))
+	if written == ø then class_data_refused("typed JSON supports only required flat fields yet") else constructed_through(plain_node(parsed(written)))
 }
 class_data_refused(why: text): Node := plain_node(parsed("raise \"" + why + "\""))
 class_data_text(name: text, program: Node, ancestors: list): text? := {
@@ -1109,7 +1113,7 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 	if statement == ø or name in ancestors { return ø }
 	view = class_view(statement)
 	declared = class_declared(statement, view)
-	if constructor_of(declared) != ø { return ø }
+	if takes_parameters(declared) { return ø }
 	types = []
 	defaults = []
 	for member in view#3[3..].map(member_read) {
@@ -1125,9 +1129,20 @@ class_data_text(name: text, program: Node, ancestors: list): text? := {
 	}
 	fields = declared.fields
 	order = fields.map(field => "\"" + field + "\"").join(", ")
-	made = name + "{" + fields.map(field => field + ": typed_fields[\"" + field + "\"]").join(", ") + "}"
+	made = constructed(name, fields.map(field => field + ": typed_fields[\"" + field + "\"]"), declared)
 	"{name: \"" + name + "\", order: [" + order + "], types: {" + types.join(", ") + "}, defaults: {" + defaults.join(", ") + "}, make: (typed_fields => " + made + ")}"
 }
+# the instance built from its fields; a class with a constructor is marked to construct through it (constructed_through)
+constructed(type_name: text, arguments: list, declared: Declared): text := {
+	made = type_name + "{" + arguments.join(", ") + "}"
+	if constructor_of(declared) == ø then made else class_data_constructor + "(" + made + ")"
+}
+class_data_constructor = "class_data_constructed"
+# a construction this late (after extensions/class_methods.warp wrapped each) runs its class's init once as theirs do,
+# C·made(C{…}), a name parsed text can't spell
+constructed_through(data: Node): Node := bottom_up(data, part => if is_called_name(part) and name_of(part#1) == class_data_constructor then call_of(made_name(name_of(key_of(part#2))), [part#2]) else part)
+# a constructor taking parameters has no fields to take them from
+takes_parameters(declared: Declared): bool := constructor_of(declared) != ø and #method_parameters(method_in(declared, constructor_method)) > 0
 type_data_text(field_type: text, program: Node, ancestors: list): text? := {
 	list_prefix = "list of "
 	if field_type.starts_with(list_prefix) {
