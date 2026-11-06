@@ -1,0 +1,5 @@
+// WebIDL Crypto (lib/web.webidl, card js-global-missing): `use crypto` or `use js crypto` — randomUUID as the
+// browser's crypto.randomUUID (RFC 9562 version 4), via lib/uuid.warp
+use uuid
+
+randomUUID(): text := uuid()

@@ -209,3 +209,11 @@ routes_end(value: any = ø) := {
 	port = env("WARP_PORT")
 	serve(if port == ø then DEFAULT_PORT else int(port))
 }
+
+// use js <global> (card js-global-missing, lib/web.webidl): self-hosted, that global module (crypto, url, math,
+// json). use js crypto; crypto.randomUUID() and use js URL; URL(t).hostname match the sample. Math and JSON keep
+// their ECMAScript capitals in source and name the modules math and json.
+rewrite js crypto => crypto
+rewrite js URL => url
+rewrite js Math => math
+rewrite js JSON => json
