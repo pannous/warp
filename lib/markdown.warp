@@ -528,6 +528,9 @@ md_space(t: text, at: int, lines: bool): int := {
 	while at <= #t and (t#at == " " or t#at == "\t" or (lines and t#at == "\n")) { at += 1 }
 	at
 }
+// a tag name character: a letter, or a digit/hyphen after the first character
+md_is_name_char(c: text, name: text): bool := (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-"))
+
 // [destination, place after] or []
 md_destination(t: text, at: int): list := {
 	if at > #t { return [] }
@@ -858,7 +861,9 @@ md_raw_html_at(t: text, k: int): list := {
 		name = ""
 		while j <= n {
 			c = "" + t#j
-			if (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-")) { name += c; j += 1 } else { break }
+			if not md_is_name_char(c, name) { break }
+			name += c
+			j += 1
 		}
 		if name == "" { return [] }
 		j = md_space(t, j, yes)
@@ -870,7 +875,9 @@ md_raw_html_at(t: text, k: int): list := {
 	name = ""
 	while j <= n {
 		c = "" + t#j
-		if (c.lower() != c.upper()) or (name != "" and (is_digit(c) or c == "-")) { name += c; j += 1 } else { break }
+		if not md_is_name_char(c, name) { break }
+		name += c
+		j += 1
 	}
 	if name == "" { return [] }
 	while yes {

@@ -135,10 +135,12 @@ PGA2 = [0, 1, 1]
 pga2_point(x: number, y: number): Multivector := blade(PGA2, 5, -x) + blade(PGA2, 3, y) + blade(PGA2, 6, 1)
 // the line a·x + b·y + c = 0
 pga2_line(a: number, b: number, c: number): Multivector := blade(PGA2, 2, a) + blade(PGA2, 4, b) + blade(PGA2, 1, c)
+// an ideal point (a direction, weight 0) has no Euclidean coordinates
+pga_refuse_ideal(w: number) := if w == 0 { raise "pga: an ideal point (a direction) has no coordinates" }
 // a point's [x, y]; an ideal point (a direction, e12 part 0) is refused
 pga2_coordinates(p: Multivector): list := {
 	w = p.parts#7
-	if w == 0 { raise "pga: an ideal point (a direction) has no coordinates" }
+	pga_refuse_ideal(w)
 	[-p.parts#6 / w, p.parts#4 / w]
 }
 // the rotor turning by angle radians counter-clockwise around the point (x, y): sandwich(rotor, p)
@@ -154,7 +156,7 @@ pga3_plane(a: number, b: number, c: number, d: number): Multivector := blade(PGA
 // a point's [x, y, z]; an ideal point is refused
 pga3_coordinates(p: Multivector): list := {
 	w = p.parts#15
-	if w == 0 { raise "pga: an ideal point (a direction) has no coordinates" }
+	pga_refuse_ideal(w)
 	[-p.parts#14 / w, p.parts#12 / w, -p.parts#8 / w]
 }
 
