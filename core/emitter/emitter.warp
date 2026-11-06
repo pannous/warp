@@ -1280,7 +1280,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 		numeric = target.kind == ValueKind.Int or target.kind == ValueKind.Float
 		if numeric and is_textual(added.kind) { return refuse("a number += a " + kind_spelling(added.kind)) }
 		sum = left is symbol and (numeric or name_of(left) in body.function.sums)
-		if sum and added.kind == ValueKind.Node {
+		# (a class defining `+` may be what is added, `total += sqrt(i)` an exact root: the arithmetic below dispatches)
+		if sum and added.kind == ValueKind.Node and not adds_by_dispatcher(body) {
 			body.function.sums[name_of(left)] = yes
 			return assignment(body, left, operation_code(body, "+", target, runtime_call("number_node", [added])))
 		}
