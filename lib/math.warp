@@ -197,7 +197,11 @@ norm(x: any) := if x is list then { var total = 0; for i in 1 to count(x) { tota
 magnitude(x: any) := norm(x)
 // vectors are lists of numbers: their dot product, their distance, the vector of length 1 along v, the cross product of
 // two 3-vectors and the direction i reflected at a surface of normal n
-dot(u: list, v: list) := sum([u#i * v#i for i in 1 to count(u)])
+dot(u: list, v: list) := {
+	var total = 0
+	for i in 1 to count(u) { total += u#i * v#i }
+	total
+}
 // of two numbers their product: `x·y` of numbers multiplies (decision middot-scalars)
 dot(u: number, v: number) := u * v
 // `u ∘ v`, the dot product's canonical spelling, and `u·v` (decision dot-glyphs); `u * v` of two lists stays refused
