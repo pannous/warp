@@ -7,3 +7,8 @@ rewrite $a to $b => range_value($a, $b) where $a is int and $b is not missing
 rewrite $a .. $b => range_value($a, $b - 1) where $a is int and $b is not missing
 rewrite $a to $b => ($xs = ø; $i = $a; $end = $b; while $i <= $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing
 rewrite $a .. $b => ($xs = ø; $i = $a; $end = $b; while $i < $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing
+
+# A round group of items left as a value is the list of its items (decision immutable-tuple: round brackets are a plain
+# list, card triage-round-groups): `(1, 2) == (3, 2)`, `([1, 2], [3, 4])[1][0]`, `f((1, 2))`. In the late sugar, after
+# the lambdas and loops took their own groups (`(a, b) => …`, `for (k, v) in m`) and destructuring its (tuples.warp)
+rewrite ($a, $b, $rest...) => [$a, $b, $rest...]
