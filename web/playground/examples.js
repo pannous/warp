@@ -21,7 +21,7 @@ pi = 4
 	lists: { value: '[3, "apple"]', code: `// a list, how many items it has, and its first item
 fruits = ["apple" "pear" "plum"]
 [#fruits, fruits#1]` },
-	"lazy ranges": { value: "[999999999999 499999999999500000000000 123456789]", code: `// a range of a trillion numbers, counted and summed at once
+	"lazy ranges": { value: "[999999999999, 499999999999500000000000, 123456789]", code: `// a range of a trillion numbers, counted and summed at once
 n = 10^12
 r = 1..n
 [count r, sum r, r#123456789]` },
@@ -45,18 +45,18 @@ total` },
 	functions: { value: "25", code: `// a function, called with or without parentheses
 def square(x) = x*x
 square(4) + square 3` },
-	arguments: { value: '["Hello, Ada" "Hi, Bob" 6 12 6]', code: `// default values, named arguments, any number of arguments
+	arguments: { value: '["Hello, Ada", "Hi, Bob", 6, 12, 6]', code: `// default values, named arguments, any number of arguments
 def greet(name, greeting = "Hello") = greeting + ", " + name
 def total(xs...) = sum xs
 def area(r) = r * r * 3
 def area(w, h) = w * h
 [greet("Ada"), greet(greeting: "Hi", name: "Bob"), total(1, 2, 3), area(2), area(2, 3)]` },
-	"polyglot calls": { value: '[3 42 [10 20 30] [11 12 13] "Hello Swift"]', code: `// write functions the way you know them from Rust, Swift, Kotlin…
+	"polyglot calls": { value: '[3, 42, [10, 20, 30], [11, 12, 13], "Hello Swift"]', code: `// write functions the way you know them from Rust, Swift, Kotlin…
 add = |a, b| a + b
 twice = { |x| x * 2 }
 func greet(person name: String) -> String { "Hello " + name }
 fun Int.plus(n: Int) = this + n
-[add(1, 2), twice(21), [1 2 3].map { $0 * 10 }, plus.([1 2 3], 10), greet(person: "Swift")]` },
+[add(1, 2), twice(21), [1 2 3].map { $0 * 10 }, plus([1 2 3], 10), greet(person: "Swift")]` },
 	broadcasting: { value: '[[1, 4, 9], [1, 4, 9, 16]]', code: `// a function of one number works on a whole list
 square := it * it
 xs = [1 2 3 4]

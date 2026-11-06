@@ -26,6 +26,7 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 use "signature.warp"
+use "open_words.warp"
 
 # The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
 # foreign lines and C imports off the source. with_used: interpolation, then used_passes (the program's rewrite rules,
@@ -38,6 +39,8 @@ use "signature.warp"
 #   preposition_heads arity_overloads      `f of x` heads, several definitions of one name by arity
 #   (extensions' passes after arity_overloads: function clauses, then `a, b = …`, extensions/function_clauses.warp
 #   and multiple_assignments.warp)
+#   open_calls                             a module's calls of its open words through its slots, each naming its
+#                                          variant (open_words.warp; a program's fills of them before with_used)
 #   type_tests spaced_prefix_calls         `x is T`, `f x` calls
 #   interpolation                          `"…${x}…"` holes
 #   (the extension's pass after interpolation: `a of b`, extensions/of_lookups.warp)
@@ -62,7 +65,7 @@ owned_refusal(refusal: text, form: text?): text := {
 }
 
 # the pure lane's passes (card pure-runs)
-pure_passes = [tries, components, definition_heads, definitions, arity_overloads, type_tests, spaced_prefix_calls, interpolation, number_words_pass, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
+pure_passes = [tries, components, definition_heads, definitions, arity_overloads, open_calls, type_tests, spaced_prefix_calls, interpolation, number_words_pass, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
 global lowering_passes = ø
@@ -124,7 +127,8 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	used_folder = folder
 	used_prelude = prelude
 	if used_lowering == ø { used_lowering = with_extension_passes(used_passes, every_pass) }
-	passed = own
+	# (the linked modules' slots the program extends filled first, the variants of each fill's word reached)
+	passed = open_slots(own)
 	for pass in used_lowering {
 		timed("${pass}")
 		passed = pass(passed)
