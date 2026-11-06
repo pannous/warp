@@ -497,7 +497,20 @@ def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data
+### Warp reads warp
+
+warp's compiler is itself a warp program, and `parse` lends any program its parser: code becomes a tree to take apart.
+
+```warp => 14
+evaluate(n) := match n {
+	data($a + $b) => evaluate(a) + evaluate(b)
+	data($a * $b) => evaluate(a) * evaluate(b)
+	_ => n
+}
+evaluate(parse("2 + 3 * 4"))
+```
+
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data, warp_reads_warp
 
 ## Closures
 
@@ -683,25 +696,25 @@ Examples: tasks, channels; samples: async, threads, parallel_let
 
 A web page is made of tags. In warp, tags are values.
 
-```warp => p: {"hello"}
+```warp => <p>hello</p>
 p{ "hello" }
 ```
 
 Attributes look like HTML.
 
-```warp => b: {class: "fat" "hello"}
+```warp => <b class="fat">hello</b>
 b{class:"fat" "hello" }
 ```
 
 Tags hold other tags, like a page does.
 
-```warp => div: {h1: {"Fruit"} p: {"Fresh " b: {"pears"} " today"}}
+```warp => <div><h1>Fruit</h1><p>Fresh <b>pears</b> today</p></div>
 div{ h1{"Fruit"} p{ "Fresh " b{"pears"} " today" } }
 ```
 
 A list of values makes a list of tags.
 
-```warp => ul{li:"apple" li:"pear"}
+```warp => <ul><li>apple</li><li>pear</li></ul>
 fruits = ["apple" "pear"]
 ul{ li all fruits }
 ```

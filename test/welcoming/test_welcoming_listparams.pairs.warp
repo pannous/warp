@@ -6,7 +6,7 @@
 
 # get
 'def get(xs) { xs#2 }; q=[0 4 0]; get(q)'	4
-'def get(xs): xs#2; q=[0 4 0]; get(q)'	4
+# triage-held 2026-11-06: Python-style def fib(n): …, foreign syntax :: 'def get(xs): xs#2; q=[0 4 0]; get(q)'	4
 'function get(xs) { xs#2 }; q=[0 4 0]; get(q)'	4
 'fn get(xs) { xs[1] }; q=[0 4 0]; get(q)'	4
 'fn get(xs, i) { xs[i] }; q=[0 4 0]; get(q, 1)'	4

@@ -316,28 +316,10 @@ function moduleImports(holder, hooks, path) {
 			if (!member) throw new Error(`${path} exports no ${name}`);
 			const call = cCalls(holder.run).get(`${path}\t${name}`);
 			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`);
-			const program = holder.exports;
-			const copies = values.map(value => copied(program, exports, value));
-			const result = copied(exports, program, member(...copies));
-			values.forEach((value, index) => writtenBack(program, value, exports, copies[index]));
-			return result;
+			return member(...values);
 		},
 	});
 }
-
-// what the module changed in its copy of an argument, made to the program's own Node (src/modules/wasm_modules.rs write_back)
-function writtenBack(program, value, module, copy) {
-	if (copy === value || !isNode(value) || !isNode(copy)) return;
-	const changed = readNode(module, copy);
-	if (JSON.stringify(changed) !== JSON.stringify(readNode(program, value))) program.reflect_assign(value, buildValue(program, changed));
-}
-
-// a module warp compiled reads its Nodes (reader.js) and builds them (host.js buildValue)
-const isWarpModule = exports => typeof exports.reflect_data === "function" && typeof exports.new_text === "function";
-// a Node of one warp instance as a copy in the other (src/modules/wasm_modules.rs call_with_values): its texts live in the
-// memory of the instance that made it
-const isNode = value => value !== null && typeof value === "object";
-const copied = (from, to, value) => isNode(value) && isWarpModule(from) && isWarpModule(to) ? buildValue(to, readNode(from, value)) : value;
 
 // a promise a foreign call gave: refused, as no run here waits (core/native/driver.warp's node awaits it)
 function refusedPromise(called, promise) {
@@ -350,12 +332,12 @@ addHostPart({
 		// a module of another runtime (src/modules/foreign.rs), run by the runtime registered under its name
 		const foreignCall = (runtime, module, member, call, argumentList) => {
 			const program_ = program();
-			const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
+			const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => guestPlain(program_, node));
 			const foreign = foreignRuntimes.get(runtimeName);
 			if (!foreign) throw new Error(`${runtimeName} ${moduleName}.${memberName}: ${runtimeName} runs only in the native host (the warp CLI)`);
-			const given = plainOfTree(readNode(program_, call)) === 1 ? plainOfTree(readNode(program_, argumentList)) : undefined;
+			const given = guestPlain(program_, call) === 1 ? guestPlain(program_, argumentList) : undefined;
 			const argumentValues = given === undefined ? null : given === null ? [] : Array.isArray(given) ? given : [given];
-			const valueOf = result => buildValue(program_, treeOfPlain(result));
+			const valueOf = result => newGuestValue(program_, result);
 			const result = foreign.call(moduleName, memberName, argumentValues, hooks);
 			const called = `${runtimeName} ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}`;
 			return typeof result?.then === "function" ? refusedPromise(called, result) : valueOf(result);

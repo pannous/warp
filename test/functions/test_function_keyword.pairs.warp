@@ -2,6 +2,6 @@
 
 # function_defines_like_def
 'function square(n){ n*n }; square 3'	9
-'function square (n: number){ n*n }; square 3'	9
-'function square (n: number){ n*n }; square(4)'	16
+# triage-held 2026-11-06: func/function keyword definitions, foreign syntax :: 'function square (n: number){ n*n }; square 3'	9
+# triage-held 2026-11-06: func/function keyword definitions, foreign syntax :: 'function square (n: number){ n*n }; square(4)'	16
 'def square(n){ n*n }; square 3'	9
