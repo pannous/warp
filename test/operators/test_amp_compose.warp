@@ -1,0 +1,15 @@
+# `&` between two functions composes them in reading order (decision D6 amp-compose)
+
+is! 'inc(x) := x + 1; dbl(x) := x * 2; h = inc & dbl; h(3)' 8
+is! 'inc(x) := x + 1; dbl(x) := x * 2; [1, 2].map(inc & dbl)' [4 6]
+is! 'inc(x) := x + 1; (inc & inc & inc)(0)' 3
+
+# applied: the value after the last function goes to the first
+is! 'inc(x) := x + 1; dbl(x) := x * 2; inc & dbl 3' 8
+is! 'inc(x) := x + 1; dbl(x) := x * 2; inc & dbl(3)' 8
+is! 'square(x) := x * x; twice(x) := 2 * x; square & twice 3' 18
+
+# between values `&` stays `and`, between whole numbers their bits
+is! 'yes & no' no
+is! 'x = 1; x > 0 & x < 3' yes
+is! '6 & 3' 2
