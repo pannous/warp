@@ -524,16 +524,20 @@ missed_cases(arms: Node, program: Node): any := {
 }
 # the case an arm `Penny: 1` or `Penny => 1` names, "" for any other arm (a default, a value, a pattern)
 arm_case_name(arm: Node): text := if (is_key(arm, Op.Colon) or is_key(arm, Op.Arrow)) and key_of(arm) is symbol and not (name_of(key_of(arm)) in ["_", "default", "else"]) then name_of(key_of(arm)) else ""
-# `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable or a list literal
+# `for byte in t`: the text's list of that unit, `t.bytes`; ø for any other loop variable, a list literal or a name
+# the program declares of another type (`f(bytes: list)`'s `for byte in bytes` walks the list)
 unit_lists = {byte: "bytes", codepoint: "codepoints"}
-unit_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_lists)
+text_unit_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, unit_lists, program)
 # `for bytes in t {… it …}`: a plural unit word walks the text by that unit, each item `it`
 unit_plurals = {bytes: "bytes", codepoints: "codepoints", chars: "chars", characters: "chars"}
-unit_plural_items(variable: Node, iterable: Node): any := units_of(variable, iterable, unit_plurals)
-units_of(variable: Node, iterable: Node, units: map): any := {
+text_unit_plural_items(variable: Node, iterable: Node, program: Node): any := units_of(variable, iterable, unit_plurals, program)
+units_of(variable: Node, iterable: Node, units: map, program: Node): any := {
 	if not units.has(name_of(variable)) or (is_group(iterable) and bracket_of(iterable) == "[") { return ø }
+	if iterable is symbol and declared_types(name_of(iterable), program).any(type => not (type in ["text", "string"])) { return ø }
 	Key(iterable, Op.Dot, symbol(units[name_of(variable)]))
 }
+# the types the program writes a name with: a parameter or variable `xs: list`
+declared_types(name: text, program: Node): list := nodes_in(program).filter(n => is_key(n, Op.Colon) and key_of(n) is symbol and name_of(key_of(n)) == name and value_of(n) is symbol).map(n => name_of(value_of(n)))
 # `when x {1 -> "a"; else -> "b"}`: a block of match arms only, each `pattern -> value`
 are_arms(body: Node): bool := #items_of(body) > 0 and items_of(body).all(item => is_key(item, Op.Arrow))
 # `for p in ps where it > 2`: the condition's `it` read as the loop's variable
@@ -1045,8 +1049,8 @@ rule_words = {
 	tests_ended: tests_ended,
 	units_shown: units_shown,
 	unit_bound: unit_bound,
-	unit_items: unit_items,
-	unit_plural_items: unit_plural_items,
+	text_unit_items: text_unit_items,
+	text_unit_plural_items: text_unit_plural_items,
 	unit_led: unit_led,
 	unit_regrouped: unit_regrouped,
 	value_definitions: value_definitions,
