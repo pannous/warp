@@ -18,7 +18,7 @@ add { operator: "+", symbol: Op.Add, aliases: [plus], power: [140, 141] } # todo
 subtract { operator: "-", symbol: Op.Sub, aliases: [minus, "‐", "‑", "‒", "–", "—", "―"], power: [140, 141] }
 multiply { operator: "*", symbol: Op.Mul, aliases: [times, "×", "⋅"], power: [150, 151] }
 divide { operator: "/", symbol: Op.Div, power: [150, 151] }
-div { operator: "÷", symbol: Op.FloorDiv, aliases: ["/!"], infix: yes, power: [150, 151]}
+div { operator: "/!", symbol: Op.FloorDiv, aliases: ["÷"], infix: yes, power: [150, 151] }
 modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes, power: [150, 151] }
 "rem" { power: [150, 151] }
 power { operator: "^", symbol: Op.Pow, aliases: ["**"], power: [160, 159] }
