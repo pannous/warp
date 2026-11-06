@@ -27,27 +27,30 @@ path_parameter(part: text): text := {
 spelled(name: Node): text := "${name}".remove_suffix(own_mark)
 
 # `x > 1500` and m → `x > 1500 * m`: a unit after an expression multiplies its last amount, through the operators
-# a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no number, or starts with a unit
+# a unit binds tighter than (lib/units.warp's rules); ø when the expression ends in no amount, or starts with a unit
 # word, the tail of an amount split off before it (`2 L == 2000 cm` parses as 2, L == 2000, cm: card spaced-unit-comparison)
 unit_bound(amounted: Node, unit: Node): any := {
-	if is_number_literal(amounted) or is_big_number_view(amounted) { return Key(amounted, Op.Mul, unit) }
-	if is_group(amounted) and bracket_of(amounted) == "(" { throw unit_ambiguous(amounted, unit) }
+	if is_amount(amounted) { return Key(amounted, Op.Mul, unit) }
 	if amounted is key and op_of(amounted) in unit_ambiguous_ops { throw unit_ambiguous(amounted, unit) }
 	if not (amounted is key and op_of(amounted) in unit_binding_ops) or starts_with_unit(amounted) { return ø }
 	right = unit_bound(value_of(amounted), unit)
 	if right == ø then ø else Key(key_of(amounted), op_of(amounted), right)
 }
+# what a unit after it measures (decision unit-after-number): a number, an amount in parentheses, `(50/3) ms`, a name
+# the program binds a value to, `x = 7; sleep(x ms)`
+is_amount(code: Node): bool := {
+	if is_number_literal(code) or is_big_number_view(code) { return yes }
+	if is_group(code) { return bracket_of(code) == "(" and #items_of(code) == 1 }
+	code is symbol and binds_value(rule_scope, name_of(code)) and not starts_with_unit(code)
+}
 starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_binding_ops then starts_with_unit(key_of(code)) else code is symbol and "units" in defining_modules("${code}")
 # `km/h`, `m²`, `cm`: code led by a unit word, the unit part of `2 km/h is speed` (lib/units.warp)
 unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else code is symbol and "units" in defining_modules("${code}")
 unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
-# a unit after a group, a product, a quotient or a power reads two ways, `(50/3) ms` and `10 / 2 ms`: refused with a fix-it
-# (unit symbols bind only after a number, notes/decisions.md)
+# a unit after a product, a quotient or a power reads two ways, `10 / 2 ms`: refused with a fix-it naming both
+# (decision unit-after-number)
 unit_ambiguous_ops = [Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Pow]
-unit_ambiguous(amounted: Node, unit: Node): text := {
-	written = if is_group(amounted) then as_code(amounted) else "(${as_code(amounted)})"
-	"DimensionError: a unit binds only after a number: write ${written} * 1${unit}, or glue the unit to the number it measures"
-}
+unit_ambiguous(amounted: Node, unit: Node): text := "DimensionError: a unit binds only after a number: write (${as_code(amounted)}) ${unit} to measure the whole amount, or glue the unit to the number it measures"
 # `km/h`, `kg·m/s^2`, `cm^2`: a unit written whole, each part a unit word, each power a number (`km/2` is no unit)
 unit_written(code: Node): bool := {
 	if code is key and op_of(code) == Op.Pow { return unit_written(key_of(code)) and is_number_literal(value_of(code)) }
@@ -745,6 +748,50 @@ class_members(class_name: text, source: text): any := {
 	methods = view#3[3 ..].map(member => defined_word(node_of(member)) ?? defined_word(member_read(member))).filter(word => word != ø)
 	[class_declared(statement, view).fields, methods]
 }
+# `fields(B)`, `methods(B)` of a class the program declares (wiki/reflection.md, card eval-inherited-methods): the
+# names of its fields and those of the classes it extends; its methods as function values, the methods of those
+# classes and every function whose first parameter is typed with one of them (`def x(a: A)` of B extends A). ø where
+# the program has its own word or declares no class of that name
+class_fields_listed(name: Node, program: Node, source: text): any := {
+	lineage = written_lineage(name, source)
+	if owns_word("fields", program) or #lineage == 0 { return ø }
+	texts_list(lineage.reverse().flat_map(owner => (class_members(owner, source) ?? [[], []])#1.map(field => "${field}")))
+}
+class_methods_listed(name: Node, program: Node, source: text): any := {
+	lineage = written_lineage(name, source)
+	if owns_word("methods", program) or #lineage == 0 { return ø }
+	own = lineage.flat_map(owner => (class_members(owner, source) ?? [[], []])#2)
+	outside = first_parameter_types.keys.filter(function => lineage.contains(first_parameter_types[function]) and not own.contains(function))
+	List((own + outside).map(symbol), Bracket.Square, Separator.Comma)
+}
+# `functions()` (card functions-list, user 2026-10-15): the program's own functions as function values, in their
+# order, as written (the program holds the library words it reached by now), a list to filter
+# (`functions().filter(f => f.name.starts_with("test_"))`); ø where it has its own word. A function taking nothing is
+# `function f`, as its bare name calls it
+program_functions(program: Node, source: text): any := {
+	if owns_word("functions", program) { return ø }
+	statements = level_statements(plain_node(parsed(source)))
+	names = distinct(statements.map(defined_function).filter(name => name != ø))
+	taking_nothing = statements.filter(statement => defined_function(statement) != ø and #listed_function_head(statement) == 1).map(defined_function)
+	if #names == 0 { return List([], Bracket.Square, Separator.Comma) }
+	plain_node(parsed("[" + names.map(name => if taking_nothing.contains(name) then "function " + name else name).join(", ") + "]"))
+}
+# the function a statement defines with parameters, `f(x) := …` or `f(x): T := …`, else ø
+defined_function(statement: Node): text? := {
+	if not is_key(statement, Op.Define) { return ø }
+	head = listed_function_head(statement)
+	if is_called_name(head) then name_of(head#1) else ø
+}
+listed_function_head(definition: Node): Node := if is_key(key_of(definition), Op.Colon) then key_of(key_of(definition)) else key_of(definition)
+# the class of that name and the classes it extends, nearest first; [] when the program (as written: the class methods
+# pass may have lifted its classes by now) declares none
+written_lineage(name: Node, source: text): list := class_lineage(spelled(name), plain_node(parsed(source)))
+class_lineage(name: text, program: Node): list := {
+	statement = declared_class(name, program)
+	if statement == ø { return [] }
+	parent = class_declared(statement, class_view(statement)).parent
+	[name] + (if parent == "" then [] else class_lineage(parent, program))
+}
 # the classes the program declares, `Point` of a line `class Point {`
 class_names(source: text): list := source.split("\n").flat_map(line => line.split(";")).map(statement => statement.trim()).filter(line => line.starts_with("class ")).map(line => line[6 ..].split(" ")#1.split("{")#1.trim())
 # `p.fields`, `p.methods`, `dir(p)` (wiki/reflection.md): the names of the members of the class p is made of everywhere the
@@ -951,6 +998,9 @@ rule_words = {
 	gpu_packed: gpu_packed,
 	gpu_packed_as: gpu_packed_as,
 	instance_members: instance_members,
+	class_fields_listed: class_fields_listed,
+	class_methods_listed: class_methods_listed,
+	program_functions: program_functions,
 	it_read_as: it_read_as,
 	law_check: law_check,
 	leading_unit: leading_unit,

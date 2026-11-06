@@ -1,0 +1,8 @@
+# a unit after a parenthesized amount or a number-typed name measures it whole; 10 / 2 ms stays refused
+# (notes/decisions.md unit-after-number refined, card use-units-ms)
+'str((50/3) ms)'	'50/3ms'
+'(50/3) ms > 16 ms'	true
+'sleep (50/3) ms; 1'	1
+'x = 7; sleep(x ms); str(x ms)'	'7ms'
+'str(100 °C in °F)'	'212°F'
+'str(-40 °F as °C)'	'-40°C'
