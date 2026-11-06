@@ -3,6 +3,30 @@
 The goal: the core binary bakes the library zero times. No LIBRARY_FILES, no LIBRARY_PARSES. Each module publishes
 its signatures, and the compiler loads it as compiled wasm when a program uses it.
 
+## Final state (main c25c72d181, 2026-11-06; card library-removal-core done)
+
+**Baked into warp.wasm** (2.15 MB, from 5.05 MB): SUGAR_RULES, the packed rules of extensions/sugar by file with each
+file's hash (rewrites.warp; parsing them each compile was ~0.3 s), and the data files `module_source("…")` reads at the
+compiler's own build: lib/entities.tsv, lib/modes.data, core/analysis/{errors,warnings,hints}.data. Everything else
+of lib/ is read from disk once a compile (library.warp library_text) or linked as compiled wasm: every program links
+modules/prelude.wasm (171 KB, 222 words) and the modules it uses, each declared from its warp.signature.
+**Trusted, hashed only under WARP_LIB:** modules/index.tsv (its `slice` spans of the prelude and the type modules) and
+SUGAR_RULES, as rule_needs_by_module trusts the index; a linked module's text is checked by its length otherwise.
+**Numbers** (instructions retired, paired, against main before each landing): L4 hello −1.1 %, use units −4.4 %,
+self compile −2.0 %; step 2 (prelude linked) hello +0.8 %, use units −0.5 %, numeric loop −3.9 %, self compile
+−0.15 %; on the way, for every linked program, 2d.1 (lazy host words) hello −4.3 % and 2d.2 (no whole module first,
+warp.fingerprint) use units −18 %.
+**Measured, not done:**
+- signature-sha256 (own card): source_hash, djb2 in warp, ~1.3 K instructions a byte, is ~1 % of hello without
+  WARP_LIB but 5.3 % of `use units` under WARP_LIB (every agent and test run of a worktree; built_of_text 3.2 %).
+  The host's sha256 would make it free, but c_bytes reads a text through shown_at, whose scratch refuses long
+  texts ("a host word's argument too long to show", driver.warp shown_packed): it needs a text passed by its bytes
+  (text_address), not shown.
+- SUGAR_RULES unbaked: parsing extensions/sugar each compile costs ~0.3 s; a prebuilt rules file beside the modules
+  (like warp.signature's packed rules) would drop the last bake.
+- pixel-channel-sums (own card): the prelude compiled from source into a program summed pixel_channel differently
+  (25500128) from a typed or linked one (25500130, IEEE); linked, programs now give the latter.
+
 ## Assessment (main c0a082, 2026-11-05)
 
 warp.wasm is 5.05 MB, and 3.04 MB of it (60%) is baked library tables:
