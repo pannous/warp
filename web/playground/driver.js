@@ -275,14 +275,14 @@ function compiledProgram(file, print) {
 
 // the compiled program run with the page's host words: { status, said }
 function programRan(bytes, file, hooks) {
-	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: programEnvironment(file) };
-	const wasi = wasiImports(() => holder.exports.memory, [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment);
+	const holder = { warnings: [], pagePath: hooks.pagePath?.(), hooks, environment: programEnvironment(file), linked: new Map() };
+	const wasi = wasiImports(() => runMemory(holder.linked, holder.exports), [file, ...(self.programArguments ?? [])], hooks.print, programFiles, holder.environment);
 	try {
 		const module = new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
 		self.joinVoice?.();
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, withWasi(programImports(holder, hooks), wasi))).exports;
+		holder.exports = new WebAssembly.Instance(module, withRuntime(bytes, withWasi(programImports(holder, hooks), wasi), holder.linked)).exports;
 	} catch (failure) {
 		return { status: FAILURE_STATUS, said: String(failure.message ?? failure) };
 	}
