@@ -41,6 +41,7 @@ uncommented(source: text): text := {
 implicit_modules(source: text, folder: text = "."): list := {
 	index = library_index_section("word")
 	# a foreign line, `posix_spawnp(pid: out, …): i32 from 'c'`, names C's words: its function the program's own
+	foreign = source.split("\n").map(c_declaration).filter(d => d != ø).map(d => d#1)
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
 	code = uncommented(source)
@@ -58,6 +59,8 @@ implicit_modules(source: text, folder: text = "."): list := {
 	for file in flat_statements(program).map(s => file_used(s, folder)).filter(file => file != ø) {
 		for slice in definition_slices(file_text(file) ?? "") { known[slice#1] = yes }
 	}
+	# and so do its foreign lines and a wasm module it uses: zlib's crc32(crc, buf, len) is no use of hash's crc32
+	for word in foreign + wasm_module_words(source, folder) { known[word] = yes }
 	globals = global_words()
 	providers = type_module_providers()
 	free = free_words(program)

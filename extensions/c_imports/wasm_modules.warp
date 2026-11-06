@@ -93,6 +93,18 @@ wasm_exports(path: text, folder: text): WasmExports := {
 	}
 	exports
 }
+# the words the wasm modules a source uses give it: their functions and warp words
+wasm_module_words(source: text, folder: text): list := {
+	words = []
+	for statement in c_statements(with_module_aliases(source)) {
+		path = wasm_module_used(statement, folder)
+		if path != ø {
+			exports = wasm_exports(path, folder)
+			words += exports.functions.map(d => d#1) + exports.words.map(wasm_word_name)
+		}
+	}
+	words
+}
 # the number after the byte the reader is at
 next_number(reader: ByteReader): int := {
 	reader.offset += 1
