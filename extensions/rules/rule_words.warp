@@ -124,9 +124,37 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 page_value_word = "page_value"
 listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
-# `test C` (extensions/sugar/test_words.warp) runs where it stands, a statement: no value to read again
-test_word = "test"
-is_test_line(statement: Node): bool := is_group(statement) and #statement > 1 and statement#1 == symbol(test_word)
+# a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again
+is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word)
+# `test C` as lib/laws.warp's call: C as written, the rest of the line after the word `test`, as it reads when made
+test_check_word = "test_check"
+written_after(word: Node, code: Node, source: text): Node := Text(line_after(word, source) ?? "${code}".trim())
+# C of several items, `test switch 3 {…} == "three"`, parsed again from its line as one expression
+condition_after(word: Node, code: Node, source: text): Node := {
+	written = line_after(word, source)
+	if written == ø then code else statements_in(plain_node(parsed(written)))#1
+}
+line_after(word: Node, source: text): text? := {
+	lines = source.split("\n")
+	if not is_positioned(word) or line_of(word) > #lines { return ø }
+	statement_start((lines#line_of(word))[column_of(word) - 1 + #name_of(word) ..]).trim()
+}
+opening_brackets = ['(', '[', '{']
+closing_brackets = [')', ']', '}']
+# the written text up to its statement's end, a `;` outside brackets and texts: `x == 4` of `x == 4; x * 2`
+statement_start(written: text): text := {
+	depth = 0
+	quote = ø
+	at = 0
+	for c in written {
+		if quote != ø { if c == quote { quote = ø } } else if c == '"' or c == '\'' { quote = c } else if c in opening_brackets { depth += 1 } else if c in closing_brackets { depth -= 1 } else if c == ';' and depth == 0 { return written[0 ..< at] }
+		at += 1
+	}
+	written
+}
+# a program with test checks ending in their summary (lib/laws.warp tests_end), its value kept when no test ran
+tests_end_word = "tests_end"
+tests_ended(program: Node): any := ending_appended(program, mentions(program, test_check_word), tests_end_word)
 page_valued(program: Node): any := {
 	statements = level_statements(program)
 	# (the sugar reads the program before its `on click {…}` became a listen call)
@@ -146,9 +174,12 @@ ending_appended(program: Node, started: bool, ending_word: text): any := {
 	statements = level_statements(program)
 	if not started or statements.any(statement => is_call_named(statement, ending_word)) { return ø }
 	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
-	ending = statements[last]
-	ended = if is_declaration(ending) or is_test_line(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
-	separated(bracketed(statements[0 ..< last] + ended + statements[last + 1 ..], ""), ";")
+	separated(bracketed(statements[0 ..< last] + ended_with(statements[last], ending_word) + statements[last + 1 ..], ""), ";")
+}
+# the last statement ended by the ending word; the tests' summary stays outermost, once the tasks, frames … ran
+ended_with(ending: Node, ending_word: text): list := {
+	if is_call_named(ending, tests_end_word) and ending_word != tests_end_word { return [call_of(tests_end_word, ended_with(if #ending == 2 then ending#2 else Node.Empty, ending_word))] }
+	if ending == Node.Empty then [call_of(ending_word, [])] else if is_declaration(ending) or is_test_line(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
 }
 # the main level's statements, of lines and of `;` within a line alike
 level_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then level_statements(s) else [s])
@@ -899,6 +930,7 @@ rule_words = {
 	builtin_type: builtin_type,
 	change_listens: change_listens,
 	class_data: class_data,
+	condition_after: condition_after,
 	class_help: class_help,
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,
@@ -950,6 +982,7 @@ rule_words = {
 	tables_kept: tables_kept,
 	task_steps: task_steps,
 	tasked: tasked,
+	tests_ended: tests_ended,
 	units_shown: units_shown,
 	unit_bound: unit_bound,
 	unit_items: unit_items,
@@ -959,7 +992,8 @@ rule_words = {
 	value_definitions: value_definitions,
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,
-	whenever_listens: whenever_listens
+	whenever_listens: whenever_listens,
+	written_after: written_after
 }
 
 # A field annotation can still be a Type node when the early rewrite runs.

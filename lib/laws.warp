@@ -12,3 +12,20 @@ law_tried(shown: text, names: list, proposition: function, chosen: list) := {
 	}
 	for value in LAW_TRIAL_VALUES { law_tried(shown, names, proposition, chosen + [value]) }
 }
+
+# A program's own tests, `test C` lines (decisions test-soft, program-test), checks as its laws are: each checked where
+# it stands, a raise failing it, and a program with tests ending in their summary, as `warp test` words it: "✓ 3 tests
+# passed" or "1 of 3 failed" (the rules in extensions/rules/modules/laws.warp). The page renders tests_checked
+# expandable (lib/markup.warp). A program ending in another value keeps it; test blocks `test "name" {…}` run only
+# under `warp test` (P209)
+# [the test as written, whether it held] of each test checked so far
+global tests_checked = []
+test_check(condition: function, written: text) := {
+	held = try { condition() == yes } catch e { no }
+	tests_checked.add([written, held])
+	ø
+}
+tests_failed() := tests_checked.filter(test => not test#2)
+tests_summary() := if #tests_failed() > 0 then "" + #tests_failed() + " of " + #tests_checked + " failed" else "✓ " + #tests_checked + " tests passed"
+# the program's end: the value of its last line, or the tests' summary when that line was a test
+tests_end(value: any = ø) := if #tests_checked == 0 or value != ø then value else tests_summary()
