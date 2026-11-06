@@ -287,6 +287,8 @@ infix operator ↑(x: number, n: number) := x ^ n
 infix operator ↓(x: number, b: number) := log(x, b)
 // the logarithm of x to the base: log(100, 10) is 2
 log(x: number, base: number): float := log(x) / log(base)
+// the natural logarithm, a standard word without `use math`, as sin is (math's alias ln => natural_log maps it over lists)
+ln(x: number): float := log(x)
 // `3 squared`, `2 cubed` (suffix words, decision postfix-words)
 square(x: number): number := x * x
 cube(x: number): number := x * x * x

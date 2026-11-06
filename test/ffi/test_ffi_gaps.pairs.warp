@@ -19,3 +19,4 @@
 'import getenv from "c"; count(getenv("PATH")) > 0'	true
 'use c; count(getenv("PATH")) > 0'	true
 'use sqlite3; sqlite3_db_handle(0)'	0
+«use c; isdigit('7')»	true

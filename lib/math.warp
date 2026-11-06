@@ -130,7 +130,6 @@ sin(x: float): float from warp
 cos(x: float): float from warp
 tan(x: float): float from warp
 exp(x: float): float from warp
-ln(x: float): float from warp
 min(a: number, b: number, more...): number from warp
 max(a: number, b: number, more...): number from warp
 
