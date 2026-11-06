@@ -149,5 +149,8 @@ declaring only Instant (cast failure across modules).
   names, reached modules), each a walk of every character; kept per source now, and rules_reaching's picked a
   yes/no per rule: self compile −12.5 %, units −18 %, hello −5.4 %. The character compares were not the cost: a
   pre-check skipping non-delimiters and code points instead of the text measured the same.
+  The kept map (lexer.warp code_only_known) is a global holding every source of a compile: bounded, as each
+  compile gets a fresh instance (the native driver a fresh store per run, the playground a fresh instance per compile,
+  web/playground/driver.js). A host keeping one compiler instance across compiles would grow it: clear it there.
 - Open for the user (morning): typed $items (seed ABI), map_index 14.8 % (scope_with copies maps via field_with,
   enum ·case lookups by name), GC 15.8 %.
