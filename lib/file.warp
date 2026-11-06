@@ -42,6 +42,9 @@ global temp_folder(): text := {
 // `delete_file("~/old.txt")`: the file removed, yes when it was there; natively C's unlink through the 'c' library
 // (lib/c.warp), so a page, which has no C library, has no delete_file yet
 unlink(path: text): i32 from 'c'
+rename(from: text, to: text): i32 from 'c'
+rmdir(path: text): i32 from 'c'
+mkdir(path: text, mode: i32): i32 from 'c'
 global delete_file(path: any): bool := unlink(home_expanded(path)) == 0
 // the program file this run was started from (WARP_PROGRAM), "" when none (inline code / some playground snippets)
 program_file(): text := std_io("os", "env", ["WARP_PROGRAM"]) ?? ""
@@ -54,3 +57,103 @@ program_folder(): text := {
 // `program.folder` / `program.file`: the decided words for that folder and file (card play-mozart-mp3)
 rewrite program.folder => program_folder()
 rewrite program.file => program_file()
+// `remove_file(path)`: a file or empty folder moved to the Trash with the unix-words rails (notes/shell_words.md);
+// natively over C rename/unlink/rmdir when the host has no file.remove (card file-remove-host-word). A page keeps
+// using std_io("file", "remove") from shell.rm
+global remove_file(path: any) := {
+	raw = str(path)
+	// home_expanded("~") alone hits a text-slice bug ("not a list"); refuse before expanding
+	if raw == "~" { raise "file.remove: refusing to remove the home folder" }
+	if raw.contains("*") or raw.contains("?") { raise "file.remove: refusing a pattern " + raw }
+	expanded = str(home_expanded(raw))
+	absolute = absolute_path(expanded)
+	why = remove_refused(absolute)
+	if why != "" { raise why }
+	if folder_path(absolute) {
+		if count(list_files(absolute)) > 0 { raise "file.remove: " + absolute + ": Directory not empty" }
+		trashed(absolute, yes)
+	} else {
+		trashed(absolute, no)
+	}
+}
+remove_refused(path: text): text := {
+	trimmed = path_trimmed(path)
+	if trimmed == "" or trimmed == "/" { return "file.remove: refusing to remove " + (if trimmed == "" then "an empty path" else trimmed) }
+	home = path_trimmed(str(std_io("os", "env", ["HOME"]) ?? ""))
+	if home != "" and trimmed == home { return "file.remove: refusing to remove the home folder" }
+	work = path_trimmed(str(std_io("os", "cwd", [])))
+	if trimmed == work { return "file.remove: refusing to remove the working directory" }
+	if work.starts_with(trimmed + "/") { return "file.remove: refusing to remove a folder above the working directory" }
+	""
+}
+absolute_path(path: text): text := normalize_path(if path.starts_with("/") then path else path_join(str(std_io("os", "cwd", [])), path))
+folder_path(path: text): bool := try { list_files(path) is list } catch e { no }
+// ~/.Trash on macOS (files go straight in); else the FreeDesktop trash under ~/.local/share/Trash
+trash_files_folder(): text := {
+	home = str(std_io("os", "env", ["HOME"]) ?? "")
+	mac = home + "/.Trash"
+	if exists(mac) then mac else home + "/.local/share/Trash/files"
+}
+trash_info_folder(): text := {
+	files = trash_files_folder()
+	if files.ends_with("/.Trash") then "" else path_join(dirname(files), "info")
+}
+ensured_folder(path: text) := {
+	if path == "" or exists(path) { return }
+	parent = dirname(path)
+	if parent != path and parent != "/" { ensured_folder(parent) }
+	mkdir(path, 448) // 0700; C mkdir — shell.mkdir shadows this name for `use shell`
+}
+trashed(path: text, folder: bool) := {
+	files = trash_files_folder()
+	ensured_folder(files)
+	info = trash_info_folder()
+	if info != "" { ensured_folder(info) }
+	name = trash_name(files, basename(path))
+	dest = path_join(files, name)
+	if rename(path, dest) != 0 {
+		if folder {
+			if rmdir(path) != 0 { raise "file.remove: " + path + ": cannot remove directory" }
+		} else {
+			if unlink(path) != 0 { raise "file.remove: " + path + ": cannot remove" }
+		}
+		return
+	}
+	if info != "" {
+		write(path_join(info, name + ".trashinfo"), "[Trash Info]\nPath=" + path + "\nDeletionDate=" + trash_deletion_date() + "\n")
+	}
+}
+trash_name(files: text, base: text): text := {
+	if not exists(path_join(files, base)) { return base }
+	n = 1
+	while exists(path_join(files, base + "." + str(n))) { n = n + 1 }
+	base + "." + str(n)
+}
+// FreeDesktop DeletionDate: UTC YYYY-MM-DDThh:mm:ss from clock() milliseconds
+trash_deletion_date(): text := {
+	ms = clock()
+	secs = ms /! 1000
+	days = secs /! 86400
+	rem = secs - days * 86400
+	hours = rem /! 3600
+	rem = rem - hours * 3600
+	mins = rem /! 60
+	secs = rem - mins * 60
+	y_m_d = civil_from_days(days)
+	pad(y_m_d#1, 4) + "-" + pad(y_m_d#2, 2) + "-" + pad(y_m_d#3, 2) + "T" + pad(hours, 2) + ":" + pad(mins, 2) + ":" + pad(secs, 2)
+}
+pad(n: int, width: int): text := { t = str(n); while #t < width { t = "0" + t }; t }
+// Howard Hinnant's civil_from_days: days since 1970-01-01 → [year, month, day]
+civil_from_days(z: int): list := {
+	z = z + 719468
+	era = (if z >= 0 then z else z - 146096) /! 146097
+	doe = z - era * 146097
+	yoe = (doe - doe /! 1460 + doe /! 36524 - doe /! 146096) /! 365
+	y = yoe + era * 400
+	doy = doe - (365 * yoe + yoe /! 4 - yoe /! 100)
+	mp = (5 * doy + 2) /! 153
+	d = doy - (153 * mp + 2) /! 5 + 1
+	m = mp + (if mp < 10 then 3 else -9)
+	y = y + (if m <= 2 then 1 else 0)
+	[y, m, d]
+}
