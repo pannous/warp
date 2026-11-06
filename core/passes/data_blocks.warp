@@ -8,6 +8,7 @@ use "walk.warp"
 use "scope.warp"
 use "lambdas.warp"
 use "../analysis/builtin_signatures.warp"
+use "prelude_words.warp"
 
 data_type = symbol("data")
 for_word = symbol("for")
@@ -29,7 +30,26 @@ data_positions_of(written: list): map := {
 	}
 	found
 }
-spliced(argument: Node): Node := List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
+# the data parameters' positions of the functions the program calls, before the modules' definitions join it: its
+# own and those of the standard module defining a word it calls (lib/markup's style, lib/sound's tune)
+data_positions_called(program: Node): map := {
+	written = nodes_in(program)
+	found = data_positions_of(written)
+	for word in (called_words(program) + block_heads(written)).filter(word => not found.has(word)) {
+		definitions = definitions_of(word, []).filter(definition => definition.contains(": data"))
+		module_positions = data_positions_of(definitions.map(definition => statements_in(plain_node(parsed(definition)))#1))
+		for name in module_positions.keys { found[name] = module_positions[name] }
+	}
+	found
+}
+# the words keying a block, `f{…}`
+block_heads(written: list): list := written.filter(n => (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))).map(n => name_of(key_of(n)))
+# the program with the arguments of its data parameters spliced quotes, which no rule or pass rewrites
+data_spliced(program: Node): Node := {
+	positions = data_positions_called(program)
+	if #positions.keys == 0 then program else bottom_up(program, n => data_argued(n, positions))
+}
+spliced(argument: Node): Node := if is_spliced_quote(argument) then argument else List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
 # `f{…}` and `f(a, b)` of an f taking data: those arguments spliced quotes
 data_argued(n: Node, positions: map): Node := {
 	if is_key(n, Op.Colon) and key_of(n) is symbol and positions.has(name_of(key_of(n))) and is_curly_group(value_of(n)) {

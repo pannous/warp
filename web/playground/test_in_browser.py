@@ -1269,8 +1269,12 @@ def wait_for_playground():
 def check_samples(paths, tree):
 	"""every sample (or the given ones) in the page served from `tree`, its output against the native run's"""
 	native = dict(line.split(None, 1)[::-1] for line in open(os.path.join(tree, NATIVE_RESULTS), encoding="utf-8").read().split("\n") if line.strip() and not line.startswith("#"))
-	native = {path.strip(): status for path, status in native.items()}
-	paths = paths or sorted(native)
+	# a failure's line names its reason after the path (scripts/samples.sh): `FAIL samples/x.warp: <reason>`
+	native = {path.split(":", 1)[0].strip(): status for path, status in native.items()}
+	# a run of some samples leaves the tracked results alone
+	written = not paths
+	# a sample removed since the native run is not in the tree any more
+	paths = paths or sorted(path for path in native if os.path.isfile(os.path.join(tree, path)))
 	data = os.path.join(tree, SAMPLES_WEB_DATA)
 	os.makedirs(os.path.join(data, "out"), exist_ok=True)
 	server = serve(tree)
@@ -1297,7 +1301,6 @@ def check_samples(paths, tree):
 		details.append(f"{status:<4} {path}" + (f"\n     {detail}" if detail else ""))
 	browser("close")
 	server.shutdown()
-	written = len(paths) == len(native)  # a run of some samples leaves the tracked results alone
 	if written:
 		open(os.path.join(tree, SAMPLES_WEB_RESULTS), "w", encoding="utf-8").write("\n".join(lines) + "\n")
 	# a run of some samples keeps the whole run's report too

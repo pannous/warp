@@ -327,7 +327,10 @@ function exportedParameters(bytes) {
 function moduleImports(holder, hooks, path) {
 	const instance = () => {
 		const modules = holder.run.wasmModules ??= new Map();
-		const file = new URL(path, FILE_ROOT).href; // one instance however the path is spelled
+		// one instance however the path is spelled; a path in the compiler's repository folder (a `use cargo` crate in
+		// /warp/web/playground/warp-lib/crates) is that file of the served repository
+		const served = path.startsWith(REPOSITORY_DIRECTORY + "/") ? path.slice(REPOSITORY_DIRECTORY.length + 1) : path;
+		const file = new URL(served, FILE_ROOT).href;
 		if (!modules.has(file)) {
 			if (file.endsWith(".wat")) throw new Error(`${path}: a module in WAT text needs the native build`);
 			const moduleHolder = { warnings: holder.warnings, run: holder.run };
