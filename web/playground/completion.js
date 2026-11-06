@@ -151,7 +151,11 @@ function startCompletion(editor, askMembers = async () => []) {
 		const code = editor.getRange({ line: 0, ch: 0 }, { line: cursor.line, ch: cursor.ch - word.length - 1 });
 		if (members.code !== code) members = { code, names: askMembers(code) };
 		const names = await members.names;
-		const choices = names.filter(name => name.startsWith(word) && name !== word).map(name => ({ text: name }));
+		// the names the code itself declares or uses first (a class's methods, `extend list {…}`'s), then the others in
+		// dir's order: a type's declared methods before the free functions taking it (decision declared-belonging)
+		const inCode = codeCounts(editor, word);
+		const starting = names.filter(name => name.startsWith(word) && name !== word);
+		const choices = [...starting.filter(name => inCode.get(name) > 0), ...starting.filter(name => !(inCode.get(name) > 0))].map(name => ({ text: name }));
 		return { choices, whole: names.includes(word) };
 	};
 

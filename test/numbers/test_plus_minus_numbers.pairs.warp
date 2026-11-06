@@ -5,3 +5,5 @@
 'use uncertain; str((6.0 ± 0.3) * 2)'	'12.00 ± 0.60'
 'use uncertain; (3 ± 0.5).high'	3.5
 'use uncertain; (3 ± 0.5).low'	2.5
+# `a < b` and `a > b` of ± values: certainly, the whole interval beyond the other (P224b)
+'use uncertain; a = 5 ± 1; b = 1 ± 1; [a > b, a < b, b < a, (2 ± 1) > (1 ± 1)]'	[yes, no, yes, no]

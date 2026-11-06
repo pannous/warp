@@ -1,0 +1,7 @@
+fold-bare-arguments	spec-gaps	test/results.txt test_several_arguments.pairs.warp:4 and test_function_values.pairs.warp:22 fail 'outside the core: a value after an assignment' (even sum [1 2 3]); lower 'sum := fold +' as partial application in extensions/sugar/functions.warp	spec
+geometric-algebra	spec-gaps	a new lib/pga.warp beside lib/geometry.warp; nothing in core	spec
+inner-outer-operators	spec-gaps	no \+ or /+ anywhere; can be declared operators in lib/list.warp through extensions/declared_operators.warp (the '\' glyph may need an extension glyph owner)	spec
+it-last-result	spec-gaps	no last-result `it` anywhere today; a sugar extension (extensions/) can name the previous statement's value it outside closures	spec
+lib-phrase	parsing-3	send landed 4fb4819150; the rest are lib/ phrase rewrites (lib/tasks.warp:42 once finishes) waiting on cards return-param-function, labeled-non, lib-function, add-xs (decision phrase-rules-kept)	spec
+list-type-forms	spec-gaps	`x = number[]` and `list of numbers` (plural) are type-word rewrites a library or extension can add (lib/prelude.warp:263 `ints` rewrite is the pattern)	spec
+meta-tagged-data	spec-gaps	p.@source on undeclared tagged data: works on declared classes and plain maps, so the tagged-literal lowering (extensions/) should keep @ keys like a map	spec

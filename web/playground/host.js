@@ -332,12 +332,22 @@ function plainOfTree(tree) {
 	}
 }
 
-// the key of an entry: a name or text as itself, any other key as written, the head of `f(x) := …` "(f x)" (as
-// src/node/json_xml.rs json_key)
+// the key of an entry as lib/json.warp json_key writes it: a name or text as itself, any other key as warp shows it
+// ("" + key, runtime/show.warp): yes/no, ø, an operation `a+b` and an entry `x: y`, the head of `f(x) := …` "(f x)";
+// a module of the self-hosted compiler needs none of this, its keys are read as shown (values.js guestEntries)
 const BRACKET_PAIRS = ["{}", "[]", "()"];
 function keyOfTree(tree) {
 	const kind = Number(BigInt(tree.kind) & KIND_MASK);
-	if (kind !== 7 && kind !== 8) return String(plainOfTree(tree));
+	if (kind === 6) {
+		const [right, ...rest] = tree.chain ?? [];
+		const operator = OPERATOR_SPELLINGS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? ":";
+		const sides = [tree.data?.node, right && { ...right, chain: rest }].filter(Boolean).map(keyOfTree);
+		return sides.join(ENTRY_OPERATORS.includes(operator) ? operator + " " : operator);
+	}
+	if (kind !== 7 && kind !== 8) {
+		const plain = plainOfTree(tree);
+		return plain === true ? "yes" : plain === false ? "no" : plain === null ? "ø" : String(plain);
+	}
 	const payload = tree.data ?? {};
 	const items = payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
 	const [open = "", close = ""] = BRACKET_PAIRS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? "";

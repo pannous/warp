@@ -24,6 +24,7 @@ no_such_day = "the day does not exist in that month: use add(…, overflow: clam
 no_zones = "a zoned time at run time needs the time zone functions"
 mismatched = "cannot subtract a date, a local time, an instant and a zoned time from each other: no implicit conversion between kinds of time"
 not_arithmetic = "a time takes + or - a duration, a duration takes + or - a duration and * a whole number: nothing else is arithmetic on times"
+too_long = "a duration of 2^31 days (5.8 million years) or 2^20 months (87000 years) or more does not fit a time"
 lengths_vary = "cannot order durations that compare differently on different dates (months and days have no fixed length)"
 
 # the order of rust-harness:src/time/mod.rs TimeForm: a form's code is its index there
@@ -163,6 +164,9 @@ duration_form_code = 3
 info_days = 8
 info_day_range = 4294967296
 info_months = 34359738368
+# the signed range of a duration's days (32 bits) and months (the 21 bits above them, to the top of the kind word)
+day_limit = 2147483648
+month_limit = 1048576
 # `a + b`, `a - b`, `a * b` (operator 0, 1, 2) of two run-time operands, each its form code (-1 a whole number, its
 # position the number), position, months and days: the time node or whole number they make
 # an operand of a time's + - * the emitter holds as a node, before its parts are read: a time, a duration or a whole
@@ -183,7 +187,13 @@ operand_of(form: int, position: int, months: int, days: int): Operand := {
 }
 operand_value(operand: Operand) := {
 	if operand is Whole { return operand.count }
-	if operand is Lasting { return time_of(duration_form_code + (operand.span.day_count % info_day_range) * info_days + operand.span.month_count * info_months, operand.span.nano_count) }
+	if operand is Lasting { return duration_value(operand.span) }
 	time_of(form_code(operand.moment.form), operand.moment.position)
 }
+# a duration made at run time beyond its info bits raises, never wraps
+duration_value(span: Span) := {
+	if not within_signed(span.day_count, day_limit) or not within_signed(span.month_count, month_limit) { raise too_long }
+	time_of(duration_form_code + (span.day_count % info_day_range) * info_days + span.month_count * info_months, span.nano_count)
+}
+within_signed(count: int, limit: int): bool := count >= - limit and count < limit
 form_code(form: TimeForm): int := (0 to 5).filter(code => form_of(code) == form)#1

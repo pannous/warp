@@ -141,7 +141,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Bee/wasp entity names go into uniscript and are regenerated into core/entities.tsv, never by hand.
 - P13 libm FFI: header-driven linking first, the LIBM tables only as fallback and as examples of hand-linked FFI.
 - uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
-- browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (probes/firefox_jspi_terminate.html).
+- browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (report and repro: notes/firefox_jspi_bug.md).
 - deploy-hook: watch-playground-deploy.sh reports the finished run's conclusion and failed jobs, one stderr line on no answer.
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 
@@ -938,3 +938,34 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - markup-done-selector: in a data block a `.name` / `#name` key is always a CSS selector, never a variable: `done = 3; style{ .done { color: "green" } }` keeps .done. Core (core/passes/data_blocks), after the sprint.
   - program-test (test-program-value): a program of `test …` lines ends with the summary value "✓ N tests passed" / "K of N failed", the wording of `warp test`; an ending rule in extensions/ + a counter in lib.
   - js-webidl-bindings: `use js` binds the JS globals from lib/web.webidl through an extension (typed signatures from the standard WebIDL), playground only.
+- 2026-11-06 card sprint, round 11 (user):
+  - clock-plain: clock() itself returns a Time quantity, so `clock() - started < 2s` works; prelude's clock uses lib/units' Quantity; lib/time's ms-number uses and the samples comparing with ms change.
+  - ordinal-index-words: "An important edge case. Ignore. Don't do anything." (`second xs` → 1s [1, 2, 3] stays; no work.)
+  - mutation-phrases: `increase x by: 2` should work out of the box as an unimportant example English definition with named parameters (lib). The general mechanism, prepositions as parameter markers without a colon, is its own big Soon card (preposition-words).
+  - map-pair-iteration → type-name loop variables (card loop-variable): `for x in y` checks whether y.x or y.xs is defined and iterates that: `for char in "ab"` chars, `for byte in "ab"` bytes (y.bytes), `for pair in m` pairs (m.pairs); otherwise y itself. For all general types.
+- 2026-11-06 card sprint, round 12 (user):
+  - program-test: a plain `warp prog.warp` run counts `test` lines too: a program ending in a test line ends with the summary (`test 1 == 2` → "1 of 1 failed"; test_soft_tests:4 changes from ø, user OK); a program ending in another value keeps it; test blocks `test "name" {…}` still run only under `warp test`.
+  - with-do-block: later: see whether a Python-like `with` can be a library over warp primitives, `with context: block, actions: block`; probably hard, since the actions depend on the variables of the first block. Card to Later.
+  - catch-blocks: parked (Later); try/catch covers it; the wiki marks the body-wide handler as planned.
+  - constant-define-operator: drop `::=`; `constant x = 3` says it; the wiki line goes.
+- 2026-11-06 card sprint, round 13 (user):
+  - it-last-result: both meanings: inside a lambda `it` is the implicit parameter; outside one, `it` is the last statement's value (`3 + 4; it * 2` → 14).
+  - purity-predicates: `f.effects is empty` is the predicate (no `?` name suffix); `purely` is an alias of `@pure`; purity stays inferred when unmarked.
+  - test-case-timeout: instead of a lower threshold: exclude library loading from a case's timing, or better warm all libraries up once so a case's `use markup` costs ~0 s while `warp test` iterates (one compiler instance reused for all cases, loaded modules cached). Then the 1 s rule (no-slow-tests) applies to the code itself.
+  - render-pdf-string: `x = 3 as pdf` with pdf undeclared refuses clearly, "unknown type pdf: use a library that defines it"; an unknown type name is never invented.
+- 2026-11-06 card sprint, round 14 (user):
+  - add-xs: drop the phrase `add x to: xs` (its rule recursed: "call stack exhausted"); `xs.add(2)` is the form.
+  - methods-declared: both ways: any function whose first parameter is typed is callable as a method (`shout(t: text) := …; "a".shout()` → 'A', as today), and `extend text { shout() := upper(self) }` is built too, for grouping; Text.methods lists both. Revises declared-belonging (b11c2fbe40).
+  - implicit-copy-call: `copy` is a built-in word, always available, never pulling lib/memory in (no bloat: unused words are shaken out); memory's byte copy is `memory.copy`.
+  - program-defining: C-style typed parameters `f(double x)` are definitely warp ("f(type x) definitely for parameters"); a C-style return type in front (`double sin(…)`) is not decided: the preferred return form is `f(type x) as type := …`. test_wasm:69,85 stay as they are for now.
+- 2026-11-06 card sprint, round 15 (user): parallel-compilation: compile independent modules in parallel (each needs only its imports' signatures); a program's passes stay sequential. wasm-linker: not now (linking stays in warp, card parked). package-manager: no preference → stays parked (after the module manager). module-manager: the user asked what module vs package manager meant; explained, answer pending.
+
+- 2026-11-06 Supervisor (user widget): warnings-meaning-question → hard error when prebuilt module has no warp.module / won’t link; no compile-from-source fallback ("This must never happen").
+  - module-manager (user): keep the card in Next (the missing module-manager parts after zero-bake: module blocks, use *, aliases of non-lib modules, conditional use, versions).
+- 2026-11-06 user (card sprint): simple to complex: get rid of all the easy cards first; whoever picks or distributes cards orders them so.
+- 2026-11-06 card sprint, round 16 (user):
+  - compile-time: no preference; interviewer default (undoable): only deprecated/foreign spellings (len, strlen, push…) warn and are rewritten by `warp fix`; English aliases of lib/aliases.warp stay silent.
+  - error-gaps: split into three: the Fail effect first (extensions/effects.warp), WIT result<T, string> at the linked-module edge, catch-in-body (= catch-blocks, parked); the broad card closes.
+  - jsx: now, as an extension: `<tag …>…</tag>` in expression position reads into the same markup nodes, `{expr}` holes.
+  - investigate-concept (contracts): the user asked how assert, check, require and ensure differ; explained, answer pending.
+  - jsx (refined, user): inline `<div …>` HTML is accepted with a warning that `warp format` turns HTML into warp markup (`div{ … }`) as well; warp format does that rewrite.
