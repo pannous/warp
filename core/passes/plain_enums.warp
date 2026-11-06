@@ -85,8 +85,8 @@ held_equality(left: Node, op: Node, right: Node, n: Node, subjects: map): Node :
 	if enum_name == ø { return n }
 	if not is_name(left) or not is_name(right) { return Key(held_text(enum_name, left), op, held_text(enum_name, right)) }
 	# two names, `written == op`: Op·same(written, op) compares two cases as they are (node_cases.warp comparing_functions)
-	same = call_of(spelled_function(enum_name, "same"), [left, right])
-	if op == Op.Ne then Key(ø, Op.Not, same) else same
+	compared = call_of(spelled_function(enum_name, "same"), [left, right])
+	if op == Op.Ne then Key(ø, Op.Not, compared) else compared
 }
 
 # the enum having a case of that name, when only one has it, else ø

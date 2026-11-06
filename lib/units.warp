@@ -33,7 +33,13 @@ class Quantity {
 	/(other) := if other is Unit then quotient(this, other.one()) else if other is Quantity then quotient(this, other) else measured(amount / other, dims, unit, scale)
 	power(exponent) := measured(amount ^ exponent, dims * exponent, unit_raised(unit, exponent), scale ^ exponent)
 	equal(other) := other is Quantity and dims == other.dims and amount == other.amount
-	compare(other) := amount - same_quantity(this, other, "compare").amount
+	compare(other) := amount - compared_amount(this, other)
+	// `<` and `>` of the amounts, an amount with a tolerance as an interval: `area > 10m²` holds when all of it is
+	// above (P224b, `certainly`), `possibly_greater` when some of it is (lib/uncertain.warp)
+	less(other) := as_interval(amount).less(compared_amount(this, other))
+	greater(other) := as_interval(amount).greater(compared_amount(this, other))
+	possibly_less(other) := as_interval(amount).possibly_less(compared_amount(this, other))
+	possibly_greater(other) := as_interval(amount).possibly_greater(compared_amount(this, other))
 	// the same quantity shown in another unit of its kind: `q.to("m")`, `q.to(m)`, `q as m`, `q as cm^2` shown in cm²
 	to(u) := { target = same_quantity(this, quantity(1, unit_text(u)), "convert"); measured(amount, dims, target.unit, target.scale) }
 	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
@@ -108,6 +114,8 @@ same_quantity(q: Quantity, other: any, action: text) := {
 	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }
 	other
 }
+// the amount q is compared with, of the same quantity (SI, an interval for one with a tolerance)
+compared_amount(q: Quantity, other: any) := same_quantity(q, other, "compare").amount
 
 // other when it adds to q, a plain 0 as q's zero: of its quantity and, for temperatures, of its scale (`20°C + 50°F` asks to convert one)
 summand(q: Quantity, other: any, action: text) := {

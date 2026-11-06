@@ -14,6 +14,8 @@ quote_folded(n: Node, at: int): Node := {
 }
 # `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
 position_fields = ["line", "column", "comment"]
+# what a selector's leading dot leaves unbound in data (unbound_words): `.done{…}` is rebuilt as written
+selector_dot = "."
 # the field a key reads, `x.name`, also as Rust's analysis view writes it, `x#("name" + 1)`; ø of another key
 read_field(n: Node): text? := {
 	if op_of(n) == Op.Dot and value_of(n) is symbol { return name_of(value_of(n)) }
@@ -61,6 +63,8 @@ def spliced_code(body: Body, e: Node): list {
 		parts = [TypedCode(ValueKind.Node, quoted_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, spliced_code(body, value_of(e)))]
 		return runtime_call("key_node", parts).code
 	}
+	# `.done` of a style sheet: a selector's name stays a word, though the program binds done
+	if is_key(e, Op.Dot) and key_of(e) == ø and value_of(e) is symbol { return quoted_code(body, e) }
 	if type(e) is key {
 		parts = [TypedCode(ValueKind.Node, spliced_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, spliced_code(body, value_of(e)))]
 		return runtime_call("key_node", parts).code
@@ -85,8 +89,8 @@ unbound_words(body: Body, e: Node): list := {
 	if bracket_of(e) == "(" and #e > 0 and e#1 is symbol and name_of(e#1) in module.functions { return items_of(e)[1..].flat_map(item => unbound_words(body, item)) }
 	# a lambda the lambdas pass lifted, `closure_new(closure_lambda_1, n)`: a function value (`div{ p{ () => n } }`)
 	if is_quote(e) or is_spliced_quote(e) or is_closure_value(e) { return [] }
-	# `.box` of a style sheet reads no field: a selector, its name a word
-	if is_key(e, Op.Dot) { return if key_of(e) == ø then unbound_words(body, value_of(e)) else unbound_words(body, key_of(e)) }
+	# `.box` and `.done{…}` of a style sheet read no field: a selector, never a value, though the program binds done
+	if is_key(e, Op.Dot) { return if key_of(e) == ø then [selector_dot] else unbound_words(body, key_of(e)) }
 	if is_word_keyed(e) { return unbound_words(body, value_of(e)) }
 	if type(e) is key { return unbound_words(body, key_of(e)) + unbound_words(body, value_of(e)) }
 	if is_group(e) then items_of(e).flat_map(item => unbound_words(body, item)) else []
