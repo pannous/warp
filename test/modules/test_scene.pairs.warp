@@ -1,0 +1,14 @@
+# 3d scenes declared as the things in them (lib/scene.warp, wiki/3d.md, card scene-3d)
+
+# things stand side by side on the ground along x, 2 m apart, the row centred on x = 0, at their natural size
+«use scene; s = scene("{car, house}"); [s.map(t => t.position), s.map(t => t.size)]»	[[[-6, 0, 0], [3.25, 0, 0]], [[4.5, 1.5, 1.8], [10, 7, 8]]]
+# a text of names with or without braces, or a list of names
+«use scene; [scene("car rock").map(t => t.kind), scene(["rock", "car"]).map(t => t.kind)]»	[["car", "rock"], ["rock", "car"]]
+# a family's member picked at random for each mention
+«use scene; s = scene("{tree, tree, tree, tree}"); s.all(t => t.name == "tree" and t.kind in ["palm", "apple", "pine"])»	true
+# twelve triangles a box, three corners each; a rock is one box, a house three
+«use scene; [#scene_triangles(scene("{rock}")), #scene_triangles(scene("{house}"))]»	[36, 108]
+# the bounds around every thing, the camera in front of them
+«use scene; s = scene("{rock}"); [scene_bounds(s), scene_camera(s)#3 > 0.5]»	[[[-0.6, 0, -0.5], [0.6, 0.8, 0.5]], true]
+# an unknown thing is refused, never guessed
+«use scene; try { scene("{unicorn}") } catch e { ("" + e).starts_with("scene: no thing named unicorn") }»	true
