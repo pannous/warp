@@ -123,9 +123,37 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 page_value_word = "page_value"
 listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
-# `test C` (extensions/sugar/test_words.warp) runs where it stands, a statement: no value to read again
-test_word = "test"
-is_test_line(statement: Node): bool := is_group(statement) and #statement > 1 and statement#1 == symbol(test_word)
+# a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again
+is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word)
+# `test C` as lib/laws.warp's call: C as written, the rest of the line after the word `test`, as it reads when made
+test_check_word = "test_check"
+written_after(word: Node, code: Node, source: text): Node := Text(line_after(word, source) ?? "${code}".trim())
+# C of several items, `test switch 3 {…} == "three"`, parsed again from its line as one expression
+condition_after(word: Node, code: Node, source: text): Node := {
+	written = line_after(word, source)
+	if written == ø then code else statements_in(plain_node(parsed(written)))#1
+}
+line_after(word: Node, source: text): text? := {
+	lines = source.split("\n")
+	if not is_positioned(word) or line_of(word) > #lines { return ø }
+	statement_start((lines#line_of(word))[column_of(word) - 1 + #name_of(word) ..]).trim()
+}
+opening_brackets = ['(', '[', '{']
+closing_brackets = [')', ']', '}']
+# the written text up to its statement's end, a `;` outside brackets and texts: `x == 4` of `x == 4; x * 2`
+statement_start(written: text): text := {
+	depth = 0
+	quote = ø
+	at = 0
+	for c in written {
+		if quote != ø { if c == quote { quote = ø } } else if c == '"' or c == '\'' { quote = c } else if c in opening_brackets { depth += 1 } else if c in closing_brackets { depth -= 1 } else if c == ';' and depth == 0 { return written[0 ..< at] }
+		at += 1
+	}
+	written
+}
+# a program with test checks ending in their summary (lib/laws.warp tests_end), its value kept when no test ran
+tests_end_word = "tests_end"
+tests_ended(program: Node): any := ending_appended(program, mentions(program, test_check_word), tests_end_word)
 page_valued(program: Node): any := {
 	statements = level_statements(program)
 	# (the sugar reads the program before its `on click {…}` became a listen call)
@@ -145,9 +173,12 @@ ending_appended(program: Node, started: bool, ending_word: text): any := {
 	statements = level_statements(program)
 	if not started or statements.any(statement => is_call_named(statement, ending_word)) { return ø }
 	last = (0 ..< #statements).filter(i => use_target(statements[i]) == ø).last()
-	ending = statements[last]
-	ended = if is_declaration(ending) or is_test_line(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
-	separated(bracketed(statements[0 ..< last] + ended + statements[last + 1 ..], ""), ";")
+	separated(bracketed(statements[0 ..< last] + ended_with(statements[last], ending_word) + statements[last + 1 ..], ""), ";")
+}
+# the last statement ended by the ending word; the tests' summary stays outermost, once the tasks, frames … ran
+ended_with(ending: Node, ending_word: text): list := {
+	if is_call_named(ending, tests_end_word) and ending_word != tests_end_word { return [call_of(tests_end_word, ended_with(if #ending == 2 then ending#2 else Node.Empty, ending_word))] }
+	if ending == Node.Empty then [call_of(ending_word, [])] else if is_declaration(ending) or is_test_line(ending) then [ending, call_of(ending_word, [])] else [call_of(ending_word, [ending])]
 }
 # the main level's statements, of lines and of `;` within a line alike
 level_statements(program: Node): list := statements_in(program).flat_map(s => if is_statement_sequence(s) then level_statements(s) else [s])
@@ -791,6 +822,49 @@ typed_words(kind: text): list := {
 }
 # a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
 is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
+
+# The views of a module's words (card dir-filters): `time.functions`, `time.attributes` (its values, `day_seconds`),
+# `time.classes` and `list.operators`, the operators it declares (`∪` of `infix operator ∪(a, b) := …`), which dir
+# leaves out; ø of a name the program binds, of a view the module or program defines itself, and of no module
+module_view(name: Node, view: Node, program: Node): any := {
+	kind = spelled(view)
+	if owns_word(kind, program) or "${name}" in names_bound_in_kept(program) { return ø }
+	source = used_module_text("${name}")
+	if source == "" { return ø }
+	listed = {}
+	if kind == "classes" { for class_name in class_names(source) { listed[class_name] = yes } }
+	if kind == "operators" { for glyph in declared_operator_glyphs(source) { listed[glyph] = yes } }
+	# a type's words of the prelude, as dir lists them (`upper` of text)
+	if kind == "functions" { for word in typed_words("${name}") { if is_listed_word(word) { listed[word] = yes } } }
+	for cut in definition_slices(source) {
+		if cut#1 == kind { return ø }
+		if viewed_word(kind, cut#1, cut#2) { listed[cut#1] = yes }
+	}
+	List(listed.keys, Bracket.Square, Separator.Comma)
+}
+viewed_word(kind: text, word: text, definition: text): bool := {
+	if kind == "classes" or kind == "operators" or not is_listed_word(word) { return no }
+	value = defines_value(word, definition)
+	if kind == "attributes" then value else not value
+}
+# `∪` of a line `infix operator ∪(a, b) := …`, and of prefix, suffix and postfix operators, each declared operator once
+declared_operator_glyphs(source: text): list := {
+	glyphs = []
+	for line in source.split("\n") {
+		for head in ["infix operator ", "prefix operator ", "suffix operator ", "postfix operator "] {
+			if line.starts_with(head) and line.contains(":=") {
+				glyph = line[#head ..].split("(")#1.trim()
+				if #glyph > 0 and not glyph.contains(" ") and not (glyph in glyphs) { glyphs += [glyph] }
+			}
+		}
+	}
+	glyphs
+}
+# `day_seconds = 86400`: a definition of a value, not a function
+defines_value(word: text, definition: text): bool := {
+	after = definition[#word ..].trim()
+	after.starts_with("=") and not after.starts_with("==") and not after.starts_with("=>")
+}
 # `text` of `upper(t: text): text from warp`, "" of an untyped first parameter
 first_parameter_type(word: text, definition: text): text := {
 	if not definition.starts_with(word + "(") { return "" }
@@ -828,6 +902,7 @@ rule_words = {
 	body_of: body_of,
 	builtin_type: builtin_type,
 	change_listens: change_listens,
+	condition_after: condition_after,
 	class_help: class_help,
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,
@@ -857,6 +932,7 @@ rule_words = {
 	then_without_if: then_without_if,
 	module_help: module_help,
 	module_named: module_named,
+	module_view: module_view,
 	module_word_help: module_word_help,
 	once_listens: once_listens,
 	page_valued: page_valued,
@@ -878,6 +954,7 @@ rule_words = {
 	tables_kept: tables_kept,
 	task_steps: task_steps,
 	tasked: tasked,
+	tests_ended: tests_ended,
 	units_shown: units_shown,
 	typed_json: typed_json,
 	unit_bound: unit_bound,
@@ -890,7 +967,8 @@ rule_words = {
 	value_helps: value_helps,
 	wgsl_painting: wgsl_painting,
 	wgsl_shader: wgsl_shader,
-	whenever_listens: whenever_listens
+	whenever_listens: whenever_listens,
+	written_after: written_after
 }
 
 # A field annotation can still be a Type node when the early rewrite runs.

@@ -1,0 +1,6 @@
+# a record declares the class of its fields, compared by value; the word alone stays a name (card pure-record-keyword)
+'record Point { x: int; y: int }; Point(1, 2) == Point(1, 2)'	yes
+'record Point { x: int; y: int }; Point(1, 2) == Point(1, 3)'	no
+'record Point(x: int, y: int); Point(1, 2).y'	2
+'record Point(x: int, y: int); Point(1, 2) == Point(1, 2)'	yes
+'record = 5; record + 1'	6

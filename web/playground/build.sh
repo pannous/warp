@@ -29,10 +29,8 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 	imports.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
 	keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
-# the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources);
-# not modules/sugar_rules.packed: preloaded, every example the tour reads as a value trapped 'illegal cast' (card
-# browser-illegal-cast), so the page's compiler parses extensions/sugar itself until that is found
-PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv')
+# the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources)
+PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv' 'modules/sugar_rules.packed')
 # the exports of warp.wasm the page calls (driver.js, values.js): the browser's copy keeps only these, and Binaryen drops
 # what they never reach and the name section (1.35 → 1.26 MB gzipped); an export missing here fails the tour loudly
 COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at returned_error
@@ -115,11 +113,13 @@ open(module, "wb").write(out)' "$1" "${COMPILER_EXPORTS[@]}"
 	wasm-opt "${WASM_OPT_FEATURES[@]}" --remove-unused-module-elements --strip-debug "$1" -o "$1"
 }
 
-# <lib>/sources.json: {name: text} of the PRELOADED_SOURCES
+# <lib>/sources.json: {name: text} of the PRELOADED_SOURCES, each byte for byte: newline="" keeps a lone \r, which
+# Python's universal newlines made \n, and the packed sugar rules (112 of them) then unpacked wrong: every tour example
+# trapped 'illegal cast' (card sugar-packed-page-cast)
 write_sources() {
 	(cd "$1" && python3 -c 'import glob, json, sys
 names = sorted(name for pattern in sys.argv[1:] for name in glob.glob(pattern))
-json.dump({name: open(name, encoding="utf-8").read() for name in names}, open("sources.json", "w"), ensure_ascii=False)' "${PRELOADED_SOURCES[@]}")
+json.dump({name: open(name, encoding="utf-8", newline="").read() for name in names}, open("sources.json", "w"), ensure_ascii=False)' "${PRELOADED_SOURCES[@]}")
 }
 
 # served-files.js: the files the server has, so the compiler's module and header searches ask only for those that exist

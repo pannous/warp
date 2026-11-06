@@ -33,6 +33,12 @@ rewrite dir $x => dir($x)
 rewrite dir($m) => [$names...] where $m is symbol and $names = dir_words($m, $program)
 rewrite dir($p) => [$names...] where $p is symbol and $names = instance_members($p, dir, $source)
 rewrite dir($x) => dir_of_value($x, $words...) where $words = value_dir_words($program)
+# the views of a module's words besides dir (card dir-filters): `time.functions`, `time.attributes`, `time.classes`,
+# `list.operators` (the operators it declares, `∪`, which dir leaves out) (extensions/rules/rule_words.warp module_view)
+rewrite $m.functions => [$names...] where $m is symbol and $names = module_view($m, functions, $program)
+rewrite $m.attributes => [$names...] where $m is symbol and $names = module_view($m, attributes, $program)
+rewrite $m.classes => [$names...] where $m is symbol and $names = module_view($m, classes, $program)
+rewrite $m.operators => [$names...] where $m is symbol and $names = module_view($m, operators, $program)
 
 # `help(Point)`, `help(area)`, `help(sound)`: what a class, a function or a module is, as text (extensions/rules/rule_words.warp
 # class_help, function_help, module_help, module_word_help; wiki/reflection.md); a program's own help wins

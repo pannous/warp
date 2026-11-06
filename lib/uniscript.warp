@@ -1,0 +1,23 @@
+// `use uniscript` (a name is lib/<name>.warp, decision package-use-by-path): the registry package uniscript's binding
+// (packages/uniscript/uniscript.warp, the same words) over its C library uniscript_c, which lib/native/uniscript_c.warp
+// declares and scripts/link-packages.sh builds of the pinned tag (package.warp `version`) beside warp
+import uniscript_c
+
+// uniscript → Unicode; each character or combination without a Unicode counterpart warns (`use strict`: the error)
+uniscript(source: text) := {
+	failure = uniscript_error(source)
+	if failure != ø { return error(failure) }
+	for problem in split(uniscript_warnings(source), "\n") {
+		if problem != "" {
+			# (the warning's value tested in place: `warned = warning(…)` fails to compile, "text of node")
+			if is_error(warning(problem)) { return error(problem) }
+		}
+	}
+	uniscript_to_unicode(source)
+}
+
+// Unicode → uniscript; uniscript() gives the text back
+unicode_to_uniscript(text: text) := uniscript_to_uniscript(text)
+
+// the source with its opener-like inline tags in explicit form (<:alpha> → \:alpha), which converts without warnings
+explicit(source: text) := uniscript_explicit(source)

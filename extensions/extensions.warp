@@ -10,6 +10,7 @@ use "index_positions.warp"
 use "property_accessors.warp"
 use "attributes.warp"
 use "sum_types.warp"
+use "record_classes.warp"
 use "radix_numbers.warp"
 use "time_literals.warp"
 use "event_phrases.warp"
@@ -34,6 +35,7 @@ use "match_patterns.warp"
 use "protocols.warp"
 use "conversions.warp"
 use "implicit_uses.warp"
+use "test_lines.warp"
 use "scoped_words.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
@@ -42,6 +44,7 @@ use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
 use "text_lints.warp"
+use "dir_hints.warp"
 use "effects.warp"
 use "primitive.warp"
 EXTENSIONS = [
@@ -55,6 +58,7 @@ EXTENSIONS = [
 	property_accessors_extension
 	attributes_extension
 	sum_types_extension
+	record_classes_extension
 	radix_numbers_extension
 	time_literals_extension
 	event_phrases_extension
@@ -82,6 +86,7 @@ EXTENSIONS = [
 	Extension{name: "int_types", passes: {"definition_heads": int_types}}
 	conversions_extension
 	implicit_uses_extension
+	test_lines_extension
 	# right before tries, in this order: the last result `it`, parse words, then the checked tries the core's tries guard
 	last_results_extension
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
@@ -91,6 +96,7 @@ EXTENSIONS = [
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
+	dir_hints_extension
 	effects_extension
 	# extensions/primitive.warp, which the compiler uses itself: its attribute `@primitive`
 	Extension{name: "primitive", attributes: [PRIMITIVE_ATTRIBUTE]}
