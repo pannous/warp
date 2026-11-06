@@ -111,13 +111,21 @@ global index_used = []
 # the slot least_recent_slot looked at last: it sweeps the slots as a clock, giving a slot looked up since a second chance
 # (the second-chance clock, where a count of lookups per slot boxed a new int at every lookup)
 global index_hand = 0
-# the slot index_slot found last: a run of lookups in one map (a parser's fields, read again and again) finds it first
+# the slots index_slot found last and the one before: a run of lookups in one map (a parser's fields, read again and
+# again) or alternating between two finds them first, where moving the other forward at each turn swapped them back
+# and forth (10% of map_index)
 global index_last = 0
+global index_previous = 0
 slot_free(slot: int): bool := is_null(index_covered#slot) or unboxed_int(index_covered#slot) < 0
 holds_entries(slot: int, entries: list): bool := not is_null(index_entries#slot) and same_list(unboxed_list(index_entries#slot), entries) and not slot_free(slot)
 # the slot holding these entries' index, 0 for none
 index_slot(entries: list): int := {
-	if index_last > 0 and holds_entries(index_last, entries) { return index_last }
+	if index_last > 0 and holds_entries(index_last, entries) {
+		# marked again only when the clock hand cleared it: a write at every lookup boxed the mark anew
+		if unboxed_int(index_used#index_last) == 0 { index_used#index_last = 1 }
+		return index_last
+	}
+	if index_previous > 0 and holds_entries(index_previous, entries) { return found_slot(index_previous) }
 	if #index_covered == 0 {
 		index_entries = new_list(index_slots())
 		index_tables = new_list(index_slots())
@@ -125,12 +133,16 @@ index_slot(entries: list): int := {
 		index_used = new_list(index_slots())
 	}
 	for slot in 1 to index_slots() {
-		if holds_entries(slot, entries) {
-			index_last = slot_moved_forward(slot)
-			return index_last
-		}
+		if holds_entries(slot, entries) { return found_slot(slot_moved_forward(slot)) }
 	}
 	0
+}
+# the slot found, now the last, marked looked up for least_recent_slot
+found_slot(slot: int): int := {
+	if slot != index_last { index_previous = index_last }
+	index_last = slot
+	index_used#slot = 1
+	slot
 }
 # a slot found by the search swapped halfway to the front, so the maps looked up most sit where the search starts
 # (it compared each slot in turn: 5% of compiling compiler.warp); its new place
@@ -140,6 +152,9 @@ slot_moved_forward(slot: int): int := {
 	swapped(index_tables, slot, to)
 	swapped(index_covered, slot, to)
 	swapped(index_used, slot, to)
+	# the last and previous slots follow the map they held
+	if index_last == to { index_last = slot }
+	if index_previous == to { index_previous = slot }
 	to
 }
 swapped(items: list, a: int, b: int): int := {
@@ -163,8 +178,7 @@ slot_covered(slot: int): int := unboxed_int(index_covered#slot)
 # a slot holding the entries' index, marked looked up; written only when it changed: a lookup that found the index
 # as it was wrapped the lists anew at every lookup
 hold_index(slot: int, entries: list, covered: int, table: list): int := {
-	index_last = slot
-	index_used#slot = 1
+	found_slot(slot)
 	if not holds_entries(slot, entries) or slot_covered(slot) != covered or not same_list(slot_table(slot), table) {
 		index_entries#slot = list_node(Kind.List, entries)
 		index_tables#slot = list_node(Kind.List, table)

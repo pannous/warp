@@ -198,13 +198,15 @@ spelling_functions(enum_name: text): list := {
 	[Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text?", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + coded_functions(enum_name) + comparing_functions(enum_name)
 }
 
-# `Op·by_code = key·cases(Op·cases)` and `Op·coded(spelled) := Op·by_code#(key·op_code(spelled) + 1)`: the case of a
-# key's operator by its code, as Op·case gives it of the operator's spelling (node_matches.warp coded_readers)
+# `Op·by_code = node·cases(Op·cases, 1)` and `Op·coded(n) := Op·by_code#(node·op_code(n) + 1)`: the case of a node's
+# part by its code, as Op·case gives it of the part's spelling (node_matches.warp bound_part). Each enum's reader of the
+# code and the runtime's table of its spellings (core/runtime/nodes.warp spellings_of)
+part_codes = {"Op": ["node·op_code", 1], "Bracket": ["node·bracket_code", 2], "Separator": ["node·separator_code", 3]}
 coded_functions(enum_name: text): list := {
-	if enum_name not in coded_readers.values { return [] }
+	if enum_name not in part_codes { return [] }
 	by_code = symbol(spelled_function(enum_name, "by_code"))
-	code = call_of("key·op_code", [symbol(spelled_value)])
-	[Key(by_code, Op.Assign, call_of("key·cases", [symbol(spelled_function(enum_name, "cases"))])),
+	code = call_of(part_codes[enum_name]#1, [symbol(spelled_value)])
+	[Key(by_code, Op.Assign, call_of("node·cases", [symbol(spelled_function(enum_name, "cases")), part_codes[enum_name]#2])),
 		spelling_function(enum_name, "coded", ø, Key(by_code, Op.Hash, Key(code, Op.Add, 1)))]
 }
 # `Op·is(spelled, case_written, case_spelled)`, `Op·same(spelled, other_spelled)`: two cases compare as they are, a case

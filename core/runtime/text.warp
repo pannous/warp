@@ -105,8 +105,18 @@ text_order(a: text, b: text): int := {
 	}
 	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then -1 else 1
 }
-# whether a and b have the same bytes: texts of other lengths without looking at a byte
-same_bytes(a: text, b: text): bool := byte_count(a) == byte_count(b) and text_order(a, b) == 0
+# whether a and b have the same bytes: the one text, or texts of other lengths, without looking at a byte (a map's
+# names are mostly the very texts looked up)
+same_bytes(a: text, b: text): bool := {
+	if same_text(a, b) == 1 { return yes }
+	if byte_count(a) != byte_count(b) { return no }
+	i = 0
+	while i < byte_count(a) {
+		if byte_at(a, i) != byte_at(b, i) { return no }
+		i += 1
+	}
+	yes
+}
 # where the bytes of part first start in t, -1 when nowhere
 text_index(t: text, part: text): int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {
