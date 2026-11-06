@@ -1,17 +1,8 @@
 #!/usr/bin/env warp
-# Rust crates from crates.io: `use cargo <crate>` builds the crate once as a WebAssembly component
-# (~/.cache/warp/crates) and calls its public functions; a struct it constructs is a handle with its methods.
-# Native only: the first run needs cargo and `rustup target add wasm32-wasip2`.
+# Rust crates from crates.io: `use cargo <crate>` links the crate built as a WebAssembly module, natively and in the page
+# (scripts/warp-crate wasm lib/crates/strsim.warp wrote lib/crates/strsim.wasm); its free functions take and give
+# numbers and texts. Crates of objects (regex.Regex, semver.Version) wait for a handle design (decision samples-modules-wasm)
 
 use cargo strsim
 print strsim.levenshtein("kitten", "sitting")
-
-use cargo regex
-digits = regex.Regex("[0-9]+")
-print digits.is_match("room 101")
-print digits.replace_all("call 555 1234", "#")
-
-use cargo semver
-version = semver.Version.parse("1.4.2")
-print version.minor
-print semver.VersionReq.parse(">=1.2").matches(version)
+print strsim.jaro_winkler("martha", "marhta") > 0.96

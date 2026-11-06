@@ -58,7 +58,41 @@ function withoutClassTags(value, classes) {
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
 	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);
-	return new RegExp(pattern, flags + "u");
+	return new RegExp(posixInJs(pattern), flags + "u");
+}
+// POSIX's named classes (the native engine is regcomp's extended syntax, driver.warp regex_answered) as JavaScript's
+// ranges, in the C locale
+const POSIX_CLASSES = {
+	alpha: "a-zA-Z", digit: "0-9", alnum: "a-zA-Z0-9", upper: "A-Z", lower: "a-z", space: "\\s", blank: " \\t",
+	xdigit: "0-9A-Fa-f", punct: "!-\\/:-@\\[-`{-~", cntrl: "\\x00-\\x1f\\x7f", print: "\\x20-\\x7e", graph: "\\x21-\\x7e",
+	word: "\\w",
+};
+// a pattern as the native engine reads it, in JavaScript's spelling (card samples-page-apps). Inside a bracket class:
+// a `]` first in it is a literal one (`[^]]`, which JavaScript reads as `[^]` and a stray `]`), a `[` a literal one
+// (`[^[]`), `[:alpha:]` a named class; the escapes JavaScript and the macOS engine share stay as written
+function posixInJs(pattern) {
+	let out = "", inside = false;
+	for (let at = 0; at < pattern.length; at++) {
+		const c = pattern[at];
+		if (c === "\\") { out += c + (pattern[++at] ?? ""); continue; }
+		if (!inside) {
+			out += c;
+			if (c !== "[") continue;
+			inside = true;
+			if (pattern[at + 1] === "^") out += pattern[++at];
+			if (pattern[at + 1] === "]") { out += "\\]"; at++; }
+		} else if (c === "]") {
+			out += c;
+			inside = false;
+		} else if (c === "[" && pattern[at + 1] === ":") {
+			const end = pattern.indexOf(":]", at + 2);
+			const named = end < 0 ? undefined : POSIX_CLASSES[pattern.slice(at + 2, end)];
+			if (named === undefined) throw new Error(`no such class in warp's regex: ${pattern.slice(at, end < 0 ? undefined : end + 2)}`);
+			out += named;
+			at = end + 1;
+		} else out += c === "[" ? "\\[" : c;
+	}
+	return out;
 }
 
 // JSON5 as JSON (card json5-parse): 'single quoted' texts, comments, trailing commas, bare keys; src/node/json_xml.rs's

@@ -1,0 +1,4 @@
+# a used module's aliases reach the program, never another used module's body (card module-name-leak): math's
+# alias log2 => binary_log stays out of sound's midi
+'use sound; use math; midi(440)'	69
+'use math; use sound; log2([1, 8])'	[0, 3]

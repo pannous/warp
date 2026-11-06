@@ -36,6 +36,8 @@ use "open_words.warp"
 #   tries                                  try/catch
 #   definition_heads definitions           which functions answer ø, class fields; definitions and their heads
 #   (extensions' passes after definition_heads: class methods, int types, conversions)
+#   number_words_pass                      number words, before arity_overloads picks an overload by its
+#                                          values' types (`three times four` multiplies as `3 times 4` does)
 #   preposition_heads arity_overloads      `f of x` heads, several definitions of one name by arity
 #   (extensions' passes after arity_overloads: function clauses, then `a, b = …`, extensions/function_clauses.warp
 #   and multiple_assignments.warp)
@@ -44,7 +46,6 @@ use "open_words.warp"
 #   type_tests spaced_prefix_calls         `x is T`, `f x` calls
 #   interpolation                          `"…${x}…"` holes
 #   (the extension's pass after interpolation: `a of b`, extensions/of_lookups.warp)
-#   number_words_pass                      number words
 #   first_sugar node_matches node_cases    extensions/sugar's first rules (arms, heads), `match`, node cases
 #   enums_declared plain_enums             enums
 #   phrase_blocks comprehensions           phrase blocks, `[x for x in xs]`
@@ -65,7 +66,7 @@ owned_refusal(refusal: text, form: text?): text := {
 }
 
 # the pure lane's passes (card pure-runs)
-pure_passes = [tries, components, definition_heads, definitions, arity_overloads, open_calls, type_tests, spaced_prefix_calls, interpolation, number_words_pass, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
+pure_passes = [tries, components, definition_heads, definitions, number_words_pass, arity_overloads, open_calls, type_tests, spaced_prefix_calls, interpolation, first_sugar, code_templates, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # the pure passes with the extensions' between them (core/extension.warp with_extension_passes), made once
 global lowering_passes = ø
