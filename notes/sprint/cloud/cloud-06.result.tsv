@@ -1,2 +1,3 @@
 browser-json	done	b6cc9c9 web/ only: keyOfTree aligned to json_key forms (self-hosted path already reads shown keys)
 completion-order	done	ae3ed80 web/ only: member choices rank the code's own names first; dir already lists a type's module words before typed prelude words
+div-class	done	389d68a lib/markup.warp html_class_names: warning + name without dot; test_markup_element_types 5/5 from source (markup.wasm not rebuilt in the cloud)
