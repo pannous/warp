@@ -12,7 +12,7 @@ g = show => show /2
 g(6)' 3
 is! 'show(p) := p
 def area(show, h) { show /h }
-area(6, 2)' 3
+area(6, 2)' error
 
 # a_definitions_parameter_scope_ends_with_it
 is! 'show(p) := p

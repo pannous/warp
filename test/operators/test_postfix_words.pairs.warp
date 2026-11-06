@@ -21,4 +21,4 @@
 'f = function abs; f(-2)'	2
 'g = function sqrt; g(16) + 1'	5.0
 'xs = [1, -2]; xs.map(abs)'	[1, 2]
-# triage-held 2026-11-06: desk-invented postfix function words (-7 abs, map xs abs) :: 'xs = [1, -2]; map xs abs'	[1, 2]
+# triage-held 2026-11-06: foreign spelling (foreign-spellings, later) :: 'xs = [1, -2]; map xs abs'	[1, 2]

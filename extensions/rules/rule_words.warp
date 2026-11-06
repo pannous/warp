@@ -43,9 +43,11 @@ is_amount(code: Node): bool := {
 	if is_group(code) { return bracket_of(code) == "(" and #items_of(code) == 1 }
 	code is symbol and binds_value(rule_scope, name_of(code)) and not starts_with_unit(code)
 }
-starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_binding_ops then starts_with_unit(key_of(code)) else code is symbol and "units" in defining_modules("${code}")
+starts_with_unit(code: Node): bool := if code is key and op_of(code) in unit_binding_ops then starts_with_unit(key_of(code)) else is_unit_word(code)
 # `km/h`, `m²`, `cm`: code led by a unit word, the unit part of `2 km/h is speed` (lib/units.warp)
-unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else code is symbol and "units" in defining_modules("${code}")
+unit_led(code: Node): bool := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then unit_led(key_of(code)) else is_unit_word(code)
+# a name lib/units defines, a unit by its class (`km`, `°C`: `km = Unit("km")`), else any other of its words (`min`)
+is_unit_word(code: Node): bool := code is symbol and (typed_as(name_of(code), "Unit") or "units" in defining_modules(name_of(code)))
 unit_binding_ops = [Op.Assign, Op.Define, Op.Add, Op.Sub, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 # a unit after a product, a quotient or a power reads two ways, `10 / 2 ms`: refused with a fix-it naming both
 # (decision unit-after-number)
@@ -55,7 +57,7 @@ unit_ambiguous(amounted: Node, unit: Node): text := "DimensionError: a unit bind
 unit_written(code: Node): bool := {
 	if code is key and op_of(code) == Op.Pow { return unit_written(key_of(code)) and is_number_literal(value_of(code)) }
 	if code is key and op_of(code) in [Op.Div, Op.Mul] { return unit_written(key_of(code)) and unit_written(value_of(code)) }
-	code is symbol and "units" in defining_modules("${code}")
+	is_unit_word(code)
 }
 # `km/h`, `m^2`: the text of a unit written whole of several parts, "km/h", as lib/units unit_named reads it; ø for a
 # single unit word or any other code
@@ -461,6 +463,7 @@ listened_through(n: Node, reads: map): Node := {
 # write changed it: `a = 2` as `(signal·old = a; signal·total = total; a = 2; if a != signal·old {
 # signal_notify("total", total, signal·total) })`; any other node as it is
 notifying(n: Node, names: list, derived: map): Node := {
+	if method_changing(n, names) { return method_notifying(n) }
 	if not writes(n) { return n }
 	name = written_target(key_of(n))
 	if not (name is symbol) { return n }
@@ -475,6 +478,18 @@ notifying(n: Node, names: list, derived: map): Node := {
 	# `x--` gives the value before the step
 	result = if op_of(n) in stepping_ops then [old] else []
 	separated(bracketed(before + [n] + notified + result, "("), ";")
+}
+# `x.add(2)` of a watched x: a method may change the list in place, so its listeners hear of it when it did; the
+# call's value stays the value (`y = x.pop()`)
+method_changing(n: Node, names: list): bool := is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and is_called_name(value_of(n))
+signal_result = "signal·result"
+method_notifying(n: Node): Node := {
+	name = key_of(n)
+	old = symbol(signal_old)
+	result = symbol(signal_result)
+	kept = plain_node(parsed("if " + name_of(name) + " is list then [] + " + name_of(name) + " else " + name_of(name)))
+	notified = Key(Key(ø, Op.If, Key(name, Op.Ne, old)), Op.Then, call_of("signal_notify", [name_of(name), name, old]))
+	separated(bracketed([Key(old, Op.Assign, kept), Key(result, Op.Assign, n), notified, result], "("), ";")
 }
 # a write: `x = 3`, `x += 1`, `x--`
 writes(n: Node): bool := {
@@ -973,6 +988,23 @@ polled_word(name: Node, program: Node, source: text): any := {
 	if texts.any(text => definition_slices(text).any(cut => cut#1 == word and cut#2.starts_with(word + "()"))) then name else ø
 }
 
+
+# words that take an `it` block / bare `it` expression as their function argument
+# (card map-argument-forms). Listed once; sugar uses `it_taking($w)` (rule-word call,
+# same pattern as `are_arms($body)`). `$w is it_taking` would need core code_properties.
+it_taking_words = ["map", "filter", "find", "any", "all", "each"]
+it_taking(w: Node): bool := w is symbol and name_of(w) in it_taking_words
+
+# `xs.map(it * 2)`, `apply(it + 3, 1)` (notes/welcoming.md, card map-argument-forms): an expression that
+# mentions `it` and is not already a lambda/function becomes `it => expression`; ø otherwise so the rule misses
+it_as_lambda(expression: Node): any := {
+	if is_lambda(expression) { return ø }
+	if is_group(expression) and bracket_of(expression) == "(" and #expression == 1 and is_lambda(expression#1) { return ø }
+	if expression is symbol { return ø }
+	if not mentions(expression, "it") { return ø }
+	Key(symbol("it"), Op.Arrow, expression)
+}
+
 # the words by name, as a rule's `where` calls them: one a line, sorted, so branches adding words merge cleanly
 
 # whether a name is assigned only text literals in the program (card text-element-assign; same idea as
@@ -1017,6 +1049,8 @@ rule_words = {
 	class_methods_listed: class_methods_listed,
 	program_functions: program_functions,
 	it_read_as: it_read_as,
+	it_as_lambda: it_as_lambda,
+	it_taking: it_taking,
 	law_check: law_check,
 	leading_unit: leading_unit,
 	list_valued: list_valued,
