@@ -763,11 +763,13 @@ bare_calls(program: Node, providers: map): list := {
 	nullary = {}
 	for module in type_modules {
 		path = std_module_path(module)
-		for slice in definition_slices(file_text(path) ?? "") { if slice#2.starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
+		for slice in definition_slices(file_text(path) ?? "") { if without_keyword(slice#2).starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
 	}
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
+# a definition's text after the keyword declaring it: `π() := …` of `const π() := …`
+without_keyword(written: text): text := if leading_name(written) in defining_keywords then written[#leading_name(written) ..].trim() else written
 # the names the program binds anywhere, its own wherever it says them, never a module's word (card module-hygiene):
 # a variable `now = …`, a function and its parameters `f(was, now)`, a key `{g: 5}`, `x: int`, `Person{name: …}`, a
 # lambda's or an arm's pattern `(a, b) => …`, `for now in …`, a class, an enum and its cases
