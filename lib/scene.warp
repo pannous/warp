@@ -1,0 +1,132 @@
+// The standard library module scene (wiki/3d.md, card scene-3d): `use scene`, a 3d scene declared as the things in it,
+// `scene("{car, tree, tree, house}")`, every other choice assumed: each thing's natural size in meters, its upright
+// orientation, where it stands, which member of a family it is, the camera that sees them all.
+// Decisions (card scene-3d):
+// - coordinates are wgpu's (wiki/3d.md): x right, y up, z toward the viewer; meters; the ground is y = 0
+// - a thing is a name of the table `natural_sizes` ([width, height, depth] in meters, its color [r, g, b] in 0…1) or a
+//   family of `families`: `tree` is a palm, an apple or a pine tree, picked at random (`use random`; seed(n) repeats it)
+// - things stand side by side along x, 2 m apart, the row centred on x = 0, each facing +z; `position` is the centre
+//   of a thing's footprint on the ground
+// - a thing's shape is a few boxes, each given in fractions of its size (`shapes`): what the renderer draws is a
+//   triangle list, `scene_triangles`, three corners [x, y, z] a triangle, the form samples/gpu/scene_3d.warp ray casts
+// - an unknown thing is refused, never guessed
+use random
+
+SCENE_GAP = 2
+
+// [width, height, depth] in meters and a color, per thing
+natural_sizes = {
+	car: [[4.5, 1.5, 1.8], [0.80, 0.15, 0.12]],
+	truck: [[8, 3.5, 2.5], [0.20, 0.35, 0.70]],
+	bike: [[1.8, 1.1, 0.6], [0.15, 0.15, 0.15]],
+	person: [[0.5, 1.75, 0.3], [0.90, 0.70, 0.55]],
+	dog: [[0.9, 0.6, 0.3], [0.55, 0.40, 0.25]],
+	house: [[10, 7, 8], [0.95, 0.85, 0.70]],
+	tower: [[6, 30, 6], [0.60, 0.60, 0.65]],
+	palm: [[4, 12, 4], [0.30, 0.65, 0.25]],
+	apple: [[5, 6, 5], [0.25, 0.55, 0.20]],
+	pine: [[4, 15, 4], [0.10, 0.40, 0.20]],
+	bush: [[1.5, 1.2, 1.5], [0.20, 0.50, 0.15]],
+	rock: [[1.2, 0.8, 1], [0.50, 0.50, 0.50]]
+}
+
+// a family's members, one picked at random for each mention
+families = {
+	tree: ["palm", "apple", "pine"],
+	vehicle: ["car", "truck", "bike"],
+	animal: ["dog"],
+	building: ["house", "tower"],
+	plant: ["bush", "palm", "apple", "pine"]
+}
+
+// the boxes a thing is made of, [x0, y0, z0, x1, y1, z1] in fractions of its size: x and z from -0.5 to 0.5 about its
+// centre, y from 0 (the ground) to 1 (its top); a thing not listed is one box
+shapes = {
+	car: [[-0.5, 0.15, -0.5, 0.5, 0.55, 0.5], [-0.25, 0.55, -0.45, 0.25, 1, 0.45], [-0.4, 0, -0.5, -0.2, 0.15, 0.5], [0.2, 0, -0.5, 0.4, 0.15, 0.5]],
+	truck: [[-0.5, 0.2, -0.5, 0.2, 1, 0.5], [0.22, 0.2, -0.5, 0.5, 0.7, 0.5], [-0.4, 0, -0.5, -0.25, 0.2, 0.5], [0.3, 0, -0.5, 0.45, 0.2, 0.5]],
+	house: [[-0.5, 0, -0.5, 0.5, 0.6, 0.5], [-0.4, 0.6, -0.4, 0.4, 0.8, 0.4], [-0.25, 0.8, -0.25, 0.25, 1, 0.25]],
+	palm: [[-0.04, 0, -0.04, 0.04, 0.85, 0.04], [-0.5, 0.85, -0.5, 0.5, 1, 0.5]],
+	apple: [[-0.06, 0, -0.06, 0.06, 0.4, 0.06], [-0.5, 0.4, -0.5, 0.5, 1, 0.5]],
+	pine: [[-0.05, 0, -0.05, 0.05, 0.2, 0.05], [-0.5, 0.2, -0.5, 0.5, 0.5, 0.5], [-0.35, 0.5, -0.35, 0.35, 0.8, 0.35], [-0.15, 0.8, -0.15, 0.15, 1, 0.15]],
+	person: [[-0.5, 0, -0.5, 0.5, 0.85, 0.5], [-0.3, 0.85, -0.4, 0.3, 1, 0.4]],
+	dog: [[-0.5, 0.45, -0.5, 0.3, 0.85, 0.5], [0.3, 0.6, -0.4, 0.5, 1, 0.4], [-0.45, 0, -0.4, -0.3, 0.45, 0.4], [0.1, 0, -0.4, 0.25, 0.45, 0.4]]
+}
+
+// the names a scene mentions: a text `{car, tree, tree}` (or `car tree tree`), or a list of names
+scene_names(things: any): list := {
+	if things is list { return things.map(t => str(t)) }
+	words = parse(if str(things).starts_with("{") then str(things) else "{" + str(things) + "}")
+	out = []
+	for w in words { out = out + [str(w)] }
+	out
+}
+
+// the thing a name stands for: itself, or a family's member picked at random
+scene_kind(name: text): text := {
+	if name in natural_sizes { return name }
+	if name in families { return choice(families[name]) }
+	raise "scene: no thing named " + name + " (things: " + str(natural_sizes.keys()) + ", families: " + str(families.keys()) + ")"
+}
+
+// every thing of a scene placed: [{name, kind, size, color, position}], side by side along x on the ground
+scene(things: any): list := {
+	kinds = scene_names(things).map(name => [name, scene_kind(name)])
+	width = 0
+	for k in kinds { width = width + natural_sizes[k#2]#1#1 }
+	width = width + SCENE_GAP * (#kinds - 1)
+	x = -width / 2
+	out = []
+	for k in kinds {
+		size = natural_sizes[k#2]#1
+		out = out + [{name: k#1, kind: k#2, size: size, color: natural_sizes[k#2]#2, position: [x + size#1 / 2, 0, 0]}]
+		x = x + size#1 + SCENE_GAP
+	}
+	out
+}
+
+// the corners of the boxes a placed thing is made of: [[low corner], [high corner]] in meters
+scene_boxes(thing: any): list := {
+	parts = if thing.kind in shapes then shapes[thing.kind] else [[-0.5, 0, -0.5, 0.5, 1, 0.5]]
+	s = thing.size
+	p = thing.position
+	parts.map(b => [[p#1 + b#1 * s#1, p#2 + b#2 * s#2, p#3 + b#3 * s#3], [p#1 + b#4 * s#1, p#2 + b#5 * s#2, p#3 + b#6 * s#3]])
+}
+
+// a box's twelve triangles, three corners each, wound counter-clockwise seen from outside
+box_triangles(low: list, high: list): list := {
+	c = [low, [high#1, low#2, low#3], [high#1, high#2, low#3], [low#1, high#2, low#3], [low#1, low#2, high#3], [high#1, low#2, high#3], high, [low#1, high#2, high#3]]
+	faces = [[1, 4, 3, 2], [5, 6, 7, 8], [1, 5, 8, 4], [2, 3, 7, 6], [1, 2, 6, 5], [4, 8, 7, 3]]
+	out = []
+	for f in faces { out = out + [c#(f#1), c#(f#2), c#(f#3), c#(f#1), c#(f#3), c#(f#4)] }
+	out
+}
+
+// the triangles of a whole scene, three corners [x, y, z] a triangle
+scene_triangles(placed: list): list := {
+	out = []
+	for thing in placed { for b in scene_boxes(thing) { out = out + box_triangles(b#1, b#2) } }
+	out
+}
+
+// [low corner, high corner] around every thing of a scene
+scene_bounds(placed: list): list := {
+	low = [0, 0, 0]
+	high = [0, 0, 0]
+	for thing in placed {
+		for b in scene_boxes(thing) {
+			for i in 1 to 3 {
+				low#i = min(low#i, b#1#i)
+				high#i = max(high#i, b#2#i)
+			}
+		}
+	}
+	[low, high]
+}
+
+// where a camera stands to see the whole scene through a 90° view: in front of it (+z), a little above, looking at its
+// centre
+scene_camera(placed: list): list := {
+	b = scene_bounds(placed)
+	span = max(b#2#1 - b#1#1, b#2#2 - b#1#2)
+	[(b#1#1 + b#2#1) / 2, (b#2#2 - b#1#2) / 2 + span * 0.25, b#2#3 + span * 0.75 + 2]
+}
