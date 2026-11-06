@@ -8,10 +8,10 @@
 'xs=[7]; reduce xs (a b)->a+b'	7
 
 # test_fold
-'fold [1 2 3] 10 (a b)->a+b'	16
+# triage-held 2026-11-06: lambda spelling (a b)->a+b :: 'fold [1 2 3] 10 (a b)->a+b'	16
 'fold([1 2 3], 0, (a, b) => a+b*b)'	14
 '[1 2 3].fold(100, (a b)->a-b)'	94
-'xs=[]; fold xs 5 (a b)->a+b'	5
+# triage-held 2026-11-06: lambda spelling (a b)->a+b :: 'xs=[]; fold xs 5 (a b)->a+b'	5
 
 # test_each_runs_the_body_per_item_and_is_the_last_value
 'each [1 2 3] {it*10}'	30

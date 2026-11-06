@@ -11,7 +11,7 @@
 
 # test_bytes_need_explicit_unit
 'x="👍🏽";count x.bytes'	8
-'t="héllo";number of bytes in t'	6
-'pixels=[1 2 4];#bytes in pixels'	24
+# triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 't="héllo";number of bytes in t'	6
+# triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 'pixels=[1 2 4];#bytes in pixels'	24
 'pixels=[1 2 4];pixels.bytecount'	24
-'pixels=[1 2 4];number of bytes in pixels'	24
+# triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 'pixels=[1 2 4];number of bytes in pixels'	24

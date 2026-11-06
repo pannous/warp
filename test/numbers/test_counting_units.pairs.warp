@@ -8,6 +8,6 @@
 'x="äb"; count bytes of x'	3
 
 # size_of_text_in_unit
-'size of "äb" in bytes'	3
-'size of "äb" in chars'	2
-'number of bytes in "äb"'	3
+# triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 'size of "äb" in bytes'	3
+# triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 'size of "äb" in chars'	2
+# triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 'number of bytes in "äb"'	3

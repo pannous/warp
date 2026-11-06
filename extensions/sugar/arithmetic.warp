@@ -21,6 +21,8 @@ rewrite $x as! $t => $x as !$t
 rewrite $n % ø => $n / 100
 # `(1/6) as decimal` is 0.16̅: a number's digits, the period overlined (lib/prelude.warp as_decimal)
 rewrite $x as decimal => as_decimal($x)
+# `"post" as symbol` is the symbol post, `:post`
+rewrite $x as symbol => symbol($x)
 # `random int`, `random(bool)`: a random value of the type (lib/prelude.warp random_of_type), the type no number or list
 # random(x: list or number) takes
 rewrite random $t => random_of_type($t) where $t is symbol and $t in [int, bool, codepoint, float]

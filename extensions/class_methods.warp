@@ -3,8 +3,10 @@
 # positions a class gives its instances, and its static fields. The core reads class declarations (passes/classes.warp);
 # the compiler itself declares classes without methods, so none of this runs when it compiles itself. Its parts name
 # the core words they read without a use: the core's definitions pass brings classes.warp and extensions/int_types/shows.warp first
+use "class_methods/listed_fields.warp"
 use "class_methods/statics.warp"
 use "class_methods/methods.warp"
 
-# the program's classes rewritten: their static fields hoisted, then their methods lifted to functions of the program
-classes_rewritten(program: Node): Node := methods_lifted(statics_hoisted(program))
+# the program's classes rewritten: their listed fields typed, their static fields hoisted, then their methods lifted to
+# functions of the program
+classes_rewritten(program: Node): Node := methods_lifted(statics_hoisted(listed_fields(program)))

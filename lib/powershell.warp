@@ -1,0 +1,53 @@
+// PowerShell's object pipeline over lists of records (maps): `use powershell` (card powershell-semantics). A cmdlet
+// Verb-Noun is the word verb_noun, its parameters the arguments, and the pipe | a dot, as warp chains a list's words:
+//   Get-Process | Where-Object CPU -gt 5 | Sort-Object CPU -Descending | Select-Object Name, CPU -First 3 | Format-Table
+//   processes.where_object(p => p.cpu > 5).sort_object_descending("cpu").select_object("name", "cpu").select_first(3).format_table()
+// A property is named by its key; PowerShell's case-insensitive names are warp's exact keys.
+use tables
+
+// Where-Object: the records the condition keeps
+where_object(records: list, condition: any): list := records.filter(condition)
+// ForEach-Object: each record made something else
+foreach_object(records: list, f: any): list := records.map(f)
+// Select-Object Name, CPU: each record with only these properties, in this order (a missing one ø, as PowerShell's $null)
+select_object(records: list, properties...): list := records.map(record => powershell_selected(record, properties))
+powershell_selected(record: any, properties: list): map := {
+	selected = {}
+	for property in properties { selected[property] = if record.has(property) then record[property] else ø }
+	selected
+}
+// Select-Object -First n, -Last n, -Skip n, -Unique
+select_first(records: list, n: int): list := records[0 ..< min(n, #records)]
+select_last(records: list, n: int): list := records[max(0, #records - n) ..< #records]
+select_skip(records: list, n: int): list := records[min(n, #records) ..< #records]
+select_unique(records: list): list := {
+	seen = []
+	for record in records { if record not in seen { seen += [record] } }
+	seen
+}
+// Sort-Object CPU [-Descending]: by a property's value, ties in their order (descending: reversed, as without -Stable)
+sort_object(records: list, property: text): list := records.sort_by(record => record[property])
+sort_object_descending(records: list, property: text): list := sort_object(records, property).reverse()
+// Group-Object Country: one record a value, in order of appearance: {name, count, group}, as PowerShell's GroupInfo
+group_object(records: list, property: text): list := {
+	names = []
+	for record in records { if record[property] not in names { names += [record[property]] } }
+	names.map(name => powershell_group(name, records.filter(record => record[property] == name)))
+}
+powershell_group(name: any, group: list): map := {name: name, count: #group, group: group}
+// Measure-Object CPU -Sum -Average -Minimum -Maximum: all four at once, with the count; no records, no sum
+measure_object(records: list, property: text): map := {
+	values = records.map(record => record[property])
+	if #values == 0 { return {count: 0} }
+	total = values.sum()
+	{count: #values, sum: total, average: total / #values, minimum: values.min(), maximum: values.max()}
+}
+// Format-Table: the records as an aligned table, the keys of the first its headers (lib/tables.warp)
+format_table(records: list): text := table_text(records)
+// Format-List: each record's properties one a line, `name : value`, the names padded to the longest; a blank line
+// between records
+format_list(records: list): text := records.map(powershell_listed).join("\n\n")
+powershell_listed(record: any): text := {
+	width = record.keys.map(key => #key).max()
+	record.keys.map(key => pad_display(key, width) + " : " + tables_cell(record[key])).join("\n")
+}

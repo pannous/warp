@@ -1,0 +1,16 @@
+# Source: card powershell-semantics, lib/powershell.warp (PowerShell's object pipeline as list words)
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.where_object(p => p.cpu > 5).map(p => p.name)'	["b", "c"]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_object("cpu").map(p => p.keys)'	[["cpu"], ["cpu"], ["cpu"]]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_first(2).map(p => p.name)'	["a", "b"]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_last(1).map(p => p.name)'	["c"]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_skip(2).map(p => p.name)'	["c"]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.sort_object("cpu").map(p => p.name)'	["a", "c", "b"]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.sort_object_descending("cpu").map(p => p.name)'	["b", "c", "a"]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.group_object("os").map(g => [g.name, g.count])'	[["mac", 2], ["linux", 1]]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.measure_object("cpu").average'	6
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.measure_object("cpu").maximum'	9
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.foreach_object(p => p.cpu * 2)'	[6, 18, 12]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.where_object(p => p.cpu > 5).sort_object_descending("cpu").select_object("name").select_first(1).map(p => p.name)'	["b"]
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_object("name", "cpu").format_table().split("\n")#1'	"name  cpu"
+'use powershell; ps = [{name:"a", cpu:3, os:"mac"}, {name:"b", cpu:9, os:"linux"}, {name:"c", cpu:6, os:"mac"}]; ps.select_first(1).select_object("name", "os").format_list()'	"name : a\nos   : mac"
+'use powershell; [1, 1, 2].select_unique()'	[1, 2]

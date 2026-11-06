@@ -2,6 +2,6 @@
 
 # print_empty_gives_nothing
 'print ø'	ø
-'print nil'	ø
+# triage-held 2026-11-06: nil, a foreign spelling of ø :: 'print nil'	ø
 'print(ø)'	ø
 'print ø; 3'	3

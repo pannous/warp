@@ -1,0 +1,4 @@
+# a capitalized plural field named after a declared class is a list of it under the lowercase name (decision
+# capitalized-field-list)
+'class Parameter{n:int}; class Signature{Parameters = []}; s = Signature(); s.parameters = s.parameters + [Parameter(2)]; s.parameters#1.n'	2
+'class Signature{Values = [1]}; Signature().Values'	[1]

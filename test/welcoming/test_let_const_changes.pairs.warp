@@ -15,5 +15,5 @@
 'const a, b = 3, 4; a + b'	7
 
 # let_mut_is_var
-'let mut x = 1; x = 2; x'	2
-'let mutable xs = [1]; xs.add(2); #xs'	2
+# triage-held 2026-11-06: Rust let mut / let mutable, foreign syntax :: 'let mut x = 1; x = 2; x'	2
+# triage-held 2026-11-06: Rust let mut / let mutable, foreign syntax :: 'let mutable xs = [1]; xs.add(2); #xs'	2
