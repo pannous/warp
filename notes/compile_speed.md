@@ -141,3 +141,13 @@ result, a call_ref result. Host imports keep anyref; closure entries and class w
 place/set is an i31). A closure's item 0 is a $Closure: read by `closure_slot`, never through the node cast.
 Each class struct is its own wasm type group: a module grouping two classes made another Instant type than a program
 declaring only Instant (cast failure across modules).
+
+## Hot spots after typed nodes (2026-11-06, profile data/profile/53103.sample)
+- lambdas-definitions-index (a14808ff41): parameters_given_functions filtered every definition per call node; by
+  name now: self compile −5.0 %.
+- lexer-codepoints (9dec4062f4): code_only was asked of one source 4–5 times per parse (declared operators, type
+  names, reached modules), each a walk of every character; kept per source now, and rules_reaching's picked a
+  yes/no per rule: self compile −12.5 %, units −18 %, hello −5.4 %. The character compares were not the cost: a
+  pre-check skipping non-delimiters and code points instead of the text measured the same.
+- Open for the user (morning): typed $items (seed ABI), map_index 14.8 % (scope_with copies maps via field_with,
+  enum ·case lookups by name), GC 15.8 %.
