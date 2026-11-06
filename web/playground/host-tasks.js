@@ -349,19 +349,19 @@ addHostPart({
 	words: (holder, hooks, { program, cString }) => ({
 		// `clipboard`: the page reads it (asynchronously) while the Worker waits (askPage; shipped with this part only,
 		// host_parts.rs, so a page that reads no clipboard carries none of it)
-		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
+		clipboard_text: () => newGuestValue(program(), self.askPage("clipboard", self.askPageClipboard).text),
 		// channels between programs (src/host/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 		// workers of this page's origin; the listener's timer (lowering/signals/system_signals.rs) takes what arrived
-		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainValue(program(), channel)),
+		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), guestPlain(program(), channel)),
 		channel_pending: id => BigInt(holder.channels?.get(Number(id))?.messages.length ?? 0),
-		channel_next: id => builtValue(program(), holder.channels?.get(Number(id))?.messages.shift() ?? null),
+		channel_next: id => newGuestValue(program(), holder.channels?.get(Number(id))?.messages.shift() ?? null),
 		channel_send: (channel, message) => {
-			const [name, value] = [channel, message].map(node => plainValue(program(), node));
+			const [name, value] = [channel, message].map(node => guestPlain(program(), node));
 			if (SOCKET_ADDRESS.test(name)) return sendOnSocket(holder, hooks, name, value);
 			new BroadcastChannel(name).postMessage(value);
 		},
-		fetch_start: (id, url) => startFetch(holder, hooks, Number(id), plainOfTree(readNode(program(), url))),
-		fetch_reply: id => buildValue(program(), treeOfPlain(fetchReply(holder, Number(id)))),
+		fetch_start: (id, url) => startFetch(holder, hooks, Number(id), guestPlain(program(), url)),
+		fetch_reply: id => newGuestValue(program(), fetchReply(holder, Number(id))),
 	}),
 	poll: deliverFetches,
 	navigated: dropPendingFetches,

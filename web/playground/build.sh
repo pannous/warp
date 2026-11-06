@@ -26,7 +26,7 @@ NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dy
 SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js completion.js shortcuts.js entities.tsv guide.js
 	guide.md guide-expert.md primer.md markup.js markup-transitions.js markup-forms.js canvas.js worker.js task-worker.js
 	task-workers.js js-members.js coi-serviceworker.js host.js "host-*.js" values.js wasi.js driver.js components.js foreign_python.py python_capi.py
-	reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
+	imports.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
 	keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
 # the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources)
