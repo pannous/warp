@@ -63,6 +63,8 @@ unit_written(code: Node): bool := {
 # single unit word or any other code
 compound_unit(code: Node): any := if code is key and unit_written(code) then "${code}".replace(" ", "") else ø
 # `km/h`, `kg·m/s^2`: the unit word leading a unit written of several parts, ø for other code
+# `area possibly`: the code a word qualifies, as the two words read as one group within an expression; ø for other code
+qualified(code: Node, word: Node): any := if is_group(code) and bracket_of(code) == "" and #code == 2 and code#2 == word then code#1 else ø
 leading_unit(code: Node): any := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then leading_unit(key_of(code)) else if code is symbol then code else ø
 # `q as km`, `(q as km) / h`: the unit word converted to at the bottom of the code's left operands, ø without one
 converted_unit(code: Node): any := {
@@ -1057,6 +1059,7 @@ rule_words = {
 	class_fields_listed: class_fields_listed,
 	class_methods_listed: class_methods_listed,
 	program_functions: program_functions,
+	qualified: qualified,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
 	it_taking: it_taking,

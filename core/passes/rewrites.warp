@@ -540,8 +540,8 @@ word_set(words: list): map := {
 }
 
 # the words each rule of a module needs, read off its text: a program mentioning none parses no rules. The first word of
-# the origin's shape after `where … =`, else of the pattern, else (a pattern starting with a hole, `$n $u`) the words
-# its `in [ms, kg]` listing names
+# the origin's shape after `where … =`, else of the pattern, else (a pattern starting with a hole, `$n $u`) the plain
+# words its rule word is given, else the words its `in [ms, kg]` listing names
 rule_needs(source: text): list := {
 	if not source.contains(rewrite_line_start) { return [] }
 	needs = []
@@ -554,11 +554,15 @@ rule_needs(source: text): list := {
 			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not is_rule_word(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
 			listed = listed_in_text(rule)
-			needs += if word != "" then [word] else if #listed > 0 then listed else classes_in_text(rule).flat_map(instance_words)
+			given = if #origin > 1 then words_given_in_text(origin#2) else []
+			needs += if word != "" then [word] else if #given > 0 then given else if #listed > 0 then listed else classes_in_text(rule).flat_map(instance_words)
 		}
 	}
 	needs
 }
+
+# the plain words a rule word is given, as written: `qualified($g, possibly)` names possibly
+words_given_in_text(call: text): list := if not call.contains("(") then [] else call[#call.split("(")#1 + 1 ..].split(",").map(argument => argument.trim().remove_suffix(")").trim()).filter(argument => argument != "" and is_alpha(argument[0]) and first_alphabetic_word(argument) == argument)
 
 # the words of a rule's `in [a, b]` listing, as written
 listed_in_text(rule: text): list := {
@@ -817,10 +821,13 @@ called_hole(n: Node, lines: list): bool := {
 
 # the word a program must mention for the rule to fire: the first of its origin's shape, else of its pattern
 needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
-# that word, else the words its listings name: `$n $u where $u in [ms, kg]` is needed by ms and kg
+# that word, else the plain words its rule words are given (`$a = qualified($g, possibly)`: possibly), else the words
+# its listings name: `$n $u where $u in [ms, kg]` is needed by ms and kg
 needed_words(rule: Rule): list := {
 	word = needed_word(rule)
 	if word != "" { return [word] }
+	given = rule.conditions.filter(is_computed_binding).flat_map(binding => items_of(value_of(binding))[1 ..].filter(argument => argument is symbol and rule_hole(argument) == ø).map(name_of))
+	if #given > 0 { return given }
 	listed = rule.conditions.map(membership).filter(listing => listing != ø).flat_map(listing => listing.words)
 	if #listed > 0 then listed else rule.conditions.map(class_tested).filter(name => name != ø).flat_map(instance_words)
 }
