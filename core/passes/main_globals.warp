@@ -87,8 +87,9 @@ changed_root(target: Node): any := {
 	ø
 }
 
-# `let n = 5` in the body: n is explicitly the function's own
-declares_local(body: Node, name: text): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
+# `let n = 5`, `var n = []` in the body: n is explicitly the function's own, also once the sugar dropped the word (it
+# noted where, lambdas.warp declared_locally)
+declares_local(body: Node, name: text): bool := name in declared_locally(body) or nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
 
 # how the body first mentions the name: binding it fresh (`primes = []`, the function's own local, as in Python),
 # reading or updating it (main's variable), or not at all ("")
