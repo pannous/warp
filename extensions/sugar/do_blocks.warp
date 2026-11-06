@@ -1,0 +1,5 @@
+# Ruby's `do |x| … end` after a method (card block-after): `xs.map do |a| a * 2 end` gives its lambda to the method as
+# its last argument, as `xs.map { |a| a * 2 }` does (core/parsing/parser.warp method_given); the bars are
+# extensions/pipe_lambdas.warp's
+rewrite ($x.$f do {$p -> $b}) => $x.$f($p -> $b) where $f is symbol
+rewrite ($x.$f($a...) do {$p -> $b}) => $x.$f($a..., $p -> $b) where $f is symbol
