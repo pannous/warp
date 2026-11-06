@@ -1,0 +1,24 @@
+# Texts are values (card text-element-assign): `k#i = c` rebinds k to the text with its i-th character
+# (1-based, by grapheme) replaced via lib/text.warp text_with_at. Only names the program assigns texts to
+# (as text_lints.warp's is_evident_text): list element writes stay the emitter's in-place form.
+text_with_at_word = "text_with_at"
+
+is_evident_text_name(n: Node, program: Node): bool := {
+	if not (n is symbol) { return no }
+	given = assigned_values(program, name_of(n))
+	#given > 0 and given.all(value => value is text)
+}
+
+# `k#i = c` of an evident text name k → `k = text_with_at(k, i, c)`
+text_element_form(n: Node, program: Node): Node := {
+	if not is_key(n, Op.Assign) { return n }
+	target = key_of(n)
+	if not is_key(target, Op.Hash) { return n }
+	base = key_of(target)
+	if not is_evident_text_name(base, program) { return n }
+	Key(base, Op.Assign, call_of(text_with_at_word, [base, value_of(target), value_of(n)]))
+}
+
+text_element_assigns(program: Node): Node := bottom_up(program, n => text_element_form(n, program))
+
+text_elements_extension = Extension{name: "text_elements", passes: {"late_sugar": text_element_assigns}}

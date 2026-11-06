@@ -1,5 +1,0 @@
-# Texts are values (card text-element-assign): `k#i = c` rebinds k to the text with its i-th character
-# (1-based, by grapheme) replaced. Lists keep the emitter's in-place write (`where $x is not vector`).
-# An index that is a number or a name only: `m[k]`'s lowered `k+1` (a map entry when k is text) stays a map write.
-rewrite ($x#$i = $c) => ($x = text_with_at($x, $i, $c)) where $x is value and $x is not vector and $i is int
-rewrite ($x#$i = $c) => ($x = text_with_at($x, $i, $c)) where $x is value and $x is not vector and $i is value
