@@ -1,0 +1,5 @@
+'f(x) := x * 2; f.effects'	[]
+'shout(t) := print t; shout.effects'	["IO"]
+'shout(t) := print t; loud() := shout("a"); effects of loud'	["IO"]
+'square(x) := x * x; square.effects is empty'	yes
+'g() := { puts "hi"; emit ask }; effects of g'	["IO", "ask"]

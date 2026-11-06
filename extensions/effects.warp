@@ -59,5 +59,37 @@ effect_chain(word: text, bodies: map, foreign: map, allowed: list, seen: map): l
 	ø
 }
 
+# `f.effects`, `effects of f` (card effects-lists, decision purity-predicates: `f.effects is empty` asks for a pure f):
+# the effects a program's function may have, by the words it reaches through the program's bodies, each once in the
+# order met, the events it raises among them: ["IO", "ask"], [] for a pure one; ø when the program defines no such
+# function (extensions/sugar/reflection.warp)
+effects_named(name: Node, program: Node): any := {
+	if function_definition(name, program) == ø { return ø }
+	foreign = {}
+	for statement in level_statements(program) { if is_foreign_line(statement) { foreign[declared_name(statement)] = yes } }
+	List(effects_reached(spelled(name), program, foreign, {}, []), Bracket.Square, Separator.Comma)
+}
+# `found` with the effects the word has or reaches that it lacks; `seen` the words followed already
+effects_reached(word: text, program: Node, foreign: map, seen: map, found: list): list := {
+	effect = own_effect(word, foreign)
+	if effect != ø { return if effect in found then found else found + [effect] }
+	if seen.has(word) { return found }
+	seen[word] = yes
+	body = body_of(symbol(word), program)
+	if body == ø { return found }
+	for called in symbol_words(body) { found = effects_reached(called, program, foreign, seen, found) }
+	for event in events_raised(body) { if event not in found { found += [event] } }
+	found
+}
+# the events a body raises, its effects too: `ask` of `emit ask` (extensions/event_phrases.warp), which
+# extensions/sugar/events.warp makes emitted(data ask, ø)
+events_raised(n: Node): list := {
+	if is_call_named(n, "emitted") and #n >= 2 { return symbol_words(n#2).filter(word => word != "data") }
+	if is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in emit_words and n#2 is symbol { return [name_of(n#2)] }
+	if n is key { return events_raised(key_of(n)) + events_raised(value_of(n)) }
+	if is_group(n) { return items_of(n).flat_map(events_raised) }
+	[]
+}
+
 # after the last pure pass, the library's definitions the program reaches beside its own
 effects_extension = Extension{name: "effects", attributes: EFFECT_MARKS.keys, passes: {"number_keys": checked_effects}}
