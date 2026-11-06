@@ -26,7 +26,8 @@ def function_body(f: Function, at: int): list {
 	if not relocates() { return uleb(#locals + #code) + locals + code }
 	marks = []
 	unmarked = []
-	for byte in code { if byte < 0 { marks += [[#unmarked, byte]] } else { unmarked += [byte] } }
+	# `part`, not `byte`: `for byte in xs` walks xs.bytes (decision text-unit-plurals)
+	for part in code { if part < 0 { marks += [[#unmarked, part]] } else { unmarked += [part] } }
 	size = uleb(#locals + #unmarked)
 	for mark in marks { module.relocations += [[at + #size + #locals + mark#1, kind_marked(mark#2), space_marked(mark#2)]] }
 	size + locals + unmarked
