@@ -1,0 +1,6 @@
+# Meta keys written in front of data (card meta-tagged-data, wiki/meta.md)
+'p = @source("gps") point{x:1 y:2}; p.@source'	"gps"
+'p = @source("gps") point{x:1 y:2}; p.x'	1
+'p = @unit("cm") {x:1}; p.@unit'	"cm"
+'p = @draft point{x:1}; p.@draft'	yes
+'p = point{x:1 y:2 @source:"gps"}; p.@source'	"gps"

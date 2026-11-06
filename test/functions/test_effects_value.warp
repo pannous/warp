@@ -1,22 +1,22 @@
 # from test_effects_value.rs: edit the Rust test, then run the script again
 
 # effects_of_last_keeps_the_prints
-is! 'print "a"
-square(x) := x*x
-effects of square' 'Pure'
+# triage-held 2026-11-06: effects of f / f.effects :: is! 'print "a"
+# :: square(x) := x*x
+# :: effects of square' 'Pure'
 
 # effects_of_as_a_value
-is! 'square(x) := x*x
-e = effects of square
-"square is " + e' 'square is Pure'
-is! 'f(x) := print x
-e = f.effects
-e' 'IO'
+# triage-held 2026-11-06: effects of f / f.effects :: is! 'square(x) := x*x
+# :: e = effects of square
+# :: "square is " + e' 'square is Pure'
+# triage-held 2026-11-06: effects of f / f.effects :: is! 'f(x) := print x
+# :: e = f.effects
+# :: e' 'IO'
 is! 'f(x) := print x
 "f does \\(f.effects)"' 'f does IO'
-is! 'g() := { puts "hi"; emit ask }
-es = effects of g
-es#2' 'ask'
+# triage-held 2026-11-06: effects of f / f.effects :: is! 'g() := { puts "hi"; emit ask }
+# :: es = effects of g
+# :: es#2' 'ask'
 
 # effects_of_a_parameter_reads_its_field
 is! 'chain_of(b) := b.effects

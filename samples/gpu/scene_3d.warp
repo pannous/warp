@@ -1,0 +1,64 @@
+#!/usr/bin/env warp
+# A 3d scene declared as the things in it (wiki/3d.md, card scene-3d): `use scene` assumes the rest, each thing's size
+# in meters, where it stands, which tree a tree is, the camera that sees them all. The shader casts a ray through every
+# pixel against the scene's triangles; the nearest one hit is lit by the sun in its thing's color
+use graphics
+use scene
+placed = scene("{car, tree, tree, house, person, tree}")
+mesh = scene_triangles(placed)
+# one color a triangle: a thing's color for each of its boxes' twelve triangles
+colors = []
+for thing in placed { for b in scene_boxes(thing) { for i in 1 to 12 { colors = colors + [thing.color] } } }
+eye = scene_camera(placed)
+size = 384
+render = shader {
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	let uv = (at.xy / $size - 0.5) * vec2f(1.0, -1.0);
+	// the camera circles the scene's centre, at the distance and height scene_camera chose
+	let turn = $angle;
+	let spin = mat3x3f(cos(turn), 0.0, sin(turn), 0.0, 1.0, 0.0, -sin(turn), 0.0, cos(turn));
+	let origin = spin * $eye.xyz;
+	let target = vec3f(0.0, 3.0, 0.0);
+	let forward = normalize(target - origin);
+	let right = normalize(cross(forward, vec3f(0.0, 1.0, 0.0)));
+	let up = cross(right, forward);
+	let ray = normalize(forward + uv.x * 1.2 * right + uv.y * 1.2 * up);
+	var nearest = 1e9;
+	var normal = vec3f(0.0);
+	var base = vec3f(0.0);
+	for (var i = 0u; i < u32($corners); i += 3u) {
+		let a = $mesh[i].xyz;
+		let ab = $mesh[i + 1u].xyz - a;
+		let ac = $mesh[i + 2u].xyz - a;
+		let p = cross(ray, ac);
+		let det = dot(ab, p);
+		if (abs(det) < 1e-6) { continue; }
+		let s = origin - a;
+		let u = dot(s, p) / det;
+		let q = cross(s, ab);
+		let v = dot(ray, q) / det;
+		let t = dot(ac, q) / det;
+		if (u >= 0.0 && v >= 0.0 && u + v <= 1.0 && t > 0.0 && t < nearest) {
+			nearest = t;
+			normal = normalize(cross(ab, ac));
+			base = $colors[i / 3u].xyz;
+		}
+	}
+	// the ground, y = 0, where no thing is nearer
+	if (ray.y < 0.0) {
+		let ground = -origin.y / ray.y;
+		if (ground < nearest) { nearest = ground; normal = vec3f(0.0, 1.0, 0.0); base = vec3f(0.35, 0.55, 0.30); }
+	}
+	if (nearest > 1e8) { return vec4f(0.55, 0.75, 0.95 - 0.3 * uv.y, 1.0); }
+	let facing = select(normal, -normal, dot(normal, ray) > 0.0);
+	let sun = normalize(vec3f(0.5, 0.8, 0.6));
+	let light = max(dot(facing, sun), 0.0) + 0.3 * max(dot(facing, -sun), 0.0);
+	return vec4f(base * (0.3 + 0.7 * light), 1.0);
+	}
+}
+
+corners = #mesh
+for frame in 1..120 {
+	angle = frame * 0.05
+	paint(render, size, size, {size: [size, size]})
+}

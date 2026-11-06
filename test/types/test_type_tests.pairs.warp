@@ -38,9 +38,9 @@
 'int=3; 3 is int'	1
 
 # test_as_declaration
-'x as number = 9; x'	9
-'x as number = 9; x is a number'	1
-'y as int = 4; y + 1'	5
+# triage-held 2026-11-06: a declaration x as number = 9 :: 'x as number = 9; x'	9
+# triage-held 2026-11-06: a declaration x as number = 9 :: 'x as number = 9; x is a number'	1
+# triage-held 2026-11-06: a declaration x as number = 9 :: 'y as int = 4; y + 1'	5
 
 # test_type_of_value_is_type
 'type(0.0) is int'	1

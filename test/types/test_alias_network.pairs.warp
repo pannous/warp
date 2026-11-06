@@ -1,0 +1,11 @@
+# The alias network (extensions/class_methods/methods.warp aliases_derived, card alias-network): a class's method answers the other word spellings of its lib/aliases.warp entry
+
+# a class giving add answers .plus, one giving plus answers .add; either answers +
+«class V { x: int; add(b: V) := V(x + b.x) }; V(1).plus(V(2)).x»	3
+«class V { x: int; plus(b: V) := V(x + b.x) }; [V(1).add(V(2)).x, (V(1) + V(2)).x]»	[3, 3]
+# equals is equal's spelling, so it is the class's ==
+«class P { x: int; equals(o: P) := x == o.x }; [P(1).equal(P(1)), P(1) == P(2)]»	[true, false]
+# a spelling the class declares itself stays its own
+«class W { x: int; add(b: W) := W(x + b.x); plus(b: W) := W(100) }; [W(1).plus(W(2)).x, W(1).add(W(2)).x]»	[100, 3]
+# count's spellings as before: size() is the class's count and #
+«class B { n: int; size() := n }; b = B(7); [b.count(), #b]»	[7, 7]

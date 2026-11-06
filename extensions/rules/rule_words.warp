@@ -256,15 +256,44 @@ condition_listens(condition: Node, body: Node, flags: list): Node := {
 	unfired = flags.map(flag => Key(ø, Op.Not, Key(flag, Op.Hash, 1)))
 	block = if #flags == 0 then body else List(flags.map(flag => Key(Key(flag, Op.Hash, 1), Op.Assign, Node.True)) + [body], Bracket.Curly, Separator.Semicolon)
 	declared = flags.map(flag => Key(flag, Op.Assign, List([Node.False], Bracket.Square, Separator.Comma)))
+	if is_read_anew(condition) { return held_listens(unfired.fold(condition, (now, guard) => Key(guard, Op.And, now)), block, declared) }
 	listens = symbol_words(condition).map(name => name_listener(name, became_true(unfired.fold(renamed(condition, name, symbol("value")), (now, guard) => Key(guard, Op.And, now)), renamed(condition, name, symbol("old")), block)))
 	separated(bracketed(declared + listens, "("), ";")
 }
+# A condition reading a field, `person.age > 30`, or calling a function, `big()` reading a global x, cannot take the
+# written value in place of a name: its listeners read it anew after each write and keep whether it held, the block
+# running when it came to hold. The function's reads are listened to (signaled: listened_through)
+is_read_anew(condition: Node): bool := nodes_in(condition).any(n => is_key(n, Op.Dot) or is_named_call(n))
+is_named_call(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol
+held_listens(condition: Node, block: Node, declared: list): Node := {
+	held = symbol("signal·held " + as_code(condition))
+	now = symbol("signal·now")
+	was = symbol("signal·was")
+	held_now = Key(held, Op.Hash, 1)
+	code = List([Key(now, Op.Assign, condition), Key(was, Op.Assign, held_now), Key(held_now, Op.Assign, now), became_true(now, was, block)], Bracket.Curly, Separator.Semicolon)
+	start = Key(held, Op.Assign, List([condition], Bracket.Square, Separator.Comma))
+	separated(bracketed(declared + [start] + symbol_words(condition).map(name => read_anew_listener(name, code)), "("), ";")
+}
+# a listener of each write of the name, its value read anew by the code
+read_anew_listener(name: Node, code: Node): Node := call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.False, Key(List([symbol("signal·written"), symbol("signal·before")], Bracket.Round, Separator.Comma), Op.Arrow, code)])
 # a listener of the name's changes running the code, which reads the written value as `value`, the one before as `old`
 name_listener(name: Node, code: Node): Node := call_of(variable_listen_word, [List([name], Bracket.Square, Separator.Comma), Node.True, Key(List([symbol("value"), symbol("old")], Bracket.Round, Separator.Comma), Op.Arrow, code)])
 # `on change b + c {…}`: a listener of each name the expression reads, running the block when the write changed its value
 change_listens(expression: Node, body: Node): Node := {
+	if is_read_anew(expression) { return changes_read_anew(expression, body) }
 	listens = symbol_words(expression).map(name => name_listener(name, Key(Key(ø, Op.If, Key(renamed(expression, name, symbol("value")), Op.Ne, renamed(expression, name, symbol("old")))), Op.Then, body)))
 	separated(bracketed(listens, "("), ";")
+}
+# `on change p.age {…}`: the field read anew after each write of p, the block running when it differs from the last
+# value read, which it reads as `old`, the new one as `value`
+changes_read_anew(expression: Node, body: Node): Node := {
+	last = symbol("signal·last " + as_code(expression))
+	last_now = Key(last, Op.Hash, 1)
+	value = symbol("value")
+	old = symbol("old")
+	code = List([Key(value, Op.Assign, expression), Key(old, Op.Assign, last_now), Key(last_now, Op.Assign, value), Key(Key(ø, Op.If, Key(value, Op.Ne, old)), Op.Then, body)], Bracket.Curly, Separator.Semicolon)
+	start = Key(last, Op.Assign, List([expression], Bracket.Square, Separator.Comma))
+	separated(bracketed([start] + symbol_words(expression).map(name => read_anew_listener(name, code)), "("), ";")
 }
 became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key(now, Op.And, Key(ø, Op.Not, before))), Op.Then, body)
 # the program with each write of a watched name notifying its listeners (signal_notify), `x = 3` as
@@ -274,7 +303,9 @@ became_true(now: Node, before: Node, body: Node): Node := Key(Key(ø, Op.If, Key
 signaled(program: Node): any := {
 	given = level_statements(program)
 	takers = signal_list_takers(given)
-	statements = if #takers == 0 then given else given.map(statement => signal_lists_passed(statement, takers))
+	passed = if #takers == 0 then given else given.map(statement => signal_lists_passed(statement, takers))
+	reads = function_reads(passed)
+	statements = if #reads.keys == 0 then passed else passed.map(statement => bottom_up(statement, part => listened_through(part, reads)))
 	watched = distinct(statements.flat_map(names_listened))
 	if #watched == 0 { return ø }
 	derived = derived_inputs(statements)
@@ -354,7 +385,35 @@ listening_item(call: Node, item: text): Node := match call {
 derived_inputs(statements: list): map := {
 	found = {}
 	for statement in statements { if is_key(statement, Op.Define) and key_of(statement) is symbol { found[name_of(key_of(statement))] = symbol_words(value_of(statement)) } }
-	found
+	closed_over(found)
+}
+# each name's words with those of the names among them, transitively: `quad := twice * 2; twice := a * 2` reads a
+closed_over(found: map): map := {
+	closed = {}
+	for name in found.keys { closed[name] = words_through(name, found, [name]) }
+	closed
+}
+words_through(name: text, found: map, seen: list): list := distinct(found[name].flat_map(word => if found.has(word) and word not in seen then [word] + words_through(word, found, seen + [word]) else [word]))
+# each function the program defines, `big() := x > 3`, and the names its body reads but its parameters, through the
+# functions it calls: a condition calling it listens to those (notes/signals.md "function_reads")
+function_reads(statements: list): map := {
+	found = {}
+	for statement in statements {
+		if is_key(statement, Op.Define) and not (key_of(statement) is symbol) {
+			name = defined_word(statement)
+			parameters = method_parameters(statement).map(parameter_name)
+			if name != ø { found[name] = symbol_words(value_of(statement)).filter(word => word not in parameters) }
+		}
+	}
+	closed_over(found)
+}
+# a listener of a function's name listening to the names the function reads; any other node as it is
+listened_through(n: Node, reads: map): Node := {
+	if not (is_call_named(n, variable_listen_word) and #n > 1 and is_group(n#2)) { return n }
+	names = items_of(n#2)
+	if not names.any(name => name is text and reads.has("${name}")) { return n }
+	through = distinct(names.flat_map(name => if name is text and reads.has("${name}") then reads["${name}"] else ["${name}"]))
+	bracketed([n#1, square_list(through.map(word => Text(word)))] + items_of(n)[2 ..], "(")
 }
 # the write of a watched name, notifying its listeners, and those of each watched derived value reading it once the
 # write changed it: `a = 2` as `(signal·old = a; signal·total = total; a = 2; if a != signal·old {
