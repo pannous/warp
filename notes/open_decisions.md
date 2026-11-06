@@ -6,6 +6,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
 (zero-bake hold, user via Supervisor 2026-11-05: only questions serving the library zero-bake plan are asked; others queue here.)
+- test-program-value (warp-playground, card program-test, queued 2026-11-06): a program made of `test …` lines (samples/laws/kitchensink.warp) shows nothing today. Should it end with the summary value "✓ N tests passed" / "K of N failed", as `warp test` prints? Recommended: yes, an ending rule like ended_by (extensions/rules/rule_words.warp) appending tests_summary() plus a counter in lib, no core. Alternative: the tour checks only that no test failed.
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 
