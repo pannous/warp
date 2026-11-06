@@ -113,7 +113,7 @@ methods_lifted(program: Node): Node := {
 		owner.methods = owner.methods + [as_operator_method(definition)]
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
-	for name in classes.keys { classes[name].methods = equality_derived(name, positions_derived(classes[name].methods, operator_table), operator_table) }
+	for name in classes.keys { classes[name].methods = aliases_derived(equality_derived(name, positions_derived(classes[name].methods, operator_table), operator_table)) }
 	promotions = promotions_of(top_statements, classes, scope_of(program))
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 { return program }
@@ -351,6 +351,36 @@ equality_derived(class_name: text, methods: list, operator_table: map): list := 
 	compared = Key(Key(self_node, Op.Dot, call_of(ordering_method, [other])), Op.Eq, 0)
 	methods + [Key(call_of(equality_method, [other]), Op.Define, Key(instance_test(other, class_name), Op.And, compared))]
 }
+# The alias network (card alias-network, notes/aliases.md): a class's method answers every word spelling of its
+# lib/aliases.warp entry the class does not declare itself, so a class giving add(o) answers `a.plus(b)` and one giving
+# size() answers `x.count()` and `#x`: each other spelling is a method calling the declared one, `plus(o) := add(o)`.
+# Symbol spellings stay the operators' (a class's add(o) is its `+` already)
+aliases_derived(methods: list): list := {
+	words = methods.map(defined_word).filter(word => word is text)
+	derived = []
+	for method in methods {
+		word = defined_word(method)
+		if not (word is text) { continue }
+		for spelling in alias_words(word) {
+			if spelling in words { continue }
+			words += [spelling]
+			arguments = method_parameters(method).map(parameter => if parameter is symbol then parameter else key_of(parameter))
+			derived += [Key(call_of(spelling, method_parameters(method)), Op.Define, call_of(word, arguments))]
+		}
+	}
+	methods + derived
+}
+# the word spellings of a word's alias entry, the canonical word first, the word itself among them; [word] when no
+# entry names it
+alias_words(word: text): list := {
+	canonical = canonical_word(word) ?? word
+	spelled = alias_spellings().canonical
+	others = spelled.keys.filter(spelling => spelled[spelling] == canonical and is_word_spelling(spelling))
+	if #others == 0 and canonical == word { return [word] }
+	[canonical] + others.filter(spelling => spelling != canonical)
+}
+# a spelling written as a name, `plus` and not `+` or `×`
+is_word_spelling(spelling: text): bool := #spelling > 0 and is_name_start(spelling[0 ..< 1]) and spelling.all(c => is_name_char(c))
 owns_operator(declared: Declared, glyph: text, operator_table: map): bool := declared.methods.any(method => spells_operator(defined_word(method), glyph, operator_table))
 spells_operator(word: any, glyph: text, operator_table: map): bool := word is text and spelled_operator(operator_table, word) != ø and operator_table[word]#2 == glyph
 shifted_twin(name: text, twin: text, shift: Op): Node := {
