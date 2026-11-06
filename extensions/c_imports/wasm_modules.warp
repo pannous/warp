@@ -23,13 +23,14 @@ I64_CONST = 66
 LIMITS_WITH_MAXIMUM = 1
 
 # the path of the core wasm module a `use`, `import`, `require` or `include` statement names, as written or with
-# .wasm; ø for another statement
-wasm_module_used(statement: text): text? := {
+# .wasm, in the program's folder (`•/` its project root, uses.warp rooted); ø for another statement
+wasm_module_used(statement: text, folder: text): text? := {
 	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
 	if word == ø or word == "" { return ø }
 	bare = word
 	for quote in c_quotes { if word.starts_with(quote) and word.ends_with(quote) and #word > 2 { bare = word.remove_prefix(quote).remove_suffix(quote) } }
-	for path in [bare, bare + WASM_EXTENSION] {
+	for written in [bare, bare + WASM_EXTENSION] {
+		path = path_in(folder, rooted(written, folder))
 		if path.ends_with(WASM_EXTENSION) and is_core_wasm(wasm_bytes(path)) { return path }
 	}
 	ø

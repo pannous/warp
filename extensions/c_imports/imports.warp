@@ -205,13 +205,13 @@ quoted_lines(source: text): list := {
 # [the source without its foreign lines (each an empty line, so the positions stay) and each `use sqlite3` of a
 # library with a lib/native/sqlite3.warp a `use` of that file, the C functions it calls: name → declaration, the
 # names the imports name that no line declares]
-c_functions_of(source: text, library_folder: text): list := {
+c_functions_of(source: text, library_folder: text, folder: text = "."): list := {
 	statements = c_statements(source)
 	libraries = []
 	# the wasm modules it uses, each statement standing for the values the module gives
 	wasm_uses = {}
 	for statement in statements {
-		path = wasm_module_used(statement)
+		path = wasm_module_used(statement, folder)
 		if path != ø { wasm_uses[statement] = wasm_exports(path) }
 	}
 	for statement in statements.filter(statement => not wasm_uses.has(statement)) {
