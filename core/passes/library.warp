@@ -130,15 +130,9 @@ module_hashes(): map := {
 	for module in std_module_names { hashes[module] = source_hash(try read(std_module_path(module)) else "") }
 	hashes
 }
-# a text's length and the djb2 hash of its bytes (the host's sha256 takes no text a compiler's scratch can't show)
-SOURCE_HASH_MODULUS = 4294967291
-source_hash(source: text): text := {
-	hash = 5381
-	# (by byte_at: a loop over source.bytes, a list made first, was ~2.6x as dear)
-	size = byte_size(source)
-	for at in 0 ..< size { hash = (hash * 33 + byte_at(source, at)) % SOURCE_HASH_MODULUS }
-	"${#source}-${hash}"
-}
+# a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
+# under WARP_LIB, card signature-sha256)
+source_hash(source: text): text := "${#source}-" + std_pure("hash", "sha256", [source])
 # the index as lib/ lies now, written into the modules folder; this run goes on with it, the host words made anew
 write_library_index(folder: text) := {
 	# (each section scanned, none read off an earlier index: the word section asks the host words)

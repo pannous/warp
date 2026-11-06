@@ -44,6 +44,8 @@ PATH_BYTES = 4096
 SLASH = 47
 SPACE = 32
 TEXT_SHIFT = 4294967296
+# the most bytes shown_from gives at once: the output area past its scratch (runtime/text.warp output_room, c_text_at)
+SHOWN_PART = 65488
 # the host words the driver answers, the number its callback is defined with (answered_word); exit(code) ends the run
 # with that status
 STD_IO_WORD = 1
@@ -1730,8 +1732,22 @@ shown_packed(caller: handle, context: handle, value: pointer): i64 := {
 	}
 	packed
 }
-# a value of the module as print shows it
-shown(caller: handle, context: handle, value: pointer): text := text_in(guest_memory(caller, context), shown_packed(caller, context, value))
+# a value of the module as print shows it, of any length: part by part through the output area (runtime/show.warp
+# shown_from), a whole file's text for sha256 too; a module built before shown_from shows it at once (shown_at)
+shown(caller: handle, context: handle, value: pointer): text := {
+	probe = allocate(EXTERN_BYTES)
+	if not wasmtime_caller_export_get(caller, "shown_from", 10, probe) { return text_in(guest_memory(caller, context), shown_packed(caller, context, value)) }
+	whole = ""
+	at = 0 as i64
+	part = SHOWN_PART
+	while part == SHOWN_PART {
+		chunk = text_in(guest_memory(caller, context), long_at(indexed(caller, context, "shown_from", value, at) + VALUE_OFFSET).value)
+		whole = joined(whole, chunk)
+		part = chunk.length as i64
+		at = at + part
+	}
+	whole
+}
 # the text shown_at packed (address, length) in the module's memory at `memory`, copied out
 text_in(memory: handle, packed: i64): text := {
 	length = packed % TEXT_SHIFT

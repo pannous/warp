@@ -84,6 +84,8 @@ def exported_shown_at(): any {
 	if module.builders.any(f => f.name == "shown_at") { return ø }
 	f = exported_function("shown_at", [ValueKind.Node], ValueKind.Int)
 	f.code = runtime_call("shown_at", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
+	f = exported_function("shown_from", [ValueKind.Node, ValueKind.Int], ValueKind.Int)
+	f.code = runtime_call("shown_from", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])]).code
 }
 # trap_message(code): the sentence of the runtime error a run failed in, or of the engine's trap of that code (-1 for
 # none), at its place in the program's file (runtime/error_sentences.warp), packed as shown_at's: what every host
