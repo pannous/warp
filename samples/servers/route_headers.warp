@@ -1,6 +1,7 @@
 #!/usr/bin/env warp
 # A route sets its answer's status and headers: `warp samples/servers/route_headers.warp`, then
 # `curl -i localhost:8080/teapot` answers 418 I'm a teapot with the header X-Warp: brewed
+use router
 get "/teapot" {
 	status 418
 	header "X-Warp" "brewed"

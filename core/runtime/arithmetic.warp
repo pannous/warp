@@ -60,6 +60,13 @@ appended_items(b: Node): list := {
 	if kind_code(b) == Kind.List { return unboxed_list(b) }
 	[b]
 }
+# `a += b` beside a class's `+` (control_flow.warp appended): b's items appended to a list a in place, yes; no for
+# any other a, which the class's `+` then adds to
+appends_in_place(a: Node, b: Node): bool := {
+	if is_null(a) or kind_code(a) != Kind.List { return no }
+	list_append(unboxed_list(a), appended_items(b))
+	yes
+}
 # `a += b` of values known only at run time: a list grows in place as list_append, anything else is a + b
 node_append(a: Node, b: Node) := {
 	if not is_null(a) and not is_null(b) and kind_code(a) == Kind.List and kind_code(b) == Kind.List {
