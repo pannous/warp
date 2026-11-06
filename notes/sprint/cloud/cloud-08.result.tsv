@@ -1,1 +1,2 @@
 enum-case	done	6de6827
+counter-struct	done	ab23ce7 (aside, not this card: `c = Counter()` without var gives c.count 3 and warns no field count)
