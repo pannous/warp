@@ -915,3 +915,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - mutable-array: closed; the list is the mutable array (in-place set O(1)), typed lists cover fixed numeric arrays.
   - map-chain-fusion: fuse `.map(f).map(g)` only when f and g are @pure; effectful chains run stage by stage as written.
   - map-chain-fusion (refined, user): "we also need to infer @pure from the compiler without explicit annotation where possible": purity is inferred (a function that calls only pure words and writes nothing outside its locals is pure); `@pure` is needed only where inference can't see it.
+- 2026-11-06 card sprint, round 6 (user):
+  - core-code-point-list-chars: both at once: `xs = "ab" as codepoints` gives codepoints where `xs#1 == 97` and `xs#1 == 'a'` both hold (a codepoint equals its number and its char). Today `'a' == 97` refuses ("== on char and int") and `as codepoints` is an unknown name.
+  - core-if-branch-float-widening: mixed int/float branches widen to float, as today.
+  - verify-function: a program may not name a function after a type word: `double(x) := …` refuses ("double is a type"); the law test renames it (user OK).
+  - typed-null: in discussion (wiki/null.md "Typed Null": `Person? x = null` as sugar for Person.null).
