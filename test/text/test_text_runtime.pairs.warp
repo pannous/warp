@@ -1,8 +1,8 @@
 # from test_text_runtime.rs: edit the Rust test, then run the script again
 
 # join_and_concatenation_take_non_ascii_characters
-# triage-held 2026-11-06: braceless two-argument call reads two ways, refused naming join(xs, "-") :: 'join ["ä" "ö"] ""'	'äö'
-# triage-held 2026-11-06: braceless two-argument call reads two ways, refused naming join(xs, "-") :: 'join ["ä" "ö"] "-"'	'ä-ö'
+'join ["ä" "ö"] ""'	'äö'
+'join ["ä" "ö"] "-"'	'ä-ö'
 '"ä"+"b"'	'äb'
 'x="ö"; y="b"; x+y'	'öb'
 
