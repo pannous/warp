@@ -1,6 +1,6 @@
 // The host words of a program warp compiled, run in the page (driver.js programRan): its imports mirror what the native
 // warp answers (core/native/driver.warp, WASI, libm). Shared by the playground (worker.js) and built sites
-// (site-worker.js); needs reader.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
+// (site-worker.js); needs reader.js (readText, the kinds). What only some programs reach is in the parts (HOST_PART_FILES, below).
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
@@ -25,7 +25,7 @@ const WINDOW_SIDES = { window_width: "view_width", window_height: "view_height" 
 const DISPLAY_READ_ONLY = "a program cannot resize the display: set window.width or canvas.width instead";
 const toldValue = name => self.pageSystemValues?.[name] ?? VIEW_DEFAULTS[name];
 // the standard library's adapters (src/modules/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
-// plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
+// plain values (values.js guestPlain / newGuestValue); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
 
 // the stored values of `stored x = v` and `local[k]`, by name: the page's localStorage as the worker started
@@ -187,7 +187,7 @@ function programImports(holder, hooks) {
 			},
 			// `notify "text"` (src/host.rs notify): the page shows it (playground.js notification)
 			notify: text => {
-				const shown = plainOfTree(readNode(program(), text));
+				const shown = guestPlain(program(), text);
 				if (!hooks.notify) throw new Error(`notify ${JSON.stringify(shown)}: this page shows no notifications`);
 				hooks.notify(typeof shown === "string" ? shown : JSON.stringify(shown));
 			},
@@ -195,7 +195,7 @@ function programImports(holder, hooks) {
 			// (hooks.dispatch), a page's own thread dispatches it (markup.js dispatchToPage)
 			dispatch_event: (name, detail) => {
 				const dispatch = hooks.dispatch ?? globalThis.dispatchToPage;
-				const event = { name: plainOfTree(readNode(program(), name)), detail: plainOfTree(readNode(program(), detail)) };
+				const event = { name: guestPlain(program(), name), detail: guestPlain(program(), detail) };
 				if (!dispatch) throw new Error(`emit ${event.name}: this host has no page to dispatch it to`);
 				dispatch(event);
 			},
@@ -235,8 +235,8 @@ const decode = bytes => utf8Decoder.decode(bytes);
 
 const textTree = text => ({ kind: "3", data: { text }, chain: [] });
 const KIND_LIST = 8n;
-// the inverse of reader.js readNode for the values a task carries (src/host/tasks.rs TaskValue): built through the module's
-// constructors; a list from its cons cells, the first item in data, the next cells in the chain
+// a value built from a tree of {kind, data, chain} (treeOfPlain, a task's value: src/host/tasks.rs TaskValue) through
+// the module's constructors; a list from its cons cells, the first item in data, the next cells in the chain
 function buildValue(module, tree) {
 	// where it was written (src/web/mod.rs tree_of): kept by node_at, which only a module quoting or parsing code has
 	if (tree.at !== undefined) {
@@ -284,81 +284,7 @@ function buildValue(module, tree) {
 	}
 }
 
-// src/operators/codes.rs OP_CODES as written (Op::as_str), by the code a key carries above the kind bits
-const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "/!", "/!=", "is"];
-// the keys that are entries of an object; the others are operations
-const ENTRY_OPERATORS = ["", ":", "=", ":="];
-const ROUND_BRACKET = 2n; // src/wasm_emitter bracket info: Curly 0, Square 1, Round 2
-// a value of the program (a reader.js tree) as a plain JavaScript value, for foreign_call: lists arrays, `{a:1}` objects
 const KIND_KEY = 6n;
-function plainOfTree(tree) {
-	const kind = BigInt(tree.kind);
-	const payload = tree.data ?? {};
-	// a ø item reads as a null node: it stays null ([1, ø] is [1, null]); only an empty list has no first node
-	const items = () => payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node ?? null)];
-	const plainOfItem = item => item === null ? null : plainOfTree(item);
-	switch (Number(kind & KIND_MASK)) {
-		case 0: return null;
-		case 1:
-			if (String(kind) === BOOL_KIND) return Number(payload.int) !== 0;
-			if (payload.ratio) return Number(payload.ratio[0].int) / Number(payload.ratio[1].int);
-			// a big integer keeps its digits as a BigInt (exact.js, which the parts carrying big numbers start)
-			if (payload.big) return typeof integerOfPayload === "function" ? integerOfPayload(payload) : null;
-			return payload.int === undefined ? null : Number(payload.int);
-		case 2: return Number(payload.float);
-		case 3: case 5: return payload.text;
-		case 4: return String.fromCodePoint(payload.i31);
-		// the value's own cells follow it in the key's flat chain (reader.js): `{a:[1, 2]}` keeps its 2; code, `1+1`, is
-		// `{"+": [1, 1]}` (the JsonLogic shape of src/node/json_xml.rs), a prefix operation without its empty left side
-		case 6: {
-			const [value, ...rest] = tree.chain ?? [];
-			const right = value ? plainOfTree({ ...value, chain: rest }) : null;
-			const operator = OPERATOR_SPELLINGS[Number((kind >> 8n) & KIND_MASK)] ?? ":"; // the operator code is the byte above the kind (src/run/wasm_reader.rs)
-			if (ENTRY_OPERATORS.includes(operator)) return { [keyOfTree(payload.node)]: right };
-			const left = plainOfTree(payload.node);
-			return { [operator]: [left, right].filter(side => side !== null) };
-		}
-		case 7: case 8: {
-			const values = items();
-			const bracket = (kind >> 8n) & KIND_MASK;
-			// a group of one, `(b + 1)`, is its item (src/node/json_xml.rs)
-			if (bracket === ROUND_BRACKET && values.length === 1) return plainOfItem(values[0]);
-			const isObject = bracket === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
-			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
-		}
-		// its value the function's name (src/wasm_emitter/functions/closures.rs), kept for a host word calling the export itself
-		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
-		default: return null;
-	}
-}
-
-// the key of an entry as lib/json.warp json_key writes it: a name or text as itself, any other key as warp shows it
-// ("" + key, runtime/show.warp): yes/no, ø, an operation `a+b` and an entry `x: y`, the head of `f(x) := …` "(f x)";
-// a module of the self-hosted compiler needs none of this, its keys are read as shown (values.js guestEntries)
-const BRACKET_PAIRS = ["{}", "[]", "()"];
-function keyOfTree(tree) {
-	const kind = Number(BigInt(tree.kind) & KIND_MASK);
-	if (kind === 6) {
-		const [right, ...rest] = tree.chain ?? [];
-		const operator = OPERATOR_SPELLINGS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? ":";
-		const sides = [tree.data?.node, right && { ...right, chain: rest }].filter(Boolean).map(keyOfTree);
-		return sides.join(ENTRY_OPERATORS.includes(operator) ? operator + " " : operator);
-	}
-	if (kind !== 7 && kind !== 8) {
-		const plain = plainOfTree(tree);
-		return plain === true ? "yes" : plain === false ? "no" : plain === null ? "ø" : String(plain);
-	}
-	const payload = tree.data ?? {};
-	const items = payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
-	const [open = "", close = ""] = BRACKET_PAIRS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? "";
-	return open + items.map(keyOfTree).join(" ") + close;
-}
-
-// a warp function given to foreign code: a JavaScript function calling it back through the module's closure_apply
-// (src/wasm_emitter/functions/closures.rs), synchronously, with as many of its arguments as it takes
-function callableOf({ module, node }) {
-	return (...values) => plainOfTree(readResult(module, module.closure_apply(node, buildValue(module, treeOfPlain(values)))));
-}
 
 // objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
 // they cross as `{$handle: id, type, text}` and are the object again when they come back

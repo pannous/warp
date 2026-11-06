@@ -510,12 +510,9 @@ function linearCells(memory, block) {
 addHostPart({
 	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? false : undefined,
 	words: (holder, hooks, { program }) => {
-		const plain = node => plainValue(program(), node);
-		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });
-		// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
-		const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
-		const numberList = (values, Elements) => !selfHosted(program()) ? list(Array.from(values), item(Elements))
-			: Elements === Float32Array ? newGuestFloats(program(), values) : newGuestInts(program(), values);
+		const plain = node => guestPlain(program(), node);
+		// floats, also the whole ones (newGuestValue would make 3 an Int); ints of an array<i32> or array<u32>
+		const numberList = (values, Elements) => Elements === Float32Array ? newGuestFloats(program(), values) : newGuestInts(program(), values);
 		// the kernel over the f32 copy of a block's cells, from `first` on read back; `kept` as gpuComputedFloats takes it
 		const kernel = (shader, numbers, workgroups, first, kept = {}) =>
 			gpuJob("gpu_kernel", { shader: plain(shader), numbers, workgroups: Number(workgroups), first, ...kept }, [numbers.buffer]);
@@ -610,7 +607,7 @@ addHostPart({
 		// a GPU list [f32] of the program's (extensions/gpu_lists/runtime.warp): its cells where they are in the module's memory,
 		// undefined for any other value
 		const gpuCells = value => {
-			const place = selfHosted(program()) && program().gpu_list_place ? program().gpu_list_place(value) : -1n;
+			const place = program().gpu_list_place?.(value) ?? -1n;
 			if (place < 0n) return undefined;
 			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell?.(value) ?? 0n)];
 			return new Cells(program().memory.buffer, Number(place >> 32n), Number(place & 0xFFFFFFFFn));
@@ -634,7 +631,7 @@ addHostPart({
 			}));
 		};
 		const computed = (shader, numbers, workgroups) => {
-			const entries = selfHosted(program()) ? guestEntries(program(), numbers) : undefined;
+			const entries = guestEntries(program(), numbers);
 			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(plain(shader), entries, workgroups);
 			const cells = gpuCells(numbers);
 			if (cells) {
@@ -649,16 +646,14 @@ addHostPart({
 				const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
 				const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
 				const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
-				if (selfHosted(program())) return newGuestMap(program(), Object.entries(left).map(([name, values]) => [name, numberList(values, elements[name])]));
-				const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
-				return buildValue(program(), { kind: CURLY_LIST, items: entries });
+				return newGuestMap(program(), Object.entries(left).map(([name, values]) => [name, numberList(values, elements[name])]));
 			}
 			const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
 			return numberList(values, gpuElements(code));
 		};
 		const rendered = (shader, width, height, values) => {
 			const pixels = holder.gpuRendered(plain(shader), width, height, values);
-			return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
+			return newGuestInts(program(), pixels);
 		};
 		// a WGSL error inside a `try` is the program's to catch
 		const catchable = word => (...given) => {

@@ -6,6 +6,7 @@
 // The program's Worker is the one `warp deploy` builds (src/web/deploy.rs): the host scripts its module needs, then
 // cloud-worker.js, composed here from our own copies, so a deploy carries no JavaScript of its own.
 import readerScript from "../playground/reader.js";
+import valuesScript from "../playground/values.js";
 import hostScript from "../playground/host.js";
 import importsScript from "../playground/imports.js";
 import exactScript from "../playground/exact.js";
@@ -38,6 +39,7 @@ import coiServiceWorkerScript from "../playground/coi-serviceworker.js";
 // the host scripts by the names src/web/site.rs host_scripts_of gives them (HOST_SCRIPTS, HOST_PARTS)
 const HOST_SCRIPTS = {
 	"reader.js": readerScript,
+	"values.js": valuesScript, // what every host word reads and builds a value with
 	"host.js": hostScript,
 	"host-files.js": stdScript + filesScript,
 	"host-sound.js": soundScript,
@@ -51,7 +53,7 @@ const HOST_SCRIPTS = {
 	"host-random.js": randomScript,
 	"host-media.js": mediaScript,
 };
-const ALWAYS_SCRIPTS = ["reader.js", "host.js"];
+const ALWAYS_SCRIPTS = ["reader.js", "values.js", "host.js"];
 // the files a browser program's site ships besides the host scripts, by the names src/host/page_parts.rs gives them
 const SITE_FILES = {
 	...HOST_SCRIPTS,
@@ -341,7 +343,7 @@ function checkedName(name) {
 	return name;
 }
 
-// the host scripts a deploy names (?scripts=host-files.js,…), reader.js and host.js always first
+// the host scripts a deploy names (?scripts=host-files.js,…), reader.js, values.js and host.js always first
 function checkedScripts(names) {
 	const asked = (names ?? "").split(",").filter(Boolean).filter(name => !ALWAYS_SCRIPTS.includes(name));
 	const unknown = asked.filter(name => !HOST_SCRIPTS[name]);

@@ -2,15 +2,8 @@
 // as core/native/driver.warp reads and builds them natively: through the module's exports, never its GC layout.
 // Reading: shown_at (a value's text, packed as address · 2^32 + length in the module's memory), is_textual, item_count,
 // item_at and int_item_at (1-based). Building: the constructors of core/emitter/host.warp host_builders (new_empty,
-// new_int, new_bool, new_float, new_text, new_list, error_of, new_bytes …). reader.js reads the Rust-era modules
-// (reflect_* exports), which these have not.
-
-// a module of the Rust-era compiler, which reader.js reads, has reflect_* exports: plainValue and builtValue serve both
-// until the page compiles with the self-hosted compiler only (card wasm-playground-build), then they are these
-const selfHosted = program => !program.reflect_value;
-const plainValue = (program, value) => selfHosted(program) ? guestPlain(program, value) : plainOfTree(readNode(program, value));
-const errorValue = (program, reason) => selfHosted(program) ? newGuestError(program, reason) : errorInProgram(program, reason);
-const builtValue = (program, plain) => selfHosted(program) ? newGuestValue(program, plain) : buildValue(program, treeOfPlain(plain));
+// new_int, new_bool, new_float, new_text, new_list, error_of, new_bytes …). The page runs no other modules: the
+// Rust-era ones, read through reflect_* exports, are gone with their reader (card drop-readnode-branch).
 
 const SHOWN_TEXT_SHIFT = 2n ** 32n; // driver.warp TEXT_SHIFT
 const SQUARE_BRACKET = 1n; // the bracket info of a [list] (core/node.warp Bracket: Curly 0, Square 1, Round 2)

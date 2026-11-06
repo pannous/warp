@@ -102,8 +102,10 @@ guestCount/guestItem/guestInts (item_count, item_at, int_item_at), guestBytes; g
 shown text (maps, lists, texts, yes/no, ø, numbers, ratios; a list too long to show item by item). Built back with
 the constructors of core/emitter/host.warp host_builders (newGuestText, newGuestList from the last item on,
 newGuestMap by new_spelled_key/new_spelled_list, newGuestFloats, newGuestError, newGuestValue of plain JS).
-plainValue/builtValue/errorValue pick reader.js for a Rust-era module until none runs in the page (card
-drop-readnode-branch). Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
+Every module in the page is one (card drop-readnode-branch, 2026-11-06): reader.js readNode and the Rust-era
+branches (plainValue/builtValue/errorValue, plainOfTree/keyOfTree/callableOf, ints_to_list/list_to_ints, the
+Node copy into a module imported by path) are gone; notify, dispatch_event and foreign_call read through values.js
+too. host.js buildValue/treeOfPlain stay: they build through host_builders. Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
 sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its rest) and floats are read by shown
 text, so a million-item GPU list stops the run (samples/gpu/gpu_million; bulk exports asked of core).
 libwarp_sound is a page library: lib/sound.warp's `from 'warp_sound'` words (host-sound.js soundLibrary: play
