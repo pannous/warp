@@ -1,0 +1,9 @@
+# warp fix writes a quoted path given to a file word as a path literal (decision path-literals-preferred, card
+# quoted-path-fix)
+is! «use "../../lib/fix/fix.warp"; fixed('t = read("data/a.txt")', [], yes)#1» 't = read(./data/a.txt)\n'
+is! «use "../../lib/fix/fix.warp"; fixed('write("/tmp/out.txt", t)', [], yes)#1» 'write(/tmp/out.txt, t)\n'
+is! «use "../../lib/fix/fix.warp"; fixed('if exists "../x.warp" { 1 }', [], yes)#1» 'if exists ../x.warp { 1 }\n'
+# a path with a space, a web address and a text given to another word stay quoted
+is! «use "../../lib/fix/fix.warp"; fixed('read("my data.txt")', [], yes)#1» 'read("my data.txt")\n'
+is! «use "../../lib/fix/fix.warp"; fixed('read("https://x.org/a")', [], yes)#1» 'read("https://x.org/a")\n'
+is! «use "../../lib/fix/fix.warp"; fixed('print("data/a.txt")', [], yes)#1» 'print("data/a.txt")\n'
