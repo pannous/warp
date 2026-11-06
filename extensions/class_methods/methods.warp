@@ -353,14 +353,15 @@ equality_derived(class_name: text, methods: list, operator_table: map): list := 
 }
 # The alias network (card alias-network, notes/aliases.md): a class's method answers every word spelling of its
 # lib/aliases.warp entry the class does not declare itself, so a class giving add(o) answers `a.plus(b)` and one giving
-# size() answers `x.count()` and `#x`: each other spelling is a method calling the declared one, `plus(o) := add(o)`.
+# plus(o) answers `a.add(b)`: each other spelling is a method calling the declared one, `plus(o) := add(o)`.
 # Symbol spellings stay the operators' (a class's add(o) is its `+` already)
 aliases_derived(methods: list): list := {
 	words = methods.map(defined_word).filter(word => word is text)
 	derived = []
 	for method in methods {
 		word = defined_word(method)
-		if not (word is text) { continue }
+		# count's entry is networked already: any spelling of it is the class's count (counts, derived_dispatchers)
+		if not (word is text) or counts(word) { continue }
 		for spelling in alias_words(word) {
 			if spelling in words { continue }
 			words += [spelling]
