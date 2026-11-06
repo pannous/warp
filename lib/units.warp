@@ -156,10 +156,13 @@ rewrite $e * $u => quantity($e, $name) where $e is number and $u is symbol and $
 // `2 hours in minutes`: `in` is a word of the phrase, so the run is taken whole, before `2 hours` alone (rules try
 // a phrase's runs in their order)
 rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
-// `20 °C`, `68 °F` spaced alike, and `q as °C`, `q in °F` converting to a scale
+// `20 °C`, `68 °F` spaced alike, and `q as °C`, `q in °F` converting to a scale; `100 °C in °F`, parsed 100 (°C in °F),
+// takes its amount first
+rewrite $e $u as $t => ($e $u) as $t where $e is number and $u in [°C, °F]
+rewrite $e $u in $t => ($e $u) in $t where $e is number and $u in [°C, °F]
 rewrite $e $u => quantity($e, $name) where $e is number and $u in [°C, °F] and $name = spelled($u)
-rewrite $q as $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
-rewrite $q in $u => $q.to($name) where $u in [°C, °F] and $name = spelled($u)
+rewrite $q as $u => $q.to($name) where not $q in [°C, °F] and $u in [°C, °F] and $name = spelled($u)
+rewrite $q in $u => $q.to($name) where not $q in [°C, °F] and $u in [°C, °F] and $name = spelled($u)
 // `[3, 4] cm`: a unit after a list measures each of its items
 rewrite $xs $u => $xs.map(item => item * $u) where $xs is list and $u is symbol and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is; a unit
