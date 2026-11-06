@@ -1,6 +1,7 @@
 #!/usr/bin/env warp
-# Reading a component's state from outside it (card web-outside-state): `counters`, Counter's lower-case plural, is
-# its instances in page order. `counters#1.count` is the first one's count, `counters.map(c => c.count)` every one's.
+# Reading a component's state from outside it (card web-outside-state): `Counter.instances`
+# are its instances in page order (decision instances-not-plural). `Counter.instances#1.count` is the first one's
+# count, `Counter.instances.map(c => c.count)` every one's.
 # Run it in the playground and click.
 use web
 def Counter(start) {
@@ -10,6 +11,6 @@ def Counter(start) {
 div{
 	Counter(0)
 	Counter(10)
-	button{ on click { counters#1.count = 0 }, "Reset the first" }
-	p{ "sum " + sum(counters.map(c => c.count)) }
+	button{ on click { Counter.instances#1.count = 0 }, "Reset the first" }
+	p{ "sum " + sum(Counter.instances.map(c => c.count)) }
 }

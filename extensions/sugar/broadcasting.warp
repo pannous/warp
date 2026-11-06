@@ -12,6 +12,10 @@ rewrite $f($a, $b) => element_wise_any($a, $b, ($l, $r) -> $f($l, $r)) where $b 
 # stays the question whether every element is
 rewrite $f each $xs => $xs.map($e -> $f($e)) where $f is function
 rewrite $f all $xs => $xs.map($e -> $f($e)) where $f is function
+# `xs.each.count`, `xs.each.contains("c")`: a field or method of every item (decision each-field-broadcast); the
+# list's own `xs.count` keeps its meaning
+rewrite $xs.each.$f($a...) => $xs.map($e -> $e.$f($a...)) where $f is symbol
+rewrite $xs.each.$f => $xs.map($e -> $e.$f) where $f is symbol
 # `all xs > 0` (parsed `all (xs > 0)`): whether every element compares so, `any xs > 0` whether one does
 rewrite (all $xs == $y) => all($xs, $e -> $e == $y)
 rewrite (all $xs != $y) => all($xs, $e -> $e != $y)

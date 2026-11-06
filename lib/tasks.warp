@@ -16,8 +16,11 @@ rewrite go $x => task_go(() => $x)
 rewrite await all $xs => $xs.map(task_awaited)
 rewrite await any $xs => task_awaited_any($xs)
 rewrite await first $xs => task_awaited_any($xs)
-rewrite await $x within $t or $d => task_awaited_within($x, $t / 1ms, () => $d)
-rewrite await $x within $t => task_awaited_within($x, $t / 1ms, () => raise "the task took longer than " + str($t))
+// a spaced time, `within 100 ms`, is two items of the phrase: its number and its unit
+rewrite await $x within $n $u or $d => task_awaited_within($x, $n $u, () => $d) where $u is symbol
+rewrite await $x within $n $u => task_awaited_within($x, $n $u, () => raise "the task took longer than " + str($n $u)) where $u is symbol
+rewrite await $x within $t or $d => task_awaited_within($x, $t, () => $d)
+rewrite await $x within $t => task_awaited_within($x, $t, () => raise "the task took longer than " + str($t))
 rewrite await $x => $awaited where $awaited = awaited_operand($x)
 // `finish job` is `await job` (decision finish-await), a word a program may define for itself
 rewrite finish $x => $awaited where $awaited = awaited_operand($x)
@@ -145,7 +148,7 @@ task_awaited_any(xs: any): any := {
 	task_awaited(xs.filter(is_done)#1)
 }
 // `await job within t or d`: its value if it is done within t (ms), else d (an error without one)
-task_awaited_within(x, ms, fallback: function) := if x is Task then task_value_within(x, ms, fallback) else x
+task_awaited_within(x, time, fallback: function) := if x is Task then task_value_within(x, time / 1ms, fallback) else x
 task_value_within(x: Task, ms, fallback: function) := {
 	tasks_run_while(() => not x.done, clock() + ms)
 	if x.done then task_value(x) else fallback()
