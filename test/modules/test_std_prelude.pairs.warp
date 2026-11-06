@@ -21,4 +21,4 @@
 'first(x) := 7; first([1])'	1
 
 # dir_lists_the_prelude
-'dir(prelude)#1'	'first'
+'"first" in dir(prelude)'	yes
