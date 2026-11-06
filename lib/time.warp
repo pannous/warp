@@ -1,4 +1,6 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
+// its durations are lib/units' Time quantities (milliseconds_of)
+use units
 
 // `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it)
 now(): Instant := Instant(wall_clock_ms())
@@ -33,12 +35,9 @@ class Instant {
 	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
 	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
 }
-// a duration as milliseconds: a plain number is one already; lib/units overloads it for its quantities, `2 seconds`
-// and `1h` counted in ms, one of another dimension a DimensionError
-milliseconds_of(duration: any) := duration
 // a duration (`now > 9.hours`) compared with the matching part, with a warning: a bare duration is mostly a clock
 // time meant; a plain number is milliseconds since 1970
-instant_part_compare(ms, other) := {
+instant_part_compare(ms: int, other: any): int := {
 	if other is number { return ms - other }
 	// a lib/units duration quantity, counted in whole milliseconds
 	d = int(milliseconds_of(other))
