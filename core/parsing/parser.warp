@@ -1755,13 +1755,16 @@ def blank_words(statement: text): list := statement.replace("\t", " ").split(" "
 // word → the module declaring it global, `global play(file: text) := …` (decision bizarre-global: a program naming it
 // uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
 // expected-type-names: a parameter typed Time finds its values there); "tags", tag → its module, each text of a global
-// list, `global html_elements = ["div", …]` of markup (decision html-render-mode: a program writing `div{…}` uses it)
+// list, `global html_elements = ["div", …]` of markup (decision html-render-mode: a program writing `div{…}` uses it);
+// "constants", constant → its module, `const pi() := π` of reals (decision library-constant-refused: `pi = 4` is refused)
 def global_words(): map := library_index_section("global")
+def library_constants(): map := library_index_section("const")
 def declared_classes_modules(): map := library_index_section("class")
 def declarations_scanned(files: map): map {
 	words = {}
 	classes = {}
 	tags = {}
+	constants = {}
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
 			module = path[0 ..< #path - #module_extension]
@@ -1780,10 +1783,11 @@ def declarations_scanned(files: map): map {
 					}
 				}
 				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
+				if line.starts_with(CONSTANT_MARK) { constants[name_starting(line[#CONSTANT_MARK ..])] = module }
 			}
 		}
 	}
-	{"words": words, "classes": classes, "tags": tags}
+	{"words": words, "classes": classes, "tags": tags, "constants": constants}
 }
 def declared_tags(): map := library_index_section("tag")
 // the texts quoted in a line of a list, `"a", "b",` → ["a", "b"]: every other piece between its quotes
@@ -1795,6 +1799,7 @@ def quoted_texts(line: text): list {
 }
 GLOBAL_MARK = "global "
 CLASS_MARK = "class "
+CONSTANT_MARK = "const "
 // the name a text starts with, "" when none
 def name_starting(line: text): text {
 	stop = 0

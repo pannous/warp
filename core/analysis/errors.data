@@ -6,6 +6,8 @@ kind_change($name, $was, $now)	"{name} was {a was}, is given {a now}: use anothe
 charged_assignment($name)	"{name} is defined with `:=`, charged: evaluated at each use, it takes no assignment; define it with `{name} = …` for a variable"	"{name} = …"
 # decisions let-reassign, const-deep: a `let`/`const` name assigned again (source_checks.warp)
 constant_assignment($name)	"{name} is a constant: declared with let or const, it binds once; declare it `var {name} = …` for a variable"	"var {name}"
+# decision library-constant-refused: a library constant assigned at the top level, `pi = 4` (source_checks.warp)
+library_constant($name)	"{name} is a constant"	"another name"
 # a function changing a main-level variable not declared global (main_globals.warp)
 main_variable_change($name)	"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"	"global {name}"
 # a lambda whose parameter is a literal, `1 => 2` (lambdas.warp written_parameters, card pure-lane-traps-2)
