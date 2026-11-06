@@ -212,3 +212,70 @@ int warp_sound_decoded_value(int file, long at) {
 	decoded_file* f = &decoded[file];
 	return (ma_uint64)at < f->frames * (ma_uint64)f->channels ? f->values[at] : 0;
 }
+
+// MIDI out (card midi-output-native, decision midi-native): lib/sound.warp's midi_send, the bytes of one message to the
+// output named (the first for ""), else to warp's own virtual source "warp" that a synth app listens to; 0 sent,
+// MIDI_NO_OUTPUT for no output of that name, MIDI_FAILED, MIDI_UNSUPPORTED where no MIDI is built in yet (Linux: ALSA
+// to come). A quiet run (WARP_NO_WINDOW, CI) sends nothing, as it hears nothing. warp_midi_outputs and
+// warp_midi_inputs: the devices' names, one a line
+// (NULL where no MIDI is built in)
+enum { MIDI_FAILED = -1, MIDI_NO_OUTPUT = -2, MIDI_UNSUPPORTED = -3, MIDI_NAMES_BYTES = 8192, MIDI_PACKET_BYTES = 1024 };
+#ifdef __APPLE__
+static char midi_names[MIDI_NAMES_BYTES];
+#include <CoreMIDI/CoreMIDI.h>
+static MIDIClientRef midi_client;
+static MIDIPortRef midi_output_port;
+static MIDIEndpointRef midi_virtual_source;
+
+static int midi_started(void) {
+	if (midi_client) return 1;
+	if (MIDIClientCreate(CFSTR("warp"), NULL, NULL, &midi_client) != noErr) return 0;
+	return MIDIOutputPortCreate(midi_client, CFSTR("warp out"), &midi_output_port) == noErr;
+}
+static void endpoint_name(MIDIEndpointRef endpoint, char* into, size_t size) {
+	CFStringRef name = NULL;
+	into[0] = 0;
+	if (MIDIObjectGetStringProperty(endpoint, kMIDIPropertyDisplayName, &name) != noErr || !name) return;
+	CFStringGetCString(name, into, (CFIndex)size, kCFStringEncodingUTF8);
+	CFRelease(name);
+}
+static MIDIEndpointRef output_named(const char* port) {
+	char name[256];
+	for (ItemCount i = 0; i < MIDIGetNumberOfDestinations(); i++) {
+		MIDIEndpointRef output = MIDIGetDestination(i);
+		if (!*port) return output;
+		endpoint_name(output, name, sizeof name);
+		if (strcmp(name, port) == 0) return output;
+	}
+	return 0;
+}
+int warp_midi_send(const char* port, const unsigned char* bytes, size_t size) {
+	if (silent()) return 0;
+	if (!midi_started()) return MIDI_FAILED;
+	Byte buffer[MIDI_PACKET_BYTES];
+	MIDIPacketList* packets = (MIDIPacketList*)buffer;
+	MIDIPacketListAdd(packets, sizeof buffer, MIDIPacketListInit(packets), 0, size, bytes);
+	MIDIEndpointRef output = output_named(port);
+	if (output) return MIDISend(midi_output_port, output, packets) == noErr ? 0 : MIDI_FAILED;
+	if (*port) return MIDI_NO_OUTPUT;
+	if (!midi_virtual_source && MIDISourceCreate(midi_client, CFSTR("warp"), &midi_virtual_source) != noErr) return MIDI_FAILED;
+	return MIDIReceived(midi_virtual_source, packets) == noErr ? 0 : MIDI_FAILED;
+}
+static const char* endpoint_names(ItemCount count, MIDIEndpointRef (*endpoint_at)(ItemCount)) {
+	size_t at = 0;
+	midi_names[0] = 0;
+	for (ItemCount i = 0; i < count && at < sizeof midi_names - 1; i++) {
+		endpoint_name(endpoint_at(i), midi_names + at, sizeof midi_names - at - 1);
+		at += strlen(midi_names + at);
+		midi_names[at++] = '\n';
+		midi_names[at] = 0;
+	}
+	return midi_names;
+}
+const char* warp_midi_outputs(void) { return endpoint_names(MIDIGetNumberOfDestinations(), MIDIGetDestination); }
+const char* warp_midi_inputs(void) { return endpoint_names(MIDIGetNumberOfSources(), MIDIGetSource); }
+#else
+int warp_midi_send(const char* port, const unsigned char* bytes, size_t size) { (void)port; (void)bytes; (void)size; return MIDI_UNSUPPORTED; }
+const char* warp_midi_outputs(void) { return NULL; }
+const char* warp_midi_inputs(void) { return NULL; }
+#endif
