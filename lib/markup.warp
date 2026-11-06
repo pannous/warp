@@ -140,6 +140,14 @@ class Live {
 }
 live(compute: function): Live := Live(compute)
 
+// `input{ bind: name }`: a two-way binding, the field showing the variable and setting it from what is typed; the
+// rule keeps the variable as code to read and to write (card input-bind-name)
+class Binding {
+	read: function
+	write: function
+}
+rewrite bind: $v => bind: Binding(() => $v, entered => { $v = entered }) where item and $v is symbol
+
 // an element's handler: `on click {…}` among its items (a Handler), or HTML's own spelling
 // `onclick: (event => …)`
 html_is_handler(item: any): bool := item is Handler or html_is_handler_pair(item)
@@ -188,6 +196,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	for item in items {
 		if html_is_attribute(item, tag) and html_name(item) == "data-warp-scope" { own_scope = html_plain(html_content(item)) }
 		if html_is_attribute(item, tag) and html_name(item) == "value" { value = html_plain(html_content(item)) }
+		if html_is_binding(item) { value = html_plain(html_content(item).read()) }
 	}
 	if tag == "select" { own_chosen = value }
 	var attributes = ""
@@ -199,6 +208,10 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	for item in items {
 		if html_is_handler(item) {
 			attributes = attributes + html_handler(item)
+			own_handlers.add(#page_handlers)
+		}
+		else if html_is_binding(item) {
+			attributes = attributes + html_bound(tag, items, html_content(item))
 			own_handlers.add(#page_handlers)
 		}
 		else if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(html_name(item), html_content(item)) }
@@ -224,6 +237,22 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	if contains(html_raw_text_elements, tag) { children = replace(children, "</", "<\\/") }
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
 }
+
+html_is_binding(item: any): bool := item is pair and html_name(item) == "bind" and html_content(item) is Binding
+
+// a bound field's attributes: its kind and step from the variable's type unless the element names its type, the
+// value it shows and its input handler (card web-validate: the browser refuses 2.5 for an int, a bool is a checkbox)
+html_bound(tag: any, items: list, binding: Binding): text := {
+	let shown = binding.read()
+	let field = tag == "input"
+	let kind = if field and not html_names_any(items, ["type"]) then html_field_type(shown) else ""
+	let step = if field and shown is number then " step=\"" + (if shown is int then "1" else "any") + "\"" else ""
+	let state = if shown is bool then (if shown then " checked" else "") else " value=\"" + html_escaped(shown) + "\""
+	kind + step + state + html_handler_attribute("input", detail => binding.write(html_entered_like(shown, if shown is bool then detail.checked else detail.value)))
+}
+html_field_type(value: any): text := if value is bool then " type=\"checkbox\"" else if value is number then " type=\"number\"" else ""
+// what was entered, an int variable's kept an int
+html_entered_like(shown: any, entered: any) := if shown is int and entered is number then int(entered) else entered
 
 // `select{ "apple" "pear" }`, `select{ ["apple" "pear"] }`, `select{ fruits }`: what a select holds besides elements
 // is its options, a pair `"s": "small"` an option's value and label (card select-shorthand)
