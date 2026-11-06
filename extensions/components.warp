@@ -4,7 +4,7 @@
 # set once, when the instance has none: `count = start` is `component_state(this, "count", () => start)`, and `count`
 # reads `this.count`. A call of it among a tag's items is a live part
 # (`live(() => Counter(0))`), so each render calls it again, and component gives back the same instance: by its `key:`,
-# else the n-th call of that render. `Counter.instances` are the page's instances in order, `counters` too (plural_instances).
+# else the n-th call of that render. `Counter.instances` are the page's instances in order.
 
 this_word = symbol("this·component")
 key_parameter = "key"
@@ -62,18 +62,11 @@ with_live_items(n: Node, names: list): Node := {
 	if #parts == 0 { return n }
 	Key(parts#1, Op.Colon, group_like(parts#2, items_of(parts#2).map(item => if calls_component(item, names) then live_part(item) else item)))
 }
-# (reading the instances too, `p{ "sum " + sum(counters.map(c => c.count)) }`: they change as the page renders)
+# (reading the instances too, `p{ "sum " + sum(Counter.instances.map(c => c.count)) }`: they change as the page renders)
 calls_component(n: Node, names: list): bool := not is_lambda(n) and #tag_parts(n) == 0 and (is_component_call(n, names + [instances_word]) or parts_of(n).any(part => calls_component(part, names)))
 live_part(item: Node): Node := call_node(symbol("live"), [deferred(item)])
 instances_named(n: Node, names: list): Node := {
 	if is_key(n, Op.Dot) and key_of(n) is symbol and name_of(key_of(n)) in names and value_of(n) == symbol(instances_field) { return instances_of(name_of(key_of(n))) }
-	if n is symbol { return plural_instances(name_of(n), names) ?? n }
 	n
 }
 instances_of(name: text): Node := call_node(symbol(instances_word), [name])
-# `counters`, a component's name in lower case and plural, as `Counter.instances` (a spelling the user may drop: then
-# only this goes)
-plural_instances(word: text, names: list): Node? := {
-	for name in names { if word == name.lower() + "s" { return instances_of(name) } }
-	ø
-}

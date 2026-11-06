@@ -17,11 +17,11 @@ bytes_hex(bytes: list): text := hex_encode_bytes(bytes)
 // 32-bit words: whole numbers 0 to 2^32 - 1, kept there by % 2 ** 32
 word_not(x: int, width: int): int := 2 ** width - 1 - x
 // rotate_left, rotate_right and the logical shift_right of 64-bit words are those of bits; + and * wrap
-// a number as its bytes, most significant first (big) or last
-big_endian(n: int, size: int): list := [n /! 256 ** (size - 1 - i) % 256 for i in 0 ..< size]
-little_endian(n: int, size: int): list := [n /! 256 ** i % 256 for i in 0 ..< size]
-from_big_endian(bytes: list): int := { n = 0; for b in bytes { n = n * 256 + b }; n }
-from_little_endian(bytes: list): int := { n = 0; for b in reverse(bytes) { n = n * 256 + b }; n }
+// a number as its bytes, most significant first (big) or last; size counts bytes, bits owns the implementation
+big_endian(n: int, size: int): list := int_bytes(n, size * 8, "big")
+little_endian(n: int, size: int): list := int_bytes(n, size * 8, "little")
+from_big_endian(bytes: list): int := bytes_int(bytes, "big")
+from_little_endian(bytes: list): int := bytes_int(bytes, "little")
 // the Merkle–Damgård padding: 0x80, zeros, then the bit length in length_size bytes, to whole blocks
 def padded(bytes: list, block: int, length_size: int, length: list): list {
 	out = bytes + [128]

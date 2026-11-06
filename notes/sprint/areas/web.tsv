@@ -28,3 +28,4 @@ try-click	web	lib/markup.warp:76-78 click and its `click $who` rule: inside a tr
 wasmtime-self-hosted	connectors	same root as wasmtime-pure-compiler: declare lib/wasmtime.warp's C words as foreign lines (driver.warp:80 pattern), then re-add wasmtime to std_module_names (core/compiler.warp:254 reads it; a one-word list entry)
 who-handler-read	web	samples/web/page_elements.warp:7 uses $who but lib/markup.warp has only `click $who` (line 78); a rule reading $<id> as the page element's value in a handler belongs in lib/markup.warp
 js-webidl-bindings	user-decided	user (round 9-10): use js binds from web.webidl via an extension
+jsx	user-decided	user (rounds 15-17): do it now, as an extension; inline HTML warns that warp format converts it to markup (big: after the easy cards)

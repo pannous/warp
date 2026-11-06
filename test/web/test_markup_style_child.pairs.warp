@@ -7,3 +7,5 @@
 'use markup; to_html(style{ p { color: red } .box { padding: 4px } })'	'<style>p { color: red } .box { padding: 4px }</style>'
 'use markup; to_html(style{ a + b { color: red } .x { color: blue } })'	'<style>a + b { color: red } .x { color: blue }</style>'
 'use markup; to_html(style{ .box { padding: 4px } ul > li { color: red } })'	'<style>.box { padding: 4px } ul > li { color: red }</style>'
+'use markup; to_html(style{ a ~ b { color: red } })'	'<style>a ~ b { color: red }</style>'
+'use markup; to_html(style{ div ≈ p { color: red } })'	'<style>div ~ p { color: red }</style>'

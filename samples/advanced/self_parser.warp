@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# warp reads itself: the parser that read this file is a warp program (core/parsing/parser.warp, a part of the
+# compiler core/compiler.warp, which compiles itself). parse runs that parser on a text, and the tree it gives is plain
+# data, walked like any other value: here written as `warp parse` writes it, each operation a prefix group
+shown(code) := if code is key then "(" + code.op + " " + shown(code.key) + " " + shown(code.value) + ")" else str(code)
+
+print shown(parse("1 + 2 * x"))         # (+ 1 (* 2 x))
+print shown(parse("a = b ^ 2 - 1"))     # (= a (- (^ b 2) 1))
+print shown(parse("f(x) := x * x"))     # (:= (f x) (* x x))
