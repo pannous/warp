@@ -948,3 +948,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - with-do-block: later: see whether a Python-like `with` can be a library over warp primitives, `with context: block, actions: block`; probably hard, since the actions depend on the variables of the first block. Card to Later.
   - catch-blocks: parked (Later); try/catch covers it; the wiki marks the body-wide handler as planned.
   - constant-define-operator: drop `::=`; `constant x = 3` says it; the wiki line goes.
+- 2026-11-06 card sprint, round 13 (user):
+  - it-last-result: both meanings: inside a lambda `it` is the implicit parameter; outside one, `it` is the last statement's value (`3 + 4; it * 2` → 14).
+  - purity-predicates: `f.effects is empty` is the predicate (no `?` name suffix); `purely` is an alias of `@pure`; purity stays inferred when unmarked.
+  - test-case-timeout: instead of a lower threshold: exclude library loading from a case's timing, or better warm all libraries up once so a case's `use markup` costs ~0 s while `warp test` iterates (one compiler instance reused for all cases, loaded modules cached). Then the 1 s rule (no-slow-tests) applies to the code itself.
+  - render-pdf-string: `x = 3 as pdf` with pdf undeclared refuses clearly, "unknown type pdf: use a library that defines it"; an unknown type name is never invented.
