@@ -805,7 +805,7 @@ Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voi
 
 warp turns warp into WebAssembly, which runs in every browser. Code from Rust or C can be called alike.
 
-Examples: "wasm components"; samples: wasm_interop, import_compiled, component_reflection
+Examples: "wasm modules"; samples: wasm_interop, import_compiled, component_reflection
 
 ## Laws
 
