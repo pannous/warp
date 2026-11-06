@@ -31,6 +31,7 @@ use "match_patterns.warp"
 use "protocols.warp"
 use "conversions.warp"
 use "implicit_uses.warp"
+use "test_lines.warp"
 use "scoped_words.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
@@ -75,6 +76,7 @@ EXTENSIONS = [
 	Extension{name: "int_types", passes: {"definition_heads": int_types}}
 	conversions_extension
 	implicit_uses_extension
+	test_lines_extension
 	# right before tries, in this order: parse words, then the checked tries the core's tries guard
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
