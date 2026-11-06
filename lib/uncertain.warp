@@ -151,9 +151,9 @@ rewrite $a possibly < $b => $a.possibly_less($b)
 rewrite $a certainly => $a
 rewrite $a possibly => Possibly($a)
 class Possibly {
-	value: any
-	less(other) := value.possibly_less(other)
-	greater(other) := value.possibly_greater(other)
+	compared: any
+	less(other) := compared.possibly_less(other)
+	greater(other) := compared.possibly_greater(other)
 }
 
 // `6.0 ± 0.3σ`: a spread counted in standard deviations makes a Gaussian (P217); σ is one of them, `0.3σ` 0.3
