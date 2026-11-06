@@ -1,0 +1,5 @@
+# a case with data written with its enum, O.W(3), keeps its data as W(3) does (card enum-case)
+'enum O { W(n: int), V }; O.W(3)'	W{n: 3}
+'enum O { W(n: int), V }; O.W(3).n'	3
+'enum O { W(n: int), V }; o = O.W(3); match o { W(n) => n; V => 0 }'	3
+'enum O { W(n: int), V }; o = O.W(3); match o { O.W(n) => n; O.V => 0 }'	3

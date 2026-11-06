@@ -4,6 +4,8 @@
 rewrite $e::$c => $e.$c where $c is case of $e
 # `Shape::Rect(2, 3)`: the case carrying data, made by its own name
 rewrite $e::$c => $c where $c is instance
+# `O.W(3)`, the same case written with a dot: made by its own name too, so its data stays (card enum-case)
+rewrite $e.$c => $c where $e is symbol and $c is instance and $c is not symbol
 rewrite case.$c => $c where $c is case
 
 # `c is Coin` (type_tests.warp's is_type(c, "Coin")) of an enum: c is one of its cases
