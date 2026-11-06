@@ -1,0 +1,7 @@
+# text == compares NFC forms (decisions nfc-tables, nfc-slot): é precomposed equals e + combining acute
+«"é" == "é"»	true
+«"é" != "é"»	false
+«x = "café"; y = "café"; x == y»	true
+«["é"] == ["é"]»	true
+«"e" == "é"»	false
+«"é" == "é"»	true
