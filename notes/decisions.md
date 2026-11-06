@@ -131,7 +131,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - package-reexport (card module-own): a package's own `use` lines reach the programs that use it.
   `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
 - laws-file: the human-owned laws live in samples/laws/project_laws.warp
-  (samples/laws/laws.warp already exists), keeping the "AI agents must not edit this file" header; test_bend_laws runs
+  (samples/laws/basic_laws.warp already exists), keeping the "AI agents must not edit this file" header; test_bend_laws runs
   `warp verify samples/laws/project_laws.warp`.
 - Language name: warp everywhere; `.wasp` files still read; URLs/domains and wisp unchanged.
 - P180 split-debuginfo "unpacked" plus the hourly sweep. P90 ./test.wasm is written at every compile. P91 one shared analysis per compile, refreshed only when a pass changed the program.
@@ -1027,3 +1027,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-06 nfc-tables (user, card text-equality-nfc): the NFC tables and normalizer are a prebuilt library module (lib/unicode), linked at load time like any module; a program comparing texts imports one word from it, so programs do not grow; equal bytes and pure ASCII stay on the fast path.
 - 2026-11-06 nfc-slot (user core OK, card text-equality-nfc): runtime.wasm exports an empty slot canonical·text; the native driver and the playground fill it with lib/unicode's NFC, loading unicode.wasm lazily on the first call through it; equal bytes and pure ASCII never call it (hello unchanged); an empty slot refuses loudly. No `use` line needed for "é" == "e◌́".
 - 2026-11-06 types esoteric lines (user, Grok Interviewer t31s3): methods(text) reflection lines dropped; truncated-int / wasm-cast lines in partial_time dropped; recursive_fields / gc kept: the user wants an @primitive struct (maybe distinct from a gc struct).
+- 2026-11-06 glued-tag-mark (user, refines fine-updates): the parser marks a tag glued to its braces (`point{…}`, `style{…}`) and printing keeps that form; data written `a: {…}` keeps the colon (`{user: {name: "Ann"}}` unchanged). A small core parser change, a card after the sprint; until then test_data_quoting's 4 lines stay red.
+- 2026-11-06 sound-rest (user, Grok Interviewer t35u final, after t33s1/t34u; a relay is no override of the user's own answer): both: lib/sound's rest is renamed silence (Grok A, card sound-silence-rename), and rest becomes a proper keyword (core card rest-keyword, Claude); `3 squared` stays (card suffix-words-takes-one); string([6,7]) shows "[6, 7]" (list-map-separator, text-not-str), the "[6 7]" line dropped.
+- 2026-11-06 wasm-fixture-paths (user OK, card wasm-module-uses): the ~10 old lines `import test/fixtures/wasm/…` are rewritten to the project-root form `•/test/fixtures/wasm/…`; a wasm module resolves like a warp file (program folder, `•/` from the project root), no silent fallback.
+- 2026-11-06 dir-membership-test (user OK): test_std_prelude:24 `dir(prelude)#1` → "first" is rewritten to `"first" in dir(prelude)` → yes (dir is sorted, core-dir-order); moving `first` to the top of lib/prelude.warp is not needed.
+- 2026-11-06 samples-focus (user): stop test-line work; next tasks are all failing samples, native and playground; workers wind down (land what is done), not stopped.
