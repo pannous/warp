@@ -79,7 +79,14 @@ function dispatchToPage({ name, detail }) {
 function elementEvent(event, happened, detail) {
 	const attribute = `data-warp-${event}`;
 	const element = happened.composedPath().find(node => node.getAttribute?.(attribute));
-	return element && { event: `${event}·${element.getAttribute(attribute)}`, detail };
+	return element && { event: `${event}·${element.getAttribute(attribute)}`, detail: { ...detail, ids: idValues(happened.currentTarget ?? document) } };
+}
+
+// what the shown markup's fields with an id hold, by id: `$who` in a handler reads it (lib/markup.warp page_value,
+// decision page-ids)
+function idValues(root) {
+	const fields = root.querySelectorAll?.("input[id], textarea[id], select[id]") ?? [];
+	return Object.fromEntries([...fields].map(field => [field.id, field.type === "checkbox" ? field.checked : field.value]));
 }
 
 // the element events that are no page events (card click-key, event_signals.rs FIELD_EVENTS), by the DOM event that

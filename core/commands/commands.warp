@@ -6,7 +6,7 @@
 use os
 use file
 
-core_commands = ["compile", "runtime", "module", "modules", "optimize"]
+core_commands = ["compile", "runtime", "module", "modules", "optimize", "baked-current"]
 is_command(word: text): bool := word in core_commands or word in extension_command_words()
 
 quoted_path(path: text): text := "\"" + path + "\""
