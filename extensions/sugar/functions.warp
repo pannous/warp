@@ -32,3 +32,7 @@ rewrite (def $d) => $d
 rewrite ($f of a $t = $e) => ($f(it: $t) := $e) where $t is type
 rewrite ($f of an $t = $e) => ($f(it: $t) := $e) where $t is type
 rewrite ($f of $t = $e) => ($f(it: $t) := $e) where $t is type
+# `f := x => x + 1`, `f := square | sqrt`: a name defined as a function value is that value, called as any function
+# (test_pipe_stages, card spaced-definition-pipe)
+rewrite ($f := $v) => ($f = $v) where $f is symbol and $v is function
+rewrite ($f := $a | $g) => ($f = $a | $g) where $f is symbol and $g is function
