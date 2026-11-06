@@ -1,0 +1,6 @@
+# a trailing block after an iteration word's call is its function (Swift, Kotlin)
+'[1 2 3].map { $0 * 10 }'	[10, 20, 30]
+'xs = [1 2 3]; xs.filter { it > 1 }'	[2, 3]
+'x = [1 2].map { it + 1 }; x'	[2, 3]
+# a function of foreign number types (Kotlin's Int) broadcasts over a list as one of int does
+'fun Int.plus(n: Int) = this + n; plus([1 2 3], 10)'	[11, 12, 13]
