@@ -31,6 +31,7 @@ use "walk.warp"
 use "scope.warp"
 use "uses.warp"
 use "prelude_words.warp"
+use "data_blocks.warp"
 use "../analysis/type_tests.warp"
 use "../analysis/diagnostics.warp"
 use "../analysis/builtin_signatures.warp"
@@ -212,6 +213,8 @@ own_rules_applied(program: Node, source: text): Node := {
 	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
 	rules += unbound_rules(module_rules, program)
 	if #rules == 0 { return program }
+	# a data argument as written, `style{ td { padding: 6px } }` never the units' quantity(6, "px") (decision data-parameter)
+	program = data_spliced(program)
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_signatures = definitions_signatures(program)
