@@ -909,3 +909,8 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - fine-updates: a style block prints with braces as written, `style{.done{color:"green"}}`; web/playground/examples.js is updated.
   - markup-attr-call: in markup a call to a known warp word is evaluated (`div(class: join(xs, " "))` → class="a b"); CSS functions (min, max, calc, var, rgb) inside style{} stay text; refused when both fit.
   - quasi-text: discuss later (card stays parked).
+- 2026-11-06 card sprint, round 5 (user):
+  - xs-ys: `x = ø; x += 3` refuses with a fix-it, "ø has no +: start the sum at 0 (x = 0)", replacing the internal "node sum"; self-append `xs += xs` → [1, 2, 1, 2] stays.
+  - list-map-separator: "How expensive would it be to carry the separator through? If it's cheap, then let's do it." Finding: a Node list already carries its separator in the kind field (SEPARATOR_SHIFT bit 48, core/analysis/kinds.warp:21), so showing by it costs nothing there; typed lists ($IntList, $FloatList) have no kind field and would need one. The worker measures that cost; cheap → shown lists keep their written separator.
+  - mutable-array: closed; the list is the mutable array (in-place set O(1)), typed lists cover fixed numeric arrays.
+  - map-chain-fusion: fuse `.map(f).map(g)` only when f and g are @pure; effectful chains run stage by stage as written.
