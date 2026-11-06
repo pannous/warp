@@ -6,7 +6,8 @@ use matrix
 def sigmoid(x) := 1.0 / (1.0 + exp(-x))
 def sigmoid_derivative(x) := x * (1.0 - x)
 
-# 2 inputs, 4 hidden, 1 output
+# 2 inputs, 4 hidden, 1 output; seeded, every run learns alike
+random_seed(42)
 def weight() { random() * 2 - 1 }
 hidden_weights = matrix(2, 4, weight)
 output_weights = matrix(4, 1, weight)
