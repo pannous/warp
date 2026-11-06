@@ -48,8 +48,7 @@ type_test_node(n: Node, scope: map): Node := match n {
 # `x is key` in one function stays a type test beside a local `key` of another
 scoped_type_tests(n: Node, outer: map): Node := {
 	if is_function_definition(n) {
-		nodes = nodes_in(n)
-		inner = scope_with(names_seen(outer, nodes), nodes)
+		inner = function_scope(outer, n)
 		return bottom_up(n, x => type_test_node(x, inner))
 	}
 	type_test_node(children(n, x => scoped_type_tests(x, outer)), outer)

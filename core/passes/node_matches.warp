@@ -22,14 +22,10 @@ spelled_readers = {"op_of": "Op", "bracket_of": "Bracket", "separator_of": "Sepa
 # `Op·case(t)`: the case spelled t, `Op·text(c)`: the spelling of a case (node_cases.warp spelling_functions)
 spelled_function(enum_name: text, function: text): text := enum_name + "·" + function
 
-# the spelled readers a part binds by its code, `Op·coded(n)`: a list of the cases by code, made once, where
-# `Op·case(op_of(n))` made the operator's text and hashed it into Op·cases at every match (5% of a rebuild)
-coded_readers = {"op_of": "Op"}
-# a part as a pattern binds it: a spelled part as its case
-bound_part(read: Node, reader: text): Node := {
-	if reader in coded_readers { return applied(spelled_function(coded_readers[reader], "coded"), read#2) }
-	if reader in spelled_readers then applied(spelled_function(spelled_readers[reader], "case"), read) else read
-}
+# a part as a pattern binds it: a spelled part as its case by its code, `Op·coded(n)` (node_cases.warp coded_functions),
+# a list of the cases by code made once, where `Op·case(op_of(n))` made the part's text and looked it up in Op·cases at
+# every match (5% of a rebuild; Bracket's and Separator's 1.5% of a self compile)
+bound_part(read: Node, reader: text): Node := if reader in spelled_readers then applied(spelled_function(spelled_readers[reader], "coded"), read#2) else read
 
 applied(word: text, argument: Node): Node := List([symbol(word), argument], Bracket.Round, Separator.None)
 

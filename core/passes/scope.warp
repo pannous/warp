@@ -152,10 +152,7 @@ keep_nodes(n: Node, kept: function) := {
 remember(scope: map, pairs: list): map := {
 	for pair in pairs {
 		name = pair#1
-		if name {
-			if not scope.has(name) { scope[name] = [] }
-			scope[name] = scope[name] + [pair#2]
-		}
+		if name { scope[name] = scope.get(name) + [pair#2] }
 	}
 	scope
 }
@@ -163,14 +160,19 @@ remember(scope: map, pairs: list): map := {
 # name → its meanings, of the whole program
 scope_of(program: Node): map := scope_with({}, nodes_in(program))
 
-# a copy of the scope with the names the nodes give added
-scope_with(outer: map, nodes: list): map := {
-	scope = {}
-	for name in outer.keys { scope[name] = outer[name] }
+# the scope with the names the nodes give added, in place: a function's scope starts from names_seen, its own copy of
+# what it can ask of the scope around it (copying the whole scope for each function was 2.5% of a self compile)
+scope_with(scope: map, nodes: list): map := {
 	for n in nodes {
 		scope = remember(remember(scope, meanings_of(n)), fields_of(n))
 	}
 	scope
+}
+
+# the scope a function's body sees: the names of the scope around it it asks for, and its own parameters and locals
+function_scope(outer: map, definition: Node): map := {
+	nodes = nodes_in(definition)
+	scope_with(names_seen(outer, nodes), nodes)
 }
 
 # the scope's entries for the names among the nodes: what a function's nodes can ask of the scope around it, without
