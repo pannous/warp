@@ -34,6 +34,7 @@ use "implicit_uses.warp"
 use "scoped_words.warp"
 use "parse_words.warp"
 use "iteration_inlining.warp"
+use "block_inlining.warp"
 use "of_lookups.warp"
 use "match_phrases.warp"
 use "checked_tries.warp"
@@ -79,6 +80,7 @@ EXTENSIONS = [
 	Extension{name: "parse_words", passes_before: {"tries": parse_words}}
 	checked_tries_extension
 	iteration_inlining_extension
+	block_inlining_extension
 	of_lookups_extension
 	match_phrases_extension
 	text_lints_extension
