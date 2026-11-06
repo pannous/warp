@@ -1,0 +1,4 @@
+# string.from_utf8 UFCS ignores the cast owner; same result as one-arg from_utf8
+'use text; from_utf8([104, 105])'	'hi'
+'string.from_utf8([104, 105])'	'hi'
+'use text; [from_utf8([104, 105]), string.from_utf8([104, 105])]'	['hi', 'hi']

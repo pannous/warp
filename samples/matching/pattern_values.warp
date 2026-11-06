@@ -1,0 +1,17 @@
+#!/usr/bin/env warp
+# Pattern values: find/replace as plain warp functions (card pattern-parameters, notes/pattern_values.md).
+# A parameter typed `data` keeps the pattern unevaluated, so bare names bind.
+
+page = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+
+# call form (lib/text.warp) — same results as the infix `page find {…}`
+print find(page, {type: "image", src})
+print count(find(page, {type: "text"}))
+
+# pattern held in a variable
+image = data {type: "image", src}
+print find_matches(page, image)
+
+# replace as a call: children first, template names from the bindings
+print replace(page, {type: "image", src}, {type: "link", href: src})
+print replace([[1, 2], [3, [1, 5]]], [1, x], x)
