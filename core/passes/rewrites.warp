@@ -157,6 +157,8 @@ global rule_enums = {}
 global rule_instances = {}
 # the program's classes, whose construction `Counter(3)` is an instance (`where $o is instance`)
 global rule_classes = {}
+# the words taking a block as data, lib/markup's style(sheet: data): `style: {…}` holds data, no structure's items
+global rule_data_words = {}
 # the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
 global rule_program = Node.Empty
 # the classes and the program's names assigned an instance of one, name → class (`where $u is Unit`), worked out when a
@@ -200,6 +202,9 @@ own_rules_applied(program: Node, source: text): Node := {
 	ruled = statements_ruled(statements_in(program), "", source)
 	rules = ruled#1
 	if #rules > 0 { program = separated(bracketed(ruled#2, ""), ";") }
+	# data as written, never rewritten by a rule or pass: `style{ td { padding: 6px } }` no units' quantity(6, "px")
+	# (decision data-parameter), `li{ animation: pop 400ms }` no call of the list word pop (decision tag-items-calls)
+	program = data_spliced(program)
 	mentioned = word_set(symbol_words(program))
 	module_rules = []
 	needs = rule_needs_by_module()
@@ -213,8 +218,6 @@ own_rules_applied(program: Node, source: text): Node := {
 	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
 	rules += unbound_rules(module_rules, program)
 	if #rules == 0 { return program }
-	# a data argument as written, `style{ td { padding: 6px } }` never the units' quantity(6, "px") (decision data-parameter)
-	program = data_spliced(program)
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_signatures = definitions_signatures(program)
@@ -310,6 +313,7 @@ sugar_applied(program: Node, rules: list): Node := {
 	rule_case_holders = case_holders_in(nodes)
 	rule_instances = instance_names_in(program, outer_nodes_in(program))
 	rule_classes = class_names_of(program)
+	rule_data_words = data_positions_called(program)
 	rule_program = program
 	rule_types = ø
 	rule_varying_known = no
@@ -540,8 +544,8 @@ word_set(words: list): map := {
 }
 
 # the words each rule of a module needs, read off its text: a program mentioning none parses no rules. The first word of
-# the origin's shape after `where … =`, else of the pattern, else (a pattern starting with a hole, `$n $u`) the words
-# its `in [ms, kg]` listing names
+# the origin's shape after `where … =`, else of the pattern, else (a pattern starting with a hole, `$n $u`) the plain
+# words its rule word is given, else the words its `in [ms, kg]` listing names
 rule_needs(source: text): list := {
 	if not source.contains(rewrite_line_start) { return [] }
 	needs = []
@@ -554,11 +558,15 @@ rule_needs(source: text): list := {
 			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø and not is_rule_word(first_alphabetic_word(origin#2)) then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
 			listed = listed_in_text(rule)
-			needs += if word != "" then [word] else if #listed > 0 then listed else classes_in_text(rule).flat_map(instance_words)
+			given = if #origin > 1 then words_given_in_text(origin#2) else []
+			needs += if word != "" then [word] else if #given > 0 then given else if #listed > 0 then listed else classes_in_text(rule).flat_map(instance_words)
 		}
 	}
 	needs
 }
+
+# the plain words a rule word is given, as written: `qualified($g, possibly)` names possibly
+words_given_in_text(call: text): list := if not call.contains("(") then [] else call[#call.split("(")#1 + 1 ..].split(",").map(argument => argument.trim().remove_suffix(")").trim()).filter(argument => argument != "" and is_alpha(argument[0]) and first_alphabetic_word(argument) == argument)
 
 # the words of a rule's `in [a, b]` listing, as written
 listed_in_text(rule: text): list := {
@@ -817,10 +825,13 @@ called_hole(n: Node, lines: list): bool := {
 
 # the word a program must mention for the rule to fire: the first of its origin's shape, else of its pattern
 needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
-# that word, else the words its listings name: `$n $u where $u in [ms, kg]` is needed by ms and kg
+# that word, else the plain words its rule words are given (`$a = qualified($g, possibly)`: possibly), else the words
+# its listings name: `$n $u where $u in [ms, kg]` is needed by ms and kg
 needed_words(rule: Rule): list := {
 	word = needed_word(rule)
 	if word != "" { return [word] }
+	given = rule.conditions.filter(condition => is_computed_binding(condition)).flat_map(binding => items_of(value_of(binding))[1 ..].filter(argument => argument is symbol and rule_hole(argument) == ø).map(argument => name_of(argument)))
+	if #given > 0 { return given }
 	listed = rule.conditions.map(membership).filter(listing => listing != ø).flat_map(listing => listing.words)
 	if #listed > 0 then listed else rule.conditions.map(class_tested).filter(name => name != ø).flat_map(instance_words)
 }
@@ -1212,7 +1223,8 @@ has_property(code: Node, property: text): bool := {
 	if property == "value" { return binds_value(rule_scope, word) }
 	# the program's function, else a builtin or the prelude's where the program binds nothing of the name (`x.upper!`'s upper)
 	if property == "function" { return (binds_as(rule_scope, word, Meaning.Function) or (not rule_scope.has(word) and (is_declared_word(word) or word in prelude_definitions()))) and not locally_bound(code) }
-	if program_typing()#1.has(property) { return typed_as(word, property) }
+	# a library word in an attribute's value is data, as with `takes`: `animation: pop 400ms` keeps units' ms a CSS word
+	if program_typing()#1.has(property) { return typed_as(word, property) and not (rule_in_attribute and not program_word(word)) }
 	not rule_scope.has(word)
 }
 # `$u is Unit`: a name the program assigns an instance of the class, else, unbound by it, a library module's,
@@ -1379,6 +1391,8 @@ written_later(n: Node, inside: bool): list := {
 read_now(code: Node): list := {
 	if code is symbol { return [name_of(code)] }
 	if is_lambda(code) or is_curly_group(code) { return [] }
+	# `style: { color: c }`: a word's data block is read as it is made, no code run later
+	if is_data_block(code) { return items_of(value_of(code)).flat_map(read_now) }
 	parts_of(code).flat_map(read_now)
 }
 # [name, the names it mentions] of a function or value definition, else ø
@@ -1703,8 +1717,11 @@ handler_runs(items: list): list := {
 	grouped
 }
 # `div{ "a", on click {…} }`: a word nothing binds keying a block (data_blocks.warp is_free_tag), whose items are the
-# structure's items; a class's construction `Point{ x: 1 }` is none
-is_word_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n)) and not binds_any(rule_scope, name_of(key_of(n)))
+# structure's items; a class's construction `Point{ x: 1 }` is none, nor a word's data `style: { color: c }`, which
+# is live as a whole when it reads a varying value
+is_word_block(n: Node): bool := is_keyed_block(n) and not binds_any(rule_scope, name_of(key_of(n))) and not rule_data_words.has(name_of(key_of(n)))
+is_data_block(n: Node): bool := is_keyed_block(n) and rule_data_words.has(name_of(key_of(n)))
+is_keyed_block(n: Node): bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))
 binds_any(scope: map, name: text): bool := binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type) or rule_classes.has(name)
 
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which

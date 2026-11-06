@@ -235,6 +235,8 @@ def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)
+	# a pair `a: b` is no class's instance, though a Key holds both (runtime fields.warp is_entry); `is key` and a Key arm take both
+	if value.kind == ValueKind.Node and spec == "pair" { return TypedCode(ValueKind.Bool, runtime_call("is_entry", [value]).code) }
 	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
 	TypedCode(ValueKind.Bool, [op.i32_const, if covered_kinds[type].any(kind => same_kind(kind, value.kind)) then 1 else 0])
 }

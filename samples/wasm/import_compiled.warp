@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # A module warp compiled is imported like any WebAssembly module (notes/import_compiled.md), here one compiled by
-#   warp compile --wasm test/fixtures/compiled/shapes.warp
+#   warp build --module test/fixtures/compiled/shapes.warp
 # Texts, lists and instances cross between the two modules as values
 import shapes # .wasm
 

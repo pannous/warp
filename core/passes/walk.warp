@@ -221,12 +221,16 @@ group_like(n: Node, items: list): Node := match n {
 	_: separated(bracketed(items, bracket_of(n)), separator_of(n))
 }
 
-# the call `name(arguments…)`
 # the symbol `word`
 is_word(n: Node, word: text): bool := n == symbol(word)
 # `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp)
 is_pattern_definition(n: Node): bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
-call_of(name: text, arguments: list): Node := bracketed([symbol(name)] + arguments, "(")
+# the call `name(arguments…)` a pass makes: its name is the word, never a local of the program named so (a local
+# `same = …` beside the `same(op, Op.Ne)` an enum's equality became, card implicit-word-binding)
+call_of(name: text, arguments: list): Node := bracketed([word_named(name)] + arguments, "(")
+INSERTED_WORD = "word"
+word_named(name: text): Node := with_attribute(symbol(name), symbol(INSERTED_WORD))
+is_inserted_word(n: Node): bool := attributes_of(n).any(attribute => attribute == symbol(INSERTED_WORD))
 # the statements as a block, `{ a; b }`
 block_of(parts: list): Node := List(parts, Bracket.Curly, Separator.Semicolon)
 
