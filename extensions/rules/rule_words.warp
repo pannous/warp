@@ -933,15 +933,27 @@ typed_json_value(value: text, path: text, value_type: text, depth: int, program:
 	if statement == ø or ancestors.contains(value_type) { return ø }
 	view = class_view(statement)
 	declared = class_declared(statement, view)
-	if constructor_of(declared) != ø { return ø }
+	if takes_parameters(declared) { return ø }
 	fields = declared.fields
 	parts = typed_json_fields(value, view#3[3..].map(member_read), fields, field => "(" + path + " + \".\" + \"" + field + "\")", depth + 1, program, ancestors + [value_type])
 	if parts == ø { return ø }
 	checks = parts#1
 	arguments = parts#2
 	field_names = fields.map(field => "\"" + field + "\"").join(", ")
-	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + value_type + "{" + arguments.join(", ") + "} })"
+	"({ if type(" + value + ").name != \"map\" { raise " + path + " + \" must be object, received \" + type(" + value + ").name }; for field in keys(" + value + ") { if not [" + field_names + "].contains(field) { raise \"unknown field \" + " + path + " + \".\" + field } }; " + checks.join("; ") + "; " + typed_json_made(value_type, arguments, declared) + " })"
 }
+
+# the instance built from its fields; a class with a constructor is marked to construct through it (constructed_through)
+typed_json_made(type_name: text, arguments: list, declared: Declared): text := {
+	made = type_name + "{" + arguments.join(", ") + "}"
+	if constructor_of(declared) == ø then made else typed_json_constructor + "(" + made + ")"
+}
+typed_json_constructor = "typed_json_constructed"
+# a construction this late (after extensions/class_methods.warp wrapped each) runs its class's init once as theirs do,
+# C·made(C{…}), a name parsed text can't spell
+constructed_through(validator: Node): Node := bottom_up(validator, part => if is_called_name(part) and name_of(part#1) == typed_json_constructor then call_of(made_name(name_of(key_of(part#2))), [part#2]) else part)
+# a constructor taking parameters has no fields to take them from
+takes_parameters(declared: Declared): bool := constructor_of(declared) != ø and #method_parameters(method_in(declared, constructor_method)) > 0
 
 # [the checks that each required field is there, the constructor's arguments] of the object `value` names, each field
 # converted by its declared type: a defaulted field (`port: int = 80`) missing takes its default; ø for a field whose
@@ -977,7 +989,7 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 		view = class_view(statement)
 		if view != ø and declared_type_name(view#2) == name_of(type_name) {
 			declared = class_declared(statement, view)
-			if constructor_of(declared) != ø { return plain_node(parsed("raise \"typed JSON does not support class constructors yet\"")) }
+			if takes_parameters(declared) { return plain_node(parsed("raise \"typed JSON takes no class whose init has parameters\"")) }
 			fields = declared.fields
 			parts = typed_json_fields("typed_json_value", view#3[3..].map(member_read), fields, field => "\"" + field + "\"", 0, program, [name_of(type_name)])
 			if parts == ø { return plain_node(parsed("raise \"typed JSON supports only required flat fields yet\"")) }
@@ -986,7 +998,7 @@ typed_json(source: Node, type_name: Node, program: Node): Node := {
 			object_check = "if type(typed_json_value).name != \"map\" { raise \"expected object, received \" + type(typed_json_value).name }"
 			field_names = fields.map(field => "\"" + field + "\"").join(", ")
 			unknown_check = "for field in keys(typed_json_value) { if not [" + field_names + "].contains(field) { raise \"unknown field \" + field } }"
-			validator = plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + name_of(type_name) + "{" + arguments.join(", ") + "} })"))
+			validator = constructed_through(plain_node(parsed("(typed_json_value => { " + object_check + "; " + unknown_check + "; " + required_checks.join("; ") + "; " + typed_json_made(name_of(type_name), arguments, declared) + " })")))
 			return List([validator, call_of("json", [source])], Bracket.Round, Separator.None)
 		}
 	}
