@@ -27,5 +27,7 @@ misc.tsv (cards without a topic) is taken by whichever worker empties its own li
 - Every push that changes lib/, extensions/, core/ or a sample is smoked on the very merge being pushed, even when
   the merged-in origin commits touch nothing: no landing script skips the smoke (2026-11-06: da1e8f51c2 went in
   unsmoked that way).
+- Landing livelock (Supervisor, bent rule): when main moved during your smoke, you may push the smoked merge after a
+  clean re-merge if main's new commits touch none of your branch's files; after-push builds and checks every main tip.
 - Build slots are 4 for the whole Mac (rebuild.sh waits for one): skip the rebuild for a change that needs none.
 - Questions for the user go to warp-interviewer, never to the user; never block on one: take the next card.
