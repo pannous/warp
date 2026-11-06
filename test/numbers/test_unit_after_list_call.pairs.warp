@@ -2,3 +2,5 @@
 'str([3, 4] cm)'	'[3cm, 4cm]'
 'sizes() := [1, 2]; str(sizes() cm)'	'[1cm, 2cm]'
 'xs = [1, 2]; str(xs cm)'	'[1cm, 2cm]'
+'g(n) := n > 0 ? [1, 2] : [3]; str(g(1) cm)'	'[1cm, 2cm]'
+'f(x) := x; str(f([1, 2]) cm)'	'[1cm, 2cm]'
