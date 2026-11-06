@@ -10,6 +10,13 @@ mass_dimension() := 256
 duration_dimension() := 65536
 temperature_dimension() := 16777216
 pixels_dimension() := 4294967296
+// the compound dimensions with a name of their own
+area_dimension() := 2 * length_dimension
+volume_dimension() := 3 * length_dimension
+speed_dimension() := length_dimension - duration_dimension
+frequency_dimension() := 0 - duration_dimension
+force_dimension() := mass_dimension + length_dimension - 2 * duration_dimension
+density_dimension() := pixels_dimension - length_dimension
 
 // the units that take an SI prefix, each [its SI amount, its dimension]
 si_units(): map := {
@@ -17,9 +24,9 @@ si_units(): map := {
 	"g": [1/1000, mass_dimension],
 	"s": [1, duration_dimension],
 	"K": [1, temperature_dimension],
-	"Hz": [1, 0 - duration_dimension],
-	"N": [1, mass_dimension + length_dimension - 2 * duration_dimension],
-	"L": [1/1000, 3 * length_dimension]
+	"Hz": [1, frequency_dimension],
+	"N": [1, force_dimension],
+	"L": [1/1000, volume_dimension]
 }
 inch_amount = 254/10000
 mile_amount = 1760 * 36 * inch_amount
@@ -32,15 +39,15 @@ other_units(): map := {
 	"ft": [12 * inch_amount, length_dimension],
 	"yd": [36 * inch_amount, length_dimension],
 	"mi": [mile_amount, length_dimension],
-	"mph": [mile_amount / 3600, length_dimension - duration_dimension],
+	"mph": [mile_amount / 3600, speed_dimension],
 	"lb": [45359237/100000000, mass_dimension],
 	"min": [60, duration_dimension],
 	"h": [3600, duration_dimension],
 	"day": [86400, duration_dimension],
-	"ml": [1/1000000, 3 * length_dimension],
-	"ha": [10000, 2 * length_dimension],
-	"dpi": [1 / inch_amount, pixels_dimension - length_dimension],
-	"ppi": [1 / inch_amount, pixels_dimension - length_dimension],
+	"ml": [1/1000000, volume_dimension],
+	"ha": [10000, area_dimension],
+	"dpi": [1 / inch_amount, density_dimension],
+	"ppi": [1 / inch_amount, density_dimension],
 	"°C": [1, temperature_dimension],
 	"°F": [5/9, temperature_dimension]
 }
@@ -63,7 +70,8 @@ long_prefixes(): map := {
 long_unit_names(): map := {
 	"meter": "m", "metre": "m", "gram": "g", "second": "s", "kelvin": "K", "hertz": "Hz", "newton": "N",
 	"liter": "L", "litre": "L", "inch": "inch", "foot": "ft", "feet": "ft", "yard": "yd", "mile": "mi", "pound": "lb",
-	"lbs": "lb", "minute": "min", "hour": "h", "day": "day", "hectare": "ha", "pixel": "px"
+	"lbs": "lb", "minute": "min", "hour": "h", "day": "day", "hectare": "ha", "pixel": "px", "milliliter": "ml",
+	"millilitre": "ml", "dot": "dot"
 }
 
 // the symbol of a unit as written: `kilograms` → "kg", `µg` → "µg", `Gs` → "Gs"; ø when it names no unit
