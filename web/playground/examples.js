@@ -15,7 +15,7 @@ const EXAMPLES = {
 	text: { value: '"Hello, Ada!"', code: `// put a value into a text with \\(…)
 name = "Ada"
 "Hello, \\(name)!"` },
-	constants: { value: 'Error("pi is a constant at 2:1; fix: another name")', code: `// constants such as pi cannot change
+	constants: { value: 'pi is a constant at playground.warp:2:1; fix: another name', code: `// constants such as pi cannot change
 pi = 4
 2 * pi` },
 	lists: { value: '[3, "apple"]', code: `// a list, how many items it has, and its first item
