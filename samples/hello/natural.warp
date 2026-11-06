@@ -65,7 +65,7 @@ result = (numbers where it > 0)
 create_user(
 	name: "Alice"
 	email: "alice@example.com"
-	role: admin
+	role: "admin"
 )
 
 # Ranges with words
