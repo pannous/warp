@@ -3,6 +3,8 @@
 // for an hour), rate-limited per IP; it pins the model and each task's max_tokens and builds the system prompt itself
 // from web/playground/assistant.json, so a caller chooses only the task, the messages and, for chat, the program.
 // POST /messages answers as the Messages API does (errors too: { error: { message } }).
+// CORS: ACAO + Cross-Origin-Resource-Policy: cross-origin for that Origin only (the playground is COEP require-corp),
+// and every answer Varies on Origin so a foreign refusal is never reused for it (card cors-blocked-request).
 // Secrets (wrangler secret put …): ANTHROPIC_API_KEY (from its own Console workspace, with a monthly spend limit),
 // TURNSTILE_SECRET, SESSION_SECRET. Deploy: wrangler deploy (in this folder). Test: node web/assistant/test_assistant.mjs
 import ASSISTANT from "../playground/assistant.json";
@@ -22,11 +24,20 @@ const NOT_SET_UP = "The playground's shared assistant is not set up yet: paste y
 export default {
 	async fetch(request, env) {
 		const origin = request.headers.get("origin");
-		if (origin !== env.PLAYGROUND_ORIGIN) return failure(403, "This assistant answers only the warp playground.");
+		const allowed = origin === env.PLAYGROUND_ORIGIN;
+		// always Vary Origin so a refusal is never reused for the playground; ACAO and CORP only when allowed —
+		// the playground is cross-origin isolated (COEP require-corp), so the proxy must opt in as cross-origin
+		const withCors = answer => {
+			answer.headers.set("vary", "origin");
+			if (allowed) {
+				answer.headers.set("access-control-allow-origin", origin);
+				answer.headers.set("cross-origin-resource-policy", "cross-origin");
+			}
+			return answer;
+		};
+		if (!allowed) return withCors(failure(403, "This assistant answers only the warp playground."));
 		const answer = request.method === "OPTIONS" ? preflight() : await answered(request, env).catch(problem => problem instanceof Response ? problem : failure(500, problem.message));
-		answer.headers.set("access-control-allow-origin", origin);
-		answer.headers.set("vary", "origin");
-		return answer;
+		return withCors(answer);
 	},
 };
 
