@@ -43,8 +43,9 @@ class Time extends Quantity {}
 class Temperature extends Quantity {}
 class Pixels extends Quantity {}
 
-// a quantity moving lib/time's Instant (`now + 1h`): its milliseconds, a DimensionError of any other dimension than time
-milliseconds_of(duration: Quantity) := duration.in("ms")
+// a quantity moving lib/time's Instant (`now + 1h`) as the Duration it lasts, a DimensionError of any other dimension
+// than time; a program without lib/time has no Duration and leaves it out (card instant-typed-duration)
+q: Quantity as Duration := Duration(q.in("ms"))
 
 // a quantity as the class of its dimension, a plain Quantity for a compound one (speed, area …)
 measured(amount: number, dims: int, unit: text, scale: number) := {
