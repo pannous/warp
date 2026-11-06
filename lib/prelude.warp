@@ -245,6 +245,8 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else fold(xs, 0, +)
 // `sum 1 2 3`, `sum(1, 2, 3)`: the numbers given, as max takes them (lib/extrema.warp)
 sum(a: number, b: number, more...): number := fold([a, b] + more, 0, +)
+// `xs.sum { |x| x * 2 }`, `xs.sum(x => x * 2)`: the sum of what the function gives each item, as count takes one
+sum(xs: list, f: function) := sum(xs.map(f))
 // dir(v) of a value only the run knows (extensions/sugar/reflection.warp gives the words of a list, a text and a map): a map's
 // keys, then its words (decision dir-map-keys-first), a list's or a text's words, none of a number
 // help(x), function(x).definition of a value only the run knows (extensions/sugar/reflection.warp gives the program's and its
