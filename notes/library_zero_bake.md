@@ -231,6 +231,16 @@ The emitter must guarantee these for L3–L5:
   source.bytes), so the host's sha256 (card signature-sha256) would make the hash free everywhere.
   Paired against main (instructions retired): hello 5.20 G → 5.14 G (−1.1%; under WARP_LIB 5.15 → 5.03), `use units`
   17.82 G → 17.03 G (−4.4%); compiler.warp compiling itself 2577.6 G → 2526.3 G (−2.0%).
+- L4 step 2 (2026-11-06), the prelude linked: 2a a signature's definitions packed one by one; 2b prelude.wasm
+  exports every word (built as `use prelude`, given the prelude, never reaching it twice; the dead kind_* words gone);
+  2d every program links it (linked_libraries names it first, with_used declares what it reaches from its signature),
+  with what that exposed fixed for every linked module: 2d.1 a host word the driver doesn't answer finds its library
+  at its first call (hello opened libwarp_gpu and libwarp_window every run); 2d.2 a program linked apart never builds
+  the whole module first, runtime.wasm carries warp.fingerprint (use units −18 %); 2d.3 a linked module's globals are
+  imported, never brought in and re-run (linked_needs, pre-L5c); link precedence program > used module > prelude
+  (link_libraries and bind_library_words, `by_precedence`); only a refusal marked by link_refusal retries from source.
+  2c float/codepoint overloads of the hot numeric words. Against main before step 2: hello +0.8 %, use units −0.5 %,
+  the numeric loop −3.9 % (+6 % without 2c), compiler.warp compiling itself −0.15 %; prelude.wasm 171 KB, 222 words.
 - L5 (wasm-module-linking): points 1 (closure funcref), 3 (Instance), 2 (class descriptors) landed; L5c programs and
   modules import their modules' words (notes/runtime_linking.md "Load-time linking"); L5d the playground links them
   too; L5e the splice path and .splice.wasm are gone, a module's image lives in its warp.signature.
