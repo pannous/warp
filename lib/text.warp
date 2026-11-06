@@ -25,8 +25,8 @@ letters(t): list := [c for c in chars(t) if is_unicode_letter(c)]
 is_unicode_letter(c): bool := {
 	code = ord(c)
 	if code < 128 { return is_alpha(c) }
-	at = letter_range_before(code)
-	at >= 0 and code <= letter_ranges[at * 2 + 1]
+	range_index = letter_range_before(code)
+	range_index >= 0 and code <= letter_ranges[range_index * 2 + 1]
 }
 // the last letter range (lib/letter_ranges.warp) starting at or before code, by halving; -1 when none does
 letter_range_before(code: int): int := {

@@ -1081,7 +1081,7 @@ melody(notes) := melody(notes, note_seconds)
 // the melody of its notes, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
 tune(score: data) := melody([score_pitch(item) for item in score])
 score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(str(item)) else item
-// not text.warp's capitalize: its letter test's variable `at` meets this module's function at ("at was a function")
+// capitalize is text.warp's; letter-range uses range_index so it does not meet this module's at(time, block)
 note_capitalized(name: text) := upper(name[0]) + name[1..]
 
 // patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.
