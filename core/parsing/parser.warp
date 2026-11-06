@@ -549,9 +549,12 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if stray and p.group.grouped { break }
 		if stray { raise "`" + c + "` closes no group" }
 		before = p.at
-		signed = found and found#(found.length)#2 == Separator.Space and signed_item_at(p)
+		spaced = found and found#(found.length)#2 == Separator.Space
+		signed = spaced and signed_item_at(p)
+		pathed = spaced and at_char(p, '/') and starts_path(p)
 		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
 		if signed { item = spaced_sign_marked(p, p.code[previous_start ..< before].trim(), before, item) }
+		if pathed { item = attributed(PATH_AFTER_OPERAND_MARK, listed(Bracket.Square, Separator.Space, [p.code[previous_start ..< before].trim(), item]), item) }
 		previous_start = before
 		// `def f(x)` ending its line: its body the lines below, indented or a `{…}` opening the next line (Allman), as
 		// `if c` reads its own (card def-body-next-line); without one the header stays as it is
