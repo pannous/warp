@@ -995,23 +995,24 @@ with_used_modules(program: Node, folder: text): Node := {
 	if #sources#1 == 0 and #sources#3 == 0 then program else with_reached(program, sources#1.join("\n"), yes, sources#2.map(std_module_path), sources#3)
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen, the
-# slices of the linked ones (signature.warp), whose text is never read]
-used_module_sources(statements: any, folder: text, seen: any): list := {
+# slices of the linked ones (signature.warp), whose text is never read]; a file in the program's folder takes a use of
+# the program's own, never a standard module's (`within_module`): samples/web/html.warp is no lib/html for markup's `use html`
+used_module_sources(statements: any, folder: text, seen: any, within_module: bool = no): list := {
 	sources = []
 	linked = []
 	for statement in statements {
 		used = use_target(statement)
-		if used is symbol and file_used(statement, folder) == ø and name_of(used) not in seen {
+		if used is symbol and not taken_as_file(statement, folder, within_module) and name_of(used) not in seen {
 			seen += [name_of(used)]
 			signature = linked_signature(name_of(used))
 			source = if signature == ø then used_module_text(name_of(used)) else ""
 			if signature != ø {
-				inner = used_module_sources(use_statements(signature.uses), folder, seen)
+				inner = used_module_sources(use_statements(signature.uses), folder, seen, yes)
 				sources += inner#1
 				seen = inner#2
 				linked += inner#3 + signature.slices
 			} else if source != "" {
-				inner = used_module_sources(use_statements(used_modules(source)), folder, seen)
+				inner = used_module_sources(use_statements(used_modules(source)), folder, seen, yes)
 				sources += inner#1 + [source]
 				seen = inner#2
 				linked += inner#3
@@ -1021,6 +1022,12 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 		}
 	}
 	[sources, seen, linked]
+}
+# whether a file the folder holds takes the use (uses.warp file_used): of the program's own uses any file, of a standard
+# module's uses only the module's own file (a module built in lib/ uses its neighbours so)
+taken_as_file(statement: Node, folder: text, within_module: bool): bool := {
+	file = file_used(statement, folder)
+	file != ø and (not within_module or without_steps_up(file) == without_steps_up(std_module_path(name_of(use_target(statement)))))
 }
 # `use <module>` of each module, as a program's statements say them (a module's own read off its use lines, no parse
 # of all of it)
