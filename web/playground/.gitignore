@@ -7,4 +7,4 @@ warp.debug.wasm
 components/
 served-files.js
 version.js
-warp-lib/
+warp-lib

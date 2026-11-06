@@ -1,7 +1,8 @@
-# fcff88df4e 2026-11-06 21:23 221/266 83.1%
+# 00c4ac6995 2026-11-06 21:37 222/266 83.5%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
+ok   samples/advanced/neural_net.warp
 ok   samples/advanced/particles.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
@@ -19,6 +20,7 @@ ok   samples/apps/meeting_planner.warp
 ok   samples/apps/name_matcher.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
+ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
 ok   samples/conditions/control_flow.warp
@@ -98,7 +100,6 @@ ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/gpu/watercolor.warp
-ok   samples/gpu/yohei_tweet_glsl.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
@@ -183,6 +184,8 @@ ok   samples/sound/signal_graph.warp
 ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp
+ok   samples/sound/sound_patterns.warp
+ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
 ok   samples/sound/visualizer.warp
@@ -213,6 +216,7 @@ ok   samples/types/reflection.warp
 ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
+ok   samples/wasm/component_reflection.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/keyed_counters.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
@@ -226,18 +230,14 @@ WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
-SRV  samples/servers/hosting.warp
-SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
-SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/neural_net.warp: not a function
 FAIL samples/advanced/raytracer.warp: outside the core: the unknown name a
-FAIL samples/apps/site_generator.warp: text of node
 FAIL samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
 FAIL samples/functions/functions.warp: outside the core: the unknown name a
-FAIL samples/hello/natural.warp: outside the core: a int where a list is needed
+TIME samples/gpu/yohei_tweet_glsl.warp: still running after 184 s
+FAIL samples/hello/natural.warp: outside the core: a function value in +
 FAIL samples/modules/javascript.warp: the host word foreign_call is not in warp yet
 FAIL samples/modules/rust_crates.warp: outside the core: the call levenshtein(…)
 FAIL samples/numbers/dates.warp: outside the core: a time where a int is needed
@@ -245,10 +245,10 @@ FAIL samples/numbers/measurements.warp: outside the core: the unknown name certa
 FAIL samples/numbers/units_dynamic.warp: wasm trap: null reference
 FAIL samples/objects/references.warp: outside the core: the field members of a int
 FAIL samples/python/numpy_matrix.warp: python ModuleNotFoundError: No module named 'numpy'
-TIME samples/sound/sound_patterns.warp: used its 30 s of CPU
-TIME samples/sound/sound_pipes.warp: used its 30 s of CPU
+FAIL samples/servers/hosting.warp: exit 137, nothing on stderr
+FAIL samples/servers/route_headers.warp: hint: status is router's fix: use router
+FAIL samples/servers/worker.warp: warp: Out-of-bounds access in linear memory or a table, or call stack exhausted while running samples/servers/worker.warp
 FAIL samples/storage/orm_units.warp: outside the core: the operator as on int
-FAIL samples/wasm/component_reflection.warp: outside the core: the unknown name demo
 FAIL samples/wasm/import_compiled.warp: no module, library or package named shapes: no shapes.warp beside the program or in lib/; a package is used by its path, use "…"
 FAIL samples/wasm/wasm_interop.warp: outside the core: the unknown name def
 FAIL samples/web/component_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
