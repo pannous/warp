@@ -1,0 +1,2 @@
+// lib/file's file_lines(path) splits the file's text on "\n" (card lib-file-lines); the deprecated alias lines(path) is shadowed by the prelude's lines(t) for a text path, see FILE_LINES.md
+'use file; p = temp_folder() + "/warp_fl_1.txt"; write(p, "a\nb\nc"); r = file_lines(p); delete_file(p); r'	["a", "b", "c"]
