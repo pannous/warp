@@ -1,0 +1,15 @@
+# warp fix turns a quoted path argument of a file word into a path literal (decision path-literals-preferred, card quoted-path-format)
+is! 'use "../../lib/fix/fix.warp"; fixed(«write("data/a.txt", "hi")», [], yes)#1' «write(./data/a.txt, "hi")
+»
+is! 'use "../../lib/fix/fix.warp"; fixed(«write("data/my file.txt", "hi")», [], yes)#1' «write("data/my file.txt", "hi")
+»
+is! 'use "../../lib/fix/fix.warp"; fixed(«write("./data/a.txt", "hi")», [], yes)#1' «write(./data/a.txt, "hi")
+»
+is! 'use "../../lib/fix/fix.warp"; fixed(«read("/etc/hosts")», [], yes)#1' «read(/etc/hosts)
+»
+is! 'use "../../lib/fix/fix.warp"; fixed(«exists("~/notes.txt")», [], yes)#1' «exists(~/notes.txt)
+»
+is! 'use "../../lib/fix/fix.warp"; fixed(«write("http://x.org", "hi")», [], yes)#1' «write("http://x.org", "hi")
+»
+is! 'use "../../lib/fix/fix.warp"; fixed(«print("data/a.txt")», [], yes)#1' «print("data/a.txt")
+»

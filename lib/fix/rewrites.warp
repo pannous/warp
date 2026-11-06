@@ -17,6 +17,8 @@ floor_division_words = ["div"]
 # `alias acos = arc_cosine` → `alias acos => arc_cosine`: an alias says its direction (decision alias-arrows)
 alias_word = "alias"
 alias_arrow = "=>"
+# a file or path word's first argument that is a quoted path (decision path-literals-preferred)
+path_argument_words = ["write", "read", "append", "append_file", "exists", "open", "delete_file", "list_files", "glob", "write_bytes", "read_bytes", "mkdir", "cd", "touch", "cat"]
 
 # every hint of the scanned lines, in the order of the source
 hints_of(lines: list): list := {
@@ -59,7 +61,7 @@ word_at(cs: list, i: int): text := {
 	piece(cs, i, n)
 }
 
-# the hint on a word: a counted type, another language's word, a floor division word; ø when none
+# the hint on a word: a counted type, another language's word, a floor division word, a quoted path argument; ø when none
 word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
 	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
 	if word == alias_word and starts_statement(cs, i) { return alias_arrow_hint(cs, i + #word, number) }
@@ -75,6 +77,7 @@ word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) 
 			if is_word_character(after) or after == "(" { return Hint(number, i, word, floor_division, "floor division " + floor_division) }
 		}
 	}
+	if word in path_argument_words { return quoted_path_argument_hint(cs, i, word, number) }
 	ø
 }
 
@@ -142,6 +145,39 @@ floor_division_hint(cs: list, i: int, number: int) := {
 	operand_before_blanks = is_word_character(character_before_blanks(cs, i)) or character_before_blanks(cs, i) == ")"
 	if after == "=" and operand_before_blanks { return Hint(number, i, "//", floor_division, "floor division " + floor_division) }
 	ø
+}
+
+
+# `write("data/a.txt", …)` → `write(./data/a.txt, …)`: the first argument of a path word, when a quoted path with no
+# spaces, is the path literal (decision path-literals-preferred); a path with spaces, a URL, and an empty text stay
+quoted_path_argument_hint(cs: list, i: int, word: text, number: int) := {
+	open = i + #word + blanks_after(cs, i + #word)
+	if at(cs, open) != "(" { return ø }
+	arg = open + 1 + blanks_after(cs, open + 1)
+	quote = at(cs, arg)
+	if not (quote in quotes) { return ø }
+	close = closing_quote(quote)
+	n = 1
+	while arg + n < #cs {
+		c = at(cs, arg + n)
+		if c == close { break }
+		if c == "\\" and arg + n + 1 < #cs { n += 2 } else { n += 1 }
+	}
+	if at(cs, arg + n) != close { return ø }
+	content = piece(cs, arg + 1, n - 1)
+	replacement = path_literal_for(content)
+	if replacement == "" { return ø }
+	Hint(number, arg, piece(cs, arg, n + 1), replacement, "a path is a path literal")
+}
+
+# the path literal for a quoted path's content; "" when it should stay quoted (spaces, a URL, empty)
+path_literal_for(content: text): text := {
+	if content == "" { return "" }
+	if content.contains(" ") { return "" }
+	if content.contains("://") { return "" }
+	if content.starts_with("./") or content.starts_with("../") or content.starts_with("~/") or content.starts_with("^/") or content.starts_with("•/") or content.starts_with("@/") { return content }
+	if content.starts_with("/") or content.starts_with("~") { return content }
+	"./" + content
 }
 
 # the lines with every hint's replacement, the last of a line first so the earlier columns stay
