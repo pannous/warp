@@ -824,7 +824,8 @@ names_bound_in(n: Node): any := {
 			if is_key(part, Op.Assign) or is_key(part, Op.Define) {
 				while left is key { left = key_of(left) }
 				if left is symbol { found[name_of(left)] = yes }
-				if is_group(left) { for item in left { found[name_of(leftmost_symbol(item))] = yes } }
+				# (a clause's list pattern binds its names too, `total([first, rest...])` its rest)
+				if is_group(left) { for item in left { found[name_of(leftmost_symbol(item))] = yes; if is_group(item) and bracket_of(item) == "[" { for name in pattern_names(item) { found[name] = yes } } } }
 				# the variants of a sum type, `type D = A | E(x)`
 				if is_type_view(key_of(part)) { for variant in alternatives(value_of(part)) { found[name_of(leftmost_symbol(variant))] = yes } }
 			}
@@ -862,7 +863,7 @@ pattern_names(pattern: Node): list := match pattern {
 	Symbol(name): [name]
 	Key(head, Op.Colon, type): pattern_names(head) + names_after_type(type)
 	Key(head, Op.Add, tail): pattern_names(head) + pattern_names(tail)
-	Key(head, op, fields): if is_group(fields) then pattern_names(fields) else []
+	Key(head, op, fields): if rest_name(pattern) != ø then [rest_name(pattern)] else if is_group(fields) then pattern_names(fields) else []
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
 }
 # a text pattern goes on after a hole's type, `id: int + "/posts/" + post: int` parsing as `id: (int + "/posts/" + post)`
