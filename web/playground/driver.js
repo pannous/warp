@@ -24,7 +24,10 @@ const compilerEnvironment = () => self.valueAsData ? [...COMPILER_ENVIRONMENT, .
 // tables beside it) and serves its routes: here the page's requests (lib/web.warp); a test run (valueAsData) does
 // neither, as core/native/tests.warp's `warp run <code>` does not: a program with routes gives its value, tables stay
 // in memory
-const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page", `WARP_PROGRAM=${file}`])];
+// WARP_SOUND_NOPACE when the page has not been clicked: sounds stay silent (playground.js heard), so lib/sound.warp
+// waited_till must not sleep on a silent clock (card samples-page-sound-pipes). Not WARP_NO_WINDOW: that forces the
+// WAV / getpid path the page lacks.
+const programEnvironment = file => [...ENVIRONMENT, ...(self.valueAsData ? [] : ["WARP_SERVE=page", `WARP_PROGRAM=${file}`]), ...(self.pageSystemValues?.heard ? [] : ["WARP_SOUND_NOPACE=1"])];
 const FAILURE_STATUS = 1;
 const STDOUT = 1;
 const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS

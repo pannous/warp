@@ -129,13 +129,13 @@ node_fields = [126, 0, any_reference, 0, 99, gc.node, 0]
 gc_types = [[94, 120, 1], [94, 99, gc.node, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
 	[79, 1, gc.node, 95, 7] + node_fields + [126, 0, 126, 0, 99, gc.node, 0, 99, gc.node, 0], [94, 127, 1], [95, 2, 127, 0, 99, gc.limbs, 0],
 	[79, 1, gc.node, 95, 5] + node_fields + [funcref_byte, 0, 99, gc.text, 0], [80, 1, gc.node, 95, 4] + node_fields + [99, gc.node, 1],
-	[79, 1, gc.node, 95, 11] + node_fields + concatenated(range_list(8).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
+	[79, 1, gc.node, 95, 12] + node_fields + concatenated(range_list(9).map(i => [funcref_byte, 0]))] + range_list(hook_arities + 1).map(arity => [function_type_byte, arity + 1] + concatenated(range_list(arity + 1).map(i => references.node)) + [1, any_reference])
 # a closure's entry (closures.warp), a $Node so it sits in the closure's items: the funcref it calls and the text it shows; $Instance, every class's struct's
 # supertype (instances.warp); $Class, a class's descriptor (instances.warp class_slots); the closure calls' function types, (closure, argument…) to a node. Each the same in every
 # module, so one module's instances and closures pass into another's code
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment", "attributes"]], ["Limbs", []], ["BigInt", ["negative", "limbs"]], ["Closure", ["kind", "data", "value", "entry", "shown"]], ["Instance", ["kind", "data", "value", "extra"]],
-	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call"]],
+	["Class", ["kind", "data", "value", "entries", "field_at", "place", "set", "construct", "show", "float", "call", "operate"]],
 	["closure_call_type_0", []], ["closure_call_type_1", []], ["closure_call_type_2", []], ["closure_call_type_3", []], ["closure_call_type_4", []],
 	["closure_call_type_5", []], ["closure_call_type_6", []], ["closure_call_type_7", []], ["closure_call_type_8", []]]
 # a kind's wasm value type: a number's, a yes/no's or a character's own byte, else its reference (decision kinds-as-cases)
