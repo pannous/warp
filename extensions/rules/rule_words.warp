@@ -978,8 +978,9 @@ first_parameter_type(word: text, definition: text): text := {
 # after v
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
 
-# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's) the program doesn't bind, else ø
-module_named(module: Node, program: Node): any := if "${module}" in names_bound_in_kept(program) or used_module_text("${module}".lower()) == "" then ø else module
+# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's), or a program's own linked one (`shapes`, its
+# text maybe not beside it), the program doesn't bind, else ø
+module_named(module: Node, program: Node): any := if "${module}" in names_bound_in_kept(program) or (used_module_text("${module}".lower()) == "" and not own_module_wasm.has("${module}")) then ø else module
 
 # `let n = 5` is the assignment `n = 5`, where its name was written noted (core/passes/lambdas.warp
 # local_declarations): inside a lambda the name stays the lambda's own, not the scope's (card let-inside)
