@@ -35,7 +35,8 @@ build_native(source_file: text, library: text) := {
 }
 # the first wasm2c on the PATH at least WASM2C_OLDEST, loudly none
 supported_wasm2c(): text := {
-	found = shell("which -a wasm2c").trim().split("\n").filter(path => path != "")
+	# (a PATH entry ending in / lists /opt/homebrew/bin//wasm2c: its wabt folder is found from the path without it)
+	found = shell("which -a wasm2c").trim().split("\n").filter(path => path != "").map(path => path.replace("//", "/"))
 	for path in found { if version_at_least(shell(quoted_path(path) + " --version").trim(), WASM2C_OLDEST) { return path } }
 	raise "warp build native needs wasm2c " + WASM2C_OLDEST.join(".") + " or newer (wabt), found " + (if #found == 0 then "none" else found.map(path => path + " " + shell(quoted_path(path) + " --version").trim()).join(", "))
 }
