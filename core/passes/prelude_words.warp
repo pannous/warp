@@ -631,7 +631,19 @@ with_own_words(program: Node, library: list): Node := {
 	}
 	program
 }
-own_named(code: Node, name: text, mine: text, arities: list): Node := bottom_up(renamed(code, name, symbol(mine)), n => if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(mine) and not arities.any(signature => takes(signature, #n - 1)) then group_like(n, [symbol(name)] + items_of(n)[1 ..]) else n)
+own_named(code: Node, name: text, mine: text, arities: list): Node := owned_calls(renamed(code, name, symbol(mine)), name, mine, arities)
+# each call of the word the program's own when one of its definitions takes it, else the library's, a method call's
+# receiver counted (`xs.reduce(f, 0)` is reduce(xs, f, 0)), as aliased counts it; renamed leaves a method's name as
+# written, so the call decides it here
+owned_calls(n: Node, name: text, mine: text, arities: list): Node := match n {
+	Key(receiver, Op.Dot, call): Key(owned_calls(receiver, name, mine, arities), Op.Dot, owned_call(children(call, x => owned_calls(x, name, mine, arities)), name, mine, arities, 1))
+	_: owned_call(children(n, x => owned_calls(x, name, mine, arities)), name, mine, arities, 0)
+}
+owned_call(n: Node, name: text, mine: text, arities: list, receivers: int): Node := {
+	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and (n#1 == symbol(mine) or n#1 == symbol(name))) { return n }
+	taken = arities.any(signature => takes(signature, #n - 1 + receivers))
+	group_like(n, [symbol(if taken then mine else name)] + items_of(n)[1 ..])
+}
 # the heads of the program's top-level definitions of the function name, `f(a)` and `f(a, b)`
 heads_defining(program: Node, name: text): list := statements_in(program).filter(statement => declared_name(statement) == name).map(definition_head_of).filter(head => head != ø)
 # a statement binding the name itself, not defining it: a local `handler = page_handlers#n` (lib/markup.warp
@@ -871,7 +883,8 @@ names_bound_in(n: Node): any := {
 			if is_key(part, Op.Assign) or is_key(part, Op.Define) {
 				while left is key { left = key_of(left) }
 				if left is symbol { found[name_of(left)] = yes }
-				if is_group(left) { for item in left { found[name_of(leftmost_symbol(item))] = yes } }
+				# (a clause's list pattern binds its names too, `total([first, rest...])` its rest)
+				if is_group(left) { for item in left { found[name_of(leftmost_symbol(item))] = yes; if is_group(item) and bracket_of(item) == "[" { for name in pattern_names(item) { found[name] = yes } } } }
 				# the variants of a sum type, `type D = A | E(x)`
 				if is_type_view(key_of(part)) { for variant in alternatives(value_of(part)) { found[name_of(leftmost_symbol(variant))] = yes } }
 			}
@@ -906,10 +919,10 @@ view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else
 # the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the
 # holes of a text pattern `"/users/" + id: int`
 pattern_names(pattern: Node): list := match pattern {
-	Symbol(name): [name]
+	Symbol(name): [rest_name(pattern) ?? name]
 	Key(head, Op.Colon, type): pattern_names(head) + names_after_type(type)
 	Key(head, Op.Add, tail): pattern_names(head) + pattern_names(tail)
-	Key(head, op, fields): if is_group(fields) then pattern_names(fields) else []
+	Key(head, op, fields): if rest_name(pattern) != ø then [rest_name(pattern)] else if is_group(fields) then pattern_names(fields) else []
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
 }
 # a text pattern goes on after a hole's type, `id: int + "/posts/" + post: int` parsing as `id: (int + "/posts/" + post)`

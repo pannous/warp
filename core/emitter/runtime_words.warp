@@ -54,7 +54,10 @@ def same_code(a: TypedCode, b: TypedCode): TypedCode {
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 	if name == "made_case" { return made_case(body, arguments) }
-	values = arguments.map(a => expression_code(body, a))
+	intrinsic_of(body, name, arguments.map(a => expression_code(body, a)))
+}
+# the word of values already made (quotes.warp's meta_node of a quote)
+def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 	if name in late_words { return call_values(late_word(name), values) }
 	match name {
 		"new_text": TypedCode(ValueKind.Text, index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)]))
@@ -195,7 +198,7 @@ intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2
 # the words a program calls that runtime.warp gives, by the runtime word's name, and those the extensions' runtimes give
 library_words = extended_library_words({numerator: "numerator", denominator: "denominator", join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", range_value: "range_value", is_range: "is_range", range_sum: "range_sum", list_pop: "list_pop", list_insert: "list_insert",
-	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values", keys: "map_keys", values: "map_values", has: "collection_contains", get: "map_get_or",
+	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values", instance_copy: "instance_copy", keys: "map_keys", values: "map_values", has: "collection_contains", get: "map_get_or",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", "key·node": "key_node", "symbol·node": "symbol_node", "list·node": "built_spelled_list", "key·op_code": "info_byte", "key·cases": "operator_cases", "node·op_code": "info_byte", "node·bracket_code": "bracket_info", "node·separator_code": "separator_info", "node·cases": "spelled_cases", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", attributes_of: "attributes_of", with_attribute: "with_attribute", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
