@@ -1,0 +1,37 @@
+app-webview	web	app is listed in extensions/commands/commands.warp:36 but no native command or window library exists; a lib/ window library (lib/native SDL2/raylib beside it) per decision libraries-not-core
+bare-word	web	the item rule is extensions/sugar/events.warp:10 (rewrite $e => live(() => $e) where item and $e is varying); a bare word item needs its own handling there or in lib/markup.warp
+bind-attribute-input	web	lib/markup.warp has only select{ bind: } (line 162); input{ bind: name } with value= and data-warp-input as the playground example web/playground/examples.js:263 expects
+build-site-prerender	hosting	scripts/build-site.sh (2d7c6d818) runs page_render only in the Worker; prerender index.html at build time in the script
+button-click-phrase	web	with a comma it is the Handler (test_components:4-6 pass); the single-item case is a rule in extensions/sugar/events.warp / lib/markup.warp:125
+counter-button-demo	web	markup without use web: extensions/sugar/events.warp writes handler/live; load lib/markup implicitly (extensions/implicit_uses.warp) or refuse naming use web
+deploy-self	hosting	web/playground/worker.js:156 workerBundle still returns NOT_SELF_HOSTED; lib/web.warp:200 page_serve exists to build a Worker on
+dev-build	web	Rust stored_values for_dev has no twin; web/playground/dev.js reloads but keeps no changed values; lib/storage.warp + dev.js
+element-expression-child	web	markup computed children (decision markup-keeps: tag items are expressions is a core fix 1, ~15-25 lines) else lib/markup.warp; check whether fix 1 landed
+emitter-imports-cargo	connectors	C imports work (test_c_imports_run green), cargo calls still 'no owner' (test_cargo_crates:4-9); a cargo owner beside extensions/c_imports
+enum-parameters	connectors	C enums in FFI: extensions/c_imports (header reading) maps enum params/returns/fields to warp enums by int
+firefox-jspi-bug	web	no report written yet (no notes/web hit); write the ready-to-paste Bugzilla report in notes/ and hand the user the link; filing needs the user's account
+function-returning-non	connectors	C function giving [result, out] with an output parameter: extensions/c_imports (out-parameter marshalling)
+input-bind-name	web	lib/markup.warp:162 handles bind for select only; input value/on-input and checkbox checked lowering is missing there (samples/web/typed_form.warp:8 uses it)
+li-transition-render	web	lib/markup.warp html_is_attribute/html element builder (196-217) could treat CSS-property keys transition/animation with a text value as the element's style
+live-map	web	lib/markup.warp live map value style gives 'no field op'; markup liveness is lib-side (decision markup-keeps)
+make-playground	web	the remaining red tours are carded separately (draw-canvas-show, sleep-ms-playground, …); the workflow is web/playground + its tests, no core/ change of its own
+markup-done-selector	web	style{ .done = … } selector read as a variable: lib/markup.warp style rendering (style_combinators, l.432) plus a markup rule
+markup-handler-spacing	web	extensions/sugar/events.warp:6 item rule `on $e $body: block` never fires since the lambdas pass makes click a closure; fix the rule order/pattern in extensions/sugar, not core/
+mount-cleanup-handlers	web	on mount / on cleanup have no handler anywhere (no mount in lib/markup.warp); markup render lifecycle in lib/markup.warp + web host
+packaging-pypi	connectors	packaging/pypi/build_wheels.py:38 still wheels warp, warp-runtime, warp-page-runtime (Rust layout); rewrite on packaging/native_dist.sh or drop
+page-ids-regression	web	probes/ is gone; samples/web/page_elements.warp:7 still uses $who and FAILs (test/samples.txt:259 html_escape in lib/markup.warp:371)
+playground-host	web-framework	lib/net.warp:9-10 declares fetch_start/fetch_reply from host but no lib word calls them (grep lib/ extensions/ core/); give lib/net.warp a non-waiting fetch word that uses them or drop the Rust-era parts of web/playground/host-tasks.js:153-165
+program-server	hosting	Rust serve.rs refusal is gone with the Rust compiler; deploy is web/playground/deploy.js + web/hosting/hosting.mjs: serve the server routes beside the site or refuse loudly there
+spaced-brace-markup	web	spaced head { … } in markup resolves to shell's head: lib/markup.warp element words vs lib shell word (decision library-word-visibility)
+storage-write-through	storage-write-through	lib/storage.warp:7 'Waiting: lazy loading and filters as SQL (card storage-write-through)'
+try-click	web	lib/markup.warp:76-78 click and its `click $who` rule: inside a try block the argument reaches click as a text where a list is expected
+wasmtime-self-hosted	connectors	same root as wasmtime-pure-compiler: declare lib/wasmtime.warp's C words as foreign lines (driver.warp:80 pattern), then re-add wasmtime to std_module_names (core/compiler.warp:254 reads it; a one-word list entry)
+who-handler-read	web	samples/web/page_elements.warp:7 uses $who but lib/markup.warp has only `click $who` (line 78); a rule reading $<id> as the page element's value in a handler belongs in lib/markup.warp
+component-calls	web	web framework holes are lib/markup.warp work (run-time hole lists from page·shown); only shrinks patches, no core/ need
+components-on-the-fly	connectors	run-time component loading is a library host word (lib/wasmtime.warp, lib/native) plus research; part 1 goes with card module-linking
+firefox-tour	web	fewer gpu_compute jobs or a longer limit for that check: scripts/browser-dry-run.sh / web/playground
+server-build	web	extensions/commands/build.warp:62-71 refuses unbuilt kinds; a plain warp app.warp already serves routes (core/native/warp.warp:471); detection of routes belongs in the build command extension
+site-wagi-build	hosting	extensions/commands/build.warp:63 UNBUILT_OPTIONS --site/--wagi; lib/wagi.warp exists; build kinds detected per decision build-kinds-detected
+use-cargo-config-structs	connectors	the crate binding generator (crates/, lib/crates/) needs Default constructors, field setters, &Struct handles; no core change
+use-cargo-playground	connectors	serving prebuilt crate components to web/playground and leaving excluded_samples.txt is web/ work
+js-webidl-bindings	user-decided	user (round 9-10): use js binds from web.webidl via an extension

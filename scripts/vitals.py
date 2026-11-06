@@ -215,7 +215,7 @@ def record_field(path, key):
 
 def build_history(record, by_seed, landed):
     """Each landing's instructions retired (in 10^12), peak memory and CPU seconds of building <record>, its leanest
-    full build (rebakes skipped), by the commit the record says it built: a build of uncommitted edits says
+    full build (a lib-only build reusing a stored compiler skipped: its log has no seed step; older ones say rebake), by the commit the record says it built: a build of uncommitted edits says
     `<sha>+dirty` (rebuild.sh built_commit) and is no landing's. Instructions, as CPU seconds swing with the machine's
     load and cores; <by_seed>: a seed's first build is left out, a compiler's cold first run reads ~3% more
     (notes/compiler_rebuilds.md)."""
@@ -225,7 +225,8 @@ def build_history(record, by_seed, landed):
             commit = record_field(os.path.join(folder, "inputs.txt"), "commit")[1]
             seed = (record_field(os.path.join(folder, "inputs.txt"), "seed") or [None, None])[1]
             with open(os.path.join(folder, "build.log")) as log:
-                if commit not in landed or "rebak" in log.read():
+                text = log.read()
+                if commit not in landed or "rebak" in text or "rebuild step seed" not in text:
                     continue
             timing = os.path.join(folder, "time")
             instructions = int(record_field(timing, "instructions")[0])

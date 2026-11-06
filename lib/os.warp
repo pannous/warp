@@ -30,3 +30,20 @@ input() := std_io("os", "input", [])
 input(prompt: any) := std_io("os", "input", [prompt])
 // all of standard input as one text: `cat notes.txt | warp count.warp`
 stdin() := std_io("os", "stdin", [])
+// `set_env("MODE", "fast")`: the variable set for the commands the program runs, yes when it was; natively C's
+// setenv through the 'c' library (lib/c.warp), so a page has none. env reads the environment the program started with
+setenv(name: text, value: text, overwrite: i32): i32 from 'c'
+set_env(name: any, value: any): bool := setenv(str(name), str(value), 1) == 0
+// `eprint "no such file"`: the value on standard error, a line of its own (natively, through C's stdio)
+fopen(path: text, mode: text): handle from 'c'
+fputs(s: text, file: handle): i32 from 'c'
+fclose(file: handle): i32 from 'c'
+eprint(value: any) := {
+	stream = fopen("/dev/stderr", "a")
+	fputs(str(value) + "\n", stream)
+	fclose(stream)
+	ø
+}
+// `temp_file()`, `temp_dir()`: the path of a new empty file, folder, which mktemp made
+temp_file() := command("mktemp").trim()
+temp_dir() := command("mktemp -d").trim()

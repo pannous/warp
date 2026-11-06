@@ -22,3 +22,8 @@
 - batch-18: https://claude.ai/code/session_018Xoawn76TwMEBReW51Tb7j
 - batch-19: https://claude.ai/code/session_018XoawjpjAGCRehYo5f4Yy2
 - batch-20: https://claude.ai/code/session_018XoawnkvYT2WBuVNf8Jfgv
+
+## Result (applied with `todo batch`, 2026-11-06)
+notes/sprint/triage.tsv holds all 1159 verdicts: 401 core (moved to the Core column), 338 lib (noted, sprint work),
+170 done and 164 obsolete (closed with their evidence), 86 unclear (noted; questions to warp-interviewer).
+About 20 cards without a unique key were skipped (bug-* and untitled:* cards); they get keys before the sprint.

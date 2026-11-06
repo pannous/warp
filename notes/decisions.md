@@ -886,3 +886,65 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-06 library-word-visibility (user, discussed; card linked-cross-module-overloads, revises "open words" plan A): typing is the main guard against clashes between libraries. A library word with no parameter type and no return type is private to its module by default and visible only when marked `export` (wiki/keyword.md: "visible to importers"); typed words are visible. A call is resolved by argument types, then by the expected result type (`parse(t: text) -> json` vs `-> csv`, picked by `as csv`, `csv x = …` or a typed parameter; result-type overloads already work), then by module name (`csv.parse(t)`); otherwise it is refused loudly, never guessed. Internally every module word links under its module prefix (time·padded). `any` counts as untyped (user: "what else would it be?"). Still open: whether a typed helper (json's json_* readers) can be marked private.
 - 2026-11-06 user (library-word-visibility): an untyped library word is visible to importers when marked `public`; `export` keeps its one meaning, a wasm export the host calls (page_render, timer_fired). milliseconds_of(any) is replaced by typed conversions (`q: Quantity as Duration`, `t: text as Instant`), the built-in as-conversion machinery.
 - 2026-11-06 user: after the current core finishes, a card-closing sprint. Triage every open card first: still relevant? doable without core/ (lib/, extensions/, samples, tests, scripts)? or needs core/? Then iterate quickly over the cards that need no core change; core cards wait for a later sprint.
+- 2026-11-06 user (card sprint): a worker may do several cards in a quick row, one quick commit each, and skip the general tests when certain a change needs none (a small sample or tour example, a note, a wording); anything that can change compiled behavior still gets its smoke test.
+- 2026-11-06 user (card sprint, emphatic): a card whose change affects core/ is not approached in this sprint: it moves to the Core column (the worker reports 'core: <key> <reason>' to the Supervisor, who moves it in a batch) and the worker takes the next card.
+- 2026-11-06 card sprint, round 1 (user):
+  - core-dir-order: dir(module) lists names sorted alphabetically (`dir(time)#1` → "day_number"), as Python; test_dir stays.
+  - triage-pipes: `|` between two ints is bit-or (`n = 2; m = 4; n | m` → 6); it pipes only when its right side is a function.
+  - use-require-import: `use <word>` refuses with a fix-it naming the module ("square is a word of math: use math"); test_include:12-14 may change to `use math; square 7` (user OK to edit those lines).
+  - pixels-bytes: `.bytes` of a number takes the endianness as a required parameter, `1.bytes(.big)` / `1.bytes(.little)`, no default (to avoid errors); a list is its items' bytes in that order.
+  - pixels-bytes (refined, user): the endianness is an enum value read from the parameter's type, `1.bytes(big_endian)` / `1.bytes(little_endian)`, no dot and no default.
+- 2026-11-06 card sprint, round 2 (user):
+  - cargo-semver-version: bring `use cargo` back now: a crate is built to a wasm module and linked like any module (load-time linking); test_cargo_crates:4-9 are the target.
+  - class-text: a Note equals the text of its name (Note.equals): `note("C#4") == "C#4"`; it still shows unquoted; test_note_values:7 stays.
+  - play-mozart-mp3: the sample uses the decided source-relative literal `play ^/tune.mp3` (source-relative-prefix); `program.folder` is welcome as a word for the same folder ($dir). Note: inline `x = ^/tune.mp3; x` shows ['^', "/tune.mp3"] today.
+  - power-function: investigate first: exact non-integer powers in lib/reals would be perfect, but measure the cost before choosing over floats.
+- 2026-11-06 card sprint, round 3 (user):
+  - scope-use-packages: test_use_scopes:4 and :7 change tests/warp/ → test/warp/ (user OK); expected values stay.
+  - library-typed-outcome: test_polled_signal_typed and test_task_completion_typed may be rewritten to the public behaviour (user OK); the helpers value_polled/task_awaited can then turn private.
+  - immutable-tuple: round brackets are a plain list (`a = (1, 2, 3); a#1 = 9` → [9, 2, 3]); immutability comes from a declaration, not the bracket; the tuple idea leaves wiki/mutable.md.
+  - param-as-type: a parameter's type is `f(int a)` or `f(a: int)`; `as` is the PREFERRED return-type syntax (`fib i as int := …`, `fun calculate(…) as real`), not a parameter type, and not to be confused with conversion. So `f(a as int)` is not a parameter annotation (wiki/return.md:17,32 to fix).
+- 2026-11-06 card sprint, round 4 (user):
+  - backtick-strings: inside backticks `$x` interpolates the expression `$x`, the same meaning as outside (a page element's value on a page); a plain variable is `${who}`; `\$` escapes. extensions/, no core.
+  - fine-updates: a style block prints with braces as written, `style{.done{color:"green"}}`; web/playground/examples.js is updated.
+  - markup-attr-call: in markup a call to a known warp word is evaluated (`div(class: join(xs, " "))` → class="a b"); CSS functions (min, max, calc, var, rgb) inside style{} stay text; refused when both fit.
+  - quasi-text: discuss later (card stays parked).
+- 2026-11-06 card sprint, round 5 (user):
+  - xs-ys: `x = ø; x += 3` refuses with a fix-it, "ø has no +: start the sum at 0 (x = 0)", replacing the internal "node sum"; self-append `xs += xs` → [1, 2, 1, 2] stays.
+  - list-map-separator: "How expensive would it be to carry the separator through? If it's cheap, then let's do it." Finding: a Node list already carries its separator in the kind field (SEPARATOR_SHIFT bit 48, core/analysis/kinds.warp:21), so showing by it costs nothing there; typed lists ($IntList, $FloatList) have no kind field and would need one. The worker measures that cost; cheap → shown lists keep their written separator.
+  - mutable-array: closed; the list is the mutable array (in-place set O(1)), typed lists cover fixed numeric arrays.
+  - map-chain-fusion: fuse `.map(f).map(g)` only when f and g are @pure; effectful chains run stage by stage as written.
+  - map-chain-fusion (refined, user): "we also need to infer @pure from the compiler without explicit annotation where possible": purity is inferred (a function that calls only pure words and writes nothing outside its locals is pure); `@pure` is needed only where inference can't see it.
+- 2026-11-06 card sprint, round 6 (user):
+  - core-code-point-list-chars: both at once: `xs = "ab" as codepoints` gives codepoints where `xs#1 == 97` and `xs#1 == 'a'` both hold (a codepoint equals its number and its char). Today `'a' == 97` refuses ("== on char and int") and `as codepoints` is an unknown name.
+  - core-if-branch-float-widening: mixed int/float branches widen to float, as today.
+  - verify-function: a program may not name a function after a type word: `double(x) := …` refuses ("double is a type"); the law test renames it (user OK).
+  - typed-null: in discussion (wiki/null.md "Typed Null": `Person? x = null` as sugar for Person.null).
+- 2026-11-06 typed-null (user, discussed): a typed null would be a real value. The framework works well, so a big change needs strong reasons, and this one "seems complete overkill just for this now, so probably forget it": ø stays the only null. Parked for a later, optional investigation of two ideas: wasp's smart pointers vs a small boxed typed null, and an ABI that always carries the type in an extra channel (cost of each). The trap `class Person{name: text}; p: Person? = ø; p.name` → "wasm trap: null reference" should become a loud error either way.
+- 2026-11-06 Supervisor: card sprint started early at the user's request ("replace the triage sessions with workers on the small non-core cards"), while warp-markup-handler-spacing's core finishes still land: 8 local areas (notes/sprint/README.md), branches sprint-<area> instead of card-named branches (one branch carries many cards).
+- 2026-11-06 card sprint, round 7, cleanup (user):
+  - close: bend-verdict, function-definition-core, patterns-second-pass, core-names, drop-keep (drop the Lean handle/abort rules), lib-reshuffle-rest (drop the branch), small-packages, add-word-positions.
+  - park: fung-friday, polish-notation, modular-integration.
+  - dynamic-language stays open.
+- 2026-11-06 card sprint, round 8 (user): close def-items (workaround items_until stays; module-prefixed words remove the cause), local-check-assignment (no repro), use-prelude (fixed: the repro prints 1 per frame since zero-bake). wasm-becomes: measure the levers (generate_address_map, native_unwind_info off, Cranelift speed_and_size) on size, memory and compile speed; keep only what helps and keeps backtraces; warp.wasm.driver.cwasm is still 31 MB.
+- 2026-11-06 card sprint, round 9 (user):
+  - all-words-in, are-words-in: no preference; interviewer default (undoable): `xs are in t` means every item of xs is in t, one sugar rule in extensions/; `all xs in t` not built.
+  - find-fallback: "all should be 0": `"abc".find("x") or 0`, `?? 0`, `default 0` and `try … else 0` all give 0 (today only `or` and `try … else` do). "result? means null or error": an optional result type catches the error as ø.
+  - plural-singular-check: units as names: lib/units declares each unit's singular and plural words as aliases (`kilogram`, `kilograms` → kg; `meter`, `meters` → m), no stem guessing (test_unit_literals:11).
+  - stem-lookup-ed: "We do want a general rule for all functions." Finding: today only library words that define their -ed form work (`xs sorted`, `xs reversed`); a program's own `twice(x)` gives "unknown name twiced", `stop` → `stopped` too. So the -ed stem lookup is the general rule: any unknown `<f>ed`/`<f>d` (doubled consonant: stopped → stop) applies f to the value before it, for every function taking an argument. Core name resolution (~20 lines) → Core column.
+- 2026-11-06 Supervisor (sprint): bare-comparison-refusal also refuses the bare `c then v else w` form (test_then_pipe:10-12), the same form the decision refuses at :9. puts-prints: test_wasm.pairs.warp:345/:475 are upgraded to nothing per output-words-nothing.
+- 2026-11-06 card sprint, round 10 (user):
+  - callable-bus-wav-leftover, test-web: test_callable_instances:4 and test_task_files save into `temp_folder()` instead of the repo (user OK to change those tests); expected values stay; the .gitignore line for task.txt goes.
+  - markup-done-selector: in a data block a `.name` / `#name` key is always a CSS selector, never a variable: `done = 3; style{ .done { color: "green" } }` keeps .done. Core (core/passes/data_blocks), after the sprint.
+  - program-test (test-program-value): a program of `test …` lines ends with the summary value "✓ N tests passed" / "K of N failed", the wording of `warp test`; an ending rule in extensions/ + a counter in lib.
+  - js-webidl-bindings: `use js` binds the JS globals from lib/web.webidl through an extension (typed signatures from the standard WebIDL), playground only.
+- 2026-11-06 card sprint, round 11 (user):
+  - clock-plain: clock() itself returns a Time quantity, so `clock() - started < 2s` works; prelude's clock uses lib/units' Quantity; lib/time's ms-number uses and the samples comparing with ms change.
+  - ordinal-index-words: "An important edge case. Ignore. Don't do anything." (`second xs` → 1s [1, 2, 3] stays; no work.)
+  - mutation-phrases: `increase x by: 2` should work out of the box as an unimportant example English definition with named parameters (lib). The general mechanism, prepositions as parameter markers without a colon, is its own big Soon card (preposition-words).
+  - map-pair-iteration → type-name loop variables (card loop-variable): `for x in y` checks whether y.x or y.xs is defined and iterates that: `for char in "ab"` chars, `for byte in "ab"` bytes (y.bytes), `for pair in m` pairs (m.pairs); otherwise y itself. For all general types.
+- 2026-11-06 card sprint, round 12 (user):
+  - program-test: a plain `warp prog.warp` run counts `test` lines too: a program ending in a test line ends with the summary (`test 1 == 2` → "1 of 1 failed"; test_soft_tests:4 changes from ø, user OK); a program ending in another value keeps it; test blocks `test "name" {…}` still run only under `warp test`.
+  - with-do-block: later: see whether a Python-like `with` can be a library over warp primitives, `with context: block, actions: block`; probably hard, since the actions depend on the variables of the first block. Card to Later.
+  - catch-blocks: parked (Later); try/catch covers it; the wiki marks the body-wide handler as planned.
+  - constant-define-operator: drop `::=`; `constant x = 3` says it; the wiki line goes.

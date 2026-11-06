@@ -220,14 +220,13 @@ static inline wasmtime_anyref_t warp_instance_field(warp_values* values, const w
 }
 
 // the module's types: a $Node's from a given one
-static inline wasmtime_struct_ref_pre_t* warp_struct_of(warp_values* values, const wasmtime_anyref_t* ref) {
+// the struct type of a reference (the caller deletes it), NULL when it is no struct
+static inline wasmtime_struct_type_t* warp_struct_type_of(warp_values* values, const wasmtime_anyref_t* ref) {
 	wasmtime_structref_t structure;
 	if (!wasmtime_anyref_as_struct(values->context, ref, &structure)) return NULL;
 	wasmtime_struct_type_t* type = wasmtime_structref_type(values->context, &structure);
-	wasmtime_struct_ref_pre_t* pre = wasmtime_struct_ref_pre_new(values->context, type);
-	wasmtime_struct_type_delete(type);
 	wasmtime_structref_unroot(&structure);
-	return pre;
+	return type;
 }
 static inline wasmtime_struct_ref_pre_t* warp_struct_type(warp_values* values, const wasmtime_field_type_t* fields, size_t count) {
 	wasmtime_struct_type_t* type = wasmtime_struct_type_new(values->engine, fields, count);
@@ -245,8 +244,9 @@ static inline wasmtime_struct_ref_pre_t* warp_box_type(warp_values* values, wasm
 	wasm_valtype_delete(field.storage.valtype);
 	return pre;
 }
-// $text: array (mut i8); $items: array (mut anyref); $list: struct (mut i32 length, mut (ref $items))
-static inline void warp_types_made(warp_values* values) {
+// $text: array (mut i8); $items: array (mut (ref null $Node)), the given node's type; $list: struct (mut i32 length,
+// mut (ref $items))
+static inline void warp_types_made(warp_values* values, wasmtime_struct_type_t* node) {
 	values->int_box = warp_box_type(values, WASM_I64);
 	values->float_box = warp_box_type(values, WASM_F64);
 	wasmtime_field_type_t byte = {.mutable_ = true, .storage = {.kind = WASMTIME_STORAGE_TYPE_KIND_I8}};
@@ -254,7 +254,8 @@ static inline void warp_types_made(warp_values* values) {
 	values->text = wasmtime_array_ref_pre_new(values->context, text);
 	wasmtime_array_type_delete(text);
 	wasmtime_valtype_t any = {.kind = WASMTIME_VALTYPE_KIND_REF, .reftype = {.nullable = true, .heaptype = {.kind = WASMTIME_HEAPTYPE_KIND_ANY}}};
-	wasmtime_field_type_t item = warp_field_type(true, wasmtime_valtype_to_wasm(values->engine, &any));
+	wasmtime_valtype_t a_node = {.kind = WASMTIME_VALTYPE_KIND_REF, .reftype = {.nullable = true, .heaptype = {.kind = WASMTIME_HEAPTYPE_KIND_CONCRETE_STRUCT, .of.concrete_struct = node}}};
+	wasmtime_field_type_t item = warp_field_type(true, wasmtime_valtype_to_wasm(values->engine, node ? &a_node : &any));
 	wasmtime_array_type_t* items = wasmtime_array_type_new(values->engine, &item);
 	values->items = wasmtime_array_ref_pre_new(values->context, items);
 	wasmtime_valtype_t items_ref = {.kind = WASMTIME_VALTYPE_KIND_REF, .reftype = {.nullable = false, .heaptype = {.kind = WASMTIME_HEAPTYPE_KIND_CONCRETE_ARRAY, .of.concrete_array = items}}};
@@ -266,8 +267,10 @@ static inline void warp_types_made(warp_values* values) {
 }
 static inline warp_values warp_values_of(void* engine, wasmtime_caller_t* caller, const wasmtime_anyref_t* node) {
 	warp_values values = {.engine = engine, .caller = caller, .context = wasmtime_caller_context(caller)};
-	values.node = warp_struct_of(&values, node);
-	warp_types_made(&values);
+	wasmtime_struct_type_t* node_type = warp_struct_type_of(&values, node);
+	values.node = node_type ? wasmtime_struct_ref_pre_new(values.context, node_type) : NULL;
+	warp_types_made(&values, node_type);
+	if (node_type) wasmtime_struct_type_delete(node_type);
 	return values;
 }
 static inline void warp_values_done(warp_values* values) {

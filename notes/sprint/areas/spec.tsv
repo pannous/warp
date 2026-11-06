@@ -1,0 +1,46 @@
+bare-comparison-refusal	parser-features	test_then_pipe:9 still gives 'outside the core: the operator then on int'; one more sugar rule beside then_not_pipe in extensions/sugar/calls.warp:14; parked branch then-branch b8324e477e (zero-bake hold)
+click-function	functions	on click { } with an empty block: handler rule in extensions/sugar/events.warp / lib/markup.warp
+comment-shebang-word	parsing-2	candidacy is in extensions/implicit_uses.warp:21 (mentions_indexed over raw source text, only C declarations stripped); read the program's code words (free_words, same file) instead
+events-declared-by-types	effects	listener words list (notes/rust_hacks.md row 15): events declared on element/system types in lib/markup.warp, lib/signals.warp, extensions/event_phrases.warp
+fails-cpu	functions	p.z = 0.5 on a list still unsupported on the CPU (only shader components in extensions/rules/wgsl.warp:286); component assignment as a property_accessors/sugar rule
+follow-documentation	errors	extensions/sugar/fallbacks.warp:3-4 still takes the fallback only for ø; add the error case there
+func-greet	parser-features	still red (test_argument_labels.warp:4 got 'Hi person: "Bob"'); single label + name Swift form, in the extension handling func/labels (extensions/sugar/functions.warp)
+int-plus-extension	functions	`fun Int.plus(k) = this + k`: `this` as the receiver of an extension method fits extensions/class_methods (no `this` handling there now)
+pure-text-literal-from-line	parsing-2	the `from c` lines are found by scanning the source text in extensions/c_imports/imports.warp:192 c_functions_of; it must skip lines inside text literals
+raise-field	errors	match arm reading of `"x": raise field` belongs to extensions/match_patterns.warp / extensions/sugar/arms.warp; no fix in git log
+reduction-with-block	functions	count {…} green, but test/results.txt:4385 ✗ '[1, 2, 3].sum { |x| x * 2 }' cast failure; block-first rule for every list word in extensions/sugar
+spaced-definition-pipe	parser-features	spaced definition 'square x := …' composed with | is sugar (extensions/); test_pipe_stages repro
+swap-operands-rule	rewrite-f2	rules {…} is sugar (extensions/sugar/arms.warp:22) over lib/prelude.warp:868 rewritten_everywhere, which has no step cap: add the decided 1000-step loud error naming the rule there
+test-sample-file-case	errors	cases run in the test file's folder (extensions/commands/tests.warp:3), so a relative samples/… path is not found (47 such lines in test/results.txt); resolve a file case against the tree root in test_listed
+under-float	switch-rebinds	lib/fast_math.warp:4 still says '^ stays the C library's pow'; rebinding ^ for float exponents to fast pow is a lib/fast_math rule
+all-filter-iteration	spec-gaps	test/results.txt:26 'all numbers > 2: s += it' still 'unknown name all'; a rule in extensions/sugar/broadcasting.warp (each-all-broadcast) can cover the block form
+amp-compose	spec-gaps	decided (wiki/&.md): square & print 2 = print(square(2)); `|` composition exists in extensions/sugar/calls.warp:46, & between functions can be a rule beside it
+block-after	parsing-2	extensions/pipe_lambdas.warp handles `do |x| … end` only for a call's last argument (test_python_ruby_definitions.warp:51 apply(3) do); `xs.map do |a|` needs a rule there
+bool-of-collection	spec-gaps	core/runtime/conversions.warp:88 bool() refuses non-bools; a truthiness overload bool(x: any) in lib/prelude.warp
+cargo-version	spec-gaps	`use cargo strsim` works (samples/modules/rust_crates.warp:6); a version in the use line goes to the cargo extension's use reader
+catch-blocks	spec-gaps	only `try {…} catch e {…}` exists (test/results.txt:31,163); `catch (kind) {}` / `on error {}` inside a function body can be rewrite rules in extensions/checked_tries.warp
+constant-define-operator	spec-gaps	no ::= anywhere in core/ extensions/ lib/; declare it as an operator row (lib/aliases.warp, decision operator-rows-stay) lowered by extensions/sugar/declarations.warp; core/parsing only if the tokenizer refuses '::'
+definition-head-phrases	parser-features	phrase heads extend extensions/phrase_definitions.warp (decision phrase-functions, notes/decisions.md:193); parked under the plan-only hold, WIP 2cfd2e22c5
+effects-lists	effects	extensions/effects.warp already computes a function's effects for @pure/@io marks; expose them as f.effects / effects of f there
+english-type-facts	spec-gaps	nothing implements 'a person has a random id'; an English-facts reader belongs in lib/english.warp or an extension
+fold-bare-arguments	spec-gaps	test/results.txt test_several_arguments.pairs.warp:4 and test_function_values.pairs.warp:22 fail 'outside the core: a value after an assignment' (even sum [1 2 3]); lower 'sum := fold +' as partial application in extensions/sugar/functions.warp
+geometric-algebra	spec-gaps	a new lib/pga.warp beside lib/geometry.warp; nothing in core
+inner-outer-operators	spec-gaps	no \+ or /+ anywhere; can be declared operators in lib/list.warp through extensions/declared_operators.warp (the '\' glyph may need an extension glyph owner)
+it-last-result	spec-gaps	no last-result `it` anywhere today; a sugar extension (extensions/) can name the previous statement's value it outside closures
+lib-phrase	parsing-3	send landed 4fb4819150; the rest are lib/ phrase rewrites (lib/tasks.warp:42 once finishes) waiting on cards return-param-function, labeled-non, lib-function, add-xs (decision phrase-rules-kept)
+list-type-forms	spec-gaps	`x = number[]` and `list of numbers` (plural) are type-word rewrites a library or extension can add (lib/prelude.warp:263 `ints` rewrite is the pattern)
+map-pair-iteration	spec-gaps	`for key, value in m` works; giving the loop item of a map a key/value pair is a for-sugar in extensions/ (pair.key field)
+meta-tagged-data	spec-gaps	p.@source on undeclared tagged data: works on declared classes and plain maps, so the tagged-literal lowering (extensions/) should keep @ keys like a map
+mutation-phrases	spec-gaps	increase x by 2, divide x by 2 are lib/ phrase rewrites (rewrite increase $x by $n => $x += $n); reduce clashes with fold, decide or drop that one
+once-english-task	spec-gaps	once $x finishes is lib/tasks.warp:42; the job-less form `once the download finishes` is one more rewrite there
+ordinal-index-words	spec-gaps	xs nr 2, 2nd xs, second xs are rewrites/aliases a library can declare (lib/prelude.warp rewrite pattern); xs.2nd parsing as '3 nd' is the unit reader
+phrase-typed-params	spec-gaps	extensions/phrase_definitions.warp owns `to …` phrases; typed parameters (number a, number b as real) are a rule there
+print-in-script	spec-gaps	a lib word (e.g. lib/scripts or transliteration table) mapping chars to Cyrillic; wiki/in.md example, no core
+purity-predicates	spec-gaps	square.pure?, .input?, .random?, purely keyword: extensions/effects.warp already computes 'effects of f'; predicates and purely are words/rules there
+root-power-warning	spec-gaps	a lint in extensions/text_lints.warp (or rules) warning on ungrouped √1+2 / 2^x+1; no warning exists today
+says-field	errors	[1 2].z error message teaching the swizzle rule: swizzles live in extensions/rules/wgsl.warp + core/runtime/fields.warp; the message text could come from the rule; Later edge case
+scene-3d	spec-gaps	3d scenes (wiki/3d.md): a lib/ module over the gpu/webgpu libraries (samples/gpu), no core
+shell-backtick-run	spec-gaps	lib/shell.warp:27 already has rm "file"; rm of each file of ls is a lib/shell.warp word over iteration
+shell-symbolic-mode	spec-gaps	repl behavior lives in lib/repl.warp; no symbolic mode anywhere yet
+with-do-block	spec-gaps	with context do … end as a sugar rule in extensions/sugar/ (or esoteric: drop?)
+find-fallback	user-decided	user (round 9-10): or 0, ?? 0, default 0, try … else 0 all give 0; result? means null or error → ø

@@ -17,10 +17,13 @@ operator ≠ := !=
 operator ≟ := ==
 operator ≡ := ==
 operator ﹦ := ==
-// `a ≈ b` with tolerance 1e-9 (alike below); `a ~ b` (also `a ~~ b`) the looser, tolerance 0.01 (decision approx-zero)
-infix operator ≈(a: any, b: any) := alike(a, b, 0.000000001, no)
-infix operator ~(a: any, b: any) := alike(a, b, 0.01, yes)
-infix operator ⋍(a: any, b: any) := alike(a, b, 0.000000001, no)
+// `a ≈ b` within tolerance 1e-9 (alike below); `a ~ b` (also `a ~~ b`) the looser, within rough_tolerance 0.01; a
+// program sets either: `tolerance = 0.1; 1 ≈ 1.05` holds (decision approx-zero)
+global tolerance = 0.000000001
+global rough_tolerance = 0.01
+infix operator ≈(a: any, b: any) := alike(a, b, tolerance, no)
+infix operator ~(a: any, b: any) := alike(a, b, rough_tolerance, yes)
+infix operator ⋍(a: any, b: any) := alike(a, b, tolerance, no)
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
 // pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
@@ -180,7 +183,7 @@ lerp(a, b, t) := a .+ (b .- a) .* t
 mix=&lerp
 // shader math (card compile-shaders, WGSL's words): the fractional part, 0 below the edge and 1 from it, and the smooth
 // Hermite step from 0 at low to 1 at high
-fract(x) := x - floor(x)
+fract(x) := each_any(x, e -> e - floor(e))
 step(edge, x) := if x < edge then 0 else 1
 smoothstep(low, high, x) := { var t = clamp((x - low) / (high - low), 0, 1); t * t * (3 - 2 * t) }
 // `norm x`, `‖x‖`: a number's absolute value, a list's Euclidean length (decision S3: `count`/`length` stay the number

@@ -41,7 +41,7 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
 ## Failed builds (card build-failed-store, user 2026-10-30)
 
 Every build of a hash happens once, whether it succeeds or fails. `warp rebuild` says each step before it runs
-(`rebuild step seed|stage-two|optimize|runtime|modules`); when one fails, rebuild.sh keeps the failure in
+(`rebuild step seed|optimize|runtime|modules`); when one fails, rebuild.sh keeps the failure in
 <store>/<hash>/<compiler>.failed/: build.log (the whole output), step, message (what is printed) and, for a step after
 the seed, the half-built warp.wasm.new and runtime.wasm. It prints the header, the failing step's output (its last 60
 lines) and, last, `rebuild.sh: warp build-failed at step <step>, log <path> …`, the line smoke.sh, gate.sh,
@@ -62,7 +62,7 @@ self-check's stage two in <hash>/stage-two.record/) holds
 - time: `/usr/bin/time -l` of the compile (CPU, wall, peak memory); rebuilds.log's `built` line carries its CPU
 - profile.txt, sample.gz, perf.map: the function profile of the whole run (WARP_PROFILE=perfmap and macOS sample every
   10 ms through scripts/profile.sh -a, from scripts/build-slot.sh WARP_BUILD_RECORD): no CPU cost, a few % wall.
-So a build's time and hotspots are read from its record, never by building again; a lib-only rebake is recorded too.
+So a build's time and hotspots are read from its record, never by building again; a lib-only build (a stored compiler reused, its runtime and modules made anew) is recorded too.
 A compiler's first run after it lands in the store is cold and reads about 3% more instructions retired (idioms
 2bc2e14adc9fac6f: 3.76e12 first, then 3.6495e12 three times within 0.003%). So one record alone is not a comparison:
 to compare two compilers, run each on the same fixed source, discard one warm-up run, and compare the runs after it

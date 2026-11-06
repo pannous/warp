@@ -81,51 +81,18 @@ aliased(n: Node, aliases: list): any := {
 	n
 }
 
-# the empty call `sugar_rules_baked()` of the baked table `name`, its computing marked (WARP_TIMES)
-def is_baking(n: Node, word: text, name: text): bool := {
-	if not (is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(word)) { return no }
-	timed("computing " + name)
-	yes
-}
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time (the std modules are lib/<name>.warp); `module_source("compiler/analysis/errors.data")`, a name with an
 # extension, that file of lib/. A compiled compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
 module_text(n: Node): any := {
-	if is_baking(n, "sugar_rules_baked", "SUGAR_RULES") { return baked_literal("SUGAR_RULES", sugar_rules_packed()) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
 	source = try read(path) else ø
 	if source == ø then n else source
 }
-# `baked-current <file>`: yes when the library baked into this compiler is cut and parsed as this very compiler cuts
-# and parses it, else no. One built by an older compiler (the seed) carries that one's slices and parses, so `warp
-# rebuild` builds it once more by itself: the baked library is always the built compiler's (card once-seed)
-write_baked_current(file: text) := {
-	stale = baked_tables().filter(table => not same_texts(table#2, table#3)).map(table => table#1)
-	write(file, if #stale == 0 then "yes" else "no: " + stale.join(", "))
-}
-# [name, baked in, as this compiler makes it of lib/ as it lies now] of each table module_text bakes from the library:
-# `rebake` writes the third over the second, so a lib/-only change needs no compile (decision lib-hash-rebake); a new
-# baked table joins here. Since L4 only the sugar's rules (rewrites.warp SUGAR_RULES): the compiler reads the rest
-# of lib/ from disk
-baked_tables(): list := [["SUGAR_RULES", SUGAR_RULES, sugar_rules_packed()]]
-# a baked table as the code of its read: one segment of its own (baked_segment_text) that `rebake` can write anew
-baked_literal(name: text, table: map): Node := List([symbol("unbaked_table"), List([symbol("baked_segment"), baked_segment_text(name, table)], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
-# a baked table's segment: its body's byte count in BAKED_LENGTH_DIGITS digits, the line `warp.baked <name>` padded to
-# BAKED_HEADER_BYTES, then the body, its entries packed
-BAKED_LENGTH_DIGITS = 10
-BAKED_HEADER_BYTES = 42
-BAKED_MARK = "warp.baked "
-baked_segment_text(name: text, table: map): text := {
-	body: text = pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
-	body_bytes: int = byte_size(body)
-	count_text: text = "${body_bytes}"
-	zeros: int = BAKED_LENGTH_DIGITS - #count_text
-	head: text = ("0" * zeros) + count_text + BAKED_MARK + name
-	spaces: int = BAKED_HEADER_BYTES - 1 - #head
-	head + (" " * spaces) + "\n" + body
-}
-unbaked_table(body: text): map := {
+# a table of texts by name packed, as `warp rebuild` writes one beside the modules, and read back
+packed_table(table: map): text := pack(List(table.keys.map(key => keyed(":", key, table[key])), Bracket.Curly, Separator.Comma))
+unpacked_table(body: text): map := {
 	table = {}
 	for entry in items_of(unpack(body)) {
 		key: text = key_of(entry)
@@ -133,45 +100,6 @@ unbaked_table(body: text): map := {
 	}
 	table
 }
-# `rebake <file>`: the compiler at file with each baked table as this compiler makes it (baked_tables), written over
-# its segment: code and numbering stay, so `warp rebuild` needs no second compile where the seed cut and parsed the
-# library otherwise (decision rebake-tables). A compiler whose tables are no segments (built by an older seed) stays
-write_rebaked(file: text) := {
-	wasm = read_bytes(file)
-	place = section_place(wasm, section_ids.data)
-	made = {}
-	for table in baked_tables() { made[table#1] = table#3 }
-	segments = []
-	rebaked = []
-	for segment in entries_after(wasm[place#1 ..< place#2], 0, yes) {
-		name = baked_name(segment, made.keys)
-		if name == ø { segments += [segment] } else {
-			segments += [passive(baked_segment_text(name, made[name]).bytes)]
-			rebaked += [name]
-		}
-	}
-	found = #rebaked
-	tables = #made
-	if found < tables { print "rebake: ${file} carries ${found} of the ${tables} baked tables as segments of their own, left as it is" } else {
-		size_bytes = uleb(place#2 - place#1)
-		section_start = place#1 - 1 - #size_bytes
-		ahead = wasm[0 ..< section_start]
-		behind = wasm[place#2 ..< #wasm]
-		write_bytes(file, ahead + section(section_ids.data, vector(segments)) + behind)
-	}
-}
-# the baked table a data segment holds (its mark after the digits), ø for any other segment
-baked_name(segment: list, names: list): text? := {
-	size = uleb_read(segment, 1)
-	bytes_at = size#2 + BAKED_LENGTH_DIGITS
-	for name in names {
-		mark = (BAKED_MARK + name + " ").bytes
-		if bytes_at + #mark <= #segment and segment[bytes_at ..< bytes_at + #mark] == mark { return name }
-	}
-	ø
-}
-same_texts(a: map, b: map): bool :=#a == #b and a.keys.all(key => b.get(key) == a[key])
-# a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
 module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
 

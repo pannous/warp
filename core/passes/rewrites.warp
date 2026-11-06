@@ -591,19 +591,25 @@ module_rules_of(path: text, module: text): list := {
 # (the bake trusted as the library index is, rule_needs_by_module: its file's hash asked only under WARP_LIB, a lib/
 # edited since the build; reading and hashing the sugar's files was ~10 ms a compile)
 module_rules_read(path: text, module: text): list := {
-	baked = SUGAR_RULES.get(path.remove_prefix(run_library() + "/"))
+	baked = sugar_rules_packed_beside().get(path.remove_prefix(run_library() + "/"))
 	place = if baked != ø then baked.find("\n") else ø
 	if place != ø and (warp_lib() == ø or baked[0 ..< place - 1] == source_hash(file_text(path) ?? "")) { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
 	written_rules(path, file_text(path) ?? "", module)
 }
-# The sugar's rules (extensions/sugar), the compiler's own and read by every compile, baked in packed (rule_node):
-# parsing their 45 KB was ~0.3 s of a small compile (notes/library_zero_bake.md L4), the only library text the
-# compiler still bakes. By file within lib/, its source hash, a line break, then its rules packed. uses.warp
-# module_text writes them in where sugar_rules_baked() stands; a compiler built by one that bakes none (an older seed)
-# parses them where it runs, and `warp rebuild` builds it once more (core/native/warp.warp rebaked)
-SUGAR_RULES = sugar_rules_baked()
-sugar_rules_baked(within: text = ""): map := {}
-# the sugar's rules as the bake holds them, read off lib/ as it lies now
+# The sugar's rules (extensions/sugar), read by every compile, packed (rule_node) beside the prebuilt modules by `warp
+# rebuild` (library.warp write_library_index): parsing their 45 KB was ~0.3 s of a small compile (notes/library_zero_bake.md
+# L4), and the compiler bakes no library data. By file within lib/, its source hash, a line break, then its rules
+# packed; read once a compile, and without the file (the seed's build, a fresh lib/) the rules are parsed
+SUGAR_RULES_FILE = "sugar_rules.packed"
+global sugar_rules_held = ø
+sugar_rules_packed_beside(): map := {
+	if sugar_rules_held == ø {
+		packed = file_text(modules_file(SUGAR_RULES_FILE))
+		sugar_rules_held = if packed == ø then {} else unpacked_table(packed)
+	}
+	sugar_rules_held
+}
+# the sugar's rules packed, read off lib/ as it lies now
 sugar_rules_packed(): map := {
 	packed = {}
 	for path in sugar_modules_scanned().keys.map(module => module + module_extension) {

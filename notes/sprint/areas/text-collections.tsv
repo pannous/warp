@@ -1,0 +1,36 @@
+triage-round-groups	lists	still red: "outside the core: the group (…" (e.g. test/control/test_blocks.pairs.warp:7); an extension can claim a round group as a list value
+triage-text-element-write	unicode-strings	still red: test/text/test_string.pairs.warp:39,48 "outside the core: an assignment to an element of a text"; an extension can claim it
+ask-reading	format	lib/fix/layout.warp:9-10 and :171 only avoid f it-1 in spacing; applying the reading print f(it - 1) belongs in lib/fix (fix.warp/rewrites.warp)
+beautify-no-wait	format	lib/fix/command.warp:105 asks input("apply? y/n ") and treats end of input as no; ask on a tty (isatty already in core/native/warp.warp:29) and default only without one — if native input() itself does not block it is core/native
+change-twice	lookup-2	listener registry is lib/prelude.warp:956-1000 (listen/unlisten/kept_listeners); test_event_footguns:4 fails (22 for 21)
+each-codepoint	unicode-strings	untyped t walks graphemes, typed text walks codepoints; for-each codepoint loop sugar lives in extensions/sugar/loops.warp / prelude code_point_list (lib/prelude.warp:166)
+euler-constant-character	unicode-strings	lib/reals.warp:129 const euler() := ℯ returns the character; write euler() := 2.718281828459045 (or call ℯ())
+every-method-refused	lists	no every alias in lib/aliases.warp or lib/prelude.warp; alias every => all
+for-kv-iteration	loops-sugar	for (k, v) in m still red (test_welcoming_maps:7 in test/results.txt); for k:v not handled; rewrite rules in extensions/sugar/iteration.warp
+for-loop-filter	loops-sugar	partly done: test_for_where.warp:4 green; :5 (where it > 2) and :6 (where a > 2 on class fields) still red; where-guard sugar in extensions/sugar/loops.warp
+format-writes	format	explicit readings ([a -1] -> [a, -1], count xs > 3 -> count(xs) > 3) not in lib/fix/rewrites.warp yet; the compiler note side may need core hints
+is-node-case-pattern	matching	is-test against a node-case pattern goes through the prelude matcher (lib/prelude.warp:624 pattern_bindings, :644 is_pattern_type)
+loops-count-words	loops-count-words	`n times {…}` exists (extensions/times_loops.warp); twice/thrice/once as block words are still absent from lib/ (test/control/test_block_parameter_calls.pairs.warp:4 twice(body:block) red: not a function)
+lowercase-key-comparisons	lookup	test/control/test_lowercase_key_names.warp:9 still red (test/results.txt: esc/up outside the core); key words are an events extension/lib matter (extensions/sugar, lib), card text names core/extensions/handlers.warp which moved
+match-qualified	matching	match N::Num(4) subject refused: qualified call subject in extensions/match_patterns.warp (sum_types) lowering
+nested-key-arithmetic	printing	printing built code without needed parentheses is the serializer/show side (extensions/serializer.warp), outside core
+no-lowering-gate	matching	still red: test/results.txt:2476-2477 (test_when_signals.pairs.warp:7-8 'names no parameter'); when-with-arms can lower to match in an extension (extensions/match_phrases.warp)
+pattern-parameters	matching	notes/pattern_values.md plan; find/replace as warp functions with a pattern type and matcher belong in lib/ (regex.warp/text.warp)
+pure-lane-def	matching	no exhaustiveness check exists (no 'misses' message in core/ or extensions/); a match over enum cases missing one can be refused in extensions/match_patterns.warp (lint at the match)
+puts-prints	printing	lib/prelude.warp:188 puts(t) := { print t; 0 } still answers 0 against decision output-words-nothing (decisions.md:203); make puts/putf give nothing in the prelude
+quoted-path-fix	format	lib/fix/ (fix.warp, rewrites.warp) has no quoted-text-to-path-literal fixer yet; only the decision doc a5db39247
+rewrite-codepoints	unicode-strings	lib/fix/ has no codepoints/graphemes/bytes count rewrite; warp fix is a lib/fix module
+size-size	lookup	p.size -1 should be [p.size, -1] per decision glued-negative; member-followed-by-glued-negative handled in extensions/sugar/methods.warp:35
+split-map-phrase	collections	"…".split.map length: method-chain phrase in extensions/sugar/methods.warp; test_word_functions:9
+tree-find-replace-gaps	tree-patterns	test_tree_find/test_tree_replace still red (results.txt:2229-2261): pattern find, replace into code, named pattern templates; lib tree walks (with extensions/match_patterns.warp)
+uniscript-ownership	unicode-strings	test_versions:18,19 still 'the call uniscript(…) (no owner)'; test_package_registry:4 'no uniscript_c'; fix in packages/registry loading of uniscript, not core
+alias-network	lookup	no method lookup over lib/aliases.warp's alias line; a fallback rule in extensions/class_methods/methods.warp (method dispatch) plus lib/aliases.warp
+browser-json	format	web/playground/host.js:338 keyOfTree re-implements serialize; make it call the module's json_key (lib/json.warp:300) or align its forms, web/ only
+completion-order	lookup	no completion code in core/ or lib/ (only lib/graphs.warp unrelated); completion lives in web/playground / lib/repl.warp: order declared methods first
+div-class	format	no 'class name has no dot' hint exists; add it in lib/markup.warp
+empty-equality-hint	format	no such hint yet; a lint in extensions (as extensions/text_lints.warp) suggesting 'is empty' / plain truthy 'if x'
+friends-print	printing	print-bang lands in extensions/sugar/methods.warp:29 (test_print_bang.pairs.warp:4 passes for a list); force of a map literal as data still open there
+function-signatures	format	signature text is reflection (extensions/sugar/reflection.warp); type(sqrt) currently even fails 'unknown name sqrt' (test_function_objects.pairs.warp:4)
+pattern-direct-tests	matching	optimization: per-form rewrite of compile-time-known patterns in extensions/match_patterns.warp (rewrite per form in lib/extensions per card); pattern_bindings stays for run time
+are-words-in	user-decided	user (round 9-10): one rule xs are in t, together with all-words-in
+all-words-in	user-decided	user (round 9-10): one rule xs are in t, together with are-words-in

@@ -13,7 +13,7 @@
 #   3. else, unless --check, `warp rebuild`, the result published to the store; the store's `main` link moves to it only for a build of origin/main
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
 # A failed build is kept too, so every build of a hash happens once (user 2026-10-30): <store>/<hash>/<compiler>.failed/
-# holds its log (build.log), the step it failed in (seed, stage-two, optimize, runtime, modules; `warp rebuild` says each
+# holds its log (build.log), the step it failed in (seed, optimize, runtime, modules; `warp rebuild` says each
 # before it runs), what was said (message) and the half-built warp.wasm.new and runtime.wasm. A request for that hash
 # prints the stored failure at once and exits 1; --force builds again, from the failed step on with the stored artifacts
 # (`warp rebuild from <step>`), for a fix outside the inputs (the warp binary, memory, a full disk): a fix of the sources
@@ -24,7 +24,7 @@
 # record/): inputs.txt and sources.tar.gz (all it started from, recorded_inputs), build.log, time (CPU, wall, peak
 # memory) and its function profile (profile.txt, sample.gz, perf.map: scripts/build-slot.sh WARP_BUILD_RECORD).
 set -uo pipefail
-STEPS=(seed stage-two optimize runtime modules)  # core/native/warp.warp rebuilt, in order
+STEPS=(seed optimize runtime modules)  # core/native/warp.warp rebuilt, in order
 SHOWN_LINES=60  # of a failed step's output, printed before its log's path
 ERROR_LINE='[Ee]rror|refus|trap|panic|is missing|failed'  # the line of a longer failed step's output printed first
 check= force= which=pure tree=
@@ -70,8 +70,9 @@ publish() {
 }
 # a failed build's record: its log, step and message, the half-built artifacts of a later step (resumed by --force)
 failure() { echo "$store/$hash/$1.failed"; }
-# step_after_seed <step>: a step that starts on artifacts of an earlier one
-step_after_seed() { [ -n "$1" ] && [ "$1" != "${STEPS[0]}" ]; }
+# step_after_seed <step>: a step that starts on artifacts of an earlier one (a step no longer run, a failure kept from
+# before, starts anew)
+step_after_seed() { [[ " ${STEPS[*]:1} " == *" $1 "* ]]; }
 # kept_failure <name> <log> <status>: the failed build kept in the store (the build lock held)
 kept_failure() {
 	local name=$1 log=$2 status=$3 record step lines output part
@@ -159,8 +160,8 @@ mark_main() {
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
 # beside warp.wasm (card runtime-prebuilt) with its machine code, which linked runs load (card runtime-cwasm-shipped),
 # the standard modules in modules/ (card modules-prebuilt) and the library index, which a compile reads
-# (library.warp LIBRARY_INDEX; card store-hit-words-index)
-companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv 2>/dev/null); }
+# (library.warp LIBRARY_INDEX; card store-hit-words-index) with the sugar's rules packed (rewrites.warp SUGAR_RULES_FILE)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv modules/sugar_rules.packed 2>/dev/null); }
 # an entry stored or fetched before index.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
 # the modules step of its own compiler into a scratch folder, only the index taken (store-hit-words-index)
 words_kept() {
@@ -216,35 +217,18 @@ released() {
 	[ "$(cat "$lock/pid" 2>/dev/null)" = $$ ] && rm -rf "$lock"
 }
 # A compiler's code is core/**, extensions/**, the lib/ modules they use and the seed (the --baked hash,
-# compiler-inputs.sh code_files); the rest of lib/ it reads from disk, but the sugar's rules baked into a segment
-# (uses.warp baked_tables). <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change
-# rebakes that compiler with this lib/ (warp.wasm rebake, ~1 min) and makes its runtime, modules and library index
-# anew instead of compiling compiler.warp (decision lib-hash-rebake)
+# compiler-inputs.sh code_files); the rest of lib/ it reads from disk (the sugar's rules packed beside the modules).
+# <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change takes that compiler as it is
+# and makes its runtime, modules and library index anew instead of compiling compiler.warp (decision lib-hash-rebake)
 code_kept() { mkdir -p "$store/code" && ln -sfn "../$hash" "$store/code/$baked"; }
-# rebaked_stored <log>: 0 rebaked, 1 no stored compiler of this code, 2 failed (its output in the log, step rebake)
-rebaked_stored() {
-	local log=$1 stored=$store/code/$baked/warp.wasm new=$compilers/rebaking-$$.wasm
+# reused_stored <log>: 0 reused, 1 no stored compiler of this code, 2 failed (its output in the log, step runtime)
+reused_stored() {
+	local log=$1 stored=$store/code/$baked/warp.wasm new=$compilers/reusing-$$.wasm
 	[ -f "$stored" ] || return 1
-	logged warp "miss-rebaking-$(basename "$(readlink "$store/code/$baked")")"
+	logged warp "miss-reusing-$(basename "$(readlink "$store/code/$baked")")"
 	copied "$stored" "$new" || return 1
-	echo "rebuild step rebake" >"$log"
-	local said rebake_status
-	(cd "$tree" && WARP_LIB=$lib WARP_BUILD_RECORD=$record "$scripts/build-slot.sh" "$log.said" "$warp" "$new" rebake "$new")
-	rebake_status=$?
-	said=$(cat "$log.said" 2>/dev/null); rm -f "$log.said"
-	echo "$said" >>"$log"
-	[ $rebake_status = 0 ] || { rm -f "$new" "$new".*; return 2; }
-	# a compiler a seed older than lib-hash-rebake built bakes some tables as code, no segment the rebake can rewrite:
-	# none of this code to rebake, compiled anew
-	if [[ $said == *"left as it is"* ]]; then
-		echo "rebuild.sh: ${said##*$'\n'}: compiling it" >&2
-		logged warp "rebake-incomplete-$(basename "$(readlink "$store/code/$baked")")"
-		rm -f "$new" "$new".* "$store/code/$baked"
-		return 1
-	fi
-	if ! (cd "$tree" && export WARP_LIB=$lib && "$warp" "$new" baked-current "$new.baked" &&
-		{ [ "$(cat "$new.baked")" = yes ] || { echo "rebake: the tables are still not current: $(cat "$new.baked")"; false; }; } &&
-		rm -f "$new.baked" "$compilers/runtime.wasm.cwasm" && "$warp" "$new" runtime "$compilers/runtime.wasm" &&
+	echo "rebuild step runtime" >"$log"
+	if ! (cd "$tree" && export WARP_LIB=$lib && rm -f "$compilers/runtime.wasm.cwasm" && "$warp" "$new" runtime "$compilers/runtime.wasm" &&
 		mkdir -p "$compilers/modules" && "$warp" "$new" modules "$compilers/modules" "$compilers/runtime.wasm") >>"$log" 2>&1; then
 		rm -f "$new" "$new".*
 		return 2
@@ -280,8 +264,9 @@ one() {
 		copied "$old" "$file" && cp "$old.inputs" "$file.inputs" && logged "$name" hit-lib-old-name
 	fi
 	if [ -z "$force" ] && [ -f "$file" ] && [ "$(cut -d' ' -f1 "$file.inputs" 2>/dev/null)" = "$hash" ]; then logged "$name" hit-lib; return 0; fi
-	# a build another machine published for these inputs (scripts/publish-build.sh), into the store first
-	[ -z "$force" ] && [ ! -f "$store/$hash/$name.wasm" ] && [ "${WARP_FETCH_BUILDS:-1}" = 1 ] &&
+	# a build another machine published for these inputs (scripts/publish-build.sh), into the store first; also into a
+	# partial entry, a warp.wasm without its runtime.wasm (fetch-build.sh fills in only what it lacks)
+	[ -z "$force" ] && { [ ! -f "$store/$hash/$name.wasm" ] || { [ "$name" = warp ] && [ ! -f "$store/$hash/runtime.wasm" ]; }; } && [ "${WARP_FETCH_BUILDS:-1}" = 1 ] &&
 		"$scripts/fetch-build.sh" "$hash" "$store" "$name.wasm" >/dev/null 2>&1 && [ -f "$store/$hash/$name.wasm" ] && logged "$name" fetched
 	local stored=$store/$hash/$name.wasm
 	[ -f "$stored" ] || stored=$store/$hash/$(legacy "$name").wasm
@@ -309,10 +294,10 @@ one() {
 	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
 	recorded_inputs "$record"
 	if [ -z "$force" ] && [ "$name" = warp ]; then
-		rebaked_stored "$log"
+		reused_stored "$log"
 		status=$?
 		[ $status = 2 ] && { build_failed "$name" "$log" $status; return 1; }
-		[ $status = 0 ] && { published "$name"; kept_record "$name" "$record" "$log"; released "$name"; logged "$name" built-rebaked; return 0; }
+		[ $status = 0 ] && { published "$name"; kept_record "$name" "$record" "$log"; released "$name"; logged "$name" built-reused; return 0; }
 	fi
 	[ "$name" = warp-self ] && lane=(self)
 	from=$(resumed_step "$name")
