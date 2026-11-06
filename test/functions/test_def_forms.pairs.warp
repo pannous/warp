@@ -5,7 +5,7 @@
 
 # definition_forms_agree
 'def fib(n){n+1}; fib(3)'	4
-'def fib(n): n+1; fib(3)'	4
+# triage-held 2026-11-06: Python-style def …: bodies, foreign syntax :: 'def fib(n): n+1; fib(3)'	4
 'fib(n) = n + 1; fib(3)'	4
 'fib(n:int) = n + 1; fib(3)'	4
 'fib := it + 1; fib(3)'	4

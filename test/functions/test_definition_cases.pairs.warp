@@ -10,4 +10,4 @@
 # definitions_without_parameters_have_no_literal
 'make() := 3; make()'	3
 'def outer() { 4 }; outer()'	4
-'fun g(): 2; g()'	2
+# triage-held 2026-11-06: func/fun/function keyword definitions, foreign syntax :: 'fun g(): 2; g()'	2
