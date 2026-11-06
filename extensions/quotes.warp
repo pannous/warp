@@ -30,8 +30,9 @@ reads_position(n: Node): bool := {
 # program pays nothing for them (decision debug-positions-auto)
 def quoted_code(body: Body, e: Node): list {
 	code = written_quote_code(body, e)
-	if not module.reads_positions or not is_positioned(e) { return code }
-	intrinsic_of(body, "meta_node", [TypedCode(ValueKind.Node, code), number_value(line_of(e)), number_value(column_of(e))]).code
+	at = if module.reads_positions then written_at(e) else ø
+	if at == ø { return code }
+	intrinsic_of(body, "meta_node", [TypedCode(ValueKind.Node, code), number_value(at#1), number_value(at#2)]).code
 }
 def written_quote_code(body: Body, e: Node): list {
 	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
