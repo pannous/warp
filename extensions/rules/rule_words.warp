@@ -715,6 +715,7 @@ rule_words = {
 	definition_text: definition_text,
 	dir_words: dir_words,
 	doc_of: doc_of,
+	contracts_blamed: contracts_blamed,
 	effects_named: effects_named,
 	exited: exited,
 	framed: framed,
@@ -844,6 +845,60 @@ typed_json_fields(value: text, members: list, fields: list, field_path: function
 	}
 	[checks, arguments]
 }
+# Contracts (decision 1319f7ad8d, card contract-caller-blame): a function's leading asserts are its contract on its
+# parameters, `f(x) := { assert x > 0; … }`; each call of f checks them first, at the call, so a broken contract blames
+# the caller: `f(-1)` fails "assertion failed: x > 0 in the call f(-1)". One walk of the program, none when no function
+# has a contract
+ASSERT_HEAD = "assert·else"
+CONTRACT_SUFFIX = "·contract"
+
+# the program with each call of a function with a contract checking it first; ø when no function has one
+contracts_blamed(program: Node): Node? := {
+	contracts = {}
+	for statement in level_statements(program) {
+		if is_key(statement, Op.Define) and is_group(key_of(statement)) {
+			asserts = leading_asserts(value_of(statement))
+			if #asserts > 0 { contracts[defined_name(statement)] = [defined_parameters(statement).map(parameter_name), asserts] }
+		}
+	}
+	if #contracts == 0 { return ø }
+	called_with_contracts(program, contracts)
+}
+# the asserts a body begins with
+leading_asserts(body: Node): list := {
+	if not is_curly_group(body) { return [] }
+	asserts = []
+	for statement in body {
+		if head_name(statement) != ASSERT_HEAD { return asserts }
+		asserts += [statement]
+	}
+	asserts
+}
+called_with_contracts(n: Node, contracts: map): Node := {
+	# a definition's head names its parameters, no call
+	if is_key(n, Op.Define) { return Key(key_of(n), Op.Define, called_with_contracts(value_of(n), contracts)) }
+	walked = children(n, part => called_with_contracts(part, contracts))
+	name = head_name(walked)
+	if is_round(walked) and contracts.has(name) { return contract_checked(walked, name, contracts[name]) } else { walked }
+}
+# `f(-1)` as `{x·contract = -1; assert x·contract > 0 else "… in the call f(-1)"; f(x·contract)}`, each argument
+# computed once; a call by name or of another count of arguments is left as it is
+contract_checked(call: Node, name: text, contract: list): Node := {
+	parameters = contract#1
+	arguments = items_of(call)[1..]
+	if #arguments != #parameters or arguments.any(argument => argument is key) { return call }
+	shown = name + "(" + arguments.map(argument => "${argument}").join(", ") + ")"
+	statements = []
+	for i in 1 to #parameters { statements += [Key(symbol(parameters#i + CONTRACT_SUFFIX), Op.Assign, arguments#i)] }
+	for check in contract#2 {
+		condition = check#2
+		for parameter in parameters { condition = renamed(condition, parameter, symbol(parameter + CONTRACT_SUFFIX)) }
+		statements += [List([check#1, condition, "${check#3} in the call ${shown}"], Bracket.Round, Separator.Space)]
+	}
+	statements += [List([symbol(name)] + parameters.map(parameter => symbol(parameter + CONTRACT_SUFFIX)), Bracket.Round, Separator.Comma)]
+	List(statements, Bracket.Curly, Separator.Semicolon)
+}
+
 # Generate typed JSON parsing from the class declared in the program.
 typed_json(source: Node, type_name: Node, program: Node): Node := {
 	for statement in level_statements(program) {

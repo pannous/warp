@@ -11,8 +11,9 @@ EFFECT_MARKS = {pure: [], io: ["IO", "Fail"], ffi: ["FFI", "Fail"]}
 # the emitter's words that read or write; every host word but the pure one does IO
 emitter_io_words = ["print", "read"]
 pure_host_words = ["std_pure"]
-# the head the parser gives `try x else y` and `try x catch e {y}` (core/passes/tries.warp)
-TRY_HEAD = "try·else"
+# the call a try's body runs in once the tries are lowered (core/passes/tries.warp): `try x else y` is
+# `try·finished = ran·without·error {try·value = x}; …`
+TRY_HEAD = "ran·without·error"
 
 # the words that fail by themselves: a raise, and an Error made (card error-gaps)
 failing_words = ["error"] + raise_words.keys
@@ -86,8 +87,8 @@ effect_chain(word: text, bodies: map, foreign: map, allowed: list, seen: map): l
 	}
 	ø
 }
-# the words a body names, each → whether only a try's body names it: `try x else y` (try·else(x, y) as parsed) catches
-# what x raises, never what y does
+# the words a body names, each → whether only a try's body names it: `try x else y` catches what x raises, never what
+# y does
 words_called(n: Node, caught: bool, found: map) := {
 	if n is symbol { found[name_of(n)] = caught and (found.get(name_of(n)) ?? yes) }
 	else if n is key { words_called(key_of(n), caught, found); words_called(value_of(n), caught, found) }
