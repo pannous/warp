@@ -1,0 +1,6 @@
+# a unit word as the loop variable walks the value by that unit when its type has one, else by its own items
+# (decision loop-variable, card bytes-lowering)
+'def f(bytes: list): int { s = 0; for byte in bytes { s += byte }; s }; f([1, 2, 3])'	6
+'s = 0; for byte in "é" { s += byte }; s'	364
+'m = {a: 1, b: 2}; out = []; for pair in m { out = out + [pair] }; out'	[['a', 1], ['b', 2]]
+'m = {a: 1, b: 2}; out = ""; for byte in m { out = out + byte }; out'	"ab"
