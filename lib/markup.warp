@@ -191,7 +191,7 @@ html_is_listed_element(value: any): bool := value is pair and contains(html_elem
 html_is_custom_element(name: any): bool := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
-	let items = html_items(content)
+	let items = html_shorthands_spread(html_items(content))
 	var own_scope = scope
 	var own_chosen = chosen
 	var value = ø
@@ -629,23 +629,42 @@ style_selector_text(node: any) := {
 // `li{ transition: opacity 200ms ease-out }`, `animation: pop 400ms`: the element's inline CSS, its words as data,
 // durations in milliseconds, a text as written (decisions.md transitions-data). fade, scale and slide are the CSS
 // transitions of opacity and transform, from the starting style the kind names
-transition(spec: data) := {
-	let parts = css_parts(spec)
+transition(spec: data) := css_shorthand("transition", css_items(spec))
+animation(spec: data) := css_shorthand("animation", css_items(spec))
+// `leave: pop 400ms reverse`: the animation the page plays before it removes the element (CSS has no waiting removal)
+leave(spec: data) := css_shorthand("leave", css_items(spec))
+css_shorthands = ["transition", "animation", "leave"]
+
+// a shorthand's items, its words then the element's children: the style or attribute they give, the children after it
+css_shorthand(name: text, items: list) := {
+	let parts = css_parts(items)
 	let words = parts#1
+	if name == "leave" { return [key(symbol("data-warp-leave"), ":", words)] + parts#2 }
+	if name == "animation" { return [css_style("animation", words)] + parts#2 }
 	let kind = css_kind(words)
 	if kind == ø { return [css_style("transition", words)] + parts#2 }
 	[key(symbol("starting-style"), ":", css_kinds[kind]), css_style("transition", css_of_kind(words))] + parts#2
 }
 
-animation(spec: data) := {
-	let parts = css_parts(spec)
-	[css_style("animation", parts#1)] + parts#2
-}
-
-// `leave: pop 400ms reverse`: the animation the page plays before it removes the element (CSS has no waiting removal)
-leave(spec: data) := {
-	let parts = css_parts(spec)
-	[key(symbol("data-warp-leave"), ":", parts#1)] + parts#2
+// `li{ transition: "opacity 150ms" key: 1 … }`, `transition: opacity 200ms ease-out`: an element's item naming a
+// shorthand is its style, the words after it up to the children included (card li-transition-render)
+html_shorthands_spread(items: list): list := {
+	var spread = []
+	var at = 1
+	while at <= #items {
+		let item = items#at
+		if item is pair and html_name(item) in css_shorthands {
+			let value = html_raw_content(item)
+			var spec = if value is text or not html_is_group(value) then [value] else [part for part in value]
+			while not (value is text) and at < #items and css_is_word(items#(at + 1)) {
+				at += 1
+				spec.add(items#at)
+			}
+			spread = spread + css_shorthand(html_name(item), spec)
+		} else { spread.add(item) }
+		at += 1
+	}
+	spread
 }
 
 // the starting style each kind before CSS enters from
@@ -654,10 +673,9 @@ css_default_duration = "200ms"
 
 css_style(property: any, value: any) := key(symbol("style"), ":", bracketed([key(symbol(property), ":", value)], "{"))
 
-// the words of a spec as CSS writes them, and the element's children after them (`opacity 1s "a"`): `fade 1s ease-out`
-// → "fade 1000ms ease-out"; a text leading the spec as written
-css_parts(spec: any) := {
-	let items = css_items(spec)
+// the words of a spec's items as CSS writes them, and the element's children after them (`opacity 1s "a"`): `fade 1s
+// ease-out` → "fade 1000ms ease-out"; a text leading the spec as written
+css_parts(items: list) := {
 	if items#1 is text { return [items#1, [items#i for i in 2 to #items]] }
 	var words = []
 	var children = []
