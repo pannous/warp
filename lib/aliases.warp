@@ -52,6 +52,9 @@ compare { aliases: [compareTo, compare_to] }
 # the effect constraint `f(x) := x*x ! Pure`: a free `!` takes the whole statement before it
 "not" { symbol: Op.Not, aliases: ["!", "¬"], power: [0, 105] }
 contains { aliases: [has, includes] }
+# JavaScript's names of the list tests
+all { aliases: [every] }
+any { aliases: [some] }
 "??" { power: [93, 92] }
 
 # how a value shows, another language's method names for it (a class's text() method, extensions/class_methods.warp)
