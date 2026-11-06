@@ -1,0 +1,4 @@
+# the WGSL of paint and shader_of is made at run time (lib/shaders.warp, decision shaders-in-lib): a program value the
+# shader reads takes the width of the value it holds then, however the program computed it
+'tint = [1, 2, 3].map(v => v / 3); f(x, y) := tint .* x; shader_of(f).contains("fn f(x: f32, y: f32) -> vec3f")'	yes
+'tint = [1, 2, 3].map(v => v / 3); f(x, y) := tint .* x; shader_of(f).contains("values.tint")'	yes

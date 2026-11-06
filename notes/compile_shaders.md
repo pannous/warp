@@ -1,7 +1,8 @@
 # Shaders written in warp
 
-`paint(f, width, height)` compiles a warp function `f(x, y)` to a fragment shader (lib/prelude.warp's paint rules
-call lib/wgsl.warp's wgsl_shader in the compiler; the Rust era's was src/lowering/foreign/gpu_maps/kernels.rs), with the program's numbers it reads as the shader's values; the same
+`paint(f, width, height)` compiles a warp function `f(x, y)` to a fragment shader at run time, once (lib/shaders.warp;
+its rules in extensions/rules/modules/shaders.warp hand it f quoted with what it reaches, the rule word
+definitions_reached; the Rust era's was src/lowering/foreign/gpu_maps/kernels.rs), with the program's numbers it reads as the shader's values; the same
 functions run on the CPU where there is no GPU. `shader { … }` blocks of WGSL with `$name` holes stay for hand-written
 shaders. `shader_of(f)` is the WGSL that paint compiles f to. Samples: samples/sound/gpu_visualizer_warp.warp (the
 tunnel as warp functions, playing mozart.mp3; native only), samples/gpu/warp_compiled_wgsl_shader.warp (three
@@ -51,14 +52,14 @@ The translator runs inside the compiler as rule words, which the seed compiles; 
 - `use math` brings lib's own `cosine` etc. into the program: WGSL's words are looked up before program functions
 
 ## Where paint's rule lives, and what the seed keeps (cards gpu-functions, paint-frame-failure, program-frame)
-- the `paint($f, $w, $h)` rule is the prelude's: extensions/sugar rules run after arity_overloads, which has bound the call
+- the `paint($f, $w, $h)` rule is lib/shaders' (a std module, taken as the prelude's are): extensions/sugar rules run after arity_overloads, which has bound the call
   to the prelude's overloaded paint by then; std-module rules run first, beside the program's own
 - the seed parses the library's rules with its own rule words: a rule binding two holes to words it doesn't know is
   dropped ("the rule … was dropped", whatever the hint says about apostrophes), a rest hole `$x... = word()` too; one
-  plain hole per rule, so wgsl_painting gives one map `{shader: …, uniform: …}` (not `values`: map's own .values)
+  plain hole per rule, so definitions_reached gives one map `{name: …, code: data […], values: {…}}`
 - a rule word giving ø (an empty map is ø) is no match; one giving `[…]` binds a rest hole's items
 - the compiler compiling itself has no node constructors: build nodes by parsing text (`plain_node(parsed(…))`)
-- a word's rule fires inside the prelude itself too: wgsl_painting answers ø unless f is a function the program
+- a word's rule fires inside the prelude itself too: definitions_reached answers ø unless f is a function the program
   defines; a rule never rewrites inside the definition of the word its template produces (frames' frame_listened)
 - programs run from a FILE link the prebuilt std modules, inline code compiles them from source: test a module's
   behaviour from a file (test/native/test_frame_file.sh)
