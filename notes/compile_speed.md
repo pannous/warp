@@ -131,3 +131,13 @@ lints; a sibling branch) 3.7198e12 (+1.9%); 8225781320 (both) 3.7465e12 (+2.7%);
   hot path keyed by what starts its form costs one lookup, a list of hooks costs each one's own scan. The drift is gone.
 - Not it: the map index's 64-slot scan. Home slots by first-name hash (data/drift/home-slot.patch) measured +0.08%,
   index_last already catches most lookups (card map-hash-index keeps the proper fix for its own sake).
+
+## Typed nodes (card node-wasm-type, 2026-11-06, 5e2cf051bb)
+A node is held as `(ref null $Node)`, no longer anyref: self compile 2582 G → 2351 G instructions (−9.0 %), hello −1 %,
+units −0.6 %. wasmtime runs a `ref.cast` even when the value is statically of the target type (200 M casts of a
+$MetaNode to $Node: 1.13 s, none 0.19 s), so the win came from dropping the casts, not from the type alone. Casts stay
+only where an anyref enters (emitter `entered_node`): a list item (`item_read`), a $Node's data, a host word's node
+result, a call_ref result. Host imports keep anyref; closure entries and class words return anyref (a class word's
+place/set is an i31). A closure's item 0 is a $Closure: read by `closure_slot`, never through the node cast.
+Each class struct is its own wasm type group: a module grouping two classes made another Instant type than a program
+declaring only Instant (cast failure across modules).
