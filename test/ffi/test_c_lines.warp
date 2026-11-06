@@ -1,0 +1,18 @@
+# a C function lib/c.warp has no line of, declared by the program itself (card c-entries-sort)
+is! «getppid(): i32 from 'c'
+getppid() > 0» true
+
+# lib/c.warp's process and env lines (kept on main: nothing dropped)
+is! «use c
+setenv("C_LINES_X", "hi", 1)
+getenv("C_LINES_X")» 'hi'
+is! «use c
+strerror(2)» 'No such file or directory'
+is! «use c
+getpid() > 0» true
+
+# libm's of lib/math.warp, imported as libc's too (one library on macOS)
+is! «import hypot from 'm'
+hypot(3.0, 4.0)» 5.0
+is! «import pow from 'c'
+pow(2.0, 10.0)» 1024.0
