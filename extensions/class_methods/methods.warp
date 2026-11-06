@@ -88,15 +88,19 @@ function_word(n: Node): text? := match n {
 # statically holds (`self` its method's class, `c = Counter()` Counter, `xs = []` list)
 class Routing { classes: map; names: list; methods: list; known: map }
 
-# whether a module's class routes the method, decided by what holds whatever else a compile reaches: a word of the
-# library (its index, the runtime, a typed line), an operator, a word of the syntax, a position word. A module being
-# built and a program linking it lift its classes alike, so both name a method the same (`union·Set`); ø for a
-# method a class of the program's own declares too, routed by all the program reaches
-module_routing(classes: map, names: list, method: text, operator_methods: list): bool? := {
-	linked = concatenated(linked_signatures.values.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
+# whether a module's class routes the method, decided by what holds in every compile reaching the class: a word of the
+# prelude, a definition of the module declaring it, an operator, a word of the syntax, a position word. A module being
+# built and a program linking it lift its classes alike, so both name a method the same (`union·Set` beside
+# collections' union); a word only another module defines routes nothing (units' day() leaves Instant's day, so a
+# map's `d.day` stays its field); ø for a method a class of the program's own declares too, routed by all the program
+# reaches
+module_routing(classes: map, names: list, method: text, operator_methods: list, functions: list): bool? := {
 	owners = owners_of(classes, names, method)
+	declaring = linked_signatures.values.filter(signature => signature.classes.any(entry => "${entry#1}".remove_prefix(instance_struct_prefix) in owners))
+	linked = concatenated(declaring.map(signature => signature.classes.map(entry => "${entry#1}".remove_prefix(instance_struct_prefix))))
 	if #owners == 0 or not (module.relocating or owners.all(owner => owner in linked)) { return ø }
-	is_library_word(method) or library_index_section("word").has(method) or method in operator_methods or names_syntax(method) or method in position_words
+	defined = if module.relocating then method in functions else declaring.any(signature => signature.slices.any(slice => slice#1 == method))
+	is_library_word(method) or defined or method in operator_methods or names_syntax(method) or method in position_words
 }
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
@@ -131,7 +135,7 @@ methods_lifted(program: Node): Node := {
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and 1 in taken_counts(classes, liftable, method))
-	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
+	routes = methods.filter(method => module_routing(classes, liftable, method, operator_methods, functions) ?? (is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words))
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
 	entry_words = []
 	for method in operator_methods {
@@ -153,8 +157,7 @@ methods_lifted(program: Node): Node := {
 			owners = owners_taking(classes, liftable, name, count)
 			# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 			# call (list.warp's tally(xs) beside a class's tally(x))
-			# (a module's method routed only as a word of another module's falls back to nothing it reaches)
-			falls_back = name in routes and (is_library_word(name) or name in functions or (not names_syntax(name) and module_routing(classes, liftable, name, operator_methods) == ø)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
+			falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(top_statements.filter(statement => statement not in hooks), name, count + 1)
 			dispatchers += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name), promotions, floaters)]
 		}
 	}
