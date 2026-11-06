@@ -5,6 +5,7 @@ strict	numbers and JSON refuse what they would only approximate (lib/json.warp)
 relaxed	no hints
 script	a script: no hints, the scripting words (wiki/script.md)
 graphics	the drawing bundle (wiki/use.md)
+shaders	the shader part of graphics: shader {…} blocks of WGSL and paint (card webgpu-shader-part)
 comments	comments kept as the metadata of the next element (`.doc`, `.meta.comment`)
 reflection	functions as values with their line, column and origin
 fuel	the run counts fuel steps (decision fuel-metering)
