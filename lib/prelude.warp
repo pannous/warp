@@ -631,9 +631,6 @@ byte_wrapped(n) := {
 	rest = whole % 256
 	if rest < 0 then rest + 256 else rest
 }
-convert!(n, to: byte) := byte_wrapped(n)
-convert!(n, to: u8) := byte_wrapped(n)
-convert!(n, to: uint8) := byte_wrapped(n)
 
 // bytes as! text: invalid UTF-8 becomes U+FFFD, one replacement per bad byte. from_utf8 stays strict
 lossy_utf8(bytes) := {
@@ -667,7 +664,15 @@ lossy_utf8(bytes) := {
 	}
 	out
 }
-convert!(bytes: list, to: text) := lossy_utf8(bytes)
+// `x as! T` is convert!(x, to: T), the target a value (decision checked-forced-conversions, convert-bang): one
+// definition for every target the prelude forces, as typed parameters cannot tell targets apart
+byte_names = ["byte", "u8", "uint8"]
+convert!(value, to) := {
+	target = "${to}"
+	if byte_names.contains(target) { return byte_wrapped(value) }
+	if target == "text" { return lossy_utf8(value) }
+	raise "no forced conversion to " + target + " of that value"
+}
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
 class Error { message: text }
