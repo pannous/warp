@@ -2916,8 +2916,8 @@ def url_text(p: Parser, scheme: text): text {
 }
 
 // A file path without quotes starts here, glued to what follows and not to an operand before it: `./a.wav`,
-// `../songs/a.wav`, `./` alone, `~/notes.txt`, `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`);
-// after an operand `/` divides (`width /height`). `ls /tmp`, a path after a word taking one, waits for card path-words
+// `../songs/a.wav`, `./` alone, `~/notes.txt`, `/etc/hosts` (`x = /tmp`, `[/a, /b]`); after an operand too, by its
+// spacing (decision path-after-operand): `show /tmp` is show(/tmp), while `a / b`, `a/b` and `x /2` divide
 def starts_path(p: Parser): bool := starts_path_at(p, p.at)
 
 def starts_path_at(p: Parser, at: int): bool {
@@ -2930,7 +2930,7 @@ def starts_path_at(p: Parser, at: int): bool {
 	}
 	// `cd ~` alone; `a ~ b` stays the comparison
 	if c == '~' { return char_at(p, at + 1) == '/' or not operand_follows_at(p, at + 1) }
-	if c == '/' { return starts_path_name(char_at(p, at + 1)) and not operand_before(p, at) }
+	if c == '/' { return starts_path_name(char_at(p, at + 1)) }
 	false
 }
 
@@ -2946,13 +2946,6 @@ def path_literal(p: Parser): text {
 def is_operand_end(c: text): bool := is_name_char(c) or c == ')' or c == ']' or c == '}' or c == '"' or c == '\'' or c == '»'
 def ends_path(c: text): bool := is_blank(c) or c == ']' or c == ')' or c == '}' or c == ',' or c == ';'
 def starts_path_name(c: text): bool := is_name_start(c) or c == '.'
-
-// Whether an operand ends before the blanks before `start`
-def operand_before(p: Parser, start: int): bool {
-	at = start - 1
-	while at >= 0 and (p.code[at] == ' ' or p.code[at] == '\t') { at -= 1 }
-	at >= 0 and is_operand_end(p.code[at])
-}
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 def with_glued_factor(p: Parser, amount: Node): Node := {
