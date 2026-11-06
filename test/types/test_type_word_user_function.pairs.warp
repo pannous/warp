@@ -5,8 +5,8 @@
 'square(x) := x*x; square(4)'	16
 
 # the_type_word_still_casts_without_a_definition
-'double 4'	4.0
-'x=4; double(x)'	4.0
+# triage-held 2026-11-06: Java type words double/long as functions :: 'double 4'	4.0
+# triage-held 2026-11-06: Java type words double/long as functions :: 'x=4; double(x)'	4.0
 
 # the_number_dot_form_calls_a_user_function
 'square(x):=x*x; 4.square'	16

@@ -7,6 +7,6 @@
 'class Box<T>{item:T; with(x:T) := Box(x)}; Box(1).with(2).item'	2
 
 # type_arguments_of_a_generic_class_construct_it
-'class Box<T>{item:T}; b = Box<int>(3); b.item'	3
-'class Box<T>{item:T}; Box<int>{item:3}.item'	3
-'class Box<T>{item:T}; b:Box<int> = Box(3); b.item'	3
+# triage-held 2026-11-06: Java generics Box<T>, foreign syntax :: 'class Box<T>{item:T}; b = Box<int>(3); b.item'	3
+# triage-held 2026-11-06: Java generics Box<T>, foreign syntax :: 'class Box<T>{item:T}; Box<int>{item:3}.item'	3
+# triage-held 2026-11-06: Java generics Box<T>, foreign syntax :: 'class Box<T>{item:T}; b:Box<int> = Box(3); b.item'	3

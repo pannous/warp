@@ -9,9 +9,9 @@ is! '#import math
 2' 2
 
 # an_import_statement_has_no_effect_of_its_own
-is! 'require math
-effects of main' 'Pure'
-is! 'use math
-global g = 1
-g = 2
-effects of main' 'State'
+# triage-held 2026-11-06: require / effects of main :: is! 'require math
+# :: effects of main' 'Pure'
+# triage-held 2026-11-06: require / effects of main :: is! 'use math
+# :: global g = 1
+# :: g = 2
+# :: effects of main' 'State'

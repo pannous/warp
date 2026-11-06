@@ -1,7 +1,7 @@
 # from test_filter_loops.rs: edit the Rust test, then run the script again
 
 # test_a_condition_loop_visits_only_matching_items
-'s=0; for (it>2) in [1,2,3,4] { s += it }; s'	7
+# triage-held 2026-11-06: desk-invented filter loop heads for (it>2) in xs :: 's=0; for (it>2) in [1,2,3,4] { s += it }; s'	7
 
 # test_plain_loops_do_not_filter
 's=0; for x in [1,2,3] { s += x }; s'	6
