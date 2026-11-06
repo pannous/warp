@@ -62,8 +62,7 @@ const hooks = {
 	listen: (holder, events) => {
 		live = holder;
 		startTimers(holder, id => timerShown(holder, id));
-		const fetches = [...(holder.fetches?.values() ?? [])].map(({ url }) => `fetch ${url}`);
-		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer)), ...fetches] });
+		post({ type: "listening", events: [...events.map(event => `on ${event}`), ...(holder.timers ?? []).map(timer => timerLabel(holder, timer))] });
 	},
 	panicked: message => { panicMessage = message; },
 };
