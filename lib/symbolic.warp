@@ -1,0 +1,203 @@
+// The shell's symbolic mode (wiki/shell.md "Symbolic mode", wiki/evaluation.md; card shell-symbolic-mode): an
+// assignment stays its expression until its value is asked for, and asking shows the evaluation step by step:
+//   z = y*y; y = x+x; x = 3; then z shows  y*y  (x+x)*(x+x)  (3+3)*(3+3)  6*6  36
+// lib/repl.warp's `:symbolic` turns it on, `:direct` off (the default); `z!` there gives the value alone.
+// Decisions (card shell-symbolic-mode):
+// - a table maps each symbolic name to its expression, as written; a step replaces every name of the table at once,
+//   its expression grouped in ( ) unless atomic (a number, a name, a quoted text)
+// - once no name is left, a step evaluates every innermost group at once, a call `f(…)` with its name; the last step
+//   evaluates what is left; the evaluator is the caller's (the repl's own, with the session's definitions before)
+// - an assignment that names itself, `x = x+1`, takes the old expression in at once, so no name ever stands for
+//   itself; one that would still (`a = b` after `b = a`) is refused
+// - quoted texts are left alone: no name and no group inside quotes
+SYMBOLIC_STEPS = 64
+
+symbolic_starts_name(c: text): bool := c == "_" or (is_alphanumeric(c) and not (c >= "0" and c <= "9"))
+symbolic_in_name(c: text): bool := c == "_" or is_alphanumeric(c)
+
+// the expression as its characters, one text each
+symbolic_chars(expression: text): list := [c for c in expression]
+
+// whether an expression needs no group around it: a number, a name, a quoted text
+symbolic_atomic(expression: text): bool := {
+	e = trim(expression)
+	if e == "" { return yes }
+	chars = symbolic_chars(e)
+	if chars#1 == "\"" or chars#1 == "'" { return chars#(#chars) == chars#1 and not e[1 ..< #chars - 1].contains(chars#1) }
+	start = if chars#1 == "-" then 2 else 1
+	if start > #chars { return no }
+	for i in start to #chars { if not (symbolic_in_name(chars#i) or chars#i == ".") { return no } }
+	yes
+}
+
+// the names an expression mentions, in order, each once; quoted texts skipped
+symbolic_names(expression: text): list := {
+	chars = symbolic_chars(expression)
+	names = []
+	i = 1
+	while i <= #chars {
+		c = chars#i
+		if c == "\"" or c == "'" {
+			i += 1
+			while i <= #chars and chars#i != c { i += 1 }
+			i += 1
+		} else if symbolic_starts_name(c) {
+			name = ""
+			while i <= #chars and symbolic_in_name(chars#i) {
+				name += chars#i
+				i += 1
+			}
+			if not (name in names) { names += [name] }
+		} else if symbolic_in_name(c) {
+			// a number, 3 or 2e5, is no name
+			while i <= #chars and (symbolic_in_name(chars#i) or chars#i == ".") { i += 1 }
+		} else { i += 1 }
+	}
+	names
+}
+
+// the expression with each name of the table replaced by its expression, grouped unless atomic; a bare name its
+// expression as it is; the name `skipped` stays itself
+symbolic_substituted(expression: text, table: any, skipped: text = ""): text := {
+	e = trim(expression)
+	if e in table and e != skipped { return table[e] }
+	chars = symbolic_chars(e)
+	out = ""
+	i = 1
+	while i <= #chars {
+		c = chars#i
+		if c == "\"" or c == "'" {
+			out += c
+			i += 1
+			while i <= #chars and chars#i != c {
+				out += chars#i
+				i += 1
+			}
+			if i <= #chars { out += c }
+			i += 1
+		} else if symbolic_starts_name(c) {
+			word = ""
+			while i <= #chars and symbolic_in_name(chars#i) {
+				word += chars#i
+				i += 1
+			}
+			if word in table and word != skipped { out += if symbolic_atomic(table[word]) then trim(table[word]) else "(" + trim(table[word]) + ")" } else { out += word }
+		} else if symbolic_in_name(c) {
+			// a number, 3 or 2e5, is no name
+			while i <= #chars and (symbolic_in_name(chars#i) or chars#i == ".") {
+				out += chars#i
+				i += 1
+			}
+		} else {
+			out += c
+			i += 1
+		}
+	}
+	out
+}
+
+// a value as the text of an expression giving it back: a text quoted, anything else as print shows it
+symbolic_shown(value: any): text := {
+	if value is text { return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"" }
+	text_form(value)
+}
+
+// one step of evaluation: every innermost group, with the name of a call before it, replaced by its value, and a
+// group left holding a value alone unwrapped; an Error when one fails. Without an evaluator (ø) only the unwrapping
+symbolic_reduced(expression: text, evaluate: any): any := {
+	chars = symbolic_chars(expression)
+	out = ""
+	i = 1
+	while i <= #chars {
+		c = chars#i
+		if c == "\"" or c == "'" {
+			j = i + 1
+			while j <= #chars and chars#j != c { j += 1 }
+			out += chars[i - 1 ..< min(j, #chars)].join("")
+			i = j + 1
+		} else if c == "(" {
+			j = i + 1
+			while j <= #chars and chars#j != "(" and chars#j != ")" and chars#j != "\"" and chars#j != "'" { j += 1 }
+			if j <= #chars and chars#j == ")" {
+				// an innermost group; a call takes the name written before it along
+				callee = ""
+				while #out > 0 and symbolic_in_name(out[#out - 1 ..< #out]) {
+					callee = out[#out - 1 ..< #out] + callee
+					out = out[0 ..< #out - 1]
+				}
+				inner = chars[i ..< j - 1].join("")
+				if callee == "" and symbolic_atomic(inner) { out += trim(inner) } else if evaluate == ø { out += callee + "(" + inner + ")" } else {
+					value = try evaluate(if callee == "" then inner else callee + "(" + inner + ")") catch e { e }
+					if is_error(value) { return value }
+					out += symbolic_shown(value)
+				}
+				i = j + 1
+			} else {
+				out += c
+				i += 1
+			}
+		} else {
+			out += c
+			i += 1
+		}
+	}
+	if evaluate == ø then out else symbolic_reduced(out, ø)
+}
+
+// the steps an expression's evaluation shows, {steps: [texts], error: ""}: the names replaced until none is left, the
+// innermost groups evaluated until none is left, then the value; the steps up to a failing one and its message in
+// error when one fails
+symbolic_steps(expression: text, table: any, evaluate: any): any := {
+	steps = []
+	e = trim(expression)
+	n = 0
+	while n < SYMBOLIC_STEPS {
+		next = symbolic_substituted(e, table)
+		if next == e { break }
+		steps += [next]
+		e = next
+		n += 1
+	}
+	while n < SYMBOLIC_STEPS and e.contains("(") {
+		next = symbolic_reduced(e, evaluate)
+		if is_error(next) { return {steps: steps, error: str(next)} }
+		if next == e { break }
+		steps += [next]
+		e = next
+		n += 1
+	}
+	if symbolic_atomic(e) and #steps > 0 and not symbolic_names(e).any(name => name in table) { return {steps: steps, error: ""} }
+	value = try evaluate(e) catch err { err }
+	if is_error(value) { return {steps: steps, error: str(value)} }
+	shown = symbolic_shown(value)
+	if #steps == 0 or steps#(#steps) != shown { steps += [shown] }
+	{steps: steps, error: ""}
+}
+
+// whether an expression comes back to the name, through the table's expressions, the name's own left out
+symbolic_reaches(expression: text, table: any, name: text): bool := {
+	e = expression
+	for n in 1 to SYMBOLIC_STEPS {
+		if name in symbolic_names(e) { return yes }
+		next = symbolic_substituted(e, table, name)
+		if next == e { return no }
+		e = next
+	}
+	yes
+}
+
+// the table after `name = expression`: kept as written, or, when it comes back to the name (`x = x+1`, or through
+// others), with the old expressions taken in until it no longer does; an Error when it still would
+symbolic_assigned(table: any, name: text, expression: text): any := {
+	e = trim(expression)
+	n = 0
+	while symbolic_reaches(e, table, name) and n < SYMBOLIC_STEPS {
+		next = symbolic_substituted(e, table)
+		if next == e { break }
+		e = next
+		n += 1
+	}
+	if symbolic_reaches(e, table, name) { return error("symbolic: " + name + " = " + trim(expression) + " defines " + name + " by itself") }
+	table[name] = e
+	table
+}

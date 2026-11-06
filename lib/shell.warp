@@ -25,8 +25,10 @@ mv(from: text, to: text) := std_io("file", "move", [from, to])
 // an empty file made if missing, else its time of change set to now
 touch(path: text) := std_io("file", "touch", [path])
 // `rm "old.txt"`: a file or an empty folder moved to the Trash; never a pattern, a full folder, the root, the home
-// folder or the working directory and the folders above it
-rm(path: text) := std_io("file", "remove", [path])
+// folder or the working directory and the folders above it. `rm ls("old")`, `rm find_files(".", "*.tmp")`: each path
+// of a list so, the shell's rm `ls` without a shell (card shell-backtick-run); a command line of its own runs as
+// `exec sh "rm $file"` (lib/os.warp), a hole one whole argument, never a pasted text
+rm(path: any) := if path is list then [rm(item) for item in path] else std_io("file", "remove", [str(path)])
 // a file's lines without their line ends: the first n, the last n
 file_lines(path: text) := split(remove_suffix(cat(path), "\n"), "\n")
 head(path: text, n: int = 10) := file_lines(path).first(n)

@@ -70,6 +70,7 @@ build(words: list) := {
 	modules_linked = no
 	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
 	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
+	if targets#1 == APP_WORD { return build_app(targets#2, options) }
 	target = targets#1
 	is_file = exists(target)
 	source = if is_file then read(target) else target
@@ -97,6 +98,39 @@ option_of(options: list, name: text): any := {
 	for option in options { if option.starts_with(OPTION_MARK + name + "=") { return option.remove_prefix(OPTION_MARK + name + "=") } }
 	ø
 }
+
+# `warp build app app.warp`: the executable app as the macOS application bundle app.app (card build-app-bundle): the
+# executable in Contents/MacOS with warp's libraries it may load (libwarp_wasmtime, _sound, _gpu, _window), which it
+# finds there (@executable_path, native_links), and Contents/Info.plist naming it; ad-hoc signed whole on macOS. The
+# bundle is written on any system, a folder there. A word, not a flag (decision build-kinds-detected); a page's app,
+# its markup in the system's web view, is card page-app-build
+APP_WORD = "app"
+APP_SUFFIX = ".app"
+build_app(target: text, options: list) := {
+	if not exists(target) or not target.ends_with(".warp") { raise "warp build app builds a program file, app.warp, into app.app" }
+	build([target, EXE_ONLY] + options.filter(option => option != WASM_ONLY and option != EXE_ONLY))
+	executable = target.remove_suffix(".warp")
+	name = executable.split("/").last()
+	bundle = executable + APP_SUFFIX
+	contents = bundle + "/Contents"
+	shell("rm -rf " + quoted_path(bundle) + " && mkdir -p " + quoted_path(contents + "/MacOS") + " " + quoted_path(contents + "/Resources"))
+	shell("mv " + quoted_path(executable) + " " + quoted_path(contents + "/MacOS/" + name))
+	shell("for f in " + quoted_path(library_folder) + "/libwarp_*.dylib " + quoted_path(library_folder) + "/libwarp_*.so; do if [ -f \"$f\" ]; then cp \"$f\" " + quoted_path(contents + "/MacOS") + "; fi; done")
+	write(contents + "/Info.plist", info_plist(name))
+	if is_macos() { shell("codesign --sign - --force --deep " + quoted_path(bundle)) }
+	print "built " + bundle
+}
+# the bundle's Info.plist: its name, executable and identifier (warp.app.<name>, its _ and spaces -)
+info_plist(name: text): text := {
+	entries = [["CFBundleName", name], ["CFBundleDisplayName", name], ["CFBundleExecutable", name],
+		["CFBundleIdentifier", "warp.app." + bundle_identifier(name)], ["CFBundlePackageType", "APPL"],
+		["CFBundleShortVersionString", "1.0"], ["CFBundleVersion", "1"], ["CFBundleInfoDictionaryVersion", "6.0"],
+		["LSMinimumSystemVersion", "11.0"]]
+	keys = entries.map(entry => "\t<key>" + entry#1 + "</key>\n\t<string>" + plist_escaped(entry#2) + "</string>\n").join("")
+	"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n" + keys + "\t<key>NSHighResolutionCapable</key>\n\t<true/>\n</dict>\n</plist>\n"
+}
+plist_escaped(t: text): text := t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+bundle_identifier(name: text): text := name.replace("_", "-").replace(" ", "-")
 
 # A standalone executable is core/native/driver.warp built natively, carrying the program's module (notes/primitive.md
 # "Driver"), which also makes its C calls: <driver><module><its length, 8 bytes little-endian>WRPMwasm<zeros to a

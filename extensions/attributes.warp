@@ -27,7 +27,22 @@ attribute(p: Parser): Node := {
 	}
 	value = attribute_value(p)
 	skip_spaces(p)
-	attributed(name, value, atom(p))
+	marked = atom(p)
+	in_data = with_meta_entry(marked, Key(key, Op.Colon, value))
+	if in_data == ø then attributed(name, value, marked) else in_data
+}
+# Meta keys written in front of data (card meta-tagged-data, wiki/meta.md "Meta keys on objects"):
+# `@source("gps") point{x:1 y:2}` is `point{x:1 y:2 @source:"gps"}`, and so on a map `@unit("cm") {x:1}`; a bare `@draft`
+# is `@draft: yes`. The literal keeps them as its own @ keys, so `p.@source` reads "gps"; else ø, the attribute marks
+# the atom
+with_meta_entry(n: Node, entry: Node): Node? := match n {
+	List(items, Bracket.Curly, separator): List(items + [entry], Bracket.Curly, separator)
+	Key(tag, Op.Colon, data): {
+		if not (tag is symbol) { return ø }
+		tagged = with_meta_entry(data, entry)
+		if tagged == ø then ø else Key(tag, Op.Colon, tagged)
+	}
+	_: ø
 }
 # The value of `@name(value)`, true for a bare `@name`
 attribute_value(p: Parser): Node := {

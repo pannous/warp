@@ -1,0 +1,5 @@
+# typed JSON: a defaulted field missing takes its class default, present it is checked (card typed-parse-optional)
+'class Server { host: text; port: int = 80 }; parse("{host:\\"a\\"}", Server).port'	80
+'class Server { host: text; port: int = 80 }; parse("{host:\\"a\\",port:8080}", Server).port'	8080
+'class Server { host: text; port: int = 80 }; try { parse("{host:\\"a\\",port:\\"x\\"}", Server) } catch e { e.message }'	'port must be int, received text'
+'class Server { host: text; port: int = 80 }; try { parse("{port:1}", Server) } catch e { e.message }'	'host is required'
