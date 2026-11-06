@@ -2217,7 +2217,7 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	}
 	if c == '!' or c == '¬' {
 		advance(p)
-		// `¬ 1` as `¬1`
+		# `as! int` is `as` of `!int`: the type may be a word after a blank (decision cast-checks)
 		skip_spaces(p)
 		return Key(ø, Op.Not, expression(p, 105))
 	}
