@@ -252,7 +252,8 @@ function startWorker(restarts = 0) {
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "members") return answerMembers(data);
-			if (data.type === "sound") return playSound(data, starting);
+			// a sound made is progress, as an animation's frame is: the runaway limit counts from the last one
+			if (data.type === "sound") { if (pending) soundMade(pending, data); return playSound(data, starting); }
 			if (data.type === "live cycle") return liveCycled(starting, data.name, data.at);
 			if (data.type === "live loops") return liveLoopsNamed(data.names);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
@@ -274,7 +275,7 @@ function startWorker(restarts = 0) {
 			}
 			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
-			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
+			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, sounded: pending.sounded, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
@@ -404,6 +405,17 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // then cannot start and the browser warns
 // missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
 const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
+// a run's sounds so far, in seconds, which the page names below its result (showSounded): a program that only plays
+// shows nothing else, and one run before the first click or key press stays silent
+function soundMade(run, { samples, rate, channels }) {
+	stopAfterTimeout(run);
+	run.sounded = (run.sounded ?? 0) + samples.length / Math.max(channels, 1) / rate;
+}
+const SILENT_BEFORE_ACTIVATION = "silent: a browser plays sound only after a click or key press on the page, then run it again";
+function showSounded(seconds) {
+	$("sounded").hidden = !seconds;
+	if (seconds) $("sounded").textContent = `♪ ${seconds.toFixed(1)} s of sound` + (beforeUserActivation() ? `, ${SILENT_BEFORE_ACTIVATION}` : "");
+}
 function playSound({ samples, rate, channels, at, handle, loop }, from) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
@@ -618,7 +630,7 @@ function stopRun(run, message, failed = !run.animating) {
 	finish(run, stoppedReport(run, message, failed));
 }
 
-const stoppedReport = (run, message, failed) => ({ value: message, error: failed, printed: run.printed, paintings: run.paintings,
+const stoppedReport = (run, message, failed) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
 	warnings: [], runtime_warnings: [], hints: [], notes: [] });
 
 // the Run button while a program runs: Stop (card playground-turn)
@@ -772,6 +784,7 @@ function showReport(report) {
 	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
+	showSounded(report.sounded);
 	showAddress(report.address);
 	const isShown = level => LEVELS.indexOf(level ?? "normal") >= LEVELS.indexOf($("shown-from").value);
 	const hints = isShown("hint") ? report.hints : [];
@@ -908,12 +921,15 @@ let listening = new Set(); // the page events the shown program handles: "click"
 
 // what the shown program listens to: "on click", "on key" (page events, sent from here), "every 1 s", "at 09:00",
 // "message from …" (timers and channels, run by the worker)
+// an element's own handler (on click·1, a button's) is the element to use, not named in the note
+const ELEMENT_EVENT = /·\d+$/;
 function listenTo(labels) {
 	listening = new Set(labels.filter(label => PAGE_EVENT.test(label)).map(label => label.replace(PAGE_EVENT, "$1")));
 	$("output").classList.toggle("listening", listening.size > 0);
-	$("listening").hidden = labels.length === 0;
-	const hint = listening.has("key") ? "; click here, then type" : listening.size ? "; click here" : "";
-	$("listening").textContent = `listening: ${labels.join(", ")}${hint}`;
+	const shown = labels.filter(label => !ELEMENT_EVENT.test(label));
+	$("listening").hidden = shown.length === 0;
+	const hint = listening.has("key") ? "; click here, then type" : listening.has("click") ? "; click here" : "";
+	$("listening").textContent = `listening: ${shown.join(", ")}${hint}`;
 	// timers and channels go on by themselves: the program still runs (page events wait for the user)
 	showStop(labels.some(label => !PAGE_EVENT.test(label)));
 }

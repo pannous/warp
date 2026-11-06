@@ -202,7 +202,7 @@ function programImports(holder, hooks) {
 			},
 			// a text's NFC for text == (decision nfc-slot, driver.warp canonical_text_answered): lib/unicode, its module
 			// linked on this first call, never at the run's start
-			canonical_text: text => linkedInstance(UNICODE_MODULE, libraryFile(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
+			canonical_text: text => linkedInstance(UNICODE_MODULE, linkedUrl(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
 		wasi_snapshot_preview1: {

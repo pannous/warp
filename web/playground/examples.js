@@ -70,13 +70,13 @@ tick(); tick()
 class animal { name; speak := name + " makes a sound" }
 class dog extends animal { speak := super.speak + ": woof" }
 dog("Rex").speak` },
-	properties: { value: "[100 51]", code: `// computed properties, generic classes, extension methods
-class Temperature { celsius = 0.0; fahrenheit:{celsius * 9 / 5 + 32} set{celsius = (it - 32) * 5 / 9} }
+	properties: { value: "[100, 51]", code: `// computed properties, generic classes, extension methods
+class Temperature { celsius = 0.0; fahrenheit := celsius * 9 / 5 + 32; fahrenheit(f) := { celsius = (f - 32) * 5 / 9 } }
 water = Temperature()
 water.fahrenheit = 212
 class Box<T>{item:T}
 extension Int { func squared() -> Int { self * self } }
-[water.celsius, Box<int>(42).item + 3.squared()]` },
+[water.celsius, Box(42).item + 3.squared()]` },
 	"welcoming errors": { value: '`say 3 == 3` reads two ways: say(3 == 3) or (say 3) == 3; say\'s parameter is untyped: write the parentheses or declare its type', code: `// an unclear line is an error that offers its readings
 say(x) := x
 say 3 == 3` },
@@ -304,7 +304,7 @@ play([C4 E4 G4], 300ms)
 	"wasm modules": { value: '[["fib"], 12586269025]', code: `// a Rust library compiled to WebAssembly: its exports are warp words
 use wasm "test/fixtures/components/rust_demo.wasm" as demo
 [demo.functions, fib(50)]` },
-	"C libraries": { value: '["stack" "/b/c" 3400449319 "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
+	"C libraries": { value: '["stack", "/b/c", 3400449319, "1.3.2"]', code: `// C functions and zlib, compiled to WebAssembly
 use c
 import test/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },
