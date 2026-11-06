@@ -7,6 +7,7 @@
 
 use unit_names
 use uncertain
+use reals
 
 class Quantity {
 	amount: number
@@ -115,15 +116,16 @@ added(factors: text, exponent: number, powers: map) := {
 		powers[base] = (powers.get(base) ?? 0) + exponent * factor_power(factor)
 	}
 }
-factor_base(factor: text): text := factor.split("^")#1.replace("²", "").replace("³", "")
-factor_power(factor: text): number := if factor.ends_with("²") then 2 else if factor.ends_with("³") then 3 else if factor.contains("^") then factor.split("^")#2 as number else 1
+// a factor's power written in superscripts, `m²`, `s⁻¹` (lib/reals.warp power_text), or after `^`, `m^1.5`
+factor_base(factor: text): text := factor.split("^")#1.chars().filter(c => not (c in raised_marks)).join("")
+factor_power(factor: text): number := if factor.contains("^") then factor.split("^")#2 as number else superscript_value(factor.chars().filter(c => c in raised_marks).join(""))
 // the factors of positive power, then a `/` and those of negative power: `m/s²`; `/m` of a reciprocal
 unit_shown(powers: map): text := {
 	above = powers.keys.filter(k => powers[k] > 0).map(k => unit_power(k, powers[k]))
 	below = powers.keys.filter(k => powers[k] < 0).map(k => unit_power(k, 0 - powers[k]))
 	if below is empty then above.join("·") else above.join("·") + "/" + below.join("·")
 }
-unit_power(u: text, power: number) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
+unit_power(u: text, power: number) := if power is int then power_text(u, power) else u + "^" + str(power)
 
 // the unit of that symbol, shown by it: `known_unit("km")` is the Length of 1000 m shown in km
 known_unit(symbol: text) := { entry = unit_entry_of(symbol); measured(entry#1, entry#2, symbol, entry#1) }
@@ -147,6 +149,11 @@ lb() := known_unit("lb")
 ms() := known_unit("ms")
 µs() := known_unit("µs")
 ns() := known_unit("ns")
+// `°C`, `°F`: the temperature scales, values (a glyph-led name is no function head: `°C()` reads °C then ()); a scale
+// starts away from zero, so `20°C` is the temperature 20 on it, not 20 times one degree
+°C = known_unit("°C")
+°F = known_unit("°F")
+rewrite $e * $u => quantity($e, $name) where $e is number and $u is symbol and $u in [°C, °F] and $name = spelled($u)
 // `2 hours in minutes`: `in` is a word of the phrase, so the run is taken whole, before `2 hours` alone (rules try
 // a phrase's runs in their order)
 rewrite $e $u in $t => ($e $u) in $t where $e is number and unit_led($u) and $t is symbol and $t in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi, ppi, °]
