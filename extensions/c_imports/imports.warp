@@ -212,7 +212,7 @@ c_functions_of(source: text, library_folder: text, folder: text = "."): list := 
 	wasm_uses = {}
 	for statement in statements {
 		path = wasm_module_used(statement, folder)
-		if path != ø { wasm_uses[statement] = wasm_exports(path) }
+		if path != ø { wasm_uses[statement] = wasm_exports(path, folder) }
 	}
 	for statement in statements.filter(statement => not wasm_uses.has(statement)) {
 		imported = c_import(statement)

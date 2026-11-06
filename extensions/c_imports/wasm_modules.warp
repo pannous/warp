@@ -22,19 +22,22 @@ I32_CONST = 65
 I64_CONST = 66
 LIMITS_WITH_MAXIMUM = 1
 
-# the path of the core wasm module a `use`, `import`, `require` or `include` statement names, as written or with
-# .wasm, in the program's folder (`•/` its project root, uses.warp rooted); ø for another statement
+# the module name of the core wasm module a `use`, `import`, `require` or `include` statement names, as written or with
+# .wasm: its path in the program's folder, a `•/` path as written, which the native warp roots at the project root
+# where it runs, so a program and a module it links (greeter.wat's import) name one file alike; ø for another statement
 wasm_module_used(statement: text, folder: text): text? := {
 	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
 	if word == ø or word == "" { return ø }
 	bare = word
 	for quote in c_quotes { if word.starts_with(quote) and word.ends_with(quote) and #word > 2 { bare = word.remove_prefix(quote).remove_suffix(quote) } }
 	for written in [bare, bare + WASM_EXTENSION] {
-		path = path_in(folder, rooted(written, folder))
-		if path.ends_with(WASM_EXTENSION) and is_core_wasm(wasm_bytes(path)) { return path }
+		name = if rooted(written, folder) == written then path_in(folder, written) else written
+		if name.ends_with(WASM_EXTENSION) and is_core_wasm(wasm_bytes(wasm_file(name, folder))) { return name }
 	}
 	ø
 }
+# the file of a module name
+wasm_file(name: text, folder: text): text := path_in(folder, rooted(name, folder))
 # a file's bytes, none for a file that isn't there
 wasm_bytes(path: text): list := try read_bytes(path) else []
 is_core_wasm(bytes: list): bool := #bytes >= #wasm_header and bytes[0 ..< #wasm_header] == wasm_header
@@ -45,8 +48,8 @@ class WasmExports {
 	functions: list = []
 	values: list = []
 }
-wasm_exports(path: text): WasmExports := {
-	bytes = wasm_bytes(path)
+wasm_exports(path: text, folder: text): WasmExports := {
+	bytes = wasm_bytes(wasm_file(path, folder))
 	types = wasm_types(bytes)
 	imported = wasm_imported(bytes)
 	function_types = imported.functions + wasm_vector(bytes, section_ids.function, reader => read_number(reader))

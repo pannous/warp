@@ -623,13 +623,31 @@ instances_linked(linker: handle, engine: handle, context: handle, compiled: hand
 # program uses by its path (`use counter.wasm`, extensions/c_imports/wasm_modules.warp), else ""
 instance_path(from: text): text := {
 	if same_text(from, "warp_runtime") { return joined(library_folder(), "/runtime.wasm") }
-	if is_wasm_path(from) { return from }
+	if is_wasm_path(from) { return rooted_path(from) }
 	prefix = "warp/"
 	if not starts_with(from, prefix) { return "" }
 	name = text_from(from.address + prefix.length, from.length - prefix.length)
 	joined(joined(joined(library_folder(), "/modules/"), name), ".wasm")
 }
 is_wasm_path(from: text): bool := ends_with(from, ".wasm")
+# `•/test/fixtures/wasm/counter.wasm` (or `@/…`): the project root, the nearest folder above the working one holding
+# .git, plus the rest (decision project-root-paths), so a program and a module it links name one file alike; another
+# path as it is
+rooted_path(path: text): text := {
+	mark = if starts_with(path, "•/") then "•/" else if starts_with(path, "@/") then "@/" else ""
+	if mark.length == 0 { return path }
+	joined(joined(project_root(current_folder()), "/"), text_from(path.address + mark.length, path.length - mark.length))
+}
+project_root(folder: text): text := {
+	at = folder
+	while at.length > 1 {
+		if access(c_string(joined(at, "/.git")), READABLE) == 0 { return at }
+		at = folder_of(at)
+	}
+	complain(joined(joined("no folder above ", folder), " holds .git, so a •/ path has no project root"))
+	exit(1)
+	folder
+}
 # a text kept in a cell of two longs, its address and length
 cell_text(cell: pointer): text := text_from(long_at(cell).value as u32, long_at(cell + 8).value as u32)
 text_kept(cell: pointer, t: text): nothing := {
