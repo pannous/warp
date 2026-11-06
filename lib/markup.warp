@@ -284,11 +284,15 @@ html_is_attribute(item: any, tag: any): bool := {
 	if not named { return false }
 	if html_is_dotted_name(value) { raise "an attribute value has no dot: " + name + ": \"" + str(value_of(value)) + "\"; fix: write the class name as text" }
 	if (name == "style" or html_attribute_name(name) == html_starting_style) and tag != "head" and html_is_declarations(value) { return true }
-	not (value is pair) and (not html_is_group(value) or not html_holds_pairs(value))
+	not html_is_nested(value) and (not html_is_group(value) or not html_holds_pairs(value))
 }
 
 // `class: .card`, the CSS selector's spelling of a class name: the parser's member `.card` of nothing
 html_is_dotted_name(value: any): bool := value is pair and str(value.op) == "." and key_of(value) == ø
+
+// a pair nests markup; an instance of a class, a pair of its class and fields, is one value: `title: 200ms` an attribute
+// shown as its text (card quantity-element)
+html_is_nested(value: any): bool := value is pair and class_name(value) == "key"
 
 // `class:["btn" "btn-info"]` is an attribute, `style{ ".card": {…} }` an element: its items are rules
 html_holds_pairs(value: any): bool := {
@@ -318,7 +322,7 @@ html_is_declarations(value: any): bool := {
 	for item in items {
 		if not (item is pair) { return false }
 		let inner = html_content(item)
-		if inner is pair or html_is_group(inner) { return false }
+		if html_is_nested(inner) or html_is_group(inner) { return false }
 	}
 	true
 }
