@@ -208,7 +208,13 @@ quoted_lines(source: text): list := {
 c_functions_of(source: text, library_folder: text): list := {
 	statements = c_statements(source)
 	libraries = []
+	# the wasm modules it uses, each statement standing for the values the module gives
+	wasm_uses = {}
 	for statement in statements {
+		path = wasm_module_used(statement)
+		if path != ø { wasm_uses[statement] = wasm_exports(path) }
+	}
+	for statement in statements.filter(statement => not wasm_uses.has(statement)) {
 		imported = c_import(statement)
 		if imported != ø and imported#1 not in libraries { libraries += [imported#1] }
 		library = c_use(statement)
@@ -269,8 +275,13 @@ c_functions_of(source: text, library_folder: text): list := {
 		d = c_declaration(line)
 		if d != ø and not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
 	}
+	replaced = {}
+	for statement in wasm_uses.keys {
+		for d in wasm_uses[statement].functions { functions[d#1] = d }
+		replaced[statement] = wasm_statements(statement, wasm_uses[statement])
+	}
 	declared_c_functions = functions.keys.map(name => functions[name]) + catalog
-	[c_without(kept, resolved).join("\n"), functions, missing]
+	[c_without(kept, resolved, replaced).join("\n"), functions, missing]
 }
 # the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)
 reached_within(source: text): list := {
@@ -282,10 +293,11 @@ reached_within(source: text): list := {
 	}
 	reached
 }
-# the lines without the statements of `statements`, the other statements of a line kept (a line left empty stays)
-c_without(lines: list, statements: list): list := {
-	if #statements == 0 { return lines }
-	lines.map(line => line.split(";").filter(part => part.trim() not in statements).join(";"))
+# the lines without the statements of `statements` and with those `replaced` names replaced, the other statements of a
+# line kept (a line left empty stays)
+c_without(lines: list, statements: list, replaced: map = {}): list := {
+	if #statements == 0 and #replaced.keys == 0 { return lines }
+	lines.map(line => line.split(";").filter(part => part.trim() not in statements).map(part => replaced.get(part.trim()) ?? part).join(";"))
 }
 # the words of warp's own the pure emitter makes itself (emitter.warp `floored`, `magnitude`), of other results than C's:
 # warp's floor is an int, libm's a float, warp's sqrt keeps √2 exact; warp's other math words (ceil, round) have no pure
