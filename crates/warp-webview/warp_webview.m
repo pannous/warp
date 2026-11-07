@@ -16,17 +16,21 @@ enum { WINDOW_WIDTH = 900, WINDOW_HEIGHT = 700 };
 static const char* const JS_RUNTIME = "js";
 // `warp app` names the window so (lib/app/command.warp): the program's page shows there, live
 static const char* const APP_WINDOW_VARIABLE = "WARP_APP_WINDOW";
-// web/playground/js-members.js (jsMember) and markup.js (elementEvent, morphChildren), shared with the page, and
-// bridge.js (warpForeignCall, the page's events), put into each page
+// web/playground/js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit),
+// shared with the page, and bridge.js (warpForeignCall, the page's events), put into each page
 static const char BRIDGE[] = {
 #embed "../../web/playground/js-members.js"
 	, '\n',
 #embed "../../web/playground/markup.js"
 	, '\n',
+#embed "../../web/playground/markup-forms.js"
+	, '\n',
 #embed "bridge.js"
 	, 0};
 // the module `use js` calls answered here, not in the page: the run's window, `show` it, the `next` event of its page
 static NSString* const APP_WINDOW = @"warpWindow";
+// what warpWindow.next answers once its time is over without an event (lib/markup.warp page_window_run)
+static NSString* const TICK_EVENT = @"tick";
 // the message bridge.js posts each event of the page with, its {event, detail} as JSON
 static NSString* const EVENT_MESSAGE = @"warpEvent";
 // a module's or member's name as `use js` writes it, never JS source (an argument crosses only as JSON)
@@ -174,9 +178,10 @@ static BOOL pumped(BOOL (^done)(void), NSTimeInterval seconds) {
 	}
 	return done();
 }
-// `warpWindow.show(title)`: the run's view in a window; `warpWindow.next()`: the page's next event, {event, detail} as
-// JSON, nil once the window is closed. *failure says why it can't
-static NSString* window_answered(NSString* member, NSString* title, NSString** failure) {
+// `warpWindow.show(title)`: the run's view in a window; `warpWindow.next(milliseconds)`: the page's next event,
+// {event, detail, now} as JSON, else {event: "tick", now} once the milliseconds are over (none or -1: wait for an
+// event), now the milliseconds since 1970; nil once the window is closed. *failure says why it can't
+static NSString* window_answered(NSString* member, NSString* title, NSString* request, NSString** failure) {
 	if ([member isEqualToString:@"show"]) {
 		if (windows_refused()) *failure = @"no window under WARP_NO_WINDOW or CI";
 		else if (!app_window) {
@@ -197,11 +202,18 @@ static NSString* window_answered(NSString* member, NSString* title, NSString** f
 		*failure = @"no window shown: warpWindow.show(title) first";
 		return nil;
 	}
-	pumped(^{ return (BOOL)(page_events.count > 0 || !app_window_open); }, DBL_MAX);
-	if (page_events.count == 0) return nil;
-	NSString* event = page_events.firstObject;
-	[page_events removeObjectAtIndex:0];
-	return event;
+	NSArray* given = [NSJSONSerialization JSONObjectWithData:[request dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil][@"arguments"];
+	NSNumber* waited = [given isKindOfClass:NSArray.class] && [given.firstObject isKindOfClass:NSNumber.class] ? given.firstObject : nil;
+	NSTimeInterval seconds = waited && waited.doubleValue >= 0 ? waited.doubleValue / 1000 : DBL_MAX;
+	pumped(^{ return (BOOL)(page_events.count > 0 || !app_window_open); }, seconds);
+	if (!app_window_open) return nil;
+	NSMutableDictionary* happened = [NSMutableDictionary dictionaryWithDictionary:@{@"event": TICK_EVENT}];
+	if (page_events.count) {
+		[happened setDictionary:[NSJSONSerialization JSONObjectWithData:[page_events.firstObject dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]];
+		[page_events removeObjectAtIndex:0];
+	}
+	happened[@"now"] = @((long long)(NSDate.date.timeIntervalSince1970 * 1000));
+	return [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:happened options:0 error:nil] encoding:NSUTF8StringEncoding];
 }
 
 // foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
@@ -220,8 +232,8 @@ wasm_trap_t* warp_word_foreign_call(void* engine, wasmtime_caller_t* caller, con
 		if (strcmp(runtime.UTF8String, JS_RUNTIME)) failure = [NSString stringWithFormat:@"%@: %@ is not in the native warp yet", called, runtime];
 		else if ((named_module && !is_name(module)) || !member_named(member)) failure = [NSString stringWithFormat:@"%@: not a name js has", called];
 		BOOL windowed = !failure && named_module && [module isEqualToString:APP_WINDOW];
-		NSString* request = failure || windowed || values.failure[0] ? nil : request_of(&values, given, member);
-		NSString* json = windowed ? window_answered(member, @(getenv(APP_WINDOW_VARIABLE) ?: "warp"), &failure)
+		NSString* request = failure || values.failure[0] ? nil : request_of(&values, given, member);
+		NSString* json = windowed ? window_answered(member, @(getenv(APP_WINDOW_VARIABLE) ?: "warp"), request, &failure)
 			: request && !values.failure[0] ? answered(hidden_view(), @"return await warpForeignCall(request)", @{@"request": request}, &failure) : nil;
 		if (failure) warp_failed(&values, failure_said(called, failure).UTF8String);
 		else if (json) answer = node_of_json(&values, json.UTF8String);

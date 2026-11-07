@@ -1,0 +1,4 @@
+# f.signature of a function the program calls through a foreign line: a C function, a wasm module's export (card fib-signature-display)
+
+'import strlen from "c"; strlen.signature'	"(s: text) -> i64"
+'use wasm "•/test/fixtures/components/rust_demo.wasm" as demo\ndemo.fib.signature'	"(p1: i32) -> i64"
