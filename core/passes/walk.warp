@@ -81,7 +81,8 @@ placed(made: Node, at: Node): Node := {
 	line = line_of(at)
 	column = column_of(at)
 	# (ø, the empty `()` of a template's `() => $e`, has no place)
-	if made !== ø and line is int and column is int then positioned(made, line, column) else made
+	if made === ø { return made }
+	if line is int and column is int then positioned(made, line, column) else made
 }
 
 # n without its attributes, opaque empty groups and characters, keeping the place it was written at: the parser places a
