@@ -47,7 +47,6 @@ fn held_put(cell: i32, k: i32, v: f32) {
 	let at = cell * S + k;
 	if (from_paper()) { wet[at] = v; } else { paper[at] = v; }
 }
-fn hash(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
 fn noise(p: vec2f) -> f32 {
 	let i = floor(p);
 	let f = fract(p);
