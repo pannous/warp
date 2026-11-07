@@ -1851,10 +1851,10 @@ def used_module_sources(source: text): list := module_sources(reached_modules(so
 // the standard modules a source uses by name or reaches by one of their global words
 def reached_modules(source: text): list {
 	modules = used_modules(source)
-	code = code_only(source)
+	names = names_mentioned(code_only(source))
 	words = global_words()
 	for word in words.keys {
-		if not modules.contains(words[word]) and mentions_word(code, word) { modules += [words[word]] }
+		if not modules.contains(words[word]) and names.has(word) { modules += [words[word]] }
 	}
 	modules
 }
@@ -1880,15 +1880,10 @@ def used_modules(source: text): list {
 def use_candidates(source: text): text := source.split("\n").filter(line => USE_KEYWORDS.any(keyword => line.starts_with(keyword + " ") or line.contains("; " + keyword + " "))).join("\n")
 // the use lines of a source, as a slice of it reads them (written_tree's `uses`)
 def use_lines(source: text): text := used_modules(source).map(module => "\nuse " + module).join("")
-// whether the code names the word, not as a part of a longer name: `play` in `play(A4)`, not in `display`; glued to a
-// number it is its own (`km` in `3km`, a number times km), as no name starts with a digit
-def mentions_word(code: text, word: text): bool := names_mentioned(code).has(word)
-// the names the code says, found in one walk and kept for the last code asked (the implicit uses ask it of each of the
-// library index's ~1800 words): each run of name characters starting a name, and every end of a run glued to a number
-global mentioned_code = ""
-global mentioned_names = {}
+// the names the code says, found in one walk (a caller asking of many words asks this once), each as a whole name:
+// `play` of `play(A4)`, no `play` of `display`; each run of name characters starting a name, and every end of a run
+// glued to a number, as no name starts with a digit (`km` of `3km`, a number times km)
 def names_mentioned(code: text): map {
-	if same(code, mentioned_code) { return mentioned_names }
 	names = {}
 	run = ""
 	for c in code + " " {
@@ -1897,8 +1892,6 @@ def names_mentioned(code: text): map {
 			run = ""
 		}
 	}
-	mentioned_code = code
-	mentioned_names = names
 	names
 }
 
