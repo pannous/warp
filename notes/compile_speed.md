@@ -179,3 +179,21 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
 - WARP_TIMES also prints `§R <path>` for each file a compile reads (library.warp file_source): the audit tool of
   no-lib-reads. At 4e6b583518 a hello read prelude, math, primitive, c, extensions/uncertain/operators and the five
   type modules besides modules/index.tsv and sugar_rules.packed.
+- P2/P3 (90e4d4a4fa): prelude, math, primitive, c and the uncertain operator rows are built into the compiler by
+  module_source (scripts/compiler-inputs.sh counts every module_source file as the compiler's code, so editing one is
+  a compiler rebuild); the type modules' tables (sections provider, nullary, unary) and the standard modules'
+  compile-time rules (extensions/rules/modules, packed beside the modules with the sugar's) come from what the build
+  writes. A hello compile reads no lib/ or extensions/ source: 2.05 G -> 1.83 G instructions, 0.13 s.
+- Sample audit (warp compile of each sample, WARP_TIMES §R lines): at 90e4d4a4fa only 27 of 263 samples read no lib/
+  source. The most read: reals 173, units 158, unit_names and uncertain 147, native/units 139, i18n 112. They come
+  from rule needs naming a module the program doesn't link: rules_of_module and modules_used_by read its text, and
+  used_module_text probed lib/native/<m>.warp and the crates cache first. Next (P4): an unlinked module is known by
+  its prebuilt signature (modules/<m>.wasm's warp.signature).
+- P4 (ba51489d85): a module a compile doesn't link is known by its prebuilt signature (signature.warp
+  prebuilt_signature: modules/<m>.wasm's warp.signature, read once a compile), never its text; the signature gained
+  the module's rule patterns. fizz-buzz 6.16 G -> 2.39 G instructions, 0.55 -> 0.21 s; samples compiling without a
+  lib/ read 27 -> 52 of 263 (data/reads.sh in the worktree; note bash 3 has no globstar, so samples/*/*.warp only).
+- Left after P4: programs that `use` a module read it (the parser's declared operators, reached modules, with_reached
+  of modules not linked), and 48 of lib/'s 95 modules (csv, path, tables, toml, html…) are not prebuilt at all (only
+  std_module_names, 47, are), so a program using one compiles it from its source: prebuilding every module is the
+  general fix.

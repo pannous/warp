@@ -278,10 +278,7 @@ stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if
 is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
 
 # the standard modules a module uses: a linked one's signature says them, any other's `use` lines
-modules_used_by(module: text): list := {
-	signature = linked_signature(module)
-	if signature != ø then signature.uses else used_module_text(module).split("\n").filter(line => line.starts_with(use_line_start)).map(line => line[#use_line_start ..].trim())
-}
+modules_used_by(module: text): list := module_uses(module)
 # the program rewritten by the rules of its whole, `where program`, each once, after the rules inside it fired
 # (`$program` their program): lib/web.warp's ending of a program with routes
 with_program_rules(program: Node, rules: list, origins: list): Node := {
@@ -632,7 +629,7 @@ module_rule_paths(module: text): list := [std_module_path(module), run_library()
 COMPILE_TIME_RULES = "/extensions/rules/modules/"
 # (a linked module's own rules are its signature's, signature.warp)
 rules_of_module(module: text): list := {
-	linked = linked_signature(module)
+	linked = prebuilt_signature(module)
 	if linked == ø then module_rule_paths(module).flat_map(path => module_rules_of(path, module)) else linked.rules + module_rules_of(module_rule_paths(module)#2, module)
 }
 # the rules of the module at `path`, read once a compile: the sugar's baked ones while its file is the text they were
@@ -643,11 +640,15 @@ module_rules_of(path: text, module: text): list := {
 	if not module_rules_held.has(key) { module_rules_held[key] = module_rules_read(path, module) }
 	module_rules_held[key]
 }
-# (the bake is lib/ as the build left it, decision no-lib-reads; only a build before its rules are packed parses them)
+# (the packed rules are lib/ as the build left it, decision no-lib-reads: a file of extensions/ they lack has none;
+# only a build before its rules are packed parses them)
 module_rules_read(path: text, module: text): list := {
-	baked = sugar_rules_packed_beside().get(path.remove_prefix(run_library() + "/"))
+	packed = sugar_rules_packed_beside()
+	within = path.remove_prefix(run_library() + "/")
+	baked = packed.get(within)
 	place = if baked != ø then baked.find("\n") else ø
 	if place != ø { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
+	if #packed > 0 and within.starts_with("extensions/") { return [] }
 	written_rules(path, file_text(path) ?? "", module)
 }
 # The sugar's rules (extensions/sugar), read by every compile, packed (rule_node) beside the prebuilt modules by `warp
@@ -663,10 +664,12 @@ sugar_rules_packed_beside(): map := {
 	}
 	sugar_rules_held
 }
-# the sugar's rules packed, read off lib/ as it lies now
+# the sugar's rules and the standard modules' compile-time ones (COMPILE_TIME_RULES) packed, read off lib/ as it lies
+# now
 sugar_rules_packed(): map := {
 	packed = {}
-	for path in sugar_modules_scanned().keys.map(module => module + module_extension) {
+	compile_time = library_on_disk().keys.filter(path => ("/" + path).starts_with(COMPILE_TIME_RULES) and path.ends_with(module_extension))
+	for path in sugar_modules_scanned().keys.map(module => module + module_extension) + compile_time {
 		source = library_text(path)
 		packed[path] = source_hash(source) + "\n" + pack(List(rules_parsed(source_parse(source), "", source).map(rule_node), Bracket.Square, Separator.Comma))
 	}

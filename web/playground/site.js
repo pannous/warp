@@ -9,9 +9,6 @@
 const SITE_ROOT = "warp-root";
 const SITE_MODULE = "app.wasm";
 const SITE_WORKER = "web/playground/site-worker.js";
-const KEY_EVENT = "key";
-const fieldDetail = happened => inputDetail(happened.composedPath()[0]);
-const SITE_EVENTS = { click: () => ({}), input: fieldDetail, ...Object.fromEntries(Object.keys(FIELD_EVENT_TYPES).map(event => [event, fieldDetail])), ...self.FORM_EVENTS };
 
 // resolves once no reload for isolation is coming: a Worker started before would have its request aborted (Firefox:
 // NS_BINDING_ABORTED, card firefox-worker)
@@ -96,23 +93,10 @@ async function startSite() {
 		followPointer(document.body);
 	}
 	worker.postMessage({ start: { module: new URL(SITE_MODULE, document.baseURI).href, stored: keptValues(), session: keptValues([SESSION_STORE]) } });
-	listenToElements((found, happened) => {
+	listenToElements(root(), (found, happened) => {
 		if (happened.type === "submit") submitted(happened, found);
 		if (found) worker.postMessage(found);
 	});
-}
-
-// each event of the page to `handle`: its element's {event, detail} (markup.js elementEvent) or nothing, and the event; a
-// key pressed anywhere but in a text field is the program's `on key`
-function listenToElements(handle) {
-	for (const [event, detail] of Object.entries(SITE_EVENTS)) {
-		root().addEventListener(FIELD_EVENT_TYPES[event] ?? event, happened => handle(elementEvent(event, happened, detail(happened)), happened));
-	}
-	document.addEventListener("keydown", pressed => isTyping(pressed.target) || handle({ event: KEY_EVENT, detail: { key: pressed.key } }, pressed));
-}
-
-function isTyping(target) {
-	return target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName);
 }
 
 // a painting of the program (canvas.js) in the one canvas after the root, which the root's markup morphing leaves alone:

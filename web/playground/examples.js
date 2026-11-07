@@ -306,7 +306,7 @@ users = ["Ann", "Bo"]
 route "/" { div{ h1{ "Users" } a{ href: "/users/2" "Bo" } } }
 route "/users/:id:int" { div{ h1{ users#id } a{ href: "/" "back" } } }
 route "*" { p{ "no such page" } }` },
-	forms: { value: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li></ul></div>', typed: "tea", clicks: ["add"], clicked: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li><li>tea</li></ul></div>', address: "/", code: `// a form posts to the program's own route: here the page answers it, \`warp serve\` serves it to every browser
+	forms: { value: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li></ul></div>', typed: "tea", clicks: ["add"], clicked: '<div><form method="post" action="/items"><input name="item"><button>add</button></form><ul><li>milk</li><li>tea</li></ul></div>', address: "/", code: `// the form sends what you type to the route /items of this same program; here the page plays the server, \`warp serve\` puts it on the web
 use web
 items = ["milk"]
 post "/items" { items.add(request.body.item) }
