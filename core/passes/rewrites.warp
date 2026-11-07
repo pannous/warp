@@ -120,7 +120,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "native_window", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "native_host", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -495,7 +495,10 @@ early_sugared(program: Node): Node := {
 	rules = early_module_rules()
 	words = phrase_words(program)
 	if not rules.any(rule => needed_words(rule).any(word => words.has(word))) { return program }
-	sugared(program, unbound_rules(rules, program))
+	kept = unbound_rules(rules, program)
+	once = sugared(program, kept)
+	# a rule's result may write a variable later, `bind: name`'s setter: the items reading it are live, so once more
+	if written_later(once, no).any(name => name not in written_later(program, no)) then sugared(once, kept) else once
 }
 # the rules of the early sugar modules, read once
 early_module_rules(): list := {
@@ -506,7 +509,7 @@ early_module_rules(): list := {
 	early_rules
 }
 # the words of the phrases in the node (`var total = 0`'s var, `square of number = …`'s of), also as the parser writes
-# a declaration word (uses.warp declaration_keywords), the key of `global: (play(tone) := …)`
+# a declaration word (uses.warp declaration_keywords), the key of a pair, `global: (play(tone) := …)`, `bind: name`
 phrase_words(n: Node): map := {
 	found = {}
 	waiting = [n]
@@ -515,7 +518,7 @@ phrase_words(n: Node): map := {
 		part = waiting#at
 		at += 1
 		if part is key {
-			if op_of(part) == Op.Colon and key_of(part) is symbol and name_of(key_of(part)) in declaration_keywords { found[name_of(key_of(part))] = yes }
+			if op_of(part) == Op.Colon and key_of(part) is symbol { found[name_of(key_of(part))] = yes }
 			waiting += [key_of(part), value_of(part)]
 		} else if is_group(part) {
 			# (a word block's spaced items too: `div{ "a" on click {…} }`, whose `on click {…}` is an item, card markup-handler-spacing)

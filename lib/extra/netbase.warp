@@ -15,3 +15,7 @@ netbase_path(q) := q.replace("%", "%25").replace(" ", "%20").replace(">", "%3E")
 query_at(server, q) := parse_json(fetch(server + "/json/query/" + netbase_path(q)))
 
 query(q) := query_at(netbase_server(), q)
+
+// `load wikidata`: the server imports its data itself (`./netbase :import wikidata`, notes/netbase.md), so load asks
+// it whether it answers for the dataset, and without one says what to start
+load(dataset) := try { query_at(netbase_server(), "" + dataset) } catch e { raise "netbase: no server answers at " + netbase_server() + " to load " + dataset + ": run ./netbase :import " + dataset + " and ./netbase :server, or set NETBASE" }

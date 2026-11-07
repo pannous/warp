@@ -764,7 +764,7 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
-Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
+Examples: frames, shader, "shader mouse"; samples: paint_text, paint_text_gpu, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
 
 ## Shaders
 
