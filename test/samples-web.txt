@@ -1,4 +1,4 @@
-# 7c0f7b1671 2026-11-07 09:25 246/266 92.5%
+# 5ad904e05f 2026-11-07 11:34 252/265 95.1%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
@@ -19,6 +19,7 @@ ok   samples/apps/log_analyzer.warp
 ok   samples/apps/mail_merge.warp
 ok   samples/apps/meeting_planner.warp
 ok   samples/apps/name_matcher.warp
+ok   samples/apps/open_hours.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
 ok   samples/apps/site_generator.warp
@@ -36,6 +37,7 @@ ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
 ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
+ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
 ok   samples/functions/block_arguments.warp
 ok   samples/functions/code_as_data.warp
@@ -88,10 +90,7 @@ ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/domain_warp.warp
 ok   samples/gpu/fluid_smear.warp
 ok   samples/gpu/fluid_smear_dsl.warp
-ok   samples/acceleration/gpu_arrays.warp
-ok   samples/acceleration/gpu_map.warp
-ok   samples/acceleration/gpu_million.warp
-FAIL samples/gpu/gpu_visualizer.warp
+ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ran  samples/gpu/lava_lamp.warp
@@ -109,10 +108,10 @@ ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
 drew samples/graphics/raylib_circle.warp
-TIME samples/graphics/raylib_circle_forever.warp
+drew samples/graphics/raylib_circle_forever.warp
 drew samples/graphics/raylib_debug.warp
-TIME samples/graphics/raylib_demo.warp
-TIME samples/graphics/raylib_mouse_circle.warp
+drew samples/graphics/raylib_demo.warp
+drew samples/graphics/raylib_mouse_circle.warp
 drew samples/graphics/raylib_simple.warp
 drew samples/graphics/raylib_simple_use.warp
 drew samples/graphics/raylib_sleep.warp
@@ -174,7 +173,7 @@ ok   samples/native/structs.warp
 ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
-ran  samples/numbers/dates.warp
+ok   samples/numbers/dates.warp
 ok   samples/numbers/factorial.warp
 ok   samples/numbers/gcd.warp
 ok   samples/numbers/measurements.warp
@@ -200,7 +199,7 @@ ran  samples/servers/worker.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
-FAIL samples/sound/gpu_visualizer_warp.warp
+ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -211,13 +210,13 @@ ok   samples/sound/signal_graph.warp
 ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp
-FAIL samples/sound/sound_patterns.warp
+ran  samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
-ran  samples/sound/visualizer.warp
+ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
-ok   samples/storage/netbase.warp
+EXP  samples/storage/netbase.warp
 ok   samples/storage/orm.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
@@ -247,7 +246,7 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
-FAIL samples/wasm/import_compiled.warp
+ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
