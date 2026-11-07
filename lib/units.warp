@@ -49,9 +49,9 @@ class Quantity {
 	float() := amount as float
 	text() := quantity_text(this)
 	show() := quantity_text(this)
-	// a tolerance's bounds and value, each a quantity in its unit: `(6m ± 0.3).low` is 5.7m
-	low() := measured(as_interval(amount).low, dims, unit, scale)
-	high() := measured(as_interval(amount).high, dims, unit, scale)
+	// a tolerance's bounds and value, each a quantity in its unit: `(6m ± 0.3).low` is 5.7m, a bound to the digits the spread justifies
+	low() := measured(as_interval(amount).low_bound(), dims, unit, scale)
+	high() := measured(as_interval(amount).high_bound(), dims, unit, scale)
 	value() := measured(as_interval(amount).value, dims, unit, scale)
 }
 

@@ -24,6 +24,9 @@ class Interval {
 	equals(o: any): bool := o is Interval and value == o.value and low == o.low and high == o.high
 	// the ± part: how far the interval reaches from the value, on its farther side
 	uncertainty(): float := max(high - value, value - low)
+	// its bounds as handed out, to the digits its spread justifies (guarded_bound)
+	low_bound(): float := guarded_bound(low, uncertainty())
+	high_bound(): float := guarded_bound(high, uncertainty())
 	scaled_by(factor: float): Interval := Interval(value * factor, low * factor, high * factor)
 	// √, as lib/reals.warp exact_root calls a value's own root(): it rises, so it maps the bounds, √(2.0 ± 0.01) spans
 	// √1.99 … √2.01
@@ -137,6 +140,15 @@ place_text(x: float, scale: float, decimals: int) := {
 	fraction = ""
 	while #fraction < decimals { fraction = (digits % 10 + 48) as char + fraction; digits = digits /! 10 }
 	sign + to_base(digits, 10) + "." + fraction
+}
+// a bound an interval of that radius hands out (decision float-intervals): rounded one digit finer than its ± text
+// shows, a guard digit, so 12.0 ± 1.9 reaches 10.26 and 13.86, never 13.860000000000001; its own floats stay as they are
+guarded_bound(bound: float, radius: float): float := {
+	if not (radius > 0.0 and is_finite(radius)) { return bound }
+	scale = 10.0
+	while radius * scale < 95.0 and scale < 1e18 { scale = scale * 10.0 }
+	while radius * scale >= 995.0 { scale = scale / 10.0 }
+	if abs(bound) * scale >= 1e17 then bound else round(bound * scale) / scale
 }
 // neither ∞ nor NaN: ∞ - ∞ is NaN
 is_finite(x: float): bool := x - x == 0.0
