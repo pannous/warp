@@ -920,25 +920,25 @@ global recorded = []
 global rendered_until = 0.0 as float
 rendered(file) := {
 	if count(recorded) == 0 { return 0 }
-	rate = max([sound.rate for sound in recorded])
-	channels = max([sound.channels for sound in recorded])
-	first = min(rendered_until, min([sound.place for sound in recorded]))
+	rate = max([take.rate for take in recorded])
+	channels = max([take.channels for take in recorded])
+	first = min(rendered_until, min([take.place for take in recorded]))
 	mixed = []
-	for sound in recorded {
-		start = round((sound.place - first) * rate) as int * channels
-		frames = count(sound.speakers) / sound.channels as int
-		length = round(frames * rate / sound.rate) as int
+	for take in recorded {
+		start = round((take.place - first) * rate) as int * channels
+		frames = count(take.speakers) / take.channels as int
+		length = round(frames * rate / take.rate) as int
 		needed = start + length * channels
 		if count(mixed) < needed { mixed = mixed + [0 for i in 0..(needed - count(mixed))] }
-		fades = sound_fades.filter(fade => fade[0] == 0 or fade[0] == sound.handle)
+		fades = sound_fades.filter(fade => fade[0] == 0 or fade[0] == take.handle)
 		for frame in 0..length {
-			from = min(frames - 1, frame * sound.rate / rate as int) * sound.channels
-			gain = if count(fades) == 0 then 1.0 else faded_gain(fades, sound.place + frame / rate)
-			for channel in 0..channels { mixed[start + frame * channels + channel] += round((sound.speakers[from + min(channel, sound.channels - 1)] - sample_offset) * gain) as int }
+			from = min(frames - 1, frame * take.rate / rate as int) * take.channels
+			gain = if count(fades) == 0 then 1.0 else faded_gain(fades, take.place + frame / rate)
+			for channel in 0..channels { mixed[start + frame * channels + channel] += round((take.speakers[from + min(channel, take.channels - 1)] - sample_offset) * gain) as int }
 		}
 	}
 	sound_fades = []
-	write_bytes(file, wav_bytes([min(max(sum, -32768), 32767) + sample_offset for sum in mixed], rate, channels))
+	write_bytes(file, wav_bytes([min(max(level, -32768), 32767) + sample_offset for level in mixed], rate, channels))
 	seconds = count(mixed) / channels / rate
 	rendered_until = (first + seconds) as float
 	recorded = []
