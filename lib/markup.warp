@@ -222,7 +222,7 @@ html_now(value: any) := if value is Live then html_now(value.now()) else if valu
 class Handler {
 	event: text
 	action: function
-	show() := "on " + event + " " + handler_body_shown
+	format as text := "on " + event + " " + handler_body_shown
 }
 handler(name: any, action: function): Handler := Handler(name_of(name), action)
 // a live value: code kept to run each time its value is wanted, shown as its value now; an item reading a variable a
@@ -231,7 +231,7 @@ handler(name: any, action: function): Handler := Handler(name_of(name), action)
 class Live {
 	compute: function
 	now() := { value = compute; value() }
-	show() := str(now())
+	format as text := str(now())
 }
 live(compute: function): Live := Live(compute)
 

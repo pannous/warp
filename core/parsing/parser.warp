@@ -1851,10 +1851,10 @@ def used_module_sources(source: text): list := module_sources(reached_modules(so
 // the standard modules a source uses by name or reaches by one of their global words
 def reached_modules(source: text): list {
 	modules = used_modules(source)
-	code = code_only(source)
+	names = names_mentioned(code_only(source))
 	words = global_words()
 	for word in words.keys {
-		if not modules.contains(words[word]) and mentions_word(code, word) { modules += [words[word]] }
+		if not modules.contains(words[word]) and names.has(word) { modules += [words[word]] }
 	}
 	modules
 }
@@ -1880,24 +1880,19 @@ def used_modules(source: text): list {
 def use_candidates(source: text): text := source.split("\n").filter(line => USE_KEYWORDS.any(keyword => line.starts_with(keyword + " ") or line.contains("; " + keyword + " "))).join("\n")
 // the use lines of a source, as a slice of it reads them (written_tree's `uses`)
 def use_lines(source: text): text := used_modules(source).map(module => "\nuse " + module).join("")
-// whether the code names the word, not as a part of a longer name: `play` in `play(A4)`, not in `display`; glued to a
-// number it is its own (`km` in `3km`, a number times km), as no name starts with a digit
-def mentions_word(code: text, word: text): bool {
-	parts = code.split(word)
-	i = 1
-	while i < #parts {
-		before = parts#i
-		after = parts#(i + 1)
-		if not ends_in_name(before) and (#after == 0 or not is_name_char(after[0])) { return yes }
-		i += 1
+// the names the code says, found in one walk (a caller asking of many words asks this once), each as a whole name:
+// `play` of `play(A4)`, no `play` of `display`; each run of name characters starting a name, and every end of a run
+// glued to a number, as no name starts with a digit (`km` of `3km`, a number times km)
+def names_mentioned(code: text): map {
+	names = {}
+	run = ""
+	for c in code + " " {
+		if is_name_char(c) { run += c } else {
+			if #run > 0 and is_name_start(run[0]) { names[run] = yes } else if #run > 1 { for start in 1 ..< #run { names[run[start ..]] = yes } }
+			run = ""
+		}
 	}
-	no
-}
-// whether the text ends in a name, its last run of name characters starting as a name does, not as a number (`3`)
-def ends_in_name(t: text): bool {
-	start = #t
-	while start > 0 and is_name_char(t[start - 1]) { start -= 1 }
-	start < #t and is_name_start(t[start])
+	names
 }
 
 // The statements of a source's code, outside comments and texts, split at line ends and `;`

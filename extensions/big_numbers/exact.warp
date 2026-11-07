@@ -18,8 +18,9 @@ int_gcd(a: int, b: int): int := {
 	}
 	a
 }
-# A fraction (decision fraction-written-form): the ratio an int `/` makes, and exact arithmetic on one, shows as n/d,
-# 1/3 + 1/6 as 1/2, while its denominator stays below fraction_shown_denominator(); a decimal literal's stays decimal,
+# A fraction (decision fraction-written-form): a fraction written as one, `1/3` (the emitter's extended_fraction of two
+# written ints), and exact arithmetic on one, shows as n/d, 1/3 + 1/6 as 1/2; a quotient of values, `meters / 1000`,
+# shows as decimal where it can, 3.5, while its denominator stays below fraction_shown_denominator(); a decimal literal's stays decimal,
 # 0.1 + 0.2 as 0.3. Marked in its kind (fraction_mark(): bit 55 above Kind.Int, free beside TypeValue's 54), as a
 # yes/no is; a whole result is a plain int
 fraction_shown_denominator(): int := 10000
@@ -77,10 +78,7 @@ exact_mul(a: Node, b: Node): Node := {
 exact_div(a: Node, b: Node): Node := {
 	made_case(Made.BigInt, big_exact_quotient(a, b))
 	if not fit_together(a, b) { return big_exact_quotient(a, b) }
-	# (two whole numbers divided make a fraction, as an int `/` does: extended_ratio)
-	quotient = exact_ratio(cross_product(a, b), exact_denominator(a) * exact_numerator(b))
-	if not is_ratio(a) and not is_ratio(b) { return fraction_of(quotient) }
-	fraction_kept(quotient, a, b)
+	fraction_kept(exact_ratio(cross_product(a, b), exact_denominator(a) * exact_numerator(b)), a, b)
 }
 # -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
 exact_order(a: Node, b: Node): int := {
