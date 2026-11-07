@@ -1,8 +1,11 @@
 # Fetched values (card web-async, notes/web_framework.md "Async data"): `users := fetch "/api/users"` at the main level
 # is a fetched value, `users.loading` whether its reply is still out and `users.error` the failure's text, else ø.
-# Fetched synchronously for now (both hosts answer at once), so loading is no; the real async page is the card's
-# left-over. Live regions (card web-a11y-live): the outermost markup element whose own content reads a fetched value
-# gets aria-live="polite", so a screen reader announces it when it arrives; an element setting aria-live keeps its own.
+# `name := fetch url` does not wait (card fetch-users-async): name is ø, name·loading yes and name·error ø until the
+# reply, which lib/net.warp fetch_later gives the reply function that sets them; written later, they are varying, so
+# the markup reading them renders anew when it comes (the page; the native warp answers at once). Any other value
+# mentioning fetch is fetched as it is computed, its loading no. Live regions (card web-a11y-live): the outermost
+# markup element whose own content reads a fetched value gets aria-live="polite", so a screen reader announces it when
+# it arrives; an element setting aria-live keeps its own.
 fetch_signals_extension = Extension{name: "fetch_signals", passes_before: {"tries": fetch_signals}}
 
 FETCH_WORD = "fetch"
@@ -12,22 +15,54 @@ ERROR_TYPE = "error"
 LIVE_ATTRIBUTE = "aria-live"
 LIVE_POLITENESS = "polite"
 MARKUP_MODULE = "markup"
+FETCH_LATER = "fetch_later"
+ANSWER = "answer"
+SIGNAL_SEPARATOR = "·"
+# lib/markup.warp live(compute): a value shown anew each time the page renders
+LIVE_WORD = "live"
 
 fetch_signals(program: Node): Node := {
 	fetched = flat_statements(program).map(fetched_name).filter(name => name != "")
 	if #fetched == 0 { return program }
-	# (regions first: `users.loading` reads users before it becomes no)
-	bottom_up(live_regions(program, fetched), n => signal_read(n, fetched))
+	later = statements_in(program).map(later_fetched_name).filter(name => name != "")
+	# (regions and live items first: `users.loading` reads users before it becomes users·loading)
+	marked = live_reads(live_regions(program, fetched), later)
+	read = bottom_up(marked, n => signal_read(n, fetched, later))
+	if #later == 0 { return read }
+	# (its statements among the program's, main-level: written later by the reply, its variables are varying)
+	separated(bracketed(statements_in(read).flat_map(fetched_later), ""), ";")
+}
+# the library words the lowering calls, which the program never writes (core/passes/prelude_words.warp extension_writes)
+fetched_later_words(program: Node): list := if statements_in(program).any(statement => later_url(statement) != ø) then [FETCH_LATER, LIVE_WORD] else []
+# the name of `name := fetch url` at the main level, fetched without waiting, else ""
+later_fetched_name(statement: Node): text := if later_url(statement) == ø then "" else name_of(key_of(statement))
+later_url(statement: Node): Node? := match statement {
+	Key(Symbol(name), Op.Define, value): if head_name(value) == FETCH_WORD and #value == 2 then value#2 else ø
+	_: ø
+}
+fetch_signal(name: text, field: text): Node := symbol(name + SIGNAL_SEPARATOR + field)
+# `users := fetch url`: `users = ø; users·loading = yes; users·error = ø; fetch_later(url, answer => {…})`, the reply
+# setting users or users·error
+fetched_later(statement: Node): list := {
+	url = later_url(statement)
+	if url == ø { return [statement] }
+	name = name_of(key_of(statement))
+	answer = symbol(ANSWER)
+	failed = Key(answer, Op.Is, symbol(ERROR_TYPE))
+	settled = chosen(failed, set_to(fetch_signal(name, ERROR_FIELD), call_of("str", [answer])), set_to(symbol(name), answer))
+	reply = Key(answer, Op.Arrow, block_of([set_to(fetch_signal(name, LOADING_FIELD), Node.False), settled]))
+	[set_to(symbol(name), Node.Empty), set_to(fetch_signal(name, LOADING_FIELD), Node.True), set_to(fetch_signal(name, ERROR_FIELD), Node.Empty), call_of(FETCH_LATER, [url, reply])]
 }
 # the name `name := …fetch…` defines, else ""
 fetched_name(statement: Node): text := match statement {
 	Key(Symbol(name), Op.Define, value): if mentions(value, FETCH_WORD) then name else ""
 	_: ""
 }
-# `users.loading` is no, `users.error` the failure's text
-signal_read(n: Node, fetched: list): Node := match n {
+# `users.loading` is no, `users.error` the failure's text; of a value fetched later its signals users·loading, users·error
+signal_read(n: Node, fetched: list, later: list): Node := match n {
 	Key(Symbol(name), Op.Dot, Symbol(field)): {
 		if not (name in fetched) { return n }
+		if name in later and (field == LOADING_FIELD or field == ERROR_FIELD) { return fetch_signal(name, field) }
 		if field == LOADING_FIELD { return Node.False }
 		if field == ERROR_FIELD then failure_text(key_of(n)) else n
 	}
@@ -43,6 +78,21 @@ live_regions(n: Node, fetched: list): Node := {
 	if items.any(item => is_key(item, Op.Colon) and key_of(item) == Text(LIVE_ATTRIBUTE)) { return n }
 	Key(key_of(n), Op.Colon, List([Key(Text(LIVE_ATTRIBUTE), Op.Colon, Text(LIVE_POLITENESS))] + items, Bracket.Curly, Separator.Comma))
 }
+# each item of markup reading a value fetched later is live, shown anew when the reply comes: the events sugar's
+# `live(() => …)` of an item reading a variable a handler writes (extensions/sugar/events.warp), which runs before this
+# pass, so it can't see the reply's writes
+live_reads(n: Node, later: list): Node := {
+	if #later == 0 { return n }
+	if not is_markup_element(n) { return children(n, child => live_reads(child, later)) }
+	Key(key_of(n), Op.Colon, group_like(value_of(n), items_of(value_of(n)).map(item => live_item(item, later))))
+}
+live_item(item: Node, later: list): Node := {
+	if is_markup_element(item) { return live_reads(item, later) }
+	if not later.any(name => mentions(item, name)) { return item }
+	if is_key(item, Op.Colon) and (key_of(item) is symbol or key_of(item) is text) { return Key(key_of(item), Op.Colon, kept_live(value_of(item))) }
+	kept_live(item)
+}
+kept_live(code: Node): Node := call_of(LIVE_WORD, [Key(Node.Empty, Op.Arrow, code)])
 # `div{ … }`: a tag of lib/markup.warp with its block
 is_markup_element(n: Node): bool := match n {
 	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): declared_tags().get(tag) == MARKUP_MODULE
