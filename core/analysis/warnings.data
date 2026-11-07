@@ -2,6 +2,9 @@
 
 # a text spelling a number added to a number (extensions/text_lints.warp, card print-oldest)
 spelled_number_join($written, $spelled, $as_sum, $as_text)	"{written} joins the texts; {spelled} spells a number"	"{as_sum} or {as_text}"
+# a file or folder beside the program named as a standard module it uses (extensions/local_shadows.warp, decision
+# local-folder-clash): the local one comes first
+local_shadow($local, $name, $standard)	"{local} beside the program and the standard module {standard} share the name {name}"	"rename {local}"
 # a binary operator is spaced evenly (decision binary-operator-spacing): a sign glued to what follows it only starts an item
 # a kebab name whose parts are bound too (decisions kebab-or-minus, #6 and P81): the name wins, renamed or subtracted
 kebab_name($written, $spaced, $renamed)	"{written} is the name {written}, not {spaced}"	"{renamed} or {spaced}"
