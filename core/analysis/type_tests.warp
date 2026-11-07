@@ -23,6 +23,7 @@ tested_type_call(subject: Node, type: Node, scope: map): Node := match type {
 	Symbol(word): tested_word_call(subject, word, Key(subject, Op.Eq, type), scope)
 	# `x is (int or text)`: x is one of the alternatives, `x is (1 or 2)` too
 	Key(left, Op.Or, right): Key(tested_type_call(subject, left, scope), Op.Or, tested_type_call(subject, right, scope))
+	Key(left, Op.BitOr, right): Key(tested_type_call(subject, left, scope), Op.Or, tested_type_call(subject, right, scope))
 	List(items, bracket, separator): if #items == 1 and bracket == Bracket.Round then tested_type_call(subject, items#1, scope) else Key(subject, Op.Eq, type)
 	_: Key(subject, Op.Eq, type)
 }
