@@ -1,0 +1,5 @@
+# a map's own entry wins over a method a module's classes declare (units' text() and float()): an event's text
+'use units; m = {text: "hi", float: 2.5}; [m.text, m.float]'	["hi", 2.5]
+'use units; f(e) := "got " + e.text; f({text: "yo"})'	"got yo"
+'use units; f(e) := "got " + e.text; f(7 km)'	"got 7km"
+'use units; f(e) := e.text; f(parse_code("{text: 7}"))'	7
