@@ -9,34 +9,37 @@ nanos_per_milli = 1000000
 # index (8 bits) above the form, its offset in minutes above that
 form_bits = 3
 form_mask = 7
-# the form of a zoned time (TimeFormCode.Zoned): its text names its zone, which only Rust's zone table knows
+# a zoned time (TimeFormCode.Zoned): its position the instant, its info the zone's index in lib/time.warp time_zones and
+# its offset, its node's second field the zone's name (lib/time.warp zoned makes one)
 months_shift = 35
 zone_mask = 255
 offset_shift = 11
 seconds_per_minute = 60
-# the calls a lowered program makes a time with (rust-harness:src/time/mod.rs: `now` is instant_at(clock()), a constant time_of)
-time_words = {time_of: 2, instant_at: 1}
+# the calls a lowered program makes a time with (rust-harness:src/time/mod.rs: `now` is instant_at(clock()), a constant
+# time_of), by their argument counts: time_of(info, position) and time_of(info, position, zone name) of a zoned time
+time_words = {time_of: [2, 3], instant_at: [1]}
 # the words runtime.warp reads a time with, one or two instructions each (runtime words only, as `intrinsics`)
 time_intrinsics = {time_form: 1, time_position: 1, duration_months: 1, duration_days: 1, zone_index: 1, zone_offset: 1}
 # the host words runtime words over times call, imported when the program makes a time (Rust: imports.rs makes_instant)
 time_host_words = ["local_offset"]
 makes_time(program: Node): bool := mentions(program, "instant_at") or mentions(program, "time_of")
 
-# time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
+# time_of(info, position): the time node, of a zoned time with its zone's name; instant_at(milliseconds since 1970): an instant
 def time_call(body: Body, name: text, arguments: list): TypedCode {
-	if #arguments != time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
-	if name == "time_of" and arguments#1 is number and arguments#1 % (form_mask + 1) == TimeFormCode.Zoned { return refuse("a zoned time") }
+	if #arguments not in time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
+	if name == "time_of" and #arguments == 2 and arguments#1 is number and arguments#1 % (form_mask + 1) == TimeFormCode.Zoned { return refuse("a zoned time without its zone's name") }
 	values = arguments.map(a => expression_code(body, a))
 	if name == "instant_at" {
 		nanos = converted(values#1, ValueKind.Int) + [op.i64_const] + sleb(nanos_per_milli) + [shift_ops.i64_mul]
 		return TypedCode(ValueKind.Time, time_node([op.i64_const, 0], nanos))
 	}
-	TypedCode(ValueKind.Time, time_node(converted(values#1, ValueKind.Int), converted(values#2, ValueKind.Int)))
+	zone = if #values == 3 then boxed(values#3) else [ref_null, gc_type(gc.node)]
+	TypedCode(ValueKind.Time, time_node(converted(values#1, ValueKind.Int), converted(values#2, ValueKind.Int), zone))
 }
-def time_node(info: list, position: list): list {
+def time_node(info: list, position: list, zone: list = [ref_null, gc_type(gc.node)]): list {
 	module.made["Time"] = yes
 	kind =info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
-	kind + position + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]) + [ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
+	kind + position + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]) + zone + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical
 def kind_word_shifted(code: list, shift: int, signed: bool): list {
@@ -57,10 +60,10 @@ def time_intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		return TypedCode(ValueKind.Int, days + [op.i64_const] + sleb(32) + [shift_ops.i64_shr_s])
 	}
 	if name == "zone_index" { return TypedCode(ValueKind.Int, masked(kind_word_shifted(t, kind_bits + form_bits, no), zone_mask)) }
-	# seconds east of UTC
-	offset = kind_word_shifted(t, kind_bits + offset_shift, yes)
-	TypedCode(ValueKind.Int, offset + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul])
+	TypedCode(ValueKind.Int, zone_seconds(t))
 }
+# a zoned time's seconds east of UTC, 0 of the other forms of a time (no info above their form)
+def zone_seconds(t: list): list := kind_word_shifted(t, kind_bits + offset_shift, yes) + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul]
 
 ## time literals (card triage-time-values; rust-harness:src/time/mod.rs time_info): the parser's data view of a time,
 ## `2024-02-29`, `2024-01-31T10:30:15.5Z`, `1 month 2 days`, as the time node it is
@@ -120,17 +123,30 @@ def duration_parts(written: text): list {
 
 ## time fields (card triage-time-values; rust-harness:src/time/times.rs TIME_FIELDS): `d.month`, `t.hour`, read at run time by
 ## the prelude's time_field_of, which a program writing a time literal brings (passes/prelude_words.warp emitted_words)
-time_fields = {year: 0, month: 1, day: 2, weekday: 3, day_of_year: 4, hour: 5, minute: 6, second: 7, epoch_seconds: 8, offset: 9, time: 10, date: 11}
+time_fields = {year: 0, month: 1, day: 2, weekday: 3, day_of_year: 4, hour: 5, minute: 6, second: 7, epoch_seconds: 8, offset: 9, time: 10, date: 11, form: 12}
 # the fields that are times themselves, by their form: `t.time` the time of day in whole seconds, `t.date` the day
 time_valued_fields = {time: TimeFormCode.Clock, date: TimeFormCode.Date}
-# the field of a time: its form and position given to time_field_of, no zone (a zoned time is refused as a literal)
+# the field of a time: its form, position and zone's seconds east of UTC given to time_field_of
 def time_field(time: TypedCode, name: text): TypedCode {
 	form = masked(kind_word_shifted(time.code, kind_bits, no), form_mask)
 	position = unboxed(time.code, gc_type(gc.int_box))
-	field = call_values(module.functions[time_field_word], [TypedCode(ValueKind.Int, form), TypedCode(ValueKind.Int, position), number_value(0), number_value(time_fields[name])])
+	zone = TypedCode(ValueKind.Int, zone_seconds(time.code))
+	field = call_values(module.functions[time_field_word], [TypedCode(ValueKind.Int, form), TypedCode(ValueKind.Int, position), zone, number_value(time_fields[name])])
 	if name in time_valued_fields { return TypedCode(ValueKind.Time, time_node([op.i64_const] + sleb(time_valued_fields[name]), converted(field, ValueKind.Int))) }
 	field
 }
+
+# `m.hour` of a value held as a node (a top-level name beside a linked module, an `any` parameter): the field of the
+# time it holds, else what `read` reads of it (a map's entry, an instance's field)
+def node_time_field(body: Body, value: TypedCode, name: text, read: any): TypedCode {
+	held = fresh_node_local(body)
+	stored = value.code + [op.local_set] + held[1 ..]
+	holds_a_time = held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and, op.i64_const] + sleb(Kind.Time) + [op.i64_eq]
+	field = time_field(TypedCode(ValueKind.Time, held), name)
+	TypedCode(ValueKind.Node, stored + holds_a_time + if_else_code(ValueKind.Node, field, read(TypedCode(ValueKind.Node, held))))
+}
+# the Kind in a node's kind word, below its info
+kind_mask = 255
 
 ## time arithmetic (card day-hour): `d + 1 day`, `a - b`, `2 * 1 day` of a run-time time, by lib/time_arithmetic.warp's
 ## time_operation, which a program writing a time literal and an operator brings (passes/prelude_words.warp)

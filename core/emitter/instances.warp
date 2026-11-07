@@ -466,6 +466,8 @@ def error_function(name: text): int {
 # a recursive call not yet known (pending) is read as the node it may be, as element() takes it (card recursive-class-return);
 # a list known as one swizzles too (`[1, 2, 3].xy`)
 def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): TypedCode {
+	# (a time held as a node has its fields too, `m.hour` of a top-level m beside a linked module)
+	if (value.kind == ValueKind.Node or value.kind == pending) and class_name == "" and time_fields.has(name) and module.functions.has(time_field_word) { return node_time_field(body, value, name, held => field_read(body, held, name, class_name)) }
 	if value.kind == ValueKind.Node or value.kind == pending { return field_read(body, TypedCode(ValueKind.Node, value.code), name, class_name) }
 	if value.kind == ValueKind.List and is_swizzle(name) { return field_read(body, TypedCode(ValueKind.Node, boxed(value)), name, class_name) }
 	if value.kind == ValueKind.Time and time_fields.has(name) and module.functions.has(time_field_word) { return time_field(value, name) }

@@ -1,11 +1,20 @@
 # Time literals (card parser-rows, decision core-is-self): `2024-01-31`, `2024-01-31T10:00Z` read at a digit as the
-# data view Rust's parser gives them; the core's parser asks this extension's number reader first
+# data view Rust's parser gives them; the core's parser asks this extension's number reader first. A zoned one,
+# `2024-01-31T10:00[Europe/Berlin]`, is the call zoned(2024-01-31T10:00, "Europe/Berlin") of lib/time.warp
 read_time_literal(p: Parser): Node := {
 	length = time_literal_length(p, p.at)
 	if length == 0 { return ø }
 	p.at += length
-	opaque(["data", p.code[p.at - length .. p.at]])
+	written = p.code[p.at - length .. p.at]
+	if not written.contains("[") { return opaque(["data", written]) }
+	parts = written.split("[")
+	unzoned = opaque(["data", parts#1])
+	# RFC 9557 suffixes: the zone's name, then `[key=value]` ones like `[_tzdata=warp-2026a]`, `!` marking one critical
+	suffixes = parts[1 ..].map(suffix => suffix.remove_suffix("]").remove_prefix("!"))
+	named = suffixes.filter(suffix => not suffix.contains("="))
+	if #named == 0 then unzoned else List([symbol(zoned_word), unzoned, named#1], Bracket.Round, Separator.None)
 }
+zoned_word = "zoned"
 time_literals_extension = Extension{name: "time_literals", number_readers: [read_time_literal], runtime: "times/runtime.warp"}
 
 # The length of the RFC 3339 / RFC 9557 time literal at `at`: `2024-01-31`, `2024-01-31T10:00:30.5+01:00`,
