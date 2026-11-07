@@ -15,7 +15,7 @@ local_shadows(source: text, folder: text): list := {
 # the file or folder beside the program a standard module's name also names, ø for none or no such standard module;
 # a program's own module (`warp build --module shapes.warp`, uses.warp own_module_files) is that file, no standard one
 local_shadow(name: text, folder: text): text? := {
-	if own_module_files.has(name) or used_module_text(name) == "" { return ø }
+	if own_module_files.has(name) or not is_module_name(name) { return ø }
 	[path_in(folder, name + module_extension), path_in(folder, name)].find(path => exists(path))
 }
 

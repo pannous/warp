@@ -14,6 +14,8 @@ library_constant($name)	"{name} is a constant"	"another name"
 literal_target($value, $op, $fix)	"{value} is a value, not a variable: {op} changes a variable"	"{fix}"
 # decision path-after-operand: `width /height` with height a variable reads /height as a path (source_checks.warp)
 division_path($before, $name)	"{before} /{name} gives {before} the path /{name}: write {before} / {name} for division"	"{before} / {name}"
+# decision glued-binds-tighter: `[a + b c]` with b a value reads neither way silently (source_checks.warp spaced_operand)
+spaced_operand($left, $op, $head, $rest)	"[{left} {op} {head} {rest}] is ambiguous: write [{left}{op}{head} {rest}] for two items or [{left} {op} {head}, {rest}]"	"[{left}{op}{head} {rest}]"
 # a function changing a main-level variable not declared global (main_globals.warp)
 main_variable_change($name)	"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"	"global {name}"
 # a lambda whose parameter is a literal, `1 => 2` (lambdas.warp written_parameters, card pure-lane-traps-2)

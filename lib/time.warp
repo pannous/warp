@@ -53,6 +53,9 @@ class Instant {
 	hour(): int := wall() % 86400000 /! 3600000
 	minute(): int := wall() % 3600000 /! 60000
 	second(): int := wall() % 60000 /! 1000
+	// its time of day and its day on its wall clock, times themselves (decision time-word): now.time, now.date
+	time() := time_of(clock_form, wall() % 86400000 /! 1000 * nanos_per_second)
+	date() := time_of(date_form, day_number(wall()))
 	minus(other: Instant or Duration) := if other is Instant then ms - other.ms else Instant(ms - other.ms, zone)
 	plus(duration: Duration) := Instant(ms + duration.ms, zone)
 	// the same instant on the UTC wall clock: now.UTC, also now.utc
@@ -316,8 +319,10 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 // nanoseconds, its info the zone's index and offset in minutes above the form (extensions/time_values.warp), its zone's
 // name beside them
 nanos_per_second = 1000000000
+date_form = 1
 local_form = 2
 zoned_form = 4
+clock_form = 5
 zone_index_unit = 8
 offset_minute_unit = 2048
 // an instant or a zoned time keeps its instant; a local time's wall clock resolves in the zone, a skipped or repeated

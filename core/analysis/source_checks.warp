@@ -23,6 +23,7 @@ source_checks(program: Node, prelude: text): Node := {
 		spaced_sign(n)
 		division_path(n, program)
 		uneven_spacing(n)
+		spaced_operand(n, program)
 		assigned_mutation(n, aliases)
 		literal_targets(n)
 		lints_of(without_mark(n))
@@ -131,6 +132,15 @@ uneven_spacing(n: Node) := {
 	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == UNEVEN_SPACING_MARK) { return ø }
 	written = items_of(value_of(n)#2)
 	diagnose(call_of("uneven_spacing", [written#1, written#2, written#3 + " " + written#2 + " " + written#4]), n)
+}
+# `[a + b c]` with b a value: one item `a + [b c]` or two, `[a+b c]`, `[a + b, c]`, is never guessed (decision
+# glued-binds-tighter); `[a + f 3]` of a function f calls it
+spaced_operand(n: Node, program: Node) := {
+	if not (n is key and key_of(n) == symbol(attribute_word) and value_of(n)#1 == SPACED_OPERAND_MARK) { return ø }
+	written = items_of(value_of(n)#2)
+	phrase = written#3
+	head = phrase.split(" ")#1
+	if binds_value(scope_of(program), head) { diagnose(call_of("spaced_operand", [written#1, written#2, head, phrase[head.length ..].trim()]), n) }
 }
 # `x!` as parser.warp writes it, `unwrap(x)`, and the node it marks
 has_mutation_mark(n: Node): bool := is_round(n) and #n == 2 and n#1 == symbol(unwrap_word)

@@ -2,7 +2,7 @@
 # paint without the GPU: use draw keeps a canvas of colored pixels, and show() paints it, natively in a window (a PNG
 # without one) and in the playground on its canvas. label sets words in the system's sans-serif font, any size
 use draw
-width=200 # todo set same for window!  todo warn if canvas≠window size todo create paint_text_gpu.warp too (cards window-canvas-size, paint-text-gpu)
+width=200 # todo set same for window!  todo warn if canvas≠window size (card window-canvas-size; on the GPU: paint_text_gpu.warp)
 height=100
 canvas(width, height)
 clear(paper)
