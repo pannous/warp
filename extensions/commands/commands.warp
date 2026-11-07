@@ -102,7 +102,7 @@ show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
 # written so it parses back to the same node (extensions/serializer.warp): `print(-42)`, `#a + #b`, "b" in quotes
-show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_source)))
+show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_text)))
 show_uses() := { for module in implicit_modules_of(source_or_code(1)) { print module } }
 # `warp debug`: the views above, one after the other under their names (card help-menu)
 show_debug() := {

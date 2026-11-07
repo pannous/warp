@@ -30,8 +30,13 @@ formatted_definitions(program: Node): Node := {
 	statements = statements_in(program).map(formatted_definition)
 	classes = statements.map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
 	formats = statements.filter(statement => shower_of(statement) in classes)
-	if #formats == 0 { return group_like(program, statements) }
-	group_like(program, statements.filter(statement => statement not in formats).map(statement => with_class_formats(statement, formats)))
+	if #formats == 0 { return statements_as(program, statements) }
+	statements_as(program, statements.filter(statement => statement not in formats).map(statement => with_class_formats(statement, formats)))
+}
+# the statements as the program held its own: a program of one statement, `div{ "clamp" }`, is that statement
+statements_as(program: Node, statements: list): Node := {
+	if is_statement_sequence(program) { return group_like(program, statements) }
+	if #statements == 1 then statements#1 else List(statements, Bracket.None, Separator.Newline)
 }
 # a class declaration with the formats of its class among its members
 with_class_formats(statement: Node, formats: list): Node := {
