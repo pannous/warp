@@ -54,7 +54,7 @@ const listings = new Map(); // directory → Map(name → is a directory) on the
 function requestSync(method, url) {
 	try {
 		const request = new XMLHttpRequest();
-		request.open(method, url, false);
+		request.open(method, ofThisBuild(url), false);
 		request.overrideMimeType("text/plain; charset=x-user-defined");
 		request.send();
 		return request.status === 200 ? request : null;

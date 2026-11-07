@@ -2,6 +2,15 @@
 // warp answers (core/native/driver.warp, WASI, libm). Shared by the playground (worker.js) and built sites
 // (site-worker.js); needs values.js. What only some programs reach is in the parts (HOST_PART_FILES, below).
 
+// the page's build (playground.js startWorker gives its Worker ?build=…): every file a Worker asks of the site carries it,
+// so a deploy never meets a file the browser cached of the build before (card worker-wasm-fetch: an old warp.wasm beside
+// new modules); a URL with its own query (a ?listing) or of another site stays as it is
+const PAGE_BUILD = new URLSearchParams(self.location.search).get("build");
+function ofThisBuild(url) {
+	const asked = new URL(url, self.location.href);
+	return PAGE_BUILD && !asked.search && asked.origin === self.location.origin ? `${url}?build=${encodeURIComponent(PAGE_BUILD)}` : url;
+}
+
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 // a program with a `try` exports it: the runtime error that raises the Error left in trap_detail (runtime_errors.rs)

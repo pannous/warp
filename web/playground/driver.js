@@ -35,7 +35,7 @@ const FLOAT_DIGITS = 17; // driver.warp FLOAT_DIGITS
 let compilerModule; // warp.wasm compiled once; each compile gets a fresh instance, as each native run a fresh store
 
 async function loadDriverCompiler(progress = () => {}) {
-	const [response] = await Promise.all([fetch(COMPILER_URL), preloadedSources()]);
+	const [response] = await Promise.all([fetch(ofThisBuild(COMPILER_URL)), preloadedSources()]);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
 	// compiled as it streams in, so Chrome and Safari keep its machine code with the cached response: a second visit
 	// skips the compile; the clone feeds the progress. A server without the application/wasm type compiles the bytes
@@ -44,7 +44,7 @@ async function loadDriverCompiler(progress = () => {}) {
 }
 
 async function preloadedSources() {
-	const response = await fetch(SOURCES_URL);
+	const response = await fetch(ofThisBuild(SOURCES_URL));
 	if (!response.ok) return console.warn(`${SOURCES_URL}: HTTP ${response.status}, each library source is fetched on its own; build it with web/playground/build.sh`);
 	preloadSources(await response.json(), COMPILER_FOLDER);
 }
