@@ -1,0 +1,2 @@
+# Tour example "listeners": remove one listener of a watched name, the other stays (card tour-lib-regressions)
+is! 't = 20; alarm = whenever t > 30 { print "hot: " + value }; on change t { print "t = " + value }; t = 35; remove alarm from listeners of t; t = 40; count listeners of t' 1
