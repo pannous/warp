@@ -780,15 +780,8 @@ css_measure_unit(t: text) := {
 	ø
 }
 
-// `2s` → 2000ms, `200ms` as written: CSS reads both, the page's script milliseconds
-css_word(word: any) := {
-	if css_is_measure(word) { return css_measure_word(str(word)) }
-	if not (word is pair) or str(word.op) != "*" { return str(word) }
-	let unit = str(word.value)
-	if unit == "s" { return str(word.key * 1000) + "ms" }
-	str(word.key) + unit
-}
-css_measure_word(t: text) := if css_measure_unit(t) == "s" then str((t[0:#t - 1] as float) * 1000) + "ms" else t
+// `2s`, `200ms` as written: the page reads a transition's duration off the computed style, in any unit
+css_word(word: any) := if css_is_measure(word) or not (word is pair) or str(word.op) != "*" then str(word) else str(word.key) + str(word.value)
 
 // the kind a spec's first word names, ø for CSS
 css_kind(words: any) := {
