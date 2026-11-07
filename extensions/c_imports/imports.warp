@@ -25,8 +25,9 @@ c_library_aliases = {libc: "c", libm: "m", cmath: "m", zlib: "z", SDL2: "SDL2", 
 c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
 not_c_libraries = ["warp", "emitter", "runtime", "host"]
-# the files whose foreign lines say what a library's functions take and give
+# the files whose foreign lines say what a library's functions take and give, built in: lib/c.warp, lib/math.warp
 c_catalog_files = ["c.warp", "math.warp"]
+c_catalog_texts(): list := [module_source("c"), math_text]
 c_foreign_mark = " from "
 c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
@@ -119,14 +120,7 @@ is_c_library(name: text): bool := {
 }
 
 # the foreign lines of lib/c.warp, lib/math.warp and the native files at `native_paths`
-c_catalog(library_folder: text, native_paths: list): list := {
-	found = []
-	for path in c_catalog_files.map(file => library_folder + "/" + file) + native_paths {
-		content = file_source(path) ?? ""
-		found += c_declarations_in(content)
-	}
-	found
-}
+c_catalog(native_paths: list): list := (c_catalog_texts() + native_paths.map(path => file_source(path) ?? "")).flat_map(text => c_declarations_in(text))
 # lib/native/sqlite3.warp: the foreign lines of a C library and the warp words over them (card pure-c-imports)
 native_folder = "native"
 native_file(library: text): text := native_folder + "/" + library + ".warp"
@@ -156,7 +150,7 @@ c_crate_use(statement: text): any := {
 # need an import (`floor` is warp's, `fmin` libm's)
 warp_word_names(): any := {
 	names = {}
-	for content in [library_text("math.warp"), library_text("prelude.warp")] {
+	for content in [math_text, prelude_text] {
 		for line in content.split("\n") {
 			trimmed = line.trim()
 			if trimmed.ends_with(" from warp") or trimmed.ends_with(" from emitter") {
@@ -293,7 +287,7 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 			functions[declaration#1] = declaration
 		}
 	}
-	catalog = c_catalog(library_folder, native.map(n => n#2))
+	catalog = c_catalog(native.map(n => n#2))
 	# warp's own floor stays warp's when libm is imported or used (c_warps)
 	own = warp_word_names()
 	missing = []
@@ -414,6 +408,6 @@ c_refused_form(refusal: text, functions: map, library_folder: text): any := {
 	start = outside_the_core + "the call "
 	if not refusal.starts_with(start) { return ø }
 	name = refusal.remove_prefix(start).split("(")#1
-	if functions.has(name) or c_catalog(library_folder, []).any(d => d#1 == name) { return "foreign C call" }
+	if functions.has(name) or c_catalog([]).any(d => d#1 == name) { return "foreign C call" }
 	ø
 }
