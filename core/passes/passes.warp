@@ -61,6 +61,8 @@ pass_owners = {"foreign C call": "c_imports", "runtime declaration": "definition
 
 # the emitter's refusal naming its form and owner pass: `form` one of pass_owners, ø for a form no pass owns
 owned_refusal(refusal: text, form: text?): text := {
+	# the program's own error (emitter.warp program_error) is no gap a pass owns
+	if not refusal.starts_with(outside_the_core) { return refusal }
 	if form == ø { return refusal + " (no owner)" }
 	refusal + " (" + form + "; owner " + (pass_owners.get(form) ?? "none") + " did not claim it)"
 }
