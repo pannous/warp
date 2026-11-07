@@ -1,9 +1,8 @@
-# a83685225e 2026-11-07 11:24 251/268 93.7%
+# e3968dca74 2026-11-07 11:57 248/267 92.9%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
-ok   samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
@@ -19,7 +18,6 @@ ok   samples/apps/log_analyzer.warp
 ok   samples/apps/mail_merge.warp
 ok   samples/apps/meeting_planner.warp
 ok   samples/apps/name_matcher.warp
-ok   samples/apps/open_hours.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
 ok   samples/apps/site_generator.warp
@@ -34,7 +32,6 @@ ok   samples/errors/raise_error.warp
 ok   samples/errors/try_catch.warp
 ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
-ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
 ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
@@ -95,22 +92,22 @@ ok   samples/gpu/gpu_million.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
+ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
+ok   samples/gpu/northern_lights.warp
 ok   samples/gpu/ocean.warp
+ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/gpu/watercolor.warp
 ok   samples/gpu/yohei_tweet_glsl.warp
-ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
-ok   samples/graphics/paint_text.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
-ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/natural.warp
@@ -198,7 +195,6 @@ ok   samples/sound/sound_kick_samples.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
-ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
@@ -259,11 +255,14 @@ WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
 SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
+SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1: outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-TIME samples/gpu/lava_lamp.warp: used its 30 s of CPU
-TIME samples/gpu/northern_lights.warp: used its 30 s of CPU
-TIME samples/gpu/ringed_planet.warp: used its 30 s of CPU
-FAIL samples/servers/server.warp: web.wasm won't link: lib/web.warp or a module it uses changed since it was built; scripts/smoke.sh <tree> or warp rebuild builds it anew
-FAIL samples/sound/sound_patterns.warp: sound 1.33 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-5806.wav
+FAIL samples/advanced/particles.warp: no length of int 4294638330: only a list, a text or a character has one
+FAIL samples/events/arrow_keys.warp: hint: ESC is keys's fix: use keys
+FAIL samples/graphics/finger_paint.warp: no length of int 4294967295: only a list, a text or a character has one
+FAIL samples/graphics/paint_text.warp: no length of int 4294638330: only a list, a text or a character has one
+FAIL samples/graphics/window_size.warp: no length of int 4294638330: only a list, a text or a character has one
+FAIL samples/sound/sound_patterns.warp: sound 1.33 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-36780.wav
+FAIL samples/sound/visualizer.warp: sound 4.00 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-43025.wav

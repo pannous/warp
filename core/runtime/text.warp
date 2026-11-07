@@ -125,13 +125,19 @@ maybe_decomposed(t: text): bool := {
 	at = 0
 	before = 0
 	while at < byte_count(t) {
-		next = at + code_point_width(byte_at(t, at))
-		if next > byte_count(t) { return no }
-		c = code_point_at(t, at)
-		after = if next < byte_count(t) then code_point_at(t, next) else 0
-		if may_change_in_nfc(c) and not (lone_mark(c) and not may_change_in_nfc(before) and not may_change_in_nfc(after)) { return yes }
-		before = c
-		at = next
+		# a byte below 204 (0xCC, U+0300's lead byte) is ASCII, a continuation or the lead of a code point NFC keeps
+		if byte_at(t, at) < 204 {
+			before = 0
+			at += 1
+		} else {
+			next = at + code_point_width(byte_at(t, at))
+			if next > byte_count(t) { return no }
+			c = code_point_at(t, at)
+			after = if next < byte_count(t) then code_point_at(t, next) else 0
+			if may_change_in_nfc(c) and not (lone_mark(c) and not may_change_in_nfc(before) and not may_change_in_nfc(after)) { return yes }
+			before = c
+			at = next
+		}
 	}
 	no
 }
