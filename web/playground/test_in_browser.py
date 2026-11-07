@@ -25,7 +25,8 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 # --samples (scripts/samples-web.sh): every samples/**/*.warp in the page, its output against the native run's
 SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one a line, like test/samples.txt
 # a sample that fails on purpose says why on a line of its own, `# expected failure: deliberate parse errors`: EXP
-# instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE)
+# instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE); in the page ok when it fails with the native
+# run's error, it gives what the native run gives (decision exp-counts)
 EXPECTED_FAILURE = re.compile(r"^# expected failure: ", re.M)
 # a sample's interactions (card scripts-samples, decision sample-checks): `# check: click "+1", type "name" "Ann" → text`,
 # each from a fresh run, its steps done on the page, its text then holding the text after → (natively `warp app check`)
@@ -1265,6 +1266,22 @@ def sample_verdict(report, native_output):
 	return "DIFF", f"page: {shown[:SHOWN_DIFFERENCE]!r}\n     native: {native_output[:SHOWN_DIFFERENCE]!r}"
 
 
+def native_error(err_file):
+	"""the native run's error of an expected failure: the first line of its stderr but warnings, None without one"""
+	if not os.path.isfile(err_file):
+		return None
+	lines = [line for line in open(err_file, encoding="utf-8", errors="replace").read().splitlines() if line.strip() and not line.startswith("warning:")]
+	return lines[0][:200] if lines else None
+
+
+def expected_failure_verdict(page_error, native):
+	"""an expected failure (EXPECTED_FAILURE) gives what the native run gives when it fails with the native error: ok,
+	else EXP, which does not pass (decision exp-counts)"""
+	if native is not None and page_error.strip() == native.strip():
+		return "ok", ""
+	return "EXP", f"page: {page_error!r}\n     native: {native!r}"
+
+
 def window_verdict(report):
 	"""(status, detail) of a sample opening a C library's window (raylib, SDL), which natively has no output to compare
 	(scripts/samples.sh WIN): drew when the page ran it and showed its frames (host-media.js windowShown)"""
@@ -1360,7 +1377,9 @@ def check_samples(paths, tree):
 		wrong = checks_wrong(os.path.basename(path)[:-len(".warp")], source) if status in ("ok", "ran") and CHECK_LINE.search(source) else []
 		if wrong:
 			status, detail = "DIFF", "; ".join(wrong)
-		if status == "FAIL" and (EXPECTED_FAILURE.search(source) or NATIVE_ONLY.search(source)):
+		if status == "FAIL" and EXPECTED_FAILURE.search(source):
+			status, detail = expected_failure_verdict(detail, native_error(os.path.join(tree, NATIVE_OUTPUTS, path.replace("/", "_") + ".err")))
+		elif status == "FAIL" and NATIVE_ONLY.search(source):
 			status = "EXP"
 		with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
 			shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
