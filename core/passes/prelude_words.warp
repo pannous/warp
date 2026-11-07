@@ -879,20 +879,13 @@ parameter_types(heads: list, at: int): list := {
 }
 # the words the program names bare that a type module defines as a function taking nothing, `now() := …`
 bare_calls(program: Node, providers: map): list := {
-	nullary = {}
-	for module in type_modules {
-		path = std_module_path(module)
-		for slice in definition_slices(file_text(path) ?? "") { if without_keyword(slice#2).starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
-	}
+	nullary = library_index_section("nullary")
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
 # `t.words`: the names read as a member, each a type module's function of one value (words(t)), called so as t.words()
 member_reads(program: Node): list := {
-	unary = {}
-	for module in type_modules {
-		for slice in definition_slices(file_text(std_module_path(module)) ?? "") { if takes_one_value(without_keyword(slice#2), slice#1) { unary[slice#1] = yes } }
-	}
+	unary = library_index_section("unary")
 	nodes_in(program).filter(n => is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in unary).map(n => name_of(value_of(n)))
 }
 # `words(t): list := …`: a definition's head of one parameter
@@ -988,18 +981,21 @@ leftmost_symbol(n: Node): Node := {
 	if n is symbol then n else symbol("")
 }
 # word → the type module defining it, "" for a word two of them define
-type_module_providers(): map := {
+type_module_providers(): map := library_index_section("provider")
+# the type modules' tables of the library index, read off their texts by the build writing it: each word with the
+# type module defining it ("" for two), those defined taking nothing (`now() := …`), those taking one value
+# (`words(t) := …`)
+type_module_slices(): list := type_modules.flat_map(module => definition_slices(file_text(std_module_path(module)) ?? "").map(slice => slice + [module]))
+nullary_words_scanned(): map := words_marked(type_module_slices().filter(slice => without_keyword(slice#2).starts_with(slice#1 + "()")))
+unary_words_scanned(): map := words_marked(type_module_slices().filter(slice => takes_one_value(without_keyword(slice#2), slice#1)))
+words_marked(slices: list): map := {
+	marked = {}
+	for slice in slices { marked[slice#1] = "yes" }
+	marked
+}
+type_module_providers_scanned(): map := {
 	providers = {}
-	for module in type_modules {
-		path = std_module_path(module)
-		source = file_text(path)
-		if source != ø {
-			for slice in definition_slices(source) {
-				word = slice#1
-				providers[word] = if word in providers and providers[word] != module then "" else module
-			}
-		}
-	}
+	for slice in type_module_slices() { providers[slice#1] = if slice#1 in providers and providers[slice#1] != slice#3 then "" else slice#3 }
 	providers
 }
 # the word of a root, `√2`, sqrt(2), which lib/reals.warp keeps exact (emitter.warp exact_root_word); a program's own
