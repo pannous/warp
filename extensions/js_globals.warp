@@ -39,8 +39,13 @@ js_globals(program: Node): Node := {
 	scope = JsScope()
 	for name in names { scope.globals[name] = js_global_type(name) }
 	for id in ids { scope.elements[id] = yes }
-	bottom_up(program, n => js_lowered(n, scope))
+	lowered = bottom_up(program, n => js_lowered(n, scope))
+	if markup then page_shown_first(lowered) else lowered
 }
+# a page reaching the page's js has its markup in the js runtime's document (lib/markup.warp page_in_js): natively
+# the hidden web view then holds `who` for `who.focus()`
+PAGE_SHOWN_IN_JS = "page_shown_in_js"
+page_shown_first(program: Node): Node := separated(bracketed([call_node(symbol(PAGE_SHOWN_IN_JS), [])] + statements_in(program), ""), ";")
 # A program with markup reads the page's own globals without `use js` (decision page-globals-implicit): `window` and
 # the global scope's attributes holding an object (document, location, localStorage, navigator …), typed as with
 # `use js`; a name the program binds itself is its own. Natively they are the webview's, else foreign_call's error
