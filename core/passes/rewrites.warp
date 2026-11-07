@@ -640,12 +640,12 @@ module_rules_of(path: text, module: text): list := {
 	if not module_rules_held.has(key) { module_rules_held[key] = module_rules_read(path, module) }
 	module_rules_held[key]
 }
-# (the bake trusted as the library index is, rule_needs_by_module: its file's hash asked only under WARP_LIB, a lib/
-# edited since the build; reading and hashing the sugar's files was ~10 ms a compile)
+# (the bake trusted as the library index is, rule_needs_by_module: its file's hash asked only of a lib/ maybe edited
+# since the build, library_unedited; reading and hashing the sugar's files was ~10 ms a compile)
 module_rules_read(path: text, module: text): list := {
 	baked = sugar_rules_packed_beside().get(path.remove_prefix(run_library() + "/"))
 	place = if baked != ø then baked.find("\n") else ø
-	if place != ø and (warp_lib() == ø or baked[0 ..< place - 1] == source_hash(file_text(path) ?? "")) { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
+	if place != ø and (library_unedited() or baked[0 ..< place - 1] == source_hash(file_text(path) ?? "")) { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
 	written_rules(path, file_text(path) ?? "", module)
 }
 # The sugar's rules (extensions/sugar), read by every compile, packed (rule_node) beside the prebuilt modules by `warp
@@ -787,7 +787,7 @@ dropped_rules(path: text, lines: list, rule_lines: list, rules: list, module: te
 # each standard module with rules, the words they need (rule_needs) joined by spaces, from the library index, so a
 # compile reads no other module's text (38 of them at every compile were ~5 ms of a small one). With WARP_LIB (a module
 # edited after the build): read off the texts
-rule_needs_by_module(): map := if warp_lib() == ø then library_index_section("needs") else scanned_rule_needs()
+rule_needs_by_module(): map := if library_unedited() then library_index_section("needs") else scanned_rule_needs()
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {

@@ -165,13 +165,13 @@ linked_libraries(source: text): list := {
 	dependencies_first(images)
 }
 # whether lib/<module> and the modules it uses are the texts the module was built of (library.warp built_of_texts): by
-# their length, and under WARP_LIB (a lib/ edited since the build) by their hash, as the index is trusted; djb2 over
+# their length, and in a lib/ maybe edited since the build (library_unedited) by their hash, as the index is trusted; djb2 over
 # the prelude was ~1.5 % of hello
 built_of_text(module: text, hash: text): bool := {
 	# a program's own module linked without its text beside it is what it was built of
 	if own_module_wasm.has(module) and file_text(std_module_path(module)) == ø { return yes }
 	texts = built_of_texts(module)
-	hash.starts_with("${texts_length(texts)}-") and (warp_lib() == ø or hash == texts_hash(texts))
+	hash.starts_with("${texts_length(texts)}-") and (library_unedited() or hash == texts_hash(texts))
 }
 # `import shapes` beside a shapes.wasm carrying a warp.signature: the program's own module, linked as a standard
 # module is, imported by its path (decision samples-modules-wasm); its text, where beside it, is shapes.warp
