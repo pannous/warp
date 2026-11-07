@@ -77,6 +77,8 @@ DISPLAY_DPI_SLOT = 2
 # the running run's linker, engine, linked instances and unicode instance (run_state), for a host word that links a
 # module on its first call (canonical_text); a nested run (eval) keeps its own and gives the outer one back
 RUN_SLOT = 3
+# the run's timers (signal_listen): a table the run allocates, since a host word's own allocations end with it (events)
+TIMERS_SLOT = 4
 NATIVE_VIEW_WIDTH = 640
 NATIVE_VIEW_HEIGHT = 480
 DEFAULT_DPI = 96
@@ -739,6 +741,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	linked = allocate(16)
 	text_kept(linked, "")
 	outer_run = kept_value(RUN_SLOT)
+	if outer_run == 0 { timers_forgotten() }
 	keep_value(RUN_SLOT, run_state(linker, engine, linked) as i64)
 	instances_linked(linker, engine, context, compiled, linked, trap)
 	host_words_defined(linker, engine, context, compiled, module, trap)
@@ -756,12 +759,9 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	results = allocate(VALUE_BYTES * MAX_RESULTS)
 	error = wasmtime_func_call(context, function, 0, 0, results, results_count, trap)
 	out_of_fuel(trap, fuel)
-	failure = ""
-	if error != 0 or long_at(trap).value != 0 {
-		if output.length == 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
-		failure = failure_said(error, trap, raised_message(context, instance, trap))
-	}
+	failure = call_failure(context, instance, error, trap, output)
 	if results_count > 0 and output.length == 0 { print_result(results) }
+	if failure.length == 0 and outer_run == 0 { failure = events_run(linker, context, instance, output) }
 	crash_context_restored(outer)
 	keep_value(RUN_SLOT, outer_run)
 	# the run's GC heap, instance and machine code given back: `warp rebuild` runs four compilers in one process, each
@@ -1000,8 +1000,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == RANDOM_SEED_WORD { return srand48(number) }
 	# no window, no key held
 	if word == KEY_HELD_WORD { return int_result(0, results) }
-	# a timer (lib/timers.warp) runs only in a page: nothing runs beside the native warp's program
-	if word == SIGNAL_LISTEN_WORD { return complain("warning: timers run only in a page; this run starts none") }
+	if word == SIGNAL_LISTEN_WORD { return timer_listened(given) }
 	context = wasmtime_caller_context(caller)
 	if word == PAINT_WORD { return painted(caller, context, given) }
 	if word == SYSTEM_VALUE_WORD { return int_result(system_value(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64)), results) }
@@ -1167,6 +1166,136 @@ milliseconds_now(): i64 := {
 	now = allocate(TIME_BYTES)
 	clock_gettime(CLOCK_REALTIME, now)
 	long_at(now).value * 1000 + long_at(now + 8).value / MILLION
+}
+
+## events (card native-timers): the page's event loop natively, its semantics web/playground/host-timers.js's
+# The program tells each timer by signal_listen(kind, id, argument) while main runs (lib/timers.warp); once main
+# returned, the loop sleeps until the earliest is due and calls the program's export timer_fired(id). An `every` timer
+# keeps the run going, as a page's does, until exit() or Ctrl-C; a run whose timers are all once ends after the last
+# fired; WARP_EVENTS_FOR=<ms> ends it sooner (the test harness and the samples sweep set it). Channels' `on message
+# from` polls through a timer (lib/channels.warp), so it runs in this loop too.
+TIMER_EVERY = 0
+TIMER_FRAME = 1
+TIMER_CLOCK = 2
+FRAME_MILLISECONDS = 16
+# a clock timer's argument: weekdays * 10000 + minute of the day, the weekdays a mask (bit 0 Sunday), 0 once
+WEEKDAYS_SHIFT = 10000
+EVERY_DAY = 127
+DAY_MILLISECONDS = 86400000
+WEEKDAY_FIELD = 24
+# a table entry: id, kind, argument, due (ms since the epoch, 0 once a once-timer fired); the table: count, entries
+TIMER_BYTES = 32
+TIMERS_HEADER = 8
+MAX_TIMERS = 256
+# the table's bytes: TIMERS_HEADER + MAX_TIMERS * TIMER_BYTES
+TIMERS_BYTES = 8200
+
+timer_listened(given: pointer): nothing := {
+	kind = long_at(given + VALUE_OFFSET).value
+	id = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
+	argument = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+	table = kept_value(TIMERS_SLOT) as i32
+	count = long_at(table).value
+	if count == MAX_TIMERS {
+		complain(joined(joined("more than ", text_of(MAX_TIMERS)), " timers in one run"))
+		exit(1)
+	}
+	entry = table + TIMERS_HEADER + (count as i32) * TIMER_BYTES
+	long_at(entry).value = id
+	long_at(entry + 8).value = kind
+	long_at(entry + 16).value = argument
+	long_at(entry + 24).value = next_due(kind, argument, milliseconds_now())
+	long_at(table).value = count + 1
+}
+# when a timer is next due after `now`, 0 for none (a once clock timer that fired)
+next_due(kind: i64, argument: i64, now: i64): i64 := {
+	if kind == TIMER_EVERY { return now + argument }
+	if kind == TIMER_FRAME { return now + FRAME_MILLISECONDS }
+	weekdays = argument / WEEKDAYS_SHIFT
+	minute = argument % WEEKDAYS_SHIFT
+	midnight = now - time_of_day()
+	today = weekday_now()
+	for ahead in 0..8 {
+		due = midnight + ahead * DAY_MILLISECONDS + minute * 60000
+		mask = if weekdays == 0 then EVERY_DAY else weekdays
+		if due > now and ((mask >> ((today + ahead) % 7)) & 1) == 1 { return due }
+	}
+	now + 7 * DAY_MILLISECONDS
+}
+# the local weekday, 0 Sunday
+weekday_now(): i64 := {
+	seconds = allocate(8)
+	long_at(seconds).value = milliseconds_now() / 1000
+	fields = allocate(CALENDAR_BYTES)
+	localtime_r(seconds, fields)
+	word_at(fields + WEEKDAY_FIELD).value as i64
+}
+# the loop: what the run failed in, empty when it ended as it should; a run without an output file ends there, saying
+# so, as main's failure does
+events_run(linker: handle, context: handle, instance: pointer, output: text): text := {
+	table = kept_value(TIMERS_SLOT) as i32
+	if long_at(table).value == 0 { return "" }
+	fired = allocate(EXTERN_BYTES)
+	# (the program's own, or the linked standard module timers' that the program's timers call)
+	if not wasmtime_instance_export_get(context, instance, "timer_fired", 11, fired) and not wasmtime_linker_get(linker, context, "warp/timers", 11, "timer_fired", 11, fired) {
+		refused = joined(text_of(long_at(table).value), " timer(s) refused: the program exports no timer_fired(id)")
+		if output.length == 0 {
+			complain(refused)
+			exit(1)
+		}
+		return refused
+	}
+	limit = getenv("WARP_EVENTS_FOR")
+	ends = if limit.length > 0 then milliseconds_now() + atoll(limit) else 0
+	failure = ""
+	at = earliest_timer(table)
+	while at != 0 and failure.length == 0 {
+		due = long_at(at + 24).value
+		if ends > 0 and due > ends {
+			if ends > milliseconds_now() { slept(ends - milliseconds_now()) }
+			at = 0
+		} else {
+			wait = due - milliseconds_now()
+			if wait > 0 { slept(wait) }
+			long_at(at + 24).value = if long_at(at + 8).value == TIMER_CLOCK and long_at(at + 16).value / WEEKDAYS_SHIFT == 0 then 0 else next_due(long_at(at + 8).value, long_at(at + 16).value, due)
+			failure = timer_fired(context, instance, fired, long_at(at).value, output)
+			at = earliest_timer(table)
+		}
+	}
+	failure
+}
+# a run starts with an empty table: a later run in this process (`warp test`'s next program) never fires an earlier one's
+timers_forgotten(): nothing := {
+	table = allocate(TIMERS_BYTES)
+	long_at(table).value = 0
+	keep_value(TIMERS_SLOT, table as i64)
+}
+# the entry of the timer due first, 0 when none is due any more
+earliest_timer(table: pointer): pointer := {
+	earliest = 0 as pointer
+	for i in 0..long_at(table).value {
+		entry = table + TIMERS_HEADER + (i as i32) * TIMER_BYTES
+		if long_at(entry + 24).value != 0 and (earliest == 0 or long_at(entry + 24).value < long_at(earliest + 24).value) { earliest = entry }
+	}
+	earliest
+}
+# the program's timer_fired(id): what it failed in, empty when it ran
+timer_fired(context: handle, instance: pointer, fired: pointer, id: i64, output: text): text := {
+	argument = allocate(VALUE_BYTES)
+	byte_at(argument).value = KIND_I64
+	long_at(argument + VALUE_OFFSET).value = id
+	results = allocate(VALUE_BYTES * MAX_RESULTS)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, fired + 8)))
+	error = wasmtime_func_call(context, fired + 8, argument, 1, results, results_count, trap)
+	call_failure(context, instance, error, trap, output)
+}
+# what a call of the module failed in, empty when it ran; a run without an output file ends there, saying so
+call_failure(context: handle, instance: pointer, error: handle, trap: pointer, output: text): text := {
+	if error == 0 and long_at(trap).value == 0 { return "" }
+	if output.length == 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
+	failure_said(error, trap, raised_message(context, instance, trap))
 }
 # system_value(name): the machine's readings that are plain libc; the others (battery, mouse, window, display …) come
 # with the libraries that own them (decision libraries-not-core), forwarded to them (lib/native/foreign.c
