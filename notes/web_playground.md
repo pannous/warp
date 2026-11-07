@@ -113,9 +113,9 @@ Every host word reads and builds so (reader.js and exact.js, the Rust-era tree r
 drop-readnode-branch). Ported: std.js stdCall (every std adapter), paint, save_picture, text_coverage,
 sound_samples, gpu_*. Known cost: newGuestList is O(n²) (built_list copies its rest) and floats are read by shown
 text, so a million-item GPU list stops the run (samples/acceleration/gpu_million; bulk exports asked of core).
-libwarp_sound is a page library: lib/sound.warp's `from 'warp_sound'` words (host-sound.js soundLibrary: play
-samples on the run's voice, play a file, decode/resample) and c.dlopen of @executable_path/libwarp_<name> answers a
-handle when self.PAGE_LIBRARIES has it (host-foreign.js pageStdio).
+lib/sound.warp's device words are host words (sound_played, sound_file_played, sound_file_decoded, midi_sent,
+midi_ports): host-sound.js soundWords plays samples on the run's voice, plays a file, decodes and resamples; natively
+lib/native_host/sound.warp answers them.
 Sweep caveats: samples that print a measured duration as "N ms" compare masked; gpu/gpu_visualizer and
 gpu/warp_compiled_wgsl_shader end with a while loop whose printed value is a measured time (5.001 vs 5.123): DIFF.
 

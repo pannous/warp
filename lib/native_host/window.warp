@@ -1,20 +1,13 @@
-// The native warp's window (decision native-host-modules, card window-ffi-replace): what the playground's canvas
-// answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI. No program uses it: the native
-// driver links it at the first question it does not answer itself (core/native/driver.warp host_answered) and calls
-// host_owns / host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer,
-// which libwarp_gpu shows it in) and host_run_ended.
+// The native warp's window (decision window-in-warp, card window-ffi-replace), a part of lib/native_host.warp: what the
+// playground's canvas answers in JavaScript (web/playground/canvas.js), natively over SDL3 by plain FFI: host_owns /
+// host_value (the window's system values), host_value_set, host_window_layer (a painting's Metal layer, which
+// libwarp_gpu shows it in) and window_run_ended.
 // `window_open = 1` or the first painting opens it, never under WARP_NO_WINDOW or CI. Each painting is a frame, its
 // title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
 // ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
 // A window sized by its painting opens at the largest whole multiple of it that fits a share of the screen. It resizes
 // freely and goes full screen by the system value window_fullscreen or its green button: libwarp_gpu shows the
 // painting as large as fits, its aspect kept, centered; the pointer is told in the painting's pixels
-use SDL3
-use bits
-use file
-use os
-import (calloc, library_function, field_u8, field_i32, field_u32, field_i64, field_f32, field_f64, field_pointer) from 'c'
-
 WINDOW_TITLE = "warp"
 DEFAULT_WIDTH = 640
 DEFAULT_HEIGHT = 480
@@ -63,7 +56,7 @@ global points_wide = 0
 global points_high = 0
 
 // no window under WARP_NO_WINDOW or CI, nor without SDL3
-windows_refused() := env("WARP_NO_WINDOW") != ø or env("CI") != ø or library_function("SDL3", "SDL_Init") == 0
+windows_refused() := quiet_run() or library_function("SDL3", "SDL_Init") == 0
 // the keycode SDL tells as the code warp gives the key; 0 for a key without one
 key_code(key: int): int := {
 	for i in 0 ..< count(SDL_KEYS) { if SDL_KEYS[i] == key { return WARP_KEYS[i] } }
@@ -173,19 +166,8 @@ full_screen() := open_now and both_bits(SDL_GetWindowFlags(window), SDL_WINDOW_F
 // whether the system shows dark mode, asked without a window (SDL's theme needs its video started): macOS keeps it as
 // the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light
 CFPreferencesCopyAppValue(key: handle, application: handle): handle from 'CoreFoundation'
-CFStringCreateWithCString(allocator: handle, text: text, encoding: i32): handle from 'CoreFoundation'
 CFStringCompare(a: handle, b: handle, options: i64): i64 from 'CoreFoundation'
-CFRelease(object: handle): void from 'CoreFoundation'
-CORE_FOUNDATION = "/System/Library/Frameworks/CoreFoundation.framework"
-CF_UTF8 = 0x08000100
 CF_CASE_INSENSITIVE = 1
-// a CoreFoundation string of a text the module names (a key, a style), made once
-global cf_texts = {}
-cf_text(t: text) := {
-	if not cf_texts.has(t) { cf_texts[t] = CFStringCreateWithCString(0, t, CF_UTF8) }
-	cf_texts[t]
-}
-on_mac() := exists(CORE_FOUNDATION)
 dark_mode(): bool := {
 	if not on_mac() { return no }
 	style = CFPreferencesCopyAppValue(cf_text("AppleInterfaceStyle"), cf_text("kCFPreferencesAnyApplication"))
@@ -266,7 +248,7 @@ host_window_layer(painting_width: int, painting_height: int): int := {
 warp_gpu_shown_again(): i32 from 'warp_gpu'
 // a run that painted one picture leaves it in the window until the window is closed (or Escape), shown again as the
 // window comes into sight (it opens behind the app in front) or changes size; an animation's window closes with its run
-host_run_ended() := {
+window_run_ended() := {
 	while open_now and frames == 1 and SDL_WaitEvent(event) {
 		type = field_u32(event, SDL_EVENT_TYPE_AT)
 		escaped = type == SDL_EVENT_KEY_DOWN and field_u32(event, SDL_KEY_AT) == SDLK_ESCAPE

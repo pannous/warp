@@ -1,4 +1,4 @@
-// SDL3 through its C library (lib/native_window.warp, the native warp's window): `use SDL3` declares these functions;
+// SDL3 through its C library (lib/native_host/window.warp, the native warp's window): `use SDL3` declares these functions;
 // the native warp loads libSDL3 (libSDL3.dylib, libSDL3.so.0) and calls them. Windows, views and layers are handles;
 // an event is a block of SDL_EVENT_BYTES read by its fields' offsets (lib/c.warp field_*)
 SDL_Init(flags: i32): bool from 'SDL3'
@@ -19,8 +19,27 @@ SDL_Metal_DestroyView(view: handle): void from 'SDL3'
 SDL_Metal_GetLayer(view: handle): handle from 'SDL3'
 SDL_PollEvent(event: handle): bool from 'SDL3'
 SDL_WaitEvent(event: handle): bool from 'SDL3'
+SDL_free(memory: handle): void from 'SDL3'
+// sound (lib/native_host/sound.warp): a stream to the default playback device per sound, SDL mixing them; a WAV file
+// read and samples converted to another rate and channel count
+SDL_OpenAudioDeviceStream(device: u32, spec: bytes, callback: handle, data: handle): handle from 'SDL3'
+SDL_ResumeAudioStreamDevice(stream: handle): bool from 'SDL3'
+SDL_PutAudioStreamData(stream: handle, samples: bytes, size: length): bool from 'SDL3'
+SDL_FlushAudioStream(stream: handle): bool from 'SDL3'
+SDL_GetAudioStreamQueued(stream: handle): i32 from 'SDL3'
+SDL_DestroyAudioStream(stream: handle): void from 'SDL3'
+SDL_LoadWAV(path: text, spec: handle, samples: handle, size: handle): bool from 'SDL3'
+SDL_ConvertAudioSamples(from_spec: handle, samples: handle, size: i32, to_spec: handle, converted: handle, converted_size: handle): bool from 'SDL3'
 
+SDL_INIT_AUDIO = 0x10
 SDL_INIT_VIDEO = 0x20
+SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK = 0xFFFFFFFF
+// SDL_AudioSpec: format, channels, freq, i32 each; SDL_AUDIO_S16LE 16-bit signed samples
+SDL_AUDIO_SPEC_BYTES = 12
+SDL_AUDIO_FORMAT_AT = 0
+SDL_AUDIO_CHANNELS_AT = 4
+SDL_AUDIO_RATE_AT = 8
+SDL_AUDIO_S16LE = 0x8010
 SDL_WINDOW_FULLSCREEN = 0x1
 SDL_WINDOW_OCCLUDED = 0x4
 SDL_WINDOW_HIDDEN = 0x8

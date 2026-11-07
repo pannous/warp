@@ -807,7 +807,7 @@ sound(samples) := {
 	sounded(speakers, sample_rate, if pan == 0 then 1 else 2)
 }
 
-// A sound heard goes from memory straight to libwarp_sound's device, Core Audio on macOS (card sound-direct): no file,
+// A sound heard goes from memory straight to the audio device (card sound-direct; the host word sound_played): no file,
 // no line. Else, a silent run's, one for WARP_SOUND_PLAYER's or the system's player (card sound-native-library), its
 // samples become a 16-bit PCM WAV in the system's temporary folder, warp-sound/sound-<process id>-<handle>.wav
 // (sound-<process id>.wav the first), with its line on stderr: `sound 0.55 s: <file>`. A run's first file sweeps the
@@ -855,27 +855,17 @@ def waited_till(start) {
 }
 
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
-// then). libwarp_sound beside warp plays it in the process (decision sound-plays: miniaudio, crates/warp-sound), the
-// run waiting at its end till its sounds are heard out; under WARP_NO_WINDOW or CI on a silent device. Without it, or
-// with WARP_SOUND_PLAYER set, the WAV goes to that player, else the first of afplay (macOS), paplay, aplay (Linux) that
-// starts. Under WARP_NO_WINDOW or CI only an explicit WARP_SOUND_PLAYER plays
+// then). The host plays it in the process (decision sound-plays: natively lib/native_host/sound.warp over SDL3, in the
+// playground web/playground/host-sound.js), the run waiting at its end till its sounds are heard out; under
+// WARP_NO_WINDOW or CI nothing sounds. Without an audio device, or with WARP_SOUND_PLAYER set, the WAV goes to that
+// player, else the first of afplay (macOS), paplay, aplay (Linux) that starts. Under WARP_NO_WINDOW or CI only an
+// explicit WARP_SOUND_PLAYER plays
 posix_spawnp(process: out, file: text, actions: handle, attributes: handle, arguments: texts, environment: texts): i32 from 'c'
-warp_sound_play(path: text): i32 from 'warp_sound'
-warp_sound_play_samples(samples: bytes, size: length, rate: i32, channels: i32): i32 from 'warp_sound'
-dlopen(path: text, mode: i32): handle from 'c'
-// where lib/native/foreign.c finds warp's own libraries, beside the executable
-SOUND_LIBRARY_FILES = ["@executable_path/libwarp_sound.dylib", "$ORIGIN/libwarp_sound.so"]
-RTLD_NOW = 2
-global sound_library_state = ø
-sound_library_loads() := {
-	if sound_library_state == ø {
-		sound_library_state = SOUND_LIBRARY_FILES.any(file => dlopen(file, RTLD_NOW) != 0)
-		if not sound_library_state { said("libwarp_sound is not beside warp: sounds go to the system's player as WAV files") }
-	}
-	sound_library_state
-}
+// the host's sound words: 0 once the sound plays, else -1 (no audio device), the samples little-endian 16-bit bytes
+sound_played(pcm: node, rate: int, channels: int): int from host
+sound_file_played(path: node): int from host
 quiet_run() := env("WARP_NO_WINDOW") != ø or env("CI") != ø
-heard_directly(speakers, rate, channels) := env("WARP_SOUND_PLAYER") == ø and not quiet_run() and sound_library_loads() and warp_sound_play_samples(pcm_bytes(speakers), rate, channels) == 0
+heard_directly(speakers, rate, channels) := env("WARP_SOUND_PLAYER") == ø and not quiet_run() and sound_played(pcm_bytes(speakers), rate, channels) == 0
 SYSTEM_PLAYERS = ["afplay", "paplay", "aplay"]
 sound_players() := {
 	chosen = env("WARP_SOUND_PLAYER")
@@ -884,7 +874,7 @@ sound_players() := {
 	SYSTEM_PLAYERS
 }
 played(file) := {
-	if env("WARP_SOUND_PLAYER") == ø and sound_library_loads() and warp_sound_play(file) == 0 { return ø }
+	if env("WARP_SOUND_PLAYER") == ø and sound_file_played(file) == 0 { return ø }
 	players = sound_players()
 	if count(players) == 0 { return ø }
 	environment = wasi_environment().split(chr(0)).filter(line => line != "")
@@ -1150,48 +1140,24 @@ class Sample {
 	channels: int
 	frames: [int]
 }
-// decoded by libwarp_sound, else (the playground) read here as a 16-bit WAV
-sample(path: text) := if sound_library_loads() then decoded_sample(path) else wav_sample(read_bytes(path), path)
-decoded_sample(path: text) := {
-	file = decoded_sound(path, 0, 0)
-	channels = warp_sound_decoded_channels(file)
-	Sample(warp_sound_decoded_rate(file), channels, [warp_sound_decoded_value(file, at) + sample_offset for at in 0..(warp_sound_decoded_frames(file) * channels)])
+sample(path: text) := {
+	decoded = decoded_sound(path, 0, 0)
+	Sample(decoded[0], decoded[1], [decoded[at] + sample_offset for at in DECODED_VALUES_AT..count(decoded)])
 }
-// Audio files decoded by libwarp_sound (miniaudio: wav, mp3, flac), each once a run: its number there for that rate
-// and channel count (0: the file's own), its values read one by one as the run needs them
-warp_sound_decode(path: text, rate: i32, channels: i32): i32 from 'warp_sound'
-warp_sound_decoded_frames(file: i32): i64 from 'warp_sound'
-warp_sound_decoded_rate(file: i32): i32 from 'warp_sound'
-warp_sound_decoded_channels(file: i32): i32 from 'warp_sound'
-warp_sound_decoded_value(file: i32, at: i64): i32 from 'warp_sound'
+// Audio files decoded by the host (natively AudioToolbox on macOS, else SDL3 and libmpg123: lib/native_host/sound.warp;
+// the page's decoder), each once a run at a rate and channel count (0: the file's own): [rate, channels, then its 16-bit
+// values, the channels interleaved], else the host's reason, a text
+sound_file_decoded(path: node, rate: int, channels: int): node from host
+DECODED_VALUES_AT = 2
+global decoded_sounds = {}
 decoded_sound(path: text, rate, channels) := {
 	if not exists(path) { raise path + ": no such sound file" }
-	if not sound_library_loads() { raise path + ": decoding a sound file needs libwarp_sound beside warp" }
-	file = warp_sound_decode(path, rate, channels)
-	if file < 0 { raise path + ": not decoded, miniaudio error " + str(file) + " (it reads wav, mp3 and flac)" }
-	file
+	key = path + "\t" + str(rate) + "\t" + str(channels)
+	if not decoded_sounds.has(key) { decoded_sounds[key] = sound_file_decoded(path, rate, channels) }
+	decoded = decoded_sounds[key]
+	if decoded is text { raise decoded }
+	decoded
 }
-// a 16-bit PCM WAV's chunks: fmt's channels and rate, data's samples (the formats beside it: card sound-native-files)
-wav_sample(bytes, path) := {
-	if count(bytes) < 12 or bytes[0..4] != codes("RIFF") or bytes[8..12] != codes("WAVE") { raise path + ": not a WAV file (other audio files are not in the native warp yet)" }
-	at = 12
-	channels = 0
-	rate = 0
-	while at + 8 <= count(bytes) {
-		size = little_endian_at(bytes, at + 4, 4)
-		if bytes[at..at + 4] == codes("fmt ") {
-			if little_endian_at(bytes, at + 8, 2) != PCM_FORMAT or little_endian_at(bytes, at + 22, 2) != BITS_PER_SAMPLE { raise path + ": a WAV of other than 16-bit PCM samples" }
-			channels = little_endian_at(bytes, at + 10, 2)
-			rate = little_endian_at(bytes, at + 12, 4)
-		}
-		if bytes[at..at + 4] == codes("data") {
-			return Sample(rate, channels, [(little_endian_at(bytes, at + 8 + 2 * i, 2) + sample_offset) % 65536 for i in 0..(size / 2 as int)])
-		}
-		at = at + 8 + size + size % 2
-	}
-	raise path + ": a WAV without its data"
-}
-little_endian_at(bytes, at, width) := sum([bytes[at + i] * 256 ** i for i in 0..width]) as int
 sample_seconds(clip: Sample) := count(clip.frames) / clip.channels / clip.rate
 // plain seconds below; the words take si_amount once, as melody does (notes/units_runtime.md)
 // where the frame at that many seconds starts among the interleaved values, at most the end
@@ -1351,19 +1317,18 @@ pattern(text, duration) := sound(pattern_samples(pattern_events(parse_pattern(te
 pattern(text) := pattern(text, bar_seconds(1))
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
-// Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. libwarp_sound sends natively
-// over CoreMIDI, to warp's own virtual source "warp" when there is no output (decision midi-native); the page's
-// libwarp_sound to its Web MIDI
-warp_midi_send(port: text, message: bytes, size: length): i32 from 'warp_sound'
-warp_midi_outputs(): text from 'warp_sound'
-warp_midi_inputs(): text from 'warp_sound'
+// Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. The native warp sends over
+// CoreMIDI, to warp's own virtual source "warp" when there is no output (decision midi-native); the page to its Web MIDI
+// the host's MIDI (natively CoreMIDI, lib/native_host/sound.warp; the page's Web MIDI): a message's bytes sent, 0 or
+// what failed; the inputs' (inputs: 1) or the outputs' names, one a line, ø where no MIDI is built in
+midi_sent(port: node, message: node): int from host
+midi_ports(inputs: int): node from host
 MIDI_NO_OUTPUT = -2
 MIDI_UNSUPPORTED = -3
-MIDI_NOT_BUILT_IN = "MIDI is not built into this warp's sound library yet (macOS has it; ALSA on Linux to come)"
+MIDI_NOT_BUILT_IN = "MIDI is not built into this warp yet (macOS has it; ALSA on Linux to come)"
 midi_send(status, data1, data2 = 0, port = "") := {
 	message = if status < 192 or status >= 224 then [status, data1, data2] else [status, data1]
-	if not sound_library_loads() { return std_io("midi", "send", [port, message]) }
-	sent = warp_midi_send(port, message)
+	sent = midi_sent(port, message)
 	if sent == MIDI_NO_OUTPUT { raise "no MIDI output named " + port + ": midi_outputs() names them" }
 	if sent == MIDI_UNSUPPORTED { raise MIDI_NOT_BUILT_IN }
 	if sent != 0 { raise "MIDI message not sent" }
@@ -1378,8 +1343,8 @@ public midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	silence(duration)
 	midi_off(pitch, channel)
 }
-midi_outputs() := if sound_library_loads() then midi_devices(warp_midi_outputs()) else std_io("midi", "outputs", [])
-midi_inputs() := if sound_library_loads() then midi_devices(warp_midi_inputs()) else std_io("midi", "inputs", [])
+midi_outputs() := midi_devices(midi_ports(0))
+midi_inputs() := midi_devices(midi_ports(1))
 // the next message [status, data1, data2] from the input port ("" the first, else by name), waiting for it; seconds > 0
 // waits that long at most, then ø (card midi-receive); the input stays open, so no message between two calls is lost
 midi_receive(port = "", seconds = 0) := std_io("midi", "receive", [port, seconds])
@@ -1517,7 +1482,7 @@ midi_milliseconds(tick, tempi, division) := {
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
 // audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
 // band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
-// Goertzel's recurrence in warp, of samples or of a file's decoded by libwarp_sound
+// Goertzel's recurrence in warp, of samples or of a file's decoded by the host
 global band_low = 60
 global band_high = 5000
 // the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
@@ -1526,13 +1491,12 @@ spectrum_window = 512
 public nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
 // how many seconds an audio file sounds: sound_seconds("song.mp3")
 sound_seconds(path: text) := {
-	file = decoded_sound(path, sample_rate, 1)
-	warp_sound_decoded_frames(file) / (sample_rate as float)
+	(count(decoded_sound(path, sample_rate, 1)) - DECODED_VALUES_AT) / (sample_rate as float)
 }
 spectrum(file: text, seconds, bands) := {
 	decoded = decoded_sound(file, sample_rate, 1)
-	window = spectrum_span(seconds, warp_sound_decoded_frames(decoded))
-	band_levels([warp_sound_decoded_value(decoded, at) for at in window], bands)
+	window = spectrum_span(seconds, count(decoded) - DECODED_VALUES_AT)
+	band_levels([decoded[DECODED_VALUES_AT + at] for at in window], bands)
 }
 def spectrum(samples, seconds, bands) {
 	window = spectrum_span(seconds, count(samples))
@@ -1567,7 +1531,7 @@ band_level(weighted, frequency) := {
 	4 * sqrt(power) / count(weighted) / loudest_sample
 }
 
-// PCM samples played through the same path as sounded (libwarp_sound / the page's warp_sound), so native and the
+// PCM samples played through the same path as sounded (the host's sound_played), so native and the
 // browser agree without a host import (card sound-samples). count is how many interleaved frames to take, as the old
 // host word and the page's sound_samples read them; rate and channels are the buffer's.
 sound_samples(samples: node, count: int, rate: int, channels: int) := sounded(samples[0..count], rate, channels)
