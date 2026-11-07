@@ -52,6 +52,8 @@ tests_run(compiler: text, by_self: bool, first: int): nothing := {
 	setenv(c_string("WARP_HINTS"), c_string("0"), 1)
 	setenv(c_string("WARP_VALUE_AS_DATA"), c_string("1"), 1)
 	setenv(c_string("WARP_ONE_THREAD"), c_string("1"), 1)
+	# a test checks what main gives: its timers fire none (core/native/driver.warp events; the samples sweep runs them)
+	setenv(c_string("WARP_EVENTS_FOR"), c_string("0"), 0)
 	all_ran(work, runs, if by_self then "self" else "run")
 	unsetenv(c_string("WARP_VALUE_AS_DATA"))
 	unsetenv(c_string("WARP_ONE_THREAD"))
