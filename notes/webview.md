@@ -16,10 +16,12 @@ host library, not the core binary:
 with WARP_APP_WINDOW set, its page live in a window till it is closed (card static-page-window). After main, markup's
 page_of (lib/markup.warp page_window_run) shows the run's web view in a window through `use js`'s channel
 (warp_webview.m answers the module warpWindow itself: `show`, `next`) and loops: each event of the page (bridge.js,
-named by web/playground/markup.js elementEvent as the built sites' site.js names it: click, input, change, focus, blur)
-runs its handler (page_event), the page rendered anew and morphed in (morphChildren, a field keeps focus and text).
+heard by web/playground/markup.js listenToElements as the built sites' site.js hears them: click, input, change,
+focus, blur, submit) runs its handler (page_event), a key the program's `on key`; `next(ms)` ticks when no event comes,
+and lib/timers.warp fires its `every` timers on each tick; the page rendered anew and morphed in (morphChildren).
+Closing the window ends the run.
 Refused under WARP_NO_WINDOW or CI. `check` prints the text the page shows from the hidden view: the headless test
-(test/web/test_webview.pairs.warp). Not yet: submit, keys, timers beside the window, a window test without a screen.
+(test/web/test_webview.pairs.warp). Not yet: clock timers (`at 9:30`) in the window, a window test without a screen.
 
 ## Sample checks (card scripts-samples, decision sample-checks)
 A sample declares its interactions: `# check: click "+1", type "name" "Ann" → count: 2`, one check a line, each from a
