@@ -661,7 +661,8 @@ function finish(run, report) {
 	clearTimeout(run.stopTimer);
 	if (pending === run) pending = undefined;
 	showStop(false); // the shown report's timers turn it back to Stop (listenTo)
-	if (run.eventsFor && report.listening.some(label => !PAGE_EVENT.test(label))) return listenedFor(run, report);
+	// (a stopped run's report lists no events: stoppedReport)
+	if (run.eventsFor && (report.listening ?? []).some(label => !PAGE_EVENT.test(label))) return listenedFor(run, report);
 	run.resolve(report);
 }
 

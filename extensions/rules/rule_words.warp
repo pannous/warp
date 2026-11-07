@@ -976,8 +976,10 @@ module_dir(word: text): any := {
 typed_words(kind: text): list := {
 	declared = word_lines()
 	found = declared.keys.filter(name => declared[name].any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == kind))
-	found + definition_slices(prelude_text).filter(cut => first_parameter_type(cut#1, cut#2) == kind).map(cut => cut#1)
+	found + definition_slices(prelude_text).filter(cut => kind in type_alternatives(first_parameter_type(cut#1, cut#2))).map(cut => cut#1)
 }
+# `list or number` of `sum(xs: list or number)`: each type a parameter takes, so a list's words include sum
+type_alternatives(written: text): list := written.split(" or ").map(part => part.trim())
 # a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
 is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
 
