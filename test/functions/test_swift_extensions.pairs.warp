@@ -1,0 +1,4 @@
+# Swift's extension and argument labels, Kotlin's extension function with a result type
+«extension Int { func squared() -> Int { self * self } }; 3.squared()»	9
+«fun Int.sq(): Int = this * this; 3.sq()»	9
+«func greet(person name: String) -> String { "Hello " + name }; greet(person: "Swift")»	"Hello Swift"

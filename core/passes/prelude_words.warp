@@ -909,7 +909,7 @@ names_bound_in(n: Node): any := {
 global bound_names_node = Node.Empty
 global bound_names_found = {}
 names_bound_in_kept(program: Node): any := {
-	if not same_node(program, bound_names_node) {
+	if not same(program, bound_names_node) {
 		bound_names_found = names_bound_in(program)
 		bound_names_node = program
 	}
@@ -1016,7 +1016,7 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 				sources += inner#1 + [source]
 				seen = inner#2
 				linked += inner#3
-			} else if not names_no_module(name_of(used)) {
+			} else if not names_no_module(name_of(used)) and not own_module_wasm.has(name_of(used)) {
 				raise "no module, library or package named " + name_of(used) + ": no " + name_of(used) + ".warp beside the program or in lib/; a package is used by its path, use \"packages/" + name_of(used) + "/" + name_of(used) + ".warp\""
 			}
 		}

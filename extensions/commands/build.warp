@@ -107,6 +107,7 @@ build(words: list) := {
 	source = if is_file then read(target) else target
 	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
+	if MODULE_ONLY in options { return own_module_built(target, stem) }
 	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", source_folder(target)) else build_native(target, library_folder) }
 	given_runtime = option_of(options, "runtime")
 	if given_runtime != ø { runtime_held = read_bytes(given_runtime) }
@@ -122,6 +123,17 @@ build(words: list) := {
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
 	}
+	ø
+}
+# `warp build --module shapes.warp`: shapes.wasm, the file compiled as a standard module is, behind runtime.wasm with its
+# warp.signature, which `import shapes` of a program beside it links (decision samples-modules-wasm; notes/import_compiled.md)
+MODULE_ONLY = "--module"
+own_module_built(file: text, stem: text) := {
+	if not exists(file) { raise "warp build --module: no file " + file }
+	name = stem.split("/").last()
+	own_module(name, path_in(absolute_folder("."), file), path_in(absolute_folder("."), stem + ".wasm"))
+	write_module(name, runtime_path(), stem + ".wasm")
+	print "compiled " + size_of(stem + ".wasm") + " bytes to " + stem + ".wasm"
 	ø
 }
 # a WAGI build keeps app.wasm, which a WAGI host runs once a request (Spin's wagi executor: REQUEST_METHOD, PATH_INFO

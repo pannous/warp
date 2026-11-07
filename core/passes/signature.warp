@@ -16,7 +16,7 @@ module_signature_node(name: text, image: list): Node := {
 	uses = use_lines(source)
 	slices = definition_slices(source).map(slice => square_list([Text(slice#1), Text(first_line(slice#2)), Text(pack(plain_node(parsed(slice#2, uses))))]))
 	curly_list([
-		field_node("source", Text(source_hash(try read(path) else ""))),
+		field_node("source", Text(source_hash(built_of_texts(name)))),
 		field_node("uses", square_list(used_modules(source).map(module => Text(module)))),
 		field_node("slices", square_list(slices)),
 		field_node("rules", square_list(module_rules_of(path, name).map(rule_node))),

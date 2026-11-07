@@ -45,19 +45,39 @@ WASM_OPT_FEATURES=(--enable-gc --enable-reference-types --enable-bulk-memory --e
 
 cd "$repository"
 
+# the modules a lib/ source's use lines name (core/parsing/parser.warp used_modules: `use x` leading a line)
+used_modules() { [ -f "$1" ] && sed -nE 's/^(use|import|require) ([a-z_0-9]+)[[:space:]]*$/\2/p' "$1" | sort -u; }
+
+# built_of_changed <module> <seen>: whether lib/<module>.warp or one of the modules it uses, transitively, differs
+# from the installed library's, the text its prebuilt image was built of
+built_of_changed() {
+	local name=$1 seen=$2 used
+	cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || return 0
+	for used in $(used_modules "$repository/lib/$name.warp"); do
+		[[ $seen == *" $used "* ]] && continue
+		built_of_changed "$used" "$seen$name " && return 0
+	done
+	return 1
+}
+
 build_compiler() {
 	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
 	refuse_lagging_compiler
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
-	# the tree's library over it, so the page runs this checkout's lib/ before an install: a module whose source
-	# changed is compiled from its source (its prebuilt modules/<name>.wasm dropped)
+	# the tree's library over it, so the page runs this checkout's lib/ before an install: a module whose source or
+	# the source of a module it uses (transitively, as core/passes/library.warp built_of_texts) changed is compiled
+	# from its source (its prebuilt modules/<name>.wasm dropped)
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" --exclude=compiler/ --exclude=modules/ --exclude="*.wasm" "$repository/lib/" "$page/warp-lib/"
 	local module name
 	for module in "$page/warp-lib/modules/"*.wasm; do
 		[ -f "$module" ] || continue
 		name=$(basename "$module" .wasm)
-		cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || { rm "$module"; echo "lib/$name.warp changed: compiled from its source"; }
+		# (an image of no lib/ source, a module's .splice.wasm, the page never reads)
+		[ -f "$repository/lib/$name.warp" ] || { rm "$module"; continue; }
+		built_of_changed "$name" " " || continue
+		rm "$module"
+		echo "lib/$name.warp or a module it uses changed: compiled from its source"
 	done
 	write_sources "$page/warp-lib"
 	slim_compiler "$page/warp-lib/warp.wasm"
@@ -197,6 +217,9 @@ case "${1:-all}" in
 	*) echo "usage: $0 [compiler|served <site>|site <site>]" >&2; exit 2 ;;
 esac
 
+# the compiled module samples/wasm/import_compiled.warp links (samples/wasm/shapes.wasm, a link to it), built behind the
+# page's runtime.wasm, as scripts/samples.sh builds it natively
+WARP_LIB="$INSTALLED_LIBRARY" warp build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones

@@ -202,7 +202,7 @@ function programImports(holder, hooks) {
 			},
 			// a text's NFC for text == (decision nfc-slot, driver.warp canonical_text_answered): lib/unicode, its module
 			// linked on this first call, never at the run's start
-			canonical_text: text => linkedInstance(UNICODE_MODULE, libraryFile(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
+			canonical_text: text => linkedInstance(UNICODE_MODULE, linkedUrl(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
 		wasi_snapshot_preview1: {
@@ -271,7 +271,7 @@ const RUNTIME_MODULE = "warp_runtime";
 const LINKED_MODULE_PREFIX = "warp/";
 const MODULE_START = "warp/start";
 const UNICODE_MODULE = "warp/unicode";
-const compiledLibraries = new Map(); // by file: {module, descriptors}, compiled once per worker
+const compiledLibraries = new Map(); // by url: {module, descriptors}, compiled once per worker
 // (a deployed site has no compiler folder: its runtime and modules beside the page)
 function libraryUrl(file) { return typeof COMPILER_FOLDER === "undefined" ? file : `../../${COMPILER_FOLDER}/${file}`; }
 function libraryFile(name) {
@@ -302,18 +302,30 @@ function runHolder(fields) {
 function withLinkedInstances(descriptors, imports, instances) {
 	const linked = {};
 	for (const name of new Set(descriptors.map(entry => entry.module))) {
-		const file = libraryFile(name);
-		if (file) linked[name] = linkedInstance(name, file, imports, instances);
+		const url = linkedUrl(name);
+		if (url) linked[name] = linkedInstance(name, url, imports, instances);
 	}
 	return new Proxy(imports, { get: (modules, module) => linked[module] ?? modules[module] });
 }
-function linkedInstance(name, file, imports, instances) {
-	if (instances.has(name)) return instances.get(name);
-	if (!compiledLibraries.has(file)) {
-		const bytes = getSync(libraryUrl(file), 0, true);
-		compiledLibraries.set(file, { module: new WebAssembly.Module(bytes), descriptors: importDescriptors(bytes) });
+// a module linked by its import's name: a standard one's file, or a program's own module warp built (`import shapes`
+// beside shapes.wasm, imported by its path), which imports runtime.wasm's words as a standard module does
+function linkedUrl(name) {
+	const file = libraryFile(name);
+	if (file) return libraryUrl(file);
+	if (!MODULE_PATH.test(name)) return null;
+	const url = servedModuleUrl(name);
+	return compiledLibrary(url).descriptors.some(entry => entry.module === RUNTIME_MODULE) ? url : null;
+}
+function compiledLibrary(url) {
+	if (!compiledLibraries.has(url)) {
+		const bytes = getSync(url, 0, true);
+		compiledLibraries.set(url, { module: new WebAssembly.Module(bytes), descriptors: importDescriptors(bytes) });
 	}
-	const { module, descriptors } = compiledLibraries.get(file);
+	return compiledLibraries.get(url);
+}
+function linkedInstance(name, url, imports, instances) {
+	if (instances.has(name)) return instances.get(name);
+	const { module, descriptors } = compiledLibrary(url);
 	const exports = new WebAssembly.Instance(module, withUnlinkedTrapping(descriptors, withLinkedInstances(descriptors, imports, instances))).exports;
 	instances.set(name, exports);
 	exports[MODULE_START]?.();
