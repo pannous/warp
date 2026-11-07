@@ -63,7 +63,7 @@ implicit_modules(source: text, folder: text = "."): list := {
 		for slice in definition_slices(file_text(file) ?? "") { known[slice#1] = yes }
 	}
 	# and so do its foreign lines and a wasm module it uses: zlib's crc32(crc, buf, len) is no use of hash's crc32
-	for word in foreign + wasm_module_words(source, folder) + own_module_words() { known[word] = yes }
+	for word in foreign + wasm_module_words(source, folder) { known[word] = yes }
 	globals = global_words()
 	providers = type_module_providers()
 	free = free_words(program)

@@ -751,14 +751,11 @@ tag_modules(program: Node, used: list): list := {
 # nothing to, each once
 global_word_modules(program: Node, own: any, used: list): list := {
 	bound = names_bound_in(program)
-	# the functions a module or C library the program imports gives it are its own too: import shapes' width (not
-	# libc's and libm's catalog, which every program has)
-	foreign = declared_c_functions.filter(d => d#2 not in c_and_m).map(d => d#1) + own_module_words()
 	words = global_words()
 	modules = []
 	for word in symbol_words(program) + sugar_words_of(program) {
 		module = words.get(word)
-		if module != ø and word not in own and word not in bound and word not in foreign and word not in used and module not in used and module not in modules { modules += [module] }
+		if module != ø and word not in own and word not in bound and word not in used and module not in used and module not in modules { modules += [module] }
 	}
 	modules
 }
