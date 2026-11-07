@@ -378,28 +378,10 @@ twice(value: any) := 2 times value
 thrice(body: block) := 3 times body
 thrice(value: any) := 3 times value
 // `x as decimal` of a ratio (card repeating-decimals): the digits before the period, then the period's overlined, 1/6
-// is 0.16̅; a terminating decimal, or a period longer than 1000 digits, as the ratio prints. The cast calls it with the
-// ratio's parts, the denominator never 0 (wasm_emitter/numbers/exact.rs)
-decimal_text(numerator: int, denominator: int) := {
-	rest = denominator; twos = 0; fives = 0
-	while rest % 2 == 0 { rest = rest /! 2; twos += 1 }
-	while rest % 5 == 0 { rest = rest /! 5; fives += 1 }
-	if rest == 1 { return "\(numerator / denominator)" }
-	// the period: the first power of ten that is 1 modulo the rest
-	power = 10 % rest; period = 1
-	while power != 1 and period <= 1000 { power = power * 10 % rest; period += 1 }
-	if period > 1000 { return "\(numerator / denominator)" }
-	before_period = if twos > fives then twos else fives
-	whole = abs(numerator)
-	text = (if numerator < 0 then "-" else "") + "\(whole /! denominator)."
-	remainder = whole % denominator
-	for digit in 1 to before_period + period {
-		remainder = remainder * 10
-		text = text + "\(remainder /! denominator)" + (if digit > before_period then "̅" else "")
-		remainder = remainder % denominator
-	}
-	text
-}
+// is 0.16̅; a terminating decimal as its digits, a period longer than 1000 digits as the ratio n/d: how a quotient of
+// values shows (extensions/big_numbers/exact.warp exact_text, decision quotient-period). The cast calls it with the
+// ratio's parts, the denominator never 0
+decimal_text(numerator: int, denominator: int) := "\(numerator / denominator)"
 // `x as decimal` (extensions/sugar/arithmetic.warp): the decimal digits of x, its period overlined
 as_decimal(x: number) := decimal_text(numerator(x), denominator(x))
 // x as a fraction, by its continued fraction (rust-harness:src/numbers/real.rs computes it exactly for √2, π, … written in the program):

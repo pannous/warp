@@ -691,10 +691,11 @@ written_word(name: text): text := if name.ends_with(own_word("")) then name.repl
 # whether a library module is being built (prebuilt.warp sets it), not a program
 building_a_module(): bool := module.relocating
 # `sin(x: Real) := …`: a definition typing its parameters overloads the library's typed word beside it
-# (arity_overloads.warp library_variants joins the library's lines), so a call of another type, `sin(x.float())` in its
-# own body too, reaches the library's; an untyped one, `round(x) := …`, and one of a word with no typed line to join,
-# `add(a: int, b: int) := …` beside the prelude's `add(xs, x) := …`, is the program's own
-is_typed_overload(name: text, head: Node): bool := word_lines().has(name) and #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word))
+# (arity_overloads.warp library_variants joins the library's lines and a linked module's typed definitions of as many
+# parameters), so a call of another type, `sin(x.float())` in its own body too, reaches the library's; an untyped one,
+# `round(x) := …`, and one with nothing of its parameter count to join, `add(a: int, b: int) := …` beside the prelude's
+# `add(xs, x) := …` or `log(a: text, b: int)` beside only math's log(x: float), is the program's own
+is_typed_overload(name: text, head: Node): bool := #head > 1 and items_of(head)[1 ..].all(parameter => is_key(parameter, Op.Colon) and value_of(parameter) != symbol(any_word)) and #library_variants(name, [parameter_types(head)]) > 0
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
 own_heads(program: Node): any := {
@@ -777,6 +778,9 @@ used_module_text(module: text): text := {
 	}
 	used_module_texts[module]
 }
+# whether a module of the name is there to use: a standard module's file (asked of the disk, not read), else a C
+# library's lines
+is_module_name(name: text): bool := exists(std_module_path(name)) or used_module_text(name) != ""
 # what a module says, by its prebuilt signature (signature.warp prebuilt_signature), else, a program's own module or
 # one not prebuilt, by its text: the modules it uses, its rule patterns (after `rewrite `), whether it defines the
 # word (a definition or an alias), the parses of its definitions of the word
@@ -985,6 +989,9 @@ names_bound_in_kept(program: Node): any := {
 	}
 	bound_names_found
 }
+# `math` of `math.gcd(4, 6)`: a standard module's name (`Math` math's), or a program's own linked one (`shapes`, its
+# text maybe not beside it), which the program doesn't bind
+qualifies_by_module(name: text, program: Node): bool := name not in names_bound_in_kept(program) and (is_module_name(name.lower()) or own_module_wasm.has(name))
 # the names in a view, `["attribute", "variants", ["list", ["symbol", "red"]], ["symbol", "Color"]]`'s red and Color
 view_symbols(view: any): list := if kind_of(view) == "symbol" then [view#2] else if view is list then view.flat_map(view_symbols) else []
 # the names a pattern binds: `x`, `(a, b)`, `x: int`, `[first, rest...]`, `Point{x, y}` (its x and y, not Point), the
@@ -1097,6 +1104,16 @@ used_module_sources(statements: any, folder: text, seen: any, within_module: boo
 		}
 	}
 	[sources, seen, linked]
+}
+# the standard modules the statements use and those these use in turn, by name, as used_module_sources sees them
+# but by their signatures, no text read (a file beside the program taking a use is the program's own)
+used_module_names(statements: list, folder: text): list := {
+	seen = []
+	for statement in statements {
+		used = use_target(statement)
+		if used is symbol and not taken_as_file(statement, folder, no) { seen = modules_used_by(name_of(used), seen) }
+	}
+	seen
 }
 # whether a file the folder holds takes the use (uses.warp file_used): of the program's own uses any file, of a standard
 # module's uses only the module's own file (a module built in lib/ uses its neighbours so)

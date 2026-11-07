@@ -36,9 +36,8 @@ data/
 /lib/modules/*.cwasm*
 # … and beside every other module a run links, test/fixtures/wasm's too
 *.driver.cwasm*
-# warp's wasmtime C API and sound library, copied in by scripts/wasmtime-c-api.sh (cards wasmtime-bundled, sound-plays)
+# warp's wasmtime C API and native libraries, copied in by scripts/wasmtime-c-api.sh (card wasmtime-bundled)
 /lib/libwarp_wasmtime.*
-/lib/libwarp_sound.*
 /lib/libwarp_gpu.*
 /lib/libwarp_webview.*
 /lib/compiler.wasm*

@@ -89,6 +89,22 @@ catalog_lines(catalog: list, name: text, library: text): list := {
 	if #found == 0 and library in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
 	found
 }
+# a module's or program's text with its parts, the files it uses by path from `folder` (lib/native_host.warp's
+# `use "native_host/window.warp"`), whose foreign lines, imports and calls are its own
+module_with_parts(content: text, folder: text): text := parts_joined(content, folder, [])
+# (a part's own parts too, each file once)
+parts_joined(content: text, folder: text, seen: list): text := {
+	joined = [content]
+	for path in c_statements(content).map(module_part).filter(path => path != ø).map(path => folder + "/" + path) {
+		if path not in seen {
+			seen += [path]
+			joined += [parts_joined(file_source(path) ?? "", folder_of(path), seen)]
+		}
+	}
+	joined.join("\n")
+}
+library_module_with_parts(content: text): text := module_with_parts(content, run_library())
+module_part(statement: text): any := if statement.starts_with("use \"") and statement.ends_with(".warp\"") then statement.remove_prefix("use \"").remove_suffix("\"") else ø
 # the C functions a used module's text declares: its foreign lines and the catalog's lines its imports name
 # (`import (calloc, field_u32) from 'c'`), as a program's own are (c_functions_of)
 c_declarations_used(content: text, catalog: list): list := {
@@ -267,7 +283,8 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 		imported = c_import(statement)
 		if imported != ø and imported#1 not in libraries { libraries += [imported#1] }
 		library = c_use(statement)
-		if library != ø and library not in libraries { libraries += [library] }
+		# (a standard module is no C library: its name never probes lib/native)
+		if library != ø and library not in libraries and not exists(std_module_path(library)) { libraries += [library] }
 	}
 	# [library, the path of its native file] of each library with one
 	native = []
@@ -313,13 +330,14 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	}
 	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
 	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
-	reached = reached_within(source)
-	calling = ([source] + module_sources(reached)).join("\n")
+	with_parts = module_with_parts(source, folder)
+	reached = reached_within(with_parts)
+	calling = ([with_parts] + module_sources(reached).map(library_module_with_parts)).join("\n")
 	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
-	# the foreign lines and C imports of the standard modules it uses, each it calls (lib/sound.warp's kill, unlink, mkdir;
-	# lib/native_window.warp's `import calloc from 'c'`); the catalog's own files (c.warp, math.warp) only as its rules
-	# above take them
-	for d in module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).flat_map(text => c_declarations_used(text, catalog)) {
+	# the foreign lines and C imports of the files it uses by path and of the standard modules it uses, each it calls
+	# (lib/sound.warp's kill, unlink, mkdir; lib/native_host/window.warp's `import calloc from 'c'`); the catalog's own
+	# files (c.warp, math.warp) only as its rules above take them
+	for d in ([with_parts] + module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).map(library_module_with_parts)).flat_map(text => c_declarations_used(text, catalog)) {
 		if not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
 	}
 	replaced = {}
@@ -336,7 +354,7 @@ reached_within(source: text): list := {
 	reached = reached_modules(source)
 	at = 1
 	while at <= #reached {
-		for module in used_modules(file_source(run_library() + "/" + reached#at + ".warp") ?? "") { if module not in reached { reached += [module] } }
+		for module in used_modules(library_module_with_parts(file_source(run_library() + "/" + reached#at + ".warp") ?? "")) { if module not in reached { reached += [module] } }
 		at += 1
 	}
 	reached

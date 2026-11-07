@@ -6,7 +6,7 @@ dir_word = "dir"
 
 dir_views_hint(n: Node, program: Node) := {
 	module = dir_module(without_mark(n))
-	if module == ø or owns_dir(program) or module in names_bound_in_kept(program) or used_module_text(module) == "" { return ø }
+	if module == ø or owns_dir(program) or module in names_bound_in_kept(program) or not is_module_name(module) { return ø }
 	diagnose(call_of("dir_views", [module]), n)
 }
 # `time` of `dir(time)` and `dir time`, else ø

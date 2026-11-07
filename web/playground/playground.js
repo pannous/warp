@@ -101,6 +101,39 @@ function element(tag, properties = {}, ...children) {
 	return node;
 }
 
+// card bug-report-console: the bug report carries the page's last console entries, uncaught errors and worker messages,
+// newest last, so a report from a device no one can debug says what happened (the iPad's Hello stop). A card is a public
+// issue: never localStorage, and the bug tokens are blanked out of every entry
+const CONSOLE_KEPT = 200;
+const CONSOLE_ENTRY_LENGTH = 400;
+const CONSOLE_LEVELS = ["log", "info", "warn", "error", "debug"];
+// the worker's messages each frame or print sends, which would push every other entry out
+const FREQUENT_WORKER_MESSAGES = new Set(["print", "paint", "live loops", "sleep", "loading"]);
+const consoleKept = [];
+function keepConsoleEntry(kind, parts) {
+	const text = parts.map(part => typeof part === "string" ? part : part instanceof Error ? `${part.name}: ${part.message}` : (() => {
+		try { return JSON.stringify(part); } catch { return String(part); }
+	})()).join(" ");
+	consoleKept.push(`${(performance.now() / 1000).toFixed(3)}s ${kind} ${text.slice(0, CONSOLE_ENTRY_LENGTH)}`);
+	if (consoleKept.length > CONSOLE_KEPT) consoleKept.shift();
+}
+for (const level of CONSOLE_LEVELS) {
+	const original = console[level].bind(console);
+	console[level] = (...parts) => {
+		keepConsoleEntry(level, parts);
+		original(...parts);
+	};
+}
+addEventListener("error", failure => keepConsoleEntry("uncaught", [`${failure.message} at ${failure.filename}:${failure.lineno}:${failure.colno}`]));
+addEventListener("unhandledrejection", rejection => keepConsoleEntry("unhandled rejection", [rejection.reason]));
+// the report's console field: the browser, the worker's stages, then the entries, the tokens blanked
+function consoleReport() {
+	const stages = workerStages.map(({ stage, at }) => `${stage} at ${at} ms`).join(", ") || "none";
+	const lines = [`browser: ${navigator.userAgent}`, `worker: ${workerSettled}, stage "${workerStage}"; stages: ${stages}`, ...consoleKept];
+	const secrets = [BUG_TOKEN, stored(BUG_TOKEN_KEY), $("bug-token")?.value.trim()].filter(Boolean);
+	return lines.join("\n").replace(new RegExp(secrets.map(secret => secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") || "$^", "g"), "‹token›");
+}
+
 let worker;
 let workerReady;
 let workerStage = "not started"; // the worker's last stage (worker.js stage), for playground.state
@@ -224,6 +257,7 @@ function startWorker(restarts = 0) {
 	workerWarmed = false;
 	workerStages.length = 0;
 	worker = standby ?? newWorker(restarts);
+	worker.fromStandby = worker === standby;
 	standby = undefined;
 	workerReady = worker.ready;
 	if (!worker.isReady) showLoading("starting the compiler's worker", false);
@@ -270,6 +304,8 @@ function newWorker(restarts = 0) {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		starting.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		starting.onmessage = ({ data }) => {
+			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
+			if (!FREQUENT_WORKER_MESSAGES.has(data?.type)) keepConsoleEntry("worker", [data?.type ?? String(data), ...(data?.stage ? [data.stage] : data?.message ? [data.message] : [])]);
 			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
@@ -668,20 +704,29 @@ function printedChunk(run, chunk) {
 function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 	clearTimeout(run.timer);
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, !run.animating, [hungWhere()]), milliseconds);
+}
+const HUNG_STAGES_SHOWN = 8;
+// where a run stopped by the limit hung, said beside it (card safari-hello-timeout: Hello stopped on the iPad only): the
+// worker's start, whether it was the standby, its stages and the last message it sent
+function hungWhere() {
+	const now = Math.round(performance.now());
+	const heard = worker.heard ? `"${worker.heard.type}" ${((now - worker.heard.at) / 1000).toFixed(1)} s ago` : "nothing";
+	const stages = workerStages.slice(-HUNG_STAGES_SHOWN).map(({ stage, at }) => `${stage} at ${at} ms`).join(", ") || "none seen";
+	return `where it hung: the worker ${worker.fromStandby ? "was the standby" : "started for the page"}, ${worker.isReady ? "ready" : "not ready"}; its last message ${heard}; last stages: ${stages}; page time ${now} ms`;
 }
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
-function stopRun(run, message, failed = !run.animating) {
+function stopRun(run, message, failed = !run.animating, said = []) {
 	worker.terminate();
 	startWorker();
-	finish(run, stoppedReport(run, message, failed));
+	finish(run, stoppedReport(run, message, failed, said));
 }
 
-const stoppedReport = (run, message, failed) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
-	warnings: [], runtime_warnings: [], hints: [], notes: [] });
+const stoppedReport = (run, message, failed, said = []) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
+	warnings: [], runtime_warnings: said, hints: [], notes: [] });
 
 // the Run button while a program runs: Stop (card playground-turn)
 function showStop(stoppable) {
@@ -1238,7 +1283,7 @@ function startBugButton() {
 function bugReport() {
 	const run = reportedRun();
 	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
-	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
+	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href, console: consoleReport(),
 		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 

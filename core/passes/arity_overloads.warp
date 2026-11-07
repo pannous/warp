@@ -375,12 +375,40 @@ variant_least(program: Node, overloaded: map): map := {
 # lines join its variants (decision sound-core-order), so a float still reaches the library's sin; an untyped
 # definition, `add(a, b) := …`, `def clear(color)`, takes every type itself and shadows the word
 library_variants(name: text, defined: list): list := {
-	if not word_lines().has(name) or not defined.all(own => own.any(type => type != any_word)) { return [] }
-	written = word_lines()[name].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name))
+	if not defined.all(own => own.any(type => type != any_word)) { return [] }
+	written = if word_lines().has(name) then word_lines()[name].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name)) else []
 	joining = []
 	# math declares sin twice, from warp and from 'm': one variant
 	for types in written { if types not in defined and types not in joining and defined.any(own => #own == #types) { joining += [types] } }
+	# a linked module's definition of as many parameters, all typed and of types the dispatch tells from the program's
+	# (decision cross-module-overload): the prelude's log(x: number, base: number) beside a program's log(level: text,
+	# parts: texts), each call reaching the body of its arguments' types (card program-own-log)
+	# (only the program's own definitions: one a module brought is that module's word already)
+	linked = if brought_names.has(name) then [] else linked_word_types(name)
+	for types in linked {
+		told = defined.filter(own => #own == #types)
+		if #told > 0 and any_word not in types and told.all(own => told_apart(own, types, [])) and types not in joining { joining += [types] }
+	}
 	joining
+}
+# the parameter types of each linked module's definition of the name
+linked_word_types(name: text): list := {
+	found = []
+	# (a program's definitions only: a module being built joins its uses' words as prelude_words.warp brings them; and
+	# only a word linked under its own name, which a variant's call reaches: the prelude's find is linked as its typed
+	# variants find·text·text…, which the program declares none of, so a program's find(a: int, b: int) is its own)
+	if building_a_module() or not module.linked_words.has(name) { return found }
+	for image in module.linked_images {
+		signature = linked_signature(image.name)
+		if signature == ø { continue }
+		for slice in signature.slices.filter(slice => slice#1 == name) {
+			for statement in statements_in(unpack(slice#3)) {
+				call = definition_call(statement)
+				if call != ø { found += [parameter_types(call)] }
+			}
+		}
+	}
+	found
 }
 # `sin·float(value·1: float) := sin(value·1)`: a library line as a variant, the call of the library's word
 library_variant(name: text, types: list): Node := {
@@ -431,7 +459,7 @@ parameters_bound(n: Node): list := {
 # what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
 # values', the result a builtin declares (`floor(x)` a float), `-x`, `√x` and `a + b`, `a - b`, `a * b` of known numbers
 # least: each overloaded name's variants' least argument counts (variant_least)
-class ArgumentJudge { variables: map; own: map; least: map = {} }
+class ArgumentJudge { variables: map; own: map; least: map = {}; program: Node = Node.Empty }
 keeps_numbers(op: Op): bool := match op {
 	Op.Add: yes
 	Op.Sub: yes
@@ -658,10 +686,13 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, items_of(call)[1 ..].map(parameter_name)), judge))
 	}
 	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, parameters_of(key_of(n))), judge)) }
-	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument
+	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument; a module's word called through
+	# its name, `memory.copy(bytes, at)`, the word's own call, copy(bytes, at)
 	method = if is_key(n, Op.Dot) then value_of(n) else ø
 	if method != ø and is_group(method) and bracket_of(method) == "(" and #method > 0 and method#1 is symbol and name_of(method#1) in overloaded {
-		return typed_resolved(group_like(method, [method#1, key_of(n)] + items_of(method)[1 ..]), overloaded, judge)
+		receiver = key_of(n)
+		receivers = if receiver is symbol and qualifies_by_module(name_of(receiver), judge.program) then [] else [receiver]
+		return typed_resolved(group_like(method, [method#1] + receivers + items_of(method)[1 ..]), overloaded, judge)
 	}
 	# a one-line block's words are its phrase already, `{ thrice {n += 1} }` (phrase_blocks.warp)
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
@@ -673,7 +704,7 @@ shadowed(overloaded: map, parameters: list): map := if parameters.any(name => na
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
-	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
+	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded), program))
 	refused_overload_values(resolved, overloaded, types_described)
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
