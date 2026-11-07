@@ -65,7 +65,8 @@ first_line(written: text): text := written.split("\n")#1
 # a file's bytes, [] when it isn't there (asked first: the page's read_bytes of a missing file ends the compile, no try
 # catches it, card playground-host-word)
 bytes_if_there(path: text): list := if exists(path) then (try read_bytes(path) else []) else []
-# a file's bytes as a text, a wasm module's too (a text holds its bytes as they are), "" when it isn't there
+# a file's bytes as a text, a wasm module's too (a text holds its bytes as they are), "" when it isn't there: asked
+# for its byte_size, never compared, as text equality normalizes (NFC) what it compares
 wasm_if_there(path: text): text := if exists(path) then (try read(path) else "") else ""
 
 # the signatures of the modules linked to this compile, by module name
@@ -80,7 +81,7 @@ prebuilt_signature(module: text): ModuleSignature? := {
 	if own_module_files.has(module) { return ø }
 	if not prebuilt_signatures.has(module) {
 		wasm = wasm_if_there(folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + module + ".wasm")
-		prebuilt_signatures[module] = if wasm != "" then module_signature(module, wasm) else ø
+		prebuilt_signatures[module] = if byte_size(wasm) > 0 then module_signature(module, wasm) else ø
 	}
 	prebuilt_signatures[module]
 }

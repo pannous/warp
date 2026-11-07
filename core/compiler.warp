@@ -149,7 +149,7 @@ linked_libraries(source: text): list := {
 		# (a module not prebuilt was said by the rebuild, its file left empty or never written: markup's html, compiled
 		# into markup; one prebuilt that won't link is the compile's error, never compiled from its source instead:
 		# decision module-link-hard-error)
-		if wasm == "" { continue }
+		if byte_size(wasm) == 0 { continue }
 		signature = module_signature(name, wasm)
 		if signature == ø { throw name + ".wasm won't link: no " + SIGNATURE_SECTION + " section, built by a compiler older than this one; warp rebuild builds it anew" }
 		image = library_image_of(name, signature)
