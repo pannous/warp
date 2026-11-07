@@ -636,7 +636,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
 - made-by-reach: module.made counts only kinds made by functions reachable from the program's roots.
 - comments-not-candidates: words in comments or a shebang never make a program an implicit-use candidate.
-- native-window-sdl3: the native warp's window is lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
+- native-window-sdl3 (superseded by window-in-warp): the native warp's window was lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
 - node-attributes: marks ride on the node, an `attributes` field of $MetaNode beside `comment` (with_attribute / attributes_of); `let` inside a lambda is such a mark.
 - hello-lazy-runtime-dropped: binding runtime words lazily is dropped (under 7 MB of hello's 176 MB).
 - canonical-runtime-names: runtime words map_keys/map_values/map_get_or/collection_contains are keys/values/get/has; contains/includes stay aliases of has.
