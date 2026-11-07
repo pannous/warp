@@ -1668,11 +1668,13 @@ system_value_set(name: text, value: i64): nothing := {
 	if host_told("host_value_set", name, value, 1) == 0 { slot_set(name, value) }
 }
 ## the native host module (decision window-in-warp): what the playground's JavaScript answers beyond the driver's own
-## words, natively in warp, lib/native_window.warp over SDL3 and the system's fonts: its system values, the layer a
-## painting shows in, the host words it answers as host_<word>, the still picture held open after the run
-# (primitive mode has no text constants: its name `warp/native_window` and the prefix `host_` are written where read)
-host_export(context: handle, name: text, function: pointer): bool := lazily_linked(context, "warp/native_window", HOST_LINKED_AT, name, function)
-# the run's end told the native host module, when the run linked it: a still picture stays shown till its window closes
+## words, natively in warp, lib/native_host.warp (its window over SDL3 and the system's fonts, its sound over SDL3's audio
+## and the system's decoders): its system values, the layer a painting shows in, the host words it answers as
+## host_<word>, the run's end (a still picture held open, the sounds heard out)
+# (primitive mode has no text constants: its name `warp/native_host` and the prefix `host_` are written where read)
+host_export(context: handle, name: text, function: pointer): bool := lazily_linked(context, "warp/native_host", HOST_LINKED_AT, name, function)
+# the run's end told the native host module, when the run linked it: a still picture stays shown till its window
+# closes, the sounds play out
 host_run_ended(context: handle): nothing := {
 	if long_at(kept_value(RUN_SLOT) as i32 + HOST_LINKED_AT as i32).value != 0 { guest_call(0, context, "host_run_ended", 0, 0, allocate(VALUE_BYTES)) }
 }
@@ -2394,7 +2396,7 @@ known(kind: i32, name: text, what: text, word: text): i32 := {
 }
 # the C function of a line, found in its library; one the driver can't call stops the run naming it. One its library
 # lacks, or a library not found, stops the run only when called: a program may ask for an optional library first
-# (lib/sound.warp's libwarp_sound, else the system's player)
+# (lib/native_host.warp's SDL3 and mpg123: a machine without them stays windowless and silent)
 foreign_of(line: text, wasm: pointer): i64 := {
 	library = field(line, 1, TAB)
 	name = field(line, 2, TAB)

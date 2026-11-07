@@ -459,7 +459,7 @@ parameters_bound(n: Node): list := {
 # what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
 # values', the result a builtin declares (`floor(x)` a float), `-x`, `√x` and `a + b`, `a - b`, `a * b` of known numbers
 # least: each overloaded name's variants' least argument counts (variant_least)
-class ArgumentJudge { variables: map; own: map; least: map = {} }
+class ArgumentJudge { variables: map; own: map; least: map = {}; program: Node = Node.Empty }
 keeps_numbers(op: Op): bool := match op {
 	Op.Add: yes
 	Op.Sub: yes
@@ -686,10 +686,13 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, items_of(call)[1 ..].map(parameter_name)), judge))
 	}
 	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, parameters_of(key_of(n))), judge)) }
-	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument
+	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument; a module's word called through
+	# its name, `memory.copy(bytes, at)`, the word's own call, copy(bytes, at)
 	method = if is_key(n, Op.Dot) then value_of(n) else ø
 	if method != ø and is_group(method) and bracket_of(method) == "(" and #method > 0 and method#1 is symbol and name_of(method#1) in overloaded {
-		return typed_resolved(group_like(method, [method#1, key_of(n)] + items_of(method)[1 ..]), overloaded, judge)
+		receiver = key_of(n)
+		receivers = if receiver is symbol and qualifies_by_module(name_of(receiver), judge.program) then [] else [receiver]
+		return typed_resolved(group_like(method, [method#1] + receivers + items_of(method)[1 ..]), overloaded, judge)
 	}
 	# a one-line block's words are its phrase already, `{ thrice {n += 1} }` (phrase_blocks.warp)
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
@@ -701,7 +704,7 @@ shadowed(overloaded: map, parameters: list): map := if parameters.any(name => na
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
-	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded)))
+	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded), program))
 	refused_overload_values(resolved, overloaded, types_described)
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
