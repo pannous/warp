@@ -1,6 +1,7 @@
 // The C functions a primitive program imports (`import getenv from "c"`), in a native build: each import wasm2c calls
 // is written by extensions/primitive.warp c_function_glue, which finds the function by name in the process and
 // passes the module's values over with these. Included behind lib/native/wasi.c.
+#include <errno.h>
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <netinet/in.h>
@@ -34,6 +35,8 @@ static uint32_t module_address(struct w2c_wasi__snapshot__preview1* wasi, void* 
 void* native_pointer(void* address) { return address; }
 // paint's count in this run, from 1: its PNG's number (core/native/driver.warp painted)
 int32_t next_painting(void) { static int32_t painted; return ++painted; }
+// the error number of the C call that failed last (core/native/driver.warp os_failure)
+int32_t last_error(void) { return errno; }
 void* library_function(char* library, char* name);
 // libwarp_gpu beside warp (crates/warp-gpu, card gpu-functions), found at the first question: a shader paints on the
 // GPU, else (none, or WARP_GPU=off) its function on the CPU (lib/prelude.warp paint_shader)
