@@ -52,6 +52,7 @@ use "js_globals.warp"
 use "dir_hints.warp"
 use "collection_type_tests.warp"
 use "block_definitions.warp"
+use "local_shadows.warp"
 use "effects.warp"
 use "optional_unwraps.warp"
 use "object_functions.warp"
@@ -113,6 +114,7 @@ EXTENSIONS = [
 	dir_hints_extension
 	collection_type_tests_extension
 	block_definitions_extension
+	local_shadows_extension
 	effects_extension
 	optional_unwraps_extension
 	object_functions_extension
