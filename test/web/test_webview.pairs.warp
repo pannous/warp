@@ -1,0 +1,3 @@
+# the system's web view natively (card app-webview, lib/webview.warp): a page's text read in the hidden web view
+'use webview; webview_page_text("<p>Hello <b>web view</b></p>")'	'Hello web view'
+'use webview; webview_page_text("<ul><li>a</li><li>b</li></ul>").split("\n")'	['a', 'b']

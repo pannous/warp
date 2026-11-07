@@ -1,9 +1,10 @@
-# 00c4ac6995 2026-11-06 21:37 222/266 83.5%
+# 9c02d8c27a 2026-11-07 01:48 250/266 94.0%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
 ok   samples/advanced/particles.warp
+ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
 ok   samples/advanced/test.warp
@@ -36,7 +37,9 @@ ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
 ok   samples/functions/ackermann.warp
 ok   samples/functions/block_arguments.warp
+ok   samples/functions/code_as_data.warp
 ok   samples/functions/fibonacci.warp
+ok   samples/functions/functions.warp
 ok   samples/functions/list_overloads.warp
 ok   samples/functions/queens_idiomatic.warp
 ok   samples/functions/queens.warp
@@ -111,6 +114,7 @@ ok   samples/graphics/webgpu.warp
 ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
+ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
@@ -143,6 +147,7 @@ ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
 ok   samples/modules/packages.warp
+ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
 ok   samples/modules/test_ffi_comprehensive.warp
@@ -159,17 +164,21 @@ ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
 ok   samples/numbers/factorial.warp
 ok   samples/numbers/gcd.warp
+ok   samples/numbers/measurements.warp
 ok   samples/numbers/power.warp
 ok   samples/numbers/quadratic.warp
 ok   samples/numbers/simple.warp
 ok   samples/numbers/sin.warp
 ok   samples/numbers/sine.warp
 ok   samples/numbers/sum.warp
+ok   samples/numbers/units_dynamic.warp
 ok   samples/objects/binary_tree.warp
 ok   samples/objects/data_structures.warp
 ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/dijkstra.warp
 ok   samples/objects/json_parser.warp
+ok   samples/objects/references.warp
+ok   samples/python/numpy_matrix.warp
 ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
@@ -192,6 +201,7 @@ ok   samples/sound/synth.warp
 ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
+ok   samples/storage/orm_units.warp
 ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
 ok   samples/system/c_lines.warp
@@ -218,8 +228,22 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
+ok   samples/wasm/import_compiled.warp
+ok   samples/wasm/wasm_interop.warp
+ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
+ok   samples/web/computed_tags.warp
+ok   samples/web/counter.warp
+ok   samples/web/form_submit.warp
+ok   samples/web/hello_div.warp
+ok   samples/web/html_dsl.warp
+ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
+ok   samples/web/keyframes.warp
+ok   samples/web/leaving_list.warp
+ok   samples/web/page_custom_event.warp
+ok   samples/web/select_binding.warp
+ok   samples/web/typed_form.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
 WIN  samples/graphics/raylib_circle_forever.warp
 WIN  samples/graphics/raylib_circle.warp
@@ -231,37 +255,13 @@ WIN  samples/graphics/raylib_simple.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
+SRV  samples/servers/hosting.warp
+SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
+SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/raytracer.warp: outside the core: the unknown name a
-FAIL samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
-FAIL samples/functions/functions.warp: outside the core: the unknown name a
-FAIL samples/hello/natural.warp: outside the core: a function value in +
 FAIL samples/modules/javascript.warp: the host word foreign_call is not in warp yet
-FAIL samples/modules/rust_crates.warp: outside the core: the call levenshtein(…)
-FAIL samples/numbers/dates.warp: outside the core: a time where a int is needed
-FAIL samples/numbers/measurements.warp: outside the core: the unknown name certainly
-FAIL samples/numbers/units_dynamic.warp: wasm trap: null reference
-FAIL samples/objects/references.warp: outside the core: the field members of a int
-FAIL samples/python/numpy_matrix.warp: python ModuleNotFoundError: No module named 'numpy'
-FAIL samples/servers/hosting.warp: exit 137, nothing on stderr
-FAIL samples/servers/route_headers.warp: hint: status is router's fix: use router
-FAIL samples/servers/worker.warp: warp: Out-of-bounds access in linear memory or a table, or call stack exhausted while running samples/servers/worker.warp
-FAIL samples/storage/orm_units.warp: outside the core: the operator as on int
-FAIL samples/wasm/import_compiled.warp: no module, library or package named shapes: no shapes.warp beside the program or in lib/; a package is used by its path, use "…"
-ok   samples/wasm/wasm_interop.warp
-FAIL samples/web/component_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/computed_tags.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/counter.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/form_submit.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/hello_div.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/html_dsl.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/html.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:600 (in style_as_written)
-FAIL samples/web/keyframes.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:600 (in style_as_written)
-FAIL samples/web/leaving_list.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/live_region.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/page_custom_event.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/page_elements.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/select_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/typed_form.warp: outside the core: an assignment to `… : …`
+FAIL samples/numbers/dates.warp: outside the core: a data
+FAIL samples/web/live_region.warp: no field loading
+FAIL samples/web/page_elements.warp: outside the core: the unknown name document

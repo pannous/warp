@@ -1,0 +1,6 @@
+// The system's web view (libwarp_webview beside warp, crates/warp-webview, card app-webview; macOS's WKWebView):
+// `webview_show(html, title)` shows a page in a window till it is closed (1: refused under WARP_NO_WINDOW or CI),
+// `webview_page_text(html)` is the text the page shows, read in a hidden web view. `use js` runs in that hidden view
+// too (lib/native/foreign.c binds the host word foreign_call to libwarp_webview)
+webview_show(html: text, title: text): i32 from 'warp_webview'
+webview_page_text(html: text): text from 'warp_webview'

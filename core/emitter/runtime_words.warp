@@ -131,8 +131,6 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 		"meta_column": TypedCode(ValueKind.Int, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 4]))
 		"is_null": TypedCode(ValueKind.Bool, values#1.code + [op.ref_is_null])
 		"same": same_code(values#1, values#2)
-		# same_node: `same` by its former name, for the compiler's own passes until the seed lets a program call same
-		"same_node": same_code(values#1, values#2)
 		# the error is the word's: a variant of it by arity is named `word·arity`
 		"fail": TypedCode(pending, error_throw(body.function.name.split("·")#1) + [op.unreachable])
 		"is_ratio": TypedCode(ValueKind.Bool, ratio_test(boxed(values#1)))
@@ -188,13 +186,13 @@ def intrinsic_of(body: Body, name: text, values: list): TypedCode {
 }
 # the intrinsics a program calls too, byte_at(text, offset), memory_byte(address),
 # memory_set_byte(address, value) and same(a, b), each at its own arity (a program's `same(y)` stays its own)
-program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same", "same_node"]
+program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte", "same"]
 intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, memory_f32: 1, memory_set_f32: 2, memory_i32: 1, memory_u32: 1, memory_set_i32: 2, memory_i64: 1, memory_f64: 1, memory_grown: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, made_case: 2, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1, ratio_of_parts: 2, numerator_part: 1, denominator_part: 1, has_plain_parts: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, meta_with_attributes: 2, meta_attributes: 1, same: 2, same_node: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1, instance_float: 1, instance_operated: 4}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, meta_with_attributes: 2, meta_attributes: 1, same: 2, fresh_int_node: 1, closure_text: 1, instance_set: 3, instance_entries: 1, instance_field_at: 2, instance_place: 2, is_class_instance: 1, instance_show: 1, instance_float: 1, instance_operated: 4}
 # the words a program calls that runtime.warp gives, by the runtime word's name, and those the extensions' runtimes give
 library_words = extended_library_words({numerator: "numerator", denominator: "denominator", join: "joined", "float·cast": "float_cast", int_marked: "marked_int", int_mark_of: "int_mark", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", range_value: "range_value", is_range: "is_range", range_sum: "range_sum", list_pop: "list_pop", list_insert: "list_insert", appends_in_place: "appends_in_place",

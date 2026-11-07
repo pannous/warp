@@ -44,6 +44,8 @@ PATH_BYTES = 4096
 SLASH = 47
 SPACE = 32
 TEXT_SHIFT = 4294967296
+# the exit status of a child whose exec failed (words_run): the command is not found
+EXEC_FAILED_STATUS = 127
 # the most bytes shown_from gives at once: the output area past its scratch (runtime/text.warp output_room, c_text_at)
 SHOWN_PART = 65488
 # the host words the driver answers, the number its callback is defined with (answered_word); exit(code) ends the run
@@ -65,6 +67,10 @@ REAL_PATH_WORD = 14
 SIGNAL_LISTEN_WORD = 15
 EVAL_CODE_WORD = 16
 CANONICAL_TEXT_WORD = 17
+CHANNEL_LISTEN_WORD = 18
+CHANNEL_PENDING_WORD = 19
+CHANNEL_NEXT_WORD = 20
+CHANNEL_SEND_WORD = 21
 # the end of a field in warp.wasm's parse-code encoding (extensions/parse_words.warp FIELD_END)
 FIELD_END = 1
 # the system values a program sets (set_system_value), kept by foreign.c by slot; before that, the size a window opens
@@ -75,6 +81,15 @@ DISPLAY_DPI_SLOT = 2
 # the running run's linker, engine, linked instances and unicode instance (run_state), for a host word that links a
 # module on its first call (canonical_text); a nested run (eval) keeps its own and gives the outer one back
 RUN_SLOT = 3
+# a run's channel listeners (lib/channels.warp), in its block past the unicode instance: how many, then each one's
+# id, the bytes of its channel's file read so far, its name's length and the name
+LISTENERS_AT = 48
+LISTENERS_MAX = 32
+LISTENER_BYTES = 128
+LISTENER_NAME_BYTES = 104
+# a machine-wide channel is a file of frames, each a value packed (runtime/packed_nodes.warp): its length in digits, a
+# newline and its bytes; the channels' folder only the user's
+OWNER_ONLY = 448
 NATIVE_VIEW_WIDTH = 640
 NATIVE_VIEW_HEIGHT = 480
 DEFAULT_DPI = 96
@@ -180,6 +195,15 @@ memmove(destination: handle, source: handle, size: i64): handle from "c"
 memset(destination: handle, value: i32, size: i64): handle from "c"
 memcmp(a: pointer, b: pointer, size: i64): i32 from "c"
 realpath(path: pointer, resolved: pointer): handle from "c"
+fork(): i32 from "c"
+execvp(file: pointer, arguments: pointer): i32 from "c"
+_exit(code: i32) from "c"
+pipe(ends: pointer): i32 from "c"
+dup2(from: i32, to: i32): i32 from "c"
+close(descriptor: i32): i32 from "c"
+fileno(stream: handle): i32 from "c"
+fdopen(descriptor: i32, mode: pointer): handle from "c"
+waitpid(child: i32, status: pointer, options: i32): i32 from "c"
 gcvt(value: f64, digits: i32, buffer: pointer): handle from "c"
 getenv(name: text): text from "c"
 getpid(): i32 from "c"
@@ -563,6 +587,10 @@ opens_window(name: text): bool := same_text(name, "InitWindow") or same_text(nam
 answered_word(name: text): i64 := {
 	if same_text(name, "std_io") { return STD_IO_WORD }
 	if same_text(name, "canonical_text") { return CANONICAL_TEXT_WORD }
+	if same_text(name, "channel_listen") { return CHANNEL_LISTEN_WORD }
+	if same_text(name, "channel_pending") { return CHANNEL_PENDING_WORD }
+	if same_text(name, "channel_next") { return CHANNEL_NEXT_WORD }
+	if same_text(name, "channel_send") { return CHANNEL_SEND_WORD }
 	if same_text(name, "exit") { return EXIT_WORD }
 	if same_text(name, "sleep_ms") { return SLEEP_WORD }
 	if same_text(name, "clock") { return CLOCK_WORD }
@@ -764,7 +792,8 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 # a run's linker, engine and linked-instances cell, whether canonical_text linked unicode (1) and that instance, kept in
 # the run's block: what a host word allocates is given back when it returns (foreign.c warp_host_callback)
 run_state(linker: handle, engine: handle, linked: pointer): pointer := {
-	run = allocate(32 + INSTANCE_BYTES)
+	run = allocate((LISTENERS_AT + 8 + LISTENERS_MAX * LISTENER_BYTES) as i32)
+	long_at(run + LISTENERS_AT as i32).value = 0
 	long_at(run).value = linker
 	long_at(run + 8).value = engine
 	long_at(run + 16).value = linked as i64
@@ -791,6 +820,93 @@ canonical_text_answered(context: handle, given: pointer, result: pointer): nothi
 		exit(1)
 	}
 	checked(wasmtime_func_call(context, function + 8, given, 1, result, 1, trap), trap)
+}
+## machine-wide channels (lib/channels.warp; the page's are BroadcastChannels, web/playground/host-tasks.js): every
+# sender appends to the channel's file, each listener reads it from where it was when it began listening
+channel_folder(): text := joined("/tmp/warp-channels-", getenv("USER"))
+channel_path(caller: handle, context: handle, name_value: pointer): text := {
+	name = shown(caller, context, name_value)
+	for i in 0..name.length {
+		if byte_at(name.address + i).value == SLASH {
+			complain(joined(joined("channel \"", name), "\": a channel to an address runs only in a page"))
+			exit(1)
+		}
+	}
+	mkdir(c_string(channel_folder()), OWNER_ONLY)
+	joined(joined(channel_folder(), "/"), name)
+}
+channel_listened(caller: handle, context: handle, given: pointer): nothing := {
+	listeners = listeners_block()
+	count = long_at(listeners).value
+	path = channel_path(caller, context, given + VALUE_BYTES)
+	if count == LISTENERS_MAX or path.length > LISTENER_NAME_BYTES {
+		complain(joined(path, ": too many channel listeners or too long a channel name for one run"))
+		exit(1)
+	}
+	entry = listeners + 8 + (count * LISTENER_BYTES) as i32
+	long_at(entry).value = long_at(given + VALUE_OFFSET).value
+	long_at(entry + 8).value = read_file(path).length as i64
+	long_at(entry + 16).value = path.length as i64
+	memcpy(entry + 24, native_pointer(path.address), path.length as i64)
+	long_at(listeners).value = count + 1
+}
+listeners_block(): pointer := (kept_value(RUN_SLOT) + LISTENERS_AT) as i32
+listener_entry(id: i64): pointer := {
+	listeners = listeners_block()
+	for i in 0..long_at(listeners).value {
+		entry = listeners + 8 + (i * LISTENER_BYTES) as i32
+		if long_at(entry).value == id { return entry }
+	}
+	complain(joined("no channel listener ", text_of(id)))
+	exit(1)
+	0
+}
+# what a listener has not read yet of its channel's file
+unread_of(entry: pointer): text := {
+	content = read_file(text_from(entry + 24, long_at(entry + 16).value as u32))
+	read = long_at(entry + 8).value as u32
+	if read > content.length { return text_from(0, 0) }
+	text_from(content.address + read, content.length - read)
+}
+# where a frame's bytes start in t and how many, packed as shown_at packs (start, length)
+frame_at(t: text, at: u32): i64 := {
+	length = 0 as i64
+	while byte_at(t.address + at).value != NEWLINE {
+		length = length * 10 + (byte_at(t.address + at).value - 48) as i64
+		at = at + 1
+	}
+	(at + 1) as i64 * TEXT_SHIFT + length
+}
+frames_in(t: text): i64 := {
+	count = 0 as i64
+	at = 0 as u32
+	while at < t.length {
+		frame = frame_at(t, at)
+		at = (frame / TEXT_SHIFT + frame % TEXT_SHIFT) as u32
+		count = count + 1
+	}
+	count
+}
+# a listener's oldest unread message, ø when none waits
+channel_taken(caller: handle, context: handle, entry: pointer, result: pointer): nothing := {
+	unread = unread_of(entry)
+	if unread.length == 0 { return guest_call(caller, context, "new_empty", 0, 0, result) }
+	frame = frame_at(unread, 0)
+	start = (frame / TEXT_SHIFT) as u32
+	length = (frame % TEXT_SHIFT) as u32
+	long_at(entry + 8).value = long_at(entry + 8).value + (start + length) as i64
+	guest_text_of(caller, context, text_from(unread.address + start, length), result)
+	guest_call(caller, context, "unpacked_node", result, 1, result)
+}
+channel_sent(caller: handle, context: handle, given: pointer): nothing := {
+	path = channel_path(caller, context, given)
+	packed = guest_result(caller, context, "packed_node", given + VALUE_BYTES)
+	message = shown(caller, context, packed)
+	frame = joined(joined(text_of(message.length as i64), "\n"), message)
+	file = fopen(c_string(path), c_string("a"))
+	if file == 0 { return complain(joined(path, ": not writable, the message is not sent")) }
+	fwrite(native_pointer(frame.address), 1, frame.length as i64, file)
+	fclose(file)
 }
 # what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
 # engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
@@ -997,6 +1113,10 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word == PARSE_CODE_WORD { return code_parsed(caller, context, given, results) }
 	if word == EVAL_CODE_WORD { return code_evaluated(caller, context, given, results) }
 	if word == CANONICAL_TEXT_WORD { return canonical_text_answered(context, given, results) }
+	if word == CHANNEL_LISTEN_WORD { return channel_listened(caller, context, given) }
+	if word == CHANNEL_PENDING_WORD { return int_result(frames_in(unread_of(listener_entry(number))), results) }
+	if word == CHANNEL_NEXT_WORD { return channel_taken(caller, context, listener_entry(number), results) }
+	if word == CHANNEL_SEND_WORD { return channel_sent(caller, context, given) }
 	if word == REAL_PATH_WORD { return real_path_written(caller, context, given, results) }
 	if word == SET_SYSTEM_VALUE_WORD { return system_value_set(guest_c_text(caller, context, word_at(given + VALUE_OFFSET).value as i64), long_at(given + VALUE_BYTES + VALUE_OFFSET).value) }
 	if word != STD_IO_WORD and word != STD_PURE_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
@@ -1005,6 +1125,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	listed = given + 2 * VALUE_BYTES
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
+	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1074,16 +1195,65 @@ sh_quoted(t: text): text := {
 	}
 	joined(joined(quoted, text_from(t.address + start, (t.length - start) as u32)), "'")
 }
+# net.get(url), lib/net.warp's fetch: the answer's text by curl, run by its argument vector (no shell sees the URL),
+# a URL without its scheme (`fetch "://host/x"`) over https; an answer of status 400 or more, or no curl, is the Error
+# with curl's complaint
+url_got(caller: handle, context: handle, url: text, result: pointer): nothing := {
+	words = arguments()
+	added(words, "curl")
+	added(words, "-sSL")
+	added(words, "--fail-with-body")
+	added(words, if starts_with(url, "://") then joined("https", url) else url)
+	words_run(caller, context, "curl", words, result)
+}
+# a command run by its argument vector, without a shell: what it printed, else the Error naming its exit status
+# (EXEC_FAILED_STATUS: not found) and what it said on stderr
+words_run(caller: handle, context: handle, command: text, words: Arguments, result: pointer): nothing := {
+	said = joined(compiled_path(), ".stderr")
+	ends = allocate(8)
+	errors = fopen(c_string(said), c_string("w"))
+	if pipe(ends) != 0 or errors == 0 { return guest_error(caller, context, joined("cannot run ", command), result) }
+	reading = word_at(ends).value as i32
+	writing = word_at(ends + 4).value as i32
+	file = c_string(command)
+	# (the child only rewires its outputs and execs: no allocation between fork and exec)
+	child = fork()
+	if child == 0 {
+		dup2(writing, 1)
+		dup2(fileno(errors), 2)
+		close(reading)
+		execvp(file, words.pointers)
+		_exit(EXEC_FAILED_STATUS)
+	}
+	close(writing)
+	fclose(errors)
+	stream = fdopen(reading, c_string("r"))
+	printed = piped(stream)
+	fclose(stream)
+	status = allocate(4)
+	waitpid(child, status, 0)
+	exit_status = (word_at(status).value as i32) / 256
+	if exit_status == EXEC_FAILED_STATUS {
+		unlink(said)
+		free(printed.at)
+		return guest_error(caller, context, joined(joined("cannot run ", command), ": not found on PATH"), result)
+	}
+	answered(caller, context, command, printed, exit_status, said, result)
+}
 line_run(caller: handle, context: handle, line: text, result: pointer): nothing := {
 	said = joined(compiled_path(), ".stderr")
 	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
 	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
 	printed = piped(pipe)
-	status = pclose(pipe)
+	answered(caller, context, joined("sh -c ", line), printed, pclose(pipe) / 256, said, result)
+}
+# what a command printed, its trailing newlines left off, else (exit status not 0) the Error naming the status and
+# what it said on stderr
+answered(caller: handle, context: handle, command: text, printed: Printed, exit_status: i32, said: text, result: pointer): nothing := {
 	size = printed.size
 	while size > 0 and native_byte(printed.at + size - 1) == NEWLINE { size = size - 1 }
-	if status == 0 { guest_text(caller, context, printed.at, size, result) } else {
-		guest_error(caller, context, joined(joined(joined(joined(joined("sh -c ", line), " failed (exit status: "), text_of(status / 256)), "): "), trimmed_end(read_file(said))), result)
+	if exit_status == 0 { guest_text(caller, context, printed.at, size, result) } else {
+		guest_error(caller, context, joined(joined(joined(joined(command, " failed (exit status: "), text_of(exit_status)), "): "), trimmed_end(read_file(said))), result)
 	}
 	unlink(said)
 	free(printed.at)

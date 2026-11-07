@@ -35,6 +35,14 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): Ty
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
 	# `d + 1 day`, `a - b` of a time: lib/time_arithmetic.warp's time_operation
 	if (a.kind == ValueKind.Time or b.kind == ValueKind.Time) and symbol in time_operators and module.functions.has(time_operation_word) { return time_operation_call(body, symbol, a, b) }
+	# `1 day > 2 hours`, `90 min < 1 day`, `1 day == 24 hours`: a time beside a boxed value passes extensions/times
+	# one_duration_kind first, lib/units' time quantities another duration kind until card dates-times-extraction
+	# (decision one-duration); the right operand is held, so each is computed once, in order
+	if symbol in comparisons and is_time_beside_node(a, b) {
+		held = fresh_local(body, b.kind)
+		a = TypedCode(a.kind, runtime_call("one_duration_kind", [a, TypedCode(b.kind, b.code + [op.local_tee] + uleb(held))]).code)
+		b = TypedCode(b.kind, [op.local_get] + uleb(held))
+	}
 	structured = a.kind == ValueKind.List or b.kind == ValueKind.List or a.kind == ValueKind.Node or b.kind == ValueKind.Node
 	# a boxed operand may be an instance whose class defines the operator: its dispatcher (class_methods.warp's
 	# `+·operator`, the operator a codepoint) calls the method, the right operand's for a commutative one (`5 * q`), or
@@ -358,3 +366,4 @@ def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode): TypedCode {
 	code = a.code + b.code + nonzero + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
 	TypedCode(ValueKind.Int, code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end])
 }
+is_time_beside_node(a: TypedCode, b: TypedCode): bool := (a.kind == ValueKind.Time and b.kind == ValueKind.Node) or (a.kind == ValueKind.Node and b.kind == ValueKind.Time)
