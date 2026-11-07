@@ -162,6 +162,8 @@ x
 
 Some names, like `pi`, are constants. They never change.
 
+Examples: constants, "changing variables", "counting up and down", "typed variables", "let and var", swap
+
 ## Values that follow
 
 Like a spreadsheet cell, a value can follow other values.
@@ -196,9 +198,6 @@ big
 ```
 
 Examples: "derived values", signals, listeners, "signals in lists"; samples: signal_fields
-
-
-Examples: constants
 
 ## Truth
 
