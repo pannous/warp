@@ -202,7 +202,7 @@ methods_lifted(program: Node): Node := {
 			spelled_ordering[operator#2] = named
 			continue
 		}
-		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, no, operator, promotions, floaters)]
+		dispatchers += [method_dispatcher(classes, owners, owned_spellings, operator_dispatcher(operator#2), yes, no, operator, promotions, floaters)]
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, liftable, name, routes) }
 	dispatchers += derived_dispatchers(classes, liftable, routes, promotions, spelled_ordering, operator_table)
@@ -276,7 +276,7 @@ derived_dispatchers(classes: map, names: list, routes: list, promotions: list, s
 			spelled = spelled_ordering.get(glyph) ?? {}
 			for owning_class in spelled.keys { ordered[owning_class] = call_of(spelled[owning_class], [self_node, other]) }
 			head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
-			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, ordered.keys), ordered, promoted(Key(self_node, glyph as Op, other), promotions, glyph + "·operator")))]
+			made += [Key(call_of(operator_dispatcher(glyph), head), Op.Define, value_dispatch(deepest_first(classes, ordered.keys), ordered, promoted(Key(self_node, glyph as Op, other), promotions, operator_dispatcher(glyph))))]
 		}
 	}
 	for conversion in conversion_methods {
@@ -480,6 +480,10 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
 # instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
 # `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
+# the dispatcher an operator's spelling `+` of a class's method calls, and whether a dispatcher is one
+operator_dispatcher(spelled: text): text := spelled + OPERATOR_DISPATCHER_MARK
+OPERATOR_DISPATCHER_MARK = "·operator"
+is_operator_dispatcher(name: text): bool := name.ends_with(OPERATOR_DISPATCHER_MARK)
 method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, reads_field: bool, operator: list?, promotions: list, floaters: list): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
@@ -490,7 +494,8 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
-	fallback = if not falls_back then ø else if operated then listed_in_place(spellings#1, call_arguments, reflected) else if reads_field then Key(self_node, Op.Dot, symbol(spellings#1)) else keyed_first(spellings#1, call_arguments, builtin_call(spellings#1, call_arguments))
+	# (a method call `xs.add(o)` appends to a list in place; the operator itself, `xs + [o]` and `xs += [o]`, is the builtin's)
+	fallback = if not falls_back then ø else if operated and not is_operator_dispatcher(name) then listed_in_place(spellings#1, call_arguments, reflected) else if operated then reflected else if reads_field then Key(self_node, Op.Dot, symbol(spellings#1)) else keyed_first(spellings#1, call_arguments, builtin_call(spellings#1, call_arguments))
 	# a dispatcher with a fallback takes any values in every place: a number reaches the builtin, an instance its class's
 	# method, compiled for any values, never for the kinds of a call no instance makes (`m[name] = v` of a map beside a
 	# class's position(p, v), whose `p` would be a text); so a list `[3, 1].sort()` passes none of the owners' methods

@@ -472,7 +472,7 @@ foreign_types(source: text): map := {
 	}
 	found
 }
-# [name, node] of each type the program names in a type's place: `x: Int`, `f(n: Int)`, a class field's `w: Int`
+# [name, node] of each type the program names in a type's place: `x: Int`, `real x = 3`, `f(n: Int)`, a class field's `w: Int`
 # (not an enum case `Kind.Int`)
 written_types(n: Node): list := {
 	found = []
@@ -482,6 +482,10 @@ written_types(n: Node): list := {
 		part = waiting#at
 		at += 1
 		if is_named_type(part) { found += [[declared_type_name(value_of(part)#2), part]] }
+		else if is_type_first_declaration(part) {
+			found += [[name_of(part#1), part#1]]
+			waiting += [part#2]
+		}
 		else if is_key(part, Op.Colon) and value_of(part) is symbol {
 			found += [[name_of(value_of(part)), value_of(part)]]
 			waiting += [key_of(part)]
@@ -490,6 +494,8 @@ written_types(n: Node): list := {
 	}
 	found
 }
+# `real x = 3`: the type word before a name it binds
+is_type_first_declaration(n: Node): bool := is_group(n) and #n == 2 and n#1 is symbol and is_key(n#2, Op.Assign) and key_of(n#2) is symbol
 # `x: Int`: the hint naming warp's type, once a name, unless the program declares a type of that name itself
 hint_foreign_types(program: Node, foreign: map, own_names: list) := {
 	hinted = {}
