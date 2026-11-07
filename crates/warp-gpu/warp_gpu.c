@@ -16,8 +16,9 @@
 #define VERTEX_ENTRY_POINT "warp_full_image"
 #define FRAGMENT_ENTRY_POINT "main"
 #define VALUES_NAME "values"
+// MOST_FLOATS: 64 KB, the uniform every WebGPU device binds (maxUniformBufferBindingSize), as the playground's
 enum { VALUES_BINDING = 0, TRIANGLE_CORNERS = 3, PIXEL_BYTES = 4, ROW_ALIGNMENT = 256, UNIFORM_ALIGNMENT = 16,
-	VECTOR_FLOATS = 4, MOST_FLOATS = 4096, MOST_DECLARATIONS = 16384, NAME_BYTES = 64 };
+	VECTOR_FLOATS = 4, MOST_FLOATS = 16384, MOST_DECLARATIONS = 16384, NAME_BYTES = 64 };
 static const uint32_t OPAQUE = 0xFF000000u;
 static const char* VALUE_TYPES[] = {0, "f32", "vec2f", "vec3f", "vec4f"};
 static const int VALUE_ALIGNMENTS[] = {0, 4, 8, 16, 16};
