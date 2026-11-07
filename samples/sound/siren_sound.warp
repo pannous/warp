@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# A signal computed while it plays (card real-time): warp calls siren for every sample, t its time in seconds, a
+# A signal computed while it plays: warp calls siren for every sample, t its time in seconds, a
 # block ahead of the speaker. Its state between samples lives in globals (floats: `as float`), the signal is a function
 # of floats to a float.
 use sound

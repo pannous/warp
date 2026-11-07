@@ -1,0 +1,2 @@
+'page = [{type: "image", src: "a.png"}]; image = data {type: "image", src}; find_matches(page, image)'	["a.png"]
+'replace_matches([{type: "image", src: "a.png"}], data {type: "image", src}, data {type: "link", href: src})'	[{type: "link", href: "a.png"}]

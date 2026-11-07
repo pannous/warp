@@ -1,8 +1,7 @@
 #!/usr/bin/env warp
-# a compute.toys kernel through compute_toy of `use compute_toys` (samples/gpu/lava_lamp.warp shows the simplest):
-# northern lights over a frozen lake. Curtains of light hang from wavy lines that drift and ripple with time, each
-# curtain its own color; stars twinkle behind them, a ridge of hills stands in front, the lake below mirrors it all.
-# The wheel makes the lights stronger or fainter (compute.toys' mouse.zoom).
+# Northern lights over a frozen lake. Curtains of light hang from wavy lines that drift with time, each in its own
+# color. Stars twinkle behind them, hills stand in front, and the lake below mirrors it all.
+# The wheel makes the lights stronger or fainter.
 use compute_toys
 lights = compute_toy(shader {
 	const CURTAINS = 4;
@@ -52,7 +51,7 @@ lights = compute_toy(shader {
 	fn main_image(@builtin(global_invocation_id) id: vec3u) {
 		let screen_size = textureDimensions(screen);
 		if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
-		// y up from the horizon two thirds of the way down; compute.toys counts pixel rows from the top
+		// y counts up from the horizon, two thirds of the way down
 		let at = float2(f32(id.x) - 0.5 * f32(screen_size.x), 0.65 * f32(screen_size.y) - f32(id.y)) / f32(screen_size.y);
 		let t = time.elapsed;
 		var color: float3;
@@ -69,7 +68,7 @@ lights = compute_toy(shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 })
-# ten seconds by the clock, however long a frame takes
+# run for ten seconds
 started = clock()
 while clock() - started < 10000 {
 	paint(lights)

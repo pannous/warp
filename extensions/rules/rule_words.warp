@@ -564,6 +564,10 @@ writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign
 counted_question(items: Node, item: Node): Node := {
 	throw "count(${as_code(item)} in ${as_code(items)}) counts a yes/no question: did you mean ${as_code(items)}.count(${as_code(item)})?"
 }
+# `count words in t`: a function's results counted, `count words of t` (decision 4de73dde04)
+counted_results(items: Node, function: Node): Node := {
+	throw "count ${as_code(function)} in ${as_code(items)} counts a yes/no question: did you mean count ${as_code(function)} of ${as_code(items)}?"
+}
 # `end job` (decision end-refused): no default between letting a task run to its end and ending it now
 end_refused(task: Node): Node := {
 	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
@@ -1099,6 +1103,7 @@ rule_words = {
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,
 	counted_question: counted_question,
+	counted_results: counted_results,
 	end_refused: end_refused,
 	declared_local: declared_local,
 	definitions_reached: definitions_reached,
@@ -1143,6 +1148,7 @@ rule_words = {
 	return_kind: return_kind,
 	route_bindings: route_bindings,
 	route_verb: route_verb,
+	path_parameters: path_parameters,
 	served: served,
 	shader_values: shader_values,
 	shader_values_of: shader_values_of,
@@ -1296,7 +1302,8 @@ hyphen_difference(name: Node, program: Node): any := {
 	if not parts.all(part => bound.has(part)) { return ø }
 	spaced = parts.join(" - ")
 	if bound.has(written) {
-		warn written + " is the name " + written + ", not " + spaced + "; fix: " + spaced
+		# where it is written, so the page's "I meant" renames it there and at every read (P81)
+		diagnose(call_of("kebab_name", [written, spaced, parts.join("_")]), name)
 		return ø
 	}
 	warn written + " reads as " + spaced + ": " + parts.join(" and ") + " are bound, no name " + written + "; fix: " + parts.join("_") + " or " + spaced

@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# A form handled on the page (card web-submit): `on submit` gets the form's named fields as event.fields,
+# A form handled on the page: `on submit` gets the form's named fields as event.fields,
 # a number field's value as a number. Run it in the playground, or `warp samples/web/form_submit.warp` for its HTML.
 guests = []
 div{

@@ -762,9 +762,26 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 ## Pictures
 
-`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card.
+`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
 
 Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
+
+## Shaders
+
+A shader is a small program the graphics card (GPU) runs for every pixel at once. `paint` turns a warp function of the pixel's position into a shader: it returns the pixel's color as red, green and blue between 0 and 1.
+
+```warp
+use math
+stripes(x, y) := [0.5 + 0.5 * sine(x / 4), 0.5 + 0.5 * sine(y / 4), 0.8]
+paint(stripes, 64, 32)
+```
+
+The function may call other functions; `shader_of(stripes)` shows the shader code it becomes. Paint it again in a loop for moving pictures.
+
+You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
+`use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
+
+Examples: shader, "shader mouse"; samples: warp_compiled_wgsl_shader, julia, voronoi, domain_warp, sdf_scene, ocean, scene_3d, kaleidoscope, yohei_tweet_glsl, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, fluid_smear, fluid_smear_dsl, watercolor
 
 ## Acceleration
 
@@ -782,9 +799,9 @@ card by itself, and says so once. The graphics card computes in single precision
 design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
 block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
 
-[[#Pictures]] above shows how to draw directly on the GPU.
+[[#Shaders]] above shows how to draw directly on the GPU.
 
-Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader, lava_lamp, northern_lights, ringed_planet, kaleidoscope
+Examples: "gpu map"; samples: gpu_map, gpu_arrays, gpu_million
 
 ## Sound and music
 

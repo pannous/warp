@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# Reflection: a program looks at its own classes and functions (notes/reflection.md)
+# Reflection: a program looks at its own classes and functions
 
 class Point {
 	x: int

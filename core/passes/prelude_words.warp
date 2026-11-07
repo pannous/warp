@@ -54,17 +54,18 @@ spans_of(source: text): list := {
 	source_spans[source]
 }
 # the module of sliced_modules whose file the source is, as the library index was written of it: its length the
-# index's, and under WARP_LIB (a lib/ edited since the build) its hash too, as rule_needs_by_module trusts the index
+# index's, and in a lib/ maybe edited since the build (library_unedited) its hash too, as rule_needs_by_module trusts the index
 # (hashing the prelude and the type modules was ~25 ms a compile); ø for any other text
 indexed_module(source: text): text? := {
 	for module in sliced_modules() {
 		hash = library_index_section("hash").get(module) ?? ""
-		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (warp_lib() == ø or hash == source_hash(source)) { return module }
+		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (library_unedited() or hash == source_hash(source)) { return module }
 	}
 	ø
 }
-# the modules every compile cuts: the prelude and the type modules
-sliced_modules(): list := ["prelude"] + type_modules
+# the modules every compile cuts: the prelude, lib/math.warp beside it (builtin_signatures.warp library_texts_seen) and
+# the type modules
+sliced_modules(): list := ["prelude", "math"] + type_modules
 # each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
 sliced_modules_scanned(): map := {
 	found = {}
@@ -112,6 +113,8 @@ name_defined_in(line: text): text := {
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if count(leading) == 0 or leading == rewrite_word { return "" }
 	following = line[#leading ..].trim()
+	formatted = formatted_type(line)
+	if formatted != "" { return formatted }
 	converted = conversion_target(following)
 	if converted != "" { return converted }
 	# `convert!(n, to: byte) := …`, `is!(warp, expected) := …`: the slice name is the bang word
@@ -233,11 +236,11 @@ operated_within(name: text): list := {
 }
 
 # the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),
-# the matcher of a structural match arm (node_matches.warp), an int type's show (extensions/int_types.warp)
+# the matcher of a structural match arm (node_matches.warp)
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + emitted_words(program)
 }
 # `data($a * 1) => a`, an arm of quoted code wherever a sugar word holds it (`rules {…}`, extensions/sugar/arms.warp): its
 # match is written only once the sugar fires
@@ -710,8 +713,8 @@ with_type_module_uses(program: Node): Node := {
 	used = flat_statements(program).map(use_target).filter(target => target is symbol).map(name_of)
 	providers = type_module_providers()
 	wanted = {}
-	# a function taking nothing is called bare too: `now` as `now()`
-	for word in called_words(program) + bare_calls(program, providers) + named_types(program) + root_words(program) {
+	# a function taking nothing is called bare too: `now` as `now()`, one of one value read as its member, `t.words`
+	for word in called_words(program) + bare_calls(program, providers) + member_reads(program) + named_types(program) + root_words(program) {
 		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, sorted
@@ -885,6 +888,20 @@ bare_calls(program: Node, providers: map): list := {
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
+# `t.words`: the names read as a member, each a type module's function of one value (words(t)), called so as t.words()
+member_reads(program: Node): list := {
+	unary = {}
+	for module in type_modules {
+		for slice in definition_slices(file_text(std_module_path(module)) ?? "") { if takes_one_value(without_keyword(slice#2), slice#1) { unary[slice#1] = yes } }
+	}
+	nodes_in(program).filter(n => is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in unary).map(n => name_of(value_of(n)))
+}
+# `words(t): list := …`: a definition's head of one parameter
+takes_one_value(written: text, name: text): bool := {
+	if not written.starts_with(name + "(") { return no }
+	parameters = written[#name + 1 ..].split(")")#1
+	parameters.trim() != "" and not parameters.contains(",")
+}
 # a definition's text after the keyword declaring it: `π() := …` of `const π() := …`
 without_keyword(written: text): text := if leading_name(written) in defining_keywords then written[#leading_name(written) ..].trim() else written
 # the names the program binds anywhere, its own wherever it says them, never a module's word (card module-hygiene):
@@ -919,6 +936,8 @@ names_bound_in(n: Node): any := {
 			waiting += if is_key(part, Op.Question) and is_key(branches, Op.Colon) then [key_of(part), key_of(branches), value_of(branches)] else [key_of(part), branches]
 		} else if is_group(part) {
 			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			# a named pattern, `pattern Definition = Key(head, Op.Define, body)`: head and body, never shell's head
+			if is_pattern_definition(part) { for name in case_pattern_names(value_of(part#2)) { found[name] = yes } }
 			# an enum and its cases, `enum K { B, D }`: B is the program's, never sound's note
 			enum = declared_enum(part)
 			if enum != ø { for name in [enum#1] + enum#2 { found[name] = yes } }
@@ -949,6 +968,8 @@ pattern_names(pattern: Node): list := match pattern {
 	Key(head, op, fields): if rest_name(pattern) != ø then [rest_name(pattern)] else if is_group(fields) then pattern_names(fields) else []
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
 }
+# the names a case's pattern binds, `Key(head, Op.Define, body)` its parts', the case itself none
+case_pattern_names(pattern: Node): list := if is_round(pattern) and #pattern > 0 and pattern#1 is symbol then items_of(pattern)[1 ..].flat_map(pattern_names) else pattern_names(pattern)
 # a text pattern goes on after a hole's type, `id: int + "/posts/" + post: int` parsing as `id: (int + "/posts/" + post)`
 names_after_type(type: Node): list := match type {
 	Key(left, Op.Add, right): names_after_type(left) + pattern_names(right)

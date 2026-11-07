@@ -42,8 +42,8 @@ const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
 // terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.warp): clearing the screen or moving the cursor
-// home starts the text anew, the other codes (colors, cursor moves) are dropped
-const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
+// home starts the text anew, with the line end clear()'s print gives it, the other codes (colors, cursor moves) are dropped
+const TERMINAL_RESTART = /(?:\x1b\[(?:2J|H|1;1H))+\n?/g;
 const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
@@ -103,6 +103,8 @@ function element(tag, properties = {}, ...children) {
 let worker;
 let workerReady;
 let workerStage = "not started"; // the worker's last stage (worker.js stage), for playground.state
+const workerStages = []; // the worker's stages so far, each with the page's milliseconds it began at, for playground.state: where a start's time goes
+const stageBegan = stage => workerStages.push({ stage: workerStage = stage, at: Math.round(performance.now()) });
 let workerSettled = "starting"; // workerReady's outcome
 let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
@@ -192,9 +194,15 @@ function showAgain(topic) {
 
 // ---- the worker ---------------------------------------------------------------------------------------------
 
-// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage
+// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage;
+// a stalled standby is dropped, the next stop starts a worker of its own
 function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
 	const stall = `the compiler's worker gave no sign for ${STALLED_START_MS / 1000} s at stage "${workerStage}"`;
+	if (stalledWorker === standby) {
+		standby = undefined;
+		stalledWorker.terminate();
+		return reject(new Error(stall));
+	}
 	if (restarts > 0) return reject(new Error(stall));
 	console.warn(`${stall}: starting it again`);
 	stalledWorker.terminate();
@@ -202,19 +210,41 @@ function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
 	resolve(workerReady);
 }
 
+// the standby takes over when a run is stopped, else a new worker starts
 function startWorker(restarts = 0) {
 	workerWarmed = false;
+	workerStages.length = 0;
+	worker = standby ?? newWorker(restarts);
+	standby = undefined;
+	workerReady = worker.ready;
+	if (!worker.isReady) showLoading("starting the compiler's worker", false);
+	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
+	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
+	workerSettled = "starting";
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
+	tellSystemValues();
+	sharePointer();
+	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
+	tellEnvironment();
+}
+
+// a worker started while a run animates (startsFrame): stopping that run, as the next run does, takes it at once instead
+// of starting a worker then, whose compiler loads and warms up first (0.5–1 s, seconds on a slow machine: card
+// playground-progressive-slowdown, Hello after a shader)
+let standby;
+const prepareStandby = () => standby ??= newWorker();
+
+// a worker loading the compiler: `ready` resolves once it can run programs
+function newWorker(restarts = 0) {
 	const options = new URLSearchParams();
 	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
 	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
 	if (PLAYGROUND_VERSION) options.set(BUILD_PARAMETER, PLAYGROUND_VERSION.built); // host.js ofThisBuild
-	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
-	worker.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
-	showLoading("starting the compiler's worker", false);
-	workerReady = new Promise((resolve, reject) => {
-		const starting = worker;
+	const starting = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
+	starting.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
+	starting.ready = new Promise((resolve, reject) => {
 		let stalled;
 		// each message of the starting worker shows it alive: the stall timer starts over
 		const watchStart = () => {
@@ -229,8 +259,8 @@ function startWorker(restarts = 0) {
 		const [ready, failed] = [settled(resolve), settled(reject)];
 		watchStart();
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
-		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
-		worker.onmessage = ({ data }) => {
+		starting.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		starting.onmessage = ({ data }) => {
 			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
@@ -239,13 +269,20 @@ function startWorker(restarts = 0) {
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
-			if (data.type === "stage") return workerStage = data.stage;
+			// the standby starts unseen: its stages and its loading are not the shown worker's
+			const shown = starting === worker;
+			if (data.type === "stage") return shown && stageBegan(data.stage);
 			if (data.type === "loading") {
+				if (!shown) return;
 				workerStage = `downloading the compiler: ${megabytes(data.loaded)} MB so far`; // a stalled download says how far
 				return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			}
-			if (data.type === "compiling") return stopLoading();
-			if (data.type === "ready") return ready();
+			if (data.type === "compiling") return shown && stageBegan("compiling") && stopLoading();
+			if (data.type === "ready") {
+				starting.isReady = true;
+				if (shown) stageBegan("ready");
+				return ready();
+			}
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
@@ -282,14 +319,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, sounded: pending.sounded, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
-	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
-	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
-	workerSettled = "starting";
-	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
-	tellSystemValues();
-	sharePointer();
-	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
-	tellEnvironment();
+	return starting;
 }
 
 // the members to offer after the code and a dot (completion.js), from the compiler (src/lowering/data/members.rs)
@@ -382,8 +412,8 @@ function roomBelowPaintings(paneStyle) {
 		+ pixels(paneStyle.paddingBottom) + pixels(paneStyle.borderBottomWidth) + pixels(getComputedStyle(document.body).paddingBottom);
 }
 
-// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints or prints in it
-// replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
+// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints in it replaces
+// the last frame's (printed text only at clear(), decision page-text-frames); frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
 // drawing-frames, snake-frames)
 function startsFrame(run, output) {
 	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
@@ -391,6 +421,7 @@ function startsFrame(run, output) {
 	if (starts) {
 		run.animating = true;
 		stopAfterTimeout(run);
+		prepareStandby();
 	}
 	return starts;
 }
@@ -606,14 +637,11 @@ function painted(run, painting) {
 	showFrame(run.paintings);
 }
 
-// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins.
-// Before any frame each print shows at once, so a print before a slow paint is read while it renders (card print-watch)
+// what a run prints shows at once and stays, a sleep between or not (decision page-text-frames): a text animation starts
+// each frame with clear(), whose terminal clear shows the text anew (terminalText). Each print shows at once, so a
+// print before a slow paint is read while it renders (card print-watch)
 function printedChunk(run, chunk) {
-	(run.printedWhole ??= []).push(chunk); // every frame's, for the report (scripts/samples-web.sh compares it with the native run's)
-	if (startsFrame(run, "printed")) {
-		showPrinted(run.printed);
-		run.printed = [];
-	}
+	(run.printedWhole ??= []).push(chunk); // for the report (scripts/samples-web.sh compares it with the native run's)
 	run.printed.push(chunk);
 	if (!run.animating) showPrinted(run.printed);
 }
@@ -1106,12 +1134,24 @@ async function show(code) {
 	warmWorker();
 }
 
-// once per worker, after a run is shown: the page is idle, the worker free
+// once per worker, after a run is shown and the person did nothing for WARM_UP_QUIET_MS: the warm-up takes the
+// worker for 0.5–4 s, and a run asked meanwhile waited for it, so a Hello clicked right after the page loaded took
+// seconds (card compiler-cache-compiled). A key or a click restarts the wait
+const WARM_UP_QUIET_MS = 5000;
+let warmUpWait;
 function warmWorker() {
 	if (workerWarmed) return;
+	clearTimeout(warmUpWait);
+	warmUpWait = setTimeout(warmNow, WARM_UP_QUIET_MS);
+}
+function warmNow() {
+	warmUpWait = undefined;
+	if (workerWarmed || pending || showing) return;
 	workerWarmed = true;
 	worker.postMessage({ warm: true });
 }
+const quietAgain = () => warmUpWait && warmWorker();
+["keydown", "pointerdown"].forEach(input => addEventListener(input, quietAgain, true));
 
 // a link to the same page with the other compiler build
 function showBuildSwitch() {
@@ -1388,7 +1428,7 @@ window.playground = { evaluate, settled, applyFix, chooseExample, runCode, repor
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
-	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
+	state: () => ({ worker: workerStage, stages: workerStages, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
 reportBareErrors(self, "page"); // task-workers.js
 addEventListener("unhandledrejection", event => {

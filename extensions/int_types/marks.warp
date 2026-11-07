@@ -1,6 +1,6 @@
 # Int types (card color-prints): `type Color = int`, in a program or a module it uses, makes a Color an int with a
 # mark of its own above its Kind, as a yes/no is a marked Int: `x as Color` marks it, `x is Color` tests the mark and
-# the type's `show(c: Color)` gives its text wherever it prints (class_methods.warp's text·shown); arithmetic,
+# the type's `format Color c as text` gives its text wherever it prints (class_methods.warp's text·shown); arithmetic,
 # comparisons and C calls see the plain int. Core names no such type: each declaration gets the next mark.
 # `type Angle = float` marks a float alike. Arithmetic keeps a mark (decision marks-survive-arithmetic), held unboxed
 # by the emitter as long as it can (decision marks-unboxed-first: TypedCode.mark, stamped where the value is boxed)
@@ -25,13 +25,13 @@ int_type_used(n: Node, kinds: map): Node := {
 	if is_key(n, Op.Is) { return Key(call_of("int_mark_of", [key_of(n)]), Op.Eq, kind) }
 	n
 }
-# a type's show under its own name, show·Color, so that every int type has one
+# a type's `format … as text` under its own name, format·text·Color, so that every int type has one
 shower_renamed(statement: Node): Node := {
 	head = key_of(statement)
 	Key(group_like(head, [symbol(shower_word(shower_of(statement)))] + items_of(head)[1 ..]), Op.Define, value_of(statement))
 }
 shower_word(type_name: text): text := showing_word + name_joiner + type_name
-# the program's text·shown, the classes' if it has one: a value of an int type first shown by its type's show
+# the program's text·shown, the classes' if it has one: a value of an int type first shown by its type's format … as text
 with_int_types_shown(statements: list, showers: list, kinds: map): list := {
 	head = call_of(showing_dispatcher, [Key(shown_parameter, Op.Colon, symbol("any"))])
 	dispatchers = statements.filter(statement => is_key(statement, Op.Define) and is_group(key_of(statement)) and key_of(statement)#1 == symbol(showing_dispatcher))

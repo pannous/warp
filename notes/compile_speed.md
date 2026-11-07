@@ -154,3 +154,20 @@ declaring only Instant (cast failure across modules).
   web/playground/driver.js). A host keeping one compiler instance across compiles would grow it: clear it there.
 - Open for the user (morning): typed $items (seed ABI), map_index 14.8 % (scope_with copies maps via field_with,
   enum ·case lookups by name), GC 15.8 %.
+
+## Hello takes half a second (card hello-takes, 2026-11-07)
+`time warp hello.warp`: 1.5.1 0.22 s / 1.9 G instructions, 1.6.1 0.47 s / 6.1 G, main 0.47 s / 5.5 G. WARP_TIMES
+marks are printed where a phase *starts*, so the time after `pass sugar` is sugar's, not iteration_inlining's.
+- The native warp sets WARP_LIB for every run (core/native/warp.warp, so warp.wasm's commands read its lib/), and
+  the compiler read any WARP_LIB as "a lib/ edited since its build": every compile rescanned all modules' rule needs
+  (scanned_rule_needs, which re-cut extensions/rules/rule_words.warp), hashed the prelude and the sugar files. The
+  native warp now also exports WARP_LIB_INSTALLED (its installed lib/), and library.warp library_unedited() trusts the
+  index and baked rules when WARP_LIB is that one: hello 5.5 G -> 3.1 G instructions, 0.47 -> 0.22 s. A worktree's
+  WARP_LIB stays untrusted (its lib/ may be edited after its build).
+- text == (equal_texts) ran NFC's quick check (maybe_decomposed) code point by code point over both texts at every
+  unequal compare, ~40 % of tree_patterns' compile through node_equal: bytes below 0xCC (U+0300's lead) are skipped
+  bytewise now. tree_patterns 23.6 G -> 17.6 G with the fix above.
+- one_typed_definitions cut prelude + math.warp joined, a text the index never holds: each is cut on its own now and
+  math is a sliced module of the index.
+- Profiling hello: `sample` attaches ~0.2 s late, so profile.sh catches only a hello's tail; use WARP_TIMES phases
+  for it, or a longer program.

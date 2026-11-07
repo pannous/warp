@@ -1,0 +1,11 @@
+# A key statement binds its word in a block of code (card main-block-binding, decisions #6 data as scope, bare-pair);
+# as a value, and in a block of data, it stays a pair
+
+'x:2; x'	2
+'x: 2\nx + 1'	3
+'f() := { y: 3; y * 2 }; f()'	6
+'r = 0; if r == 0 { z: 5; r = z + 1 }; r'	6
+'x: int\nx = 3\nx'	3
+'p = {a: 1\n b: 2}; p.b'	2
+'x = (y: 2); x is pair'	yes
+'use markup; to_html(div{ class: "box"\n p{ "hi" } })'	'<div class="box"><p>hi</p></div>'
