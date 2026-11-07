@@ -15,4 +15,4 @@
 'use time; try { parse_date("it\'s-01-01") } catch e { e.message }'	"parse_date: \"it's-01-01\" is no YYYY-MM-DD date"
 'use list; try { median([]) } catch e { e.message }'	"median of an empty list"
 'use list; median([3, 1, 2])'	2
-'use list; median([4, 1, 3, 2])'	5/2
+'use list; median([4, 1, 3, 2])'	2.5
