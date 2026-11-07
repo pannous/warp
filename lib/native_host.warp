@@ -8,6 +8,7 @@ use bits
 use file
 use os
 import (calloc, free, strlen, library_function, field_u8, field_i16, field_i32, field_u32, field_i64, field_f32, field_f64, field_pointer, field_text, set_field_i32, set_field_i64, set_field_f64, set_field_pointer) from 'c'
+use "native_host/platform.warp"
 use "native_host/window.warp"
 use "native_host/sound.warp"
 
@@ -15,34 +16,4 @@ use "native_host/sound.warp"
 host_run_ended() := {
 	window_run_ended()
 	sounds_heard_out()
-}
-
-// SDL's parts started (video, audio), Control-C left to stop the program at once (card window-ctrl-c: SDL's own
-// handler made it a quit event, which waited for the window's next events)
-sdl_started(flags: int) := {
-	SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1")
-	SDL_Init(flags)
-}
-// a quiet run (a test, an agent's: WARP_NO_WINDOW or CI) opens no window and sounds nothing
-quiet_run() := env("WARP_NO_WINDOW") != ø or env("CI") != ø
-// macOS, whose frameworks answer what elsewhere other libraries do (CoreText, AudioToolbox, CoreMIDI)
-CORE_FOUNDATION = "/System/Library/Frameworks/CoreFoundation.framework"
-on_mac() := exists(CORE_FOUNDATION)
-CFStringCreateWithCString(allocator: handle, text: text, encoding: i32): handle from 'CoreFoundation'
-CFStringGetCString(string: handle, buffer: handle, size: i64, encoding: i32): bool from 'CoreFoundation'
-CFRelease(object: handle): void from 'CoreFoundation'
-CF_UTF8 = 0x08000100
-// a CoreFoundation string of a text the module names (a key, a style, a MIDI port), made once
-global cf_texts = {}
-cf_text(t: text) := {
-	if not cf_texts.has(t) { cf_texts[t] = CFStringCreateWithCString(0, t, CF_UTF8) }
-	cf_texts[t]
-}
-CF_TEXT_MOST_BYTES = 1024
-// a CoreFoundation string's text
-cf_string_text(string) := {
-	buffer = calloc(1, CF_TEXT_MOST_BYTES)
-	read = if CFStringGetCString(string, buffer, CF_TEXT_MOST_BYTES, CF_UTF8) then field_text(buffer, 0) else ""
-	free(buffer)
-	read
 }
