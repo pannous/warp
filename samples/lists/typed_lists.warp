@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # Typed lists: a declared element type, checked at every write
-# (the typing rules are machine-checked in lean/WarpTypes, notes/type_theory.md)
+# (the typing rules are machine-checked in lean/WarpTypes)
 
 scores: ints = [90, 75]
 scores.add(82)

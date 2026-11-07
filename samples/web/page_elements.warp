@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# The page's elements by id (card page-ids): an id of the program's markup is a name, `who` the element and `$who`
+# The page's elements by id: an id of the program's markup is a name, `who` the element and `$who`
 # its value, what was typed into it; `document` and `window` are the page's own. Run it in the playground.
 # check: type "name" "Ann", click "Greet" → Hello Ann
 greeting = "Type a name"

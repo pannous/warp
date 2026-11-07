@@ -87,9 +87,9 @@ ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/domain_warp.warp
 ok   samples/gpu/fluid_smear_dsl.warp
 ok   samples/gpu/fluid_smear.warp
-ok   samples/gpu/gpu_arrays.warp
-ok   samples/gpu/gpu_map.warp
-ok   samples/gpu/gpu_million.warp
+ok   samples/acceleration/gpu_arrays.warp
+ok   samples/acceleration/gpu_map.warp
+ok   samples/acceleration/gpu_million.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
