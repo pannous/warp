@@ -271,8 +271,7 @@ without_steps_up(path: text): text := {
 	}
 	kept.join("/")
 }
-# a file of lib/ comes as library.warp file_source gives it: from the disk under WARP_LIB, else from the bundle, whose
-# texts are lib/ as it was when the compiler was built (a module changed since must be read)
+# a file comes as library.warp file_source gives it: read from the disk once a compile
 file_text(path: text): any := file_source(path)
 
 # what a used file brings: a class, `x = …`, `f(x) := …`,

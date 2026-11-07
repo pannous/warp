@@ -154,8 +154,6 @@ linked_libraries(source: text): list := {
 		if wasm == ø or #wasm == 0 { continue }
 		signature = module_signature(name, wasm)
 		if signature == ø { throw name + ".wasm won't link: no " + SIGNATURE_SECTION + " section, built by a compiler older than this one; warp rebuild builds it anew" }
-		# (a lib/ edited since its modules were built: a WARP_LIB edit before scripts/smoke.sh prebuilds them)
-		if not built_of_text(name, signature.source) { throw name + ".wasm won't link: lib/" + name + module_extension + " or a module it uses changed since it was built; scripts/smoke.sh <tree> or warp rebuild builds it anew" }
 		image = library_image_of(name, signature)
 		if image is text { throw name + ".wasm won't link: " + image }
 		images += [image]
@@ -163,15 +161,6 @@ linked_libraries(source: text): list := {
 		for inner in signature.uses { if inner not in names { names += [inner] } }
 	}
 	dependencies_first(images)
-}
-# whether lib/<module> and the modules it uses are the texts the module was built of (library.warp built_of_texts): by
-# their length, and in a lib/ maybe edited since the build (library_unedited) by their hash, as the index is trusted; djb2 over
-# the prelude was ~1.5 % of hello
-built_of_text(module: text, hash: text): bool := {
-	# a program's own module linked without its text beside it is what it was built of
-	if own_module_wasm.has(module) and file_text(std_module_path(module)) == ø { return yes }
-	texts = built_of_texts(module)
-	hash.starts_with("${texts_length(texts)}-") and (library_unedited() or hash == texts_hash(texts))
 }
 # `import shapes` beside a shapes.wasm carrying a warp.signature: the program's own module, linked as a standard
 # module is, imported by its path (decision samples-modules-wasm); its text, where beside it, is shapes.warp

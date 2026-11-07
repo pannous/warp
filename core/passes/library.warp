@@ -19,18 +19,6 @@ def warp_lib(): text? {
 	}
 	warp_lib_given
 }
-# whether lib/ is as its build left it, so its library index and baked rules are trusted unhashed: no WARP_LIB, or
-# the installed build's lib/, which the native warp names in WARP_LIB_INSTALLED as it sets WARP_LIB for every run;
-# any other WARP_LIB is a lib/ maybe edited since its build
-global library_unedited_asked = no
-global library_unedited_held = no
-def library_unedited(): bool {
-	if not library_unedited_asked {
-		library_unedited_held = warp_lib() == ø or warp_lib() == env("WARP_LIB_INSTALLED")
-		library_unedited_asked = yes
-	}
-	library_unedited_held
-}
 # this file lies in core/passes/, reached as core/ or as lib/'s link compiler/
 def library_of_core(core: text): text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
 # The lib/ the run was given, which run_library answers from now on
@@ -73,7 +61,10 @@ def library_texts(library: text, within: text): map {
 def file_source(path: text): text? {
 	# (one not there is none, asked first: the page's read of a missing file ends the compile, card playground-host-word;
 	# any other failure to read stays loud)
-	if not file_texts.has(path) { file_texts[path] = if exists(path) then (try read(path) else ø) else ø }
+	if not file_texts.has(path) {
+		file_texts[path] = if exists(path) then (try read(path) else ø) else ø
+		read_traced(path)
+	}
 	file_texts[path]
 }
 global file_texts = {}
@@ -148,7 +139,7 @@ module_hashes(): map := {
 	hashes
 }
 # a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
-# under WARP_LIB, card signature-sha256)
+# when a compile checked lib/ against its build, card signature-sha256)
 source_hash(source: text): text := "${#source}-" + text_digest(source)
 # the sha256 of a text, of its parts' sha256s when longer than one host word is given: a page's slim compiler shows at
 # most 64 KB of an argument, lib/sound.warp is longer (its prebuilt module failed every sound sample in the page)
