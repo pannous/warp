@@ -50,6 +50,7 @@ const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and 
 const DEBUG_COMPILER = "warp.debug.wasm";
 const WAV_TYPE = "audio/wav"; // save sound's files (host-files.js wavOf)
 const PNG_TYPE = "image/png"; // save canvas's pictures (savePicture)
+const BUILD_PARAMETER = "build"; // ?build=<the build time>: the files the worker fetches are of this build (host.js PAGE_BUILD)
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 // a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
 const STALLED_START_MS = 60_000;
@@ -208,6 +209,7 @@ function startWorker(restarts = 0) {
 	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
+	if (PLAYGROUND_VERSION) options.set(BUILD_PARAMETER, PLAYGROUND_VERSION.built); // host.js ofThisBuild
 	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
 	worker.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
 	showLoading("starting the compiler's worker", false);
