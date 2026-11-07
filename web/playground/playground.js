@@ -1053,7 +1053,7 @@ function servingRequests({ shared, port }) {
 	const first = !worker.serving;
 	const waiting = worker.serving?.waiting ?? (first ? ["GET", SERVED_ROOT] : undefined);
 	worker.serving = { shared };
-	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT } };
+	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`web requests (http://localhost:${port} when warp runs it)`], address: SERVED_ROOT } };
 	if (waiting) servedRequest(...waiting);
 }
 
