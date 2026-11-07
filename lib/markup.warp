@@ -104,7 +104,7 @@ page_window_run(html: text) := {
 	print shown
 	exit(0)
 }
-// the window's next event, {event: "click·1", detail, now}, else a tick once the milliseconds are over; ø once it is
+// the window's next event, {event: "click·1", detail, wall}, else a tick once the milliseconds are over; ø once it is
 // closed
 page_window_event(milliseconds: int): any := foreign_call("js", APP_WINDOW, "next", 1, [milliseconds])
 // what happened on the page, done: the milliseconds till a timer is due, WAIT_FOR_EVENT when none is
@@ -112,7 +112,7 @@ page_happened(happened: any): int := {
 	event = happened["event"]
 	if event == PAGE_KEY_EVENT { emitted(PAGE_KEY_EVENT, happened["detail"]) }
 	else if event != PAGE_TICK { page_event(int(event.split(EVENT_JOINER)[1]), happened["detail"]) }
-	emitted(PAGE_TICK, happened["now"]) ?? WAIT_FOR_EVENT
+	emitted(PAGE_TICK, happened["wall"]) ?? WAIT_FOR_EVENT
 }
 page_step(words: list): text := {
 	if words[0] == "click" and #words == 2 { return click(words[1]) }

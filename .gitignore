@@ -40,7 +40,6 @@ data/
 /lib/libwarp_wasmtime.*
 /lib/libwarp_sound.*
 /lib/libwarp_gpu.*
-/lib/libwarp_window.*
 /lib/libwarp_webview.*
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*

@@ -36,7 +36,7 @@ STAMP_DIGITS=10
 PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv' 'modules/sugar_rules.packed')
 # the exports of warp.wasm the page calls (driver.js, values.js): the browser's copy keeps only these, and Binaryen drops
 # what they never reach and the name section (1.35 → 1.26 MB gzipped); an export missing here fails the tour loudly
-COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at returned_error
+COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at shown_from returned_error
 	error_of new_empty new_int new_bool new_float new_codepoint new_text new_symbol new_key new_list new_type new_bytes new_ints
 	new_floats new_spelled_key new_spelled_list item_count item_at int_item_at float_item_at gpu_list_place gpu_list_cell
 	is_textual)
@@ -93,6 +93,10 @@ build_compiler() {
 # `library: "dir/name"` prebuilt as <clone>/dir/name.wasm; natively scripts/link-packages.sh builds it beside warp
 pack_package_libraries() {
 	local manifest clone library
+	# a fresh worktree has no packages/ (git ignores it): linked first, else the page lacks uniscript_c.wasm and
+	# samples/text/uniscript_text.warp fails "uniscript_c.uniscript_error is not available in the browser"; the served
+	# list, written after, then holds the packages samples use by path (samples/modules/packages.warp)
+	compgen -G "packages/*/package.warp" > /dev/null || "$repository/scripts/link-packages.sh" "$repository"
 	for manifest in packages/*/package.warp; do
 		[ -f "$manifest" ] || continue
 		library=$(manifest_field "$manifest" library)

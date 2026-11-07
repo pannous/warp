@@ -25,8 +25,9 @@ c_library_aliases = {libc: "c", libm: "m", cmath: "m", zlib: "z", SDL2: "SDL2", 
 c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
 not_c_libraries = ["warp", "emitter", "runtime", "host"]
-# the files whose foreign lines say what a library's functions take and give
+# the files whose foreign lines say what a library's functions take and give, built in: lib/c.warp, lib/math.warp
 c_catalog_files = ["c.warp", "math.warp"]
+c_catalog_texts(): list := [module_source("c"), math_text]
 c_foreign_mark = " from "
 c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
@@ -82,6 +83,25 @@ c_type_of(word: text): text := {
 
 # the foreign lines of `text`
 c_declarations_in(content: text): list := content.split("\n").map(line => c_declaration(line)).filter(d => d != ø)
+# the catalog's lines of `name` from `library`; libc and libm are one library on macOS: `import sqrtf from "c"` takes libm's line
+catalog_lines(catalog: list, name: text, library: text): list := {
+	found = catalog.filter(d => d#1 == name and d#2 == library)
+	if #found == 0 and library in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
+	found
+}
+# the C functions a used module's text declares: its foreign lines and the catalog's lines its imports name
+# (`import (calloc, field_u32) from 'c'`), as a program's own are (c_functions_of)
+c_declarations_used(content: text, catalog: list): list := {
+	found = c_declarations_in(content)
+	imports = c_statements(content).map(c_import).filter(imported => imported != ø)
+	for imported in imports {
+		for name in imported#2 {
+			lines = catalog_lines(catalog, name, imported#1)
+			if #lines > 0 { found += [lines#1] }
+		}
+	}
+	found
+}
 # the C functions of the standard modules a compile's program uses, name → declaration (prelude_words.warp
 # with_used_modules): a module a pass or rule brings (`use web` of server routes) calls C as one its text names does
 global used_c_functions = {}
@@ -100,14 +120,7 @@ is_c_library(name: text): bool := {
 }
 
 # the foreign lines of lib/c.warp, lib/math.warp and the native files at `native_paths`
-c_catalog(library_folder: text, native_paths: list): list := {
-	found = []
-	for path in c_catalog_files.map(file => library_folder + "/" + file) + native_paths {
-		content = file_source(path) ?? ""
-		found += c_declarations_in(content)
-	}
-	found
-}
+c_catalog(native_paths: list): list := (c_catalog_texts() + native_paths.map(path => file_source(path) ?? "")).flat_map(text => c_declarations_in(text))
 # lib/native/sqlite3.warp: the foreign lines of a C library and the warp words over them (card pure-c-imports)
 native_folder = "native"
 native_file(library: text): text := native_folder + "/" + library + ".warp"
@@ -137,7 +150,7 @@ c_crate_use(statement: text): any := {
 # need an import (`floor` is warp's, `fmin` libm's)
 warp_word_names(): any := {
 	names = {}
-	for content in [library_text("math.warp"), library_text("prelude.warp")] {
+	for content in [math_text, prelude_text] {
 		for line in content.split("\n") {
 			trimmed = line.trim()
 			if trimmed.ends_with(" from warp") or trimmed.ends_with(" from emitter") {
@@ -274,7 +287,7 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 			functions[declaration#1] = declaration
 		}
 	}
-	catalog = c_catalog(library_folder, native.map(n => n#2))
+	catalog = c_catalog(native.map(n => n#2))
 	# warp's own floor stays warp's when libm is imported or used (c_warps)
 	own = warp_word_names()
 	missing = []
@@ -287,9 +300,7 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 			before = #missing
 			for name in imported#2 {
 				if not functions.has(name) and not c_warps(own, name, imported#1) {
-					found = catalog.filter(d => d#1 == name and d#2 == imported#1)
-					# libc and libm are one library on macOS: `import sqrtf from "c"` takes libm's line
-					if #found == 0 and imported#1 in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
+					found = catalog_lines(catalog, name, imported#1)
 					if #found > 0 { functions[name] = found#1 } else { missing += [name + " from '" + imported#1 + "'"] }
 				}
 			}
@@ -305,11 +316,11 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 	reached = reached_within(source)
 	calling = ([source] + module_sources(reached)).join("\n")
 	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
-	# the foreign lines of the standard modules it uses, each it calls (lib/sound.warp's kill, unlink, mkdir); the
-	# catalog's own files (c.warp, math.warp) only as its rules above take them
-	for line in module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).join("\n").split("\n") {
-		d = c_declaration(line)
-		if d != ø and not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
+	# the foreign lines and C imports of the standard modules it uses, each it calls (lib/sound.warp's kill, unlink, mkdir;
+	# lib/native_window.warp's `import calloc from 'c'`); the catalog's own files (c.warp, math.warp) only as its rules
+	# above take them
+	for d in module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).flat_map(text => c_declarations_used(text, catalog)) {
+		if not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
 	}
 	replaced = {}
 	for statement in wasm_uses.keys {
@@ -397,6 +408,6 @@ c_refused_form(refusal: text, functions: map, library_folder: text): any := {
 	start = outside_the_core + "the call "
 	if not refusal.starts_with(start) { return ø }
 	name = refusal.remove_prefix(start).split("(")#1
-	if functions.has(name) or c_catalog(library_folder, []).any(d => d#1 == name) { return "foreign C call" }
+	if functions.has(name) or c_catalog([]).any(d => d#1 == name) { return "foreign C call" }
 	ø
 }

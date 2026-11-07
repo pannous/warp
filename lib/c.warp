@@ -57,6 +57,21 @@ fclose(file: handle): i32 from 'c'
 fputs(s: text, file: handle): i32 from 'c'
 fflush(file: handle): i32 from 'c'
 
+// memory a program hands C to fill, and a field of a struct C filled read by its offset and C type (field_*: the
+// native warp's own, lib/native/foreign.c): `event = calloc(1, 128)`, `SDL_PollEvent(event)`, `field_u32(event, 0)`
+calloc(count: i64, size: i64): handle from 'c'
+free(memory: handle): void from 'c'
+field_u8(struct: handle, offset: i64): i32 from 'c'
+field_i32(struct: handle, offset: i64): i32 from 'c'
+field_u32(struct: handle, offset: i64): i64 from 'c'
+field_i64(struct: handle, offset: i64): i64 from 'c'
+field_f32(struct: handle, offset: i64): f64 from 'c'
+field_f64(struct: handle, offset: i64): f64 from 'c'
+field_pointer(struct: handle, offset: i64): handle from 'c'
+// a C library's function by its name, as the native warp finds it (lib/native/foreign.c): 0 when the library or the
+// function is not there, so a program asks before it calls an optional library (`library_function("SDL3", "SDL_Init")`)
+library_function(library: text, name: text): handle from 'c'
+
 // libm's functions lib/math.warp has no line of
 ldexp(x: f64, exponent: i32): f64 from 'm'
 cbrt(x: f64): f64 from 'm'

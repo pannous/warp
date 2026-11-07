@@ -1,0 +1,7 @@
+# decision gathering, the mirror of P50 broadcasting: arguments past the others gather into a last parameter of a list type
+
+'total(xs: numbers) := sum(xs); total 1 2 3'	6
+'total(xs: numbers) := sum(xs); total(1, 2, 3)'	6
+'total(xs: numbers) := sum(xs); total([1, 2, 3])'	6
+'say(level: text, parts: texts) := level + ": " + parts.join(" "); say "warn" "a" "b"'	"warn: a b"
+'f(x) := x; f(1, 2)'	error	an untyped last parameter gathers nothing

@@ -8,6 +8,8 @@ rewrite paint($s, $v) => paint($s, $size..., $v) where $s is symbol and $size = 
 // a paint of a shader the program assigns reads its holes from the variables of their names (extensions/rules/shader_holes.warp shader_values)
 rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values($s, $v, $program)
 rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
+// a shader block's paint without holes, with no values, so the rules below place it (card wgsl-error)
+rewrite paint($s, $w, $h) => paint($s, $w, $h, ø) where $s is symbol and $place = shader_place_of($s, $program, $source)
 // gpu_render(s, width, height): a shader's render without values of its own, its holes read as paint's
 rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
 rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, [])
@@ -18,7 +20,8 @@ rewrite $p => $q where program and $q = gpu_lists_packed($p)
 // (this rule needs gpu_compute, so the prelude's rules, the one above too, come with any program calling it)
 rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
 // a shader text the program names gets the shader words it calls but does not define (lib/prelude.warp shader_words,
-// decision shader-hash: hash(cell)); after the rules above, which read the shader's name
-rewrite paint($s, $w, $h, $v) => paint(shader_words($s), $w, $h, $v) where $s is symbol and not $s is function
-rewrite gpu_render($s, $w, $h, $v) => gpu_render(shader_words($s), $w, $h, $v) where $s is symbol
-rewrite gpu_compute($s, $v, $n) => gpu_compute(shader_words($s), $v, $n) where $s is symbol
+// decision shader-hash: hash(cell)), placed where its shader block stands (card wgsl-error); after the rules above,
+// which read the shader's name
+rewrite paint($s, $w, $h, $v) => paint($words, $w, $h, $v) where $s is symbol and not $s is function and $words = shader_words_of($s, $program, $source)
+rewrite gpu_render($s, $w, $h, $v) => gpu_render($words, $w, $h, $v) where $s is symbol and $words = shader_words_of($s, $program, $source)
+rewrite gpu_compute($s, $v, $n) => gpu_compute($words, $v, $n) where $s is symbol and $words = shader_words_of($s, $program, $source)

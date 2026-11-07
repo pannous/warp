@@ -53,22 +53,16 @@ spans_of(source: text): list := {
 	}
 	source_spans[source]
 }
-# the module of sliced_modules whose file the source is, its length the index's: the index is lib/ as the build left it
-# (decision no-lib-reads: an edited lib/ is a rebuild); ø for any other text
-indexed_module(source: text): text? := {
-	for module in sliced_modules() {
-		hash = library_index_section("hash").get(module) ?? ""
-		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) { return module }
-	}
-	ø
-}
-# the modules every compile cuts: the prelude, lib/math.warp beside it (builtin_signatures.warp library_texts_seen) and
-# the type modules
-sliced_modules(): list := ["prelude", "math"] + type_modules
+# the module of sliced_texts the source is; ø for any other text
+indexed_module(source: text): text? := sliced_modules().find(module => source == sliced_texts()[module])
+# the texts every compile cuts, by the library index's cuts: the prelude and lib/math.warp beside it, both built in
+# (builtin_signatures.warp; decision no-lib-reads)
+sliced_texts(): map := {prelude: prelude_text, math: math_text}
+sliced_modules(): list := sliced_texts().keys
 # each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
 sliced_modules_scanned(): map := {
 	found = {}
-	for module in sliced_modules() { found[module] = slice_spans(file_text(std_module_path(module)) ?? "").map(span => "${span#1} ${span#2} ${span#3}").join(";") }
+	for module in sliced_modules() { found[module] = slice_spans(sliced_texts()[module]).map(span => "${span#1} ${span#2} ${span#3}").join(";") }
 	found
 }
 indexed_spans(spans: text): list := spans.split(";").filter(span => span != "").map(span => span.split(" ")).map(span => [span#1, span#2 as int, span#3 as int])
@@ -574,8 +568,7 @@ module_of_path(path: text): text := {
 modules_used_by(module_name: text, seen: list): list := {
 	if module_name in seen { return seen }
 	seen += [module_name]
-	signature = linked_signature(module_name)
-	for used in (if signature != ø then signature.uses else used_modules(used_module_text(module_name))) { seen = modules_used_by(used, seen) }
+	for used in module_uses(module_name) { seen = modules_used_by(used, seen) }
 	seen
 }
 # `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
@@ -767,17 +760,42 @@ global_word_modules(program: Node, own: any, used: list): list := {
 	modules
 }
 # the runtime words lib/math.warp declares, `max(a, b, more...) from warp`, which a program calls without its use
-runtime_words_of_math = library_text("math.warp").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø).map(line => line.name)
+runtime_words_of_math = math_runtime_lines.map(line => line.name)
 # the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
 # a used module's source: lib/<module>.warp, else a C library's words, lib/native/<module>.warp (`use sqlite3`'s rows)
 # read once a module: a rule word asks it at each call site it tries (extensions/rules/rule_words.warp module_named)
 global used_module_texts = {}
 used_module_text(module: text): text := {
 	if not used_module_texts.has(module) {
-		native = native_path(run_library(), module)
-		used_module_texts[module] = file_text(std_module_path(module)) ?? (if native == ø then "" else file_text(native) ?? "")
+		source = file_text(std_module_path(module))
+		# (a C library's lines, lib/native/<m>.warp, only for a name no module file has)
+		if source == ø {
+			native = native_path(run_library(), module)
+			source = if native == ø then "" else file_text(native) ?? ""
+		}
+		used_module_texts[module] = source
 	}
 	used_module_texts[module]
+}
+# what a module says, by its prebuilt signature (signature.warp prebuilt_signature), else, a program's own module or
+# one not prebuilt, by its text: the modules it uses, its rule patterns (after `rewrite `), whether it defines the
+# word (a definition or an alias), the parses of its definitions of the word
+module_uses(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.uses else used_modules(used_module_text(module))
+}
+module_patterns(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.patterns else rule_patterns(used_module_text(module))
+}
+module_defines(module: text, word: text): bool := {
+	signature = prebuilt_signature(module)
+	if signature == ø { return definition_slices(used_module_text(module)).any(slice => slice#1 == word) or module_aliases(used_module_text(module)).has(word) }
+	signature.slices.any(slice => slice#1 == word) or signature.aliases.has(word)
+}
+module_definitions(module: text, word: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.slices.filter(slice => slice#1 == word).map(slice => unpack(slice#3)) else definition_slices(used_module_text(module)).filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2)))
 }
 # `use strict`, `use m`: a mode (lib/modes.data) or a C library, which a `use` names without a module file
 use_modes = module_source("modes.data").split("\n").filter(line => line != "" and not line.starts_with("#")).map(line => line.split("\t")#1)
@@ -785,7 +803,7 @@ names_no_module(name: text): bool := name in use_modes or is_c_library(name)
 # the names the prelude defines, read once
 global prelude_definition_names = ø
 prelude_definitions(): list := {
-	if prelude_definition_names == ø { prelude_definition_names = definition_slices(library_text("prelude.warp")).map(slice => slice#1) }
+	if prelude_definition_names == ø { prelude_definition_names = definition_slices(prelude_text).map(slice => slice#1) }
 	prelude_definition_names
 }
 # (an implicit use is always the standard module, never a same-named file beside the program: only an explicit
@@ -897,20 +915,13 @@ parameter_types(heads: list, at: int): list := {
 }
 # the words the program names bare that a type module defines as a function taking nothing, `now() := …`
 bare_calls(program: Node, providers: map): list := {
-	nullary = {}
-	for module in type_modules {
-		path = std_module_path(module)
-		for slice in definition_slices(file_text(path) ?? "") { if without_keyword(slice#2).starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
-	}
+	nullary = library_index_section("nullary")
 	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
 # `t.words`: the names read as a member, each a type module's function of one value (words(t)), called so as t.words()
 member_reads(program: Node): list := {
-	unary = {}
-	for module in type_modules {
-		for slice in definition_slices(file_text(std_module_path(module)) ?? "") { if takes_one_value(without_keyword(slice#2), slice#1) { unary[slice#1] = yes } }
-	}
+	unary = library_index_section("unary")
 	nodes_in(program).filter(n => is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in unary).map(n => name_of(value_of(n)))
 }
 # `words(t): list := …`: a definition's head of one parameter
@@ -1006,18 +1017,21 @@ leftmost_symbol(n: Node): Node := {
 	if n is symbol then n else symbol("")
 }
 # word → the type module defining it, "" for a word two of them define
-type_module_providers(): map := {
+type_module_providers(): map := library_index_section("provider")
+# the type modules' tables of the library index, read off their texts by the build writing it: each word with the
+# type module defining it ("" for two), those defined taking nothing (`now() := …`), those taking one value
+# (`words(t) := …`)
+type_module_slices(): list := type_modules.flat_map(module => definition_slices(file_text(std_module_path(module)) ?? "").map(slice => slice + [module]))
+nullary_words_scanned(): map := words_marked(type_module_slices().filter(slice => without_keyword(slice#2).starts_with(slice#1 + "()")))
+unary_words_scanned(): map := words_marked(type_module_slices().filter(slice => takes_one_value(without_keyword(slice#2), slice#1)))
+words_marked(slices: list): map := {
+	marked = {}
+	for slice in slices { marked[slice#1] = "yes" }
+	marked
+}
+type_module_providers_scanned(): map := {
 	providers = {}
-	for module in type_modules {
-		path = std_module_path(module)
-		source = file_text(path)
-		if source != ø {
-			for slice in definition_slices(source) {
-				word = slice#1
-				providers[word] = if word in providers and providers[word] != module then "" else module
-			}
-		}
-	}
+	for slice in type_module_slices() { providers[slice#1] = if slice#1 in providers and providers[slice#1] != slice#3 then "" else slice#3 }
 	providers
 }
 # the word of a root, `√2`, sqrt(2), which lib/reals.warp keeps exact (emitter.warp exact_root_word); a program's own
