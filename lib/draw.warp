@@ -146,7 +146,9 @@ def show() {
 // save canvas as: "painting.png", save(canvas, "painting.png") or save "painting.png" (card save-painting): the canvas
 // as drawn so far as a PNG, natively that file, in the playground a download. On the GPU the pixels are there, not
 // here: the host draws them again
-class Picture {}
+class Picture {
+	format as text := "canvas ${canvas_width}×${canvas_height}"
+}
 // the canvas as drawn so far (decision saved-words): canvas() beside canvas(width, height), so the bare word canvas,
 // its call, is a Picture
 canvas() := Picture()
