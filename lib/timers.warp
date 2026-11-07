@@ -1,7 +1,7 @@
 // The standard module timers (card registers-page): `on every 500ms {…}` and `on every 2 seconds {…}` run their block at
 // each period, `at 9:30 {…}` once at that time of day, `on every day at 9:30 {…}` each day at it. A page runs them (web/playground/host-timers.js): the program tells the host each timer by the host word
-// signal_listen(kind, id, argument) and the page calls back the exported timer_fired(id) at each firing. Natively
-// nothing runs beside the program (the pure lane), so the native warp says that it starts none
+// signal_listen(kind, id, argument) and the page calls back the exported timer_fired(id) at each firing; the native warp
+// the same, once main returned (core/native/driver.warp events): an `every` timer keeps the run going until exit()
 use units
 TIMER_EVERY = 0
 TIMER_CLOCK = 2

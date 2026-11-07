@@ -7,6 +7,24 @@ function addTimer(holder, hooks, id, timer, written) {
 	(holder.timers ??= []).push({ id: Number(id), ...timer });
 }
 
+// a fetch answered later (lib/net.warp fetch_later, card fetch-users-async): one more of the run's timers, firing once
+// with the answer; null, the answer to come, else the answer at once where nothing listens
+function fetchLater(holder, url, id) {
+	if (!holder.hooks?.listen) return getSync(url);
+	(holder.timers ??= []).push({ id: Number(id), fetch: url });
+	return null;
+}
+// the answer's text, or {failure} as the native warp's net.get says it
+async function fetchedAnswer(url) {
+	try {
+		const response = await fetch(withPageProtocol(url));
+		if (!response.ok) return { failure: `HTTP status ${response.status}` };
+		return { text: await response.text() };
+	} catch (failure) {
+		return { failure: `network error (blocked by CORS?): ${failure.message}` };
+	}
+}
+
 // milliseconds from now to the next local minute_of_day on a weekday of the mask (bit 0 Sunday), as seconds_until_on
 const EVERY_DAY = 0b1111111;
 const DAY_MILLISECONDS = 24 * 3600 * 1000;
@@ -19,28 +37,42 @@ function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) 
 	return 7 * DAY_MILLISECONDS;
 }
 
-// a run's timers started: `fire(id)` runs the program's timer_fired(id) for each when it is due (driver.js timerFired); a program
-// without that export is refused loudly, once; stopTimers ends them
+// a run's timers started: `fire(id)` runs the program's timer_fired(id) for each when it is due, `fire(id, answer)` a
+// fetch's fetch_answered(id, answer) once its answer is in (driver.js timerFired); a program without that export is
+// refused loudly, once; stopTimers ends them, and an answer coming after it is dropped
 function startTimers(holder, fire) {
 	const handles = [];
-	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
-	if (holder.timers?.length && !holder.exports[TIMER_FIRED_EXPORT])
-		return console.error(`${holder.timers.length} timer(s) refused: the program exports no ${TIMER_FIRED_EXPORT}(id)`);
+	let stopped = false;
+	holder.stopTimers = () => { stopped = true; handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); }); };
+	const exportOf = timer => timer.fetch === undefined ? TIMER_FIRED_EXPORT : FETCH_ANSWERED_EXPORT;
+	const unfired = holder.timers?.find(timer => !holder.exports[exportOf(timer)]);
+	if (unfired) return console.error(`${holder.timers.length} timer(s) refused: the program exports no ${exportOf(unfired)}`);
+	const fetches = holder.timers?.filter(timer => timer.fetch !== undefined) ?? [];
+	holder.fetchesLeft = fetches.length;
+	for (const timer of fetches) {
+		fetchedAnswer(timer.fetch).then(answer => {
+			if (stopped) return;
+			holder.fetchesLeft--;
+			fire(timer.id, { url: timer.fetch, ...answer });
+		});
+	}
 	const atClock = timer => handles.push(setTimeout(() => {
 		fire(timer.id);
 		if (!timer.once) atClock(timer);
 	}, millisecondsUntil(timer.minute, timer.weekdays)));
-	for (const timer of holder.timers ?? []) {
+	for (const timer of holder.timers?.filter(timer => timer.fetch === undefined) ?? []) {
 		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer.id), timer.every));
 		else atClock(timer);
 	}
 }
 
 // what a timer says in the page: "every 500 ms", "at 09:00", "every day at 09:00", or the channel its listener reads
-function timerLabel(holder, { id, every, minute, once, frame }) {
+function timerLabel(holder, timer) {
+	const { id, every, minute, once, frame } = timer;
 	const channel = holder.channels?.get(id);
 	if (channel) return `message from "${channel.name}"`;
 	if (frame) return "every frame";
+	if (timer.fetch !== undefined) return `fetch ${timer.fetch}`;
 	if (every !== undefined) return every % 1000 ? `every ${every} ms` : `every ${every / 1000} s`;
 	const time = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 	return once ? `at ${time}` : `every day at ${time}`;

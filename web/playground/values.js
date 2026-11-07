@@ -14,12 +14,19 @@ const valueEncoder = new TextEncoder();
 // it in (runtime/show.warp shown_at's -1)
 function shownText(program, value) {
 	const packed = program.shown_at(value);
-	return packed < 0n ? undefined : valueDecoder.decode(new Uint8Array(program.memory.buffer, Number(packed / SHOWN_TEXT_SHIFT), Number(packed % SHOWN_TEXT_SHIFT)));
+	return packed < 0n ? undefined : valueDecoder.decode(packedBytes(program, packed));
 }
+const packedBytes = (program, packed) => new Uint8Array(program.memory.buffer, Number(packed / SHOWN_TEXT_SHIFT), Number(packed % SHOWN_TEXT_SHIFT));
+// a host word's text argument of any length: at once, else part by part through the output area (runtime/show.warp
+// shown_from), each part copied before the next overwrites it, as the native driver's shown reads one
 function guestText(program, value) {
 	const text = shownText(program, value);
-	if (text === undefined) throw new Error("a host word's argument is too long to show");
-	return text;
+	if (text !== undefined) return text;
+	const parts = [];
+	for (let at = 0n, part; (part = packedBytes(program, program.shown_from(value, at))).length; at += BigInt(part.length)) parts.push(part.slice());
+	const whole = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+	parts.reduce((at, part) => (whole.set(part, at), at + part.length), 0);
+	return valueDecoder.decode(whole);
 }
 const isGuestText = (program, value) => program.is_textual(value) !== 0;
 const guestCount = (program, list) => Number(program.item_count(list));
