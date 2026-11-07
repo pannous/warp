@@ -2,6 +2,7 @@
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: the color module's (rgb, hsv, the named colors, with_alpha)
 use math
 use color
+use os
 // the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480 
 global canvas_width: int = view_width
@@ -55,10 +56,20 @@ shape_shader = shader {
 // the pixels the canvas keeps here: none when they are on the GPU
 pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
 
+// canvas(width, height) sizes the window too (card window-canvas-size), which then shows the canvas pixel for pixel
 def canvas(width, height) {
 	canvas_width = width
 	canvas_height = height
 	canvas_pixels = int[pixels_for(width, height)]
+	window.width = width
+	window.height = height
+}
+// a window sized apart from the canvas (`window.width = 800` after canvas(200, 100)) shows it scaled: said once
+global size_difference_said = no
+size_difference_told() := {
+	if size_difference_said or (window.width == canvas_width and window.height == canvas_height) { return ø }
+	size_difference_said = yes
+	eprint("the canvas is ${canvas_width}×${canvas_height}, the window ${window.width}×${window.height}: the canvas is shown scaled; canvas(w, h) sizes both")
 }
 // the canvas's size as properties (decision property-accessors): written, it is a new blank canvas, as an HTML canvas is
 canvas.width := canvas_width
@@ -124,6 +135,7 @@ def line(x1, y1, x2, y2, color) {
 }
 
 def show() {
+	size_difference_told()
 	if drawing_on_gpu {
 		draw_shader(shape_shader)
 		draw_show(canvas_width, canvas_height)

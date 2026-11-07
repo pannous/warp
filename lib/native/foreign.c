@@ -253,7 +253,7 @@ void* c_function(char* name) { return native_function(name); }
 
 // The C calls of a module the driver runs (core/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
 // where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
-// warp's own libraries (libwarp_sound) beside the executable first, as libwarp_wasmtime is
+// warp's own libraries (libwarp_gpu) beside the executable first, as libwarp_wasmtime is
 // Fixed short folders per platform (user 2026-11-06 library-search-paths): no scan/sort/computed from.
 // macOS: homebrew + local + opt/<name>/Frameworks/<Name>.framework/<Name> + the system's frameworks. Linux:
 // /usr/lib(+triple) + local, lib<name>.so / .so.0 / -2.0.so.0 / .so.1 / .so.6 (usual versioned sonames, FreeType's
@@ -330,15 +330,23 @@ void* library_function(char* library, char* name) {
 	return NULL;
 }
 // A field of a C struct a program holds as a handle, by its offset (lib/c.warp: SDL_Event's union, FreeType's glyph
-// slot): its bytes as the C type is, a signed integer widened, a float as a double, a pointer as a handle
+// slot): its bytes as the C type is, a signed integer widened, a float as a double, a pointer as a handle; set_field_*
+// writes one (an AudioStreamBasicDescription, an AudioBufferList pointing at memory of the program's)
 #define FIELD_READER(name, type, result) result name(const uint8_t* address, int64_t offset) { type value; memcpy(&value, address + offset, sizeof value); return (result)value; }
+#define FIELD_WRITER(name, type, given) void name(uint8_t* address, int64_t offset, given value) { type field = (type)value; memcpy(address + offset, &field, sizeof field); }
+FIELD_WRITER(set_field_i32, int32_t, int64_t)
+FIELD_WRITER(set_field_i64, int64_t, int64_t)
+FIELD_WRITER(set_field_f64, double, double)
+FIELD_WRITER(set_field_pointer, void*, void*)
 FIELD_READER(field_u8, uint8_t, int32_t)
+FIELD_READER(field_i16, int16_t, int32_t)
 FIELD_READER(field_i32, int32_t, int32_t)
 FIELD_READER(field_u32, uint32_t, int64_t)
 FIELD_READER(field_i64, int64_t, int64_t)
 FIELD_READER(field_f32, float, double)
 FIELD_READER(field_f64, double, double)
 FIELD_READER(field_pointer, void*, void*)
+const char* field_text(const uint8_t* address, int64_t offset) { return (const char*)(address + offset); }
 // a C function called with up to 8 integers and pointers and up to 8 floats in their registers (the ARM64 and x86-64
 // conventions keep the two apart, `ldexp(double, int)` takes d0 and x0): it reads only the ones its parameters name.
 // Its result is the integer register, or the bits of the float register
