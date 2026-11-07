@@ -1,0 +1,3 @@
+# a list's + concatenates beside a class whose add spells +, inside another class's method too (card lines-red)
+'class St { items = []; push(y) := items.add(y) }; class Bag { n = 0; add(x) := { n = x } }; s = St(); s.push(5); s.items'	[5]
+'class Bag { n = 0; add(x) := { n = x } }; f(xs) := xs + [3]; f([1, 2])'	[1, 2, 3]

@@ -564,6 +564,10 @@ writing_ops = [Op.Assign, Op.AddAssign, Op.SubAssign, Op.MulAssign, Op.DivAssign
 counted_question(items: Node, item: Node): Node := {
 	throw "count(${as_code(item)} in ${as_code(items)}) counts a yes/no question: did you mean ${as_code(items)}.count(${as_code(item)})?"
 }
+# `count words in t`: a function's results counted, `count words of t` (decision 4de73dde04)
+counted_results(items: Node, function: Node): Node := {
+	throw "count ${as_code(function)} in ${as_code(items)} counts a yes/no question: did you mean count ${as_code(function)} of ${as_code(items)}?"
+}
 # `end job` (decision end-refused): no default between letting a task run to its end and ending it now
 end_refused(task: Node): Node := {
 	throw "end ${as_code(task)}: did you mean finish ${as_code(task)} (let it run to its end) or cancel ${as_code(task)} (end it now)?"
@@ -976,8 +980,10 @@ module_dir(word: text): any := {
 typed_words(kind: text): list := {
 	declared = word_lines()
 	found = declared.keys.filter(name => declared[name].any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == kind))
-	found + definition_slices(prelude_text).filter(cut => first_parameter_type(cut#1, cut#2) == kind).map(cut => cut#1)
+	found + definition_slices(prelude_text).filter(cut => kind in type_alternatives(first_parameter_type(cut#1, cut#2))).map(cut => cut#1)
 }
+# `list or number` of `sum(xs: list or number)`: each type a parameter takes, so a list's words include sum
+type_alternatives(written: text): list := written.split(" or ").map(part => part.trim())
 # a module's word dir lists: a function or value, never a class (`Cursor`) or an operator's function
 is_listed_word(word: text): bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
 
@@ -1097,6 +1103,7 @@ rule_words = {
 	compound_unit: compound_unit,
 	converted_unit: converted_unit,
 	counted_question: counted_question,
+	counted_results: counted_results,
 	end_refused: end_refused,
 	declared_local: declared_local,
 	definitions_reached: definitions_reached,

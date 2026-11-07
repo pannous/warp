@@ -439,20 +439,26 @@ TAIL_SECONDS = 0.05
 effected(amplitudes: list, effect: list) := scaled_effect(amplitudes, effect, if loudness * loudest_sample > 0 then loudness * loudest_sample else 1.0)
 // the effect on amplitudes that `scale` makes 1: a signal's loudness, a bus's full scale (its tail rings out at -60 dB
 // of the speakers, as the playground's)
+// a signal as floats (decision exact-decimals): PCM deltas are ints and the effects' constants (0.75, 0.001, a
+// mix of 0.5) exact, so int × exact made exact ratios whose denominators grow in a feedback loop (a comb's
+// y[i] = x[i] + 0.75 · y[i - gap]): a bus reverb took seconds, a longer one never finished. Floats are contagious,
+// so a float signal keeps every effect in f64 (card float-buffer-exact)
+float_signal(xs: list) := [v as float for v in xs]
 scaled_effect(amplitudes: list, effect: list, scale) := {
 	name = effect#1
 	if name not in EFFECT_NAMES { raise "no effect named " + name + ": " + EFFECT_NAMES.join(", ") }
+	signal = float_signal(amplitudes)
+	unit = scale as float
 	# linear effects keep the caller's scale (no copy in and out): only distort and compress need unit full-scale
-	if name == "gain" { return [v * effect#2 for v in amplitudes] }
-	if name == "delay" { return delayed_by(amplitudes, effect#2, effect#3, effect#4, SILENT * scale) }
-	if name == "reverb" { return reverbed_by(amplitudes, effect#2, SILENT * scale) }
+	if name == "gain" { return [v * effect#2 for v in signal] }
+	if name == "delay" { return delayed_by(signal, effect#2, effect#3, effect#4, SILENT * unit) }
+	if name == "reverb" { return reverbed_by(signal, effect#2, SILENT * unit) }
 	if name == "distort" or name == "compress" {
-		unit = scale as float
-		x = [a as float / unit for a in amplitudes]
+		x = [v / unit for v in signal]
 		y = if name == "distort" then [tanh(v * (1 + 10 * effect#2)) for v in x] else compressed(x, effect#2, effect#3, effect#4, effect#5)
 		return [v * unit for v in y]
 	}
-	biquad_filtered(amplitudes, biquad(name, effect))
+	biquad_filtered(signal, biquad(name, effect))
 }
 // the biquad's coefficients [b0 b1 b2 a1 a2], normalized by a0 and the a's negated, of a filter effect
 biquad(name, effect) := {
@@ -479,8 +485,6 @@ biquad_filtered(x: list, k: list) := {
 	b2 = k#3
 	a1 = k#4
 	a2 = k#5
-	# bus path hands int PCM deltas; `as float` once (v*1.0 stays nat and is ~40× slower in the comb loop)
-	x = [v as float for v in x]
 	y = [0.0 for v in x]
 	x1 = 0.0
 	x2 = 0.0
@@ -505,8 +509,6 @@ delayed_by(x: list, seconds, feedback, mix, silent = SILENT) := {
 	tail = gap + floor(TAIL_SECONDS * sample_rate) as int
 	block = sample_rate /! 100
 	quiet = tail
-	# bus path hands int PCM deltas; `as float` once (v*1.0 stays nat and is ~40× slower in the comb loop)
-	x = [v as float for v in x]
 	out = []
 	n = #x
 	i = 0
@@ -543,8 +545,6 @@ reverbed_by(x: list, mix, silent = SILENT) := {
 	tail = longest + floor(TAIL_SECONDS * sample_rate) as int
 	block = sample_rate /! 100
 	quiet = tail
-	# bus path hands int PCM deltas; `as float` once (v*1.0 stays nat and is ~40× slower in the comb loop)
-	x = [v as float for v in x]
 	out = []
 	n = #x
 	i = 0
@@ -784,9 +784,8 @@ public panned(samples) := if pan == 0 then samples else [sample_offset + (round(
 bused(samples) := {
 	chain = bus_chains[sent_bus]
 	if count(chain) == 0 { return samples }
-	# float once: int PCM deltas in the effect loops were ~40× slower (nat/rational arithmetic)
-	amplitudes = [(x - sample_offset) as float for x in samples]
-	for effect in chain { amplitudes = scaled_effect(amplitudes, effect, loudest_sample as float) }
+	amplitudes = [x - sample_offset for x in samples]
+	for effect in chain { amplitudes = scaled_effect(amplitudes, effect, loudest_sample) }
 	clamped_samples(amplitudes)
 }
 sound(samples) := {
@@ -921,25 +920,25 @@ global recorded = []
 global rendered_until = 0.0 as float
 rendered(file) := {
 	if count(recorded) == 0 { return 0 }
-	rate = max([sound.rate for sound in recorded])
-	channels = max([sound.channels for sound in recorded])
-	first = min(rendered_until, min([sound.place for sound in recorded]))
+	rate = max([take.rate for take in recorded])
+	channels = max([take.channels for take in recorded])
+	first = min(rendered_until, min([take.place for take in recorded]))
 	mixed = []
-	for sound in recorded {
-		start = round((sound.place - first) * rate) as int * channels
-		frames = count(sound.speakers) / sound.channels as int
-		length = round(frames * rate / sound.rate) as int
+	for take in recorded {
+		start = round((take.place - first) * rate) as int * channels
+		frames = count(take.speakers) / take.channels as int
+		length = round(frames * rate / take.rate) as int
 		needed = start + length * channels
 		if count(mixed) < needed { mixed = mixed + [0 for i in 0..(needed - count(mixed))] }
-		fades = sound_fades.filter(fade => fade[0] == 0 or fade[0] == sound.handle)
+		fades = sound_fades.filter(fade => fade[0] == 0 or fade[0] == take.handle)
 		for frame in 0..length {
-			from = min(frames - 1, frame * sound.rate / rate as int) * sound.channels
-			gain = if count(fades) == 0 then 1.0 else faded_gain(fades, sound.place + frame / rate)
-			for channel in 0..channels { mixed[start + frame * channels + channel] += round((sound.speakers[from + min(channel, sound.channels - 1)] - sample_offset) * gain) as int }
+			from = min(frames - 1, frame * take.rate / rate as int) * take.channels
+			gain = if count(fades) == 0 then 1.0 else faded_gain(fades, take.place + frame / rate)
+			for channel in 0..channels { mixed[start + frame * channels + channel] += round((take.speakers[from + min(channel, take.channels - 1)] - sample_offset) * gain) as int }
 		}
 	}
 	sound_fades = []
-	write_bytes(file, wav_bytes([min(max(sum, -32768), 32767) + sample_offset for sum in mixed], rate, channels))
+	write_bytes(file, wav_bytes([min(max(level, -32768), 32767) + sample_offset for level in mixed], rate, channels))
 	seconds = count(mixed) / channels / rate
 	rendered_until = (first + seconds) as float
 	recorded = []

@@ -140,8 +140,9 @@ linked_libraries(source: text): list := {
 	images = []
 	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole; a
 	# module written links those it uses, never itself
-	# (the prelude too, every program's, linked as any module but by the prelude it is written of)
-	names = (if module_written != "" then used_modules(file_text(std_module_path(module_written)) ?? "") else ["prelude"] + used_modules(source)).filter(name => name != module_written)
+	# (the prelude too, every program's and every module's, so a run holds one instance of its words and globals: signals'
+	# listen and the program's unlisten edit the same event_listeners)
+	names = (["prelude"] + used_modules(if module_written != "" then file_text(std_module_path(module_written)) ?? "" else source)).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
 	at = 0
 	while at < #names {

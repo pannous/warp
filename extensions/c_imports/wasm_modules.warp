@@ -27,7 +27,9 @@ LIMITS_WITH_MAXIMUM = 1
 # where it runs, so a program and a module it links (greeter.wat's import) name one file alike; ø for another statement
 wasm_module_used(statement: text, folder: text): text? := {
 	bare = wasm_use_written(statement)
-	if bare == ø { return ø }
+	# (the module `warp build --module shapes.warp` writes is no library of its own: compiler.warp module_source is
+	# `use shapes`, and a shapes.wasm an older compiler left beside it, without its signature, read as one: index out of range)
+	if bare == ø or bare == module_written { return ø }
 	for written in [bare, bare + WASM_EXTENSION] {
 		name = if rooted(written, folder) == written then path_in(folder, written) else written
 		# (one carrying a warp.signature is a module warp compiled, linked as a standard module is: compiler.warp own_module_beside)
