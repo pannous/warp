@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# use script: the basic Unix commands as warp words, their results lists and maps (card unix-words, wiki/script.md)
+# use script: the basic Unix commands as warp words, their results lists and maps (wiki/script.md)
 # native only: the browser has no home folder and no programs to list.
 use script
 
