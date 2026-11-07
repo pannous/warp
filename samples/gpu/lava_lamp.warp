@@ -1,10 +1,8 @@
 #!/usr/bin/env warp
-# a compute.toys shader runs as it is: `compute_toy(shader { … })` of `use compute_toys` takes a single-pass
-# compute.toys kernel, main_image writing textureStore(screen, id.xy, color), and makes it a WGSL shader for paint.
-# This one is a lava lamp: seven blobs of wax rise and sink on slow loops of their own, melting into each other where
-# their fields add up; a press puts one more blob under the pointer, the wheel adds wax or takes it away
-# (compute.toys' mouse.zoom). More compute.toys shaders that run with warp:
-# https://github.com/pannous/shaders (folder warp/compute_toys)
+# A lava lamp: seven blobs of wax rise and sink, melting into each other where they meet.
+# Press to add a blob under the pointer; the wheel adds wax or takes it away.
+# compute_toy runs a shader from compute.toys as it is: its main_image colors each pixel with textureStore.
+# More of them: https://github.com/pannous/shaders (folder warp/compute_toys)
 use compute_toys
 lamp = compute_toy(shader {
 	const BLOBS = 7;
@@ -57,7 +55,7 @@ lamp = compute_toy(shader {
 		textureStore(screen, id.xy, float4(color, 1.0));
 	}
 })
-# ten seconds by the clock, however long a frame takes
+# run for ten seconds
 started = clock()
 while clock() - started < 10000 {
 	paint(lamp)

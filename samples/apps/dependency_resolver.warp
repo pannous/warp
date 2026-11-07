@@ -4,7 +4,7 @@
 use semver
 use graphs
 
-# the registry: package -> version -> its requirements ("log" quoted: a bare key log pulls the log function in, card key-map)
+# the registry: package -> version -> its requirements ("log" quoted: a bare key log pulls the log function in)
 registry = {
 	app: {"1.0.0": {web: "^2.1.0", "log": "~1.4.0"}},
 	web: {"2.0.0": {http: "^1.0.0"}, "2.1.3": {http: "^1.2.0", "log": ">=1.3.0"}, "2.2.0-beta.1": {http: "^2.0.0"}, "3.0.0": {http: "^2.0.0"}},

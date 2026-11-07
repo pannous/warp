@@ -23,7 +23,7 @@ mail(message, address) := print "\(message) → \(address)"
 # Arithmetic with words
 result = one plus two # got it
 total = three times four # got it
-# half = ten divided by two  (a foreign spelling, decision esoteric-phrases-commented)
+# half = ten divided by two  (a foreign spelling)
 half = ten / two
 rest = ten modulo three # got it
 
@@ -32,13 +32,13 @@ valid = age >= 18 and has_id
 allowed = is_admin or is_owner
 
 # Comparisons
-# bigger = a is greater than b  (an esoteric phrase, decision english-comparisons)
+# bigger = a is greater than b  (an esoteric phrase)
 bigger = a > b
 equal = x equals y
 found = item is in collection
 
 # Conditional statements
-# if age is at least 18  (an esoteric phrase, decision english-comparisons)
+# if age is at least 18  (an esoteric phrase)
 if age >= 18 {
 	print "Adult"
 }

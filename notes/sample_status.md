@@ -70,8 +70,8 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ✅ samples/golf/rot13.warp
 - ✅ samples/golf/sierpiński-triangle.short.warp
 - ✅ samples/golf/sierpiński-triangle.warp
-- ❌ samples/gpu/gpu_arrays.warp: no field totals
-- ✅ samples/gpu/gpu_map.warp
+- ❌ samples/acceleration/gpu_arrays.warp: no field totals
+- ✅ samples/acceleration/gpu_map.warp
 - ❌ samples/gpu/gpu_visualizer.warp: outside the core: the unknown name pi
 - ❌ samples/gpu/kaleidoscope.warp: outside the core: a call of paint with 1 arguments
 - ❌ samples/gpu/lava_lamp.warp: outside the core: an error value
