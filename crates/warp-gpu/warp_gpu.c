@@ -4,6 +4,7 @@
 // Built by scripts/wasmtime-c-api.sh beside libwarp_wasmtime; core/native/driver.warp painted() loads it lazily
 #include <webgpu/webgpu.h>
 #include <webgpu/wgpu.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -171,8 +172,8 @@ static int scope_clean(void) {
 	waited(&scope.done);
 	return !scope.failed;
 }
-static WGPURenderPipeline pipeline_of(const char* code, WGPUTextureFormat format) {
-	if (compiled_code && compiled_format == format && !strcmp(compiled_code, code)) return compiled_pipeline;
+// the code's pipeline drawing into the format, compiled anew; NULL and the failure told where it does not compile
+static WGPURenderPipeline pipeline_compiled(const char* code, WGPUTextureFormat format) {
 	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
 	WGPUShaderSourceWGSL source = WGPU_SHADER_SOURCE_WGSL_INIT;
 	source.code = view_of(code);
@@ -192,10 +193,14 @@ static WGPURenderPipeline pipeline_of(const char* code, WGPUTextureFormat format
 	descriptor.fragment = &fragment;
 	WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, &descriptor);
 	wgpuShaderModuleRelease(module);
-	if (!scope_clean()) {
-		if (pipeline) wgpuRenderPipelineRelease(pipeline);
-		return NULL;
-	}
+	if (scope_clean()) return pipeline;
+	if (pipeline) wgpuRenderPipelineRelease(pipeline);
+	return NULL;
+}
+static WGPURenderPipeline pipeline_of(const char* code, WGPUTextureFormat format) {
+	if (compiled_code && compiled_format == format && !strcmp(compiled_code, code)) return compiled_pipeline;
+	WGPURenderPipeline pipeline = pipeline_compiled(code, format);
+	if (!pipeline) return NULL;
 	if (compiled_pipeline) wgpuRenderPipelineRelease(compiled_pipeline);
 	free(compiled_code);
 	compiled_code = strdup(code);
@@ -330,8 +335,10 @@ static void drawing_released(Drawing* drawing) {
 	if (drawing->uniform) wgpuBufferRelease(drawing->uniform);
 	if (drawing->previous) wgpuTextureViewRelease(drawing->previous);
 }
-// the drawing's full image drawn into the view, by the encoder
-static void drawn(WGPUCommandEncoder encoder, WGPUTextureView view, const Drawing* drawing) {
+// where in a target a drawing lands: x, y, width, height in the target's pixels
+typedef struct { float x, y, width, height; } Viewport;
+// the drawing's full image drawn into the view, by the encoder, onto the whole view or only the viewport given
+static void drawn_into(WGPUCommandEncoder encoder, WGPUTextureView view, const Drawing* drawing, const Viewport* viewport) {
 	WGPURenderPassColorAttachment attachment = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
 	attachment.view = view;
 	attachment.loadOp = WGPULoadOp_Clear;
@@ -341,11 +348,13 @@ static void drawn(WGPUCommandEncoder encoder, WGPUTextureView view, const Drawin
 	pass_descriptor.colorAttachments = &attachment;
 	WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &pass_descriptor);
 	wgpuRenderPassEncoderSetPipeline(pass, drawing->pipeline);
+	if (viewport) wgpuRenderPassEncoderSetViewport(pass, viewport->x, viewport->y, viewport->width, viewport->height, 0, 1);
 	if (drawing->bindings) wgpuRenderPassEncoderSetBindGroup(pass, 0, drawing->bindings, 0, NULL);
 	wgpuRenderPassEncoderDraw(pass, TRIANGLE_CORNERS, 1, 0, 0);
 	wgpuRenderPassEncoderEnd(pass);
 	wgpuRenderPassEncoderRelease(pass);
 }
+static void drawn(WGPUCommandEncoder encoder, WGPUTextureView view, const Drawing* drawing) { drawn_into(encoder, view, drawing, NULL); }
 static void submitted(WGPUCommandEncoder encoder) {
 	WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
 	wgpuQueueSubmit(queue, 1, &commands);
@@ -410,11 +419,25 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 }
 
 // --- a window's surface (libwarp_window's Metal layer): what is shown there stays on the GPU, no pixel read back.
-// The surface is as big as the painting, the layer scales it to the window; a format without sRGB, so the window
-// shows the colors a PNG of the same painting holds
+// The surface is as big as the layer's drawable (the window's pixels, which SDL keeps it at as the window resizes or
+// goes full screen); the painting, drawn at its own size, is scaled into it whole, its aspect kept, the rest black.
+// A format without sRGB, so the window shows the colors a PNG of the same painting holds
 static const WGPUTextureFormat SURFACE_FORMAT = WGPUTextureFormat_BGRA8Unorm;
+#ifdef __APPLE__
+#include <objc/message.h>
+typedef struct { double width, height; } LayerSize; // CGSize
+// the Metal layer's drawableSize, in pixels
+static void drawable_size(void* layer, int32_t* width, int32_t* height) {
+	LayerSize size = ((LayerSize (*)(void*, SEL))objc_msgSend)(layer, sel_registerName("drawableSize"));
+	if (size.width >= 1 && size.height >= 1) *width = (int32_t)size.width, *height = (int32_t)size.height;
+}
+#else
+static void drawable_size(void* layer, int32_t* width, int32_t* height) {}
+#endif
+// the window's surface at the layer's size, else the painting's
 static int surface_ready(void* layer, int32_t width, int32_t height) {
 	if (!device_ready()) return 0;
+	drawable_size(layer, &width, &height);
 	if (surface && surface_layer != layer) { wgpuSurfaceRelease(surface); surface = NULL; }
 	if (!surface) {
 		WGPUSurfaceSourceMetalLayer source = WGPU_SURFACE_SOURCE_METAL_LAYER_INIT;
@@ -437,25 +460,22 @@ static int surface_ready(void* layer, int32_t width, int32_t height) {
 	}
 	return 1;
 }
-// the last painting a window out of sight could not show (its shader and values, else its pixels), shown when the
-// window comes into sight (warp_gpu_shown_again): a window opens behind the app in front, and a still picture paints once
-typedef struct { char* shader; char* values; uint8_t* pixels; void* layer; int32_t width, height; } Unshown;
-static Unshown unshown;
-static int out_of_sight; // the last present found the window out of sight
-static void unshown_kept(const char* shader, const char* values, const uint8_t* pixels, void* layer, int32_t width, int32_t height) {
-	free(unshown.shader), free(unshown.values), free(unshown.pixels);
-	unshown = (Unshown){0};
-	if (!out_of_sight) return;
-	size_t bytes = (size_t)width * height * PIXEL_BYTES;
-	unshown = (Unshown){shader ? strdup(shader) : NULL, values ? strdup(values) : NULL, pixels ? memcpy(malloc(bytes), pixels, bytes) : NULL, layer, width, height};
+// the last painting shown, its image kept on the GPU, shown again as the window comes into sight or changes size
+// (warp_gpu_shown_again): a window opens behind the app in front, and a still picture paints once
+typedef struct { WGPUTexture picture; void* layer; int32_t width, height; } Shown;
+static Shown last_shown;
+static void shown_kept(WGPUTexture picture, void* layer, int32_t width, int32_t height) {
+	if (picture == last_shown.picture) return;
+	wgpuTextureAddRef(picture);
+	if (last_shown.picture) wgpuTextureRelease(last_shown.picture);
+	last_shown = (Shown){picture, layer, width, height};
 }
 // the drawing shown in the window's surface, by the encoder, waiting for the display's next refresh (vsync); a window
 // out of sight (hidden, minimized, covered) shows nothing and is no failure
-static int presented(WGPUCommandEncoder encoder, const Drawing* drawing) {
+static int presented(WGPUCommandEncoder encoder, const Drawing* drawing, const Viewport* viewport) {
 	WGPUSurfaceTexture current = WGPU_SURFACE_TEXTURE_INIT;
 	wgpuSurfaceGetCurrentTexture(surface, &current);
-	out_of_sight = current.status == (WGPUSurfaceGetCurrentTextureStatus)WGPUSurfaceGetCurrentTextureStatus_Occluded;
-	if (out_of_sight) return submitted(encoder), 1;
+	if (current.status == (WGPUSurfaceGetCurrentTextureStatus)WGPUSurfaceGetCurrentTextureStatus_Occluded) return submitted(encoder), 1;
 	if (current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal && current.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
 		snprintf(failure, sizeof failure, "the window's surface gave no image to draw (status %d)", (int)current.status);
 		surface_width = 0;
@@ -463,44 +483,56 @@ static int presented(WGPUCommandEncoder encoder, const Drawing* drawing) {
 		return 0;
 	}
 	WGPUTextureView view = wgpuTextureCreateView(current.texture, NULL);
-	drawn(encoder, view, drawing);
+	drawn_into(encoder, view, drawing, viewport);
 	submitted(encoder);
 	wgpuSurfacePresent(surface);
 	wgpuTextureViewRelease(view);
 	wgpuTextureRelease(current.texture);
 	return 1;
 }
+// the picture spread over the viewport it is drawn in, each window pixel taking the picture's pixel under it (sharp
+// pixels, as the PNG has them)
 #define PICTURE_SHADER "@group(0) @binding(0) var picture: texture_2d<f32>;\n" \
-	"@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f { return textureLoad(picture, vec2i(position.xy), 0); }\n"
-// the picture (an RGBA8 texture) shown in the window's surface, after what the encoder holds
-static int picture_presented(WGPUCommandEncoder encoder, WGPUTexture picture, int32_t width, int32_t height) {
-	Drawing drawing;
-	if (!drawing_made(PICTURE_SHADER, "", SURFACE_FORMAT, width, height, &drawing)) return submitted(encoder), 0;
+	"struct Corner { @builtin(position) position: vec4f, @location(0) across: vec2f }\n" \
+	"@vertex fn " VERTEX_ENTRY_POINT "(@builtin(vertex_index) corner: u32) -> Corner {\n" \
+	"\tlet at = vec2f(f32(corner / 2u) * 4.0 - 1.0, f32(corner % 2u) * 4.0 - 1.0);\n" \
+	"\treturn Corner(vec4f(at, 0.0, 1.0), vec2f(at.x + 1.0, 1.0 - at.y) * 0.5);\n}\n" \
+	"@fragment fn " FRAGMENT_ENTRY_POINT "(corner: Corner) -> @location(0) vec4f {\n" \
+	"\tlet size = vec2i(textureDimensions(picture));\n" \
+	"\treturn textureLoad(picture, clamp(vec2i(corner.across * vec2f(size)), vec2i(0), size - vec2i(1)), 0);\n}\n"
+// the painting's place in the surface: as large as fits whole, centered
+static Viewport letterboxed(int32_t width, int32_t height) {
+	float scale = fminf((float)surface_width / width, (float)surface_height / height);
+	float shown_width = width * scale, shown_height = height * scale;
+	return (Viewport){(surface_width - shown_width) / 2, (surface_height - shown_height) / 2, shown_width, shown_height};
+}
+// the picture (an RGBA8 texture) shown in the window's surface, scaled to it, after what the encoder holds, and kept
+static int picture_presented(WGPUCommandEncoder encoder, WGPUTexture picture, void* layer, int32_t width, int32_t height) {
+	shown_kept(picture, layer, width, height);
+	static WGPURenderPipeline picture_pipeline;
+	if (!picture_pipeline) picture_pipeline = pipeline_compiled(PICTURE_SHADER, SURFACE_FORMAT);
+	if (!picture_pipeline) return submitted(encoder), 0;
 	WGPUTextureView picture_view = wgpuTextureCreateView(picture, NULL);
 	WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
 	entry.binding = 0;
 	entry.textureView = picture_view;
-	drawing.bindings = bindings_of(drawing.pipeline, &entry, 1);
-	int shown = presented(encoder, &drawing);
+	Drawing drawing = {.pipeline = picture_pipeline, .bindings = bindings_of(picture_pipeline, &entry, 1)};
+	Viewport viewport = letterboxed(width, height);
+	int shown = presented(encoder, &drawing, &viewport);
 	drawing_released(&drawing);
 	wgpuTextureViewRelease(picture_view);
 	return shown;
 }
-// the shader shown in the window's layer at width × height; 0, else -1 and warp_gpu_failure(). A shader reading its
-// previous frame draws into an image of its own first, kept for the next frame, then shown
+// the shader shown in the window's layer at width × height; 0, else -1 and warp_gpu_failure(). It draws into an image
+// of the painting's size first (kept for the next frame by a shader reading its previous one), then shown scaled
 int warp_gpu_show(const char* shader, const char* values, void* layer, int32_t width, int32_t height) {
 	Drawing drawing;
-	int reading = reads_previous(shader);
-	if (!drawing_made(shader, values, reading ? WGPUTextureFormat_RGBA8Unorm : SURFACE_FORMAT, width, height, &drawing) || !surface_ready(layer, width, height)) return -1;
+	if (!drawing_made(shader, values, WGPUTextureFormat_RGBA8Unorm, width, height, &drawing) || !surface_ready(layer, width, height)) return -1;
 	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
-	int shown;
-	if (reading) {
-		WGPUTexture image = image_drawn(encoder, &drawing, width, height);
-		shown = picture_presented(encoder, image, width, height);
-		image_done(&drawing, image);
-	} else shown = presented(encoder, &drawing);
+	WGPUTexture image = image_drawn(encoder, &drawing, width, height);
+	int shown = picture_presented(encoder, image, layer, width, height);
+	image_done(&drawing, image);
 	drawing_released(&drawing);
-	unshown_kept(shader, values, NULL, layer, width, height);
 	return shown ? 0 : -1;
 }
 // pixels (RGBA, a byte each, row by row) shown in the window's layer at width × height; 0, else -1
@@ -514,20 +546,17 @@ int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int3
 	rows.rowsPerImage = (uint32_t)height;
 	WGPUExtent3D extent = {(uint32_t)width, (uint32_t)height, 1};
 	wgpuQueueWriteTexture(queue, &into, pixels, (size_t)width * height * PIXEL_BYTES, &rows, &extent);
-	int shown = picture_presented(wgpuDeviceCreateCommandEncoder(device, NULL), picture, width, height);
+	int shown = picture_presented(wgpuDeviceCreateCommandEncoder(device, NULL), picture, layer, width, height);
 	wgpuTextureRelease(picture);
-	unshown_kept(NULL, NULL, pixels, layer, width, height);
 	return shown ? 0 : -1;
 }
-// the painting kept from a window out of sight shown again (libwarp_window asks when its window comes into sight); 0
-// also when none waits, else -1
+// the last painting shown again, at the window's size now (libwarp_window asks when its window comes into sight or
+// changes size); 0 also when none was shown, else -1
 int warp_gpu_shown_again(void) {
-	Unshown again = unshown;
-	unshown = (Unshown){0};
-	int shown = again.shader ? warp_gpu_show(again.shader, again.values, again.layer, again.width, again.height)
-		: again.pixels ? warp_gpu_show_pixels(again.pixels, again.layer, again.width, again.height) : 0;
-	free(again.shader), free(again.values), free(again.pixels);
-	return shown;
+	Shown again = last_shown;
+	if (!again.picture) return 0;
+	if (!surface_ready(again.layer, again.width, again.height)) return -1;
+	return picture_presented(wgpuDeviceCreateCommandEncoder(device, NULL), again.picture, again.layer, again.width, again.height) ? 0 : -1;
 }
 
 // --- gpu_compute(shader, arrays, workgroups) (card host-word): a WGSL compute shader, its entry point `main`, run over
