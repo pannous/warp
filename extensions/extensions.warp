@@ -49,6 +49,7 @@ use "page_values.warp"
 use "fetch_signals.warp"
 use "js_globals.warp"
 use "dir_hints.warp"
+use "block_definitions.warp"
 use "effects.warp"
 use "optional_unwraps.warp"
 use "object_functions.warp"
@@ -107,6 +108,7 @@ EXTENSIONS = [
 	fetch_signals_extension
 	js_globals_extension
 	dir_hints_extension
+	block_definitions_extension
 	effects_extension
 	optional_unwraps_extension
 	object_functions_extension

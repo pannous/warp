@@ -1,0 +1,24 @@
+# A function defined inside the block of an if, else, while or for, `while c { f(y) := y * 2 }` or `f := y => …`, is
+# refused with its fix: scoped functions are parked (decision block-definitions, card inside). Its message is in
+# core/analysis/errors.data. A function's own body, a lambda's and a class's define as before
+
+block_definition(n: Node, program: Node) := {
+	defined = block_statements(without_mark(n)).find(statement => defined_function_name(statement) != ø)
+	if defined == ø { return ø }
+	diagnose(call_of("block_definition", [defined_function_name(defined)]), defined)
+}
+# the statements of the block an if, else, while or for runs, [] of other code
+block_statements(n: Node): list := {
+	block = if is_key(n, Op.Then) or is_key(n, Op.Else) or is_key(n, Op.Do) then value_of(n) else if is_loop(n) then n#(#n) else ø
+	if block == ø { return [] }
+	if is_curly_group(block) then items_of(block) else [block]
+}
+# `f` of `f(y) := …` and of `f := y => …`, else ø
+defined_function_name(statement: Node): text? := {
+	plain = without_mark(statement)
+	parts = definition_of(plain)
+	if parts != ø { return parts.name }
+	if is_key(plain, Op.Define) and key_of(plain) is symbol and is_key(without_mark(value_of(plain)), Op.Arrow) then name_of(key_of(plain)) else ø
+}
+
+block_definitions_extension = Extension{name: "block_definitions", lints: [block_definition]}
