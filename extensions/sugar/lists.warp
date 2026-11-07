@@ -31,10 +31,6 @@ rewrite ($x = list of bools) => ($x = [])
 
 # A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
 rewrite $v as list of $t => $v.map($x => $x as $t)
-# A test of a collection of a type (card map-of-type-test): `m is map of int`, `xs is list of text`, each item (a
-# map's each value) of that type
-rewrite $v is list of $t => ($v is list and $v.all($x => $x is $t)) where $t is type
-rewrite $v is map of $t => ($v is map and $v.values.all($x => $x is $t)) where $t is type
 
 # `count bytes in t`: the text's byte size, ahead of the `in` of a membership
 rewrite (count bytes in $t) => byte_size($t)
