@@ -18,7 +18,8 @@ rewrite ($a .$op $b) => element_wise_any($a, $b, ($l, $r) -> ($l $op $r)) where 
 rewrite $x as! $t => $x as !$t
 # Trailing percent (decision Trailing percent): `10%` is 1/10, exact, and `50 % of 200` 100 (the parser's `50% * 200`);
 # infix `%` stays the remainder
-rewrite $n % ø => $n / 100
+# (times 0.01, a decimal: a percent shows as one, 10% as 0.1, never the fraction 1/10, decision fraction-written-form)
+rewrite $n % ø => $n * 0.01
 # `(1/6) as decimal` is 0.16̅: a number's digits, the period overlined (lib/prelude.warp as_decimal)
 rewrite $x as decimal => as_decimal($x)
 # `"post" as symbol` is the symbol post, `:post`
