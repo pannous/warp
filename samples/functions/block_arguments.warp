@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-
+# a function that takes a block of code and runs it n times
 def repeats(n: int, block) := {
 	for i in 1...n {
 		block()

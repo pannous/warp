@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# lists what the sound module offers, with the help of each word
 use sound
 
 print "the sound module contains many useful functions and tweaks"
