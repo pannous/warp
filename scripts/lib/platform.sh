@@ -27,10 +27,6 @@ warp_main_checkout=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 if [ $warp_platform = mac ]; then warp_store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}
 elif [ -d /workspace/warp-store ]; then warp_store=${WARP_COMPILER_STORE:-/workspace/warp-store}  # the box's, shared by its agents
 else warp_store=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers}; fi
-# do the compilers beside the shared binary follow main (the Mac's after-push refreshes them)? The box's are a
-# release's, so a smoke there builds the branch's own (WARP_INSTALLED_FOLLOWS_MAIN=1 to clone them anyway)
-if [ $warp_platform = mac ]; then warp_installed_follows_main=${WARP_INSTALLED_FOLLOWS_MAIN:-1}
-else warp_installed_follows_main=${WARP_INSTALLED_FOLLOWS_MAIN:-0}; fi
 # a native warp copied into <folder> finds its wasmtime beside itself: put the folder on the loader's path (the Mac's
 # rpath already looks there; Linux's loader needs LD_LIBRARY_PATH)
 libraries_beside() { eval "export $warp_library_path_variable=\"$1\${$warp_library_path_variable:+:\$$warp_library_path_variable}\""; }

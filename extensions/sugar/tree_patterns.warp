@@ -1,0 +1,10 @@
+# Tree patterns (notes/matching.md): `page find {type: "image", src}` every match at any depth, a pattern binding one
+# name its values, none the matched parts, several their maps; `xs replace [1, x] with x` each match rewritten,
+# children first (lib/prelude.warp find_matches, replace_matches). Early sugar too: before any pass, so the overload pass
+# never takes `find [1, x]` of `s = page find [1, x]` (the parser nests an assigned phrase) for a call of find; and
+# first sugar again, for `(p replace … with …).a` once the passes made its parentheses a phrase
+rewrite $x find $p => find_matches($x, data($p))
+rewrite $x replace $p with $t => replace_matches($x, data($p), data($t))
+# the phrase as a call's argument, `count(page find {type: "text"})`, which the parser reads as count's four words
+rewrite $f($x find $p) => $f(find_matches($x, data($p)))
+rewrite $f($x replace $p with $t) => $f(replace_matches($x, data($p), data($t)))
