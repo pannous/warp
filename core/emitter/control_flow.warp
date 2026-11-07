@@ -33,6 +33,9 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, statements_block(no_branch), 1)
+	# both branches leave by a return: the if gives no value, the function's result is its
+	# returns' alone, `if x > 2 { return "big" } else { return "small" }` a text
+	if a.kind == never and b.kind == never and leaves(yes_branch) and leaves(no_branch) { return TypedCode(never, c + [op.if, no_value] + a.code + [op.else] + b.code + [op.end, op.unreachable]) }
 	kind = joint_kind(a.kind, b.kind)
 	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
 	# not kept), so the function's other readings decide it
@@ -41,6 +44,16 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	if kind == no_kind or kind == ValueKind.Mixed { return TypedCode(no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]) }
 	TypedCode(kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end])
 }
+# a branch that leaves its function: its last statement a return, or an if/else each branch of which leaves it
+def leaves(branch: Node): bool {
+	if is_return(branch) { return yes }
+	parts = block_statements(statements_block(branch))
+	if #parts == 0 or (#parts == 1 and parts#1 == branch) { return no }
+	final_statement = parts.last
+	if is_return(final_statement) { return yes }
+	is_key(final_statement, Op.Else) and is_key(key_of(final_statement), Op.Then) and is_key(key_of(key_of(final_statement)), Op.If) and leaves(value_of(key_of(final_statement))) and leaves(value_of(final_statement))
+}
+is_return(n: Node): bool := n == symbol("return") or (is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 == symbol("return"))
 # `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø
 def unmatched(c: list, a: TypedCode, numeric: bool): TypedCode {
 	if a.kind == no_kind { return TypedCode(no_kind, c + [op.if, no_value] + a.code + [op.end]) }
