@@ -50,6 +50,7 @@ export page_render(value: any) := {
 	page_handlers = []
 	page_handler_events = []
 	page_handler_labels = []
+	page_fields = []
 	component_calls = {}
 	component_order = []
 	component_current = ø
@@ -60,7 +61,21 @@ export page_render(value: any) := {
 // handler n of the last page_render run with the event's detail (value, checked, fields, key …) as `event`
 // a program's value as the page it is, its HTML, when it is markup, else ø: how `warp` prints a program ending in
 // markup (decision html-render-mode; the emitter's _start)
-export page_of(value: any): any := if html_is_page(value) then page_render(value) else ø
+export page_of(value: any): any := if html_is_page(value) then page_after_steps(value) else ø
+// the page after the steps of a sample's check line (`# check: click "+1", type "name" "Ann" → …`, card
+// scripts-samples), which `warp app check` gives in WARP_PAGE_STEPS, one a line, its words by tabs: click⇥+1
+PAGE_STEPS_VARIABLE = "WARP_PAGE_STEPS"
+page_after_steps(value: any): text := {
+	steps = std_io("os", "env", [PAGE_STEPS_VARIABLE]) ?? ""
+	html = render(value)
+	for step in steps.split("\n").filter(line => line != "") { html = page_step(step.split("\t")) }
+	html
+}
+page_step(words: list): text := {
+	if words[0] == "click" and #words == 2 { return click(words[1]) }
+	if words[0] == "type" and #words == 3 { return type_into(words[1], words[2]) }
+	raise "a check's step is click \"<label>\" or type \"<label>\" \"<text>\", not " + words.join(" ")
+}
 // an element, or a group of nothing but elements (`{div{…}}`, `[li{…} li{…}]`)
 html_is_page(value: any): bool := html_is_element(value) or (html_is_group(value) and #html_elements_in(value) > 0 and #html_elements_in(value) == #value)
 export page_event(n: int, detail: any) := {
@@ -82,6 +97,20 @@ render(value: any) := {
 	page_render(value)
 }
 click(label: any) := page_act("click", name_of(label), ø)
+// `type_into("name", "Ann")`, a check's `type "name" "Ann"` (`type` is the word of types): the text typed into the
+// field showing that label (its placeholder, aria-label, name or id, as click finds an element), its value `$who`
+// then; the page's HTML after it
+type_into(label: any, typed: text) := {
+	for field in page_fields {
+		if label in field#2 {
+			page_values[field#1] = typed
+			return page_render(page_shown)
+		}
+	}
+	raise "no field showing " + label + " to type into; the page: " + page_render(page_shown)
+}
+// [id, its labels] of each field of the last render with an id (`input{ id: "who" placeholder: "name" }`)
+global page_fields = []
 // `$who` (decision page-ids, extensions/page_values.warp): the value of the page's field with the id who, what was
 // typed into it, which every element event brings as its detail's ids (web/playground/markup.js idValues); `$who =
 // "Ann"` writes it, shown as the field's value
@@ -293,6 +322,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
 	for own in own_handlers { page_handler_labels#own = html_labels(tag, items, children) }
+	for item in items { if html_is_attribute(item, tag) and html_name(item) == "id" { page_fields.add([html_plain(html_content(item)), html_labels(tag, items, children)]) } }
 	attributes = attributes + html_page_value(items, tag, value)
 	// the option whose value, else text, is the select's
 	if #styles > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }

@@ -27,6 +27,10 @@ SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one 
 # a sample that fails on purpose says why on a line of its own, `# expected failure: deliberate parse errors`: EXP
 # instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE)
 EXPECTED_FAILURE = re.compile(r"^# expected failure: ", re.M)
+# a sample's interactions (card scripts-samples, decision sample-checks): `# check: click "+1", type "name" "Ann" → text`,
+# each from a fresh run, its steps done on the page, its text then holding the text after → (natively `warp app check`)
+CHECK_LINE = re.compile(r"^# check: (.*) → (.*)$", re.M)
+CHECK_STEP = re.compile(r'(click|type)((?:\s+"[^"]*")+)')
 NATIVE_RESULTS = "test/samples.txt"  # scripts/samples.sh: WIN samples need a C window library, never run in a page
 # scripts/samples.sh: <sample with / as _>.txt, what the native run printed (samples-web.sh names the main checkout's)
 NATIVE_OUTPUTS = os.environ.get("WARP_NATIVE_OUTPUTS", "data/samples/out")
@@ -420,6 +424,44 @@ def browser(*arguments):
 # shows an example or sample (%s: its name as JSON) and waits until its run finished
 RUN_EXAMPLE = """await playground.chooseExample(%s);
 		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));"""
+
+
+# the sample shown anew (%s: its name), each step done on its rendered page as lib/markup.warp's click and type_into
+# find an element, by its text, placeholder, aria-label, name or id (%s: the steps as [word, label, text]): the
+# page's text after them, or the label no element shows
+CHECK_STEPS = """(async () => { """ + RUN_EXAMPLE + """
+	const root = document.getElementById("rendered").shadowRoot;
+	const labels = element => [element.textContent.trim(), ...["placeholder", "aria-label", "name", "id"].map(name => element.getAttribute(name))];
+	for (const [word, label, text] of %s) {
+		const element = [...root.querySelectorAll("*")].reverse().find(element => labels(element).includes(label));
+		if (!element) return JSON.stringify({ missing: label });
+		if (word === "type") {
+			element.value = text;
+			element.dispatchEvent(new Event("input", { bubbles: true }));
+		} else element.click();
+		await new Promise(done => setTimeout(done, """ + str(CLICK_MILLISECONDS) + """));
+	}
+	return JSON.stringify({ text: [...root.children].map(element => element.innerText).join(" ") });
+})()"""
+
+
+def spaced(text):
+	"""the text with each run of white space one space, as `warp app check` compares (lib/app/command.warp spaced)"""
+	return " ".join(text.split())
+
+
+def checks_wrong(name, source):
+	"""each check line of the sample that the page does not pass, with what it showed"""
+	wrong = []
+	for steps, expected in CHECK_LINE.findall(source):
+		parsed = [[word, *re.findall(r'"([^"]*)"', quoted)] for word, quoted in CHECK_STEP.findall(steps)]
+		answer = browser("eval", CHECK_STEPS % (json.dumps(name), json.dumps(parsed)))
+		shown = json.loads(json.loads(answer)) if answer.startswith('"') else {"text": f"(page gave no answer: {answer or browser_complaint})"}
+		if "missing" in shown:
+			wrong.append(f"check {steps} → {expected}: no element shows {shown['missing']}")
+		elif spaced(expected) not in spaced(shown["text"]):
+			wrong.append(f"check {steps} → {expected}: the page shows {spaced(shown['text'])[:SHOWN_DIFFERENCE]}")
+	return wrong
 
 
 def run_sample(name):
@@ -1312,6 +1354,9 @@ def check_samples(paths, tree):
 			compared = native.get(path) == "ok" and os.path.isfile(native_file)
 			native_output = open(native_file, encoding="utf-8", errors="replace").read() if compared else None
 			status, detail = sample_verdict(report, native_output)
+		wrong = checks_wrong(os.path.basename(path)[:-len(".warp")], source) if status in ("ok", "ran") and CHECK_LINE.search(source) else []
+		if wrong:
+			status, detail = "DIFF", "; ".join(wrong)
 		if status == "FAIL" and (EXPECTED_FAILURE.search(source) or NATIVE_ONLY.search(source)):
 			status = "EXP"
 		with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
