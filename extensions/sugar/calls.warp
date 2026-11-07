@@ -61,6 +61,9 @@ rewrite (type $x $more...) => type(($x $more...))
 # (decision union-or). Typed operators (decision rules-to-typed-operators), dispatched at compile time; a lambda
 # composed keeps its body, `(x => x + 1) | dbl` is `x => dbl(x + 1)`. Rust twin: pipes.rs
 rewrite ($it => $body) | $g => $it => $body | $g where $g is function
+# a composition applied takes the value after it, `twice|abs -4` is abs(twice(-4)), as `&` does
+rewrite $f | $g $x => $g($f($x)) where $f is function and $g is function
+rewrite $f | $g($x) => $g($f($x)) where $f is function and $g is function
 infix operator |(a: type, b: type) := a | b
 infix operator |(f: function, g: function) := x => x | f | g
 infix operator |(x: any, g: function) := g(x)
