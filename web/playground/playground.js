@@ -42,8 +42,8 @@ const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
 // terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.warp): clearing the screen or moving the cursor
-// home starts the text anew, the other codes (colors, cursor moves) are dropped
-const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
+// home starts the text anew, with the line end clear()'s print gives it, the other codes (colors, cursor moves) are dropped
+const TERMINAL_RESTART = /(?:\x1b\[(?:2J|H|1;1H))+\n?/g;
 const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
@@ -382,8 +382,8 @@ function roomBelowPaintings(paneStyle) {
 		+ pixels(paneStyle.paddingBottom) + pixels(paneStyle.borderBottomWidth) + pixels(getComputedStyle(document.body).paddingBottom);
 }
 
-// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints or prints in it
-// replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
+// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints in it replaces
+// the last frame's (printed text only at clear(), decision page-text-frames); frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
 // drawing-frames, snake-frames)
 function startsFrame(run, output) {
 	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
@@ -606,14 +606,11 @@ function painted(run, painting) {
 	showFrame(run.paintings);
 }
 
-// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins.
-// Before any frame each print shows at once, so a print before a slow paint is read while it renders (card print-watch)
+// what a run prints shows at once and stays, a sleep between or not (decision page-text-frames): a text animation starts
+// each frame with clear(), whose terminal clear shows the text anew (terminalText). Each print shows at once, so a
+// print before a slow paint is read while it renders (card print-watch)
 function printedChunk(run, chunk) {
-	(run.printedWhole ??= []).push(chunk); // every frame's, for the report (scripts/samples-web.sh compares it with the native run's)
-	if (startsFrame(run, "printed")) {
-		showPrinted(run.printed);
-		run.printed = [];
-	}
+	(run.printedWhole ??= []).push(chunk); // for the report (scripts/samples-web.sh compares it with the native run's)
 	run.printed.push(chunk);
 	if (!run.animating) showPrinted(run.printed);
 }
@@ -661,7 +658,8 @@ function finish(run, report) {
 	clearTimeout(run.stopTimer);
 	if (pending === run) pending = undefined;
 	showStop(false); // the shown report's timers turn it back to Stop (listenTo)
-	if (run.eventsFor && report.listening.some(label => !PAGE_EVENT.test(label))) return listenedFor(run, report);
+	// (a stopped run's report lists no events: stoppedReport)
+	if (run.eventsFor && (report.listening ?? []).some(label => !PAGE_EVENT.test(label))) return listenedFor(run, report);
 	run.resolve(report);
 }
 
