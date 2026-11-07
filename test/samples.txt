@@ -1,4 +1,4 @@
-# 4bcb12ca50 2026-11-07 19:40 245/261 93.9%
+# 4c64a9e640 2026-11-07 23:54 244/262 93.1%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -90,7 +90,6 @@ ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/gpu_visualizer.warp
-ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
@@ -98,13 +97,12 @@ ok   samples/gpu/northern_lights.warp
 ok   samples/gpu/ocean.warp
 ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/scene_3d.warp
-ok   samples/gpu/sdf_scene.warp
-ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
-ok   samples/graphics/paint_text.warp
 ok   samples/graphics/paint_text_gpu.warp
+ok   samples/graphics/paint_text.warp
+ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
@@ -115,6 +113,7 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
+ok   samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
@@ -127,6 +126,7 @@ ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
 ok   samples/loops/life_idiomatic.warp
 ok   samples/loops/life_kotlin_ranges.warp
+ok   samples/loops/mandelbrot.warp
 ok   samples/matching/code_templates.warp
 ok   samples/matching/matching.warp
 ok   samples/matching/pattern_clauses.warp
@@ -141,7 +141,6 @@ ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
-ok   samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
@@ -178,11 +177,9 @@ ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
-ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
-ok   samples/sound/music.warp
 ok   samples/sound/play_mp3.warp
 ok   samples/sound/rhythm.warp
 ok   samples/sound/signal_graph.warp
@@ -223,6 +220,7 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
+ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
@@ -255,9 +253,11 @@ SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
-EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1 outside the core: the unknown name load
+EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1 netbase: no server answers at http://localhost:8181 to load wikidata: run ./netbase :import wikidata and ./netbase :server, or set NETBASE
 SRV  samples/storage/todo_app.warp
-FAIL samples/graphics/shader_brush.warp: SDL_CreateWindow from SDL3 opens a window: refused under WARP_NO_WINDOW or CI
-FAIL samples/laws/kitchensink.warp: SDL_CreateWindow from SDL3 opens a window: refused under WARP_NO_WINDOW or CI
-FAIL samples/loops/mandelbrot.warp: SDL_CreateWindow from SDL3 opens a window: refused under WARP_NO_WINDOW or CI
-FAIL samples/wasm/import_compiled.warp: samples/wasm/import_compiled.warp:1:8 outside the core: the declaration global `… = …`
+FAIL samples/gpu/julia.warp: samples/gpu/julia.warp:1:26 wasm trap: call stack exhausted
+FAIL samples/gpu/sdf_scene.warp: samples/gpu/sdf_scene.warp:1:26 wasm trap: call stack exhausted
+FAIL samples/gpu/voronoi.warp: samples/gpu/voronoi.warp:1:26 wasm trap: call stack exhausted
+FAIL samples/modules/packages.warp: samples/modules/packages.warp:1:26 wasm trap: call stack exhausted
+FAIL samples/sound/gpu_visualizer_warp.warp: samples/sound/gpu_visualizer_warp.warp:1:26 wasm trap: call stack exhausted
+FAIL samples/sound/music.warp: samples/sound/music.warp:11:1 outside the core: the unknown name melody: `use sound` defines it
