@@ -3,6 +3,11 @@
 // alpha_of; draw paints them, arithmetic sees the number
 use math
 type Color = int
+opaque = 0xFF000000
+// a number as a color, color(0xFF8000): six hex digits are opaque, eight carry their own alpha (0x80FF8000 is half
+// transparent); a fully transparent one is with_alpha(c, 0)
+color(n: int): Color := (if n <= 0xFFFFFF then opaque + n else n) as Color
+rgb(n: int): Color := color(n)
 black = 0xFF000000 as Color
 white = 0xFFFFFFFF as Color
 gray = 0xFF808080 as Color
@@ -12,7 +17,6 @@ blue = 0xFF0000FF as Color
 yellow = 0xFFFFD700 as Color
 orange = 0xFFFF8C00 as Color
 purple = 0xFF8000C0 as Color
-opaque = 0xFF000000
 hex_digits = "0123456789ABCDEF"
 
 // each named color with its name

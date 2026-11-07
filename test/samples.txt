@@ -1,4 +1,4 @@
-# 160161ae8c 2026-11-07 16:38 247/263 93.9%
+# 75b2a5ef1f 2026-11-07 19:17 247/263 93.9%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -104,7 +104,6 @@ ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
-ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
 ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
@@ -115,7 +114,6 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
-ok   samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
@@ -129,7 +127,6 @@ ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
 ok   samples/loops/life_idiomatic.warp
 ok   samples/loops/life_kotlin_ranges.warp
-ok   samples/loops/mandelbrot.warp
 ok   samples/matching/code_templates.warp
 ok   samples/matching/matching.warp
 ok   samples/matching/pattern_clauses.warp
@@ -197,6 +194,7 @@ ok   samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
+ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
@@ -226,13 +224,13 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
-ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
 ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
+ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
@@ -255,10 +253,12 @@ WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: samples/native/c_calls.warp:6:1 primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
 SRV  samples/servers/hosting.warp
+SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
+SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1 outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/servers/route_headers.warp: exit 137, nothing on stderr
-FAIL samples/servers/worker.warp: exit 137, nothing on stderr
-FAIL samples/sound/visualizer.warp: the program links warp/native_window, but there is no /Volumes/Worktrees/samples-sweep/lib/modules/native_window.wasm
-FAIL samples/web/hello_div.warp: the program links warp/native_window, but there is no /Volumes/Worktrees/samples-sweep/lib/modules/native_window.wasm
+FAIL samples/graphics/shader_brush.warp: hint: click is markup's fix: use markup
+FAIL samples/laws/kitchensink.warp: hint: operator_≈ is math's; fix: use math
+FAIL samples/loops/mandelbrot.warp: hint: width is native_window's fix: use native_window
+FAIL samples/wasm/import_compiled.warp: samples/wasm/import_compiled.warp:1:8 outside the core: the declaration global `… = …`

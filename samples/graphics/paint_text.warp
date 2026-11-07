@@ -2,11 +2,12 @@
 # paint without the GPU: use draw keeps a canvas of colored pixels, and show() paints it, natively in a window (a PNG
 # without one) and in the playground on its canvas. label sets words in the system's sans-serif font, any size
 use draw
-canvas(200, 100)
+width=200 # todo set same for window!  todo warn if canvas≠window size todo create paint_text_gpu.warp too (cards window-canvas-size, paint-text-gpu)
+height=100
+canvas(width, height)
 clear(paper)
 rect(10, 56, 60, 34, blue)
-circle(120, 72, 20, orange)
+circle(120, 72, 20, color(0xFFD700))
 line(156, 90, 190, 54, green)
-label(10, 6, "hello", red, 32)
-label(120, 16, "warp paints", purple)
-show()
+label(10, 6, "hello", red, size=48) 
+show() # todo Escape works great, but Control C only works when switching back to the window, Or takes some seconds (card window-ctrl-c)

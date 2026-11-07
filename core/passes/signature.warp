@@ -59,6 +59,10 @@ square_list(items: list): Node := List(items, Bracket.Square, Separator.Comma)
 curly_list(items: list): Node := List(items, Bracket.Curly, Separator.Comma)
 first_line(written: text): text := written.split("\n")#1
 
+# a file's bytes, [] when it isn't there (asked first: the page's read_bytes of a missing file ends the compile, no try
+# catches it, card playground-host-word)
+bytes_if_there(path: text): list := if exists(path) then (try read_bytes(path) else []) else []
+
 # the signatures of the modules linked to this compile, by module name
 global linked_signatures = {}
 linked_signature(module: text): ModuleSignature? := linked_signatures.get(module)
@@ -70,9 +74,7 @@ prebuilt_signature(module: text): ModuleSignature? := {
 	if linked_signature(module) != ø { return linked_signature(module) }
 	if own_module_files.has(module) { return ø }
 	if not prebuilt_signatures.has(module) {
-		path = folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + module + ".wasm"
-		# (asked first: the page's read_bytes of a missing file ends the compile)
-		wasm = if exists(path) then (try read_bytes(path) else []) else []
+		wasm = bytes_if_there(folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + module + ".wasm")
 		prebuilt_signatures[module] = if #wasm > 0 then module_signature(module, wasm) else ø
 	}
 	prebuilt_signatures[module]

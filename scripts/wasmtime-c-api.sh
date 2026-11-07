@@ -2,8 +2,8 @@
 # scripts/wasmtime-c-api.sh [<folder>…]: warp's native libraries built for this machine into /opt/cargo (a no-op when
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
 # (crates/wasmtime-capi, card wasmtime-bundled) libwarp_sound (crates/warp-sound, miniaudio, decision sound-plays) and libwarp_gpu (crates/warp-gpu, wgpu-native,
-# card gpu-functions), libwarp_window (crates/warp-window, SDL3, card native-window) and libwarp_webview
-# (crates/warp-webview, the system's web view, card app-webview; macOS's WKWebView for now).
+# card gpu-functions) and libwarp_webview (crates/warp-webview, the system's web view, card app-webview; macOS's
+# WKWebView for now). The window is warp's own (lib/native_window.warp, SDL3 over FFI).
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail
@@ -14,10 +14,7 @@ MINIAUDIO_SHA256=6b2029714f8634c4d7c70cc042f45074e0565766113fc064f20cd27c986be9c
 export CARGO_TARGET_DIR=${WARP_WASMTIME_TARGET:-/opt/cargo/warp-wasmtime}
 sound_build=${WARP_SOUND_TARGET:-/opt/cargo/warp-sound}
 WGPU_VERSION=29.0.1.1
-STB_COMMIT=6e9f34d5429cf16790ec43c9bac3f1ee4ad1f760
-STB_TRUETYPE_SHA256=ecd30b05e0dd4fea3a13c26810dd9e1992dc379049482c393d5a19e6b5090aab
 gpu_build=${WARP_GPU_TARGET:-/opt/cargo/warp-gpu}
-window_build=${WARP_WINDOW_TARGET:-/opt/cargo/warp-window}
 webview_build=${WARP_WEBVIEW_TARGET:-/opt/cargo/warp-webview}
 WASMTIME_VERSION=50.0.0
 WASMTIME_SHA256=2d93539aae382faee7b19650fd966f1f8185599b9cc4adc0a5a8b8f768c11ba9
@@ -55,17 +52,16 @@ if [ "$(cat "$wasmtime_stamp" 2>/dev/null)" != "$wasmtime_inputs" ] || ! ls "$CA
   echo "$wasmtime_inputs" >"$wasmtime_stamp"
 fi
 case $(uname -s) in
-  Darwin) suffix=dylib; prefix=lib; system_libraries=""; window_libraries="-framework CoreFoundation"
+  Darwin) suffix=dylib; prefix=lib; system_libraries=""
     sound_libraries="-framework CoreMIDI -framework CoreFoundation"
     gpu_libraries="-framework Metal -framework QuartzCore -framework Foundation -framework CoreGraphics -framework IOKit -framework IOSurface -lobjc" ;;
-  Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries"; window_libraries=""
+  Linux) suffix=so; prefix=lib; system_libraries="-ldl -lpthread -lm"; gpu_libraries="$system_libraries"
     sound_libraries="$system_libraries" ;;
-  *) suffix=dll; prefix=""; system_libraries=""; gpu_libraries=""; window_libraries=""; sound_libraries="" ;;
+  *) suffix=dll; prefix=""; system_libraries=""; gpu_libraries=""; sound_libraries="" ;;
 esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
 sound_library=${prefix}warp_sound.$suffix
 gpu_library=${prefix}warp_gpu.$suffix
-window_library=${prefix}warp_window.$suffix
 webview_library=${prefix}warp_webview.$suffix
 
 # a library owning host words reads and builds warp values in place (lib/native/warp_node.h) through warp's wasmtime:
@@ -133,23 +129,6 @@ gpu_library_built() {
 }
 gpu_library_built
 
-# SDL3 as the system installs it (brew install sdl3, apt install libsdl3-dev), linked as a library of its own, with
-# stb_truetype's one header (text_coverage), fetched once at its pinned commit and checked
-window_library_built() {
-  flags=$(pkg-config --cflags --libs sdl3 2>/dev/null) || return 0
-  mkdir -p "$window_build"
-  header=$window_build/stb-$STB_COMMIT/stb_truetype.h
-  fetched "$header" "https://raw.githubusercontent.com/nothings/stb/$STB_COMMIT/stb_truetype.h" "$STB_TRUETYPE_SHA256"
-  source=$checkout/crates/warp-window/warp_window.c
-  built=$window_build/$window_library
-  # shellcheck disable=SC2086 # the headers are words
-  current "$built" "$source" "$header" $value_headers && return
-  # shellcheck disable=SC2086 # the flags are words
-  nice -n 19 cc -O2 -shared -fPIC -I "$(dirname "$header")" -o "$built.new" "$source" $flags $window_libraries $value_libraries
-  mv -f "$built.new" "$built"
-}
-window_library_built
-
 # the system's web view: WKWebView on macOS (WebKitGTK on Linux is a card of its own); its JS bridge embedded (#embed)
 webview_library_built() {
   [ "$(uname -s)" = Darwin ] || return 0
@@ -176,7 +155,5 @@ for folder in "$@"; do
   installed "$sound_build/$sound_library" "$folder"
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
   if [ -f "$gpu_build/$gpu_library" ]; then installed "$gpu_build/$gpu_library" "$folder"; fi
-  # (a machine without SDL3 gets none: its programs run their frames once, windowless)
-  if [ -f "$window_build/$window_library" ]; then installed "$window_build/$window_library" "$folder"; fi
   if [ -f "$webview_build/$webview_library" ]; then installed "$webview_build/$webview_library" "$folder"; fi
 done
