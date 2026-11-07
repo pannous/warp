@@ -1,5 +1,5 @@
 # Int types (card int-types-extraction, decision core-is-self): `type Color = int` and `type Angle = float` mark a
-# number with a mark of its own (marks.warp), the type's show giving its text (shows.warp, which class_methods reads).
+# number with a mark of its own (marks.warp), the type's `format … as text` giving its text (shows.warp, which class_methods reads).
 # The definitions pass runs int_types where it ran; the marks themselves (kinds, boxing, output) are the core's. Its
 # parts name core words without a use of core paths (lib/extensions has no ../core)
 use "int_types/shows.warp"

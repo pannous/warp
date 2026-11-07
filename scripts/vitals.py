@@ -37,6 +37,13 @@ STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build record
 # record's own warp.wasm, run once, so its records are alike)
 BUILDS = [("warp.wasm, built by the seed", "warp.record", True),
           ("self-compile: warp.wasm compiles itself", "warp-self.record", False)]
+HELLO = "samples/hello/hello.warp"
+HELLO_RUNS = 3  # the cheapest of these runs counts: instructions and wall time only ever gain from the machine's load
+INSTALLS = os.path.expanduser("~/dev/bin/warp-builds")  # each install of a main tip (after-push.sh): warp and its compilers
+HELLO_SNAPSHOTS = os.path.join(REPO, "data/vitals/hello.jsonl")  # one line per measured install, kept as installs go
+# measured by hand before the series began: (label, revision, 10^9 instructions, seconds)
+HELLO_REFERENCES = [("1.4.1", "v1.4.1", 0.09, 0.01), ("1.5.1", "v1.5.1", 1.9, 0.22), ("1.6.1", "v1.6.1", 6.1, 0.47),
+                    ("before hello-takes", "d152612c4d^1", 5.4, 0.53), ("hello-takes", "d152612c4d", 3.1, 0.22)]
 
 
 def component(path):
@@ -308,9 +315,54 @@ def card_counts():
     return snapshots
 
 
+def hello_cost(warp):
+    """The cheapest of HELLO_RUNS runs of `<warp> HELLO` (compile and run): 10^9 instructions retired and wall
+    seconds, by /usr/bin/time -l; None when it doesn't say Hello."""
+    runs = []
+    for _ in range(HELLO_RUNS):
+        run = subprocess.run(["/usr/bin/time", "-l", warp, HELLO], capture_output=True, text=True, cwd=REPO,
+                             env={**os.environ, "WARP_NO_WINDOW": "1"})
+        instructions, seconds = re.search(r"(\d+)\s+instructions retired", run.stderr), re.search(r"([\d.]+) real", run.stderr)
+        if "Hello" not in run.stdout or not instructions or not seconds:
+            print(f"vitals: {warp} {HELLO} failed: {(run.stdout + run.stderr).strip()[-200:]}", file=sys.stderr)
+            return None
+        runs.append((int(instructions.group(1)) / 1e9, float(seconds.group(1))))
+    return round(min(r[0] for r in runs), 2), round(min(r[1] for r in runs), 2)
+
+
+def commit_date(revision):
+    return git("log", "-1", "--format=%cd", "--date=iso-strict", revision).strip()[:16].replace("T", " ")
+
+
+def hello_track():
+    """hello's compile and run per main tip: each install in INSTALLS not measured yet is measured once (its
+    compilers' commit, warp.wasm.inputs) and kept in HELLO_SNAPSHOTS; then HELLO_REFERENCES, measured by hand."""
+    measured = []
+    if os.path.exists(HELLO_SNAPSHOTS):
+        with open(HELLO_SNAPSHOTS) as kept:
+            measured = [json.loads(line) for line in kept if line.strip()]
+    known = {point["commit"] for point in measured}
+    for folder in sorted(glob.glob(os.path.join(INSTALLS, "*"))):
+        try:
+            with open(os.path.join(folder, "warp.wasm.inputs")) as inputs:
+                commit = re.search(r"commit=(\w+)", inputs.read()).group(1)
+        except (OSError, AttributeError):
+            continue
+        if commit in known or not (cost := hello_cost(os.path.join(folder, "warp"))):
+            continue
+        known.add(commit)
+        measured.append({"time": commit_date(commit), "commit": commit[:10], "instructions": cost[0], "seconds": cost[1]})
+        with open(HELLO_SNAPSHOTS, "a") as kept:
+            kept.write(json.dumps(measured[-1]) + "\n")
+    series = sorted([p["time"], p["commit"], p["instructions"], p["seconds"], ""] for p in measured)
+    references = [[commit_date(revision), git("rev-parse", "--short=10", revision).strip(), instructions, seconds, label]
+                  for label, revision, instructions, seconds in HELLO_REFERENCES]
+    return {"series": series, "references": references}
+
+
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP).splitlines()}
-data = {"cards": card_counts(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
+data = {"cards": card_counts(), "hello": hello_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(TEMPLATE) as template, open(OUT, "w") as page:
     page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))

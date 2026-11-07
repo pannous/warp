@@ -29,7 +29,7 @@ class real {
 		if under is int then real_of(1 / denominator, pi_power / 2, under) else √float()
 	}
 	text() := real_text(coefficient, pi_power, radicand)
-	show() := real_text(coefficient, pi_power, radicand)
+	format as text := real_text(coefficient, pi_power, radicand)
 }
 
 # a number as an exact real, π to the power 0: `3 as real`, and a number meeting a real under any operator becomes one

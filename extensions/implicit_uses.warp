@@ -9,9 +9,10 @@ spelling_of(word: text): text := {
 	if glyph != word and (is_operator_glyph(glyph) or glyph in alias_spellings().declared) then glyph else word
 }
 # whether the source writes an indexed word: a glyph wherever it stands, `3·4` and `3∘4` too, a name as a whole word
-mentions_indexed(source: text, word: text): bool := {
+# (one of the names it mentions, parser.warp names_mentioned)
+mentions_indexed(source: text, names: map, word: text): bool := {
 	spelled = spelling_of(word)
-	if spelled != word then source.contains(spelled) else mentions_word(source, spelled)
+	if spelled != word then source.contains(spelled) else names.has(spelled)
 }
 # the [start, end] of each text literal and comment of the source, in order, by the lexer's own ends of both
 texts_and_comments(source: text): list := {
@@ -45,9 +46,11 @@ implicit_modules(source: text, folder: text = "."): list := {
 	source = source.split("\n").map(line => if c_declaration(line) != ø then "" else line).join("\n")
 	# (the texts read too, for the words in their holes, `"a ${clamp(x, 0, 3)}"`; one only in a text isn't free)
 	code = uncommented(source)
-	candidates = index.keys.filter(word => mentions_indexed(code, word))
+	names = names_mentioned(code)
+	candidates = index.keys.filter(word => mentions_indexed(code, names, word))
 	if #candidates == 0 { return [] }
-	program = interpolation(plain_node(parsed(source)))
+	# (a `format Flag f as text` definition defines no format: lib/text's stays callable)
+	program = formatted_definitions(interpolation(plain_node(parsed(source))))
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
@@ -151,6 +154,8 @@ free_words(n: Node): map := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
+		# quoted code names nothing: the g of `data g` is no unit
+		if is_quote(part) { continue }
 		if part is symbol { found[name_of(part)] = yes }
 		else if is_named_type(part) { found[declared_type_name(value_of(part)#2)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }

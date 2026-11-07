@@ -50,7 +50,7 @@ equality_method = "equal"
 # instance_float: `sin(2km)`), a shown value by show(), ø on any other value: it then shows its structure (decision
 # show-hook; runtime show.warp key_text through the hook instance_show); emitter/output.warp and emitter.warp cast read
 # the dispatchers
-conversion_methods = [["text", showing_dispatcher, "str"], ["float", HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], ["float", HiddenWord.FloatHooked as text, ø], ["show", HiddenWord.ShowShown as text, ø]]
+conversion_methods = [["text", showing_dispatcher, "str"], ["float", HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], ["float", HiddenWord.FloatHooked as text, ø], [form_method, HiddenWord.ShowShown as text, ø]]
 # a class's positions (card class-position-index, decisions instance-position and property-accessors): `b#p` is its
 # position(p), from 1, `b[i]` (the parser's b#(i+1)) its index(i), from 0, either one deriving the other; `b#p = v` the
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
@@ -139,7 +139,7 @@ methods_lifted(program: Node): Node := {
 		name = if view == ø then "" else declared_type_name(view#2)
 		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
 	}
-	# an int type's show(c: Color) is a hook extensions/int_types/marks.warp renames show·Color, no function show to route to
+	# an int type's `format Color c as text` is a hook extensions/int_types/marks.warp renames format·text·Color, no function to route to
 	hooks = int_type_showers(top_statements)
 	functions = functions_defined(top_statements.filter(statement => statement not in hooks))
 	constructed = {}
