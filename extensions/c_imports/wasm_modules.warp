@@ -30,12 +30,12 @@ wasm_module_used(statement: text, folder: text): text? := {
 	# (the module `warp build --module shapes.warp` writes is no library of its own: compiler.warp module_source is
 	# `use shapes`, and a shapes.wasm an older compiler left beside it, without its signature, read as one: index out of range)
 	if bare == ø or bare == module_written { return ø }
-	for written in [bare, bare + WASM_EXTENSION] {
-		name = if rooted(written, folder) == written then path_in(folder, written) else written
-		# (one carrying a warp.signature is a module warp compiled, linked as a standard module is: compiler.warp own_module_beside)
-		bytes = wasm_bytes(wasm_file(name, folder))
-		if name.ends_with(WASM_EXTENSION) and is_core_wasm(bytes) and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) == ø { return name }
-	}
+	# (only a .wasm file is read: `use compute_toys` beside a folder compute_toys read the folder, which never ended, card hit)
+	written = if bare.ends_with(WASM_EXTENSION) then bare else bare + WASM_EXTENSION
+	name = if rooted(written, folder) == written then path_in(folder, written) else written
+	# (one carrying a warp.signature is a module warp compiled, linked as a standard module is: compiler.warp own_module_beside)
+	bytes = wasm_bytes(wasm_file(name, folder))
+	if is_core_wasm(bytes) and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) == ø { return name }
 	ø
 }
 # the module as a use statement writes it, unquoted, ø for no use: `use wasm "rust_demo.wasm"` (decision
