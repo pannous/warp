@@ -1,0 +1,6 @@
+# a selector's # before a word and its block stays the id selector, though the program binds the word
+'use markup; main = [1 2]; to_html(style{ #main { color: red } })'	"<style>#main { color: red }</style>"
+'use markup; main = "ab"; to_html(style{ #main{ color: red } })'	"<style>#main { color: red }</style>"
+'xs = [1 2 3]; {n: #xs}'	{n: 3}
+# a descendant selector is a text key, as written (night decision on style-ul, card should-dot)
+'use markup; to_html(style{ "ul .done": { color: red } })'	"<style>ul .done { color: red }</style>"

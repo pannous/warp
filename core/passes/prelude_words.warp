@@ -261,7 +261,7 @@ forced_cast_words(program: Node): list := {
 	}
 	[]
 }
-extension_writes = [component_words, forced_cast_words]
+extension_writes = [component_words, forced_cast_words, fetched_later_words]
 # a value called, `room(signal)` (closure_call_1 once lowered), may be an instance its class's `call` takes (emitter
 # closures.warp instance_calls): the module's call is reached and kept for it
 callable_word = "call"
@@ -271,11 +271,18 @@ calls_a_value(program: Node): bool := {
 }
 time_literal_words(program: Node): list := {
 	nodes = nodes_in(program)
-	if not nodes.any(is_time_view) { return [] }
+	# a time literal, or a name typed time whose fields it reads, `zoned(t: time, …) := … t.form` (lib/time.warp)
+	if not nodes.any(n => is_time_view(n) or is_time_typed(n)) { return [] }
 	[time_field_word] + (if nodes.any(n => time_operator_symbols.any(symbol => is_operator(n, symbol))) then [time_operation_word, time_operand_word] else [])
 }
-# the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *
-emitted_modules(program: Node): list := if time_operation_word in time_literal_words(program) then [time_arithmetic_module] else []
+is_time_typed(n: Node): bool := is_operator(n, ":") and value_of(n) == symbol(time_module)
+# the modules of the emitted words: lib/time_arithmetic.warp for a time's + - *, lib/time.warp for a time placed in a
+# zone, `t in "Europe/Berlin"`, which the sugar makes zoned(t, "Europe/Berlin") (extensions/sugar/methods.warp)
+emitted_modules(program: Node): list := (if time_operation_word in time_literal_words(program) then [time_arithmetic_module] else []) + (if places_in_zone(program) then [time_module] else [])
+time_module = "time"
+# (`t in "Europe/Berlin"` read as the group of its three words, the sugar's form)
+places_in_zone(program: Node): bool := nodes_in(program).any(n => is_group(n) and #n == 3 and n#2 == symbol(placed_in_word) and zone_written(n#3))
+placed_in_word = "in"
 
 # the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
 global brought_names = {}

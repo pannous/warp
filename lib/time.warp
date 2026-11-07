@@ -219,8 +219,10 @@ time_zones = [
 	Zone("Pacific/Honolulu", -36000, Dst.Never)
 ]
 
-zone_named(name: text): Zone := {
-	for zone in time_zones { if zone.name == name { return zone } }
+zone_named(name: text): Zone := time_zones#(zone_index(name) + 1)
+// a zone's place in time_zones from 0, as a zoned time's info holds it
+zone_index(name: text): int := {
+	for at in 0 ..< #time_zones { if time_zones#(at + 1).name == name { return at } }
 	raise "unknown time zone " + name + ": not in the time zone rules (lib/time.warp time_zones)"
 }
 // ISO weekday of a day number: Monday 1 … Sunday 7
@@ -278,6 +280,35 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 			raise "that wall time does not exist in " + zone.name + ": it is skipped by a daylight saving transition; choose disambiguation: earlier or later"
 		}
 	}
+}
+
+// Zoned times (wiki/time.md "Time zones"): `2024-01-31T10:00[Europe/Berlin]` is zoned(2024-01-31T10:00, "Europe/Berlin"),
+// `t in "Asia/Kolkata"` zoned(t, "Asia/Kolkata"): a time node of the form Zoned, its position the instant in
+// nanoseconds, its info the zone's index and offset in minutes above the form (extensions/time_values.warp), its zone's
+// name beside them
+nanos_per_second = 1000000000
+local_form = 2
+zoned_form = 4
+zone_index_unit = 8
+offset_minute_unit = 2048
+// an instant or a zoned time keeps its instant; a local time's wall clock resolves in the zone, a skipped or repeated
+// one by the disambiguation (`zoned(2024-03-31T02:30, "Europe/Berlin", disambiguation: later)`)
+zoned(t: time, zone_name: text, disambiguation: Disambiguation = Disambiguation.Reject) := {
+	at = zone_index(zone_name)
+	seconds = if t.form == local_form then zone_instant(time_zones#(at + 1), t.epoch_seconds, disambiguation) else t.epoch_seconds
+	zoned_at(at, seconds * nanos_per_second)
+}
+// the zoned time of the zone at that index at an instant (nanoseconds since 1970), its offset the one in effect then
+zoned_at(at: int, nanos: int) := {
+	zone = time_zones#(at + 1)
+	offset = zone_offset(zone, nanos /! nanos_per_second)
+	time_of(zoned_form + at * zone_index_unit + offset /! 60 * offset_minute_unit, nanos, zone.name)
+}
+// the instant a wall time (seconds since 1970 on the zone's clock) means as a calendar shift lands on it: a repeated
+// one the earlier, a skipped one moved past the gap (RFC 5545, Temporal's "compatible")
+compatible_instant(zone: Zone, wall: int): int := {
+	earlier = zone_instant(zone, wall, Disambiguation.Earlier)
+	if earlier + zone_offset(zone, earlier) == wall then earlier else zone_instant(zone, wall, Disambiguation.Later)
 }
 
 // Date patterns (card lib-date-patterns): format_pattern(time, "yyyy-MM-dd HH:mm") and parse_pattern(text, pattern), UTC.
