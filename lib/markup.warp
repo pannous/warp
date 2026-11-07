@@ -76,8 +76,30 @@ page_after_steps(value: any): text := {
 	steps = std_io("os", "env", [PAGE_STEPS_VARIABLE]) ?? ""
 	html = render(value)
 	for step in steps.split("\n").filter(line => line != "") { html = page_step(step.split("\t")) }
+	if std_io("os", "env", [APP_WINDOW_VARIABLE]) { html = page_window_run(html) }
 	html
 }
+// `warp app` (lib/app/command.warp) runs the program so, natively: its page in a window of the system's web view, each
+// event of the page running its handler (page_event) and the page rendered anew, as the page's site.js does, till the
+// window is closed; the HTML shown last (crates/warp-webview warpWindow)
+APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
+APP_WINDOW = "warpWindow"
+EVENT_JOINER = "·"
+page_window_run(html: text): text := {
+	page_shown_in_js()
+	foreign_call("js", "globalThis", JS_PAGE_SHOWN, 1, [html])
+	foreign_call("js", APP_WINDOW, "show", 1, [])
+	shown = html
+	happened = page_window_event()
+	while happened != ø {
+		page_event(int(happened["event"].split(EVENT_JOINER)[1]), happened["detail"])
+		shown = page_render(page_shown)
+		happened = page_window_event()
+	}
+	shown
+}
+// the window's next event, {event: "click·1", detail}, ø once it is closed
+page_window_event(): any := foreign_call("js", APP_WINDOW, "next", 1, [])
 page_step(words: list): text := {
 	if words[0] == "click" and #words == 2 { return click(words[1]) }
 	if words[0] == "type" and #words == 3 { return type_into(words[1], words[2]) }
