@@ -16,7 +16,7 @@ gpu_compute / gpu_render plumbing (src/graphics/gpu.rs, web/playground/host-gpu.
   one; a list the program makes once (literal, comprehension, `float[n]`) at its main level and uses only by #, xs#i,
   xs#i = v, for, print and gpu_compute is one by itself (lib/rule_words.warp gpu_lists_packed, lib/wgsl.warp
   gpu_bound), as is a creating form written in a gpu_compute call. libwarp_gpu binds the cells as the storage buffer
-  and writes results back into them (warp_node.h warp_floats): samples/gpu/gpu_million.warp went 852 + 1686 ms → 138 +
+  and writes results back into them (warp_node.h warp_floats): samples/acceleration/gpu_million.warp went 852 + 1686 ms → 138 +
   20 ms. Other list words refuse a `[f32]` list today; card f32-gpu gives reads a boxed copy (one function, which
   xs-map-gpu replaces by a kernel) and growth (a [count, capacity, cells] header, vector doubling). Linear memory is
   never freed yet (card packed-f32-memory).
@@ -165,7 +165,7 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
    Sample: samples/lists/dot.warp.
    Browser (host-gpu.js gpu_kernel): the block's cells go to the task Worker as a transferred Float32Array and
    come back as raw f32 bytes in the shared buffer (writeSharedFloats, state FLOATS_STATE), only from the first cell
-   needed (the partials of a reduction). Measured with samples/gpu/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
+   needed (the partials of a reduction). Measured with samples/acceleration/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
    10^6, ms): sum GPU 8–17 / CPU 80–160, the mapped list back 12–16; the first run 86 (device + shader). Raw WebGPU for
    that kernel is ~3 ms. SwiftShader (CI): correct, sum 464 ms, sin less precise (2e-5 relative). Chrome's Tint
    refuses the f32 literal 3.4028235e38 (it rounds above the largest f32): LARGEST_F32 is a bitcast. Careful when
@@ -180,7 +180,7 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
    kept block replaces an earlier run's buffer for the same address (addresses recur across runs in one process).
    Browser: GPU jobs go to the task Worker of the last GPU job (host-gpu.js gpuTaskWorker), which keeps
    the buffers (keptBuffers, by block and count); busy or missing → another worker / an upload (KEPT_MISSING, retried).
-   Headless Chrome, samples/gpu/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
+   Headless Chrome, samples/acceleration/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
 
 ## Painting a shader every frame (samples/gpu/gpu_visualizer.warp)
 - src/graphics/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js

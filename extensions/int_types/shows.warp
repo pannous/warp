@@ -2,7 +2,8 @@
 # too, so a class's routed show() never falls back to a hook that int_types.warp renames away (card
 # module-arity-overloads)
 
-showing_word = "show"
+# the hook's own name, which no program spells: a program writes `format Color c as text := …`
+showing_word = "format·text"
 
 # the number types a marked type is held as: `type Color = int`, `type Angle = float`
 MARKED_NUMBER_KINDS = {int: Kind.Int, float: Kind.Float}
@@ -24,7 +25,23 @@ int_type_kinds(statements: list): map := {
 	}
 	kinds
 }
-# `show(c: Color) := …`: Color; ø for any other statement
+# `format Color c as text := …` (the user's decision format-as-text, not show: showing is no printing): the hook giving
+# a value of Color its text, read as `format·text(c: Color) := …` before any pass takes it for a call of lib/text format
+formatted_definitions(program: Node): Node := group_like(program, statements_in(program).map(formatted_definition))
+formatted_definition(statement: Node): Node := {
+	if not is_key(statement, Op.Define) or not is_group(key_of(statement)) { return statement }
+	words = items_of(key_of(statement))
+	if not (#words == 5 and words.all(word => word is symbol)) { return statement }
+	if [words#1, words#4, words#5].map(name_of) != ["format", "as", "text"] { return statement }
+	Key(call_of(showing_word, [Key(words#3, Op.Colon, words#2)]), Op.Define, value_of(statement))
+}
+# the type a module's line `format Angle a as text := …` gives its text, "" of any other line: the hook is a slice of
+# Angle's, reached with the type (core/passes/prelude_words.warp name_defined_in)
+formatted_type(line: text): text := {
+	words = line.split(":=")#1.split(" ").filter(word => word != "")
+	if line.contains(":=") and #words == 5 and words#1 == "format" and words#4 == "as" and words#5 == "text" then words#2 else ""
+}
+# `format·text(c: Color) := …`: Color; ø for any other statement
 shower_of(statement: Node): text? := {
 	if not is_key(statement, Op.Define) { return ø }
 	head = key_of(statement)

@@ -17,7 +17,7 @@ exact_cmp(a: Node, b: Node): int := {
 }
 exact_neg(x: Node): Node := {
 	made_case(Made.BigInt, big_exact_negated(x))
-	exact_ratio(-exact_numerator(x), exact_denominator(x))
+	fraction_kept(exact_ratio(-exact_numerator(x), exact_denominator(x)), x, x)
 }
 # -1, 0 or 1 as x is below, equal to or above 0 (a denominator is positive)
 exact_sign(x: Node): int := {

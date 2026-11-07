@@ -54,17 +54,18 @@ spans_of(source: text): list := {
 	source_spans[source]
 }
 # the module of sliced_modules whose file the source is, as the library index was written of it: its length the
-# index's, and under WARP_LIB (a lib/ edited since the build) its hash too, as rule_needs_by_module trusts the index
+# index's, and in a lib/ maybe edited since the build (library_unedited) its hash too, as rule_needs_by_module trusts the index
 # (hashing the prelude and the type modules was ~25 ms a compile); ø for any other text
 indexed_module(source: text): text? := {
 	for module in sliced_modules() {
 		hash = library_index_section("hash").get(module) ?? ""
-		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (warp_lib() == ø or hash == source_hash(source)) { return module }
+		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (library_unedited() or hash == source_hash(source)) { return module }
 	}
 	ø
 }
-# the modules every compile cuts: the prelude and the type modules
-sliced_modules(): list := ["prelude"] + type_modules
+# the modules every compile cuts: the prelude, lib/math.warp beside it (builtin_signatures.warp library_texts_seen) and
+# the type modules
+sliced_modules(): list := ["prelude", "math"] + type_modules
 # each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
 sliced_modules_scanned(): map := {
 	found = {}
@@ -112,6 +113,8 @@ name_defined_in(line: text): text := {
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if count(leading) == 0 or leading == rewrite_word { return "" }
 	following = line[#leading ..].trim()
+	formatted = formatted_type(line)
+	if formatted != "" { return formatted }
 	converted = conversion_target(following)
 	if converted != "" { return converted }
 	# `convert!(n, to: byte) := …`, `is!(warp, expected) := …`: the slice name is the bang word
@@ -233,11 +236,11 @@ operated_within(name: text): list := {
 }
 
 # the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),
-# the matcher of a structural match arm (node_matches.warp), an int type's show (extensions/int_types.warp)
+# the matcher of a structural match arm (node_matches.warp)
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + (if statements_in(program).any(statement => int_type_name(statement) != ø) then [showing_word] else []) + emitted_words(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_quoted_arm(n) or (is_key(n, Op.Is) and is_shape_pattern(value_of(n)))) then [matcher_word] else []) + (if nodes.any(is_pattern_definition) then [matcher_word, pattern_converter_word, kept_pattern_word] else []) + (if writes_templates then [template_word] else []) + emitted_words(program)
 }
 # `data($a * 1) => a`, an arm of quoted code wherever a sugar word holds it (`rules {…}`, extensions/sugar/arms.warp): its
 # match is written only once the sugar fires

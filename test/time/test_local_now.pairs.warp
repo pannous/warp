@@ -1,0 +1,5 @@
+# an Instant on a zone's wall clock (decision local-now): now is one in the run's zone; one a program builds is UTC
+'use time; [Instant(0).zone, str(Instant(0))]'	["UTC", "1970-01-01T00:00:00Z"]
+'use time; Instant(0, "Europe/Berlin").hour'	1
+'use time; str(Instant(0, "Asia/Kolkata"))'	"1970-01-01T05:30:00+05:30"
+'use time; Instant(0, "Asia/Kolkata") < Instant(1)'	yes

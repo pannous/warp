@@ -2,7 +2,7 @@
 @primitive
 # expected failure: @primitive C calls run only in a native build (warp build native)
 # C functions of lib/c.warp and lib/math.warp, called natively: `warp build native c_calls.warp`, then
-# `GREETING=Hi ./c_calls` (notes/primitive.md "C calls")
+# `GREETING=Hi ./c_calls`
 import (getenv, strlen) from "c"
 import hypot from "m"
 greeting = getenv("GREETING")
