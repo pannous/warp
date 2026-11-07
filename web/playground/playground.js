@@ -194,9 +194,15 @@ function showAgain(topic) {
 
 // ---- the worker ---------------------------------------------------------------------------------------------
 
-// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage
+// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage;
+// a stalled standby is dropped, the next stop starts a worker of its own
 function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
 	const stall = `the compiler's worker gave no sign for ${STALLED_START_MS / 1000} s at stage "${workerStage}"`;
+	if (stalledWorker === standby) {
+		standby = undefined;
+		stalledWorker.terminate();
+		return reject(new Error(stall));
+	}
 	if (restarts > 0) return reject(new Error(stall));
 	console.warn(`${stall}: starting it again`);
 	stalledWorker.terminate();
@@ -204,20 +210,41 @@ function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
 	resolve(workerReady);
 }
 
+// the standby takes over when a run is stopped, else a new worker starts
 function startWorker(restarts = 0) {
 	workerWarmed = false;
 	workerStages.length = 0;
+	worker = standby ?? newWorker(restarts);
+	standby = undefined;
+	workerReady = worker.ready;
+	if (!worker.isReady) showLoading("starting the compiler's worker", false);
+	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
+	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
+	workerSettled = "starting";
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
+	tellSystemValues();
+	sharePointer();
+	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
+	tellEnvironment();
+}
+
+// a worker started while a run animates (startsFrame): stopping that run, as the next run does, takes it at once instead
+// of starting a worker then, whose compiler loads and warms up first (0.5–1 s, seconds on a slow machine: card
+// playground-progressive-slowdown, Hello after a shader)
+let standby;
+const prepareStandby = () => standby ??= newWorker();
+
+// a worker loading the compiler: `ready` resolves once it can run programs
+function newWorker(restarts = 0) {
 	const options = new URLSearchParams();
 	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
 	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
 	if (PLAYGROUND_VERSION) options.set(BUILD_PARAMETER, PLAYGROUND_VERSION.built); // host.js ofThisBuild
-	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
-	worker.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
-	showLoading("starting the compiler's worker", false);
-	workerReady = new Promise((resolve, reject) => {
-		const starting = worker;
+	const starting = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
+	starting.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
+	starting.ready = new Promise((resolve, reject) => {
 		let stalled;
 		// each message of the starting worker shows it alive: the stall timer starts over
 		const watchStart = () => {
@@ -232,8 +259,8 @@ function startWorker(restarts = 0) {
 		const [ready, failed] = [settled(resolve), settled(reject)];
 		watchStart();
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
-		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
-		worker.onmessage = ({ data }) => {
+		starting.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		starting.onmessage = ({ data }) => {
 			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
@@ -242,13 +269,20 @@ function startWorker(restarts = 0) {
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
-			if (data.type === "stage") return stageBegan(data.stage);
+			// the standby starts unseen: its stages and its loading are not the shown worker's
+			const shown = starting === worker;
+			if (data.type === "stage") return shown && stageBegan(data.stage);
 			if (data.type === "loading") {
+				if (!shown) return;
 				workerStage = `downloading the compiler: ${megabytes(data.loaded)} MB so far`; // a stalled download says how far
 				return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			}
-			if (data.type === "compiling") return stageBegan("compiling") && stopLoading();
-			if (data.type === "ready") return stageBegan("ready") && ready();
+			if (data.type === "compiling") return shown && stageBegan("compiling") && stopLoading();
+			if (data.type === "ready") {
+				starting.isReady = true;
+				if (shown) stageBegan("ready");
+				return ready();
+			}
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
@@ -285,14 +319,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, sounded: pending.sounded, printed: pending.printed, printedWhole: pending.printedWhole ?? [], paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
-	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
-	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
-	workerSettled = "starting";
-	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
-	tellSystemValues();
-	sharePointer();
-	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
-	tellEnvironment();
+	return starting;
 }
 
 // the members to offer after the code and a dot (completion.js), from the compiler (src/lowering/data/members.rs)
@@ -394,6 +421,7 @@ function startsFrame(run, output) {
 	if (starts) {
 		run.animating = true;
 		stopAfterTimeout(run);
+		prepareStandby();
 	}
 	return starts;
 }
