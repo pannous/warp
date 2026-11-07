@@ -213,11 +213,11 @@ def spells_function(alias: OperatorAlias): bool := is_name_start(alias.target#1)
 // the operator statements among statements, read once
 def operator_statements(statements: list): list := statements.filter(statement => statement.contains(":=")).map(statement => operator_statement(blank_words(statement))).filter(statement => statement != ø)
 def source_operator_statements(source: text): list := if source.contains(":=") then operator_statements(code_statements(source)) else []
-// lib/math.warp's operator statements, which every program reads (decision operator-alias), read the first time a
+// lib/math.warp's operator statements (its text built in), which every program reads (decision operator-alias), read the first time a
 // parse needs them
 global math_statements = ø
 def math_operator_statements(): list {
-	if math_statements == ø { math_statements = operator_statements(code_statements_of("math")) }
+	if math_statements == ø { math_statements = operator_statements(code_statements(math_text)) }
 	math_statements
 }
 // the aliases among statements
