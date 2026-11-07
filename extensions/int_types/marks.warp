@@ -14,12 +14,17 @@ int_types(program: Node): Node := {
 	statements = statements_in(program)
 	# (a module's own `as Color` only marks: with_alpha(c, 0) stays invisible; its users convert)
 	converters = if module_written != "" then [] else statements.map(statement => converted_type(statement, kinds)).filter(name => name != ø)
-	marked = group_like(program, statements.map(statement => if converted_type(statement, kinds) != ø then converter_defined(statement, kinds) else bottom_up(statement, n => int_type_used(n, kinds, converters))))
+	# (so do the functions a conversion calls, lib/color's color(n) of `n: int as Color := color(n)`: their `as Color`
+	# calling the conversion again would never end, wherever the module's text is compiled)
+	marking = statements.filter(statement => converted_type(statement, kinds) != ø).flat_map(statement => called_words(value_of(statement)))
+	marked = group_like(program, statements.map(statement => if converted_type(statement, kinds) != ø then converter_defined(statement, kinds) else bottom_up(statement, n => int_type_used(n, kinds, if function_named(statement) in marking then [] else converters))))
 	showers = kinds.keys.filter(name => statements_in(marked).any(statement => shower_of(statement) == name))
 	if #showers == 0 { return marked }
 	statements = statements_in(marked).map(statement => if shower_of(statement) in showers then shower_renamed(statement) else statement)
 	group_like(marked, with_int_types_shown(statements, showers, kinds))
 }
+# the function a definition defines, also one declaring its result, `color(n: int): Color := …`
+function_named(statement: Node): text? := if is_key(statement, Op.Define) and is_key(key_of(statement), Op.Colon) then defined_word(Key(key_of(key_of(statement)), Op.Define, value_of(statement))) else defined_word(statement)
 # `x as Color` marks x, or calls the type's conversion where it has one; `x is Color` tests its mark
 int_type_used(n: Node, kinds: map, converters: list = []): Node := {
 	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in kinds) { return n }

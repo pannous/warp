@@ -143,7 +143,8 @@ def show() {
 	else { paint(canvas_pixels, canvas_width, canvas_height) }
 }
 
-// save canvas as: "painting.png", save(canvas, "painting.png") or save "painting.png" (card save-painting): the canvas
+// save canvas as: "painting.png", save(canvas, "painting.png") or canvas.save("painting.png") (card save-painting;
+// decision save-picture-word: save is typed by the Picture, no bare save "painting.png" beside file's save): the canvas
 // as drawn so far as a PNG, natively that file, in the playground a download. On the GPU the pixels are there, not
 // here: the host draws them again
 class Picture {
@@ -154,9 +155,9 @@ class Picture {
 canvas() := Picture()
 save(made: Picture, as file) := {
 	if drawing_on_gpu { draw_shader(shape_shader) }
-	save_picture(canvas_pixels, canvas_width, canvas_height, file)
+	failed = save_picture(canvas_pixels, canvas_width, canvas_height, file)
+	if failed { raise failed }
 }
-save(file: text) := save(Picture(), file)
 
 // label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth
 // edges mixed with what is below (card paint-text): the host sets them, the playground with the browser's canvas,
@@ -176,4 +177,5 @@ draw_show(width: int, height: int) from host
 draw_shader(shader: node) from host
 text_coverage(words: node, size: int): node from host
 paint(picture: node, width: int, height: int, values: node) from host
-save_picture(picture: node, width: int, height: int, file: node) from host
+// why the picture could not be saved, else ""
+save_picture(picture: node, width: int, height: int, file: node): node from host
