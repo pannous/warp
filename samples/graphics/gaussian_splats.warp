@@ -3,19 +3,22 @@
 # of fuzzy 3D ellipsoids, each a position, a scale and a rotation (its covariance), a color and an opacity.
 # Every frame warp projects each Gaussian to a 2D ellipse on the screen (its covariance through the camera's Jacobian),
 # sorts them near to far, and the fragment shader blends them front to back at every pixel until it is opaque.
-# The camera orbits by the clock; drag the mouse to turn it yourself
+# The camera orbits a little every frame; drag the mouse to turn it yourself
 use math
 use color
-use units
 
-size = 384
-focal = 1.4 * size # pixels per unit at depth 1
 distance_away = 5.0
+zoom = 1.5 # the focal length, in picture heights
+nearest = 0.2 # what is nearer the camera is not seen
 background = [0.05, 0.06, 0.10]
-# a Gaussian blurred by less than a pixel aliases: every projected one gets this much variance (in pixels²) more
+# a Gaussian narrower than a pixel aliases: every projected one gets this much variance (in pixels²) more
 pixel_blur = 0.3
-knot_splats = 420
+knot_steps = 320
+tube_splats = 6 # Gaussians around the tube at each step
+tube_radius = 0.12
+light = normalize([0.4, 0.8, 0.5])
 star_splats = 60
+orbit_step = 0.01 # radians a frame
 
 class Splat { position: list; covariance: list; color: Color; opacity: float }
 
@@ -26,68 +29,83 @@ rotation(q: list): list := {
 	 [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
 	 [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]]
 }
-# the quaternion turning the x axis onto the unit vector `along`
-turning_x_onto(along: list): list := {
-	half = [1 + along#1, 0, -along#3, along#2]
-	half ./ norm(half)
-}
+# the rotation whose columns are the axes a, b, c (each a unit vector, at right angles)
+turning_onto(a: list, b: list, c: list): list := [[a#i, b#i, c#i] for i in 1 to 3]
 # a Gaussian's covariance Σ = R S Sᵀ Rᵀ, its 3×3 rows: R the rotation, S the scales along its own axes
-covariance(scale: list, turn: list): list := {
-	r = rotation(turn)
+covariance(scale: list, r: list): list := {
 	m = [[r#i#j * scale#j for j in 1 to 3] for i in 1 to 3]
 	[[dot(m#i, m#j) for j in 1 to 3] for i in 1 to 3]
 }
-splat(position: list, scale: list, turn: list, color: Color, opacity: float): Splat := Splat(position, covariance(scale, turn), color, opacity)
+splat(position: list, scale: list, r: list, color: Color, opacity: float): Splat := Splat(position, covariance(scale, r), color, opacity)
 
-# the scene: a (2, 3) torus knot of Gaussians stretched along the curve, its hue going round, and a few round stars
+# the scene: the surface of a tube along a (2, 3) torus knot, of flat Gaussians lying in it, its hue going round and
+# lit from above; and stars, Gaussians stretched each its own way
 knot_point(t: float): list := {
 	r = 1 + 0.45 * cos(3 * t)
 	[r * cos(2 * t), 0.45 * sin(3 * t), r * sin(2 * t)]
 }
-knot = [{
-	t = 2 * π * i / knot_splats
-	along = normalize(knot_point(t + 0.01) .- knot_point(t - 0.01))
-	splat(knot_point(t), [0.07, 0.035, 0.035], turning_x_onto(along), hsv(360 * i / knot_splats, 0.75, 0.95), 0.8)
-} for i in 1 to knot_splats]
-stars = [{
+knot_tube(): list := {
+	surface = []
+	for i in 1 to knot_steps {
+		t = 2 * π * i / knot_steps
+		along = normalize(knot_point(t + 0.01) .- knot_point(t - 0.01))
+		side = normalize(cross(along, [0, 1, 0]))
+		lifted = cross(side, along)
+		for j in 1 to tube_splats {
+			a = 2 * π * j / tube_splats
+			outward = side .* cos(a) .+ lifted .* sin(a)
+			around = cross(outward, along)
+			shade = 0.3 + 0.7 * max(dot(outward, light), 0)
+			surface.push(splat(knot_point(t) .+ outward .* tube_radius, [0.035, 0.065, 0.008], turning_onto(along, around, outward), hsv(360 * i / knot_steps, 0.75, 0.95 * shade), 0.9))
+		}
+	}
+	surface
+}
+knot = knot_tube()
+star(i: int): Splat := {
 	t = 2.39996 * i # the golden angle: points spread evenly over the sphere
 	height = 1 - 2 * i / star_splats
 	ring = sqrt(1 - height * height)
-	splat([2.6 * ring * cos(t), 2.6 * height, 2.6 * ring * sin(t)], [0.03, 0.03, 0.03], [1, 0, 0, 0], white, 0.9)
-} for i in 1 to star_splats]
+	twist = [cos(i), sin(2 * i), cos(3 * i), sin(5 * i)]
+	splat([2.6 * ring * cos(t), 2.6 * height, 2.6 * ring * sin(t)], [0.06, 0.015, 0.015], rotation(twist ./ norm(twist)), white, 0.9)
+}
+stars = [star(i) for i in 1 to star_splats]
 scene = knot + stars
 
-# the camera's place and axes looking at the origin from yaw and pitch: [eye, right, up, forward]
-camera(yaw: float, pitch: float): list := {
+# a camera looking at the origin from yaw and pitch: its place, its axes, its focal length in pixels and the picture's
+# centre
+class Camera { eye: list; right: list; up: list; forward: list; focal: float; centre: list }
+camera(yaw: float, pitch: float, width: float, height: float): Camera := {
 	eye = [cos(pitch) * sin(yaw), sin(pitch), cos(pitch) * cos(yaw)] .* distance_away
 	forward = normalize(eye .* -1)
 	right = normalize(cross(forward, [0, 1, 0]))
-	[eye, right, cross(right, forward), forward]
+	Camera(eye, right, cross(right, forward), forward, zoom * height, [width / 2, height / 2])
 }
 quadratic(a: list, sigma: list, b: list): float := dot(a, [dot(sigma#i, b) for i in 1 to 3])
 
 # a Gaussian on the screen: [depth, [x, y, conic a, conic b], [conic c, opacity, color's 24 bits, 0]], the conic the
 # inverse of its 2D covariance; ø behind the camera
-projected(s: Splat, view: list): any := {
-	seen = s.position .- view#1
-	x = dot(seen, view#2); y = dot(seen, view#3); z = dot(seen, view#4)
-	if z < 0.2 { return ø }
+projected(s: Splat, view: Camera): any := {
+	seen = s.position .- view.eye
+	x = dot(seen, view.right); y = dot(seen, view.up); z = dot(seen, view.forward)
+	if z < nearest { return ø }
+	f = view.focal
 	# the rows of the projection's Jacobian times the view rotation: how a step in the world moves the pixel
-	across = view#2 .* (focal / z) .- view#4 .* (focal * x / (z * z))
-	down = view#3 .* (-focal / z) .+ view#4 .* (focal * y / (z * z))
+	across = view.right .* (f / z) .- view.forward .* (f * x / (z * z))
+	down = view.up .* (-f / z) .+ view.forward .* (f * y / (z * z))
 	a = quadratic(across, s.covariance, across) + pixel_blur
 	b = quadratic(across, s.covariance, down)
 	c = quadratic(down, s.covariance, down) + pixel_blur
 	det = a * c - b * b
-	[z, [size / 2 + focal * x / z, size / 2 - focal * y / z, c / det, -b / det], [a / det, s.opacity, int(s.color) % 16777216, 0]]
+	[z, [view.centre#1 + f * x / z, view.centre#2 - f * y / z, c / det, -b / det], [a / det, s.opacity, int(s.color) % 16777216, 0]]
 }
 
 global ellipses = []
 global inks = []
 global count = 0
-# the scene seen from yaw and pitch, nearest first, as the shader reads it
+# the scene seen from yaw and pitch, nearest first, as the shader reads it, for a picture of the size it shows at
 project(yaw: float, pitch: float) := {
-	view = camera(yaw, pitch)
+	view = camera(yaw, pitch, shown_width(), shown_height())
 	seen = scene.map(s => projected(s, view)).filter(p => p != ø).sort_by(p => p#1)
 	ellipses = seen.map(p => p#2)
 	inks = seen.map(p => p#3)
@@ -115,7 +133,6 @@ splats = shader {
 }
 }
 
-started = clock()
 yaw = 0.0
 pitch = 0.35
 last_x = mouse_x
@@ -126,10 +143,10 @@ on frame {
 		yaw -= (mouse_x - last_x) * 0.01
 		pitch = clamp(pitch + (mouse_y - last_y) * 0.01, -1.4, 1.4)
 	} else {
-		yaw = yaw + 0.01
+		yaw += orbit_step
 	}
 	last_x = mouse_x
 	last_y = mouse_y
 	project(yaw, pitch)
-	paint(splats, size, size)
+	paint(splats) # at the size it shows at: the window's, the playground's pane
 }
