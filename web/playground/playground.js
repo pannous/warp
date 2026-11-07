@@ -266,6 +266,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (data.type === "serving") return servingRequests(data);
 			if (data.type === "served") return showServed(data.response);
+			if (data.type === "handled" && data.fetchesLeft !== undefined) lastAnswered = data;
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -671,7 +672,20 @@ function evaluate(code, file = programFile(), { asData = false } = {}) {
 	return run;
 }
 
+// the shown run's last fetch answer (lib/net.warp fetch_later), each rendering the page anew: settled(report) is the
+// run's report once no answer is out, with the value and page of the last (test_in_browser.py --samples compares that)
+let lastAnswered;
+const SETTLE_MILLISECONDS = 15000, SETTLE_POLL_MILLISECONDS = 50;
+async function settled(report) {
+	const deadline = Date.now() + SETTLE_MILLISECONDS;
+	const out = () => lastAnswered?.fetchesLeft ?? report.fetching;
+	while (report.fetching && out() > 0 && Date.now() < deadline) await new Promise(done => setTimeout(done, SETTLE_POLL_MILLISECONDS));
+	if (!report.fetching || !lastAnswered) return report;
+	return { ...report, value: lastAnswered.value ?? report.value, html: lastAnswered.html ?? report.html, error: lastAnswered.error };
+}
+
 async function runInWorker(code, file, asData) {
+	lastAnswered = undefined;
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
 		worker.terminate();
@@ -1344,7 +1358,7 @@ function initialize() {
 }
 
 // for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, settled, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// an animation that runs until stopped (a raylib window's `while not WindowShouldClose()`) ends with its report, as
 	// the next run would end it (test_in_browser.py sample_answer); yes when one ran
 	stopAnimation: () => Boolean(pending?.animating && (stopRun(pending, ANIMATION_STOPPED), true)),
