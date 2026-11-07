@@ -12,11 +12,14 @@ host library, not the core binary:
 - Not yet: warp functions given to js (callbacks: `Array.from(xs, x => …)`), `use js "module"` (npm), the operator
   forwarding of host-foreign.js FOREIGN_OPERATORS, WebKitGTK on Linux.
 
-`warp app [check] <file>` (lib/app/command.warp, dispatched by core/native/warp.warp): runs the program (`warp run`),
-takes its printed page (lib/markup.warp page_of) and shows it in a window till it is closed (lib/webview.warp
-webview_show; refused under WARP_NO_WINDOW or CI). `check` prints the text the page shows from the hidden view: the
-headless test (test/web/test_webview.pairs.warp). The window shows the static page: its handlers (on click) do not
-reach the program yet.
+`warp app [check] <file>` (lib/app/command.warp, dispatched by core/native/warp.warp): runs the program (`warp run`)
+with WARP_APP_WINDOW set, its page live in a window till it is closed (card static-page-window). After main, markup's
+page_of (lib/markup.warp page_window_run) shows the run's web view in a window through `use js`'s channel
+(warp_webview.m answers the module warpWindow itself: `show`, `next`) and loops: each event of the page (bridge.js,
+named by web/playground/markup.js elementEvent as the built sites' site.js names it: click, input, change, focus, blur)
+runs its handler (page_event), the page rendered anew and morphed in (morphChildren, a field keeps focus and text).
+Refused under WARP_NO_WINDOW or CI. `check` prints the text the page shows from the hidden view: the headless test
+(test/web/test_webview.pairs.warp). Not yet: submit, keys, timers beside the window, a window test without a screen.
 
 ## Sample checks (card scripts-samples, decision sample-checks)
 A sample declares its interactions: `# check: click "+1", type "name" "Ann" → count: 2`, one check a line, each from a
