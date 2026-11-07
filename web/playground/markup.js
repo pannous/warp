@@ -83,9 +83,9 @@ function elementEvent(event, happened, detail) {
 }
 
 // what the shown markup's fields with an id hold, by id: `$who` in a handler reads it (lib/markup.warp page_value,
-// decision page-ids)
+// decision page-ids); the markup shown in a host's shadow root (the playground's #rendered) is searched there
 function idValues(root) {
-	const fields = root.querySelectorAll?.("input[id], textarea[id], select[id]") ?? [];
+	const fields = (root.shadowRoot ?? root).querySelectorAll?.("input[id], textarea[id], select[id]") ?? [];
 	return Object.fromEntries([...fields].map(field => [field.id, field.type === "checkbox" ? field.checked : field.value]));
 }
 
