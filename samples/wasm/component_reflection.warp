@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-# A WebAssembly module's exports, read off its binary when the program compiles: natively and in the page
-# (notes/reflection.md). rust_demo is a Rust crate built as a core module; components wait (decision samples-modules-wasm)
+# A WebAssembly module's exports, read off its binary when the program compiles: natively and in the page.
+# rust_demo is a Rust crate built as a plain WebAssembly module
 use wasm "../../test/fixtures/components/rust_demo.wasm" as demo
 
 print "the module exports ${demo.functions}"
