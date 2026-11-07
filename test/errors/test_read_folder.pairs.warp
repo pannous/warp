@@ -1,2 +1,2 @@
-'try read("test/fixtures") else "caught"'	"caught"
-'try { read_bytes("test/fixtures") } catch e { "is a directory" in "${e}".lower() }'	yes
+'try read(".") else "caught"'	"caught"
+'try { read_bytes(".") } catch e { "${e}" }'	"read . failed: Is a directory"
