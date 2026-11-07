@@ -1,0 +1,5 @@
+# an attribute's phrase of the program's own function is its call; a measure held in a variable is a CSS word (cards li-title-greet, css-shorthand-quantity, li-fails)
+'use web; greet(n) := "Hi " + n; page = li{ title: greet "Ann", "x" }; render page'	'<li title="Hi Ann">x</li>'
+'use web; q = 400ms; page = li{ animation: pop q "x" }; render page'	'<li style="animation: pop 400ms">x</li>'
+'use web; q = 2s; page = li{ transition: opacity q "x" }; render page'	'<li style="transition: opacity 2000ms">x</li>'
+'use web; page = li{ "x", 3km }; render page'	'<li>x3km</li>'

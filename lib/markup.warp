@@ -768,16 +768,27 @@ css_items(spec: any) := {
 	items
 }
 
-// `ease-out`, `200ms`, `2`
-css_is_word(item: any) := item is symbol or item is number or (item is pair and str(item.op) == "*" and item.key is number and item.value is symbol)
+// `ease-out`, `200ms`, `2`, a measure held in a variable (`q = 400ms`)
+css_is_word(item: any) := item is symbol or item is number or (item is pair and str(item.op) == "*" and item.key is number and item.value is symbol) or css_is_measure(item)
+
+// a value of a unit, `400ms` or `3km` computed or held in a variable: no word, number or tree, its text a number
+// and a CSS unit (card css-shorthand-quantity)
+css_is_measure(item: any): bool := not (item is text or item is symbol or item is number or item is pair or html_is_group(item) or item == ø) and css_measure_unit(str(item)) != ø
+// the CSS unit a measure's text ends with, `ms` of "400ms", ø when the text before it is no number
+css_measure_unit(t: text) := {
+	for unit in style_units { if t.ends_with(unit) and #t > #unit and is_numeric(t[0:#t - #unit]) { return unit } }
+	ø
+}
 
 // `2s` → 2000ms, `200ms` as written: CSS reads both, the page's script milliseconds
 css_word(word: any) := {
+	if css_is_measure(word) { return css_measure_word(str(word)) }
 	if not (word is pair) or str(word.op) != "*" { return str(word) }
 	let unit = str(word.value)
 	if unit == "s" { return str(word.key * 1000) + "ms" }
 	str(word.key) + unit
 }
+css_measure_word(t: text) := if css_measure_unit(t) == "s" then str((t[0:#t - 1] as float) * 1000) + "ms" else t
 
 // the kind a spec's first word names, ø for CSS
 css_kind(words: any) := {
