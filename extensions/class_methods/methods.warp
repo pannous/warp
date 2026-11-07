@@ -50,7 +50,7 @@ equality_method = "equal"
 # instance_float: `sin(2km)`), a shown value by show(), ø on any other value: it then shows its structure (decision
 # show-hook; runtime show.warp key_text through the hook instance_show); emitter/output.warp and emitter.warp cast read
 # the dispatchers
-conversion_methods = [["text", showing_dispatcher, "str"], ["float", HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], ["float", HiddenWord.FloatHooked as text, ø], ["show", HiddenWord.ShowShown as text, ø]]
+conversion_methods = [["text", showing_dispatcher, "str"], ["float", HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], ["float", HiddenWord.FloatHooked as text, ø], [form_method, HiddenWord.ShowShown as text, ø]]
 # a class's positions (card class-position-index, decisions instance-position and property-accessors): `b#p` is its
 # position(p), from 1, `b[i]` (the parser's b#(i+1)) its index(i), from 0, either one deriving the other; `b#p = v` the
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
