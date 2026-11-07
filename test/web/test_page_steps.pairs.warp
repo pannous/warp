@@ -1,0 +1,2 @@
+# a sample's check steps (card scripts-samples, lib/markup.warp type_into): text typed into the field showing a label
+'use web; page = div{ input{ id: "who" placeholder: "name" } }; render page; type_into("name", "Ann")'	'<div><input id="who" placeholder="name" value="Ann"></div>'
