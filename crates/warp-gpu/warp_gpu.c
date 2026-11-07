@@ -157,8 +157,23 @@ static int values_laid_out(const char* values, Layout* layout) {
 
 // --- the pipeline
 typedef struct { int done; int failed; } Scope;
+// a shader that does not compile, as every host says it (web/playground/host-gpu.js checkedModule): why at its place,
+// `the shader: expected `;`, found "}" at 4:1`, out of naga's report "Shader '' parsing error: why … ┌─ wgsl:4:1 …"
+// (a shader block's place in the program, lib/prelude.warp shader_words); naga's whole report where it says neither
+#define NAGA_CAUSE "error: "
+#define NAGA_PLACE "wgsl:"
+static void shader_failed(WGPUStringView message) {
+	char report[sizeof failure];
+	snprintf(report, sizeof report, "%.*s", (int)(message.data ? message.length : 0), message.data ? message.data : "");
+	const char* why = strstr(report, NAGA_CAUSE);
+	const char* place = strstr(report, NAGA_PLACE);
+	if (!why || !place) { failed("the shader: ", message); return; }
+	why += strlen(NAGA_CAUSE);
+	place += strlen(NAGA_PLACE);
+	snprintf(failure, sizeof failure, "the shader: %.*s at %.*s", (int)strcspn(why, "\n"), why, (int)strspn(place, "0123456789:"), place);
+}
 static void scope_popped(WGPUPopErrorScopeStatus status, WGPUErrorType type, WGPUStringView message, void* scope, void* unused) {
-	if (type != WGPUErrorType_NoError) { failed("the shader: ", message); ((Scope*)scope)->failed = 1; }
+	if (type != WGPUErrorType_NoError) { shader_failed(message); ((Scope*)scope)->failed = 1; }
 	((Scope*)scope)->done = 1;
 }
 // whether the device reported no error since the scope was pushed
@@ -418,7 +433,7 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 	return done > 0 ? 0 : -1;
 }
 
-// --- a window's surface (libwarp_window's Metal layer): what is shown there stays on the GPU, no pixel read back.
+// --- a window's surface (lib/native_window.warp's Metal layer): what is shown there stays on the GPU, no pixel read back.
 // The surface is as big as the layer's drawable (the window's pixels, which SDL keeps it at as the window resizes or
 // goes full screen); the painting, drawn at its own size, is scaled into it whole, its aspect kept, the rest black.
 // A format without sRGB, so the window shows the colors a PNG of the same painting holds
@@ -550,7 +565,7 @@ int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int3
 	wgpuTextureRelease(picture);
 	return shown ? 0 : -1;
 }
-// the last painting shown again, at the window's size now (libwarp_window asks when its window comes into sight or
+// the last painting shown again, at the window's size now (lib/native_window.warp asks when its window comes into sight or
 // changes size); 0 also when none was shown, else -1
 int warp_gpu_shown_again(void) {
 	Shown again = last_shown;

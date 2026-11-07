@@ -24,8 +24,8 @@ const DEFAULT_DPI = 96;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
-// window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
-const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
+// window_possible: a page paints in its pane, never a window of its own. window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
+const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, window_possible: 0, gpu_drawing: 0 };
 // window.width, window.height (card make-width): the frame the paintings show in, in CSS pixels; the view's size until the
 // run sets it (set_system_value), which the page then gives its paintings (hooks.resizeWindow, canvas.js)
 const WINDOW_SIDES = { window_width: "view_width", window_height: "view_height" };

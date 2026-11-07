@@ -420,4 +420,10 @@ function pageEventHandled(holder, event, detail) {
 	}
 }
 
-const report = (value, status) => ({ value, error: status !== 0 && value !== "", status, warnings: [], runtime_warnings: [], hints: [], notes: [] });
+const report = (value, status) => ({ value, error: status !== 0 && value !== "", error_at: placeNamed(value), status, warnings: [], runtime_warnings: [], hints: [], notes: [] });
+// the place in the typed program a failure names last, ` at 5:22` or ` at playground.warp:5:22`, which the page marks
+const PLACE_IN_PROGRAM = new RegExp(` at (?:${TYPED_FILE.replace(".", "\\.")}:)?(\\d+):(\\d+)`, "g");
+function placeNamed(value) {
+	const [, line, column] = [...String(value).matchAll(PLACE_IN_PROGRAM)].at(-1) ?? [];
+	return line ? { line: Number(line), column: Number(column) } : undefined;
+}

@@ -636,7 +636,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
 - made-by-reach: module.made counts only kinds made by functions reachable from the program's roots.
 - comments-not-candidates: words in comments or a shebang never make a program an implicit-use candidate.
-- native-window-sdl3: the native warp's window is lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
+- native-window-sdl3 (superseded by window-in-warp): the native warp's window was lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
 - node-attributes: marks ride on the node, an `attributes` field of $MetaNode beside `comment` (with_attribute / attributes_of); `let` inside a lambda is such a mark.
 - hello-lazy-runtime-dropped: binding runtime words lazily is dropped (under 7 MB of hello's 176 MB).
 - canonical-runtime-names: runtime words map_keys/map_values/map_get_or/collection_contains are keys/values/get/has; contains/includes stay aliases of has.
@@ -1093,3 +1093,5 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - gathering (user, the mirror of P50 broadcasting): a call with more arguments than parameters whose LAST parameter is a list type gathers the extra arguments into it: `total(xs: numbers) := sum(xs); total 1 2 3` = total([1, 2, 3]); `log(level: text, parts: texts)` takes `log "warn" "a" "b"`. Each item checks against the item type; no `...` syntax. One rule in the call matcher (card gathering).
 - 2026-11-07 deploy-on-push (user: deploys in a minute): Playground deploys on every push to main touching the site (build + deploy only, queued not cancelled); tours/verify on the hourly schedule and by hand.
   - notes-are-notes (user, card chord-addition-construct): note names (C4, C#4…) are lib/sound Note values, shown as C4, playing their frequency: Note + Note is a chord [C4 E4], chord + Note a bigger chord, Note + n is n semitones up, Note * number the frequency times; raw frequency math is `hertz(C4) + 1`. test_sound_note_names:8 (`C#4 + 0` → C#4) changes (user OK).
+  - glued-binds-tighter (user, core OK, card chord-addition-construct): an operator with no spaces around it joins its neighbours into one item of a space-separated list: `a=1; b=2; c=3; [a+b c]` → [3, 3], as `[1+2 3]` already reads; `melody([C4+E4 E4 G4], 1000ms)` works; `warp format` prints the reading explicitly. Small parser change in core/parsing.
+- 2026-11-07 one-build-slot (user: reduce the load): <store>/build-slots/count = 1, one compiler build at a time for every session until the user raises it.
