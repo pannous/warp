@@ -2,3 +2,4 @@
 # word's failure (card error-text-trap; the page's `exec sh "crontab -l"` in samples/system/crontab.warp)
 'try { split(error("boom"), ",") } catch e { e.message }'	"boom"
 'try { for x in error("boom") { x } } catch e { e.message }'	"boom"
+'try { split(fetch "http://127.0.0.1:9/x", ",") } catch e { not e.message.starts_with("text of") }'	yes
