@@ -76,10 +76,11 @@ which(name: text): text? := {
 	}
 	ø
 }
-// A path written without quotes is a Path where a word has a method for one (card cross-module-overload): `sort
-// ./names.txt` sorts the file's lines, `sort [3 1 2]` stays the list's sort; the same for unique, find and size
-class Path { name: text }
-sort(file: Path) := sort_lines(file.name)
-unique(file: Path) := unique_lines(file.name)
-find(folder: Path, pattern: text) := find_files(folder.name, pattern)
-size(file: Path) := file_size(file.name)
+// A path written without quotes is a path (decision path-type), a text marked as one: `sort ./names.txt` sorts the
+// file's lines, `sort [3 1 2]` stays the list's sort, `find ./src "x"` finds files while "abc".find("b") stays the
+// text's; the same for unique and size. Path(t) marks a text computed at run time
+Path(name: text): any := name as path
+sort(file: path) := sort_lines(file)
+unique(file: path) := unique_lines(file)
+find(folder: path, pattern: text) := find_files(folder, pattern)
+size(file: path) := file_size(file)

@@ -324,6 +324,9 @@ def type_value_of(body: Body, n: Node): TypedCode {
 	listed = if value.kind == ValueKind.List then analyzed_list_type(body, n) else ø
 	if value.kind == ValueKind.List and listed == ø { return runtime_call("node_type_name", [TypedCode(ValueKind.Node, boxed(value)), list_value(body, module.classes.keys)]) }
 	word = if value.kind == ValueKind.Int and not fast_int(body, n) then "nat" else if value.kind == ValueKind.List then listed else static_type_word(value.kind)
+	# a marked text held unboxed, `type(./a)`: its type's word
+	marked = marked_text_types.keys.filter(name => marked_text_types[name] == value.mark)
+	if value.kind == ValueKind.Text and #marked > 0 { word = marked#1 }
 	if word != ø { return TypedCode(ValueKind.Node, node(Marked.TypeValue, text_bytes(word))) }
 	refuse("the type of a " + kind_spelling(value.kind))
 }

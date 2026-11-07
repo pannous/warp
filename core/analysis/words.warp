@@ -36,7 +36,7 @@ is_type_word(word: text): bool := type_words contains word.lower()
 is_capitalized(name: text): bool := name#1.upper() == name#1 and name#1.lower() != name#1
 # the type words a type test takes besides those
 test_type_words = ["key", "pair", "operation", "expression", "code", "callable", "invocable", "runnable", "error", "empty",
-	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
+	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration", "path"]
 is_tested_type_word(word: text): bool := is_type_word(word) or collection_words contains word or test_type_words contains word
 is_type_word_or_any(word: text): bool := word == any_word or is_type_word(word)
 # `ints`, `matches`: the plural of a type word
@@ -75,7 +75,7 @@ binding_operators = assigning_operators + [":=", ":"]
 # the built-in type words and the kind a value declared so is held as
 type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
-	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
+	text: "text", str: "text", string: "text", path: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
 	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", exact: "empty"}
 
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)

@@ -206,17 +206,19 @@ library_words = extended_library_words({numerator: "numerator", denominator: "de
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", nat: "nat", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
-	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
+	number: "number", text: "text", str: "text", string: "text", path: "path", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code",
 	function: "function", block: "function"}
+# the marked texts by their type word: `x as path` marks a text, `x is path` tests the mark
+marked_text_types = {path: Marked.Path}
 # the kinds of a value known only at run time each type passes: an int is a
 # rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
 # types.warp node_is_type, held_kind_bit)
 passing_kinds = {int: [Kind.Int], nat: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
-	number: [Kind.Int, HeldBit.Rational, Kind.Float], text: [Kind.Text, Kind.Codepoint], char: [Kind.Codepoint],
+	number: [Kind.Int, HeldBit.Rational, Kind.Float], text: [Kind.Text, Kind.Codepoint, HeldBit.Path], path: [HeldBit.Path], char: [Kind.Codepoint],
 	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
 	error: [Kind.Error], code: [], function: [Kind.Function]}
-covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char],
+covered_kinds = {int: [ValueKind.Int], nat: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char], path: [],
 	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], symbol: [], map: [], error: [], code: [], function: []}
 kind_bit(kind: int): int := 1 << kind
 # whether the class is the ancestor or extends it
@@ -236,7 +238,9 @@ def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
 	# a pair `a: b` is no class's instance, though a Key holds both (runtime fields.warp is_entry); `is key` and a Key arm take both
 	if value.kind == ValueKind.Node and spec == "pair" { return TypedCode(ValueKind.Bool, runtime_call("is_entry", [value]).code) }
 	if value.kind == ValueKind.Node { return node_type_test(body, value, type) }
-	TypedCode(ValueKind.Bool, [op.i32_const, if covered_kinds[type].any(kind => same_kind(kind, value.kind)) then 1 else 0])
+	# a text held unboxed carries its mark statically: `p is path` of a path in a local
+	passes = if type in marked_text_types then value.mark == marked_text_types[type] else covered_kinds[type].any(kind => same_kind(kind, value.kind))
+	TypedCode(ValueKind.Bool, [op.i32_const, if passes then 1 else 0])
 }
 # (typed, so a kind from a table and one a cast spelled, `2 as float`, compare as kinds)
 same_kind(a: ValueKind, b: ValueKind): bool := a == b
@@ -264,7 +268,7 @@ def held_kind_bit_code(body: Body, held: list): list {
 	ratio = kind + [op.i64_const] + sleb(Kind.Int) + [op.i64_eq] + ratio_test(held) + [op.i32_and]
 	marked = held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
 	marked += unless_held(HeldBit.Bool, is_field(Marked.Bool)) + unless_held(HeldBit.TypeValue, is_field(Marked.TypeValue))
-	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio)
+	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio) + unless_held(HeldBit.Path, is_field(Marked.Path))
 	held + [op.ref_is_null, op.if] + value_type(ValueKind.Int) + held_bit(Kind.List) + [op.else] + marked + [op.end]
 }
 def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }

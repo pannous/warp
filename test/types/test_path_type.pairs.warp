@@ -1,0 +1,11 @@
+# an unquoted path is a path, a text marked as one (decision path-type, card path-literal-type)
+'type(./a.txt)'	path
+'./a.txt is path'	yes
+'./a.txt is text'	yes
+'"./a.txt" is path'	no
+'p = ~/notes/a.md; p is path'	yes
+'"dir: " + ./docs'	'dir: ./docs'
+'#(./abc)'	5
+'size(t: text) := #t; size(./abc)'	5
+'kind(p: path) := "path"; kind(t: text) := "text"; [kind(./a), kind("./a")]'	['path', 'text']
+'use shell; ["abc".find("b"), find("abc", "b")]'	[2, 2]

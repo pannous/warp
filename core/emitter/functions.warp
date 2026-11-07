@@ -256,6 +256,8 @@ annotated_kind(written: text): ValueKind := {
 	word = aliased_type(written)
 	if is_union(word) { return shared_kind(union_members(word).map(annotated_kind)) }
 	if word in node_annotations or word in module.classes { return ValueKind.Node }
+	# `p: path`: a marked text, held as a text
+	if word in marked_text_types { return ValueKind.Text }
 	# `text?`: ø or the value, a node; its type named as any other (`Bogus?` is unknown too)
 	if word.ends_with("?") and annotated_kind(word.remove_suffix("?")) != ø { return ValueKind.Node }
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return ValueKind.List }

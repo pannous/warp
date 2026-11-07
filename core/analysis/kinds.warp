@@ -5,10 +5,10 @@ kind_mask = 255
 Kind = {Empty: 0, Int: 1, Float: 2, Text: 3, Codepoint: 4, Symbol: 5, Key: 6, Block: 7, List: 8, Data: 9, Meta: 10, Error: 11, TypeDef: 12, Pointer: 13, Function: 16, Uncertain: 17, Time: 18}
 # whole kind fields, a Kind with the info above it: a yes/no is an Int of BOOL_INFO 1, a map a List of the curly
 # bracket 0, a list of the square one 1 and of none 5, an instance a Key of no operator, an entry a Key of `:`
-# (Op::Colon 1), a type value a Symbol marked TYPE_VALUE_MARK (1 << 54)
+# (Op::Colon 1), a type value a Symbol marked TYPE_VALUE_MARK (1 << 54), a path a Text of TextMark.Path 1
 # the bits of `x is type` beyond the Kinds (runtime types.warp held_kind_bit, emitter.warp passing_kinds): a yes/no, a ratio
 # and a map test apart from the Int and List they are, a type value apart from its Symbol (emitter.warp held_kind_bit_code)
-HeldBit = {Bool: 32, Rational: 33, Map: 34, TypeValue: 35}
+HeldBit = {Bool: 32, Rational: 33, Map: 34, TypeValue: 35, Path: 36}
 # the values only some programs make, which the runtime handles by `made_case(Made.Time, time_text(n))`: compiled only
 # into a program making them (emitter runtime_words.warp made_case)
 Made = {BigInt: 0, Ratio: 1, Time: 2}
@@ -16,7 +16,7 @@ Made = {BigInt: 0, Ratio: 1, Time: 2}
 NodeShape = {Empty: 0, Meta: 1, Int: 2, Ratio: 3, BigInt: 4, Float: 5, Codepoint: 6, Text: 7, Pair: 8, List: 9}
 # a failure, an Error the run gave (decision N19, only failures raise): FAILED_INFO 1 above Kind.Error; an Error held as
 # data (the parser's, quoted code) has none
-Marked = {Bool: 257, Map: 8, SquareList: 264, UnbracketedList: 1288, Instance: 6, Entry: 262, TypeValue: 18014398509481989, FailedError: 267}
+Marked = {Bool: 257, Path: 259, Map: 8, SquareList: 264, UnbracketedList: 1288, Instance: 6, Entry: 262, TypeValue: 18014398509481989, FailedError: 267}
 # the units of the parts above the Kind: the info byte (a key's operator, a list's bracket, a time's form, KIND_BITS
 # 8), a list's separator (SEPARATOR_SHIFT 48), a list's kind (two bits from 1 << 52, ListKind), the code mark
 # (CODE_MARK, 1 << 56), two bits of a list kind's own (from 1 << 57, a GPU list's cell type)
@@ -27,6 +27,9 @@ ListKind = {Listed: 0, Range: 1}
 # the first mark in an Int's or Float's info byte a number type takes (extensions/int_types/marks.warp): 1 is a yes/no's (a map,
 # as the runtime reads this file's maps only)
 TypeMark = {First: 2}
+# a marked text's mark in its info byte, as a yes/no is an Int marked 1: a path `./a.txt` (decision path-type); a text
+# type of the library's takes the next
+TextMark = {Path: 1}
 # a list's bracket in its info byte
 BracketCode = {Curly: 0, Square: 1, Round: 2, Less: 3, Other: 4, None: 5}
 # a time's form in its info bits, Clock the time of day

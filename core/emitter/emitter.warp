@@ -699,7 +699,7 @@ def boxed(value: TypedCode): list {
 	if is_node_kind(kind) { return code }
 	# a statement's value (`x = print "a"`): ø
 	if kind == no_kind { return code + [ref_null, gc_type(gc.node)] }
-	if kind == ValueKind.Text { return node(Kind.Text, code) }
+	if kind == ValueKind.Text { return node(if value.mark != 0 then value.mark else Kind.Text, code) }
 	if kind == ValueKind.List { return node(Marked.SquareList, code) }
 	if kind == ValueKind.Char { return node(Kind.Codepoint, code + gc_code(gc_ops.ref_i31, [])) }
 	# a number of a marked type boxed with its mark (decision marks-unboxed-first)
@@ -1146,7 +1146,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		# mark, carried statically (decision marks-unboxed-first)
 		if word == "marked_int" and #n == 3 and n#3 is int {
 			mark = n#3 as int
-			held = if mark % KindUnit.Info == Kind.Float then ValueKind.Float else ValueKind.Int
+			held = if mark % KindUnit.Info == Kind.Float then ValueKind.Float else if mark % KindUnit.Info == Kind.Text then ValueKind.Text else ValueKind.Int
 			return TypedCode(held, converted(expression_code(body, n#2), held), mark)
 		}
 		# `str(p)` shows p as print does, an instance by its class's text(); not inside that dispatcher, whose fallback it is
@@ -1365,6 +1365,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `t as codepoint`, `x as integer`: a type word's other names are its kind's; `255 as byte`, `5 as hex` an int's
 	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else if name_of(right) in int_spellings then ValueKind.Int else name_of(right)
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
+	# `"./a" as path`: the text marked, held unboxed with its mark (TextMark)
+	if operator == Op.As and target in marked_text_types { return TypedCode(ValueKind.Text, converted(expression_code(body, left), ValueKind.Text), marked_text_types[target]) }
 	if operator == Op.As and (is_held_kind(target)) {
 		value = expression_code(body, left)
 		if text_reader(target) != ø { return instance_cast(left, value, target) }

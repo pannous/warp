@@ -2127,7 +2127,8 @@ def with_finally(p: Parser, guard: Node): Node := {
 // An expression's start: a prefix operator and its operand, else an atom
 def prefixed(p: Parser): Node := {
 	c = char_here(p)
-	if starts_path(p) { return path_literal(p) }
+	// `./a.txt` is a path, a text marked as one (decision path-type)
+	if starts_path(p) { return Key(Text(path_literal(p)), Op.As, symbol("path")) }
 	prefixed_operand = read_prefix(p)
 	if prefixed_operand != ø { return prefixed_operand }
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }

@@ -260,7 +260,9 @@ list_fit = 2
 overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
 	f64: "float", f32: "float", number: "number", text: "text", str: "text", string: "text",
 	codepoint: "codepoint", char: "codepoint", character: "codepoint", bool: "bool", boolean: "bool", function: "function",
-	block: "function"}
+	block: "function", path: "path"}
+# a marked text, `path`, is a text: it fits a text parameter, and a variant taking it is tested before one taking text
+marked_text_of(kind: text, type: text): bool := kind in marked_text_types and overload_kind(type) == "text"
 
 # the program's classes, whose plurals are list types too (`xs: notes` of `class note`)
 global overload_classes = []
@@ -397,6 +399,8 @@ static_kind(n: Node): list? := {
 	if n is float { return ["float", ø] }
 	if n is codepoint { return ["codepoint", ø] }
 	if n is text { return ["text", ø] }
+	# `./a` is `"./a" as path`
+	if is_key(n, Op.As) and value_of(n) is symbol and name_of(value_of(n)) in marked_text_types { return [name_of(value_of(n)), ø] }
 	if is_group(n) and bracket_of(n) == "[" { return ["list", element_kind(items_of(n))] }
 	# `note(60)`: an instance of the program's class
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in overload_classes { return [name_of(n#1), ø] }
@@ -490,7 +494,7 @@ fit(kind: text, type: text): int? := {
 	if type == "number" { return if kind == "int" or kind == "float" then 1 else ø }
 	wanted = overload_kind(type)
 	if kind == wanted { return 0 }
-	if (kind == "int" and wanted == "float") or (kind == "codepoint" and wanted == "text") then 1 else ø
+	if (kind == "int" and wanted == "float") or (kind == "codepoint" and wanted == "text") or marked_text_of(kind, type) then 1 else ø
 }
 
 # how well a list of `element`s fits a parameter of `type`; a list of untold elements fits every list type
@@ -597,7 +601,7 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 }
 
 # whether the other type admits every value this one admits, and more: text of `text or int`, Dog of Animal, any type of any
-admits_less(narrow: text, wide: text): bool := narrow != wide and (wide == any_word or union_members(narrow).all(member => member in union_members(wide) or union_members(wide).any(type => class_distance(member, type) != ø)))
+admits_less(narrow: text, wide: text): bool := narrow != wide and (wide == any_word or union_members(narrow).all(member => member in union_members(wide) or union_members(wide).any(type => class_distance(member, type) != ø or marked_text_of(member, type))))
 # a variant no wider than the other at any parameter and narrower at one: the one a call fitting both takes
 narrower_variant(narrow: list, wide: list): bool := #narrow == #wide and (1 to #narrow).all(at => narrow#at == wide#at or admits_less(narrow#at, wide#at)) and (1 to #narrow).any(at => admits_less(narrow#at, wide#at))
 # the variants, each before the first wider one, else in the order given: a run-time test passing both takes the
