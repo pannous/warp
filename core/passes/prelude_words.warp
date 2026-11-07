@@ -907,6 +907,8 @@ names_bound_in(n: Node): any := {
 			waiting += if is_key(part, Op.Question) and is_key(branches, Op.Colon) then [key_of(part), key_of(branches), value_of(branches)] else [key_of(part), branches]
 		} else if is_group(part) {
 			for name in iteration_variables(items_of(part)) { found[name] = yes }
+			# a named pattern, `pattern Definition = Key(head, Op.Define, body)`: head and body, never shell's head
+			if is_pattern_definition(part) { for name in case_pattern_names(value_of(part#2)) { found[name] = yes } }
 			# an enum and its cases, `enum K { B, D }`: B is the program's, never sound's note
 			enum = declared_enum(part)
 			if enum != ø { for name in [enum#1] + enum#2 { found[name] = yes } }
@@ -937,6 +939,8 @@ pattern_names(pattern: Node): list := match pattern {
 	Key(head, op, fields): if rest_name(pattern) != ø then [rest_name(pattern)] else if is_group(fields) then pattern_names(fields) else []
 	_: if is_group(pattern) then items_of(pattern).flat_map(pattern_names) else []
 }
+# the names a case's pattern binds, `Key(head, Op.Define, body)` its parts', the case itself none
+case_pattern_names(pattern: Node): list := if is_round(pattern) and #pattern > 0 and pattern#1 is symbol then items_of(pattern)[1 ..].flat_map(pattern_names) else pattern_names(pattern)
 # a text pattern goes on after a hole's type, `id: int + "/posts/" + post: int` parsing as `id: (int + "/posts/" + post)`
 names_after_type(type: Node): list := match type {
 	Key(left, Op.Add, right): names_after_type(left) + pattern_names(right)
