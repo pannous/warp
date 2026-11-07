@@ -20,9 +20,6 @@ library_folder = if not command and #args > 3 then args#4 else run_library()
 # the parser's and the uses' standard modules from that lib/ too, never the folder this compiler was built in
 use_library(library_folder)
 
-# the prelude's text, whose definitions a program reaches (prelude_words.warp), built in as the compiler's other data
-prelude_source = library_text("prelude.warp")
-
 # the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
 # extended runtime (decision runtime-split)
 RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
@@ -39,7 +36,7 @@ root_text(file: text): text := {
 runtime_folder(): text := library_folder + "/compiler"
 
 # the runtime words, lowered by the same passes as a program, only to build runtime.wasm: a compile takes them from it
-lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_source)
+lowered_runtime_words(): Node := lowered_program(RUNTIME_ROOTS.map(file => root_text(file)).join("\n"), runtime_folder(), prelude_text)
 
 # the compiler's own build, this library's compiler.warp (by its text): its runtime carries only the rows of
 # COMPILER_BUILD_EXTENSIONS (decision extension-row-optional). Its file as written: file_text may answer the bundle's
@@ -97,7 +94,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	link_libraries(images, if linking and module.relocating then definition_slices(source).map(slice => slice#1) else [])
 	used_c_functions = {}
 	timed("checked_program")
-	program = checked_program(foreign#1, folder, prelude_source)
+	program = checked_program(foreign#1, folder, prelude_text)
 	timed("checked_program done")
 	c_functions = with_used_c_functions(foreign#2)
 	found = checked_facts(known)

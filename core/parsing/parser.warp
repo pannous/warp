@@ -105,7 +105,7 @@ def bang_words(source: text): list {
 // front stage 5× slower (card front-stage-5x-slower)
 global prelude_bangs = ø
 def prelude_bang_words(): list {
-	if prelude_bangs == ø { prelude_bangs = bang_words(library_text("prelude.warp")) }
+	if prelude_bangs == ø { prelude_bangs = bang_words(prelude_text) }
 	prelude_bangs
 }
 
