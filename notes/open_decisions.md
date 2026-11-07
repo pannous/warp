@@ -8,6 +8,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 (zero-bake hold, user via Supervisor 2026-11-05: only questions serving the library zero-bake plan are asked; others queue here.)
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
+- data-tag-words: in data, `head{…}` / `first{…}` (prelude words) stay tags; only program-defined or used words call (decisions.md).
 
 ## Parked
 - phrase-params (user: park for now; card definition-heads-phrases): in `send v to c := …` which words are parameters: (a) the body decides (used or typed words), () optional, unifying the older `to add a to b:` reader (an unused plain word there turns fixed); (b) always parentheses. Also: a phrase head starting with a keyword word (`send` is an emit word) refused aloud vs outranking the keyword. Provisional (a) on the branch only, not landed. Meanwhile phrases are written with named arguments (`give 2 to: 40`, named-argument-phrases).
