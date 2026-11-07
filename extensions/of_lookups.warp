@@ -75,9 +75,11 @@ is_type_head(n: Node): bool := match n {
 	_: no
 }
 
-# `object.member`, through the left operands of an operator: `p + 1` gives `p.name + 1`
+# `object.member`, through the left operands of an operator: `p + 1` gives `p.name + 1`; a selection, `.` and `#`,
+# belongs to the object: `name of xs#3` is `xs#3.name`, the reverse of the dots it reads as (card hGpjl4)
+selection_ops = [Op.Dot, Op.Hash]
 member_of(object: Node, member: Node): Node := match object {
-	Key(left, op, right): { if op != Op.Dot and left != ø then Key(member_of(left, member), op, right) else Key(object, Op.Dot, member) }
+	Key(left, op, right): { if op not in selection_ops and left != ø then Key(member_of(left, member), op, right) else Key(object, Op.Dot, member) }
 	_: Key(object, Op.Dot, member)
 }
 
