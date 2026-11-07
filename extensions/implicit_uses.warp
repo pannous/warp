@@ -151,6 +151,8 @@ free_words(n: Node): map := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
+		# quoted code names nothing: the g of `data g` is no unit
+		if is_quote(part) { continue }
 		if part is symbol { found[name_of(part)] = yes }
 		else if is_named_type(part) { found[declared_type_name(value_of(part)#2)] = yes }
 		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
