@@ -48,9 +48,17 @@ block_heads(written: list): list := written.filter(n => (is_key(n, Op.Colon) or 
 data_spliced(program: Node, keeps_meaning: function): Node := {
 	positions = data_positions_called(program)
 	outer = outer_scope(program)
-	tagged = spaced_tags(program, outer, keeps_meaning)
+	tagged = spaced_tags(quotes_unglued(program), outer, keeps_meaning)
 	lexical_bottom_up(tagged, outer, (n, scope) => attributes_spliced(if #positions.keys == 0 then n else data_argued(n, positions), scope))
 }
+# glued `data{…}` is the quote `data {…}` (decisions data-tag-words, spaced-tag: one thing in both spellings), never
+# the pair data: {…}; an entry of a block keeps its key data, `{data: {a: 1}}`, `div{ data: {…} }`
+quotes_unglued(n: Node): Node := {
+	if is_glued_quote(n) { return List([quote_symbol, value_of(n)], Bracket.None, Separator.Space) }
+	if not is_curly_group(n) { return children(n, quotes_unglued) }
+	group_like(n, items_of(n).map(item => if is_glued_quote(item) then Key(key_of(item), op_of(item), quotes_unglued(value_of(item))) else quotes_unglued(item)))
+}
+is_glued_quote(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == quote_symbol and is_curly_group(value_of(n))
 match_word = symbol("match")
 # each spaced tag of the program (spaced_tagged), never among a match's arms, `match k { Int {…} Error {…} }`
 spaced_tags(n: Node, scope: map, keeps_meaning: function): Node := {
