@@ -17,3 +17,14 @@ takes its printed page (lib/markup.warp page_of) and shows it in a window till i
 webview_show; refused under WARP_NO_WINDOW or CI). `check` prints the text the page shows from the hidden view: the
 headless test (test/web/test_webview.pairs.warp). The window shows the static page: its handlers (on click) do not
 reach the program yet.
+
+## Sample checks (card scripts-samples, decision sample-checks)
+A sample declares its interactions: `# check: click "+1", type "name" "Ann" → count: 2`, one check a line, each from a
+fresh run; the steps are lib/markup.warp's page words (click; type is type_into), the page's text, its white space
+runs as one space, holds the text after →.
+- natively `warp app check <file>` (lib/app/command.warp) runs the program with WARP_PAGE_STEPS (markup's
+  page_after_steps does the steps before the page is printed) and reads the text in the hidden web view;
+  scripts/samples.sh runs it for every sample that ran and has check lines, a failing check its FAIL
+- in the page web/playground/test_in_browser.py --samples (scripts/samples-web.sh) shows the sample anew per check,
+  clicks and types in the rendered DOM, and a failing check is its DIFF
+- found so far: page_elements fails both ways (cards bare-name: `p{ greeting }` not live; who-focus natively)
