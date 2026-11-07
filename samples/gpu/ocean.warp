@@ -29,9 +29,8 @@ exposure = 1.0
 # W A S D move, Space or E up, Q or C down, drag the mouse to look around, Escape ends
 global camera_x = 0.0
 global camera_z = 0.0
-# The shader reads a length as its metres, an angle as its radians (`60°` is 1.0472): it ignores units (decision
-# no-units-in-shaders). The camera's lengths stay numbers of metres: a quantity times a computed float loses its unit
-# (card quantity-times-float)
+# The shader reads a length as its metres, an angle as its radians (`60°` is 1.0472): it ignores units.
+# So the camera's lengths are plain numbers of metres.
 global camera_height = 2.4 # metres
 global yaw = 0° # to the right
 global pitch = -3° # up

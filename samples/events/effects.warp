@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# Effect handlers: a function asks with `emit`, the program answers with `on …` (notes/effect_handlers.md)
+# Effect handlers: a function asks with `emit`, the program answers with `on …`
 
 # price asks for the tax rate instead of knowing it
 price(net) := net * (1 + emit tax_rate)

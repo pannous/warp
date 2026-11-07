@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-# Reading a component's state from outside it (card web-outside-state): `Counter.instances`
-# are its instances in page order (decision instances-not-plural). `Counter.instances#1.count` is the first one's
+# Reading a component's state from outside it: `Counter.instances`
+# are its instances in page order. `Counter.instances#1.count` is the first one's
 # count, `Counter.instances.map(c => c.count)` every one's.
 # Run it in the playground and click.
 use web
