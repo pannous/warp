@@ -7,9 +7,6 @@
 kaleidoscope = shader {
 	const TAU = 6.2831853;
 
-	// a random-looking number 0 ..< 1 that stays the same for a cell
-	fn hash(cell: vec2f) -> f32 { return fract(sin(dot(cell, vec2f(127.1, 311.7))) * 43758.5453); }
-
 	// a glass color for a shard: the hue wheel, rich and a little dark
 	fn glass(seed: f32) -> vec3f {
 		return 0.45 + 0.4 * cos(TAU * (seed + vec3f(0.0, 0.33, 0.67)));
