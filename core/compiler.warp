@@ -172,13 +172,15 @@ linked_libraries(source: text): list := {
 built_of_text(module: text, hash: text): bool := {
 	# a program's own module linked without its text beside it is what it was built of
 	if own_module_wasm.has(module) and file_text(std_module_path(module)) == ø { return yes }
-	text = built_of_texts(module)
-	hash.starts_with("${#text}-") and (warp_lib() == ø or hash == source_hash(text))
+	texts = built_of_texts(module)
+	hash.starts_with("${texts_length(texts)}-") and (warp_lib() == ø or hash == texts_hash(texts))
 }
 # `import shapes` beside a shapes.wasm carrying a warp.signature: the program's own module, linked as a standard
 # module is, imported by its path (decision samples-modules-wasm); its text, where beside it, is shapes.warp
 own_module_beside(name: text, program_folder: text) := {
 	wasm = path_in(absolute_folder(program_folder), name + ".wasm")
+	# (asked first: the page's read_bytes of a missing file ends the compile, no try catches it, card playground-host-word)
+	if not exists(wasm) { return ø }
 	bytes = try read_bytes(wasm) else []
 	if #bytes > 0 and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) != ø { own_module(name, wasm.remove_suffix(".wasm") + module_extension, wasm) }
 }
