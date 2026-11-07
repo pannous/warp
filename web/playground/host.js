@@ -343,3 +343,5 @@ function withUnlinkedTrapping(descriptors, imports) {
 
 // the one export a program with timers fires them by, timer_fired(id: int) (host-timers.js, driver.js timerFired)
 const TIMER_FIRED_EXPORT = "timer_fired";
+// the one a fetch's answer comes by, fetch_answered(id: int, answer) (lib/net.warp fetch_later, host-timers.js)
+const FETCH_ANSWERED_EXPORT = "fetch_answered";

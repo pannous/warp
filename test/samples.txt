@@ -260,7 +260,7 @@ FAIL samples/web/html_dsl.warp: outside the core: the call html_escape(…) at l
 FAIL samples/web/html.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:600 (in style_as_written)
 FAIL samples/web/keyframes.warp: outside the core: the call remove_prefix(…) at lib/markup.warp:600 (in style_as_written)
 FAIL samples/web/leaving_list.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
-FAIL samples/web/live_region.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
+ok   samples/web/live_region.warp
 FAIL samples/web/page_custom_event.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
 FAIL samples/web/page_elements.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)
 FAIL samples/web/select_binding.warp: outside the core: the call html_escape(…) at lib/markup.warp:475 (in html_escaped)

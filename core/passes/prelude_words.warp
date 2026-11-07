@@ -261,7 +261,7 @@ forced_cast_words(program: Node): list := {
 	}
 	[]
 }
-extension_writes = [component_words, forced_cast_words]
+extension_writes = [component_words, forced_cast_words, fetched_later_words]
 # a value called, `room(signal)` (closure_call_1 once lowered), may be an instance its class's `call` takes (emitter
 # closures.warp instance_calls): the module's call is reached and kept for it
 callable_word = "call"
