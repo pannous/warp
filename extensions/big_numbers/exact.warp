@@ -95,8 +95,9 @@ shown_big_int(n: Node): text := {
 	fail()
 }
 # an exact rational as it shows: a written fraction (is_fraction) as n/d, 1/3; any other, a quotient of values
-# (decision fraction-written-form), as decimal digits, exactly where it terminates (its denominator 2^a·5^b, 7/2 as
-# 3.5), else a float's shortest ones, `a / 6` of 37 as 6.166666666666667
+# (decision fraction-written-form), as decimal digits: where it terminates (its denominator 2^a·5^b) exactly, 7/2 as
+# 3.5, else with its period overlined as a repeating decimal is written (decision quotient-period), `a / 6` of 37 as
+# 6.16̅
 exact_text(n: Node): text := {
 	made_case(Made.BigInt, big_exact_text(n))
 	# an Int that is no ratio: a plain int, else a big int, whose text a program without one never compiles (shown_big_int)
@@ -107,11 +108,40 @@ exact_text(n: Node): text := {
 	fives = factor_count(denominator, 5)
 	fraction = is_fraction(n) and denominator < fraction_shown_denominator()
 	if fraction { return int_text(numerator) + "/" + int_text(denominator) }
-	if denominator != int_pow(2, twos) * int_pow(5, fives) { return float_text(float(numerator) / float(denominator)) }
+	if denominator != int_pow(2, twos) * int_pow(5, fives) { return periodic_text(numerator, denominator, max_int(twos, fives)) }
 	digits = max_int(twos, fives)
 	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
 	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
 	decimal_text(int_text(if scaled < 0 then -scaled else scaled), digits, numerator < 0)
+}
+# the digits of numerator/denominator past the point: `lead` of them before the period, then the period, each of its
+# digits overlined, 0.16̅ of 1/6; a period longer than period_digits_shown() shows as the ratio n/d, as the prelude's
+# decimal_text (`x as decimal`) does
+period_digits_shown(): int := 1000
+overline(): text := "̅"
+periodic_text(numerator: int, denominator: int, lead: int): text := {
+	period = decimal_period(denominator / (int_pow(2, factor_count(denominator, 2)) * int_pow(5, factor_count(denominator, 5))))
+	if period > period_digits_shown() { return int_text(numerator) + "/" + int_text(denominator) }
+	magnitude = if numerator < 0 then 0 - numerator else numerator
+	out = (if numerator < 0 then "-" else "") + int_text(int_quotient(magnitude, denominator)) + "."
+	remainder = int_remainder(magnitude, denominator)
+	for i in 0..<(lead + period) {
+		remainder = remainder * 10
+		out = out + int_text(int_quotient(remainder, denominator)) + (if i < lead then "" else overline())
+		remainder = int_remainder(remainder, denominator)
+	}
+	out
+}
+# how many digits repeat in 1/d of a d prime to 10: the least k with 10^k ≡ 1 (mod d), counted up to one past the
+# digits shown
+decimal_period(d: int): int := {
+	k = 1
+	power = int_remainder(10, d)
+	while power != 1 and k <= period_digits_shown() {
+		power = int_remainder(power * 10, d)
+		k += 1
+	}
+	k
 }
 # a magnitude's digits with a point ahead of the last `digits` of them, a 0 ahead of a leading point
 decimal_text(magnitude: text, digits: int, negative: bool): text := {
