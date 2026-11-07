@@ -514,7 +514,9 @@ typed_through_local(n: Node, name: text, type: any): Node := if type == ø then 
 through_type(part: Node, name: text, type: Node): Node := {
 	value = value_given(part, name)
 	if value == ø { return part }
-	Key(symbol(name), Op.Assign, Key(Key(symbol(name + typed_suffix), Op.Colon, type), Op.Assign, value))
+	# the made local stands where this assignment wrote the name: a refusal names it, not the declaration (card typed-refusal-position)
+	written = if declares_typed(part, name) then key_of(key_of(part)) else key_of(part)
+	Key(symbol(name), Op.Assign, Key(Key(placed(symbol(name + typed_suffix), written), Op.Colon, type), Op.Assign, value))
 }
 # the value an assignment gives the name: `name: T = v` and `name = v` give v, `name += v` name + v
 value_given(part: Node, name: text): any := {
