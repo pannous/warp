@@ -97,6 +97,10 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
   (?build=, host.js ofThisBuild) keeps it with the HTTP-cached response. IndexedDB cannot hold a WebAssembly.Module
   (Chrome and Firefox removed its serialization). Measured on the live site, headless Chrome: Hello at 7.5 s on a
   first visit, 2.3 s after (1.1 s with the quiet warm-up); playground.state().stages shows where a start's time goes.
+- Stopping a run (an animation the next run stops, Stop, a sound handover) ends its worker; a new worker loads and warms
+  the compiler first, so Hello after a shader took 0.8–1.2 s in Firefox (the user: 4 s after five shaders). A run that
+  animates starts a standby worker (playground.js prepareStandby), which the stop takes at once: Hello 0.33 s
+  (card playground-progressive-slowdown). Chrome and Firefox showed no growth over many runs otherwise.
 
 ## Values of self-hosted modules (values.js, 2026-11-01)
 A module of the self-hosted compiler has no reflect_* exports: a host word reads its value arguments as driver.warp

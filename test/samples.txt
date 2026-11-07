@@ -1,8 +1,9 @@
-# e3968dca74 2026-11-07 11:57 248/267 92.9%
+# 057bffab3e 2026-11-07 03:51 237/266 89.1%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
+ok   samples/advanced/particles.warp
 ok   samples/advanced/raytracer.warp
 ok   samples/advanced/self_parser.warp
 ok   samples/advanced/snake.warp
@@ -32,16 +33,16 @@ ok   samples/errors/raise_error.warp
 ok   samples/errors/try_catch.warp
 ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
+ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
-ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
 ok   samples/functions/block_arguments.warp
 ok   samples/functions/code_as_data.warp
 ok   samples/functions/fibonacci.warp
 ok   samples/functions/functions.warp
 ok   samples/functions/list_overloads.warp
-ok   samples/functions/queens_idiomatic.warp
 ok   samples/functions/queens.warp
+ok   samples/functions/queens_idiomatic.warp
 ok   samples/functions/sudoku.warp
 ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
@@ -84,12 +85,11 @@ ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/domain_warp.warp
-ok   samples/gpu/fluid_smear_dsl.warp
 ok   samples/gpu/fluid_smear.warp
+ok   samples/gpu/fluid_smear_dsl.warp
 ok   samples/gpu/gpu_arrays.warp
 ok   samples/gpu/gpu_map.warp
 ok   samples/gpu/gpu_million.warp
-ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
 ok   samples/gpu/lava_lamp.warp
@@ -103,11 +103,14 @@ ok   samples/gpu/voronoi.warp
 ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/gpu/watercolor.warp
 ok   samples/gpu/yohei_tweet_glsl.warp
+ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
+ok   samples/graphics/paint_text.warp
+ok   samples/graphics/shader.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_trails.warp
-ok   samples/graphics/shader.warp
 ok   samples/graphics/webgpu.warp
+ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/natural.warp
@@ -119,10 +122,10 @@ ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
 ok   samples/lists/quicksort.warp
-ok   samples/lists/sieve_idiomatic.warp
 ok   samples/lists/sieve.warp
-ok   samples/lists/sorting_idiomatic.warp
+ok   samples/lists/sieve_idiomatic.warp
 ok   samples/lists/sorting.warp
+ok   samples/lists/sorting_idiomatic.warp
 ok   samples/lists/typed_lists.warp
 ok   samples/loops/game_of_life.warp
 ok   samples/loops/iterators.warp
@@ -147,9 +150,9 @@ ok   samples/modules/packages.warp
 ok   samples/modules/rust_crates.warp
 ok   samples/modules/slug_paths.warp
 ok   samples/modules/square.warp
+ok   samples/modules/test_ffi.warp
 ok   samples/modules/test_ffi_comprehensive.warp
 ok   samples/modules/test_ffi_extended.warp
-ok   samples/modules/test_ffi.warp
 ok   samples/native/arguments.warp
 ok   samples/native/doubling.warp
 ok   samples/native/fib.warp
@@ -159,7 +162,6 @@ ok   samples/native/structs.warp
 ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
-ok   samples/numbers/dates.warp
 ok   samples/numbers/factorial.warp
 ok   samples/numbers/gcd.warp
 ok   samples/numbers/measurements.warp
@@ -172,33 +174,20 @@ ok   samples/numbers/sum.warp
 ok   samples/numbers/units_dynamic.warp
 ok   samples/objects/binary_tree.warp
 ok   samples/objects/data_structures.warp
-ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/dijkstra.warp
+ok   samples/objects/dijkstra_idiomatic.warp
 ok   samples/objects/json_parser.warp
 ok   samples/objects/references.warp
 ok   samples/python/numpy_matrix.warp
 ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
-ok   samples/sound/arrangement.warp
-ok   samples/sound/filters.warp
-ok   samples/sound/gpu_visualizer_warp.warp
-ok   samples/sound/harmony.warp
-ok   samples/sound/hum_blocks.warp
-ok   samples/sound/midi.warp
-ok   samples/sound/music.warp
 ok   samples/sound/play_mp3.warp
-ok   samples/sound/rhythm.warp
-ok   samples/sound/signal_graph.warp
-ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
-ok   samples/sound/sound_kick_samples.warp
-ok   samples/sound/sound_pipes.warp
-ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
 ok   samples/sound/voices.warp
+ok   samples/storage/orm.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
-ok   samples/storage/orm.warp
 ok   samples/storage/store.warp
 ok   samples/system/c_lines.warp
 ok   samples/system/crontab.warp
@@ -208,8 +197,8 @@ ok   samples/tasks/parallel_let.warp
 ok   samples/tasks/threads.warp
 ok   samples/text/calculator.warp
 ok   samples/text/find_text.warp
-ok   samples/text/levenshtein_idiomatic.warp
 ok   samples/text/levenshtein.warp
+ok   samples/text/levenshtein_idiomatic.warp
 ok   samples/text/palindrome.warp
 ok   samples/text/regexes.warp
 ok   samples/text/replace_word.warp
@@ -232,8 +221,8 @@ ok   samples/web/computed_tags.warp
 ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
 ok   samples/web/hello_div.warp
-ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
+ok   samples/web/html_dsl.warp
 ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
@@ -243,13 +232,13 @@ ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
-WIN  samples/graphics/raylib_circle_forever.warp
 WIN  samples/graphics/raylib_circle.warp
+WIN  samples/graphics/raylib_circle_forever.warp
 WIN  samples/graphics/raylib_debug.warp
 WIN  samples/graphics/raylib_demo.warp
 WIN  samples/graphics/raylib_mouse_circle.warp
-WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_simple.warp
+WIN  samples/graphics/raylib_simple_use.warp
 WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
@@ -257,12 +246,22 @@ SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
-EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1: outside the core: the unknown name load
+EXP  samples/storage/netbase.warp: outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/advanced/particles.warp: no length of int 4294638330: only a list, a text or a character has one
-FAIL samples/events/arrow_keys.warp: hint: ESC is keys's fix: use keys
-FAIL samples/graphics/finger_paint.warp: no length of int 4294967295: only a list, a text or a character has one
-FAIL samples/graphics/paint_text.warp: no length of int 4294638330: only a list, a text or a character has one
-FAIL samples/graphics/window_size.warp: no length of int 4294638330: only a list, a text or a character has one
-FAIL samples/sound/sound_patterns.warp: sound 1.33 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-36780.wav
-FAIL samples/sound/visualizer.warp: sound 4.00 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-43025.wav
+TIME samples/gpu/gpu_visualizer.warp: used its 30 s of CPU
+FAIL samples/numbers/dates.warp: outside the core: a data
+TIME samples/sound/arrangement.warp: used its 30 s of CPU
+TIME samples/sound/filters.warp: used its 30 s of CPU
+TIME samples/sound/gpu_visualizer_warp.warp: used its 30 s of CPU
+TIME samples/sound/harmony.warp: used its 30 s of CPU
+TIME samples/sound/hum_blocks.warp: used its 30 s of CPU
+TIME samples/sound/midi.warp: used its 30 s of CPU
+TIME samples/sound/music.warp: used its 30 s of CPU
+TIME samples/sound/rhythm.warp: used its 30 s of CPU
+TIME samples/sound/signal_graph.warp: used its 30 s of CPU
+TIME samples/sound/siren_sound.warp: used its 30 s of CPU
+TIME samples/sound/sound_kick_samples.warp: used its 30 s of CPU
+TIME samples/sound/sound_patterns.warp: used its 30 s of CPU
+TIME samples/sound/sound_pipes.warp: used its 30 s of CPU
+TIME samples/sound/stereo_sound.warp: used its 30 s of CPU
+TIME samples/sound/visualizer.warp: used its 30 s of CPU

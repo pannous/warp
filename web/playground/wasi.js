@@ -20,9 +20,10 @@ const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMP
 const isRepository = fd => fd === ROOT_FD || fd === REPOSITORY_FD;
 const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
 // WARP_INCLUDE replaces the compiler's include directories (src/formats/ffi_parser.rs), so it looks in exactly one place;
-// WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch
+// WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch;
+// TZ the browser's time zone, the run's zone `now` reads (lib/time.warp local_zone_name, decision local-now)
 const ENVIRONMENT = [`WARP_INCLUDE=${INCLUDE_DIRECTORY}`, `WARP_HTTP_STUB=${new URL("/__stub__", self.location.href).href}`,
-	`TMPDIR=${TEMPORARY_DIRECTORY}`];
+	`TMPDIR=${TEMPORARY_DIRECTORY}`, `TZ=${Intl.DateTimeFormat().resolvedOptions().timeZone}`];
 const ALL_RIGHTS = 0xffffffffffffffffn;
 const RANDOM_CHUNK = 65536; // crypto.getRandomValues limit per call
 const DIRENT_HEADER = 24;

@@ -277,7 +277,7 @@ defined_unit(name: text, one: Quantity) := {
 type Angle = float
 ° = 0.017453292519943295 as Angle # π / 180, a float as the GPU reads it (π is the exact Real of lib/reals)
 // 60°, rounded to 12 digits so that 60° shows no 59.99999999999999°
-show(a: Angle) := "${round(float(a) / 0.017453292519943295 * 1e12) / 1e12}°"
+format Angle a as text := "${round(float(a) / 0.017453292519943295 * 1e12) / 1e12}°"
 
 // a quantity shown in a unit of its own dimension, any other value as it is: a field `distance: km` given 1500m holds
 // 1.5km (extensions/rules/rule_words.warp units_shown), never a conversion of another kind of value

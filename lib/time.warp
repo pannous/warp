@@ -1,7 +1,22 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
 
-// `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it)
-now(): Instant := Instant(wall_clock_ms())
+// `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it), in the
+// run's time zone (decision local-now): now.hour is the local hour, its text has the zone's offset; an Instant a
+// program builds is UTC
+now(): Instant := Instant(wall_clock_ms(), local_zone_name())
+// the run's time zone: the environment's TZ, natively the system's zone where TZ names none (core/native/driver.warp),
+// in the page the browser's (web/playground/wasi.js); UTC, warned, for a zone not in time_zones
+local_zone_name(): text := {
+	for entry in wasi_environment().split(chr(0)) { if entry.starts_with(TZ_ENTRY) { return known_zone(entry[#TZ_ENTRY ..]) } }
+	UTC
+}
+TZ_ENTRY = "TZ="
+UTC = "UTC"
+known_zone(name: text): text := {
+	if time_zones.any(zone => zone.name == name) { return name }
+	warning("the time zone " + name + " is not in lib/time.warp time_zones: now is UTC")
+	UTC
+}
 // the one hook into the host: WASI's clock_time_get (core/analysis/host_words.warp) of the wall clock
 // (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
 // memory's first 8 bytes (the scratch fd_write takes only within its call), read back little-endian
@@ -23,21 +38,30 @@ n: number as Duration := Duration(n)
 // milliseconds added or taken away, and its text in RFC 3339 (print, `"at " + now`)
 class Instant {
 	ms: int
+	zone: text = "UTC"
 	// another Instant: the earlier first. A duration (`now > 9.hours`, `now > 17h`) compares the matching part
 	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
-	compare(other: Instant or number or Duration) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else instant_part_compare(ms, other)
-	// its calendar fields, UTC: now.year, now.month, now.day, now.hour, now.minute, now.second
-	year() := date_of(ms).year
-	month() := date_of(ms).month
-	day() := date_of(ms).day
-	hour(): int := ms % 86400000 /! 3600000
-	minute(): int := ms % 3600000 /! 60000
-	second(): int := ms % 60000 /! 1000
-	minus(other: Instant or Duration) := if other is Instant then ms - other.ms else Instant(ms - other.ms)
-	plus(duration: Duration) := Instant(ms + duration.ms)
-	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
-	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
+	compare(other: Instant or number or Duration) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else instant_part_compare(wall(), other)
+	// seconds east of UTC its zone has then
+	offset(): int := zone_offset(zone_named(zone), ms /! 1000)
+	// its milliseconds on its zone's wall clock, which its calendar fields read: now.year, now.month, now.day,
+	// now.hour, now.minute, now.second
+	wall(): int := ms + offset() * 1000
+	year() := date_of(wall()).year
+	month() := date_of(wall()).month
+	day() := date_of(wall()).day
+	hour(): int := wall() % 86400000 /! 3600000
+	minute(): int := wall() % 3600000 /! 60000
+	second(): int := wall() % 60000 /! 1000
+	minus(other: Instant or Duration) := if other is Instant then ms - other.ms else Instant(ms - other.ms, zone)
+	plus(duration: Duration) := Instant(ms + duration.ms, zone)
+	// RFC 3339, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z; in another
+	// zone its wall clock and offset, 2026-10-25T12:43:40.692+01:00 (the zone's name is .zone)
+	text() := format_date(wall()) + "T" + format_time(wall()) + millis_fraction(ms % 1000) + (if zone == UTC then "Z" else offset_written(offset()))
 }
+// +01:00, -04:00, +05:30: seconds east of UTC as RFC 3339 writes them
+offset_written(seconds: int): text := (if seconds < 0 then "-" else "+") + two_digits(abs(seconds) /! 3600) + ":" + two_digits(abs(seconds) % 3600 /! 60)
+
 // a bare number beside an Instant names no unit (decision instant-bare-number): `t > 5` is refused
 bare_number_refused(n: number) := raise "" + n + " what? write t > " + n + " h, or " + n + " AM"
 // a duration (`now > 9.hours`, `now > 17h`) compared with the matching part, with a warning: a bare duration is

@@ -18,7 +18,7 @@ hex_digits = "0123456789ABCDEF"
 // each named color with its name
 named_colors = [[black, "black"], [white, "white"], [gray, "gray"], [red, "red"], [green, "green"], [blue, "blue"], [yellow, "yellow"], [orange, "orange"], [purple, "purple"]]
 // red, else its hex text #RRGGBB
-show(c: Color) := {
+format Color c as text := {
 	for pair in named_colors { if pair[0] == c { return pair[1] } }
 	hex_text(c)
 }
