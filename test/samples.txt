@@ -1,4 +1,4 @@
-# 8c5b3004af 2026-11-07 15:06 250/263 95.1%
+# 160161ae8c 2026-11-07 16:38 247/263 93.9%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
@@ -197,7 +197,6 @@ ok   samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
-ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
@@ -234,8 +233,8 @@ ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
 ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
-ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
+ok   samples/web/html.warp
 ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
@@ -244,7 +243,7 @@ ok   samples/web/page_custom_event.warp
 ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
-EXP  samples/errors/errors.warp: spelling code
+EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
 WIN  samples/graphics/raylib_circle_forever.warp
 WIN  samples/graphics/raylib_circle.warp
 WIN  samples/graphics/raylib_debug.warp
@@ -256,9 +255,10 @@ WIN  samples/graphics/raylib_sleep.warp
 WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: samples/native/c_calls.warp:6:1 primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
 SRV  samples/servers/hosting.warp
-SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
-SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1 outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/web/html.warp: spelling code
+FAIL samples/servers/route_headers.warp: exit 137, nothing on stderr
+FAIL samples/servers/worker.warp: exit 137, nothing on stderr
+FAIL samples/sound/visualizer.warp: the program links warp/native_window, but there is no /Volumes/Worktrees/samples-sweep/lib/modules/native_window.wasm
+FAIL samples/web/hello_div.warp: the program links warp/native_window, but there is no /Volumes/Worktrees/samples-sweep/lib/modules/native_window.wasm
