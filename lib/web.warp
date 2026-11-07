@@ -200,7 +200,7 @@ serve(port: int) := {
 // the program's routes answering the playground's requests (its address bar, links and forms) as HTTP text, which a
 // page hands over and shows (web/playground/host-routes.js): a browser page listens on no port
 page_serve(port: int) := {
-	print "serving in the page: the address bar below asks it, its links and forms too"
+	print "This program is a web server, running here in the page: type a path in the address field below, or use its links and forms."
 	while true { std_io("web", "answer", [http_served(std_io("web", "request", [port]))]) }
 }
 
