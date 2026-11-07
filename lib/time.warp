@@ -58,6 +58,8 @@ class Instant {
 	// the same instant on the UTC wall clock: now.UTC, also now.utc
 	UTC() := Instant(ms)
 	utc() := Instant(ms)
+	// the same instant on that zone's wall clock: zoned(now, "Asia/Kolkata"), now.zoned("Asia/Kolkata")
+	zoned(zone_name: text) := Instant(ms, zone_name)
 	// RFC 3339, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z; in another
 	// zone its wall clock and offset, 2026-10-25T12:43:40.692+01:00 (the zone's name is .zone)
 	text() := format_date(wall()) + "T" + format_time(wall()) + millis_fraction(ms % 1000) + (if zone == UTC_ZONE then "Z" else offset_written(offset()))
@@ -309,8 +311,8 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 	}
 }
 
-// Zoned times (wiki/time.md "Time zones"): `2024-01-31T10:00[Europe/Berlin]` is zoned(2024-01-31T10:00, "Europe/Berlin"),
-// `t in "Asia/Kolkata"` zoned(t, "Asia/Kolkata"): a time node of the form Zoned, its position the instant in
+// Zoned times (wiki/time.md "Time zones"): zoned(t, "Asia/Kolkata"), also t.zoned("Asia/Kolkata") (decision zone-word),
+// the one conversion to a zone: a time node of the form Zoned, its position the instant in
 // nanoseconds, its info the zone's index and offset in minutes above the form (extensions/time_values.warp), its zone's
 // name beside them
 nanos_per_second = 1000000000

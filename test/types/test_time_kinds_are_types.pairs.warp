@@ -8,7 +8,7 @@
 '1 day is time'	true
 '2024-06-01 is date'	true
 '2024-06-01 is instant'	false
-'(2024-01-31T10:00 in "Europe/Berlin") is zoned time'	true
+'zoned(2024-01-31T10:00, "Europe/Berlin") is zoned time'	true
 'type(now) is time'	true
 'type(now) == time'	false
 'type(now) == instant'	true
