@@ -26,8 +26,9 @@ parameter_of(written: Node): Parameter := {
 	if not is_key(declared, Op.Colon) { return Parameter(name: parameter_name(declared), defaulted_to: defaulted_to, label: label_of(declared)) }
 	Parameter(name: parameter_name(key_of(declared)), type_name: type_text(value_of(declared)), defaulted_to: defaulted_to, label: label_of(key_of(declared)))
 }
-# `with` of `with new`: the label word before a parameter's name, "" when it has none
-label_of(named: Node): text := if is_group(named) and #named > 1 and named#1 is symbol and name_of(named#1) in label_words then name_of(named#1) else ""
+# the word a call names the parameter by: a label word before it (`with new x`), or Swift's argument label, the first
+# of two words (`func greet(person name: String)` called `greet(person: "Ann")`); "" for none
+label_of(named: Node): text := if is_group(named) and #named > 1 and named#1 is symbol and (name_of(named#1) in label_words or (#named == 2 and (named#2 is symbol or (named#2 is key and key_of(named#2) is symbol)))) then name_of(named#1) else ""
 # the name of a rest parameter or a spread argument, `*xs` (the parser's `...xs`, `vararg xs` too) and `xs...` (read
 # as `xs to ø`), else ø
 rest_name(written: Node): any := {
