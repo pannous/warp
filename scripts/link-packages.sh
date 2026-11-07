@@ -7,7 +7,7 @@
 # ~/.cache/warp/packages/<name>@<version> (a tag never changes); one whose `library: "dir/name"` has a native twin
 # lib/native/<name>.c (uniscript's uniscript_c, card uniscript-ownership) gets that C library built of the clone, the
 # crate in dir/ by cargo and the twin over it, into <clone>/native, and linked beside warp (where the native warp's
-# dlopen looks first, as for libwarp_sound): `use uniscript` (lib/uniscript.warp) then calls it.
+# dlopen looks first, as for libwarp_gpu): `use uniscript` (lib/uniscript.warp) then calls it.
 # usage: scripts/link-packages.sh [<tree>]   (default: this checkout)
 set -u
 registry_url=https://github.com/pannous/warp-packages.git
