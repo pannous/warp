@@ -185,6 +185,15 @@ write_site_served_files() {
 	(cd "$1" && find . -type f | sed 's|^\./||') | write_served_files "$1/served-files.js"
 }
 
+# the repository's tracked files of these paths copied into <site> at their paths; the regular ones, not the links
+shipped_tracked() {
+	local site=$1 file
+	shift
+	git ls-files -z -- "$@" | while IFS= read -r -d '' file; do
+		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
+	done
+}
+
 # the deployed site from a built playground (pages.yml, scripts/browser-dry-run.sh): a fresh <site> folder
 collect_site() {
 	local site part
@@ -201,8 +210,11 @@ collect_site() {
 	# the samples' neighbours at their repository paths, as natively: `play "tune.mp3"` beside samples/sound/play_mp3.warp
 	# (card open-mozart; tune.mp3 is our own half-second C-E-G, mozart.mp3 left for its unclear copyright), the files a sample reads, writes over or includes; the regular ones, not the links
 	# (samples/tests, samples/wasm/shapes.wasm)
-	git ls-files -z samples | while IFS= read -r -d '' file; do
-		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
+	shipped_tracked "$site" samples
+	# the files the tour's examples read, at their repository paths too: `use wasm "test/fixtures/…/rust_demo.wasm"`,
+	# `import test/fixtures/wasm/zlib` (its .wasm and .warp), else the page's compile meets an unknown name
+	for named in $(grep -oE '(test|lib|data)/[A-Za-z0-9_./-]+' "$page/examples.js" | sort -u); do
+		shipped_tracked "$site" "$named" "$named.*"
 	done
 	package_files | while IFS= read -r file; do mkdir -p "$site/$(dirname "$file")" && cp -L "$file" "$site/$file"; done
 	echo "$DOMAIN" > "$site/CNAME"
