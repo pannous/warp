@@ -238,7 +238,7 @@ FAIL samples/advanced/raytracer.warp: outside the core: the unknown name a
 FAIL samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
 FAIL samples/functions/functions.warp: outside the core: the unknown name a
 FAIL samples/hello/natural.warp: outside the core: a function value in +
-FAIL samples/modules/javascript.warp: the host word foreign_call is not in warp yet
+ok   samples/modules/javascript.warp
 FAIL samples/modules/rust_crates.warp: outside the core: the call levenshtein(…)
 FAIL samples/numbers/dates.warp: outside the core: a time where a int is needed
 FAIL samples/numbers/measurements.warp: outside the core: the unknown name certainly
