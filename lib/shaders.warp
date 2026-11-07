@@ -8,6 +8,7 @@
 # rule word definitions_reached quotes it: `{name: "f", code: data [definitions], values: {sun: sun, …}}`.
 # A color of lib/color (a named one, `orange`, or a program value holding one) is the [r, g, b] it paints.
 use color
+use math
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUES_NAME = "values"
@@ -60,7 +61,8 @@ WGSL_WORDS = {"sine": ["sin", "each"], "cosine": ["cos", "each"], "tangent": ["t
 	"norm": ["length", "to_one"], "magnitude": ["length", "to_one"],
 	"normalize": ["normalize", "kept"], "cross": ["cross", "kept"], "reflect": ["reflect", "kept"],
 	"sinh": ["sinh", "each"], "cosh": ["cosh", "each"], "tanh": ["tanh", "each"], "fabs": ["abs", "each"],
-	"fmin": ["min", "each"], "fmax": ["max", "each"], "ceiling": ["ceil", "each"], "whole_part": ["trunc", "each"]}
+	"fmin": ["min", "each"], "fmax": ["max", "each"], "ceiling": ["ceil", "each"], "whole_part": ["trunc", "each"],
+	"hash": ["hash", "to_one"]}
 # warp's math words WGSL lacks, or has with another meaning, as WGSL expressions of the same meaning: $1, $2 … the
 # arguments, all of one width (a number broadcasts). warp's round takes halves away from zero, WGSL's to even
 WGSL_MEANINGS = {"round": "sign($1) * floor(abs($1) + 0.5)", "remainder": "$1 - $2 * trunc($1 / $2)",
@@ -148,6 +150,8 @@ global shaders_made = {}
 
 # paint(f, width, height) of a program function: its shader on the GPU, the values it reads as they are now; else f of
 # each pixel on the CPU (lib/prelude.warp paint_each)
+# hash(cell) on the CPU, as the shader word computes it (lib/prelude.warp SHADER_WORDS_WGSL), for a painting without a GPU
+hash(cell: list) := fract(sine(dot(cell .- 289 .* floor(cell ./ 289), [127.1, 311.7])) * 43758.5453)
 paint_function(reached: map, width, height, f) := if gpu_paints() then paint(shader_of(reached), width, height, shader_values(values_read(reached))) else paint_each(f, width, height)
 # the program values the function's shader reads, as they are now; ø for none
 values_read(reached: map): any := {
@@ -169,7 +173,7 @@ wgsl_shader(reached: map): text := {
 	painted = wgsl_painted_call(reached)
 	if shading.refusal != "" { raise "shader_of(${reached.name}): ${shading.refusal}" }
 	shader_functions = shading.written_functions.join("\n\n")
-	shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn vec4f(" + painted + ", 1.0);\n}\n"
+	shader_words(shader_functions + "\n\n@fragment fn main(@builtin(position) position: vec4f) -> @location(0) vec4f {\n\treturn vec4f(" + painted + ", 1.0);\n}\n")
 }
 # f called at the pixel's column and row (WGSL's position is the pixel's center)
 wgsl_painted_call(reached: map): text := {
