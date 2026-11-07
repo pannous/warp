@@ -33,6 +33,8 @@ DATA_FOLDERS = ["extensions/sugar", "extensions/uncertain", "extensions/rules/mo
 # a file of lib/ by its path within lib/ ("prelude.warp", "extensions/sugar/lists.warp"), read from disk: the compiler
 # carries no library text (notes/library_zero_bake.md L4), "" for none
 def library_text(within: text): text := file_source(run_library() + "/" + within) ?? ""
+# a standard module's text, wherever in lib/ it lies (uses.warp std_module_path: lib/host/native_host.warp too)
+def module_text(name: text): text := file_source(std_module_path(name)) ?? ""
 
 # the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): map {

@@ -1873,7 +1873,7 @@ def reached_modules(source: text): list {
 def module_sources(modules: list): list {
 	sources = []
 	for module in modules {
-		module_source = file_source(run_library() + "/" + module + ".warp") ?? ""
+		module_source = module_text(module)
 		if module_source { sources += [module_source] }
 	}
 	sources

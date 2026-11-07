@@ -1,7 +1,7 @@
 # The native host module in warp (decision window-in-warp; cards window-ffi-replace, warp-sound-c)
 
 What the playground answers in JavaScript beyond the driver's own words, the native warp answers in warp:
-lib/native_host.warp, one module of two parts, native_host/window.warp (SDL3's window, CoreText/FreeType text) and
+lib/host/native_host.warp, one module of two parts, native_host/window.warp (SDL3's window, CoreText/FreeType text) and
 native_host/sound.warp (SDL3's audio, AudioToolbox / libmpg123 decoding, CoreMIDI), over C libraries by plain FFI.
 No C wrappers: crates/warp-window/warp_window.c and crates/warp-sound/warp_sound.c (miniaudio) are gone.
 

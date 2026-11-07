@@ -3,7 +3,7 @@
 # current), and copied into each folder, default the one beside the warp binary on PATH: warp's wasmtime C API
 # (crates/wasmtime-capi, card wasmtime-bundled), libwarp_gpu (crates/warp-gpu, wgpu-native, card gpu-functions) and
 # libwarp_webview (crates/warp-webview, the system's web view, card app-webview; macOS's WKWebView for now). The window
-# and the sound are warp's own (lib/native_host.warp, SDL3 and the system's libraries over FFI).
+# and the sound are warp's own (lib/host/native_host.warp, SDL3 and the system's libraries over FFI).
 # after-push.sh installs them beside warp and into the main checkout's lib/, rebuild.sh into a tree's lib/, the library
 # folder a native build links from and its executables find them in (rpath); the release workflow runs it for lib/
 set -eu -o pipefail

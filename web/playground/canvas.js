@@ -8,7 +8,7 @@ const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), 
 const KEYS_HELD_KEPT = 8;
 // mouse_wheel: the wheel steps turned over a canvas, up adding (crates/warp-runtime host_words.rs MOUSE_WHEEL)
 // "keys pressed", "key code pressed": the keys that went down so far and the last of them, as natively
-// (lib/native_host/window.warp): `on key {…}` runs for a press let go before the program's frame looks (lib/keys.warp)
+// (lib/host/native_host/window.warp): `on key {…}` runs for a press let go before the program's frame looks (lib/keys.warp)
 const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_down_x", "mouse_down_y", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`), "keys pressed", "key code pressed"];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)

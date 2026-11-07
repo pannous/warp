@@ -19,7 +19,10 @@ Standard functionality split into importable modules, `lib/<name>.warp`. User do
 
 ## 2. Modules
 Each module is `lib/<name>.warp`, embedded in the binary (modules.rs STD_MODULES, `include_str!`), so `use <name>`
-needs no files and works in the browser. Non-standard modules (netbase) live in lib/extra/. lib/web.webidl is data
+needs no files and works in the browser. Non-standard modules (netbase) live in lib/extra/; the modules the native
+driver links itself (native_host and its parts) in lib/host/, which the library word index skips, so none of their
+words brings them to a program (decision host-folder, uses.warp module_folder/is_host_module, wiki standard-library
+"Library folders"). lib/web.webidl is data
 for web_idl.rs, not a module. `warp help` lists the modules, `warp help list` prints a module's leading comment and
 its words with the comment line above each (src/modules/std_docs.rs).
 

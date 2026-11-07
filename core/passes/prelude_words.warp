@@ -831,12 +831,12 @@ word_index(file: text): map := {
 	for word in words.keys { index[word] = words[word].split(" ") }
 	index
 }
-# the words each standard module defines (an `alias ln => natural_log` too) but the prelude, each with its modules joined by spaces: a word of letters
+# the words each standard module defines (an `alias ln => natural_log` too) but the prelude and lib/host/'s, each with its modules joined by spaces: a word of letters
 # (`red`, `minute`), no operator or made name (an operator's function, operator_·, kept: is_made_name); also the word leading a rule of the module that means nothing else
 # (storage's `stored users: [User]`), never one the core or the prelude gives a meaning (english's `add $x to`)
 module_word_definers(): map := {
 	definers = {}
-	for module in std_module_names.filter(name => name != "prelude") {
+	for module in std_module_names.filter(name => name != "prelude" and not is_host_module(name)) {
 		source = file_text(std_module_path(module)) ?? ""
 		for word in definition_slices(source).map(slice => slice#1) + module_aliases(source).keys + rule_heads(source).filter(word => not has_meaning(word)) {
 			if word is text and #word > 0 and is_name_start(word[0]) and not is_made_name(word) {

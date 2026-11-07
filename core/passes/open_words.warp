@@ -18,7 +18,7 @@ open_slots(program: Node): Node := if module_written == "" and #module.linked_im
 
 # --- a module being built ---
 slotted(program: Node, name: text): Node := {
-	open = opened_words(program, definition_slices(library_text(name + module_extension)).map(slice => slice#1))
+	open = opened_words(program, definition_slices(module_text(name)).map(slice => slice#1))
 	if #open == 0 { return program }
 	called = {}
 	rewritten = children(program, n => slotted_calls(n, open, name, called))
@@ -43,7 +43,7 @@ opened_words(program: Node, written: list): map := {
 # whether another standard module writes a variant of the word taking as many values, typed for a class: units'
 # milliseconds_of(duration: Quantity) beside time's. (A slotted call is a closure call whose value has no static kind:
 # every word slotted would leave a module's typed code untyped; card open-words-protocol takes a program's own classes)
-extended_elsewhere(word: text, count: int): bool := std_module_names.filter(other => other != module_written).any(other => definition_slices(library_text(other + module_extension)).any(slice => slice#1 == word and class_typed_head(slice#2, count)))
+extended_elsewhere(word: text, count: int): bool := std_module_names.filter(other => other != module_written).any(other => definition_slices(module_text(other)).any(slice => slice#1 == word and class_typed_head(slice#2, count)))
 class_typed_head(written: text, count: int): bool := statements_in(plain_node(parsed(written))).any(statement => class_typed_call(definition_call(statement), count))
 class_typed_call(call: Node, count: int): bool := call != ø and #call - 1 == count and parameter_types(call).any(type => type != any_word and is_open_type(type))
 # untyped, any, or a class (a capitalized name, as a class is written)
