@@ -479,6 +479,14 @@ shader_words(shader) := {
 	}
 	added
 }
+// the shader words of a shader block's text, placed where the block stands in the program: [its first line, the columns
+// before that line, the columns before each later one] (extensions/shader_blocks.warp shader_place), so the GPU says
+// its errors at their place in the program (card wgsl-error)
+shader_words(shader, place) := {
+	lines = shader.split("\n")
+	indented = join(["\n" + " " * place#3 + line for line in lines[1 ..]], "")
+	shader_words("\n" * (place#1 - 1) + " " * place#2 + lines[0] + indented)
+}
 // paint(shader) of a WGSL shader text, at the size of where it shows (wiki/graphics.md)
 paint(shader: text) := paint(shader_words(shader), shown_width(), shown_height(), ø)
 // where a painting without a size shows: the window, in its frames, once it is open or where one can open (natively its
