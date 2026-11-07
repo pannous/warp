@@ -625,7 +625,7 @@ warp_config(fuel: bool, heap_bytes: i64): handle := {
 # window refused (headless_checked), but in a module the driver links on its own question, warp's own, which minds
 # WARP_NO_WINDOW itself (lazily_linked: the native host module's window)
 host_words_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, guarded: bool, trap: pointer): nothing := {
-	table = custom_section(module, "warp.c_functions")
+	table = c_functions_table(module)
 	imports = allocate(VECTOR_BYTES)
 	wasmtime_module_imports(compiled, imports)
 	for i in 0..long_at(imports).value {
@@ -641,6 +641,13 @@ host_words_defined(linker: handle, engine: handle, context: handle, compiled: ha
 		if line.length > 0 and is_wasm_path(from) and crosses_memory(line) { word_defined(linker, import, foreign_of(line, wasm_exports_of(linker, context, from, name)), trap) }
 		if same_text(from, "host") { host_word_defined(linker, engine, import, name, trap) }
 	}
+}
+# the lines of the C functions a module calls: a GC module's, else a primitive one's, whose values are numbers, texts
+# as their (address, length) pairs and addresses of its memory (decision primitive-c-in-driver: what a native build's
+# glue does, primitive.warp c_function_glue)
+c_functions_table(module: text): text := {
+	table = custom_section(module, "warp.c_functions")
+	if table.length > 0 then table else custom_section(module, "warp.primitive_c_functions")
 }
 # a C function that opens a native window (raylib's InitWindow, SDL's, GLFW's) ends the run before it starts under
 # WARP_NO_WINDOW or CI, so no test or agent run pops one up
@@ -2339,6 +2346,9 @@ PARAMETER_OUT = 7
 PARAMETER_TEXTS = 8
 PARAMETER_BYTES = 9
 PARAMETER_LENGTH = 10
+# a primitive module's text, the address of its (address, length) pair, and its pointer, an address of its memory
+PARAMETER_PAIR = 11
+PARAMETER_ADDRESS = 12
 REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
@@ -2350,6 +2360,8 @@ CROSSING_TEXT = 2
 CROSSING_OWNED_TEXT = 3
 CROSSING_HANDLE = 4
 CROSSING_U32 = 5
+CROSSING_PAIR = 6
+CROSSING_ADDRESS = 7
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
@@ -2364,6 +2376,8 @@ parameter_kind(name: text): i32 := {
 	if same_text(name, "texts") { return PARAMETER_TEXTS }
 	if same_text(name, "bytes") { return PARAMETER_BYTES }
 	if same_text(name, "length") { return PARAMETER_LENGTH }
+	if same_text(name, "pair") { return PARAMETER_PAIR }
+	if same_text(name, "address") { return PARAMETER_ADDRESS }
 	0
 }
 register_of(name: text): i32 := {
@@ -2381,6 +2395,8 @@ crossing_of(name: text): i32 := {
 	if same_text(name, "owned_text") { return CROSSING_OWNED_TEXT }
 	if same_text(name, "handle") { return CROSSING_HANDLE }
 	if same_text(name, "u32") { return CROSSING_U32 }
+	if same_text(name, "pair") { return CROSSING_PAIR }
+	if same_text(name, "address") { return CROSSING_ADDRESS }
 	0
 }
 failure_of(name: text): i32 := {
@@ -2595,6 +2611,8 @@ c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointe
 	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
 	if kind == PARAMETER_TEXTS { return native_pointer(c_strings(caller, context, value - VALUE_OFFSET)) }
 	if kind == PARAMETER_BYTES { return native_pointer(c_bytes(caller, context, value - VALUE_OFFSET)) }
+	if kind == PARAMETER_PAIR { return pair_c_text(caller, context, word_at(value).value as i64) }
+	if kind == PARAMETER_ADDRESS { return if word_at(value).value == 0 then 0 else guest_memory(caller, context) + word_at(value).value as i64 }
 	id = word_at(value).value as i32
 	if not handle_known(id) { failed_call(joined(joined(name, ": no handle "), text_of(id))) }
 	handle_pointer(id)
@@ -2620,7 +2638,10 @@ c_strings(caller: handle, context: handle, list: pointer): pointer := {
 # the C result as the module's value: a text, a handle id, else the number in its register
 c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: pointer): nothing := {
 	value = result + VALUE_OFFSET
-	if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
+	if c.crossing == CROSSING_PAIR or c.crossing == CROSSING_ADDRESS {
+		byte_at(result).value = KIND_I32
+		word_at(value).value = (if returned == 0 then 0 else if c.crossing == CROSSING_PAIR then guest_pair(caller, context, returned) else returned - guest_memory(caller, context)) as u32
+	} else if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
 		# (a wasm module's own text is freed by its free, wasm_called)
 		if c.crossing == CROSSING_OWNED_TEXT and returned != 0 and c.wasm == 0 { free(returned) }
@@ -2639,6 +2660,51 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 	}
 }
 register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 else if register == REGISTER_F64 then KIND_F64 else if register == REGISTER_F32 then KIND_F32 else KIND_I32
+## a primitive module's texts: the address of an (address, length) pair of its memory, as foreign.c's native_text and
+# module_text take them in a native build
+PAIR_BYTES = 8
+PRIMITIVE_ARENA_ALIGNMENT = 8
+# the module's text at `pair` as a NUL-terminated copy, the null address NULL
+pair_c_text(caller: handle, context: handle, pair: i64): i64 := {
+	if pair == 0 { return 0 }
+	memory = guest_memory(caller, context)
+	cell = native_long(memory + pair)
+	address = cell % 4294967296
+	length = cell / 4294967296
+	copy = allocate((length + 1) as i32)
+	memcpy(copy, memory + address, length)
+	byte_at(copy + length).value = 0
+	native_pointer(copy)
+}
+# a C text copied into the module's arena as a text: its pair, its bytes behind it
+guest_pair(caller: handle, context: handle, text: handle): i64 := {
+	length = strlen(text)
+	pair = primitive_arena_taken(caller, context, PAIR_BYTES + length)
+	cell = allocate(PAIR_BYTES)
+	word_at(cell).value = (pair + PAIR_BYTES) as u32
+	word_at(cell + 4).value = length as u32
+	memory = guest_memory(caller, context)
+	memmove(memory + pair, native_pointer(cell), PAIR_BYTES)
+	memmove(memory + pair + PAIR_BYTES, text, length)
+	pair
+}
+# bytes taken from the top of the module's arena (its exported global, primitive.warp arena_taken), its memory grown
+# when they pass its end
+primitive_arena_taken(caller: handle, context: handle, size: i64): i64 := {
+	arena = allocate(EXTERN_BYTES)
+	if not exported(caller, context, "arena", arena) { failed_call("a C text for a module without an arena") }
+	top = allocate(VALUE_BYTES)
+	wasmtime_global_get(context, arena + 8, top)
+	taken = word_at(top + VALUE_OFFSET).value as i64
+	next = (taken + size + PRIMITIVE_ARENA_ALIGNMENT - 1) / PRIMITIVE_ARENA_ALIGNMENT * PRIMITIVE_ARENA_ALIGNMENT
+	word_at(top + VALUE_OFFSET).value = next as u32
+	wasmtime_global_set(context, arena + 8, top)
+	memory = allocate(EXTERN_BYTES)
+	exported(caller, context, "memory", memory)
+	size_now = wasmtime_memory_data_size(context, memory + 8)
+	if next > size_now and wasmtime_memory_grow(context, memory + 8, (next - size_now + WASM_PAGE_BYTES - 1) / WASM_PAGE_BYTES, allocate(8)) != 0 { failed_call("the module's memory would not grow for a C text") }
+	taken
+}
 # the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says (a module
 # calling C exports it), else at the end of its memory, grown for them
 guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := guest_bytes_built(caller, context, bytes, length, "new_text", result)
