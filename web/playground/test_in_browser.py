@@ -25,7 +25,8 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 # --samples (scripts/samples-web.sh): every samples/**/*.warp in the page, its output against the native run's
 SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one a line, like test/samples.txt
 # a sample that fails on purpose says why on a line of its own, `# expected failure: deliberate parse errors`: EXP
-# instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE)
+# instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE); in the page ok when it fails with the native
+# run's error, it gives what the native run gives (decision exp-counts)
 EXPECTED_FAILURE = re.compile(r"^# expected failure: ", re.M)
 # a sample's interactions (card scripts-samples, decision sample-checks): `# check: click "+1", type "name" "Ann" → text`,
 # each from a fresh run, its steps done on the page, its text then holding the text after → (natively `warp app check`)
@@ -1222,12 +1223,15 @@ def check_examples(names, page_url=None, site=None):
 
 
 # one sample started in the page as its own file (%s: path and source as JSON), its report kept as JSON in
-# window.sampleReport; asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
+# window.sampleReport, once the fetches it started are answered (playground.js settled); asked for in short evals, since a long one loses agent-browser's channel ("CDP response channel
 # closed" for gpu_visualizer under load)
 # only the fields the verdict reads: a sample's whole report holds its pictures too, and a full-HD frame (samples/gpu/
 # ringed_planet.warp) as JSON took this process past the dry run's memory cap
 REPORT_FIELDS = ["error", "errors", "message", "value", "html", "printed", "printedWhole", "text", "stream", "paintings", "width", "height"]
-START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
+# a sample's timers run this long before its output is taken, as scripts/samples.sh's WARP_EVENTS_FOR has them run
+# natively (milliseconds)
+SAMPLE_EVENTS_MS = 3500
+START_SAMPLE = """window.sampleReport = undefined; playground.evaluate(%s, %s, { eventsFor: """ + str(SAMPLE_EVENTS_MS) + """ }).then(playground.settled).then(report => window.sampleReport = JSON.stringify(report, """ + json.dumps(REPORT_FIELDS) + """),
 	failure => window.sampleReport = JSON.stringify({ error: true, value: String(failure) })); "started";"""
 SAMPLE_POLL_SECONDS = 0.5
 # a window sample (WIN) still animating this long after it started (a raylib window's loop, natively until Escape) is
@@ -1260,6 +1264,22 @@ def sample_verdict(report, native_output):
 	if MEASURED_TIME.sub("…", shown).rstrip() == MEASURED_TIME.sub("…", native_output).rstrip():
 		return "ok", ""
 	return "DIFF", f"page: {shown[:SHOWN_DIFFERENCE]!r}\n     native: {native_output[:SHOWN_DIFFERENCE]!r}"
+
+
+def native_error(err_file):
+	"""the native run's error of an expected failure: the first line of its stderr but warnings, None without one"""
+	if not os.path.isfile(err_file):
+		return None
+	lines = [line for line in open(err_file, encoding="utf-8", errors="replace").read().splitlines() if line.strip() and not line.startswith("warning:")]
+	return lines[0][:200] if lines else None
+
+
+def expected_failure_verdict(page_error, native):
+	"""an expected failure (EXPECTED_FAILURE) gives what the native run gives when it fails with the native error: ok,
+	else EXP, which does not pass (decision exp-counts)"""
+	if native is not None and page_error.strip() == native.strip():
+		return "ok", ""
+	return "EXP", f"page: {page_error!r}\n     native: {native!r}"
 
 
 def window_verdict(report):
@@ -1357,7 +1377,9 @@ def check_samples(paths, tree):
 		wrong = checks_wrong(os.path.basename(path)[:-len(".warp")], source) if status in ("ok", "ran") and CHECK_LINE.search(source) else []
 		if wrong:
 			status, detail = "DIFF", "; ".join(wrong)
-		if status == "FAIL" and (EXPECTED_FAILURE.search(source) or NATIVE_ONLY.search(source)):
+		if status == "FAIL" and EXPECTED_FAILURE.search(source):
+			status, detail = expected_failure_verdict(detail, native_error(os.path.join(tree, NATIVE_OUTPUTS, path.replace("/", "_") + ".err")))
+		elif status == "FAIL" and NATIVE_ONLY.search(source):
 			status = "EXP"
 		with open(os.path.join(data, "out", output_name), "w", encoding="utf-8") as shown:
 			shown.write(page_output(report) if not report.get("error") else str(report.get("value")))
