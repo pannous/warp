@@ -61,9 +61,9 @@ for compiler in warp warp-self; do
 	[ -f "$tree/lib/$compiler.wasm" ] && clone "$tree/lib/$compiler.wasm" "$logs/$compiler.wasm"
 done
 
-# the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one, on stderr)
+# the lanes judged: pure, and self when the tree's lib/ (WARP_LIB, where the binary finds it) holds a promoted warp-self.wasm
 lanes=pure
-if ! "$warp" version 2>&1 | grep -q 'warp-self.wasm missing'; then lanes="pure self"
+if [ -f "$WARP_LIB/warp-self.wasm" ]; then lanes="pure self"
 else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh promotes warp.wasm once it compiles itself)"; fi
 
 if wants 0; then
