@@ -1061,7 +1061,10 @@ takes_only_numbers(word: text, arity: int?): bool := {
 	#fitting > 0 and fitting.all(signature => takes_numbers(signature.parameters.filter(parameter => not parameter.rest)))
 }
 # fixed parameters, at least one, all numbers: a word of a rest alone, `print(values...)`, takes a list as it is
-takes_numbers(fixed: list): bool := #fixed > 0 and fixed.all(parameter => parameter.type_name in numeric_parameter_types)
+takes_numbers(fixed: list): bool := #fixed > 0 and fixed.all(parameter => is_numeric_type(parameter.type_name))
+# a number type by its name or by a foreign name of one, the prelude's `type Int = int` (Kotlin's `fun Int.plus`)
+is_numeric_type(name: text): bool := name in numeric_parameter_types or (prelude_foreign_types.get(name) ?? "") in numeric_parameter_types
+prelude_foreign_types = foreign_types(prelude_text)
 # how many arguments the call the rule matched passes the word, ø when it matched no call of it
 matched_arity(word: Node): int? := if rule_matched != ø and is_round(rule_matched) and #rule_matched > 0 and rule_matched#1 == word then #rule_matched - 1 else ø
 

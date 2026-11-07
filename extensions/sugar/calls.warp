@@ -5,6 +5,10 @@
 # `map square xs`, `map (x -> x * 2) [1, 2, 3]`: a function before a list maps it, as `xs.map(square)` does; ahead
 # of the composition below, which would read `map floor xs` as map(floor(xs))
 rewrite (map $f $xs) => map($xs, $f) where $f is function
+# a trailing block after an iteration word's call is its function (Swift, Kotlin, Ruby): `xs.map { $0 * 10 }`,
+# `xs.reduce(0) { $0 + $1 }`; only these words, so `if xs.empty { … }` stays a condition and its block
+rewrite $xs.$f {$body...} => $xs.$f({$body...}) where takes_trailing_block($f)
+rewrite $xs.$f($a...) {$body...} => $xs.$f($a..., {$body...}) where takes_trailing_block($f)
 # so round, the function first: `map(floor, xs)` is map(xs, floor)
 rewrite map($f, $xs) => map($xs, $f) where $f is function and not $xs is function
 # a function before an empty `()`, spaced or not, is called with nothing: `f ()` is f() (user decision calls-arguments)

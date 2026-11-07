@@ -848,11 +848,18 @@ def grouped(pairs: list, bracket: Bracket): Node := {
 	}
 	if group.length > 0 { groups += [group] }
 	nodes = [if group.length == 1 and group#1#2 == Separator.None then group#1#1 else grouped(group, Bracket.None) for group in groups]
+	if bracket == Bracket.Curly { nodes = entries_spliced(nodes) }
 	if nodes.length == 1 and bracket == Bracket.None { return nodes#1 }
 	if split == Separator.Space { return phrase(bracket, nodes) }
 	if split == Separator.Comma { return comma_list(bracket, nodes) }
 	listed(bracket, split, nodes)
 }
+// `{ a: 1, b: 2 ⏎ c: 3 }`: commas, semicolons and lines all separate a block's entries, as in JSON5 (wiki/list.md); a
+// list's runs stay its rows, `[1, 2 ⏎ 3, 4]`
+def entries_spliced(nodes: list): list := if nodes.any(is_entry_run) and nodes.all(n => is_colon_entry(n) or is_entry_run(n)) then nodes.flat_map(run_entries) else nodes
+def run_entries(n: Node): list := if is_entry_run(n) then items_of(n).flat_map(run_entries) else [n]
+def is_colon_entry(n: Node): bool := is_key(n, Op.Colon)
+def is_entry_run(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) != " " and #n > 1 and items_of(n).all(item => is_colon_entry(item) or is_entry_run(item))
 
 // Words side by side; `print ord c` and `{ print ord c }` print the rest of the line as one value
 def phrase(bracket: Bracket, nodes: list): Node := {

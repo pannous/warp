@@ -107,6 +107,7 @@ wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle):
 wasmtime_linker_define_func(linker: handle, module: text, module_size: i64, name: text, size: i64, type: handle, callback: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
 wasmtime_linker_define_instance(linker: handle, context: handle, name: text, size: i64, instance: pointer): handle from "warp_wasmtime"
 wasmtime_linker_allow_shadowing(linker: handle, allow: bool) from "warp_wasmtime"
+wasmtime_linker_get(linker: handle, context: handle, module: text, module_size: i64, name: text, size: i64, item: pointer): bool from "warp_wasmtime"
 wasi_config_new(): handle from "warp_wasmtime"
 wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "warp_wasmtime"
 # what a crash says the process was running (lib/native/wasi.c): a module's arguments while it runs
@@ -178,6 +179,7 @@ realloc(pointer: handle, size: i64): handle from "c"
 wasmtime_module_serialize(module: handle, bytes: pointer): handle from "warp_wasmtime"
 wasmtime_module_deserialize_file(engine: handle, path: pointer, module: pointer): handle from "warp_wasmtime"
 memmove(destination: handle, source: handle, size: i64): handle from "c"
+memset(destination: handle, value: i32, size: i64): handle from "c"
 memcmp(a: pointer, b: pointer, size: i64): i32 from "c"
 realpath(path: pointer, resolved: pointer): handle from "c"
 fork(): i32 from "c"
@@ -541,7 +543,7 @@ warp_config(fuel: bool, heap_bytes: i64): handle := {
 # the host words the module imports, each defined as its callback (lib/native/foreign.c warp_host_callback, which calls
 # host_word) with the type the module declares: std_io, exit, and each C function its warp.c_functions section
 # describes; a word the driver doesn't answer as a library's own (library_bound)
-host_words_defined(linker: handle, engine: handle, compiled: handle, module: text, trap: pointer): nothing := {
+host_words_defined(linker: handle, engine: handle, context: handle, compiled: handle, module: text, trap: pointer): nothing := {
 	table = custom_section(module, "warp.c_functions")
 	imports = allocate(VECTOR_BYTES)
 	wasmtime_module_imports(compiled, imports)
@@ -550,11 +552,12 @@ host_words_defined(linker: handle, engine: handle, compiled: handle, module: tex
 		from = native_vector_text(wasm_importtype_module(import))
 		name = native_vector_text(wasm_importtype_name(import))
 		line = c_line(table, from, name)
-		# (a wasm module's export is linked as its instance's, instances_linked)
+		# (a wasm module's export is linked as its instance's, instances_linked, unless values cross into its memory)
 		if line.length > 0 and not is_wasm_path(from) {
 			headless_checked(name, field(line, 1, TAB))
-			word_defined(linker, import, foreign_of(line), trap)
+			word_defined(linker, import, foreign_of(line, 0), trap)
 		}
+		if line.length > 0 and is_wasm_path(from) and crosses_memory(line) { word_defined(linker, import, foreign_of(line, wasm_exports_of(linker, context, from, name)), trap) }
 		if same_text(from, "host") { host_word_defined(linker, engine, import, name, trap) }
 	}
 }
@@ -690,7 +693,7 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 	}
 	compiled = compiled_module(engine, module, machine_code_file(path, PROGRAM_GC_HEAP_BYTES), trap)
 	instances_linked(linker, engine, context, compiled, linked, trap)
-	host_words_defined(linker, engine, compiled, module, trap)
+	host_words_defined(linker, engine, context, compiled, module, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
@@ -738,7 +741,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	outer_run = kept_value(RUN_SLOT)
 	keep_value(RUN_SLOT, run_state(linker, engine, linked) as i64)
 	instances_linked(linker, engine, context, compiled, linked, trap)
-	host_words_defined(linker, engine, compiled, module, trap)
+	host_words_defined(linker, engine, context, compiled, module, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
@@ -1955,7 +1958,8 @@ c_line(table: text, from: text, name: text): text := {
 }
 # a C function as its callback's data, its line read once: its address and name, each parameter's kind (a byte each),
 # its result's register and what it crosses as, how a failure shows, the first out-pointer's pointee
-struct Foreign { function: handle; name: pointer; name_length: u32; kinds: pointer; count: i32; register: i32; crossing: i32; failure: i32; pointee: pointer; pointee_length: u32 }
+# (`wasm`: a wasm module's function, wasm_exports_of, else 0)
+struct Foreign { function: handle; name: pointer; name_length: u32; kinds: pointer; count: i32; register: i32; crossing: i32; failure: i32; pointee: pointer; pointee_length: u32; wasm: pointer }
 foreign_at(address: pointer): Foreign := address
 # the kinds of the words the C signatures name them by, each word's kind in one place (parameter_kind, register_of, …);
 # 0 is a word the driver doesn't know
@@ -1979,6 +1983,7 @@ CROSSING_NUMBER = 1
 CROSSING_TEXT = 2
 CROSSING_OWNED_TEXT = 3
 CROSSING_HANDLE = 4
+CROSSING_U32 = 5
 FAILURE_NONE = 1
 FAILURE_NOT_NULL = 2
 FAILURE_FALSE = 3
@@ -2009,6 +2014,7 @@ crossing_of(name: text): i32 := {
 	if same_text(name, "text") { return CROSSING_TEXT }
 	if same_text(name, "owned_text") { return CROSSING_OWNED_TEXT }
 	if same_text(name, "handle") { return CROSSING_HANDLE }
+	if same_text(name, "u32") { return CROSSING_U32 }
 	0
 }
 failure_of(name: text): i32 := {
@@ -2025,10 +2031,10 @@ known(kind: i32, name: text, what: text, word: text): i32 := {
 # the C function of a line, found in its library; one the driver can't call stops the run naming it. One its library
 # lacks, or a library not found, stops the run only when called: a program may ask for an optional library first
 # (lib/sound.warp's libwarp_sound, else the system's player)
-foreign_of(line: text): i64 := {
+foreign_of(line: text, wasm: pointer): i64 := {
 	library = field(line, 1, TAB)
 	name = field(line, 2, TAB)
-	function = library_function(c_string(library), c_string(name))
+	function = if wasm == 0 then library_function(c_string(library), c_string(name)) else 0
 	parameters = field(line, 3, TAB)
 	count = field_count(parameters, COMMA)
 	kinds = allocate(count as i32)
@@ -2044,7 +2050,7 @@ foreign_of(line: text): i64 := {
 	crossing = known(crossing_of(field(line, 5, TAB)), name, "a result crossing as ", field(line, 5, TAB))
 	failure = known(failure_of(field(line, 8, TAB)), name, "a failure shown as ", field(line, 8, TAB))
 	pointee = field(line, 6, TAB)
-	Foreign(function, name.address, name.length, kinds, count as i32, register, crossing, failure, pointee.address, pointee.length) as i64
+	Foreign(function, name.address, name.length, kinds, count as i32, register, crossing, failure, pointee.address, pointee.length, wasm) as i64
 }
 failed_call(message: text): nothing := {
 	complain(message)
@@ -2055,6 +2061,10 @@ failed_call(message: text): nothing := {
 # count the length after them, a handle id its C pointer, the first out-pointer a slot that becomes the result; its
 # result crossed back the same way
 c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
+	if c.wasm != 0 { wasm_called(c, caller, context, given, results, results_count) } else { library_called(c, caller, context, given, results, results_count) }
+}
+# the call of a C library's function (dlopen'd)
+library_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
 	name = text_from(c.name, c.name_length)
 	if c.function == 0 { failed_call(joined(joined("no C function ", name), " in its library, or the library not found")) }
 	integers = allocate(REGISTERS * 8)
@@ -2080,9 +2090,133 @@ c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: p
 		if kind != PARAMETER_OUT and kind != PARAMETER_LENGTH { passed = passed + 1 }
 	}
 	returned = native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
+	c_finished(c, caller, context, returned, long_at(out).value, results, results_count)
+}
+## C functions of a wasm module (card wasm-instance-c-calls)
+# A module the program uses by its path whose foreign lines cross texts, bytes or an out-pointer (test/fixtures/wasm/
+# zlib.warp beside zlib.wasm): each such argument copied into a block of the module's own memory, from its malloc,
+# freed by its free after the call; a text result read from its memory. As web/playground/host-foreign.js callC does;
+# numbers only, its export is linked as it is (instances_linked)
+crosses_memory(line: text): bool := {
+	parameters = field(line, 3, TAB)
+	numbers = yes
+	for p in 0..field_count(parameters, COMMA) {
+		kind = parameter_kind(field(parameters, p, COMMA))
+		if kind != PARAMETER_I32 and kind != PARAMETER_I64 and kind != PARAMETER_F32 and kind != PARAMETER_F64 { numbers = no }
+	}
+	not numbers or not same_text(field(line, 5, TAB), "number")
+}
+# the module's function, memory, malloc and free (each an extern of EXTERN_BYTES, then a byte each: whether the module
+# exports it), got from the linker before the function's name is shadowed by the call through the driver
+WASM_FUNCTION = 0
+WASM_MEMORY = 1
+WASM_MALLOC = 2
+WASM_FREE = 3
+WASM_EXPORTS = 4
+wasm_exports_of(linker: handle, context: handle, module: text, name: text): pointer := {
+	exports = allocate((WASM_EXPORTS * EXTERN_BYTES + WASM_EXPORTS) as i32)
+	wasm_export_got(linker, context, module, name, exports, WASM_FUNCTION)
+	wasm_export_got(linker, context, module, "memory", exports, WASM_MEMORY)
+	wasm_export_got(linker, context, module, "malloc", exports, WASM_MALLOC)
+	wasm_export_got(linker, context, module, "free", exports, WASM_FREE)
+	if not wasm_exported(exports, WASM_FUNCTION) or not wasm_exported(exports, WASM_MEMORY) { failed_call(joined(joined(joined(module, " exports no "), name), " or no memory")) }
+	exports
+}
+wasm_export_got(linker: handle, context: handle, module: text, name: text, exports: pointer, which: i64): nothing := {
+	byte_at(exports + WASM_EXPORTS * EXTERN_BYTES + which).value = if wasmtime_linker_get(linker, context, module, module.length, name, name.length, wasm_export(exports, which)) then 1 else 0
+}
+wasm_export(exports: pointer, which: i64): pointer := exports + which * EXTERN_BYTES
+wasm_exported(exports: pointer, which: i64): bool := byte_at(exports + WASM_EXPORTS * EXTERN_BYTES + which).value == 1
+wasm_memory(context: handle, exports: pointer): handle := wasmtime_memory_data(context, wasm_export(exports, WASM_MEMORY) + 8)
+# the module's export called with the values, its first result as an i64 (an i32 unsigned), 0 for none
+wasm_function_called(context: handle, exports: pointer, which: i64, arguments: pointer, count: i64): i64 := {
+	function = wasm_export(exports, which) + 8
+	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, function)))
+	results = allocate(VALUE_BYTES * MAX_RESULTS)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	checked(wasmtime_func_call(context, function, arguments, count, results, results_count, trap), trap)
+	if results_count == 0 { return 0 }
+	if byte_at(results).value == KIND_I32 then word_at(results + VALUE_OFFSET).value as i64 else long_at(results + VALUE_OFFSET).value
+}
+# an i32 as the call's value
+wasm_i32(values: pointer, at: i64, value: i64): nothing := {
+	byte_at(values + at * VALUE_BYTES).value = KIND_I32
+	word_at(values + at * VALUE_BYTES + VALUE_OFFSET).value = value as u32
+}
+# a block of `size` bytes in the module's memory, from its malloc, holding the bytes at `host` (zeros for 0)
+wasm_block(c: Foreign, context: handle, host: handle, size: i64): i64 := {
+	if not wasm_exported(c.wasm, WASM_MALLOC) { failed_call(joined(text_from(c.name, c.name_length), " takes a text or out-pointer, but its module exports no malloc(size)")) }
+	argument = allocate(VALUE_BYTES)
+	wasm_i32(argument, 0, size)
+	block = wasm_function_called(context, c.wasm, WASM_MALLOC, argument, 1)
+	if block == 0 { failed_call(joined(text_from(c.name, c.name_length), ": the module's malloc gave no memory")) }
+	place = wasm_memory(context, c.wasm) + block
+	if host == 0 { memset(place, 0, size) } else { memmove(place, host, size) }
+	block
+}
+wasm_freed(c: Foreign, context: handle, block: i64): nothing := {
+	if wasm_exported(c.wasm, WASM_FREE) and block != 0 {
+		argument = allocate(VALUE_BYTES)
+		wasm_i32(argument, 0, block)
+		wasm_function_called(context, c.wasm, WASM_FREE, argument, 1)
+	}
+}
+WASM_POINTER_BYTES = 4
+wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
+	name = text_from(c.name, c.name_length)
+	arguments = allocate((c.count * VALUE_BYTES) as i32)
+	blocks = allocate((c.count * 8) as i32)
+	block_count = 0
+	out = 0 as i64
+	passed = 0
+	bytes_length = 0 as i64
+	for p in 0..c.count {
+		kind = byte_at(c.kinds + p).value as i32
+		value = given + passed * VALUE_BYTES + VALUE_OFFSET
+		argument = arguments + p * VALUE_BYTES
+		if kind == PARAMETER_HANDLE or kind == PARAMETER_TEXTS { failed_call(joined(name, ": a handle or a list of texts into a wasm module, not in the native driver yet")) }
+		if kind == PARAMETER_TEXT or kind == PARAMETER_BYTES or kind == PARAMETER_OUT {
+			# (a later out-pointer is NULL, as for a C library)
+			block = 0 as i64
+			if kind == PARAMETER_TEXT {
+				host = c_argument(caller, context, name, kind, value, 0)
+				block = wasm_block(c, context, host, strlen(host) + 1)
+			}
+			if kind == PARAMETER_BYTES {
+				bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET)
+				block = wasm_block(c, context, c_argument(caller, context, name, kind, value, 0), bytes_length)
+			}
+			if kind == PARAMETER_OUT and out == 0 {
+				block = wasm_block(c, context, 0, WASM_POINTER_BYTES)
+				out = block
+			}
+			long_at(blocks + block_count * 8).value = block
+			block_count = block_count + 1
+			wasm_i32(arguments, p, block)
+		} else if kind == PARAMETER_LENGTH {
+			wasm_i32(arguments, p, bytes_length)
+		} else {
+			byte_at(argument).value = if kind == PARAMETER_I32 then KIND_I32 else if kind == PARAMETER_I64 then KIND_I64 else if kind == PARAMETER_F32 then KIND_F32 else KIND_F64
+			long_at(argument + VALUE_OFFSET).value = long_at(value).value
+		}
+		if kind != PARAMETER_OUT and kind != PARAMETER_LENGTH { passed = passed + 1 }
+	}
+	returned = wasm_function_called(context, c.wasm, WASM_FUNCTION, arguments, c.count as i64)
+	pointed = if out == 0 then 0 else (native_long(wasm_memory(context, c.wasm) + out) % 4294967296 + 4294967296) % 4294967296
+	gives_text = c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT
+	# (a text result read where it is in the module's memory)
+	c_finished(c, caller, context, if gives_text and returned != 0 then wasm_memory(context, c.wasm) + returned else returned, pointed, results, results_count)
+	if c.crossing == CROSSING_OWNED_TEXT { wasm_freed(c, context, returned) }
+	for i in 0..block_count { wasm_freed(c, context, long_at(blocks + i * 8).value) }
+}
+# a C call's result checked as its line says how a failure shows, then crossed back: the first out-pointer's value
+# (`pointed`) where the line names its pointee, else what the function returned
+c_finished(c: Foreign, caller: handle, context: handle, returned: i64, pointed: i64, results: pointer, results_count: i64): nothing := {
+	name = text_from(c.name, c.name_length)
 	if (c.failure == FAILURE_NOT_NULL and returned != 0) or (c.failure == FAILURE_FALSE and returned % 256 == 0) { failed_call(joined(joined(name, " failed, C result "), text_of(returned))) }
-	if c.pointee_length > 0 and long_at(out).value == 0 { failed_call(joined(joined(joined(joined(name, " gave no "), text_from(c.pointee, c.pointee_length)), ", C status "), text_of(returned % 4294967296))) }
-	if results_count > 0 { c_result(caller, context, c, if c.pointee_length > 0 then long_at(out).value else returned, results) }
+	if c.pointee_length > 0 and pointed == 0 { failed_call(joined(joined(joined(joined(name, " gave no "), text_from(c.pointee, c.pointee_length)), ", C status "), text_of(returned % 4294967296))) }
+	if results_count > 0 { c_result(caller, context, c, if c.pointee_length > 0 then pointed else returned, results) }
 }
 # the register of a parameter that is no float: a number, a text's C copy, a handle's pointer, an out-pointer's slot
 c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointer, out: pointer): i64 := {
@@ -2119,11 +2253,16 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 	value = result + VALUE_OFFSET
 	if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
-		if c.crossing == CROSSING_OWNED_TEXT and returned != 0 { free(returned) }
+		# (a wasm module's own text is freed by its free, wasm_called)
+		if c.crossing == CROSSING_OWNED_TEXT and returned != 0 and c.wasm == 0 { free(returned) }
 	} else {
 		if c.crossing == CROSSING_HANDLE {
 			byte_at(result).value = KIND_I32
 			word_at(value).value = handle_id(returned) as u32
+		} else if c.crossing == CROSSING_U32 {
+			# an unsigned 32-bit result as the int it means: zlib's crc32 3400449319, never -894517977
+			byte_at(result).value = KIND_I64
+			long_at(value).value = (returned % 4294967296 + 4294967296) % 4294967296
 		} else {
 			byte_at(result).value = register_kind(c.register)
 			long_at(value).value = if c.register == REGISTER_BOOL then (if returned % 256 == 0 then 0 else 1) else (if c.register == REGISTER_I64 or c.register == REGISTER_F64 then returned else returned % 4294967296)
