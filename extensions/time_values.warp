@@ -136,6 +136,18 @@ def time_field(time: TypedCode, name: text): TypedCode {
 	field
 }
 
+# `m.hour` of a value held as a node (a top-level name beside a linked module, an `any` parameter): the field of the
+# time it holds, else what `read` reads of it (a map's entry, an instance's field)
+def node_time_field(body: Body, value: TypedCode, name: text, read: any): TypedCode {
+	held = fresh_node_local(body)
+	stored = value.code + [op.local_set] + held[1 ..]
+	holds_a_time = held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and, op.i64_const] + sleb(Kind.Time) + [op.i64_eq]
+	field = time_field(TypedCode(ValueKind.Time, held), name)
+	TypedCode(ValueKind.Node, stored + holds_a_time + if_else_code(ValueKind.Node, field, read(TypedCode(ValueKind.Node, held))))
+}
+# the Kind in a node's kind word, below its info
+kind_mask = 255
+
 ## time arithmetic (card day-hour): `d + 1 day`, `a - b`, `2 * 1 day` of a run-time time, by lib/time_arithmetic.warp's
 ## time_operation, which a program writing a time literal and an operator brings (passes/prelude_words.warp)
 time_operators = {"+": 0, "-": 1, "*": 2}
