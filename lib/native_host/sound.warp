@@ -127,6 +127,8 @@ trimmed_to_length(decoded: list, tagged: list): list := {
 }
 // the values of `count` 16-bit samples in C memory
 values_at(samples, count: int): list := [field_i16(samples, SAMPLE_BYTES * at) for at in 0 ..< count]
+// [rate, channels, then the values of the chunks read, one after another]
+decoded_of(rate: int, channels: int, chunks: list): list := [rate, channels] + [value for values in chunks for value in values]
 // u32 fields of a C struct set, each [offset, value]
 fields_set(memory, fields: list) := {
 	for field in fields { set_field_i32(memory, field[0], field[1]) }
@@ -189,7 +191,7 @@ toolbox_decoded(path: text, rate: int, channels: int): any := {
 	}
 	ExtAudioFileDispose(file)
 	for memory in [format, size, chunk, buffers, frames] { free(memory) }
-	[rate, channels] + [value for values in chunks for value in values]
+	decoded_of(rate, channels, chunks)
 }
 
 // elsewhere: a WAV by SDL3 (any of its sample formats, made 16-bit), an MP3 by libmpg123, both at the file's own rate
@@ -253,7 +255,7 @@ mpg123_decoded(path: text): any := {
 	mpg123_close(decoder)
 	mpg123_delete(decoder)
 	for memory in [rate_cell, channels_cell, encoding, chunk, done] { free(memory) }
-	[rate, channels] + [value for values in chunks for value in values]
+	decoded_of(rate, channels, chunks)
 }
 // [rate, channels, values…] at another rate and channel count: each frame's channels averaged into one, or the first
 // repeated into more, then resampled linearly (as the playground's host-sound.js remixed and resampled)
