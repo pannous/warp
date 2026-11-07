@@ -1088,3 +1088,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - time-utc-property (user: "just now.UTC?"): `t.UTC` (alias `t.utc`) is a time on the UTC wall clock, the same as `t.zoned("UTC")`; named zones use `zoned`.
   - zone-word (user): a time converts to a zone with `zoned`: `now.zoned("Europe/Berlin")` = `zoned(now, "Europe/Berlin")`; neither `in` (membership) nor `as` (casts to a type; a zone text is no type) converts zones.
   - fraction-glyphs (user, "leave as is"): a glyph number `3½`, `2¾`, `½`, `-1¼` is one numeral and shows as a decimal (3.5, 2.75, 0.5, -1.25); it gets no fraction mark (test_mixed_numbers stays).
+  - bar-never-or (user: "logical or? NEVER!"): `|` is never the logical `or` (no short-circuit, no or-node anywhere in the parser): it is bit-or between numbers, a pipe into a function, a union between types. yes/no values are bits there only by bool-as-int; logic is written `or`.
