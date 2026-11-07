@@ -1761,8 +1761,8 @@ FOLDER_MODE = 493
 PNG_SIGNATURE_HIGH = 2303741511
 PNG_SIGNATURE_LOW = 218765834
 painted(caller: handle, context: handle, given: pointer): nothing := {
-	width = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
-	height = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+	width = picture_width(given)
+	height = picture_height(given)
 	if width > 0 and height > 0 {
 		pixels = painted_pixels(caller, context, given, width, height)
 		if pixels != 0 {
@@ -1773,6 +1773,9 @@ painted(caller: handle, context: handle, given: pointer): nothing := {
 		}
 	}
 }
+# the width and height a painting's values (picture, width, height, …) give
+picture_width(given: pointer): i64 := long_at(given + VALUE_BYTES + VALUE_OFFSET).value
+picture_height(given: pointer): i64 := long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
 # the next painting's file in the temporary folder: warp-paint/paint.png, then paint-2.png …
 painting_path(): text := {
 	folder = joined(temporary_folder(), "warp-paint")
@@ -1783,8 +1786,8 @@ painting_path(): text := {
 # save(canvas, "hello.png") of lib/draw: the canvas's pixels (picture, width, height, file) as a PNG in that file; why
 # it could not, else "" (lib/draw raises it)
 picture_saved(caller: handle, context: handle, given: pointer): text := {
-	width = long_at(given + VALUE_BYTES + VALUE_OFFSET).value
-	height = long_at(given + 2 * VALUE_BYTES + VALUE_OFFSET).value
+	width = picture_width(given)
+	height = picture_height(given)
 	png_written(pixels_of(caller, context, given, width * height), width, height, shown(caller, context, given + 3 * VALUE_BYTES))
 }
 # the picture's pixels: a WGSL shader's, its values the uniform, from the GPU (lib/native/foreign.c, libwarp_gpu),
