@@ -131,7 +131,8 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 # defines page_value(), its last expression again, which the page shows anew after each firing
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
 page_value_word = "page_value"
-listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
+# (`on message from "chat" {…}` is lib/channels.warp's message_listened by the time this reads it)
+listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "message_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
 # a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again
 is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word)
@@ -178,7 +179,8 @@ page_valued(program: Node): any := {
 	# (a write, `x = 3` once signaled notifies its listeners, or an output, `print "done"`, is no value to read again:
 	# run again it would write or print anew)
 	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) or outputs(last) { return ø }
-	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
+	# (a value of any kind, as the page reads it: a text's too, never its bare bytes)
+	separated(bracketed(statements + [Key(Key(call_of(page_value_word, []), Op.Colon, symbol("any")), Op.Define, last)], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when

@@ -4,8 +4,8 @@
 
 fruits = ["Apple", "Banana", "Cherry"]
 
-html { lang: "en"
-	head {
+html{ lang: "en"
+	head{
 		title: "My Page"
 		meta{ charset: "utf-8" }
 		style{ # css rules as they are written in css; link{ rel: "stylesheet" href: "style.css" } loads a sheet instead
@@ -17,38 +17,38 @@ html { lang: "en"
 			footer { color: gray; padding: 0 16px }
 		}
 	}
-	body {
-		header {
+	body{
+		header{
 			h1: "Welcome"
-			nav {
+			nav{
 				a{ href: "/" "Home" }
 				a{ href: "/about" "About" }
 				a{ href: "/contact" "Contact" }
 			}
 		}
-		main {
-			article {
+		main{
+			article{
 				h2: "Hello World"
 				p: "This is a paragraph of text."
-				ul {
+				ul{
 					li{ "First item" }
 					li{ "Second item" }
 					li{ "Third item" }
 				}
 			}
-			section {
+			section{
 				h3: "Fruits" # dynamic content: a loop inside the markup
-				ul { for fruit in fruits { li: fruit } }
+				ul{ for fruit in fruits { li: fruit } }
 			}
-			aside {
+			aside{
 				h3: "Related"
-				ul {
+				ul{
 					li{ a{ href: "#" "Link 1" } }
 					li{ a{ href: "#" "Link 2" } }
 				}
 			}
 		}
-		footer {
+		footer{
 			p: "© 2025 warp"
 		}
 	}
