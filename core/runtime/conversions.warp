@@ -88,7 +88,7 @@ bool_checked(n: Node): Node := {
 	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
-# an instance that converts itself to a float, an exact root √3, is one too and stays exact, as `float x = π` keeps π
+# an instance that converts itself to a float, an exact root √3, is one too: a run-time value checked so stays itself
 float_checked(n: Node): Node := {
 	if converts_to_float(n) { return n }
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { returned_error("not a float") }
