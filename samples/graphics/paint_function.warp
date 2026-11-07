@@ -1,6 +1,7 @@
 #!/usr/bin/env warp
 # paint(f, width, height) of a function: f(column, row) inks each pixel; on the GPU as a fragment shader where there
 # is one (WARP_GPU=off paints on the CPU). mandelbrot_canvas.warp loops over the pixels itself
+use color
 width = 960
 height = 540
 max_iter = 60
@@ -18,9 +19,10 @@ def escape_time(cx, cy) {
 	return iter
 }
 
+# a pixel's color: black inside the set, outside bands of orange and purple by how fast it escapes
 def ink(column, row) {
 	steps = escape_time(-2.2 + column * 3.2 / width, -1.1 + row * 2.2 / height)
-	steps == max_iter or steps % 2 == 1
+	if steps == max_iter then black else if steps % 2 == 1 then orange else purple
 }
 
 started = clock()
