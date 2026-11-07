@@ -1,0 +1,38 @@
+# A key statement binds its word (card main-block-binding, decisions #6 data as scope and bare-pair): in a block of
+# code, the program's, a definition's or lambda's body, a control word's `if c {…}`, the statement `x: 2` before one
+# reading x is `x = 2`, so `x:2; x` gives 2. The block's last statement stays the pair it is as a value, a word the
+# program binds otherwise keeps that binding (`x: int` declares, `x = 3` assigns it), and a block of data keeps its
+# pairs: a tag's or map's `{…}`, a value assigned `m = {…}`, a list's items, a call's arguments, a match's arms
+
+match_word = symbol("match")
+
+key_bindings(program: Node): Node := code_bound(program, scope_of(program), yes)
+
+# n with the key statements of its blocks of code bound; `code`: n stands where a block is code
+code_bound(n: Node, scope: map, code: bool): Node := {
+	walked = if code and (is_statement_sequence(n) or is_curly_group(n)) then statements_bound(n, scope) else n
+	# a body: a definition's, a lambda's, `if c {…}` (then(if(ø, c), {…})), else, `while c {…}` (do(while(ø, c), {…}))
+	if [Op.Define, Op.Arrow, Op.Then, Op.Else, Op.Do].any(op => is_key(walked, op)) { return Key(key_of(walked), op_of(walked), code_bound(value_of(walked), scope, yes)) }
+	if walked is key { return Key(code_bound(key_of(walked), scope, no), op_of(walked), code_bound(value_of(walked), scope, no)) }
+	if not is_group(walked) or items_of(walked).any(item => item == match_word) { return walked }
+	# a phrase's block, `if c {…}`, and a block's statements are code; a list's items and a call's arguments data
+	holds_code = bracket_of(walked) == "" or is_curly_group(walked)
+	children(walked, part => code_bound(part, scope, holds_code))
+}
+statements_bound(block: Node, scope: map): Node := {
+	statements = items_of(block)
+	group_like(block, (0 ..< #statements).map(at => if at < #statements - 1 and binds_key(statements[at], statements[at + 1 ..], scope) then Key(key_of(statements[at]), Op.Assign, value_of(statements[at])) else statements[at]))
+}
+# `x: 2` of a word nothing else binds, read by a statement after it
+binds_key(statement: Node, later: list, scope: map): bool := {
+	if not (is_key(statement, Op.Colon) and key_of(statement) is symbol) { return no }
+	value = value_of(statement)
+	# `global x = 0`, `let x = 1`: a word declaring the binding after it; `x: int` declares x
+	if is_key(value, Op.Assign) or is_key(value, Op.Define) or (value is symbol and is_tested_type(name_of(value), scope)) { return no }
+	word = name_of(key_of(statement))
+	# (a block's keys are its fields, Meaning.Field, which bind no name)
+	bound = binds_value(scope, word) or binds_as(scope, word, Meaning.Function) or binds_as(scope, word, Meaning.Type)
+	not bound and later.any(next => mentions(next, word))
+}
+
+key_bindings_extension = Extension{name: "key_bindings", passes_before: {"definitions": key_bindings}}
