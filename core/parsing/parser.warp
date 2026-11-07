@@ -18,7 +18,7 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = [] }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indexing: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; scans: map = {}; aliases: map; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list; shifts: list = []; pipe_stops: bool = no }
 // What stands at the parser's position (card parser-checklist-idioms): its character, the one k further, the one at
 // any offset, each a line break past the end; whether the character or a text stands there
 def char_here(p: Parser): text := peek(p.code, p.at, p.n)
@@ -530,6 +530,8 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 	enclosed = ends != ItemsEnd.Source and not rest
 	// the rest of the enclosing group or block stops where that one stops
 	if not rest { p.group = GroupContext{bracket: bracket, grouped: outer.grouped or enclosed, in_branch: ends == ItemsEnd.EndOrElse, stops_at_end: ends == ItemsEnd.End or ends == ItemsEnd.EndOrElse} }
+	outer_pipe_stops = p.pipe_stops
+	p.pipe_stops = no
 	while true {
 		skip_blanks(p)
 		if closes_block(p) {
@@ -554,7 +556,12 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		spaced = found and found#(found.length)#2 == Separator.Space
 		signed = spaced and signed_item_at(p)
 		pathed = spaced and at_char(p, '/') and starts_path(p)
-		item = if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0)
+		item = with_field(p, "pipe_stops", spaced == yes, () => if follows_clause_word(found) then header_expression(p, 0) else if heads_block(p, found) then head_item(p) else expression(p, 0))
+		if spaced == yes and pipe_follows(p) {
+			call = trailing_spaced_run(found)
+			found = found[0 .. found.length - #call]
+			item = piped_onward(p, call.map(entry => entry#1) + [item])
+		}
 		if signed { item = spaced_sign_marked(p, p.code[previous_start ..< before].trim(), before, item) }
 		if pathed { item = attributed(PATH_AFTER_OPERAND_MARK, listed(Bracket.Square, Separator.Space, [p.code[previous_start ..< before].trim(), item]), item) }
 		previous_start = before
@@ -591,7 +598,29 @@ def items_until(p: Parser, bracket: Bracket, ends: ItemsEnd): Node := {
 		if p.at == before { advance(p) }
 	}
 	p.group = outer
+	p.pipe_stops = outer_pipe_stops
 	grouped(found, bracket)
+}
+// whether `|>` comes next on the line
+def pipe_follows(p: Parser): bool {
+	skip_spaces(p)
+	at_text(p, "|>")
+}
+// the entries of the braceless call the items end with: those a space separates from the next
+def trailing_spaced_run(found: list): list {
+	start = found.length
+	while start > 0 and found#start#2 == Separator.Space { start -= 1 }
+	found[start .. found.length]
+}
+// `square 3 |> f |> g`: the braceless call of the words piped through each stage after it
+def piped_onward(p: Parser, words: list): Node {
+	call = spaced(words)
+	while pipe_follows(p) {
+		p.at += 2
+		skip_blanks(p)
+		call = piped(call, expression(p, binding_powers("|>")#2))
+	}
+	call
 }
 
 // `ys = xs.map`, `f(xs) := xs.map`, `n = t.replace "a"`: an assignment of a method, which a block or value after it is
@@ -1083,6 +1112,8 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = Key(left, Op.Colon, prefixed(p))
 				continue
 			}
+			// a later item of a braceless call leaves `|>` to the call: `square 3 |> str` is str(square 3) (items_until)
+			if op#2 == "|>" and p.pipe_stops { break }
 			owns = owns_branches(left, op#2, took_own_then)
 			if powers#1 < min_power and not owns { break }
 			// `match -3 {…}`, `xs where #it > 1`, `where to#i == n`: after a clause word a glued `#` or `-`, or an
