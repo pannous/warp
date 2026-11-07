@@ -8,7 +8,7 @@ CALLBACK_ARGUMENTS = 6
 CALLBACK_TYPES = ["i32", "i64", "handle"]
 global callback_functions = []
 global callback_types = []
-c_callback(f: function, types: list): handle := {
+c_callback(f: function, types: list) := {
 	if #types > CALLBACK_ARGUMENTS { raise "c_callback: at most " + CALLBACK_ARGUMENTS + " arguments, not " + #types }
 	for type in types { if type not in CALLBACK_TYPES { raise "c_callback: an argument is one of " + CALLBACK_TYPES.join(", ") + ", not " + type } }
 	callback_functions += [f]
