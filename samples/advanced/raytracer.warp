@@ -35,7 +35,7 @@ global spheres = [
 global light = normalize(vec(1, 1, -1))
 
 def trace(ray) {
-	closest = 1e10 as float # 1e10 alone is an exact number, which cannot later hold a float
+	closest = 1e10
 	hit_sphere = None
 	for sphere in spheres {
 		t = intersect(ray, sphere)
