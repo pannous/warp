@@ -120,7 +120,7 @@ comprehension_sugar_module_names = sugar_files(["comprehensions"])
 # the sugar of declarations (extensions/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
 declaration_sugar_module_names = sugar_files(["declarations"])
 # the standard modules: those with `rewrite` lines lend their rules to the programs mentioning them
-std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode"]
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "color", "keys", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "laws", "case_table", "case_tables", "uncertain", "web", "storage", "frames", "native_window", "signals", "timers", "tasks", "shaders", "unicode_data", "unicode"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # the declarations sugar strips it, and the function keyword's rule rewrites the rest)
@@ -278,10 +278,7 @@ stored(n: Node): Node := if mentions(n, store_word) then bottom_up(n, part => if
 is_store(n: Node): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(store_word)
 
 # the standard modules a module uses: a linked one's signature says them, any other's `use` lines
-modules_used_by(module: text): list := {
-	signature = linked_signature(module)
-	if signature != ø then signature.uses else used_module_text(module).split("\n").filter(line => line.starts_with(use_line_start)).map(line => line[#use_line_start ..].trim())
-}
+modules_used_by(module: text): list := module_uses(module)
 # the program rewritten by the rules of its whole, `where program`, each once, after the rules inside it fired
 # (`$program` their program): lib/web.warp's ending of a program with routes
 with_program_rules(program: Node, rules: list, origins: list): Node := {
@@ -632,7 +629,7 @@ module_rule_paths(module: text): list := [std_module_path(module), run_library()
 COMPILE_TIME_RULES = "/extensions/rules/modules/"
 # (a linked module's own rules are its signature's, signature.warp)
 rules_of_module(module: text): list := {
-	linked = linked_signature(module)
+	linked = prebuilt_signature(module)
 	if linked == ø then module_rule_paths(module).flat_map(path => module_rules_of(path, module)) else linked.rules + module_rules_of(module_rule_paths(module)#2, module)
 }
 # the rules of the module at `path`, read once a compile: the sugar's baked ones while its file is the text they were

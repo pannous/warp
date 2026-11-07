@@ -433,7 +433,7 @@ int warp_gpu_paint(const char* shader, const char* values, int32_t width, int32_
 	return done > 0 ? 0 : -1;
 }
 
-// --- a window's surface (libwarp_window's Metal layer): what is shown there stays on the GPU, no pixel read back.
+// --- a window's surface (lib/native_window.warp's Metal layer): what is shown there stays on the GPU, no pixel read back.
 // The surface is as big as the layer's drawable (the window's pixels, which SDL keeps it at as the window resizes or
 // goes full screen); the painting, drawn at its own size, is scaled into it whole, its aspect kept, the rest black.
 // A format without sRGB, so the window shows the colors a PNG of the same painting holds
@@ -565,7 +565,7 @@ int warp_gpu_show_pixels(const uint8_t* pixels, void* layer, int32_t width, int3
 	wgpuTextureRelease(picture);
 	return shown ? 0 : -1;
 }
-// the last painting shown again, at the window's size now (libwarp_window asks when its window comes into sight or
+// the last painting shown again, at the window's size now (lib/native_window.warp asks when its window comes into sight or
 // changes size); 0 also when none was shown, else -1
 int warp_gpu_shown_again(void) {
 	Shown again = last_shown;

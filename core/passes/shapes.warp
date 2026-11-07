@@ -45,7 +45,7 @@ def group_parts(node: Node): list? := match node {
 // `square xs |> filter(p)` is `filter((square xs), p)`
 def piped(operand: Node, receiver: Node): Node := {
 	parts = group_parts(operand)
-	if parts != ø and parts#1 == "" and parts#2 == " " { operand = call_of([operand]) }
+	if parts != ø and parts#1 == "" and parts#2 == " " { operand = call_of(parts#3) }
 	receiver_parts = group_parts(receiver)
 	if receiver_parts != ø and receiver_parts#1 == "(" and receiver_parts#2 == "" and #receiver_parts#3 > 0 and receiver_parts#3#1 is symbol {
 		items = receiver_parts#3
