@@ -53,22 +53,16 @@ spans_of(source: text): list := {
 	}
 	source_spans[source]
 }
-# the module of sliced_modules whose file the source is, its length the index's: the index is lib/ as the build left it
-# (decision no-lib-reads: an edited lib/ is a rebuild); ø for any other text
-indexed_module(source: text): text? := {
-	for module in sliced_modules() {
-		hash = library_index_section("hash").get(module) ?? ""
-		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) { return module }
-	}
-	ø
-}
-# the modules every compile cuts: the prelude, lib/math.warp beside it (builtin_signatures.warp library_texts_seen) and
-# the type modules
-sliced_modules(): list := ["prelude", "math"] + type_modules
+# the module of sliced_texts the source is; ø for any other text
+indexed_module(source: text): text? := sliced_modules().find(module => source == sliced_texts()[module])
+# the texts every compile cuts, by the library index's cuts: the prelude and lib/math.warp beside it, both built in
+# (builtin_signatures.warp; decision no-lib-reads)
+sliced_texts(): map := {prelude: prelude_text, math: math_text}
+sliced_modules(): list := sliced_texts().keys
 # each sliced module's cut as the index holds it, `name start end` of each slice joined by ";"
 sliced_modules_scanned(): map := {
 	found = {}
-	for module in sliced_modules() { found[module] = slice_spans(file_text(std_module_path(module)) ?? "").map(span => "${span#1} ${span#2} ${span#3}").join(";") }
+	for module in sliced_modules() { found[module] = slice_spans(sliced_texts()[module]).map(span => "${span#1} ${span#2} ${span#3}").join(";") }
 	found
 }
 indexed_spans(spans: text): list := spans.split(";").filter(span => span != "").map(span => span.split(" ")).map(span => [span#1, span#2 as int, span#3 as int])
