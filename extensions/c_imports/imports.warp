@@ -283,7 +283,8 @@ c_functions_of(written: text, library_folder: text, folder: text = "."): list :=
 		imported = c_import(statement)
 		if imported != ø and imported#1 not in libraries { libraries += [imported#1] }
 		library = c_use(statement)
-		if library != ø and library not in libraries { libraries += [library] }
+		# (a standard module is no C library: its name never probes lib/native)
+		if library != ø and library not in libraries and not exists(std_module_path(library)) { libraries += [library] }
 	}
 	# [library, the path of its native file] of each library with one
 	native = []

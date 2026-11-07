@@ -109,7 +109,6 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ❌ samples/lists/primes.warp: outside the core: the unknown name n
 - ❌ samples/lists/quicksort.warp: outside the core: a call of random with 1 arguments
 - ✅ samples/lists/sieve.warp
-- ✅ samples/lists/sieve_idiomatic.warp
 - ✅ samples/lists/sorting.warp
 - ✅ samples/lists/sorting_idiomatic.warp
 - ✅ samples/lists/typed_lists.warp
@@ -151,7 +150,6 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ✅ samples/objects/binary_tree.warp
 - ❌ samples/objects/data_structures.warp: outside the core: the unknown name red
 - ❌ samples/objects/dijkstra.warp: outside the core: the call insert(…)
-- ✅ samples/objects/dijkstra_idiomatic.warp
 - ❌ samples/objects/json_parser.warp: outside the core: the call byte_slice(…)
 - ❌ samples/objects/references.warp: outside the core: the operator === on int
 - ❌ samples/python/numpy_matrix.warp: could not run the program: unknown import: `python::Py_InitializeEx` has not been defined

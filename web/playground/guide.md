@@ -385,7 +385,7 @@ square [1 2 3]
 
 Also see [[#Closures]] and [[#Acceleration]] below.
 
-Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic, dot, typed_lists
+Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, dot, typed_lists
 
 ## Objects
 
@@ -410,7 +410,7 @@ ada.age += 1
 ada.age
 ```
 
-Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, dijkstra_idiomatic, references
+Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, references
 
 ## Loops
 
@@ -445,7 +445,7 @@ while n < 3 { n += 1 }
 n
 ```
 
-Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot, game_of_life, life_idiomatic, iterators
+Examples: loops; samples: fizzbuzz, sieve, mandelbrot, game_of_life, life_idiomatic, iterators
 
 ## Functions
 

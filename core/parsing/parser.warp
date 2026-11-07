@@ -11,8 +11,9 @@ use file
 use "../passes/library.warp"
 
 // Where the items being read stand: the bracket of their group, whether that group is closed by a bracket or a word
-// (`grouped`), whether a Ruby block's `end` closes it (`stops_at_end`) and whether an `else` ends it too (`in_branch`)
-class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_branch: bool = no; stops_at_end: bool = no }
+// (`grouped`), whether a Ruby block's `end` closes it (`stops_at_end`), whether an `else` ends it too (`in_branch`) and
+// whether a glued operator's operand is read, which a blank ends (`glued`, decision glued-binds-tighter)
+class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_branch: bool = no; stops_at_end: bool = no; glued: bool = no }
 
 // What closes the items of items_until: the end of the source, the closing bracket, a Ruby block's `end`, that or a
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
@@ -1099,6 +1100,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				continue
 			}
 			if op#1 == "." and char_here(p) == "(" { raise dot_call_refused(left) }
+			glued = glued_at(p, operator_start, op#1)
 			skip_blanks(p)
 			if is_phrase_operator(op) {
 				left = phrase_operation(left, op#1, expression(p, powers#2))
@@ -1113,11 +1115,12 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				// rule's rest hole before a comprehension's clause, `[$e... for $x in $xs]` (card sugar-comprehensions)
 				left = keyed(op#2, left, ø)
 			} else {
-				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else if (op#2 == "=" or op#2 == ":=") and block_head_at(p) then headed_phrase(p) else expression(p, powers#2)
+				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else if (op#2 == "=" or op#2 == ":=") and block_head_at(p) then headed_phrase(p) else right_operand(p, powers#2, glued)
 				// `x(p: P) -> int := …`, Swift's and Rust's result arrow, is the typed head `x(p: P): int := …`
 				if op#2 == ":=" or op#2 == "=" { left = result_typed(left) }
 				operand = left
 				left = keyed(bit_operator(op#1, left, right, op#2), left, if op#2 == ":" then with_switch_cases(p, right) else right)
+				if spaced_operand_in_list(p, op#1, glued, right) { left = attributed(SPACED_OPERAND_MARK, listed(Bracket.Square, Separator.Space, [written_before(p, operand, operator_start), op#1, written_before(p, right, p.at)]), left) }
 				if unevenly_spaced(p, operator_start, op#1) { left = attributed(UNEVEN_SPACING_MARK, listed(Bracket.Square, Separator.Space, [written_before(p, operand, p.at), op#1, written_before(p, operand, operator_start), p.code[operator_start + op#1.length ..< p.at].trim()]), left) }
 				// `{f: x => x * 2}`: the field f holds the lambda; `f: (float) -> float` stays a typed name
 				if op#1 == "=>" { left = field_holding_lambda(left) }
@@ -1399,6 +1402,8 @@ def operand_after(p: Parser, width: int): bool {
 // `or` up to `+` (not in an argument or a loop header) or with an argument that is no name, never before `for`
 def applies(p: Parser, left: Node, min_power: int): bool {
 	if min_power == 0 or min_power > 151 { return false }
+	// `[a+b c]`: a glued operator's operand ends at a blank (decision glued-binds-tighter)
+	if p.group.glued and p.at > 0 and is_blank(p.code[p.at - 1]) { return false }
 	// `do r += i end`: the `end` closing the block is no argument
 	if p.group.stops_at_end and keyword_at(p, "end") { return false }
 	// `ys = @parallel square all xs`: a word an attribute marks applies as the word itself
@@ -1569,6 +1574,14 @@ def spaced_sign_marked(p: Parser, before: text, sign_at: int, item: Node): Node 
 // `a *b`, `a* b`: an arithmetic or comparing operator spaced on one side only, which computes but reads as a sign or a
 // suffix; the analyzer warns (decision binary-operator-spacing, source_checks.warp uneven_spacing)
 def unevenly_spaced(p: Parser, at: int, glyph: text): bool := EVENLY_SPACED_OPERATORS contains glyph and at > 0 and is_blank(p.code[at - 1]) != is_blank(char_at(p, at + glyph.length))
+// `[a+b c]`: in a square list an arithmetic operator glued to both its operands joins them into one item, `[(a+b), c]`; its right operand
+// ends at a blank (decision glued-binds-tighter); precedence stays: `1+2 * 3` is 7
+def glued_at(p: Parser, at: int, glyph: text): bool := p.group.bracket == Bracket.Square and GLUED_OPERATORS contains glyph and at > 0 and not is_blank(p.code[at - 1]) and not is_blank(char_here(p))
+GLUED_OPERATORS = ["+", "-", "*", "/", "%", "^"]
+def right_operand(p: Parser, min_power: int, glued: bool): Node := if glued then with_field(p.group, "glued", yes, () => expression(p, min_power)) else expression(p, min_power)
+// `[a + b c]`: a spaced operator in a square list whose right operand is a phrase `b c`, which the analyzer refuses where
+// b is a value, naming both readings (source_checks.warp spaced_operand)
+def spaced_operand_in_list(p: Parser, glyph: text, glued: bool, right: Node): bool := not glued and p.group.bracket == Bracket.Square and GLUED_OPERATORS contains glyph and is_group(right) and bracket_of(right) == "" and separator_of(right) == " " and #right > 1 and right#1 is symbol
 EVENLY_SPACED_OPERATORS = ["*", "/", "%", "^", "==", "!=", "<", ">", "<=", ">="]
 // the source written from the node's place to the offset `end`, "" for a node of no place
 def written_before(p: Parser, n: Node, end: int): text := {
