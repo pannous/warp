@@ -72,7 +72,9 @@ spaced_tagged(n: Node, scope: map, keeps_meaning: function): Node := {
 	}
 	if is_spaced(n) and #tags == 1 then tags#1 else group_like(n, tags)
 }
-is_tag_word(word: text, scope: map, keeps_meaning: function): bool := not (is_own_word(scope, word) or binds_as(scope, word, Meaning.Type) or keeps_meaning(word))
+is_tag_word(word: text, scope: map, keeps_meaning: function): bool := is_tag_name(word, scope) and not keeps_meaning(word)
+# a word that may name a tag: none the program binds as a value, function or type, and never the quote `data {…}`
+is_tag_name(word: text, scope: map): bool := word != quote_word and not (is_own_word(scope, word) or binds_as(scope, word, Meaning.Type))
 # `li{ animation: pop 400ms }`: in an attribute's value, words led by one the program does not bind are data, the CSS
 # words as written, never a call of a library word (decision tag-items-calls)
 attributes_spliced(n: Node, scope: map): Node := {
@@ -99,8 +101,7 @@ data_argued(n: Node, positions: map): Node := {
 # `div{…}` of a word the program gives no value, function or type
 is_free_tag(n: Node, scope: map): bool := {
 	if not ((is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))) { return no }
-	name = name_of(key_of(n))
-	not (is_own_word(scope, name) or binds_as(scope, name, Meaning.Type))
+	is_tag_name(name_of(key_of(n)), scope)
 }
 with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), tag_items(value_of(n), scope).map(item => data_argued(as_call(loop_as_items(item), scope), positions)))) else n
 # a tag's items; a block that is one phrase headed by a function, `p{ greet "Ann" }`, is that one item (decision
