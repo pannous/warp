@@ -60,7 +60,8 @@ def component(path):
 
 
 def git(*args):
-    return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True, check=True).stdout
+    # errors="replace": a results file may hold a test's raw bytes (bd625bdbdb's has a lone 0x83)
+    return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True, errors="replace", check=True).stdout
 
 
 # main read once: a fetch during the run must not mix two tips (KeyError in PARENTS)
