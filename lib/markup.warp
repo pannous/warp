@@ -393,7 +393,7 @@ html_items(content: any): list := {
 	if not html_is_group(content) or html_is_element(content) { return [content] }
 	var items = []
 	for item in content {
-		if html_is_group(item) and not html_is_element(item) and html_holds_pairs(item) { for pair in item { items.add(pair) } }
+		if html_is_group(item) and not html_is_element(item) and html_holds_pairs(item) { for entry in item { items.add(entry) } }
 		else { items.add(item) }
 	}
 	items
