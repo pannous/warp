@@ -294,8 +294,8 @@ failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 	if raised.length > 0 { complain(place_first(raised)) }
 	exit(1)
 }
-# "<words> at f.warp:16:7<; fix: …>" said as "f.warp:16:7: <words><; fix: …>", the place first as compilers say it,
-# so editors and build tools jump there; a sentence naming no file:line:column stays as it is
+# "<words> at f.warp:16:7<; fix: …>" said as "f.warp:16:7 <words><; fix: …>", the place first so
+# editors and build tools jump there (a space after it, no colon: their patterns take that whether or not they allow one); a sentence naming no file:line:column stays as it is
 place_first(sentence: text): text := {
 	for at in 0..sentence.length {
 		if starts_with(text_from(sentence.address + at, (sentence.length - at) as u32), " at ") {
@@ -304,7 +304,7 @@ place_first(sentence: text): text := {
 			place = text_from(sentence.address + at + 4, (stop - at - 4) as u32)
 			if is_file_place(place) {
 				words = joined(text_from(sentence.address, at as u32), text_from(sentence.address + stop, (sentence.length - stop) as u32))
-				return joined(joined(place, ": "), words)
+				return joined(joined(place, " "), words)
 			}
 		}
 	}

@@ -91,6 +91,16 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
 - The first markup program a worker compiles pays a one-time cost (lib/markup.warp's to_html): after a run is shown
   the page asks its worker once to warm up (playground.js warmWorker → worker.js warmUp: `p{ "" }` evaluated with the
   worker's messages silenced, skipped over a live run).
+  It waits for 5 s without a key or click (WARM_UP_QUIET_MS): sent right after the first run, it held the worker for
+  1–4 s and a Hello clicked meanwhile waited behind it (card compiler-cache-compiled).
+- The compiler's machine code is cached by the browser, not by the page: compileStreaming of the versioned warp.wasm
+  (?build=, host.js ofThisBuild) keeps it with the HTTP-cached response. IndexedDB cannot hold a WebAssembly.Module
+  (Chrome and Firefox removed its serialization). Measured on the live site, headless Chrome: Hello at 7.5 s on a
+  first visit, 2.3 s after (1.1 s with the quiet warm-up); playground.state().stages shows where a start's time goes.
+- Stopping a run (an animation the next run stops, Stop, a sound handover) ends its worker; a new worker loads and warms
+  the compiler first, so Hello after a shader took 0.8–1.2 s in Firefox (the user: 4 s after five shaders). A run that
+  animates starts a standby worker (playground.js prepareStandby), which the stop takes at once: Hello 0.33 s
+  (card playground-progressive-slowdown). Chrome and Firefox showed no growth over many runs otherwise.
 
 ## Values of self-hosted modules (values.js, 2026-11-01)
 A module of the self-hosted compiler has no reflect_* exports: a host word reads its value arguments as driver.warp

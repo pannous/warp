@@ -122,7 +122,7 @@ without_named_patterns(program: Node): Node := {
 	group_like(program, statements_in(program).filter(statement => not named_pattern(statement)))
 }
 
-# a pattern's name where a pattern, a test or a type goes
+# a pattern's name where a pattern, a test, a type or a quote goes
 with_named_patterns(n: Node, patterns: map): Node := match n {
 	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
 	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
@@ -134,7 +134,8 @@ with_named_patterns(n: Node, patterns: map): Node := match n {
 		if forced != "" and forced in patterns then pattern_call(kept_pattern_word, subject, patterns[forced]) else n
 	}
 	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))
-	_: n
+	# `page find Image`, find's quote `data Image`: the pattern held as data
+	_: if is_quote(n) and n#2 is symbol and name_of(n#2) in patterns then group_like(n, [n#1, patterns[name_of(n#2)]]) else n
 }
 
 # `match subject { pattern: yes, _: no }`
@@ -150,7 +151,21 @@ named_arm(arm: Node, patterns: map): Node := match arm {
 # the program with its named patterns put where their names stand, right before node_matches lowers the matches
 named_patterns(program: Node): Node := {
 	patterns = named_patterns_of(program)
-	if patterns then bottom_up(without_named_patterns(program), n => with_named_patterns(n, patterns)) else program
+	if not patterns { return program }
+	tests = bottom_up(without_named_patterns(program), n => with_subject_carried(n, patterns))
+	bottom_up(tests, n => with_named_patterns(n, patterns))
+}
+# `it is Pair and StartsAtOne`, read `(it is Pair) and StartsAtOne`: a pattern's name is no value, so the subject of
+# the test before it is tested again, `it is Pair and it is StartsAtOne` (or `or`)
+with_subject_carried(n: Node, patterns: map): Node := {
+	if not ((is_key(n, Op.And) or is_key(n, Op.Or)) and value_of(n) is symbol and name_of(value_of(n)) in patterns) { return n }
+	subject = tested_subject(key_of(n), patterns)
+	if subject == ø then n else Key(key_of(n), op_of(n), Key(subject, Op.Eq, value_of(n)))
+}
+# the subject of `x is Pattern`, also of the first of several joined by and/or; ø for any other condition
+tested_subject(test: Node, patterns: map): Node? := {
+	if is_key(test, Op.Eq) and value_of(test) is symbol and name_of(value_of(test)) in patterns { return key_of(test) }
+	if is_key(test, Op.And) or is_key(test, Op.Or) then tested_subject(key_of(test), patterns) else ø
 }
 
 match_patterns_extension = Extension{name: "match_patterns", arm_lowerings: [guarded_arms], passes: {"code_templates": named_patterns}}

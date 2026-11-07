@@ -272,8 +272,10 @@ lowering_from(prelude: text) := {
 		typed_one_definitions = ø
 	}
 }
-# the library a lowering sees: the prelude, with lib/math.warp beside the standard one
-library_sources(): text := if word_lines_prelude == prelude_text then prelude_text + "\n" + library_text("math.warp") else word_lines_prelude
+# the library a lowering sees: the prelude, with lib/math.warp beside the standard one; each text cut on its own, so
+# the library index's cuts of both serve (prelude_words.warp spans_of)
+library_texts_seen(): list := if word_lines_prelude == prelude_text then [prelude_text, library_text("math.warp")] else [word_lines_prelude]
+library_sources(): text := library_texts_seen().join("\n")
 word_lines(): map := {
 	if typed_word_lines != ø { return typed_word_lines }
 	typed_word_lines = {}
@@ -306,7 +308,7 @@ one_typed_definitions(): map := {
 	if typed_one_definitions != ø { return typed_one_definitions }
 	typed_one_definitions = {}
 	seen = {}
-	for slice in definition_slices(library_sources()) {
+	for slice in library_texts_seen().flat_map(source => definition_slices(source)) {
 		if not seen.has(slice#1) {
 			seen[slice#1] = yes
 			if takes_one_typed(slice#1, slice#2) { typed_one_definitions[slice#1] = yes }
