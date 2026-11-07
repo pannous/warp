@@ -1,0 +1,4 @@
+# commas, semicolons and lines all separate a block's entries, mixed too (card tour-kitchensink-map)
+'p = {\n a: 1, b: 2\n c: 3\n d: 4\n}\np.b + p.c'	5
+'p = {\n f: "x",\n d: "y";\n b: "z", c: "w"\n age: 30\n}\np.age'	30
+'p = {\n a: 1, b: 2\n hobbies: ["r" "h"]\n}\np.hobbies#2'	'h'
