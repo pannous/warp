@@ -81,11 +81,11 @@ bracket_openings(): list := spellings_of(4)
 bracket_closings(): list := spellings_of(5)
 separator_joiners(): list := spellings_of(6)
 # `(1; 2)`, `'x', 2`: a list between its brackets, its items joined as its separator joins them; a list or map of no
-# written separator by commas, `[1, 2]`, `{a: 1, b: 'x'}`, as `warp format` writes them (decision shown-spaced)
+# kept separator spaced, `[1 2]`, `{a: 1 b: 'x'}` (decisions shown-separator, shown-separator-wins)
 list_shown(n: Node): text := {
 	at = bracket_info(n) + 1
-	listed = separator_info(n) == 0 and (bracket_info(n) == BracketCode.Curly or bracket_info(n) == BracketCode.Square)
-	joiner = if listed then ", " else node_text(separator_joiners()#(separator_info(n) + 1))
+	spaced = separator_info(n) == 0 and (bracket_info(n) == BracketCode.Curly or bracket_info(n) == BracketCode.Square)
+	joiner = if spaced then " " else node_text(separator_joiners()#(separator_info(n) + 1))
 	items = if is_extended_list(n) then extended_list_items(n) else unboxed_list(n)
 	node_text(bracket_openings()#at) + joined_items(items, joiner) + node_text(bracket_closings()#at)
 }

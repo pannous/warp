@@ -77,8 +77,8 @@ quoted_text(t: text): text := {
 }
 # the bytes of `"` and `\`, which a quoted text escapes
 is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
-# a list as `warp format` writes it, `[1, "ab"]` (decision shown-spaced)
-list_text(xs: list): text := "[" + joined_items(xs, ", ") + "]"
+# a list spaced, `[1 "ab"]` (decision shown-separator-wins: a list keeps no separator of its own)
+list_text(xs: list): text := "[" + items_text(xs) + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
 items_text(xs: list): text := joined_items(xs, " ")
 joined_items(xs: list, joiner: text): text := {
