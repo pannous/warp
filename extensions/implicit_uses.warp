@@ -54,7 +54,7 @@ implicit_modules(source: text, folder: text = "."): list := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = prelude_definitions()
-	used = used_module_sources(flat_statements(program), folder, [])#2
+	used = used_module_names(flat_statements(program), folder)
 	# (a word of a module it uses, by the index: the candidates are its words)
 	known = {}
 	for word in candidates { if defining_modules(word).any(module => module in used) { known[word] = yes } }

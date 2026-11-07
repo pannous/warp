@@ -1,0 +1,5 @@
+# `real x` alone declares x as `x: real` does, its value assigned later (card comment-description-hold)
+'real x; x = 3; x * x'	9
+'int n; n = 4; n + 1'	5
+'text s; s = "ab"; s'	'ab'
+'x = 2.5; int x'	2
