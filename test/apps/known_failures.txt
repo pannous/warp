@@ -1,3 +1,0 @@
-site_generator core-linked-module-divergence: the bundled markdown and template modules misbehave (compiled from source it passes)
-config_validator core-linked-module-divergence: the bundled json_tools module misbehaves beside toml (compiled from source it passes)
-dependency_resolver core-linked-module-divergence: the bundled graphs module misbehaves (compiled from source it passes; card linked-collections-unicode)
