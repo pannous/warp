@@ -135,7 +135,7 @@ jobs:
       # them beside itself
       run: |
         WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_SOUND_TARGET="$RUNNER_TEMP/warp-sound" \
-          WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" WARP_WINDOW_TARGET="$RUNNER_TEMP/warp-window" scripts/wasmtime-c-api.sh lib
+          WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" scripts/wasmtime-c-api.sh lib
     - name: the previous release's native warp, brought up to the tag's host words
       run: .workflow/scripts/release-bootstrap.sh ${{ matrix.target }} "$RUNNER_TEMP/bootstrap" .
     - name: the native warp
