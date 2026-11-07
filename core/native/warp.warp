@@ -479,9 +479,6 @@ first = past_options(if counting then start + 2 else if prefixed then start + 1 
 # reaches it (no link to an absolute path)
 setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
-# and the installed lib/, a build's own: a compile trusts its library index while WARP_LIB names that one
-# (passes/library.warp library_unedited)
-setenv(c_string("WARP_LIB_INSTALLED"), c_string(if installed_found().length > 0 then resolved_path(installed_found()) else ""), 1)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
 setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
 if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }

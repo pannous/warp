@@ -1,19 +1,7 @@
-# A linked-module find-variant failure (finding only; card lib-yaml-json-tools-edges)
+# A linked-module find-variant failure (solved, card typed-overload-replace, 60d16a5e36)
 
-Bundled (precompiled) modules, main 1825b189a:
-
-```warp
-use toml
-use json_tools
-print(parse_toml("a = 1"))
-```
-
-fails in either `use` order with
-
-    `(find rest (str next))` fits no single variant of find(text, text), find(list, function), find(text, function) at <program>:942:72
-
-Each module alone prints `{a: 1}`; compiled from source (a WARP_LIB copy with one extra trailing newline in the module) it
-works too. 942:72 is `rest.find(str(next))` in `fits_text_cut` in lib/prelude.warp, blamed on the program file.
-Making `rest` provably a text (`rest = str(value)`) and rebuilding changed nothing, so the overload choice for linked
-modules is core's: card core-linked-module-divergence. It keeps samples/apps/config_validator and site_generator in
-test/apps/known_failures.txt.
+`use toml; use json_tools` (and `use text`, `use shell` with a text pattern `match`) failed with
+`(find rest (str next))` fits no single variant of find(…) in the prelude's `fits_text_cut`. The cause was not the
+linking: the dispatch judged a local variable `rest` a function because text's `Cursor.rest()` shares its name.
+known_kind (core/passes/arity_overloads.warp) now takes an assigned name for a variable. Test:
+test/modules/test_cross_module_overloads.pairs.warp.
