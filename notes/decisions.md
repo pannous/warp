@@ -956,7 +956,7 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
   - program-defining: C-style typed parameters `f(double x)` are definitely warp ("f(type x) definitely for parameters"); a C-style return type in front (`double sin(…)`) is not decided: the preferred return form is `f(type x) as type := …`. test_wasm:69,85 stay as they are for now.
 - 2026-11-06 card sprint, round 15 (user): parallel-compilation: compile independent modules in parallel (each needs only its imports' signatures); a program's passes stay sequential. wasm-linker: not now (linking stays in warp, card parked). package-manager: no preference → stays parked (after the module manager). module-manager: the user asked what module vs package manager meant; explained, answer pending.
 
-- 2026-11-06 Supervisor (user widget): warnings-meaning-question → hard error when prebuilt module has no warp.module / won’t link; no compile-from-source fallback ("This must never happen").
+- 2026-11-06 Supervisor (user widget): warnings-meaning-question → hard error when prebuilt module has no warp.module / won’t link; no compile-from-source fallback ("This must never happen"). A stale modules/x.wasm (lib/x.warp edited since it was built) is the same hard error, naming the fix `scripts/smoke.sh <tree>` / `warp rebuild` (follows from the decision; card module-link-hard-error).
   - module-manager (user): keep the card in Next (the missing module-manager parts after zero-bake: module blocks, use *, aliases of non-lib modules, conditional use, versions).
 - 2026-11-06 user (card sprint): simple to complex: get rid of all the easy cards first; whoever picks or distributes cards orders them so.
 - 2026-11-06 card sprint, round 16 (user):
