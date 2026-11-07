@@ -43,6 +43,7 @@ FLOAT_DIGITS = 17
 PATH_BYTES = 4096
 SLASH = 47
 SPACE = 32
+SEMICOLON = 59
 TEXT_SHIFT = 4294967296
 # the exit status of a child whose exec failed (words_run): the command is not found
 EXEC_FAILED_STATUS = 127
@@ -290,8 +291,37 @@ failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 		if error != 0 { wasmtime_error_message(error, message) } else { wasm_trap_message(long_at(trap).value, message) }
 		complain(native_vector_text(native_pointer(message)))
 	}
-	if raised.length > 0 { complain(raised) }
+	if raised.length > 0 { complain(place_first(raised)) }
 	exit(1)
+}
+# "<words> at f.warp:16:7<; fix: …>" said as "f.warp:16:7: <words><; fix: …>", the place first as compilers say it,
+# so editors and build tools jump there; a sentence naming no file:line:column stays as it is
+place_first(sentence: text): text := {
+	for at in 0..sentence.length {
+		if starts_with(text_from(sentence.address + at, (sentence.length - at) as u32), " at ") {
+			stop = at + 4
+			while stop < sentence.length and byte_at(sentence.address + stop).value != SPACE and byte_at(sentence.address + stop).value != SEMICOLON { stop = stop + 1 }
+			place = text_from(sentence.address + at + 4, (stop - at - 4) as u32)
+			if is_file_place(place) {
+				words = joined(text_from(sentence.address, at as u32), text_from(sentence.address + stop, (sentence.length - stop) as u32))
+				return joined(joined(place, ": "), words)
+			}
+		}
+	}
+	sentence
+}
+# `f.warp:16:7`: a file, a colon, digits, a colon, digits
+is_file_place(word: text): bool := {
+	column = digits_start(word, word.length)
+	if column == word.length or column < 2 or byte_at(word.address + column - 1).value != COLON { return no }
+	line = digits_start(word, column - 1)
+	line > 1 and line < column - 1 and byte_at(word.address + line - 1).value == COLON
+}
+# where the run of digits that ends before `end` begins
+digits_start(word: text, end: int): int := {
+	start = end
+	while start > 0 and is_digit(byte_at(word.address + start - 1).value) { start = start - 1 }
+	start
 }
 # a run's stdout and stderr: this process's, else the file `output`
 output_to(config: handle, output: text): nothing := {

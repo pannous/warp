@@ -15,7 +15,7 @@ public format(template, values) := {
 	result
 }
 // the words between runs of whitespace: spaces, tabs, newlines (Python's split())
-words(t): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
+words(t: text): list := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
 lines(t: text): list := [remove_suffix(l, chr(13)) for l in split(t, "\n")]
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15),
 // of any script: letters of "x، ب٣" is ['x' 'ب']
