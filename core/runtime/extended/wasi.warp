@@ -131,11 +131,12 @@ read_file(path: Node): Node := {
 	while got > 0 {
 		store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
 		store_scratch_word(scratch_iovec() + 4, wasi_chunk())
-		# a folder opens but never reads (EISDIR): its error fails the read at once, never a stale count read again
+		# a folder opens but never reads (wasmtime says EBADF): its error fails the read at once, never a stale count
+		# read again, named as the folder it is
 		error = fd_read(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 		if error != 0 {
 			fd_close(fd)
-			return file_failure("read", t, error)
+			return file_failure("read", t, if is_folder(t) then wasi_is_a_folder() else error)
 		}
 		got = scratch_word(scratch_count())
 		if got > 0 { answer = answer + scratch_text(scratch_bytes(), got) }
@@ -155,6 +156,12 @@ std_file_exists(path: Node): bool := {
 	fd = opened_file(text_of_textual(path), 0)
 	if fd >= 0 { fd_close(fd) }
 	fd >= 0 or (0 - fd != wasi_no_entry() and 0 - fd != wasi_not_a_folder())
+}
+# whether the path opens as a folder
+is_folder(path: text): bool := {
+	fd = opened_entry(path, wasi_directory(), wasi_readdir_right())
+	if fd >= 0 { fd_close(fd) }
+	fd >= 0
 }
 
 # `use file; list_files(folder)`: the names of the folder's entries without . and .., in the order WASI gives them;
