@@ -506,10 +506,30 @@ last_assignments(statements: list): map := {
 # the names a node changes with one of the operators, `n += …`, `n++`
 assigned_names(n: Node, operators: list): list := nodes_in(n).filter(part => part is key and (op_of(part) in operators or op_of(part) in counting_steps) and key_of(part) is symbol).map(part => name_of(key_of(part)))
 cell_of(name: text): Node := Key(symbol(name + cell_suffix), Op.Dot, symbol("value"))
-# a shared name's typed declaration `guests: int = 2` keeps its check and conversion in a typed local of its own, the
-# cell taking what it holds, `guests = (guests·typed: int = 2)`: the cell's value has no declared type to assign through
+# a shared name declared with a type, `guests: int = 2`, takes each value through a typed local of its own, the cell
+# holding what it took, `guests = (guests·typed: int = 5)`: the cell's value has no declared type to check, convert or
+# refuse a value by, so `guests = 2.5` in a lambda is refused as at the main level (card lambda-captured-assignment)
 typed_suffix = "·typed"
-typed_through_local(n: Node, name: text): Node := bottom_up(n, part => if is_key(part, Op.Assign) and is_key(key_of(part), Op.Colon) and key_of(key_of(part)) == symbol(name) then Key(symbol(name), Op.Assign, Key(Key(symbol(name + typed_suffix), Op.Colon, value_of(key_of(part))), Op.Assign, value_of(part))) else part)
+typed_through_local(n: Node, name: text, type: any): Node := if type == ø then n else bottom_up(n, part => through_type(part, name, type))
+through_type(part: Node, name: text, type: Node): Node := {
+	value = value_given(part, name)
+	if value == ø { return part }
+	Key(symbol(name), Op.Assign, Key(Key(symbol(name + typed_suffix), Op.Colon, type), Op.Assign, value))
+}
+# the value an assignment gives the name: `name: T = v` and `name = v` give v, `name += v` name + v
+value_given(part: Node, name: text): any := {
+	if declares_typed(part, name) { return value_of(part) }
+	if not (part is key and key_of(part) == symbol(name)) { return ø }
+	if is_key(part, Op.Assign) { return value_of(part) }
+	if op_of(part) in compound_ops { return Key(symbol(name), compound_ops[op_of(part)] as Op, value_of(part)) }
+	ø
+}
+declares_typed(part: Node, name: text): bool := is_key(part, Op.Assign) and is_key(key_of(part), Op.Colon) and key_of(key_of(part)) == symbol(name)
+# the type the statements first declare the name with, `guests: int = 2`, else ø
+type_declared(statements: list, name: text): any := {
+	for part in statements.flat_map(nodes_in) { if declares_typed(part, name) { return value_of(key_of(part)) } }
+	ø
+}
 # the statements of a scope, its parameters and the blocks it gives functions as lambdas, its shared names in cells
 # made first, a parameter's holding its value. A shared name the program's functions read too (`read_elsewhere`, main's
 # `price` of `total := price * count` beside `on key { price = 10 }`) is one variable for them all: a global, its first
@@ -523,7 +543,9 @@ celled_scope(statements: list, parameters: list, positions: map, read_elsewhere:
 	made_global = shared.filter(name => name in read_elsewhere and first_assignment(statements, name) >= 0)
 	statements = made_global.fold(statements, with_global_declaration)
 	shared = shared.filter(name => name not in made_global)
-	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(typed_through_local(part, name), name, cell_of(name))))
+	types = {}
+	for name in shared { types[name] = type_declared(statements, name) }
+	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(typed_through_local(part, name, types[name]), name, cell_of(name))))
 	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
 }
 # where the scope first assigns the name as a statement of its own, `price = 3`, else -1
