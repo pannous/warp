@@ -19,7 +19,7 @@ host_run_ended() := {
 
 // SDL's parts started (video, audio), Control-C left to stop the program at once (card window-ctrl-c: SDL's own
 // handler made it a quit event, which waited for the window's next events)
-sdl_started(flags: int): bool := {
+sdl_started(flags: int) := {
 	SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1")
 	SDL_Init(flags)
 }

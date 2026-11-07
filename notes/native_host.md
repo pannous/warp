@@ -52,3 +52,19 @@ coverage list (width, height, rows) through `coverage_list`.
 - MIDI out: CoreMIDI over FFI (client, output port, a virtual source "warp" when there is no output); its endpoint
   names by kMIDIPropertyDisplayName, a CFString global read through library_function + field_pointer. Linux: not yet.
 - The page answers the same host words in web/playground/host-sound.js soundWords.
+
+## warp_gpu.c next? (assessed 2026-11-07)
+crates/warp-gpu/warp_gpu.c (800 lines over wgpu-native's webgpu.h) could follow, as a third part, once three
+general FFI mechanisms exist; its WGSL text work (uniform layout, previous-frame detection) and the gpu_compute host
+word's reading and building of warp lists (warp_node.h over wasmtime) become plain warp, simpler than in C:
+1. Callbacks (card ffi-callbacks): wgpu answers adapter and device requests, buffer maps and error scopes through C
+   function pointers (WGPUCallbackMode_AllowProcessEvents, polled by wgpuInstanceProcessEvents); a warp function, or a
+   small set of foreign.c trampolines that record "done" in memory a program reads, must be passable as a pointer.
+2. Structs passed by value: wgpuInstanceRequestAdapter, wgpuBufferMapAsync … take a WGPU*CallbackInfo (5 pointers,
+   40 bytes) by value; foreign.c's calls pass only registers of scalars. ARM64 passes such a struct by reference to a
+   copy, x86-64 SysV on the stack: a `struct(bytes)` parameter kind in the driver's C call.
+3. Bulk copies between C memory and warp lists: a frame's pixels (width × height × 4 bytes read back) and compute
+   buffers both ways; one FFI call a value (as the sound decoder reads now) is ~a million calls a 640×480 frame. A
+   `copied(memory, count, type): list` and its reverse in foreign.c would serve the decoder too.
+Descriptors themselves (nested structs, WGPUStringView fields, chained structs) are calloc + set_field_* as far as
+they are written into memory, verbose but fine.
