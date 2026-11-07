@@ -429,8 +429,9 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 }
 # whether a slice's definition overloads the definitions of its name a used module brought, rather than being replaced
 # by them: brought (never the program's own, decision library-words-lexical) and told apart from each by the dispatch
-# (arity_overloads): another parameter count, or a parameter of another dispatchable type; color's hex_text(c: Color),
-# its Color an int, still replaces the prelude's hex_text(n: int)
+# (arity_overloads): as many parameters, one of another dispatchable type; color's hex_text(c: Color), its Color an
+# int, still replaces the prelude's hex_text(n: int), and so does a definition of another parameter count, which a
+# name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
 overloads_brought(slice: list, program: Node): bool := {
 	if not brought_names.has(slice#1) { return no }
 	heads = statements_in(program).filter(statement => declared_name(statement) == slice#1).map(definition_head_of)
@@ -444,7 +445,7 @@ overloads_brought(slice: list, program: Node): bool := {
 	classes = declared_classes(program)
 	heads.all(other => not is_group(other) or told_apart(types, parameter_types(other), classes))
 }
-told_apart(types: list, others: list, classes: list): bool := #types != #others or (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
+told_apart(types: list, others: list, classes: list): bool := #types == #others and (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
 # a linked module's definition as the program needs it: a function's head, its body left to the module's code, a
 # class with its methods so; a value, whose initializer the program runs, and a field as they are
 declared_only(n: Node): Node := {
