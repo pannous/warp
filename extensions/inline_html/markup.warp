@@ -45,9 +45,10 @@ starts_expression(points: list, at: int): bool := {
 	before = at - 1
 	while before >= 0 and (points[before] == ' ' or points[before] == '\t') { before -= 1 }
 	if before < 0 or points[before] in EXPRESSION_STARTS { return yes }
-	word_before(points, before) in EXPRESSION_START_WORDS
+	word_ending_at(points, before) in EXPRESSION_START_WORDS
 }
-word_before(points: list, end: int): text := {
+# the word of letters ending at index `end`
+word_ending_at(points: list, end: int): text := {
 	start = end
 	while start >= 0 and is_alpha(points[start]) { start -= 1 }
 	points_text(points, start + 1, end + 1)
