@@ -11,3 +11,7 @@
 # membership_ranges_and_loops
 «s = ""; for c in 'a' through 'c' { s = s + c }; s»	'abc'
 's = 0; for each in [1, 2] { s = s + each }; s'	3
+
+# an operator word right before ( calls the function of that name (card unknown-name)
+'add(a, b) := a * b; law add(a, b) == add(b, a); add(2, 3)'	6
+'equal(a, b) := a == b; print equal(2, 2)'	yes

@@ -17,3 +17,8 @@ rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, [])
 rewrite $p => $q where program and $q = gpu_lists_packed($p)
 // (this rule needs gpu_compute, so the prelude's rules, the one above too, come with any program calling it)
 rewrite gpu_compute($s, $v, $n) => gpu_compute($s, $made, $n) where $made = gpu_list_made($v)
+// a shader text the program names gets the shader words it calls but does not define (lib/prelude.warp shader_words,
+// decision shader-hash: hash(cell)); after the rules above, which read the shader's name
+rewrite paint($s, $w, $h, $v) => paint(shader_words($s), $w, $h, $v) where $s is symbol and not $s is function
+rewrite gpu_render($s, $w, $h, $v) => gpu_render(shader_words($s), $w, $h, $v) where $s is symbol
+rewrite gpu_compute($s, $v, $n) => gpu_compute(shader_words($s), $v, $n) where $s is symbol
