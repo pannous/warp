@@ -170,8 +170,7 @@ companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm
 # by that step and the next: a tree without them builds on the installed warp's, as warp.wasm builds on the seed, and
 # the steps replace them (card rebuild-fresh-worktree)
 borrowed_bootstrap() {
-	local installed file
-	installed=$(dirname "$(readlink -f "$warp" 2>/dev/null || echo "$warp")")/lib
+	local installed=$(dirname "$warp")/lib file
 	[ -f "$lib/runtime.wasm" ] && [ -f "$lib/modules/unicode.wasm" ] && return
 	[ -f "$installed/runtime.wasm" ] || { echo "rebuild.sh: $lib has no runtime.wasm and the installed warp no $installed/runtime.wasm to start from" >&2; return; }
 	mkdir -p "$lib/modules"
