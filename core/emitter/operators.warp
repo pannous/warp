@@ -128,11 +128,16 @@ def node_operation(body: Body, symbol: text, a: list, b: list): TypedCode {
 	integers = plain_int_test(boxed(left)) + plain_int_test(boxed(right)) + [op.i32_and] + if_else_code(kind, ints, exact)
 	numbers = by_class(body, symbol, left, right, kind, both_of_kind(left.code, right.code, Kind.Int) + if_else_code(kind, TypedCode(kind, integers), floats))
 	code = a + [op.local_set] + left.code[1..] + b + [op.local_set] + right.code[1..]
-	# (a runtime built before marks_kept, the seed's, keeps none)
-	if symbol not in comparisons and module.runtime.has("marks_kept") { return runtime_call("marks_kept", [TypedCode(kind, code + numbers), left, right]) }
-	if symbol not in comparisons { return TypedCode(kind, code + numbers) }
-	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
+	# (a runtime built before marks_kept, the seed's, keeps none)
+	computed = if symbol not in comparisons and module.runtime.has("marks_kept") then runtime_call("marks_kept", [TypedCode(kind, numbers), left, right]) else TypedCode(kind, numbers)
+	# a text held in a node repeats as a static one does, `x * 2` of an untyped x given "ab"
+	if symbol == "*" and module.runtime.has("repeated_node") {
+		repeated_texts = TypedCode(ValueKind.Node, boxed(runtime_call("repeated_node", [left, right])))
+		return TypedCode(kind, code + textual(left) + textual(right) + [op.i32_or] + if_else_code(kind, repeated_texts, computed))
+	}
+	if symbol not in comparisons { return TypedCode(kind, code + computed.code) }
+	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	TypedCode(kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, TypedCode(kind, numbers)))
 }
 # `a + b`, `a - b`, `a * b`, `a / b` of a class instance: its class's own operator through its descriptor

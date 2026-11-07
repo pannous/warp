@@ -11,6 +11,8 @@
 #include <SDL3/SDL_metal.h>
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CGGeometry.h>
+#include <objc/message.h>
 #endif
 #include <math.h>
 #include <stdint.h>
@@ -95,6 +97,15 @@ static void frame_timed(void) {
 	title_ns = now;
 	frames_since_title = 0;
 }
+// the layer drawn at the painting's size again, which it scales to the window: a resized window's layer is set by SDL
+// to the window's pixels, the painting then shown unscaled in its corner and the pointer told off by the same factor
+static void painting_size_kept(void) {
+#ifdef __APPLE__
+	if (!view || painted_width <= 0) return;
+	CGSize size = {painted_width, painted_height};
+	((void (*)(void*, SEL, CGSize))objc_msgSend)(SDL_Metal_GetLayer(view), sel_registerName("setDrawableSize:"), size);
+#endif
+}
 // the window's events since the last frame taken in
 static void events_taken(void) {
 	SDL_Event event;
@@ -108,6 +119,7 @@ static void events_taken(void) {
 		case SDL_EVENT_MOUSE_BUTTON_DOWN: mouse_down = 1; down_x = event.button.x; down_y = event.button.y; break;
 		case SDL_EVENT_MOUSE_BUTTON_UP: mouse_down = 0; break;
 		case SDL_EVENT_MOUSE_WHEEL: wheel += event.wheel.y; break;
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: painting_size_kept(); break;
 		}
 	}
 	// a window out of sight has no refresh to wait for: its frames idle instead of spinning
@@ -123,8 +135,10 @@ static void held_open(void) {
 	SDL_Event event;
 	while (open_now && frames == 1 && SDL_WaitEvent(&event)) {
 		int escaped = event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE;
+		int resized = event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED;
+		if (resized) painting_size_kept();
 		if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED || escaped) window_closed();
-		else if (event.type == SDL_EVENT_WINDOW_EXPOSED && painting_shown_again) painting_shown_again();
+		else if ((resized || event.type == SDL_EVENT_WINDOW_EXPOSED) && painting_shown_again) painting_shown_again();
 	}
 }
 

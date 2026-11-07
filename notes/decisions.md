@@ -1087,3 +1087,4 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-07 local-folder-clash (user): a folder beside a program named like a used module is used, as packages-by-name says (local files and folders first); so samples/gpu/compute_toys/ is renamed, and a local folder or file that shadows a standard module gives a warning naming both.
   - time-utc-property (user: "just now.UTC?"): `t.UTC` (alias `t.utc`) is a time on the UTC wall clock, the same as `t.zoned("UTC")`; named zones use `zoned`.
   - zone-word (user): a time converts to a zone with `zoned`: `now.zoned("Europe/Berlin")` = `zoned(now, "Europe/Berlin")`; neither `in` (membership) nor `as` (casts to a type; a zone text is no type) converts zones.
+  - fraction-glyphs (user, "leave as is"): a glyph number `3½`, `2¾`, `½`, `-1¼` is one numeral and shows as a decimal (3.5, 2.75, 0.5, -1.25); it gets no fraction mark (test_mixed_numbers stays).
