@@ -79,7 +79,7 @@ enlarged(): int := {
 }
 window_opened() := {
 	if open_now or windows_refused() { return ø }
-	if not SDL_Init(SDL_INIT_VIDEO) { return eprint("window: " + SDL_GetError()) }
+	if not sdl_started(SDL_INIT_VIDEO) { return eprint("window: " + SDL_GetError()) }
 	event = calloc(1, SDL_EVENT_BYTES)
 	rectangle = calloc(1, SDL_RECT_BYTES)
 	points_wide = calloc(1, 4)

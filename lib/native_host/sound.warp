@@ -18,7 +18,7 @@ global sound_streams = []
 global audio_state = 0
 
 audio_started() := {
-	if audio_state == 0 { audio_state = if library_function("SDL3", "SDL_Init") != 0 and SDL_Init(SDL_INIT_AUDIO) then 1 else -1 }
+	if audio_state == 0 { audio_state = if library_function("SDL3", "SDL_Init") != 0 and sdl_started(SDL_INIT_AUDIO) then 1 else -1 }
 	audio_state == 1
 }
 little_endian(value: int, width: int): list := int_bytes(value, width, "little")

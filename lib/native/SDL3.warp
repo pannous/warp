@@ -2,6 +2,7 @@
 // the native warp loads libSDL3 (libSDL3.dylib, libSDL3.so.0) and calls them. Windows, views and layers are handles;
 // an event is a block of SDL_EVENT_BYTES read by its fields' offsets (lib/c.warp field_*)
 SDL_Init(flags: i32): bool from 'SDL3'
+SDL_SetHint(name: text, value: text): bool from 'SDL3'
 SDL_GetError(): text from 'SDL3'
 SDL_GetTicksNS(): i64 from 'SDL3'
 SDL_Delay(milliseconds: i32): void from 'SDL3'
@@ -32,6 +33,8 @@ SDL_LoadWAV(path: text, spec: handle, samples: handle, size: handle): bool from 
 SDL_ConvertAudioSamples(from_spec: handle, samples: handle, size: i32, to_spec: handle, converted: handle, converted_size: handle): bool from 'SDL3'
 
 SDL_INIT_AUDIO = 0x10
+// SDL turns SIGINT and SIGTERM into a quit event, seen only when its events are taken; "1" leaves them the process's
+SDL_HINT_NO_SIGNAL_HANDLERS = "SDL_NO_SIGNAL_HANDLERS"
 SDL_INIT_VIDEO = 0x20
 SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK = 0xFFFFFFFF
 // SDL_AudioSpec: format, channels, freq, i32 each; SDL_AUDIO_S16LE 16-bit signed samples
