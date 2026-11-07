@@ -59,8 +59,8 @@ def spliced_code(body: Body, e: Node): list {
 	if is_group(e) and bracket_of(e) != "{" and separator_of(e) in statement_separators { return boxed(expression_code(body, e)) }
 	# `if c then a else b` is code, never split at its else; its branches are data in turn (`else ul{…}`)
 	if is_conditional(e) { return boxed(expression_code(body, e)) }
-	if is_group(e) and is_data_tag(body, e) { return spliced_code(body, Key(e#1, Op.Colon, e#2)) }
 	if not is_curly_group(e) and not is_word_keyed(e) and #unbound_words(body, e) == 0 { return boxed(expression_code(body, e)) }
+	if is_group(e) and is_data_tag(body, e) { return spliced_code(body, Key(e#1, Op.Colon, e#2)) }
 	if is_word_keyed(e) {
 		parts = [TypedCode(ValueKind.Node, quoted_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, spliced_code(body, value_of(e)))]
 		return runtime_call("key_node", parts).code
@@ -116,8 +116,5 @@ is_data_tag(body: Body, n: Node): bool := {
 	parts = tag_parts(n)
 	if #parts != 2 or name_of(parts#1) in module.classes { return no }
 	name = name_of(parts#1)
-	# `head{ title: "x" }`: a prelude function before a block stays a tag, only the program's own or used words call
-	# (decision data-tag-words)
-	if name in prelude_definitions() { return yes }
 	not is_bound(body, name) or (names_function_only(body, name) and not takes_arguments(module.functions[name], [parts#2]))
 }
