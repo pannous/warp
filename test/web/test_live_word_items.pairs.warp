@@ -1,0 +1,6 @@
+# A variable a handler writes, an item of its own, is live as code reading it is (decision markup-keeps): `p{ greeting }`
+# shows its value now, after a click as before
+
+'use web; greeting = "start"; page = div{ button{ on click { greeting = "Hi" }, "Greet" } p{ greeting } }; render page; click "Greet"'	'<div><button data-warp-click="1">Greet</button><p>Hi</p></div>'
+'use web; done = "open"; page = div{ button{ on click { done = "done" }, "Finish" } p{ class: done, "task" } }; render page; click "Finish"'	'<div><button data-warp-click="1">Finish</button><p class="done">task</p></div>'
+'use web; name = "Ann"; to_html(div{ p{ name } })'	'<div><p>Ann</p></div>'

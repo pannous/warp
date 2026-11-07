@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# functions with laws, properties warp checks for any values: square(-x) == square(x)
 square(x) := x * x
 law square(-x) == square(x)
 combined(a, b) := a + b

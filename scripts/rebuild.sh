@@ -166,19 +166,6 @@ mark_main() {
 # the standard modules in modules/ (card modules-prebuilt) and the library index, which a compile reads
 # (library.warp LIBRARY_INDEX; card store-hit-words-index) with the sugar's rules packed (rewrites.warp SUGAR_RULES_FILE)
 companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm modules/index.tsv modules/sugar_rules.packed 2>/dev/null); }
-# the runtime step's compiler compares texts by NFC, which runs modules/unicode.wasm on runtime.wasm, both written only
-# by that step and the next: a tree without them builds on the installed warp's, as warp.wasm builds on the seed, and
-# the steps replace them (card rebuild-fresh-worktree)
-borrowed_bootstrap() {
-	local installed=$(dirname "$warp")/lib file
-	[ -f "$lib/runtime.wasm" ] && [ -f "$lib/modules/unicode.wasm" ] && return
-	[ -f "$installed/runtime.wasm" ] || { echo "rebuild.sh: $lib has no runtime.wasm and the installed warp no $installed/runtime.wasm to start from" >&2; return; }
-	mkdir -p "$lib/modules"
-	for file in "$installed"/runtime.wasm "$installed"/modules/*.wasm; do
-		[ -f "$lib/${file#"$installed"/}" ] || cp "$file" "$lib/${file#"$installed"/}"
-	done
-	echo "rebuild.sh: a fresh lib/: its runtime and modules start as the installed warp's, until the build replaces them"
-}
 # an entry stored or fetched before index.tsv was kept with its modules gets it once, as `warp rebuild` writes it:
 # the modules step of its own compiler into a scratch folder, only the index taken (store-hit-words-index)
 words_kept() {
@@ -310,7 +297,7 @@ one() {
 	fi
 	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
 	recorded_inputs "$record"
-	borrowed_bootstrap
+	"$scripts/seed-bootstrap.sh" "$warp" "${WARP_SEED:-$(seed_beside)}" "$lib"
 	if [ -z "$force" ] && [ "$name" = warp ]; then
 		reused_stored "$log"
 		status=$?

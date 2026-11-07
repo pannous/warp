@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-
+# one function name, two definitions: the type the result is asked as chooses which runs
 class pdf { body: text }
 class docx { body: text }
 

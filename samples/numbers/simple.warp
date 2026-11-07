@@ -1,2 +1,3 @@
 #!/usr/bin/env warp
+# the simplest program: one calculation, its value the result
 3 * 3

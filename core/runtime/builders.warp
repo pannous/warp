@@ -40,6 +40,9 @@ built_floats(address: int, count: int, info: int): Node := list_node(info * Kind
 # code's lists the native warp's parse_code rebuilds (core/native/driver.warp code_built): the items, a square list
 # (ø for none), with the bracket and separator their spellings name; its keys take the operator so too, key_node
 built_spelled_list(items: Node, bracket: Node, separator: Node): Node := separated_node(bracketed_node(items, bracket), separator)
+# a map of the host's `name: value` keys, a square list of them (ø for none): an object the page gives (an event's
+# detail, a js value) is a map as the program's own `{x: 1}` is
+built_map(keys: Node): Node := map_of(if is_null(keys) then [] else unboxed_list(keys))
 # a type declaration as written, `class P { x: int }`: its name and body
 built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
 # the Error of a failure, which raises in a plain variable (decision N19); printing, equality and `is error` see it as

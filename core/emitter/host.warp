@@ -35,7 +35,7 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 	TypedCode(result, if is_node_kind(result) then entered_node(code) else code)
 }
 # the constructors a host word builds nodes with: [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
-host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
+host_builders = [["new_map", [ValueKind.Node], "built_map"], ["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
 	["new_float", [ValueKind.Float], "built_float"], ["new_codepoint", [ValueKind.Char], "built_codepoint"], ["new_text", [ValueKind.Char, ValueKind.Char], "built_text"],
 	["new_symbol", [ValueKind.Char, ValueKind.Char], "built_symbol"], ["new_key", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_key"],
 	["new_list", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_list"], ["new_type", [ValueKind.Node, ValueKind.Node], "built_type"], ["error_of", [ValueKind.Node], "built_error"],
