@@ -51,10 +51,19 @@ int32_t gpu_paints(void) {
 	}
 	return gpu_paint && gpu_failure;
 }
-int32_t library_system_value(char* name, int64_t* value);
+static uint32_t module_text(struct w2c_wasi__snapshot__preview1* wasi, const char* text);
+static void arena_given_back(struct w2c_wasi__snapshot__preview1* wasi, uint32_t before);
+// a system value as the driver answers it (core/native/driver.warp system_value, the native host module's window
+// among them), asked in a host word: what it allocates is given back after
 static int64_t library_value(const char* name) {
-	int64_t value = 0;
-	return library_system_value((char*)name, &value) ? value : 0;
+	static uint64_t (*value_of)(w2c_program*, uint32_t);
+	if (!value_of) value_of = (uint64_t (*)(w2c_program*, uint32_t))native_function("w2c_program_system_value");
+	struct w2c_wasi__snapshot__preview1* wasi = running_wasi;
+	uint32_t* top = w2c_program_arena(wasi->program);
+	uint32_t before = *top;
+	int64_t value = (int64_t)value_of(wasi->program, module_text(wasi, name));
+	arena_given_back(wasi, before);
+	return value;
 }
 // the holes every shader has, filled where the shader reads them and the program gave none, as the playground fills
 // them (web/playground/host-gpu.js builtinValues): the image's size, seconds since the first painting, the paintings
@@ -126,41 +135,11 @@ int32_t gpu_painted(char* shader, char* given_values, int64_t width, int64_t hei
 	free(colors);
 	return failed;
 }
-// The system values the driver does not own, forwarded to the libraries that do (libwarp_window's window, keys and
-// mouse), each found beside warp at the first question; none owning one, the driver answers it
-static const char* OWNING_LIBRARIES[] = {"warp_window"};
-enum { OWNING_COUNT = sizeof OWNING_LIBRARIES / sizeof *OWNING_LIBRARIES };
-typedef int32_t (*value_answer)(const char*, int64_t*);
-typedef int32_t (*value_taker)(const char*, int64_t);
-static value_answer value_answers[OWNING_COUNT];
-static value_taker value_takers[OWNING_COUNT];
-static void owning_libraries_found(void) {
-	static int32_t found;
-	if (found) return;
-	found = 1;
-	for (int i = 0; i < OWNING_COUNT; i++) {
-		value_answers[i] = (value_answer)library_function((char*)OWNING_LIBRARIES[i], "warp_system_value");
-		value_takers[i] = (value_taker)library_function((char*)OWNING_LIBRARIES[i], "warp_set_system_value");
-	}
-}
-// 1 and the value into *value when a library owns the name, else 0
-int32_t library_system_value(char* name, int64_t* value) {
-	owning_libraries_found();
-	for (int i = 0; i < OWNING_COUNT; i++) if (value_answers[i] && value_answers[i](name, value)) return 1;
-	return 0;
-}
-// the value told every library; 1 when one owns the name (the driver keeps it otherwise)
-int32_t library_system_value_set(char* name, int64_t value) {
-	owning_libraries_found();
-	int32_t owned = 0;
-	for (int i = 0; i < OWNING_COUNT; i++) if (value_takers[i] && value_takers[i](name, value)) owned = 1;
-	return owned;
-}
 // The host words the driver does not answer, bound to the libraries beside warp that own some (libwarp_gpu's
-// gpu_compute, libwarp_window's text_coverage, libwarp_webview's foreign_call; decision library-direct-refs): the wasmtime_func_callback_t
+// gpu_compute, libwarp_webview's foreign_call; decision library-direct-refs): the wasmtime_func_callback_t
 // `warp_word_<name>` a library exports, reading and building the module's values in place (lib/native/warp_node.h);
 // NULL when none owns it. Two owning one name end the run naming both
-static const char* HOST_WORD_LIBRARIES[] = {"warp_gpu", "warp_window", "warp_webview"};
+static const char* HOST_WORD_LIBRARIES[] = {"warp_gpu", "warp_webview"};
 enum { HOST_WORD_COUNT = sizeof HOST_WORD_LIBRARIES / sizeof *HOST_WORD_LIBRARIES, WORD_SYMBOL_ROOM = 256 };
 void* library_word(char* name) {
 	char symbol[WORD_SYMBOL_ROOM];
@@ -179,26 +158,13 @@ void* library_word(char* name) {
 	}
 	return word;
 }
-// A painting shown in an open window (libwarp_window's layer) by libwarp_gpu, on the GPU throughout: 1 shown, 0 no
-// window open (the driver writes its PNG), -1 failed, the reason told
-static void* window_layer(int64_t width, int64_t height) {
-	static void* (*layer_of)(int32_t, int32_t);
-	static int32_t asked;
-	if (!asked) {
-		asked = 1;
-		layer_of = (void* (*)(int32_t, int32_t))library_function("warp_window", "warp_window_layer");
-		void (*repainted_by)(int32_t (*)(void)) = (void (*)(int32_t (*)(void)))library_function("warp_window", "warp_window_repainted_by");
-		int32_t (*shown_again)(void) = (int32_t (*)(void))library_function("warp_gpu", "warp_gpu_shown_again");
-		if (repainted_by && shown_again) repainted_by(shown_again);
-	}
-	return layer_of && gpu_paints() ? layer_of((int32_t)width, (int32_t)height) : NULL;
-}
+// A painting shown by libwarp_gpu in the layer of the native host module's open window (core/native/driver.warp
+// window_layer), on the GPU throughout: 1 shown, 0 no window open (the driver writes its PNG), -1 failed, the reason told
 static int32_t shown_or_told(int32_t failed) {
 	if (failed) fprintf(stderr, "paint into the window: %s\n", gpu_failure());
 	return failed ? -1 : 1;
 }
-int32_t shader_shown(char* shader, char* given_values, int64_t width, int64_t height) {
-	void* layer = window_layer(width, height);
+int32_t shader_shown(char* shader, char* given_values, void* layer, int64_t width, int64_t height) {
 	if (!layer) return 0;
 	static int32_t (*show)(const char*, const char*, void*, int32_t, int32_t);
 	if (!show) show = (int32_t (*)(const char*, const char*, void*, int32_t, int32_t))library_function("warp_gpu", "warp_gpu_show");
@@ -209,8 +175,7 @@ int32_t shader_shown(char* shader, char* given_values, int64_t width, int64_t he
 }
 // the pixels as driver.warp png_written shades them: 0 paper, a value with an alpha byte its color, any other ink
 enum { PAPER = 250, INK = 29, COLOR_FROM = 16777216 };
-int32_t pixels_shown(int64_t* pixels, int64_t width, int64_t height) {
-	void* layer = window_layer(width, height);
+int32_t pixels_shown(int64_t* pixels, void* layer, int64_t width, int64_t height) {
 	if (!layer) return 0;
 	static int32_t (*show)(const uint8_t*, void*, int32_t, int32_t);
 	if (!show) show = (int32_t (*)(const uint8_t*, void*, int32_t, int32_t))library_function("warp_gpu", "warp_gpu_show_pixels");
@@ -290,8 +255,9 @@ void* c_function(char* name) { return native_function(name); }
 // where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
 // warp's own libraries (libwarp_sound) beside the executable first, as libwarp_wasmtime is
 // Fixed short folders per platform (user 2026-11-06 library-search-paths): no scan/sort/computed from.
-// macOS: homebrew + local + opt/<name>/Frameworks/<Name>.framework/<Name>. Linux: /usr/lib(+triple) + local,
-// lib<name>.so / .so.0 / -2.0.so.0 / .so.1 (usual versioned sonames; odd ones like libpython3.13.so.1.0 still
+// macOS: homebrew + local + opt/<name>/Frameworks/<Name>.framework/<Name> + the system's frameworks. Linux:
+// /usr/lib(+triple) + local, lib<name>.so / .so.0 / -2.0.so.0 / .so.1 / .so.6 (usual versioned sonames, FreeType's
+// .so.6; odd ones like libpython3.13.so.1.0 still
 // need a symlink, WARP path, or a computed `from`). Windows: LoadLibrary System32+PATH (not this dlopen list).
 static const char* LIBRARY_PATHS[] = {
 	"@executable_path/lib%s.dylib",
@@ -303,6 +269,7 @@ static const char* LIBRARY_PATHS[] = {
 	"lib%s-2.so.0",
 	"lib%s.so.1",
 	"lib%s.so.1.0",
+	"lib%s.so.6",
 	"lib%s3.so",
 	"/opt/homebrew/lib/lib%s.dylib",
 	"/usr/local/lib/lib%s.dylib",
@@ -355,9 +322,23 @@ void* library_function(char* library, char* name) {
 			if (loaded) return dlsym(loaded, name);
 		}
 	}
+	// a system framework by its name: `from 'CoreFoundation'`
+	snprintf(path, sizeof path, "/System/Library/Frameworks/%s.framework/%s", library, library);
+	void* framework = dlopen(path, flags);
+	if (framework) return dlsym(framework, name);
 #endif
 	return NULL;
 }
+// A field of a C struct a program holds as a handle, by its offset (lib/c.warp: SDL_Event's union, FreeType's glyph
+// slot): its bytes as the C type is, a signed integer widened, a float as a double, a pointer as a handle
+#define FIELD_READER(name, type, result) result name(const uint8_t* address, int64_t offset) { type value; memcpy(&value, address + offset, sizeof value); return (result)value; }
+FIELD_READER(field_u8, uint8_t, int32_t)
+FIELD_READER(field_i32, int32_t, int32_t)
+FIELD_READER(field_u32, uint32_t, int64_t)
+FIELD_READER(field_i64, int64_t, int64_t)
+FIELD_READER(field_f32, float, double)
+FIELD_READER(field_f64, double, double)
+FIELD_READER(field_pointer, void*, void*)
 // a C function called with up to 8 integers and pointers and up to 8 floats in their registers (the ARM64 and x86-64
 // conventions keep the two apart, `ldexp(double, int)` takes d0 and x0): it reads only the ones its parameters name.
 // Its result is the integer register, or the bits of the float register
@@ -397,6 +378,17 @@ int32_t handle_id(void* pointer) {
 int32_t handle_known(int32_t id) { return id >= 0 && (uint32_t)id <= handle_count; }
 void* handle_pointer(int32_t id) { return id > 0 && (uint32_t)id <= handle_count ? handles[id - 1] : NULL; }
 
+// what a host word allocated given back, zeroed: the arena past its top stays as fresh memory is, so an allocate after
+// a host word (warp test's slots after test-list ran) never starts with an earlier word's bytes. What arena_kept
+// kept stays: a module the driver links on a host word's question (driver.warp lazily_linked) keeps its records
+static uint32_t arena_floor;
+void arena_kept(void) { arena_floor = *w2c_program_arena(running_wasi->program); }
+static void arena_given_back(struct w2c_wasi__snapshot__preview1* wasi, uint32_t before) {
+	uint32_t* top = w2c_program_arena(wasi->program);
+	uint32_t kept = before > arena_floor ? before : arena_floor;
+	if (*top > kept) memset(at(wasi, kept), 0, *top - kept);
+	*top = kept;
+}
 // A host word a program defines for a module it runs through wasmtime's C API (core/native/driver.warp
 // host_words_defined): a wasmtime_func_callback_t whose data is the word's number. The values (wasmtime_val_t, VALUE_BYTES
 // each) cross through the program's arena to its exported host_word(word, caller, values, count, results, count),
@@ -414,14 +406,11 @@ void* warp_host_callback(void* word, void* caller, const void* values, size_t co
 	memcpy(at(wasi, given), values, count * VALUE_BYTES);
 	answer(wasi->program, (u64)(uintptr_t)word, (u64)(uintptr_t)caller, given, count, answered, results_count);
 	memcpy(results, at(wasi, answered), results_count * VALUE_BYTES);
-	// given back zeroed: the arena past its top stays as fresh memory is, so an allocate after a host word (warp test's
-	// slots after test-list ran) never starts with an earlier word's bytes
-	memset(at(wasi, before), 0, *top - before);
-	*top = before;
+	arena_given_back(wasi, before);
 	return NULL;
 }
 // A host word the driver doesn't answer, owned by a library beside warp or by none, found at its first call: opening
-// libwarp_gpu and libwarp_window to look was half of hello's run once every program linked prelude.wasm, which
+// libwarp_gpu to look was half of hello's run once every program linked prelude.wasm, which
 // imports clipboard_text. Its data: the word's name, the engine its owner reads values with, the owner once found,
 // and the word naming it when none owns it (driver.warp unanswered_word)
 typedef void* (*wasm_callback_t)(void*, void*, const void*, size_t, void*, size_t);
