@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+# Timers: `on every …` runs its block at each period once the program's main is done, natively as in the page
+
+ticks = 0
+on every 200 ms {
+	ticks += 1
+	print "tick " + ticks
+	# a run with a timer goes on until it ends itself
+	if ticks == 3 { exit(0) }
+}
+print "main done, the timer ticks from here"
