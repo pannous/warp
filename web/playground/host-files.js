@@ -32,7 +32,7 @@ function servedFileExists(path) {
 	if (isUnserved(url)) return false;
 	try {
 		const request = new XMLHttpRequest();
-		request.open("HEAD", url, false);
+		request.open("HEAD", ofThisBuild(url), false);
 		request.send();
 		return request.status > 0 && request.status < 400;
 	} catch {
@@ -53,7 +53,7 @@ function getSync(url, timeout, binary = false) {
 	url = withPageProtocol(url);
 	if (isUnserved(url)) throw new Error(HTTP_NOT_FOUND);
 	const request = new XMLHttpRequest();
-	request.open("GET", url, false);
+	request.open("GET", ofThisBuild(url), false);
 	if (timeout) request.timeout = timeout;
 	if (binary) request.overrideMimeType("text/plain; charset=x-user-defined"); // bytes as they are
 	request.send();
