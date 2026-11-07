@@ -73,6 +73,10 @@ remove(m: map, key) from emitter
 pop(xs: list): any := list_pop(xs)
 // Python's xs.clear() and m.clear(): x emptied in place, so every alias sees it
 clear(x: any): any := { if x is map { for k in keys(x) { x.remove(k) } } else { while count(x) > 0 { x.pop() } }; x }
+// clear() the screen: the terminal clear and the cursor home, in the playground a text frame's start, the text shown
+// anew (decision page-text-frames: `loop { clear(); draw_board(); sleep 50ms }`)
+TERMINAL_CLEAR = "\e[2J\e[H"
+clear() := print TERMINAL_CLEAR
 // Python's xs.pop(i) and m.pop(k): the item at the 0-based position i (-1 the last) or the value of the key k, removed
 // from x in place, so every alias sees it
 pop(x: any, k: any): any := {

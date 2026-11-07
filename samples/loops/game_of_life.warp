@@ -59,10 +59,10 @@ def render() {
 
 main:={
 	# Main loop: a few generations instead of forever; each one is drawn over the last:
-	# "\e[2J" clears the terminal, "\e[H" puts the cursor back at its top left (the playground shows frames alike)
-	print "\e[2J"
+	# clear() clears the terminal and puts the cursor back at its top left (the playground shows frames alike)
 	for generation in 0 to generations {
-		print "\e[H" + "generation ${generation}"
+		clear()
+		print "generation ${generation}"
 		render()
 		if generation < generations {
 			step()
