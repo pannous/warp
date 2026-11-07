@@ -916,7 +916,7 @@ names_bound_in(n: Node): any := {
 global bound_names_node = Node.Empty
 global bound_names_found = {}
 names_bound_in_kept(program: Node): any := {
-	if not same_node(program, bound_names_node) {
+	if not same(program, bound_names_node) {
 		bound_names_found = names_bound_in(program)
 		bound_names_node = program
 	}

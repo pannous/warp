@@ -44,6 +44,19 @@ times_of_different_kinds_have_no_order() := {
 	fail()
 	0
 }
+# n as it is, unless n and other are durations of the two kinds: a calendar duration (`1 day`) beside an instance
+# (lib/units' `2 hours`), which are one kind only from card dates-times-extraction (decision one-duration)
+one_duration_kind(n: Node, other: Node): Node := {
+	if (is_calendar_duration(n) and is_instance(other)) or (is_calendar_duration(other) and is_instance(n)) { calendar_and_clock_durations_are_different_kinds() }
+	n
+}
+is_calendar_duration(n: Node): bool := is_time(n) and is_duration(n)
+is_instance(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.Instance
+# the runtime error of one_duration_kind, named to read off the trace
+calendar_and_clock_durations_are_different_kinds() := {
+	fail()
+	0
+}
 # an operand of a time's + - * as lib/time_arithmetic.warp time_operation takes it: its form, -1 for a whole number,
 # and its position, a whole number's value
 operand_form(n: Node): int := if is_time(n) then time_form(n) else -1

@@ -118,7 +118,6 @@ with_uses_written(result: list, file: text): list := {
 	uses = modules.map(module => "use " + module.trim())
 	[(lines[0 ..< at] + uses + lines[at ..]).join("\n"), result[1] + uses.map(line => "" + (at + 1) + " " + line)]
 }
-quoted_path(path: text): text := "'" + path.replace("'", "'\\''") + "'"
 
 # a change "<line> <rule>" as check lists it
 listed_change(shown: text, change: text): text := {

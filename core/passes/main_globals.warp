@@ -48,21 +48,26 @@ main_globals(program: Node, own_names: list): any := {
 	program
 }
 
-# the variables main assigns, outside the function definitions
+# the variables main assigns, outside the function definitions; a loop's or comprehension's variable belongs to its
+# loop, a function binding that name is its own: an item variable the lowering binds from made names
+# (reads_made_name), a range's counter it declares, `i: int = a`, and steps (`loop·step: i++`, iteration.warp)
+loop_step_label = "loop·step"
 main_variables(program: Node): any := {
 	found = {}
-	for statement in statements_in(program) { add_assigned(statement, found) }
+	stepped = nodes_in(program).filter(n => is_operator(n, ":") and key_of(n) == symbol(loop_step_label)).map(n => changed_variable(value_of(n)))
+	for statement in statements_in(program) { add_assigned(statement, found, stepped) }
 	found
 }
-add_assigned(n: Node, found: map): any := {
+add_assigned(n: Node, found: map, stepped: list): any := {
 	if is_define_statement(n) { return ø }
 	if is_operator(n, "=") {
 		target = key_of(n)
 		if is_operator(target, ":") and key_of(target) == symbol(global_word) { target = value_of(target) }
 		name = changed_root(target)
-		if name != ø { found[name] = yes }
+		counter = is_operator(target, ":") and name in stepped
+		if name != ø and not counter and not reads_made_name(value_of(n)) { found[name] = yes }
 	}
-	for part in parts_of(n) { add_assigned(part, found) }
+	for part in parts_of(n) { add_assigned(part, found, stepped) }
 	ø
 }
 

@@ -1,6 +1,14 @@
-// The standard library module net (notes/stdlib.md section 7): `use net`; fetch (GET) is a prelude word. post sends a
-// text through the adapter std_io and gives the answer's text (ureq natively, a synchronous request in the browser)
+// The standard library module net (notes/stdlib.md section 7): `use net`, or a program naming the global fetch. post
+// sends a text through the adapter std_io and gives the answer's text (a synchronous request in the browser;
+// the native warp has no net.post yet, card net-get-curl)
+use json
 public post(url: any, body: any) := std_io("net", "post", [url, body])
 // post(url, body, {"x-api-key": key}): the map's pairs are the request's headers; an answer of status >= 400 is the
 // error, with the answer's text
 public post(url: any, body: any, headers: any) := std_io("net", "post", [url, body, headers])
+// fetch(url): what a GET of the url answers (the page answers it with a request, the native warp by curl): a JSON
+// array or object as warp data (lists, maps), any other answer its text (notes/web_framework.md "Async data"); no
+// declared result, so a failed request's error comes through as itself
+global fetch(url: text) := fetched_value(std_io("net", "get", [url]))
+fetched_value(answer) := if answer is text and is_json_shaped(answer) then json(answer) else answer
+is_json_shaped(answer: text): bool := trim(answer).starts_with("[") or trim(answer).starts_with("{")
