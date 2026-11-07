@@ -107,7 +107,11 @@ with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag
 # tag-items-calls), not the items greet and "Ann"
 tag_items(block: Node, scope: map): list := if is_call_phrase(block, scope) then [List(items_of(block), Bracket.None, Separator.Space)] else items_of(block)
 # `greet "Ann" {…}` among a tag's items: a phrase headed by a function the program binds is its call, as anywhere else
-as_call(item: Node, scope: map): Node := if is_group(item) and bracket_of(item) == "" and is_call_phrase(item, scope) then call_node(item#1, items_of(item)[1..]) else item
+as_call(item: Node, scope: map): Node := {
+	# `title: greet "Ann"`: an attribute's phrase so too (card li-title-greet)
+	if is_key(item, Op.Colon) and not is_curly_group(value_of(item)) { return Key(key_of(item), Op.Colon, as_call(value_of(item), scope)) }
+	if is_group(item) and bracket_of(item) == "" and is_call_phrase(item, scope) then call_node(item#1, items_of(item)[1..]) else item
+}
 is_call_phrase(group: Node, scope: map): bool := separator_of(group) == " " and #group > 1 and group#1 is symbol and (binds_as(scope, name_of(group#1), Meaning.Function) or is_library_call(group, scope))
 # `reverse xs`: a library word of one typed parameter and its argument (the `takes one` of extensions/sugar/calls.warp)
 is_library_call(group: Node, scope: map): bool := #group == 2 and not scope.has(name_of(group#1)) and takes_one_typed_value(name_of(group#1))

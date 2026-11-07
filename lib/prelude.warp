@@ -41,10 +41,6 @@ count(m: map): int from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
-// fetch(url): the text a GET of the url answers, through the adapter std_io as lib/net.warp's post (the page answers
-// it with a request; the native warp has no HTTP client yet and says so: no declared result, so that error comes through
-// as itself, not as a failed cast to text)
-fetch(url: text) := std_io("net", "get", [url])
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
 map(xs: list, f: (any) -> any): list from emitter
@@ -430,6 +426,17 @@ nearest(x, kind, limit = 1000000, within = 0) := {
 }
 // Python's dict(pairs) (card python-stdlib): a map of [key value] pairs
 dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+// copy(x), clone(x): a value of its own that a change to x no longer reaches (decisions P205-P207): deep, each
+// field, item and entry copied too; copy(x, shallow: yes) is a new one sharing what x holds. A copy keeps its class
+copy(x, shallow: bool = no) := {
+	if x is list { return x.map(item => copy_item(item, shallow)) }
+	made = if x is map then {} else instance_copy(x)
+	# (neither a map nor an instance: a number, a text, … is a value of its own)
+	if made === x { return x }
+	for name in keys(x) { made[name] = copy_item(x[name], shallow) }
+	made
+}
+copy_item(item, shallow: bool) := if shallow then item else copy(item)
 // Python's dict.fromkeys(ks, value) (card python-aliases): a map of each key with the one value
 fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
 // Python's xs.pop(i) and m.pop(k) (card python-aliases, declaration_lowering removed_key): the element at the 0-based

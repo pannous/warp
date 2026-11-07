@@ -202,7 +202,7 @@ function programImports(holder, hooks) {
 			},
 			// a text's NFC for text == (decision nfc-slot, driver.warp canonical_text_answered): lib/unicode, its module
 			// linked on this first call, never at the run's start
-			canonical_text: text => linkedInstance(UNICODE_MODULE, libraryFile(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
+			canonical_text: text => linkedInstance(UNICODE_MODULE, linkedUrl(UNICODE_MODULE), holder.imports, holder.linked).canonical_text(text),
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
 		wasi_snapshot_preview1: {
@@ -223,9 +223,13 @@ function programImports(holder, hooks) {
 	};
 	// anything else (native FFI libraries) is missing in the browser: say which, when the program calls it
 	const missing = (module, name) => () => { throw new Error(`${module}.${name} is not available in the browser`); };
+	// every host word through one wrapper: its failure is the program's error, which a `try` catches
+	const catchable = word => typeof word !== "function" ? word : (...given) => {
+		try { return word(...given); } catch (failure) { raisedInProgram(program(), failure, holder); }
+	};
 	return new Proxy(known, {
 		get: (modules, module) => new Proxy(modules[module] ?? eachHostPart("importModule", holder, hooks, module).find(Boolean) ?? {}, {
-			get: (functions, name) => functions[name] ?? missing(module, String(name)),
+			get: (functions, name) => catchable(functions[name] ?? missing(module, String(name))),
 		}),
 	});
 }
@@ -241,16 +245,15 @@ const isPlainObject = value => [Object.prototype, null].includes(Object.getProto
 
 // a codepoint (a WIT char, P94) as a foreign runtime sends it, since JSON would make it a text: `{$char: "b"}`
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
-// a host word failing for the program's reason (a shader that does not compile), as native TaskFailure
-class HostWordFailure extends Error {}
-
-// a host word's failure as the program's own error (card wgsl-error, as src/host/native.rs raised): in a program with a
-// `try` its message goes to trap_detail and the program's returned_error raises it, which a running `try` catches
-// (`catch e` binds the message) and which otherwise traps as `raise` does; without a `try`, or any other exception (a
-// bug of the host), the failure as it was
-function raisedInProgram(exports, failure) {
+// a host word's failure (read_bytes of a missing file, a shader that does not compile) as the program's own error, as
+// the native driver raises it (cards wgsl-error, playground-host-word): in a program with a `try` its message goes to
+// trap_detail and the program's returned_error raises it, which a running `try` catches (`catch e` binds the message)
+// and which otherwise traps as `raise` does. Passing as they were: a program without `try`, the program's own trap or
+// raise coming back through a host word that called it, the engine's stack overflow (a RangeError) and exit
+function raisedInProgram(exports, failure, holder) {
 	const returnedError = exports[RETURNED_ERROR_EXPORT], detail = exports[TRAP_DETAIL_EXPORT];
-	if (!(failure instanceof HostWordFailure) || !returnedError || !detail) throw failure;
+	const passing = !(failure instanceof Error) || failure instanceof WebAssembly.RuntimeError || failure instanceof RangeError || holder?.exitCode !== undefined;
+	if (passing || !returnedError || !detail) throw failure;
 	detail.value = newGuestValue(exports, failure.message);
 	returnedError();
 	throw failure;

@@ -13,7 +13,7 @@ gpu_lists = GpuLists(Node.Empty, {})
 # form gpu_packed packs, and mentioned otherwise only as a GPU list serves it: #xs, xs#i, xs#i = v, for x in xs, print xs
 gpu_bound(xs: Node, program: Node): bool := {
 	if not (xs is symbol) { return no }
-	if not same_node(program, gpu_lists.program) {
+	if not same(program, gpu_lists.program) {
 		gpu_lists.program = program
 		gpu_lists.uses = {}
 		gpu_uses_counted(program)

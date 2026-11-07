@@ -155,7 +155,7 @@ linked_libraries(source: text): list := {
 		# never silently compiled from source)
 		if wasm == ø or #wasm == 0 { continue }
 		signature = module_signature(name, wasm)
-		image = if signature == ø then "no " + SIGNATURE_SECTION + " (built before it)" else if not built_of_text(name, signature.source) then "lib/" + name + module_extension + " differs from the text it was built of" else library_image_of(name, signature)
+		image = if signature == ø then "no " + SIGNATURE_SECTION + " (built before it)" else if not built_of_text(name, signature.source) then "lib/" + name + module_extension + " or a module it uses differs from the text it was built of" else library_image_of(name, signature)
 		if image is text {
 			warn name + ".wasm not linked: " + image + "; compiled from source"
 			continue
@@ -166,18 +166,21 @@ linked_libraries(source: text): list := {
 	}
 	dependencies_first(images)
 }
-# whether lib/<module> is the text the module was built of: by its length, and under WARP_LIB (a lib/ edited since
-# the build) by its hash, as the index is trusted (library.warp); djb2 over the prelude was ~1.5 % of hello
+# whether lib/<module> and the modules it uses are the texts the module was built of (library.warp built_of_texts): by
+# their length, and under WARP_LIB (a lib/ edited since the build) by their hash, as the index is trusted; djb2 over
+# the prelude was ~1.5 % of hello
 built_of_text(module: text, hash: text): bool := {
 	# a program's own module linked without its text beside it is what it was built of
 	if own_module_wasm.has(module) and file_text(std_module_path(module)) == ø { return yes }
-	text = file_text(std_module_path(module)) ?? ""
-	hash.starts_with("${#text}-") and (warp_lib() == ø or hash == source_hash(text))
+	texts = built_of_texts(module)
+	hash.starts_with("${texts_length(texts)}-") and (warp_lib() == ø or hash == texts_hash(texts))
 }
 # `import shapes` beside a shapes.wasm carrying a warp.signature: the program's own module, linked as a standard
 # module is, imported by its path (decision samples-modules-wasm); its text, where beside it, is shapes.warp
 own_module_beside(name: text, program_folder: text) := {
 	wasm = path_in(absolute_folder(program_folder), name + ".wasm")
+	# (asked first: the page's read_bytes of a missing file ends the compile, no try catches it, card playground-host-word)
+	if not exists(wasm) { return ø }
 	bytes = try read_bytes(wasm) else []
 	if #bytes > 0 and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) != ø { own_module(name, wasm.remove_suffix(".wasm") + module_extension, wasm) }
 }

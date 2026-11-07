@@ -29,6 +29,9 @@ SERVER_PORT=0
 # a sample that fails on purpose says why on a line of its own: EXP instead of FAIL (the page sweep reads it too,
 # web/playground/test_in_browser.py EXPECTED_FAILURE)
 EXPECTED_FAILURE='^# expected failure: '
+# a sample's interactions (card scripts-samples, decision sample-checks), `# check: click "+1" → count: 1`: a sample
+# that ran is checked by `warp app check` too (lib/app/command.warp, the hidden web view), a failing check its FAIL
+CHECK_LINE='^# check: '
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
@@ -55,9 +58,13 @@ one() {
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
 	# storage does: a counter prints its first run's value, not the sweep count's
 	rm -f "$tree/${1%.warp}.database.sqlite"
-	(cd "$tree" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
+	(cd "$tree" && ulimit -t "$CPU_SECONDS" && WARP_NO_WINDOW=1 WARP_EVENTS_FOR=${WARP_EVENTS_FOR:-3500} WARP_PORT=$SERVER_PORT timeout "$wall" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
+	if [ $status -eq 0 ] && grep -q "$CHECK_LINE" "$tree/$1"; then
+		(cd "$tree" && WARP_NO_WINDOW=1 timeout "$wall" "$WARP" app check "$1" </dev/null >"$out.checks" 2>&1) || status=1
+		[ $status -ne 0 ] && { printf 'FAIL %s: %s\n' "$1" "$(grep -av '^ok ' "$out.checks" | grep -am1 . | cut -c1-200)"; return; }
+	fi
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
 	first=$(grep -av '^wasm-rt warning\|^warning: ' "$out.err" | grep -am1 . | tr '\t' ' ' | cut -c1-200)
 	[ $status -eq 124 ] && { verdict=TIME; first="still running after ${wall} s"; }
@@ -66,7 +73,7 @@ one() {
 	printf '%-4s %s: %s\n' "$verdict" "$1" "${first:-exit $status, nothing on stderr}"
 }
 export -f one wall_seconds
-export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE
+export tree results WARP CPU_SECONDS WALL_SECONDS CPU_LIMIT_HIT WINDOW_LIBRARIES SERVING SERVER_PORT EXPECTED_FAILURE CHECK_LINE
 
 report=$results/report.txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$report"
