@@ -67,6 +67,8 @@ selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "b
 # the operators that change their target, `n = …`, `n += …` (a branch's value assigns through them: parser.warp
 # branch_value; a function changing main's n: main_globals.warp)
 assigning_operators = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
+# the operators that count their target up or down, `n++`, `n--`
+counting_operators = ["++", "--"]
 # the operators after which `return` names a variable: those and the definitions
 binding_operators = assigning_operators + [":=", ":"]
 

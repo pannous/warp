@@ -24,6 +24,7 @@ source_checks(program: Node, prelude: text): Node := {
 		division_path(n, program)
 		uneven_spacing(n)
 		assigned_mutation(n, aliases)
+		literal_targets(n)
 		lints_of(without_mark(n))
 		if is_group(n) and separator_of(n) in statement_separators {
 			listed_statements = items_of(n)
@@ -73,6 +74,28 @@ library_constant_assignments(program: Node) := {
 		if name != "" and constants.has(name) { diagnose(call_of("library_constant", [name]), statement) }
 	}
 	ø
+}
+# decision literal-targets: a value where a variable changes, `1 = 2`, `1 += 3`, `1++`, is an error whose fix names
+# the readings: a variable, or the operation the spacing hid (`1 ++ 3` as 1 + +3, `1 = 2` as 1 == 2). A group's
+# `1++` before an item (not a statement) is checked there, which knows the item, ahead of the key's own check
+literal_targets(n: Node) := {
+	if is_group(n) and separator_of(n) not in statement_separators {
+		items = items_of(n)
+		for i in 0 ..< #items - 1 { literal_target(items[i], items[i + 1]) }
+	}
+	literal_target(n, ø)
+}
+literal_target(n: Node, next: any) := {
+	if not (n is key and (op_of(n) in assigning_operators or op_of(n) in counting_operators)) { return ø }
+	target = without_mark(key_of(n))
+	if not (is_literal(target) or target is codepoint) { return ø }
+	value = if target is text or target is codepoint then "\"${target}\"" else "${target}"
+	op = op_of(n)
+	counting = op in counting_operators
+	variable = "x = " + value + ", then x" + (if counting then op else " " + op + " ${value_of(n)}")
+	sign = op[0 ..< 1]
+	operation = if counting and next != ø then value + " " + sign + " " + sign + "${next}" else if op == "=" then value + " == ${value_of(n)}" else ø
+	diagnose(call_of("literal_target", [value, op, if operation then variable + "; or " + operation else variable]), n)
 }
 # the binding `k = 7` of `let k = 7` declaring a constant, else ø
 declared_constant(statement: Node): any := {
