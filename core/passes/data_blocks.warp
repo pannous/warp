@@ -46,11 +46,33 @@ data_positions_called(program: Node): map := {
 block_heads(written: list): list := written.filter(n => (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))).map(n => name_of(key_of(n)))
 # the program with the arguments of its data parameters and its tags' worded attributes spliced quotes, which no rule
 # or pass rewrites
-data_spliced(program: Node): Node := {
+data_spliced(program: Node, keeps_meaning: function): Node := {
 	positions = data_positions_called(program)
 	scope = scope_of(program)
-	bottom_up(program, n => attributes_spliced(if #positions.keys == 0 then n else data_argued(n, positions), scope))
+	tagged = spaced_tags(program, scope, keeps_meaning)
+	bottom_up(tagged, n => attributes_spliced(if #positions.keys == 0 then n else data_argued(n, positions), scope))
 }
+match_word = symbol("match")
+# each spaced tag of the program (spaced_tagged), never among a match's arms, `match k { Int {…} Error {…} }`
+spaced_tags(n: Node, scope: map, keeps_meaning: function): Node := {
+	if is_group(n) and items_of(n).any(item => item == match_word) { return n }
+	spaced_tagged(children(n, part => spaced_tags(part, scope, keeps_meaning)), scope, keeps_meaning)
+}
+# `ul {…}` the tag `ul{…}` is (decision spaced-tag), of a word the program does not bind, of no rule or library
+# meaning; side by side, `{ head {…} body {…} }`, each such pair its tag, when nothing else stands among them
+spaced_tagged(n: Node, scope: map, keeps_meaning: function): Node := {
+	if not ((is_spaced(n) or (is_curly_group(n) and separator_of(n) == " ")) and #n >= 2 and #n % 2 == 0) { return n }
+	tags = []
+	at = 1
+	while at < #n {
+		word = n#at
+		if not (word is symbol and is_curly_group(n#(at + 1)) and is_tag_word(name_of(word), scope, keeps_meaning)) { return n }
+		tags += [Key(word, Op.Colon, n#(at + 1))]
+		at += 2
+	}
+	if is_spaced(n) and #tags == 1 then tags#1 else group_like(n, tags)
+}
+is_tag_word(word: text, scope: map, keeps_meaning: function): bool := not (is_own_word(scope, word) or binds_as(scope, word, Meaning.Type) or keeps_meaning(word))
 # `li{ animation: pop 400ms }`: in an attribute's value, words led by one the program does not bind are data, the CSS
 # words as written, never a call of a library word (decision tag-items-calls)
 attributes_spliced(n: Node, scope: map): Node := {
