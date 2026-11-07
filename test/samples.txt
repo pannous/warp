@@ -1,4 +1,4 @@
-# e60b268542 2026-11-07 09:12 246/266 92.5%
+# a83685225e 2026-11-07 11:24 251/268 93.7%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
@@ -19,6 +19,7 @@ ok   samples/apps/log_analyzer.warp
 ok   samples/apps/mail_merge.warp
 ok   samples/apps/meeting_planner.warp
 ok   samples/apps/name_matcher.warp
+ok   samples/apps/open_hours.warp
 ok   samples/apps/recipe_scaler.warp
 ok   samples/apps/settings_cli.warp
 ok   samples/apps/site_generator.warp
@@ -35,6 +36,7 @@ ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
 ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
+ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
 ok   samples/functions/block_arguments.warp
 ok   samples/functions/code_as_data.warp
@@ -87,9 +89,9 @@ ok   samples/golf/sierpiński-triangle.warp
 ok   samples/gpu/domain_warp.warp
 ok   samples/gpu/fluid_smear_dsl.warp
 ok   samples/gpu/fluid_smear.warp
-ok   samples/acceleration/gpu_arrays.warp
-ok   samples/acceleration/gpu_map.warp
-ok   samples/acceleration/gpu_million.warp
+ok   samples/gpu/gpu_arrays.warp
+ok   samples/gpu/gpu_map.warp
+ok   samples/gpu/gpu_million.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
@@ -160,6 +162,7 @@ ok   samples/native/structs.warp
 ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
 ok   samples/numbers/collatz.warp
+ok   samples/numbers/dates.warp
 ok   samples/numbers/factorial.warp
 ok   samples/numbers/gcd.warp
 ok   samples/numbers/measurements.warp
@@ -181,6 +184,7 @@ ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
+ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -194,6 +198,7 @@ ok   samples/sound/sound_kick_samples.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
+ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
@@ -223,6 +228,7 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
+ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
@@ -253,15 +259,11 @@ WIN  samples/graphics/sdl_red_square.warp
 EXP  samples/native/c_calls.warp: primitive mode cannot emit getenv from 'c' but in a native build: a primitive file's C calls run by `warp build native`
 SRV  samples/servers/hosting.warp
 SRV  samples/servers/route_headers.warp
-SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
-EXP  samples/storage/netbase.warp: outside the core: the unknown name load
+EXP  samples/storage/netbase.warp: samples/storage/netbase.warp:4:1: outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
 TIME samples/gpu/lava_lamp.warp: used its 30 s of CPU
 TIME samples/gpu/northern_lights.warp: used its 30 s of CPU
 TIME samples/gpu/ringed_planet.warp: used its 30 s of CPU
-FAIL samples/numbers/dates.warp: wasm trap: null reference
-FAIL samples/sound/gpu_visualizer_warp.warp: outside the core: the field ms of a list at lib/time.warp:80 (in format_date)
-FAIL samples/sound/sound_patterns.warp: sound 1.33 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-31227.wav
-FAIL samples/sound/visualizer.warp: sound 4.00 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-32313.wav
-FAIL samples/wasm/import_compiled.warp: index out of range: 12164 not in 1…12163
+FAIL samples/servers/server.warp: web.wasm won't link: lib/web.warp or a module it uses changed since it was built; scripts/smoke.sh <tree> or warp rebuild builds it anew
+FAIL samples/sound/sound_patterns.warp: sound 1.33 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-5806.wav
