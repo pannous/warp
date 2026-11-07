@@ -316,7 +316,8 @@ function evaluatedNatively(code, file, hooks) {
 		// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
 		if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
 		// fetching: the answers still out (lib/net.warp fetch_later), each rendering the page anew when it comes
-		return { ...report(status === 0 ? value : said, status), html, warnings, fetching: holder?.fetchesLeft ?? 0 };
+		// runtime_warnings: what the host words said once a run (host-gpu.js warnOnce, @gpu on the CPU, `warn`)
+		return { ...report(status === 0 ? value : said, status), html, warnings, runtime_warnings: holder?.warnings ?? [], fetching: holder?.fetchesLeft ?? 0 };
 	});
 }
 
