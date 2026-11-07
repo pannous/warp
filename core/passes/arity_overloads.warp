@@ -375,12 +375,32 @@ variant_least(program: Node, overloaded: map): map := {
 # lines join its variants (decision sound-core-order), so a float still reaches the library's sin; an untyped
 # definition, `add(a, b) := …`, `def clear(color)`, takes every type itself and shadows the word
 library_variants(name: text, defined: list): list := {
-	if not word_lines().has(name) or not defined.all(own => own.any(type => type != any_word)) { return [] }
-	written = word_lines()[name].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name))
+	if not defined.all(own => own.any(type => type != any_word)) { return [] }
+	written = if word_lines().has(name) then word_lines()[name].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name)) else []
 	joining = []
 	# math declares sin twice, from warp and from 'm': one variant
 	for types in written { if types not in defined and types not in joining and defined.any(own => #own == #types) { joining += [types] } }
+	# a linked module's definition of as many parameters, all typed and of types the dispatch tells from the program's
+	# (decision cross-module-overload): the prelude's log(x: number, base: number) beside a program's log(level: text,
+	# parts: texts), each call reaching the body of its arguments' types (card program-own-log)
+	for types in linked_word_types(name) {
+		told = defined.filter(own => #own == #types)
+		if #told > 0 and types.all(type => type != any_word) and told.all(own => told_apart(own, types, overload_classes)) and types not in joining { joining += [types] }
+	}
 	joining
+}
+# the parameter types of each linked module's definition of the name
+linked_word_types(name: text): list := {
+	found = []
+	for image in module.linked_images {
+		for slice in linked_signature(image.name).slices.filter(slice => slice#1 == name) {
+			for statement in statements_in(unpack(slice#3)) {
+				call = definition_call(statement)
+				if call != ø { found += [parameter_types(call)] }
+			}
+		}
+	}
+	found
 }
 # `sin·float(value·1: float) := sin(value·1)`: a library line as a variant, the call of the library's word
 library_variant(name: text, types: list): Node := {
