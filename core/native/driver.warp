@@ -473,6 +473,24 @@ real_path_of(path: text): text := {
 	real_folder = resolved_path(if folder.length == 0 then "/" else folder)
 	if same_text(real_folder, folder) then path else joined(joined(real_folder, "/"), last_name(path))
 }
+# the run's time zone named in TZ, which lib/time.warp's now reads (decision local-now): where TZ names none (unset, or
+# a path such as macOS's /etc/localtime) the system's zone, the end of /etc/localtime's link after zoneinfo/
+name_time_zone(): i32 := {
+	given = getenv("TZ")
+	zone = system_zone_name()
+	if (given.length == 0 or starts_with(given, "/") or starts_with(given, ":")) and zone.length > 0 then setenv(c_string("TZ"), c_string(zone), 1) else 0
+}
+system_zone_name(): text := {
+	target = allocate(PATH_BYTES)
+	length = readlink(c_string("/etc/localtime"), target, PATH_BYTES)
+	if length <= 0 { return "" }
+	link = text_from(target, length as u32)
+	for i in 0..link.length {
+		rest = text_from(link.address + i, (link.length - i) as u32)
+		if starts_with(rest, "zoneinfo/") { return text_from(rest.address + 9, rest.length - 9) }
+	}
+	""
+}
 # the name after a path's last slash
 last_name(path: text): text := {
 	last = -1
@@ -791,6 +809,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	wasi_config_set_argv(config, given.count, given.pointers)
 	wasi_config_inherit_stdin(config)
 	output_to(config, output)
+	name_time_zone()
 	wasi_config_inherit_env(config)
 	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
 	wasi_config_preopen_dir(config, ".", ".", yes)
