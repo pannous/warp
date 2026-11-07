@@ -70,11 +70,17 @@ def spliced_code(body: Body, e: Node): list {
 		return runtime_call("key_node", parts).code
 	}
 	if is_group(e) and #e > 0 {
-		items = TypedCode(ValueKind.Node, node(Marked.SquareList, vector_code(e.map(item => spliced_code(body, item)))))
+		items = TypedCode(ValueKind.Node, node(Marked.SquareList, vector_code(range_list(#e).map(at => if is_id_selector(e, at) then quoted_code(body, e[at]) else spliced_code(body, e[at])))))
 		bracketed = TypedCode(ValueKind.Node, runtime_call("bracketed_node", [items, text_value(bracket_of(e))]).code)
 		return runtime_call("separated_node", [bracketed, text_value(separator_of(e))]).code
 	}
 	quoted_code(body, e)
+}
+# `#main {…}` of a style sheet: a `#` before a word and then its block is the id selector as written, no count of a
+# value the program binds; a `#xs` anywhere else counts
+is_id_selector(items: Node, at: int): bool := {
+	mark = items[at]
+	is_key(mark, Op.Hash) and key_of(mark) == ø and value_of(mark) is symbol and at + 1 < #items and is_curly_group(items[at + 1])
 }
 # `class: "box"`, `"nav a": {…}`, `p{…}`: a key whose left is a word or text, kept as written
 is_word_keyed(e: Node): bool := (is_key(e, Op.Colon) or is_key(e, Op.None)) and (key_of(e) is symbol or key_of(e) is text)
