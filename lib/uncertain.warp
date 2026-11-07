@@ -24,7 +24,7 @@ class Interval {
 	equals(o: any): bool := o is Interval and value == o.value and low == o.low and high == o.high
 	// the ± part: how far the interval reaches from the value, on its farther side
 	uncertainty(): float := max(high - value, value - low)
-	scaled(factor: float): Interval := Interval(value * factor, low * factor, high * factor)
+	scaled_by(factor: float): Interval := Interval(value * factor, low * factor, high * factor)
 	// √, as lib/reals.warp exact_root calls a value's own root(): it rises, so it maps the bounds, √(2.0 ± 0.01) spans
 	// √1.99 … √2.01
 	root(): Interval := Interval(sqrt(value), sqrt(low), sqrt(high))
@@ -55,7 +55,7 @@ class Gaussian {
 	uncertainty(): float := deviation()
 	low(): float := value - deviation()
 	high(): float := value + deviation()
-	scaled(factor: float): Gaussian := scaled_by_slope(value * factor, this, factor)
+	scaled_by(factor: float): Gaussian := scaled_by_slope(value * factor, this, factor)
 	// linear propagation: d√x = dx / (2√x)
 	root(): Gaussian := scaled_by_slope(sqrt(value), this, 0.5 / sqrt(value))
 	text(): text := uncertain_text(value, deviation(), 1)

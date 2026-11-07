@@ -63,6 +63,8 @@ unit_written(code: Node): bool := {
 # single unit word or any other code
 compound_unit(code: Node): any := if code is key and unit_written(code) then "${code}".replace(" ", "") else ø
 # `km/h`, `kg·m/s^2`: the unit word leading a unit written of several parts, ø for other code
+# `"Europe/Berlin"`, `"UTC"`: a text written as a time zone's name, an IANA Area/Location (lib/time.warp time_zones)
+zone_written(code: Node): bool := code is text and ("${code}" == "UTC" or ("${code}".contains("/") and not "${code}".contains(" ")))
 # `area possibly`: the code a word qualifies, as the two words read as one group within an expression; ø for other code
 qualified(code: Node, word: Node): any := if is_group(code) and bracket_of(code) == "" and #code == 2 and code#2 == word then code#1 else ø
 leading_unit(code: Node): any := if code is key and op_of(code) in [Op.Div, Op.Mul, Op.Pow] then leading_unit(key_of(code)) else if code is symbol then code else ø
@@ -1104,7 +1106,8 @@ rule_words = {
 	value_dir_words: value_dir_words,
 	value_helps: value_helps,
 	whenever_listens: whenever_listens,
-	written_after: written_after
+	written_after: written_after,
+	zone_written: zone_written
 }
 
 # A field annotation can still be a Type node when the early rewrite runs.

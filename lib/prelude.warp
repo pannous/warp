@@ -580,9 +580,11 @@ display.size := [display_width, display_height] px
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
 // The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
-// time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its wall
-// clock position, its zone's seconds east of UTC (not `offset`: the index type's synonym) and the index of the field in times.rs TIME_FIELDS
-time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
+// time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its
+// position, its zone's seconds east of UTC (a zoned time's, else 0; not `offset`: the index type's synonym) and the
+// index of the field in times.rs TIME_FIELDS. A zoned time's fields are those of its wall clock, its epoch seconds the instant's
+time_field_of(form: int, position: int, zone_seconds: int, field: int): int := {
+	wall = if form == 1 then position else position + zone_seconds * 1000000000
 	days = time_days(form, wall)
 	nanos = time_nanos(form, wall)
 	match field {
@@ -595,10 +597,12 @@ time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
 		5 => nanos /! 3600000000000
 		6 => nanos /! 60000000000 % 60
 		7 => nanos /! 1000000000 % 60
-		8 => days * 86400 + nanos /! 1000000000
+		8 => days * 86400 + nanos /! 1000000000 - zone_seconds
 		9 => zone_seconds
 		// the time of day in whole seconds, as calendar::Time::part: 22:27:46
 		10 => nanos /! 1000000000 * 1000000000
+		// the form of the time (lib/time.warp zoned tells a local time from an instant so)
+		12 => form
 		_ => days
 	}
 }
