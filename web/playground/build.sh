@@ -52,6 +52,8 @@ used_modules() { [ -f "$1" ] && sed -nE 's/^(use|import|require) ([a-z_0-9]+)[[:
 # from the installed library's, the text its prebuilt image was built of
 built_of_changed() {
 	local name=$1 seen=$2 used
+	# (a used library of no lib/ source, `use sqlite3`'s lib/native/sqlite3.warp, is not built in)
+	[ -f "$repository/lib/$name.warp" ] || return 1
 	cmp -s "$repository/lib/$name.warp" "$INSTALLED_LIBRARY/$name.warp" || return 0
 	for used in $(used_modules "$repository/lib/$name.warp"); do
 		[[ $seen == *" $used "* ]] && continue
