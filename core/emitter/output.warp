@@ -18,7 +18,7 @@ instance_text_word = HiddenWord.TextShown as text
 instance_show_word = HiddenWord.ShowShown as text
 # a value as the text `+` joins it with and print writes
 def shown_text(value: TypedCode): TypedCode {
-	# a number of a marked type shows by its type's show (extensions/int_types.warp), boxed with its mark
+	# a number of a marked type shows as its type's `format … as text` gives it (extensions/int_types.warp), boxed with its mark
 	if value.mark != 0 and (value.kind == ValueKind.Int or value.kind == ValueKind.Float) { return shown_text(TypedCode(ValueKind.Node, boxed(value))) }
 	kind = value.kind
 	if kind == ValueKind.Text { return value }
