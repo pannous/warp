@@ -23,13 +23,9 @@
 use "driver.warp"
 use "tests.warp"
 
-fork(): i32 from "c"
-waitpid(child: i32, status: pointer, options: i32): i32 from "c"
-fdopen(descriptor: i32, mode: pointer): handle from "c"
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
 isatty(descriptor: i32): i32 from "c"
 execv(path: pointer, arguments: pointer): i32 from "c"
-execvp(name: pointer, arguments: pointer): i32 from "c"
 read(descriptor: i32, data: pointer, size: i64): i64 from "c"
 STDIN = 0
 STDOUT = 1

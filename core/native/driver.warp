@@ -44,6 +44,8 @@ PATH_BYTES = 4096
 SLASH = 47
 SPACE = 32
 TEXT_SHIFT = 4294967296
+# the exit status of a child whose exec failed (words_run): the command is not found
+EXEC_FAILED_STATUS = 127
 # the most bytes shown_from gives at once: the output area past its scratch (runtime/text.warp output_room, c_text_at)
 SHOWN_PART = 65488
 # the host words the driver answers, the number its callback is defined with (answered_word); exit(code) ends the run
@@ -180,6 +182,15 @@ memmove(destination: handle, source: handle, size: i64): handle from "c"
 memset(destination: handle, value: i32, size: i64): handle from "c"
 memcmp(a: pointer, b: pointer, size: i64): i32 from "c"
 realpath(path: pointer, resolved: pointer): handle from "c"
+fork(): i32 from "c"
+execvp(file: pointer, arguments: pointer): i32 from "c"
+_exit(code: i32) from "c"
+pipe(ends: pointer): i32 from "c"
+dup2(from: i32, to: i32): i32 from "c"
+close(descriptor: i32): i32 from "c"
+fileno(stream: handle): i32 from "c"
+fdopen(descriptor: i32, mode: pointer): handle from "c"
+waitpid(child: i32, status: pointer, options: i32): i32 from "c"
 gcvt(value: f64, digits: i32, buffer: pointer): handle from "c"
 getenv(name: text): text from "c"
 getpid(): i32 from "c"
@@ -1005,6 +1016,7 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	listed = given + 2 * VALUE_BYTES
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
 	if same_text(module, "os") and same_text(member, "exec") { return os_exec(caller, context, listed, results) }
+	if same_text(module, "net") and same_text(member, "get") { return url_got(caller, context, shown(caller, context, item_of(caller, context, listed, 1)), results) }
 	if same_text(module, "regex") { return regex_answered(caller, context, member, listed, results) }
 	if same_text(module, "hash") { return hash_answered(caller, context, member, listed, results) }
 	# a live loop's cycle starts: only the playground hands loops over between runs; a fade or stop save sound applies
@@ -1074,16 +1086,65 @@ sh_quoted(t: text): text := {
 	}
 	joined(joined(quoted, text_from(t.address + start, (t.length - start) as u32)), "'")
 }
+# net.get(url), lib/net.warp's fetch: the answer's text by curl, run by its argument vector (no shell sees the URL),
+# a URL without its scheme (`fetch "://host/x"`) over https; an answer of status 400 or more, or no curl, is the Error
+# with curl's complaint
+url_got(caller: handle, context: handle, url: text, result: pointer): nothing := {
+	words = arguments()
+	added(words, "curl")
+	added(words, "-sSL")
+	added(words, "--fail-with-body")
+	added(words, if starts_with(url, "://") then joined("https", url) else url)
+	words_run(caller, context, "curl", words, result)
+}
+# a command run by its argument vector, without a shell: what it printed, else the Error naming its exit status
+# (EXEC_FAILED_STATUS: not found) and what it said on stderr
+words_run(caller: handle, context: handle, command: text, words: Arguments, result: pointer): nothing := {
+	said = joined(compiled_path(), ".stderr")
+	ends = allocate(8)
+	errors = fopen(c_string(said), c_string("w"))
+	if pipe(ends) != 0 or errors == 0 { return guest_error(caller, context, joined("cannot run ", command), result) }
+	reading = word_at(ends).value as i32
+	writing = word_at(ends + 4).value as i32
+	file = c_string(command)
+	# (the child only rewires its outputs and execs: no allocation between fork and exec)
+	child = fork()
+	if child == 0 {
+		dup2(writing, 1)
+		dup2(fileno(errors), 2)
+		close(reading)
+		execvp(file, words.pointers)
+		_exit(EXEC_FAILED_STATUS)
+	}
+	close(writing)
+	fclose(errors)
+	stream = fdopen(reading, c_string("r"))
+	printed = piped(stream)
+	fclose(stream)
+	status = allocate(4)
+	waitpid(child, status, 0)
+	exit_status = (word_at(status).value as i32) / 256
+	if exit_status == EXEC_FAILED_STATUS {
+		unlink(said)
+		free(printed.at)
+		return guest_error(caller, context, joined(joined("cannot run ", command), ": not found on PATH"), result)
+	}
+	answered(caller, context, command, printed, exit_status, said, result)
+}
 line_run(caller: handle, context: handle, line: text, result: pointer): nothing := {
 	said = joined(compiled_path(), ".stderr")
 	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
 	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
 	printed = piped(pipe)
-	status = pclose(pipe)
+	answered(caller, context, joined("sh -c ", line), printed, pclose(pipe) / 256, said, result)
+}
+# what a command printed, its trailing newlines left off, else (exit status not 0) the Error naming the status and
+# what it said on stderr
+answered(caller: handle, context: handle, command: text, printed: Printed, exit_status: i32, said: text, result: pointer): nothing := {
 	size = printed.size
 	while size > 0 and native_byte(printed.at + size - 1) == NEWLINE { size = size - 1 }
-	if status == 0 { guest_text(caller, context, printed.at, size, result) } else {
-		guest_error(caller, context, joined(joined(joined(joined(joined("sh -c ", line), " failed (exit status: "), text_of(status / 256)), "): "), trimmed_end(read_file(said))), result)
+	if exit_status == 0 { guest_text(caller, context, printed.at, size, result) } else {
+		guest_error(caller, context, joined(joined(joined(joined(command, " failed (exit status: "), text_of(exit_status)), "): "), trimmed_end(read_file(said))), result)
 	}
 	unlink(said)
 	free(printed.at)

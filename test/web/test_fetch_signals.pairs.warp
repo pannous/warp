@@ -1,0 +1,5 @@
+'config := fetch "://warp.pannous.com/assistant.json"; config.about.starts_with("What the assistant")'	yes
+'config := fetch "://warp.pannous.com/assistant.json"; [config.loading, config.error]'	[no, ø]
+'header = fetch "://warp.pannous.com/lib/libc.h"; header is text'	yes
+'config := fetch "://warp.pannous.com/assistant.json"; to_html(div{ h1{ "About" } p{ if config.loading then "Loading…" else "loaded" } })'	'<div><h1>About</h1><p aria-live="polite">loaded</p></div>'
+'config := fetch "://warp.pannous.com/assistant.json"; to_html(p{ "aria-live": "assertive", config.loading })'	'<p aria-live="assertive">no</p>'

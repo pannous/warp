@@ -41,10 +41,6 @@ count(m: map): int from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
-// fetch(url): the text a GET of the url answers, through the adapter std_io as lib/net.warp's post (the page answers
-// it with a request; the native warp has no HTTP client yet and says so: no declared result, so that error comes through
-// as itself, not as a failed cast to text)
-fetch(url: text) := std_io("net", "get", [url])
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
 map(xs: list, f: (any) -> any): list from emitter
