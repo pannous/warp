@@ -201,25 +201,40 @@ promoted_untested() {
 	inputs_line >"$file.inputs"
 	publish "$file"
 }
-# the build lock of a compiler of this hash taken (a folder holding the builder's pid); no when a live builder holds
-# it, a dead one's taken over. Released when the build ends, by the exit trap when this run is killed
-building() {
-	local lock=$store/$hash/$1.building holder
-	mkdir -p "$store/$hash"
+# a lock: a folder holding its holder's pid. lock_taken: no when a live holder has it, a dead one's taken over; every
+# lock this run holds is let go when it ends, by the exit trap when it is killed
+held_locks=()
+lock_taken() {
+	local lock=$1 holder
+	mkdir -p "$(dirname "$lock")"
 	if ! mkdir "$lock" 2>/dev/null; then
-		holder=$(cat "$lock/pid" 2>/dev/null)
-		[ -n "$holder" ] || { sleep 2; holder=$(cat "$lock/pid" 2>/dev/null); }  # its pid written a moment after
+		holder=$(lock_holder "$lock")
+		[ -n "$holder" ] || { sleep 2; holder=$(lock_holder "$lock"); }  # its pid written a moment after
 		[ -n "$holder" ] && kill -0 "$holder" 2>/dev/null && return 1
 		rm -rf "$lock" && mkdir "$lock" 2>/dev/null || return 1
 	fi
 	echo $$ >"$lock/pid"
-	trap 'released '"$1" EXIT
+	held_locks+=("$lock")
+	trap 'for lock in "${held_locks[@]}"; do lock_released "$lock"; done' EXIT
 }
-# the build lock let go, if it is still this run's
-released() {
-	local lock=$store/$hash/$1.building
-	[ "$(cat "$lock/pid" 2>/dev/null)" = $$ ] && rm -rf "$lock"
+lock_holder() { cat "$1/pid" 2>/dev/null; }
+# the lock let go, if it is still this run's
+lock_released() { [ "$(lock_holder "$1")" = $$ ] && rm -rf "$1"; }
+# lock_waited <lock> <name>: until its live holder lets go
+lock_waited() {
+	local holder
+	holder=$(lock_holder "$1")
+	logged "$2" "waiting-for-$holder"
+	while [ -d "$1" ] && kill -0 "$holder" 2>/dev/null; do sleep 10; done
 }
+# the build lock of a compiler of this hash
+build_lock() { echo "$store/$hash/$1.building"; }
+building() { lock_taken "$(build_lock "$1")"; }
+released() { lock_released "$(build_lock "$1")"; }
+# the compile lock of this code (the baked hash): trees of one code and different libraries, a branch and the main it
+# merged, compile compiler.warp once; the others wait for that compile and rebake (reused_stored), never queue for a
+# build slot to compile it again (card smoke-slot-queue: 10 such second compiles on 2026-11-07, 11-18 min each)
+code_lock() { echo "$store/code/$baked.building"; }
 # A compiler's code is core/**, extensions/**, the lib/ modules they use and the seed (the --baked hash,
 # compiler-inputs.sh code_files); the rest of lib/ it reads from disk (the sugar's rules packed beside the modules).
 # <store>/code/<baked> links the hash of a compiler of that code, so a lib/-only change takes that compiler as it is
@@ -288,22 +303,22 @@ one() {
 	if [ -n "$check" ]; then logged "$name" miss; return 3; fi
 	# one build of a hash at a time: a second tree waits for the first and takes its result from the store
 	if ! building "$name"; then
-		local holder
-		holder=$(cat "$store/$hash/$name.building/pid" 2>/dev/null)
-		logged "$name" "waiting-for-$holder"
-		while [ -d "$store/$hash/$name.building" ] && kill -0 "$holder" 2>/dev/null; do sleep 10; done
+		lock_waited "$(build_lock "$name")" "$name"
 		one "$@"
 		return
 	fi
 	local lane=(pure) from log=$store/$hash/$name.building/log record=$store/$hash/$name.building/record
 	recorded_inputs "$record"
 	"$scripts/seed-bootstrap.sh" "$warp" "${WARP_SEED:-$(seed_beside)}" "$lib"
-	if [ -z "$force" ] && [ "$name" = warp ]; then
+	# a stored compiler of this code rebaked, else this tree compiles it, else it waits for the tree compiling it
+	while [ -z "$force" ] && [ "$name" = warp ]; do
 		reused_stored "$log"
 		status=$?
 		[ $status = 2 ] && { build_failed "$name" "$log" $status; return 1; }
 		[ $status = 0 ] && { published "$name"; kept_record "$name" "$record" "$log"; released "$name"; logged "$name" built-reused; return 0; }
-	fi
+		lock_taken "$(code_lock)" && break
+		lock_waited "$(code_lock)" "$name"
+	done
 	[ "$name" = warp-self ] && lane=(self)
 	from=$(resumed_step "$name")
 	[ -n "$from" ] && lane=(from "$from")
@@ -316,7 +331,7 @@ one() {
 	[ -f "$file" ] || { cat "$log" >&2; released "$name"; echo "rebuild.sh: warp rebuild wrote no $file" >&2; return 1; }
 	inputs_line >"$file.inputs"
 	published "$name"
-	[ "$name" = warp ] && code_kept
+	[ "$name" = warp ] && code_kept && lock_released "$(code_lock)"
 	rm -rf "$(failure "$name")"
 	kept_record "$name" "$record" "$log"
 	released "$name"

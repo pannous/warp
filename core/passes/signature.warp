@@ -6,7 +6,7 @@
 # ~0.3 s). The first section behind the header, so a reader reads its bytes first. `warp signature <m>` shows it as
 # warp text
 SIGNATURE_SECTION = "warp.signature"
-class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list }
+class ModuleSignature { source: text; uses: list; slices: list; rules: list; foreign: map; aliases: map; words: list; globals: list; classes: list; builders: list; runtime: list; patterns: list; operators: list }
 
 # the signature of the standard module `name` as lib/ lies now, a node; with the fields of its image (prebuilt.warp
 # image_fields) when its compile wrote them
@@ -22,7 +22,8 @@ module_signature_node(name: text, image: list): Node := {
 		field_node("rules", square_list(module_rules_of(path, name).map(rule_node))),
 		field_node("foreign", texts_node(foreign_types(source))),
 		field_node("aliases", texts_node(module_aliases(source))),
-		field_node("patterns", square_list(rule_patterns(source).map(pattern => Text(pattern))))] + image)
+		field_node("patterns", square_list(rule_patterns(source).map(pattern => Text(pattern)))),
+		field_node("operators", square_list(declared_operators(source).map(operator => Text(written_operator(operator)))))] + image)
 }
 # the module's bytes with its signature as their first section
 with_signature(wasm: list, name: text, image: list): list := wasm_header + section(section_ids.custom, name_bytes(SIGNATURE_SECTION) + pack(module_signature_node(name, image)).bytes) + wasm[#wasm_header ..]
@@ -34,7 +35,7 @@ module_signature(name: text, wasm: list): ModuleSignature? := {
 	fields = {}
 	for entry in items_of(unpack(utf8_text(wasm[place#1 ..< place#2]))) { fields[name_of(key_of(entry))] = value_of(entry) }
 	module_name = name
-	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"))
+	ModuleSignature(source: "${fields["source"]}", uses: items_of(fields["uses"]).map(module => "${module}"), slices: items_of(fields["slices"]).map(slice => ["${slice#1}", "${slice#2}", "${slice#3}", module_name]), rules: items_of(fields["rules"]).map(rule => unpacked_rule(rule, module_name)), foreign: texts_read(fields.get("foreign")), aliases: texts_read(fields.get("aliases")), words: listed(fields, "words"), globals: listed(fields, "globals"), classes: listed(fields, "classes"), builders: listed(fields, "builders"), runtime: listed(fields, "runtime"), patterns: listed(fields, "patterns").map(pattern => "${pattern}"), operators: listed(fields, "operators").map(operator => "${operator}"))
 }
 # a signature field's items, none for one an older build left out
 listed(fields: map, field: text): list := if fields.get(field) == ø then [] else items_of(fields[field])
