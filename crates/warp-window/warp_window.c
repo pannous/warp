@@ -4,8 +4,9 @@
 // `window_open = 1` or the first painting opens it, never under WARP_NO_WINDOW or CI. Each painting is a frame, its
 // title telling the frame times; each painting and reading of window_open takes the window's events in. Closed, it
 // ends a program painting on; a still picture (a run's one painting) stays shown after the run until it is closed.
-// The window resizes keeping the painting's aspect (the layer scales the painting to it), and goes full screen by
-// the system value window_fullscreen or its green button; the pointer is told in the painting's pixels
+// A window sized by its painting opens at the largest whole multiple of it that fits a share of the screen. It resizes
+// freely and goes full screen by the system value window_fullscreen or its green button: libwarp_gpu shows the
+// painting as large as fits, its aspect kept, centered; the pointer is told in the painting's pixels
 // Built by scripts/wasmtime-c-api.sh where SDL3 is installed
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
@@ -21,6 +22,7 @@
 #define WINDOW_TITLE "warp"
 enum { DEFAULT_WIDTH = 640, DEFAULT_HEIGHT = 480, MOST_HELD = 16, TITLE_BYTES = 128, OUT_OF_SIGHT_MS = 16 };
 static const uint64_t TITLE_EVERY_NS = 500000000;
+static const float SCREEN_SHARE = 0.7f; // the most of the screen a window sized by its painting opens to
 // the codes lib/keys.warp KEY_NAMES gives the keys SDL codes above the characters (web/playground/canvas.js KEY_CODES)
 static const SDL_Keycode SDL_KEYS[] = {SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT, SDLK_LSHIFT, SDLK_RSHIFT, SDLK_LCTRL,
 	SDLK_RCTRL, SDLK_LALT, SDLK_RALT, SDLK_LGUI, SDLK_RGUI};
@@ -62,13 +64,21 @@ static void key_released(int64_t code) {
 		if (held[i] == code) { memmove(held + i, held + i + 1, (--held_count - i) * sizeof *held); return; }
 }
 
+// how many times the painting's size the window opens at: the most that fits SCREEN_SHARE of the screen, at least once
+static int64_t enlarged(void) {
+	SDL_Rect screen;
+	if (sized_by_program || !SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &screen)) return 1;
+	int64_t times = (int64_t)fminf(screen.w * SCREEN_SHARE / width, screen.h * SCREEN_SHARE / height);
+	return times > 1 ? times : 1;
+}
 static void held_open(void);
 static void window_opened(void) {
 	if (window || windows_refused()) return;
 	static int holding;
 	if (!holding) holding = 1, atexit(held_open);
 	if (!SDL_Init(SDL_INIT_VIDEO)) { fprintf(stderr, "window: %s\n", SDL_GetError()); return; }
-	window = SDL_CreateWindow(WINDOW_TITLE, (int)width, (int)height, SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE);
+	int64_t times = enlarged();
+	window = SDL_CreateWindow(WINDOW_TITLE, (int)(width * times), (int)(height * times), SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE);
 	if (!window) { fprintf(stderr, "window: %s\n", SDL_GetError()); return; }
 	view = SDL_Metal_CreateView(window);
 	open_now = 1;
@@ -118,19 +128,26 @@ static void events_taken(void) {
 static int32_t (*painting_shown_again)(void);
 void warp_window_repainted_by(int32_t (*shown_again)(void)) { painting_shown_again = shown_again; }
 // a run that painted one picture leaves it in the window until the window is closed (or Escape), shown again as the
-// window comes into sight (it opens behind the app in front); an animation's window closes with its run
+// window comes into sight (it opens behind the app in front) or changes size; an animation's window closes with its run
 static void held_open(void) {
 	SDL_Event event;
 	while (open_now && frames == 1 && SDL_WaitEvent(&event)) {
 		int escaped = event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE;
+		int uncovered = event.type == SDL_EVENT_WINDOW_EXPOSED || event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED;
 		if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED || escaped) window_closed();
-		else if (event.type == SDL_EVENT_WINDOW_EXPOSED && painting_shown_again) painting_shown_again();
+		else if (uncovered && painting_shown_again) painting_shown_again();
 	}
 }
 
-// a pointer position in the window's points as a pixel of the painting the window shows scaled
-static int64_t in_painting(float point, int32_t painted, int window_points) {
-	return painted > 0 && window_points > 0 ? (int64_t)(point * painted / window_points) : (int64_t)point;
+// a pointer position in the window's points as a pixel of the painting the window shows as large as fits, centered
+// (libwarp_gpu letterboxed); across or down
+static int64_t in_painting(float point, int across) {
+	int points_wide = 0, points_high = 0;
+	SDL_GetWindowSize(window, &points_wide, &points_high);
+	if (painted_width <= 0 || painted_height <= 0 || points_wide <= 0 || points_high <= 0) return (int64_t)point;
+	float scale = fminf((float)points_wide / painted_width, (float)points_high / painted_height);
+	float margin = across ? (points_wide - painted_width * scale) / 2 : (points_high - painted_height * scale) / 2;
+	return (int64_t)floorf((point - margin) / scale);
 }
 // whether the system shows dark mode, asked without a window (SDL's theme needs its video started): macOS keeps it as
 // the global preference AppleInterfaceStyle "Dark"; elsewhere not known, light
@@ -156,11 +173,9 @@ int32_t warp_system_value(const char* name, int64_t* value) {
 	else if (named(name, "keys pressed")) *value = presses;
 	else if (named(name, "key code pressed")) *value = last_pressed;
 	else if (named(name, "mouse_x") || named(name, "mouse_y") || named(name, "mouse_down_x") || named(name, "mouse_down_y")) {
-		int points_wide = 0, points_high = 0;
-		if (open_now) SDL_GetWindowSize(window, &points_wide, &points_high);
 		int across = named(name, "mouse_x") || named(name, "mouse_down_x"), pressed = named(name, "mouse_down_x") || named(name, "mouse_down_y");
 		float point = across ? (pressed ? down_x : mouse_x) : (pressed ? down_y : mouse_y);
-		*value = !open_now ? 0 : across ? in_painting(point, painted_width, points_wide) : in_painting(point, painted_height, points_high);
+		*value = open_now ? in_painting(point, across) : 0;
 	} else if (named(name, "window_fullscreen")) *value = full_screen();
 	else if (named(name, "dark mode")) *value = dark_mode();
 	else if (named(name, "mouse_down")) *value = open_now && mouse_down;
@@ -196,16 +211,13 @@ void* warp_window_layer(int32_t painting_width, int32_t painting_height) {
 	events_taken();
 	if (closed_by_user) exit(0);
 	frame_timed();
-	if (painting_width != painted_width || painting_height != painted_height) {
-		painted_width = painting_width;
-		painted_height = painting_height;
-		float aspect = (float)painting_width / (float)painting_height;
-		SDL_SetWindowAspectRatio(window, aspect, aspect);
-	}
+	painted_width = painting_width;
+	painted_height = painting_height;
 	if (!sized_by_program && frames == 1 && (painting_width != width || painting_height != height)) {
 		width = painting_width;
 		height = painting_height;
-		SDL_SetWindowSize(window, (int)width, (int)height);
+		int64_t times = enlarged();
+		SDL_SetWindowSize(window, (int)(width * times), (int)(height * times));
 	}
 	return SDL_Metal_GetLayer(view);
 }

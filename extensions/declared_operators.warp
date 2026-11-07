@@ -83,14 +83,24 @@ def scanned_operators(source: text): list {
 }
 # The glyph operators the standard modules declare, with their precedence: `[1] ∪ [2] ∩ [3]` reads ∩ first as
 # lib/list.warp says, without `use list`, `6 ± 1` is uncertain's operator_±(6, 1), which brings uncertain as any word
-# of it does (implicit_modules); scanned the first time a parse needs them
+# of it does (implicit_modules); read off the library index the first time a parse needs them
 global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
-		statements = std_module_names.filter(name => join(module_sources([name]), "").contains("operator")).flat_map(name => code_statements_of(name))
-		library_operators = operators_declared_in(statements).filter(operator => not is_name_start(operator.glyph#1))
+		indexed = library_index_section("operator")
+		library_operators = indexed.keys.map(key => DeclaredOperator{glyph: key.split(" ")#1, fixity: FIXITY_WORDS[key.split(" ")#2], level: indexed[key] as int})
 	}
 	library_operators
+}
+# each of them as the library index holds it (library.warp), `<glyph> <fixity word>` with its level, scanned off the
+# modules' texts by the build writing the index
+def library_operators_scanned(): map {
+	statements = std_module_names.filter(name => join(module_sources([name]), "").contains("operator")).flat_map(name => code_statements_of(name))
+	found = {}
+	for operator in operators_declared_in(statements).filter(operator => not is_name_start(operator.glyph#1)) {
+		found[operator.glyph + " " + FIXITY_WORDS.keys.find(word => FIXITY_WORDS[word] == operator.fixity)] = "${operator.level}"
+	}
+	found
 }
 
 def has_beyond_ascii(source: text): bool {

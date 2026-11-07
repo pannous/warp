@@ -982,7 +982,8 @@ module_dir(word: text): any := {
 	if source == "" { return ø }
 	listed = {}
 	for name in definition_slices(source).map(cut => cut#1) + typed_words(word) { if is_listed_word(name) { listed[name] = yes } }
-	List(listed.keys, Bracket.Square, Separator.Comma)
+	# sorted, so an edit of the module leaves the order of its other words as it was (decision core-dir-order)
+	List(listed.keys.sort(), Bracket.Square, Separator.Comma)
 }
 # the prelude's words whose first parameter is of the type: its declarations, `upper(t: text): text from warp`
 # (word_lines), and its definitions, `pad_left(t: text, width) := …`

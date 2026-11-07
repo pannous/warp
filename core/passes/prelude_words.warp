@@ -53,13 +53,12 @@ spans_of(source: text): list := {
 	}
 	source_spans[source]
 }
-# the module of sliced_modules whose file the source is, as the library index was written of it: its length the
-# index's, and in a lib/ maybe edited since the build (library_unedited) its hash too, as rule_needs_by_module trusts the index
-# (hashing the prelude and the type modules was ~25 ms a compile); ø for any other text
+# the module of sliced_modules whose file the source is, its length the index's: the index is lib/ as the build left it
+# (decision no-lib-reads: an edited lib/ is a rebuild); ø for any other text
 indexed_module(source: text): text? := {
 	for module in sliced_modules() {
 		hash = library_index_section("hash").get(module) ?? ""
-		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (library_unedited() or hash == source_hash(source)) { return module }
+		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) { return module }
 	}
 	ø
 }

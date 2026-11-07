@@ -1,0 +1,21 @@
+# A test of a collection of a type (card map-of-type-test): `xs is list of int` is `xs is list` and each of its items
+# `is int`, `m is map of text` each of the map's values, `xs is list of list of int` nested. Right before the core's
+# type tests (core/analysis/type_tests.warp), which take each `is` it leaves and would read the phrase as a value
+
+map_word = "map"
+typed_item = symbol("item·typed")
+
+collection_type_tests(program: Node): Node := bottom_up(program, collection_type_test)
+collection_type_test(n: Node): Node := {
+	if not is_key(n, Op.Is) { return n }
+	phrase = value_of(n)
+	if not (is_group(phrase) and bracket_of(phrase) == "" and #phrase >= 3 and phrase#1 is symbol and is_collection_head(name_of(phrase#1)) and phrase#2 == symbol(of_word)) { return n }
+	subject = key_of(n)
+	collection = phrase#1
+	item_type = if #phrase == 3 then phrase#3 else List(items_of(phrase)[2 ..], Bracket.None, Separator.Space)
+	items = if collection == symbol(map_word) then call_of("values", [subject]) else subject
+	each_typed = call_of("all", [items, Key(typed_item, Op.Arrow, collection_type_test(Key(typed_item, Op.Is, item_type)))])
+	Key(Key(subject, Op.Is, collection), Op.And, each_typed)
+}
+
+collection_type_tests_extension = Extension{name: "collection_type_tests", passes_before: {"type_tests": collection_type_tests}}
