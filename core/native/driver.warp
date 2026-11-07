@@ -1690,6 +1690,34 @@ host_told(export: text, name: text, value: i64, numbers: i64): i64 := {
 	guest_call(0, context, export, values, 1 + numbers, result)
 	value_number(result)
 }
+## C calling a warp function back (card ffi-callbacks): a trampoline of lib/native/foreign.c, which lib/callbacks.warp
+## c_callback handed C, calls this during the C call; it calls that module's export c_callback_fired(slot, a … f)
+c_callback_answered(slot: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64): i64 := {
+	context = run_context()
+	function = allocate(EXTERN_BYTES)
+	if not wasmtime_linker_get(long_at(kept_value(RUN_SLOT) as i32).value, context, "warp/callbacks", 14, "c_callback_fired", 16, function) {
+		complain("C called a callback back, but the run links no warp/callbacks exporting c_callback_fired")
+		exit(1)
+	}
+	values = allocate(7 * VALUE_BYTES)
+	integer_value_set(values, slot)
+	integer_value_set(values + VALUE_BYTES, a)
+	integer_value_set(values + 2 * VALUE_BYTES, b)
+	integer_value_set(values + 3 * VALUE_BYTES, c)
+	integer_value_set(values + 4 * VALUE_BYTES, d)
+	integer_value_set(values + 5 * VALUE_BYTES, e)
+	integer_value_set(values + 6 * VALUE_BYTES, f)
+	result = allocate(VALUE_BYTES)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	checked(wasmtime_func_call(context, function + 8, values, 7, result, 1, trap), trap)
+	value_number(result)
+}
+# a wasmtime_val_t holding an i64
+integer_value_set(value: pointer, n: i64): nothing := {
+	byte_at(value).value = KIND_I64
+	long_at(value + VALUE_OFFSET).value = n
+}
 slot_set(name: text, value: i64): nothing := {
 	slot = if same_text(name, "window_width") then WINDOW_WIDTH_SLOT else if same_text(name, "window_height") then WINDOW_HEIGHT_SLOT else if same_text(name, "display_dpi") then DISPLAY_DPI_SLOT else -1
 	if slot < 0 {
