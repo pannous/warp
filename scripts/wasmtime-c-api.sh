@@ -157,7 +157,7 @@ webview_library_built() {
   folder=$checkout/crates/warp-webview
   built=$webview_build/$webview_library
   # shellcheck disable=SC2086 # the headers are words
-  current "$built" "$folder"/* "$checkout/web/playground/js-members.js" "$checkout/web/playground/markup.js" $value_headers && return
+  current "$built" "$folder"/* "$checkout/web/playground/js-members.js" "$checkout/web/playground/markup.js" "$checkout/web/playground/markup-forms.js" $value_headers && return
   # shellcheck disable=SC2086 # the flags are words
   nice -n 19 cc -O2 -std=gnu23 -fobjc-arc -shared -fPIC -o "$built.new" "$folder/warp_webview.m" -framework Cocoa -framework WebKit $value_libraries
   mv -f "$built.new" "$built"

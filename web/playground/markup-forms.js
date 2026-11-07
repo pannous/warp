@@ -1,7 +1,7 @@
 // Forms (a part of markup.js, card web-submit): loaded after markup.js only by pages whose program has an
 // `on submit` handler (src/web/site.rs), and always by the playground.
 
-// the events a site listens for besides site.js SITE_EVENTS
+// the events a page listens for besides markup.js listenToElements' own
 var FORM_EVENTS = { submit: submitDetail };
 
 // a form sent: `form{ on submit { … } }` reads its named fields as event.fields (card web-submit), a number field's as

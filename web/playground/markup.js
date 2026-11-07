@@ -98,6 +98,22 @@ function inputDetail(field) {
 	return { value: NUMBER_FIELDS.includes(field.type) ? field.valueAsNumber : field.value, checked: field.checked ?? false };
 }
 
+// each event of a page its program hears, to `handle`: its element's {event, detail} (elementEvent) or nothing, and the
+// DOM event; a key pressed anywhere but in a text field is the program's `on key` (lib/keys.warp). A built site
+// (site.js) and the native warp's app window (crates/warp-webview/bridge.js) listen so; markup-forms.js adds submit
+const KEY_EVENT = "key";
+const fieldDetail = happened => inputDetail(happened.composedPath()[0]);
+function listenToElements(root, handle) {
+	const events = { click: () => ({}), input: fieldDetail, ...Object.fromEntries(Object.keys(FIELD_EVENT_TYPES).map(event => [event, fieldDetail])), ...self.FORM_EVENTS };
+	for (const [event, detail] of Object.entries(events)) {
+		root.addEventListener(FIELD_EVENT_TYPES[event] ?? event, happened => handle(elementEvent(event, happened, detail(happened)), happened));
+	}
+	document.addEventListener("keydown", pressed => isTyping(pressed.target) || handle({ event: KEY_EVENT, detail: { key: pressed.key } }, pressed));
+}
+function isTyping(target) {
+	return target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName);
+}
+
 // text on the page's clipboard (`clipboard.write`, host-files.js); the browser refuses it without a recent user action
 // (a click), loudly on the console
 function copyText(text) {
