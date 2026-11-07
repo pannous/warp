@@ -30,6 +30,8 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 	imports.js std.js examples.js codemirror-warp-mode.js codemirror lib samples.js keywords.js
 	keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
+# the digits of a file's content hash its deployed URL carries (stamp_assets)
+STAMP_DIGITS=10
 # the library sources a first compile reads, sent to the page in one file, warp-lib/sources.json (wasi.js preloadSources)
 PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv' 'modules/sugar_rules.packed')
 # the exports of warp.wasm the page calls (driver.js, values.js): the browser's copy keeps only these, and Binaryen drops
@@ -220,7 +222,21 @@ collect_site() {
 	echo "$DOMAIN" > "$site/CNAME"
 	# the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
 	write_site_served_files "$site"
+	stamp_assets "$site"
 	echo "collected $site"
+}
+
+# each script and style sheet the site's index.html links, its URL stamped with its content hash, `playground.js?v=3f…`
+# (card stale-cached-assets): GitHub Pages lets a browser keep any file 10 minutes, so a reloaded page met the build
+# before's CSS; a changed file is a new URL, fetched at once. version.js is one, so the workers' ?build= (host.js
+# ofThisBuild) is the new build's too
+stamp_assets() {
+	local index=$1/index.html asset stamp
+	for asset in $(grep -oE '(src|href)="[^":?#]+\.(js|css)"' "$index" | sed -E 's/^[a-z]+="(.*)"$/\1/' | sort -u); do
+		[ -f "$1/$asset" ] || continue
+		stamp=$(shasum -a 256 "$1/$asset" | cut -c1-$STAMP_DIGITS)
+		ASSET="$asset" STAMP="$stamp" perl -pi -e 's{((?:src|href)=")\Q$ENV{ASSET}\E"}{$1$ENV{ASSET}?v=$ENV{STAMP}"}g' "$index"
+	done
 }
 
 case "${1:-all}" in

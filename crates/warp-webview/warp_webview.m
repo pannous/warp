@@ -1,7 +1,8 @@
 // libwarp_webview (card app-webview, decision native-js-webview): the system's web view for the native warp, on macOS
 // WKWebView. It answers the host word foreign_call for `use js` (bound by lib/native/foreign.c library_word) in one
-// hidden web view per run, made at the first call: never shown, never activating the app, no Dock icon. And it shows a
-// page's HTML in a window for `warp app` (lib/app/command.warp, lib/webview.warp), never under WARP_NO_WINDOW or CI.
+// hidden web view per run, made at the first call: never shown, never activating the app, no Dock icon. `warp app` shows
+// that view in a window, the program's handlers live (warpWindow below, lib/markup.warp page_window_run), never under
+// WARP_NO_WINDOW or CI.
 // Built by scripts/wasmtime-c-api.sh
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
@@ -13,12 +14,25 @@ static NSString* const EMPTY_PAGE = @"<!doctype html><meta charset=utf-8><title>
 static const NSTimeInterval ANSWER_SECONDS = 10, SPIN_SECONDS = 0.005;
 enum { WINDOW_WIDTH = 900, WINDOW_HEIGHT = 700 };
 static const char* const JS_RUNTIME = "js";
-// web/playground/js-members.js (jsMember, shared with the page) and bridge.js (warpForeignCall), put into each page
+// `warp app` names the window so (lib/app/command.warp): the program's page shows there, live
+static const char* const APP_WINDOW_VARIABLE = "WARP_APP_WINDOW";
+// web/playground/js-members.js (jsMember), markup.js (listenToElements, morphChildren) and markup-forms.js (submit),
+// shared with the page, and bridge.js (warpForeignCall, the page's events), put into each page
 static const char BRIDGE[] = {
 #embed "../../web/playground/js-members.js"
 	, '\n',
+#embed "../../web/playground/markup.js"
+	, '\n',
+#embed "../../web/playground/markup-forms.js"
+	, '\n',
 #embed "bridge.js"
 	, 0};
+// the module `use js` calls answered here, not in the page: the run's window, `show` it, the `next` event of its page
+static NSString* const APP_WINDOW = @"warpWindow";
+// what warpWindow.next answers once its time is over without an event (lib/markup.warp page_window_run)
+static NSString* const TICK_EVENT = @"tick";
+// the message bridge.js posts each event of the page with, its {event, detail} as JSON
+static NSString* const EVENT_MESSAGE = @"warpEvent";
 // a module's or member's name as `use js` writes it, never JS source (an argument crosses only as JSON)
 static NSString* const NAME_PATTERN = @"^[A-Za-z_$][A-Za-z0-9_$]*$";
 
@@ -40,10 +54,22 @@ static BOOL spun(BOOL (^done)(void), NSTimeInterval seconds) {
 - (void)webView:(WKWebView*)view didFailNavigation:(WKNavigation*)navigation withError:(NSError*)error { self.loaded = 1; }
 @end
 
+// the page's events not yet given to the program, each its {event, detail} as JSON
+static NSMutableArray<NSString*>* page_events;
+@interface WarpEvents : NSObject <WKScriptMessageHandler>
+@end
+@implementation WarpEvents
+- (void)userContentController:(WKUserContentController*)controller didReceiveScriptMessage:(WKScriptMessage*)message {
+	if ([message.body isKindOfClass:NSString.class]) [page_events addObject:message.body];
+}
+@end
+
 static WKWebView* view_made(NSRect frame) {
 	WKWebViewConfiguration* configuration = [WKWebViewConfiguration new];
 	WKUserScript* bridge = [[WKUserScript alloc] initWithSource:@(BRIDGE) injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];
 	[configuration.userContentController addUserScript:bridge];
+	page_events = page_events ?: [NSMutableArray new];
+	[configuration.userContentController addScriptMessageHandler:[WarpEvents new] name:EVENT_MESSAGE];
 	return [[WKWebView alloc] initWithFrame:frame configuration:configuration];
 }
 // the HTML shown in the view, waited for: 0 when it did not load in time
@@ -118,6 +144,78 @@ static NSString* failure_said(NSString* called, NSString* failure) {
 	NSString* plain = [failure hasPrefix:@"Error: "] ? [failure substringFromIndex:7] : failure;
 	return [plain hasPrefix:called] ? plain : [NSString stringWithFormat:@"%@: %@", called, plain];
 }
+// the run's window, the hidden view in it: open until it is closed
+static NSWindow* app_window;
+static BOOL app_window_open;
+@interface WarpAppWindowClosing : NSObject <NSWindowDelegate>
+@end
+@implementation WarpAppWindowClosing
+- (void)windowWillClose:(NSNotification*)notification { app_window_open = NO; }
+@end
+static NSWindow* window_made(NSString* title, id<NSWindowDelegate> delegate) {
+	NSWindow* window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+		styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable
+		backing:NSBackingStoreBuffered defer:NO];
+	window.releasedWhenClosed = NO;
+	window.title = title;
+	window.delegate = delegate;
+	return window;
+}
+static void window_shown(NSWindow* window, WKWebView* view) {
+	view.frame = window.contentView.bounds;
+	view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+	[window.contentView addSubview:view];
+	[window center];
+	[window makeKeyAndOrderFront:nil];
+	[NSApp activateIgnoringOtherApps:YES];
+}
+// the app's events (clicks, keys) handed to its windows until done() or the seconds are over, as [NSApp run] would
+static BOOL pumped(BOOL (^done)(void), NSTimeInterval seconds) {
+	NSDate* until = [NSDate dateWithTimeIntervalSinceNow:seconds];
+	while (!done() && until.timeIntervalSinceNow > 0) {
+		NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:SPIN_SECONDS] inMode:NSDefaultRunLoopMode dequeue:YES];
+		if (event) [NSApp sendEvent:event];
+	}
+	return done();
+}
+// `warpWindow.show(title)`: the run's view in a window; `warpWindow.next(milliseconds)`: the page's next event,
+// {event, detail, wall} as JSON, else {event: "tick", wall} once the milliseconds are over (none or -1: wait for an
+// event), wall the local wall clock's milliseconds since 1970 (lib/timers.warp); nil once the window is closed. *failure says why it can't
+static NSString* window_answered(NSString* member, NSString* title, NSString* request, NSString** failure) {
+	if ([member isEqualToString:@"show"]) {
+		if (windows_refused()) *failure = @"no window under WARP_NO_WINDOW or CI";
+		else if (!app_window) {
+			WKWebView* view = hidden_view();
+			application_made(NSApplicationActivationPolicyAccessory);
+			[NSApp finishLaunching];
+			app_window = window_made(title, [WarpAppWindowClosing new]);
+			app_window_open = YES;
+			window_shown(app_window, view);
+		}
+		return nil;
+	}
+	if (![member isEqualToString:@"next"]) {
+		*failure = [NSString stringWithFormat:@"the window has no %@: show or next", member];
+		return nil;
+	}
+	if (!app_window) {
+		*failure = @"no window shown: warpWindow.show(title) first";
+		return nil;
+	}
+	NSArray* given = [NSJSONSerialization JSONObjectWithData:[request dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil][@"arguments"];
+	NSNumber* waited = [given isKindOfClass:NSArray.class] && [given.firstObject isKindOfClass:NSNumber.class] ? given.firstObject : nil;
+	NSTimeInterval seconds = waited && waited.doubleValue >= 0 ? waited.doubleValue / 1000 : DBL_MAX;
+	pumped(^{ return (BOOL)(page_events.count > 0 || !app_window_open); }, seconds);
+	if (!app_window_open) return nil;
+	NSMutableDictionary* happened = [NSMutableDictionary dictionaryWithDictionary:@{@"event": TICK_EVENT}];
+	if (page_events.count) {
+		[happened setDictionary:[NSJSONSerialization JSONObjectWithData:[page_events.firstObject dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]];
+		[page_events removeObjectAtIndex:0];
+	}
+	happened[@"wall"] = @((long long)((NSDate.date.timeIntervalSince1970 + NSTimeZone.localTimeZone.secondsFromGMT) * 1000));
+	return [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:happened options:0 error:nil] encoding:NSUTF8StringEncoding];
+}
+
 // foreign_call(runtime, module, member, call, arguments), as the page's host-foreign.js foreignCall answers it
 wasm_trap_t* warp_word_foreign_call(void* engine, wasmtime_caller_t* caller, const wasmtime_val_t* given, size_t given_count, wasmtime_val_t* results, size_t result_count) {
 	(void)given_count, (void)result_count;
@@ -133,8 +231,10 @@ wasm_trap_t* warp_word_foreign_call(void* engine, wasmtime_caller_t* caller, con
 		NSString* failure = nil;
 		if (strcmp(runtime.UTF8String, JS_RUNTIME)) failure = [NSString stringWithFormat:@"%@: %@ is not in the native warp yet", called, runtime];
 		else if ((named_module && !is_name(module)) || !member_named(member)) failure = [NSString stringWithFormat:@"%@: not a name js has", called];
+		BOOL windowed = !failure && named_module && [module isEqualToString:APP_WINDOW];
 		NSString* request = failure || values.failure[0] ? nil : request_of(&values, given, member);
-		NSString* json = request && !values.failure[0] ? answered(hidden_view(), @"return await warpForeignCall(request)", @{@"request": request}, &failure) : nil;
+		NSString* json = windowed ? window_answered(member, @(getenv(APP_WINDOW_VARIABLE) ?: "warp"), request, &failure)
+			: request && !values.failure[0] ? answered(hidden_view(), @"return await warpForeignCall(request)", @{@"request": request}, &failure) : nil;
 		if (failure) warp_failed(&values, failure_said(called, failure).UTF8String);
 		else if (json) answer = node_of_json(&values, json.UTF8String);
 		return warp_answered(&values, answer, results);
@@ -149,43 +249,5 @@ char* webview_page_text(const char* html) {
 		NSString* text = page_loaded(view, @(html)) ? answered(view, @"return document.body?.innerText ?? ''", @{}, &failure) : nil;
 		if (!text) fprintf(stderr, "libwarp_webview: the page did not load%s%s\n", failure ? ": " : "", failure ? failure.UTF8String : "");
 		return strdup(text ? text.UTF8String : "");
-	}
-}
-
-@interface WarpWindowClosing : NSObject <NSWindowDelegate>
-@end
-@implementation WarpWindowClosing
-- (void)windowWillClose:(NSNotification*)notification {
-	[NSApp stop:nil];
-	// stop takes effect after the next event
-	[NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:0 context:nil subtype:0 data1:0 data2:0] atStart:NO];
-}
-@end
-
-// `warp app`: the page's HTML in a window titled so, shown until it is closed; 1 refused (WARP_NO_WINDOW, CI)
-int32_t webview_show(const char* html, const char* title) {
-	if (windows_refused()) {
-		fprintf(stderr, "warp app: no window under WARP_NO_WINDOW or CI\n");
-		return 1;
-	}
-	@autoreleasepool {
-		application_made(NSApplicationActivationPolicyAccessory);
-		NSWindow* window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
-			styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable
-			backing:NSBackingStoreBuffered defer:NO];
-		window.releasedWhenClosed = NO;
-		window.title = @(title);
-		WarpWindowClosing* closing = [WarpWindowClosing new];
-		window.delegate = closing;
-		WKWebView* view = view_made(window.contentView.bounds);
-		view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-		[window.contentView addSubview:view];
-		[view loadHTMLString:@(html) baseURL:[NSURL URLWithString:PAGE_ORIGIN]];
-		[window center];
-		[window makeKeyAndOrderFront:nil];
-		[NSApp activateIgnoringOtherApps:YES];
-		[NSApp run];
-		window.delegate = nil;
-		return 0;
 	}
 }

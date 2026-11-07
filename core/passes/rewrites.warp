@@ -393,9 +393,12 @@ rules_reaching(rules: list, needs: list, results: list, statement: Node): list :
 # what code must hold for the rule to fire in it (tokens_within): its pattern's words outside holes, and the operator
 # of the key its pattern is (`$a ?? $b` fires only where code has a `??`)
 needed_tokens(rule: Rule): list := required_words(rule.pattern) + (if rule.pattern is key and rule.head != "" then [rule.head] else [])
+# a hole of any form: `$x`, `$body: block`, `$xs...` or an affixed one; its words (a typed hole's kind) are no words of
+# the code it matches
+is_hole(pattern: Node): bool := rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø
 # the words code must hold for the pattern to match it (rule_matches): its words outside holes
 required_words(pattern: Node): list := {
-	if rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø or affixed_hole(pattern) != ø { return [] }
+	if is_hole(pattern) { return [] }
 	if pattern is symbol { return [name_of(pattern)] }
 	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
 	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
@@ -640,12 +643,15 @@ module_rules_of(path: text, module: text): list := {
 	if not module_rules_held.has(key) { module_rules_held[key] = module_rules_read(path, module) }
 	module_rules_held[key]
 }
-# (the bake trusted as the library index is, rule_needs_by_module: its file's hash asked only of a lib/ maybe edited
-# since the build, library_unedited; reading and hashing the sugar's files was ~10 ms a compile)
+# (the packed rules are lib/ as the build left it, decision no-lib-reads: a file of extensions/ they lack has none;
+# only a build before its rules are packed parses them)
 module_rules_read(path: text, module: text): list := {
-	baked = sugar_rules_packed_beside().get(path.remove_prefix(run_library() + "/"))
+	packed = sugar_rules_packed_beside()
+	within = path.remove_prefix(run_library() + "/")
+	baked = packed.get(within)
 	place = if baked != ø then baked.find("\n") else ø
-	if place != ø and (library_unedited() or baked[0 ..< place - 1] == source_hash(file_text(path) ?? "")) { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
+	if place != ø { return items_of(unpack(baked[place ..])).map(packed => unpacked_rule(packed, module)) }
+	if #packed > 0 and within.starts_with("extensions/") { return [] }
 	written_rules(path, file_text(path) ?? "", module)
 }
 # The sugar's rules (extensions/sugar), read by every compile, packed (rule_node) beside the prebuilt modules by `warp
@@ -661,10 +667,12 @@ sugar_rules_packed_beside(): map := {
 	}
 	sugar_rules_held
 }
-# the sugar's rules packed, read off lib/ as it lies now
+# the sugar's rules and the standard modules' compile-time ones (COMPILE_TIME_RULES) packed, read off lib/ as it lies
+# now
 sugar_rules_packed(): map := {
 	packed = {}
-	for path in sugar_modules_scanned().keys.map(module => module + module_extension) {
+	compile_time = library_on_disk().keys.filter(path => ("/" + path).starts_with(COMPILE_TIME_RULES) and path.ends_with(module_extension))
+	for path in sugar_modules_scanned().keys.map(module => module + module_extension) + compile_time {
 		source = library_text(path)
 		packed[path] = source_hash(source) + "\n" + pack(List(rules_parsed(source_parse(source), "", source).map(rule_node), Bracket.Square, Separator.Comma))
 	}
@@ -785,9 +793,9 @@ dropped_rules(path: text, lines: list, rule_lines: list, rules: list, module: te
 	dropped.map(i => path + ":" + i + ": the rule `" + lines#i.trim() + "` was dropped").join("\n") + "\n(a line before it left an apostrophe or a bracket open, even in a comment: `#` starts one only before a blank)"
 }
 # each standard module with rules, the words they need (rule_needs) joined by spaces, from the library index, so a
-# compile reads no other module's text (38 of them at every compile were ~5 ms of a small one). With WARP_LIB (a module
-# edited after the build): read off the texts
-rule_needs_by_module(): map := if library_unedited() then library_index_section("needs") else scanned_rule_needs()
+# compile reads no other module's text (38 of them at every compile were ~5 ms of a small one); read off the texts only
+# by the build writing the index
+rule_needs_by_module(): map := library_index_section("needs")
 scanned_rule_needs(): map := {
 	found = {}
 	for module in std_module_names {
@@ -1795,7 +1803,8 @@ is_braced_map(code: Node): bool := #code > 0 and items_of(code).all(item => is_k
 literal_words(pattern: Node): list := mentioned_names(pattern, []).filter(name => not name.starts_with(rule_hole_mark))
 
 first_word_of(pattern: Node): text? := {
-	if pattern is symbol { return if rule_hole(pattern) == ø then name_of(pattern) else ø }
+	if is_hole(pattern) { return ø }
+	if pattern is symbol { return name_of(pattern) }
 	for part in parts_of(pattern) {
 		word = first_word_of(part)
 		if word != ø { return word }

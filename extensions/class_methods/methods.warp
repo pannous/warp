@@ -50,7 +50,7 @@ equality_method = "equal"
 # instance_float: `sin(2km)`), a shown value by show(), ø on any other value: it then shows its structure (decision
 # show-hook; runtime show.warp key_text through the hook instance_show); emitter/output.warp and emitter.warp cast read
 # the dispatchers
-conversion_methods = [["text", showing_dispatcher, "str"], ["float", HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], ["float", HiddenWord.FloatHooked as text, ø], ["show", HiddenWord.ShowShown as text, ø]]
+conversion_methods = [["text", showing_dispatcher, "str"], ["float", HiddenWord.FloatConverted as text, HiddenWord.FloatCast as text], ["float", HiddenWord.FloatHooked as text, ø], [form_method, HiddenWord.ShowShown as text, ø]]
 # a class's positions (card class-position-index, decisions instance-position and property-accessors): `b#p` is its
 # position(p), from 1, `b[i]` (the parser's b#(i+1)) its index(i), from 0, either one deriving the other; `b#p = v` the
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
@@ -102,7 +102,7 @@ function_word(n: Node): text? := match n {
 
 # what routing a call `x.m(…)` knows: the classes, the lifted ones, the routed methods, and the type each name
 # statically holds (`self` its method's class, `c = Counter()` Counter, `xs = []` list)
-class Routing { classes: map; names: list; methods: list; known: map }
+class Routing { classes: map; names: list; methods: list; known: map; results: map }
 
 # whether a module's class routes the method, decided by what holds whatever else a compile reaches: a word of the
 # library (its index, the runtime, a typed line), an operator, a word of the syntax, a position word. A module being
@@ -160,8 +160,9 @@ methods_lifted(program: Node): Node := {
 	if #routes > 0 {
 		self_types = {}
 		for name in methods { for owning_class in owners_of(classes, liftable, name) { self_types[lifted_name(classes, liftable, name, owning_class, routes)] = owning_class } }
-		program_types = assigned_types(rewritten, classes)
-		rewritten = rewritten.map(top_statement => routed(top_statement, Routing(classes, liftable, routes, statement_types(top_statement, program_types, self_types, classes))))
+		results = result_classes(rewritten, classes)
+		program_types = assigned_types(rewritten, classes, results)
+		rewritten = rewritten.map(top_statement => routed(top_statement, Routing(classes, liftable, routes, statement_types(top_statement, program_types, self_types, classes), results)))
 	}
 	floaters = float_converters(classes, liftable, routes)
 	dispatchers = []
@@ -661,7 +662,14 @@ method_routed(n: Node, routing: Routing): Node := match n {
 		if method == ø or not may_own(type, method, routing) { return Key(object, Op.Dot, member) }
 		call_of(routed_function(type, method, routing), [object] + (if member is symbol then [] else items_of(member)[1..]))
 	}
-	_: children(n, part => routed(part, routing))
+	# `zoned(now, "UTC")` the same as `now.zoned("UTC")` where the first argument is statically an instance of a class
+	# declaring the routed method (decision zone-word); on any other value the function as written
+	_: if is_instance_call(n, routing) then method_routed(Key(n#2, Op.Dot, call_of(name_of(n#1), items_of(n)[2..])), routing) else children(n, part => routed(part, routing))
+}
+is_instance_call(n: Node, routing: Routing): bool := {
+	if not is_called_name(n) or #n < 2 or name_of(n#1) not in routing.methods { return no }
+	type = static_type(n#2, routing)
+	type != ø and type in routing.classes and may_own(type, name_of(n#1), routing) and (#n - 2) in taken_counts(routing.classes, routing.names, name_of(n#1))
 }
 # the routed method a member `.sum` or `.sum(…)` calls, else ø
 routed_member(member: Node, routing: Routing): text? := {
@@ -684,12 +692,26 @@ routed_function(type: text?, method: text, routing: Routing): text := {
 
 # the type a value statically has: a class, or a type of no class (list, int, text…); ø when only the run time knows
 static_type(n: Node, routing: Routing): text? := {
-	if n is symbol { return if name_of(n) in routing.known then routing.known[name_of(n)] else ø }
+	if n is symbol { return if name_of(n) in routing.known then routing.known[name_of(n)] else routing.results.get(name_of(n)) }
 	if is_key(n, Op.Dot) and value_of(n) is symbol {
 		owner = static_type(key_of(n), routing)
 		return if owner in routing.classes then field_type(routing.classes, owner, name_of(value_of(n))) else ø
 	}
-	written_type(n, routing.classes)
+	written_type(n, routing.classes, routing.results)
+}
+# function → the class it declares it gives, `now(): Instant`
+result_classes(statements: list, classes: map): map := {
+	found = {}
+	for statement in statements {
+		result = written_result(statement)
+		if result != ø and result in classes { found[defined_word(statement)] = result }
+		# (`now(): Instant := …` as written, before definitions.warp holds its result)
+		if is_key(statement, Op.Define) and is_key(key_of(statement), Op.Colon) and value_of(key_of(statement)) is symbol and name_of(value_of(key_of(statement))) in classes {
+			head = key_of(key_of(statement))
+			if head is symbol or is_called_name(head) { found[if head is symbol then name_of(head) else name_of(head#1)] = name_of(value_of(key_of(statement))) }
+		}
+	}
+	found
 }
 field_type(classes: map, owning_class: text, field: text): text? := {
 	for ancestor in lineage(classes, owning_class) { if field in classes[ancestor].field_types { return classes[ancestor].field_types[field] } }

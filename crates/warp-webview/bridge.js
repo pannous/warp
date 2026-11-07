@@ -16,10 +16,15 @@ function warpPlain(value) {
 	if (!warpIsPlainObject(value)) return warpHandleOf(value);
 	return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, warpPlain(item)]));
 }
-// the program's page after each render (lib/markup.warp page_render), so its elements by id (`who.focus()`) are here
+// the program's page after each render (lib/markup.warp page_render), so its elements by id (`who.focus()`) are here;
+// what differs is changed (markup.js morphChildren), so a field keeps its focus and what is typed in it
 function warpShowPage(html) {
-	if (document.body.innerHTML !== html) document.body.innerHTML = html;
+	morphChildren(document.body, parsedHtml(html));
 }
+// each event of the page its program hears (markup.js listenToElements: an element's, a key, a form sent), {event:
+// "click·1", detail} as markup.js elementEvent names it, to the native warp (warp_webview.m warpWindow.next), as the
+// pages warp builds give theirs to the program (site.js)
+listenToElements(document, found => found && window.webkit?.messageHandlers?.warpEvent?.postMessage(JSON.stringify(found)));
 // `use js Math; Math.max(1, 5)`: the module's name or a handle, the member, the arguments (null: a read); a promise is
 // awaited (callAsyncJavaScript)
 async function warpForeignCall(request) {

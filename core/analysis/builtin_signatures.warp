@@ -11,7 +11,10 @@ use "host_words.warp"
 # a builtin word as a typed line of lib/prelude.warp declares it
 class Builtin { name: text; signature: Signature }
 
-prelude_text = library_text("prelude.warp")
+# lib/prelude.warp and lib/math.warp, built in when the compiler is built: a compile reads no library text (decision
+# no-lib-reads; an edited lib/ is a rebuild)
+prelude_text = module_source("prelude")
+math_text = module_source("math")
 runtime_library = "warp"
 emitter_library = "emitter"
 alias_start = "alias "
@@ -115,6 +118,8 @@ compiler_lines = [
 	"zero_fill(count, filler): list from emitter",
 	"instance_of(x, class_name): bool from emitter",
 	"caught_error(finished, value): error from emitter",
+	"placed_at(failure, position): error from emitter",
+	"trap_place(): int from emitter",
 	"byte_at(t, offset): int from emitter",
 	# todo Can we move all the uniscript to a later extension pass because the core compiler does not use any uniscript
 	"uniscript_error(values...): int from emitter",
@@ -205,9 +210,9 @@ type_word_kind(word: text): text? := type_kinds.get(word)
 
 # libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
 # floor compiles to, so its result is the call's
-foreign_math_lines = library_text("math.warp").split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
+foreign_math_lines = math_text.split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
 # the words lib/math.warp declares `from warp`, `abs(x: number): number from warp`, which a program calls without its use
-math_runtime_lines = library_text("math.warp").split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø)
+math_runtime_lines = math_text.split("\n").map(line => typed_line(line, runtime_library)).filter(line => line != ø)
 
 # the kind a declared result is held as: `nothing` and `any` a node of run-time kind, a yes/no an int, a type of
 # values its kind, any other type (`time`, `signal`) an object; ø for `number`, decided where the value is made
@@ -274,7 +279,7 @@ lowering_from(prelude: text) := {
 }
 # the library a lowering sees: the prelude, with lib/math.warp beside the standard one; each text cut on its own, so
 # the library index's cuts of both serve (prelude_words.warp spans_of)
-library_texts_seen(): list := if word_lines_prelude == prelude_text then [prelude_text, library_text("math.warp")] else [word_lines_prelude]
+library_texts_seen(): list := if word_lines_prelude == prelude_text then [prelude_text, math_text] else [word_lines_prelude]
 library_sources(): text := library_texts_seen().join("\n")
 word_lines(): map := {
 	if typed_word_lines != ø { return typed_word_lines }

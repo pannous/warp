@@ -160,10 +160,10 @@ declaring only Instant (cast failure across modules).
 marks are printed where a phase *starts*, so the time after `pass sugar` is sugar's, not iteration_inlining's.
 - The native warp sets WARP_LIB for every run (core/native/warp.warp, so warp.wasm's commands read its lib/), and
   the compiler read any WARP_LIB as "a lib/ edited since its build": every compile rescanned all modules' rule needs
-  (scanned_rule_needs, which re-cut extensions/rules/rule_words.warp), hashed the prelude and the sugar files. The
-  native warp now also exports WARP_LIB_INSTALLED (its installed lib/), and library.warp library_unedited() trusts the
-  index and baked rules when WARP_LIB is that one: hello 5.5 G -> 3.1 G instructions, 0.47 -> 0.22 s. A worktree's
-  WARP_LIB stays untrusted (its lib/ may be edited after its build).
+  (scanned_rule_needs, which re-cut extensions/rules/rule_words.warp), hashed the prelude and the sugar files. First
+  fixed by a trust flag (WARP_LIB_INSTALLED, d152612c4d), then, by decision no-lib-reads (user: "we do not touch any
+  library files after the compiler is built"), the whole edited-lib detection was deleted (4e6b583518): a compile
+  trusts lib/ as its build left it, an edited lib/ is a rebuild. hello 5.5 G -> 3.1 G instructions.
 - text == (equal_texts) ran NFC's quick check (maybe_decomposed) code point by code point over both texts at every
   unequal compare, ~40 % of tree_patterns' compile through node_equal: bytes below 0xCC (U+0300's lead) are skipped
   bytewise now. tree_patterns 23.6 G -> 17.6 G with the fix above.
@@ -171,3 +171,21 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
   math is a sliced module of the index.
 - Profiling hello: `sample` attaches ~0.2 s late, so profile.sh catches only a hello's tail; use WARP_TIMES phases
   for it, or a longer program.
+- mentions_word split the whole source once per word asked: implicit uses ask each of the index's ~1800 words.
+  names_mentioned finds the source's names in one walk.
+- A source with a character beyond ASCII (hello's 🌍) read and scanned all 47 module texts for their glyph operators
+  (declared_operators.warp library_glyph_operators): the index's section `operator` holds them now. With the two
+  above: hello 3.1 G -> 2.05 G, 0.16 s (4e6b583518).
+- WARP_TIMES also prints `§R <path>` for each file a compile reads (library.warp file_source): the audit tool of
+  no-lib-reads. At 4e6b583518 a hello read prelude, math, primitive, c, extensions/uncertain/operators and the five
+  type modules besides modules/index.tsv and sugar_rules.packed.
+- P2/P3 (90e4d4a4fa): prelude, math, primitive, c and the uncertain operator rows are built into the compiler by
+  module_source (scripts/compiler-inputs.sh counts every module_source file as the compiler's code, so editing one is
+  a compiler rebuild); the type modules' tables (sections provider, nullary, unary) and the standard modules'
+  compile-time rules (extensions/rules/modules, packed beside the modules with the sugar's) come from what the build
+  writes. A hello compile reads no lib/ or extensions/ source: 2.05 G -> 1.83 G instructions, 0.13 s.
+- Sample audit (warp compile of each sample, WARP_TIMES §R lines): at 90e4d4a4fa only 27 of 263 samples read no lib/
+  source. The most read: reals 173, units 158, unit_names and uncertain 147, native/units 139, i18n 112. They come
+  from rule needs naming a module the program doesn't link: rules_of_module and modules_used_by read its text, and
+  used_module_text probed lib/native/<m>.warp and the crates cache first. Next (P4): an unlinked module is known by
+  its prebuilt signature (modules/<m>.wasm's warp.signature).
