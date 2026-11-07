@@ -1,0 +1,7 @@
+# two linked modules each order, compare and show their own classes: every value by its own module's word
+'use units; a = Instant(5); b = Instant(3); a > b'	yes
+'use units; a = Instant(5); b = Instant(3); a.compare(b)'	2
+'use units; a = Instant(5); b = Instant(3); a <= b'	no
+'use units; 3m > 2m'	yes
+'use units; 2m < 3m and Instant(2) < Instant(3)'	yes
+'use units; str(Instant(5))'	"1970-01-01T00:00:00.005Z"

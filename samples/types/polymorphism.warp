@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# one function name, two definitions: the argument types choose which runs
 combine(a: number, b: number) := a + b
 combine(a: int, b: int) := a * b
 
