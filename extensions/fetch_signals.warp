@@ -1,0 +1,52 @@
+# Fetched values (card web-async, notes/web_framework.md "Async data"): `users := fetch "/api/users"` at the main level
+# is a fetched value, `users.loading` whether its reply is still out and `users.error` the failure's text, else ø.
+# Fetched synchronously for now (both hosts answer at once), so loading is no; the real async page is the card's
+# left-over. Live regions (card web-a11y-live): the outermost markup element whose own content reads a fetched value
+# gets aria-live="polite", so a screen reader announces it when it arrives; an element setting aria-live keeps its own.
+fetch_signals_extension = Extension{name: "fetch_signals", passes_before: {"tries": fetch_signals}}
+
+FETCH_WORD = "fetch"
+LOADING_FIELD = "loading"
+ERROR_FIELD = "error"
+ERROR_TYPE = "error"
+LIVE_ATTRIBUTE = "aria-live"
+LIVE_POLITENESS = "polite"
+MARKUP_MODULE = "markup"
+
+fetch_signals(program: Node): Node := {
+	fetched = flat_statements(program).map(fetched_name).filter(name => name != "")
+	if #fetched == 0 { return program }
+	# (regions first: `users.loading` reads users before it becomes no)
+	bottom_up(live_regions(program, fetched), n => signal_read(n, fetched))
+}
+# the name `name := …fetch…` defines, else ""
+fetched_name(statement: Node): text := match statement {
+	Key(Symbol(name), Op.Define, value): if mentions(value, FETCH_WORD) then name else ""
+	_: ""
+}
+# `users.loading` is no, `users.error` the failure's text
+signal_read(n: Node, fetched: list): Node := match n {
+	Key(Symbol(name), Op.Dot, Symbol(field)): {
+		if not (name in fetched) { return n }
+		if field == LOADING_FIELD { return Node.False }
+		if field == ERROR_FIELD then failure_text(key_of(n)) else n
+	}
+	_: n
+}
+# each outermost markup element whose own content reads a fetched value, with aria-live="polite"
+live_regions(n: Node, fetched: list): Node := {
+	if not is_markup_element(n) { return children(n, child => live_regions(child, fetched)) }
+	items = items_of(value_of(n))
+	if not items.any(item => not is_markup_element(item) and fetched.any(name => mentions(item, name))) {
+		return children(n, child => live_regions(child, fetched))
+	}
+	if items.any(item => is_key(item, Op.Colon) and key_of(item) == Text(LIVE_ATTRIBUTE)) { return n }
+	Key(key_of(n), Op.Colon, List([Key(Text(LIVE_ATTRIBUTE), Op.Colon, Text(LIVE_POLITENESS))] + items, Bracket.Curly, Separator.Comma))
+}
+# `div{ … }`: a tag of lib/markup.warp with its block
+is_markup_element(n: Node): bool := match n {
+	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): declared_tags().get(tag) == MARKUP_MODULE
+	_: no
+}
+# `users.error`: `if users is error then str(users) else ø`
+failure_text(fetched: Node): Node := chosen(Key(fetched, Op.Is, symbol(ERROR_TYPE)), call_of("str", [fetched]), Node.Empty)
