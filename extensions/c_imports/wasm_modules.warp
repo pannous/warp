@@ -26,6 +26,12 @@ LIMITS_WITH_MAXIMUM = 1
 # .wasm: its path in the program's folder, a `•/` path as written, which the native warp roots at the project root
 # where it runs, so a program and a module it links (greeter.wat's import) name one file alike; ø for another statement
 wasm_module_used(statement: text, folder: text): text? := {
+	name = wasm_module_named(statement, folder)
+	# (one carrying a warp.signature is a module warp compiled, linked as a standard module is: compiler.warp own_module_beside)
+	if name != ø and section_place(wasm_bytes(wasm_file(name, folder)), section_ids.custom, SIGNATURE_SECTION) == ø then name else ø
+}
+# the core wasm module a statement names, as wasm_module_used, a module warp compiled too; ø for another statement
+wasm_module_named(statement: text, folder: text): text? := {
 	bare = wasm_use_written(statement)
 	# (the module `warp build --module shapes.warp` writes is no library of its own: compiler.warp module_source is
 	# `use shapes`, and a shapes.wasm an older compiler left beside it, without its signature, read as one: index out of range)
@@ -33,10 +39,7 @@ wasm_module_used(statement: text, folder: text): text? := {
 	# (only a .wasm file is read: `use compute_toys` beside a folder compute_toys read the folder, which never ended, card hit)
 	written = if bare.ends_with(WASM_EXTENSION) then bare else bare + WASM_EXTENSION
 	name = if rooted(written, folder) == written then path_in(folder, written) else written
-	# (one carrying a warp.signature is a module warp compiled, linked as a standard module is: compiler.warp own_module_beside)
-	bytes = wasm_bytes(wasm_file(name, folder))
-	if is_core_wasm(bytes) and section_place(bytes, section_ids.custom, SIGNATURE_SECTION) == ø { return name }
-	ø
+	if is_core_wasm(wasm_bytes(wasm_file(name, folder))) then name else ø
 }
 # the module as a use statement writes it, unquoted, ø for no use: `use wasm "rust_demo.wasm"` (decision
 # samples-modules-wasm: the long form, `wasm` before a quoted path) is "rust_demo.wasm"; an `as` name is gone by now
@@ -111,8 +114,13 @@ with_c_types(functions: list, path: text, folder: text): list := {
 wasm_module_words(source: text, folder: text): list := {
 	words = []
 	for statement in c_statements(with_module_aliases(source)) {
-		path = wasm_module_used(statement, folder)
-		if path != ø {
+		path = wasm_module_named(statement, folder)
+		if path == ø { continue }
+		# a module warp compiled gives the words its signature defines: shapes.wasm's width(p) is no use of a library's width
+		signed = module_signature(path, wasm_bytes(wasm_file(path, folder)))
+		if signed != ø {
+			words += signed.slices.map(slice => slice#1)
+		} else {
 			exports = wasm_exports(path, folder)
 			words += exports.functions.map(d => d#1) + exports.words.map(wasm_word_name)
 		}

@@ -2,6 +2,7 @@
 // command per line on stdin (single quotes, comments, trailing commas; a line of only a comment is skipped), one JSON
 // answer per line on stdout:
 //   ["open", url] → true once loaded · ["eval", js] → the value as agent-browser prints it (JSON text)
+//   ["click", selector] → "" once clicked, a real pointer click (the user's gesture)
 //   ["messages"] → the console errors and warnings and failed requests since the last ask, workers included
 //   ["close"] → quits
 // A command still unanswered after COMMAND_SECONDS answers {"timeout": what, the page's state and console}; a Firefox that went away ends the driver
@@ -126,6 +127,16 @@ const commands = {
 		if (answer.error || result.type === "exception") return `✗ ${answer.message ?? result.exceptionDetails?.text}`;
 		const value = plain(result.result);
 		return value === undefined ? "" : JSON.stringify(value);
+	},
+	// a real click at the middle of the element the selector finds, the user's gesture the page needs to start a sound
+	// or a window's frames (playground.js windowOpen), which a click in script never is
+	click: async selector => {
+		const middle = await commands.eval(`(bounds => [Math.round(bounds.left + bounds.width / 2), Math.round(bounds.top + bounds.height / 2)])(document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect())`);
+		if (middle.startsWith("✗")) return middle;
+		const [x, y] = JSON.parse(middle);
+		const pointer = [{ type: "pointerMove", x, y }, { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }];
+		const answer = await send("input.performActions", { context, actions: [{ type: "pointer", id: "mouse", actions: pointer }] });
+		return answer.error ? `✗ ${answer.message}` : "";
 	},
 	messages: async () => messages.splice(0),
 	close: async () => {

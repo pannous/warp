@@ -197,3 +197,12 @@ marks are printed where a phase *starts*, so the time after `pass sugar` is suga
   of modules not linked), and 48 of lib/'s 95 modules (csv, path, tables, toml, html…) are not prebuilt at all (only
   std_module_names, 47, are), so a program using one compiles it from its source: prebuilding every module is the
   general fix.
+- P5 (hello-takes-interfaces): implicit uses find the used modules by their signatures (used_module_names), a used
+  module's declared operators come from its signature (new field `operators`, one text each as the index's section
+  holds them), a standard module's `use` probes no lib/native file for C lines, and whether a name is a module asks
+  the disk (is_module_name), not its text. `use json` reads lib/json.warp still: with_reached pulls the linked
+  module's source through the passes (1.0 s / 8.7 G instructions on main and here, sugar + first_sugar the most);
+  first_sugar reads memory.warp and sound.warp. Next: a linked prebuilt module is linked, never recompiled.
+- Pitfall: a function named `operator_<x>` declares the operator <x> (lib/aliases.warp's operator_·): helpers
+  operator_written/operator_read broke the index scan (cast failure in key_left under alias_fields, found with
+  WARP_BACKTRACE=1); they are written_operator/read_operator.
