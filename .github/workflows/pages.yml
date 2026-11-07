@@ -166,13 +166,11 @@ jobs:
     - name: The painting checks in Safari
       run: python3 web/playground/test_in_browser.py --examples --safari --site _site webgpu shader_trails "(the view's size stays as paintings of that size are shown)" "(many GPU jobs in one run)" "(many tasks in one run)" async "(named GPU arrays, a shader painted into the page's canvas)"
 
-  # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
-  # tours, green, instead of a failed deploy mailing a failed run
+  # only main may deploy (the github-pages environment). The deploy follows the build at once; the tours run beside it
+  # as checks whose failures are fixed forward, never a gate (user 2026-11-07: a red tour held every deploy for a day)
   deploy:
-    needs: [ build, tour-chrome, tour-firefox ]
-    if: >-
-      always() && github.ref == 'refs/heads/main' && needs.build.result == 'success' &&
-      (inputs.skip_checks || (needs.tour-chrome.result == 'success' && needs.tour-firefox.result == 'success'))
+    needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     environment:
       name: github-pages
