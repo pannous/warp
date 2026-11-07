@@ -1047,6 +1047,11 @@ first_parameter_type(word: text, definition: text): text := {
 # after v
 value_dir_words(program: Node): any := if owns_dir(program) then ø else List(["list", "text", "map"].map(module_dir), Bracket.Square, Separator.Comma)
 
+# whether a fixed-width int variable is an int holding its cast value (extensions/sugar/calls.warp): in a GC program;
+# @primitive code, lowered with the primitive prelude (extensions/primitive.warp), emits the width itself, `start: u32 = …`
+# a wasm i32
+widened_to_int(width: Node): bool := used_prelude != PRIMITIVE_PRELUDE
+
 # `math` of `math.gcd(4, 6)`, else ø (prelude_words.warp qualifies_by_module)
 module_named(module: Node, program: Node): any := if qualifies_by_module("${module}", program) then module else ø
 
@@ -1132,6 +1137,7 @@ rule_words = {
 	class_methods_listed: class_methods_listed,
 	program_functions: program_functions,
 	qualified: qualified,
+	widened_to_int: widened_to_int,
 	it_read_as: it_read_as,
 	it_as_lambda: it_as_lambda,
 	it_taking: it_taking,
