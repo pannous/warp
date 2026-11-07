@@ -18,6 +18,31 @@ name = "Ada"
 	constants: { value: 'pi is a constant at playground.warp:2:1; fix: another name', code: `// constants such as pi cannot change
 pi = 4
 2 * pi` },
+	"changing variables": { value: "10", code: `// x op= y is x = x op y, for every operator: *=, max=, ^= …
+x = 3
+x *= 2
+x max= 10
+x` },
+	"counting up and down": { value: "2", code: `// ++ and -- change a variable at once, so i++ and ++i are the same
+i = 1
+i++
+i++
+i--
+i` },
+	"typed variables": { value: "4", code: `// a type after the name: x only ever holds an int
+x: int = 3
+x = 4
+x` },
+	"let and var": { value: "2", code: `// let binds a name once, var is a variable that can change
+let step = 1
+var count = 1
+count += step
+count` },
+	swap: { value: "[2, 1]", code: `// several variables assigned at once: a swap in one line
+a = 1
+b = 2
+a, b = b, a
+[a, b]` },
 	lists: { value: '[3, "apple"]', code: `// a list, how many items it has, and its first item
 fruits = ["apple" "pear" "plum"]
 [#fruits, fruits#1]` },

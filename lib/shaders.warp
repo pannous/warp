@@ -6,6 +6,8 @@
 # uniformLayout), so a frame changes them without a new shader. A form WGSL has none of is refused, naming it.
 # This module's rules (extensions/rules/modules/shaders.warp) hand paint and shader_of the function as the compiler's
 # rule word definitions_reached quotes it: `{name: "f", code: data [definitions], values: {sun: sun, …}}`.
+# A color of lib/color (a named one, `orange`, or a program value holding one) is the [r, g, b] it paints.
+use color
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
 VALUES_NAME = "values"
@@ -152,9 +154,11 @@ values_read(reached: map): any := {
 	names = shader_made(reached)#2
 	if #names == 0 { return ø }
 	read = {}
-	for name in names { read[name] = reached.values[name] }
+	for name in names { read[name] = painted_value(reached.values[name]) }
 	read
 }
+# a value as the shader reads it: a color its channels
+painted_value(value) := if value is Color then channels(value) else value
 # `shader_of(f)`: the WGSL fragment shader that paints f(column, row) at every pixel, as a text
 shader_of(reached: map): text := shader_made(reached)#1
 shader_made(reached: map): list := {
@@ -208,8 +212,10 @@ wgsl_name(name: text): text := {
 	for i in 0 ..< #name { spelled_out += if IDENTIFIER_LETTERS.contains(name[i]) then name[i] else "_" }
 	if spelled_out in WGSL_TAKEN then spelled_out + "_" else spelled_out
 }
-wgsl_number(n: Node): text := {
-	spelled_out = "${n}"
+wgsl_number(n: Node): text := wgsl_float(n)
+# a number as a WGSL float literal, 1 as 1.0
+wgsl_float(x: any): text := {
+	spelled_out = "${x}"
 	if spelled_out.contains(".") or spelled_out.contains("e") or spelled_out.contains("E") then spelled_out else spelled_out + ".0"
 }
 
@@ -479,6 +485,8 @@ wgsl_program_value(n: Node): list := {
 	word = name_of(n)
 	if shading.value_widths.has(word) { return [VALUES_NAME + "." + word, shading.value_widths[word]] }
 	if not shading.values.has(word) {
+		named = color_named(word)
+		if named != ø { return ["vec3f(" + channels(named).map(channel => wgsl_float(channel)).join(", ") + ")", COLOR_WIDTH] }
 		return wgsl_refused(n, "${word} is neither a variable of the function nor a value of the program")
 	}
 	if wgsl_name(word) != word {
@@ -496,6 +504,7 @@ wgsl_program_value(n: Node): list := {
 # vectors (a list of more than four, or of lists) its items' width negated, `levels#b` reads an item; 0 for any other
 wgsl_value_width(value): int := {
 	if value is bool { return 0 }
+	if value is Color { return COLOR_WIDTH }
 	if not (value is list) { return 1 }
 	if #value == 0 { return 0 }
 	if #value <= 4 and value.all(item => not (item is list)) { return #value }
