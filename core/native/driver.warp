@@ -387,10 +387,21 @@ library_folder(): text := resolved_path(library_found())
 library_found(): text := {
 	given = getenv("WARP_LIB")
 	if given.length > 0 { return given }
-	installed_found()
+	found = installed_found()
+	if found.length > 0 { return found }
+	own = folder_of(invoked_path())
+	linked = folder_of(resolved_path(executable_path()))
+	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), joined(folder_of(linked), "/share/warp")), "; WARP_LIB names one"))
+	exit(1)
+	own
 }
-# the installed warp's lib/, whatever $WARP_LIB names: its runtime and modules of a finished build
-installed_library(): text := resolved_path(installed_found())
+# the installed warp's lib/, whatever $WARP_LIB names: its runtime and modules of a finished build; a copy of the
+# executable without one (self-check.sh runs one in a scratch folder) has the library folder
+installed_library(): text := {
+	found = installed_found()
+	if found.length > 0 then resolved_path(found) else library_folder()
+}
+# the first folder holding a lib/ beside the executable, its links followed, or of its share/warp; empty for none
 installed_found(): text := {
 	own = folder_of(invoked_path())
 	linked = folder_of(resolved_path(executable_path()))
@@ -399,9 +410,7 @@ installed_found(): text := {
 	if holds_library(joined(own, "/lib")) { return joined(own, "/lib") }
 	if holds_library(linked) { return linked }
 	if holds_library(shared) { return shared }
-	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), shared), "; WARP_LIB names one"))
-	exit(1)
-	own
+	""
 }
 holds_library(folder: text): bool := access(c_string(joined(folder, "/prelude.warp")), READABLE) == 0
 # the path with its links resolved, the path itself when it names no file

@@ -98,10 +98,10 @@ is_callable(name: text): bool := name in module.functions or is_declared_word(na
 # the words of e nothing binds, a field's name (`todo.text`) and an entry's key not counted
 unbound_words(body: Body, e: Node): list := {
 	if e is symbol { return if is_bound(body, name_of(e)) and not names_function_only(body, name_of(e)) then [] else [name_of(e)] }
-	# `f(x)`: the call of a function, its arguments the words to ask
-	if bracket_of(e) == "(" and #e > 0 and e#1 is symbol and is_callable(name_of(e#1)) { return items_of(e)[1..].flat_map(item => unbound_words(body, item)) }
 	# a lambda the lambdas pass lifted, `closure_new(closure_lambda_1, n)`: a function value (`div{ p{ () => n } }`)
 	if is_quote(e) or is_spliced_quote(e) or is_closure_value(e) { return [] }
+	# `f(x)`: the call of a function, its arguments the words to ask
+	if bracket_of(e) == "(" and #e > 0 and e#1 is symbol and is_callable(name_of(e#1)) { return items_of(e)[1..].flat_map(item => unbound_words(body, item)) }
 	# `.box` and `.done{…}` of a style sheet read no field: a selector, never a value, though the program binds done
 	if is_key(e, Op.Dot) { return if key_of(e) == ø then [selector_dot] else unbound_words(body, key_of(e)) }
 	if is_word_keyed(e) { return unbound_words(body, value_of(e)) }
