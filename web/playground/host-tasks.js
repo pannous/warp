@@ -40,7 +40,7 @@ function addTaskWorker(loaded) {
 			loaded?.();
 		};
 	});
-	self.postMessage({ taskWorker: { id, url: new URL(TASK_WORKER, self.location.href).href } });
+	self.postMessage({ taskWorker: { id, url: ofThisBuild(new URL(TASK_WORKER, self.location.href).href) } });
 }
 
 // a voice (card playground-go, natively src/sound/mod.rs Voice): when this Worker's queued sounds end on the clock the

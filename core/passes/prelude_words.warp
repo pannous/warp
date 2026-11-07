@@ -424,6 +424,9 @@ declared_only(n: Node): Node := {
 	if class_view(n) != ø { return with_members(n, declared_only) }
 	head = if n is key then key_of(n) else ø
 	if is_group(head) and bracket_of(head) == "(" {
+		# (a word taking a block keeps its body: extensions/block_inlining.warp runs a literal block in it in place,
+		# `3 times {…}` a loop of the caller's own, card times-infix-operator)
+		if takes_block(head) { return n }
 		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
 		if is_key(n, Op.Assign) { return Key(head, Op.Assign, Node.Empty) }
 	}
@@ -431,6 +434,7 @@ declared_only(n: Node): Node := {
 	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
+takes_block(head: Node): bool := items_of(head)[1 ..].any(parameter => parameter_type(parameter) == "block")
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 # a value, and a type the program's declarations name (`type fraction = rational`), whose statement is no program's
 # last
