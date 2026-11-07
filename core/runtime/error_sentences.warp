@@ -24,7 +24,8 @@ error_fix(name: text): text := {
 	if name == "not_a_map" { return "keys, values and entries are a map's; a list's positions are 1..count(xs)" }
 	if name == "ø_plus_a_text" { return "fix: start a text with `t = \"\"`, a list with `t = []`" }
 	if name == "invalid_code_point" { return "a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF" }
-	if name == "calendar_and_clock_durations_are_different_kinds" { return "1 day and 2 hours are one kind only from card dates-times-extraction (decision one-duration)" }
+	# one kind from card dates-times-extraction on (decision one-duration)
+	if name == "calendar_and_clock_durations_are_different_kinds" { return "fix: for now write the calendar part in hours: 24 hours, not 1 day" }
 	if name == "list_cannot_hold_this_item" { return "its declared element type does not admit it (P215)" }
 	""
 }
