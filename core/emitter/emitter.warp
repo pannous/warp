@@ -509,6 +509,7 @@ node_reader(kind: ValueKind): text? := match kind {
 	ValueKind.Text: "text_of_node"
 	ValueKind.Bool: "bool_of_node"
 	ValueKind.List: "list_of_node"
+	ValueKind.Time: "time_of_node"
 	ValueKind.Char: "char_of_node"
 	_: ø
 }

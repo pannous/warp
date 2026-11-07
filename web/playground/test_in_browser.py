@@ -184,7 +184,7 @@ NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: a
 	if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] + 10.0; ns[id.x] = ns[id.x] - 1; }
 }"
 gpu_compute(shader, {xs: [1.5 2 3], ns: [7 8 9]}, 1)"""
-NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
+NAMED_ARRAYS_SHOWN = ["11.5", "6, 7, 8"]
 RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
 # card wgsl-error: a WGSL error of a shader block names its line and column in the program, whose word there is marked
 SHADER_ERROR = "(a WGSL error at its place in the program)"

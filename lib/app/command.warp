@@ -75,9 +75,10 @@ app_command(arguments: list): int := {
 		print webview_page_text(html)
 		return 0
 	}
-	# (what it printed, a failure's too: `|| true` keeps the output a failing command's error drops)
+	# (what it printed, a failure's too: `|| true` keeps the output a failing command's error drops; nothing when the app
+	# ended itself, `on key { exit }`)
 	shown = command(APP_WINDOW_VARIABLE + "=" + quoted_path(file) + " warp run " + quoted_path(file) + " 2>&1 || true")
-	if is_page(shown) then 0 else shows_no_page(file, shown)
+	if is_page(shown) or shown.trim() == "" then 0 else shows_no_page(file, shown)
 }
 shows_no_page(file: text, shown: any): int := {
 	print "warp app: " + file + " shows no page: " + str(shown).trim()
