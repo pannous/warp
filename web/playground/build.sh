@@ -67,6 +67,9 @@ built_of_changed() {
 build_compiler() {
 	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
 	refuse_lagging_compiler
+	# the registry's packages samples use by path, linked where the tree has none yet (the workflow clones them first),
+	# so the served list and the packed libraries hold them (samples/modules/packages.warp)
+	[ -d packages ] || "$repository/scripts/link-packages.sh" "$repository" > /dev/null || echo "warning: no packages linked: the package samples fail in the page" >&2
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
 	# the tree's library over it, so the page runs this checkout's lib/ before an install: a module whose source or
@@ -93,6 +96,9 @@ build_compiler() {
 # `library: "dir/name"` prebuilt as <clone>/dir/name.wasm; natively scripts/link-packages.sh builds it beside warp
 pack_package_libraries() {
 	local manifest clone library
+	# a fresh worktree has no packages/ (git ignores it): linked first, else the page lacks uniscript_c.wasm and
+	# samples/text/uniscript_text.warp fails "uniscript_c.uniscript_error is not available in the browser"
+	compgen -G "packages/*/package.warp" > /dev/null || "$repository/scripts/link-packages.sh" "$repository"
 	for manifest in packages/*/package.warp; do
 		[ -f "$manifest" ] || continue
 		library=$(manifest_field "$manifest" library)
