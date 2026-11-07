@@ -1,0 +1,3 @@
+# a prelude function glued to its block in data is the tag, not its call (decision data-tag-words: elements written glued)
+'use markup; d = div{ first{ p{"a"} } }; str(d)'	"div: {first: {p: {'a'}}}"
+'use markup; to_html(html{ head{ title: "x" } })'	"<html><head><title>x</title></head></html>"

@@ -266,6 +266,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (data.type === "serving") return servingRequests(data);
 			if (data.type === "served") return showServed(data.response);
+			if (listened) eventHeard(data);
 			if (data.type === "handled" && data.fetchesLeft !== undefined) lastAnswered = data;
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
@@ -658,16 +659,37 @@ function finish(run, report) {
 	clearTimeout(run.stopTimer);
 	if (pending === run) pending = undefined;
 	showStop(false); // the shown report's timers turn it back to Stop (listenTo)
+	if (run.eventsFor && report.listening.some(label => !PAGE_EVENT.test(label))) return listenedFor(run, report);
 	run.resolve(report);
+}
+
+// evaluate's `eventsFor`: a program left listening to its timers is reported once they ran that long, what they printed
+// in its report, as the native warp's event loop runs them under WARP_EVENTS_FOR (core/native/driver.warp events); a
+// timer's failure or exit ends the wait sooner
+let listened; // {run, report} while its timers run
+function listenedFor(run, report) {
+	listened = { run, report };
+	run.timer = setTimeout(listenedEnd, run.eventsFor);
+}
+function listenedEnd() {
+	const { run, report } = listened;
+	clearTimeout(run.timer);
+	listened = undefined;
+	run.resolve({ ...report, printedWhole: run.printedWhole ?? [] });
+}
+function eventHeard(data) {
+	if (data.type === "print") (listened.run.printedWhole ??= []).push(data);
+	if (data.type === "handled" && data.error) listenedEnd();
 }
 
 // evaluate code in the worker: the report of src/web/mod.rs evaluate plus `printed` [{text, stream}]. The worker runs one
 // program at a time, so each call waits for the calls before it (typing while the compiler still loads makes several).
 // `file`: the program's path in the served repository (samples/…), so its `use` and file reads resolve beside it, as
 // the chosen sample's do (scripts/samples-web.sh runs every sample so). `asData`: the program prints its value as data
-// after the value mark, as a native `warp test` run does (test_in_browser.py --tests)
-function evaluate(code, file = programFile(), { asData = false } = {}) {
-	const run = runs.then(() => runInWorker(code, file, asData));
+// after the value mark, as a native `warp test` run does (test_in_browser.py --tests). `eventsFor`: milliseconds the
+// program's timers run before the report (listenedFor)
+function evaluate(code, file = programFile(), { asData = false, eventsFor = 0 } = {}) {
+	const run = runs.then(() => runInWorker(code, file, asData, eventsFor));
 	runs = run.catch(() => {});
 	return run;
 }
@@ -684,7 +706,7 @@ async function settled(report) {
 	return { ...report, value: lastAnswered.value ?? report.value, html: lastAnswered.html ?? report.html, error: lastAnswered.error };
 }
 
-async function runInWorker(code, file, asData) {
+async function runInWorker(code, file, asData, eventsFor) {
 	lastAnswered = undefined;
 	// a program serving requests waits for them (lib/web.warp page_serve): the next run starts in a fresh Worker
 	if (worker.serving) {
@@ -693,7 +715,7 @@ async function runInWorker(code, file, asData) {
 	}
 	await workerReady;
 	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
+		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {}, eventsFor };
 		stopAfterTimeout(run);
 		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 		pending = run;
