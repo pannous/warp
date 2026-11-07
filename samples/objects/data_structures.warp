@@ -30,7 +30,7 @@ company = {
 }
 
 # Access nested values
-ceo_name = company.employees#3.name
+ceo_name = name of company.employees#3
 
 # List comprehensions
 squares = [x * x for x in 1..10]
