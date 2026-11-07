@@ -146,7 +146,9 @@ field_name(member: Node): text? := match member {
 	_: ø
 }
 # the type of a value as written (written_type): a literal's, a construction's class
-written_type(n: Node, classes: map): text? := {
+# (results: the class a function declares it gives, `now(): Instant`, so `t = now` holds an Instant)
+written_type(n: Node, classes: map, results: map = {}): text? := {
+	if n is symbol and name_of(n) in results { return results[name_of(n)] }
 	if n is bool { return "bool" }
 	if n is int { return "int" }
 	if n is float { return "float" }
@@ -154,7 +156,7 @@ written_type(n: Node, classes: map): text? := {
 	if is_empty_list(n) or (is_group(n) and bracket_of(n) == "[") { return "list" }
 	if is_called_name(n) {
 		constructed = classes.keys.filter(owning_class => name_of(n#1) in [owning_class, constructor_name(owning_class), made_name(owning_class)])
-		return if #constructed > 0 then constructed#1 else ø
+		return if #constructed > 0 then constructed#1 else results.get(name_of(n#1))
 	}
 	match n {
 		Key(Symbol(owning_class), Op.None, right): { if owning_class in classes then owning_class else ø }
@@ -170,13 +172,13 @@ member_type(member: Node): text? := match member {
 type_named(written: Node): text? := if written is symbol then name_of(written) else if is_group(written) and bracket_of(written) == "[" then "list" else ø
 # variable → the type of the values assigned to it, "" where they differ or are not known: by name across the
 # program, as arity_overloads.warp's assigned_kinds
-assigned_types(statements: list, classes: map): map := assigned_types_in(statements.flat_map(nodes_in), classes)
-assigned_types_in(nodes: list, classes: map): map := {
+assigned_types(statements: list, classes: map, results: map = {}): map := assigned_types_in(statements.flat_map(nodes_in), classes, results)
+assigned_types_in(nodes: list, classes: map, results: map = {}): map := {
 	types = {}
 	for n in nodes {
 		if is_key(n, Op.Assign) and key_of(n) is symbol {
 			name = name_of(key_of(n))
-			type = written_type(value_of(n), classes) ?? ""
+			type = written_type(value_of(n), classes, results) ?? ""
 			types[name] = if name in types and types[name] != type then "" else type
 		}
 	}

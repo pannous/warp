@@ -76,30 +76,44 @@ page_after_steps(value: any): text := {
 	steps = std_io("os", "env", [PAGE_STEPS_VARIABLE]) ?? ""
 	html = render(value)
 	for step in steps.split("\n").filter(line => line != "") { html = page_step(step.split("\t")) }
-	if std_io("os", "env", [APP_WINDOW_VARIABLE]) { html = page_window_run(html) }
+	if std_io("os", "env", [APP_WINDOW_VARIABLE]) { page_window_run(html) }
 	html
 }
-// `warp app` (lib/app/command.warp) runs the program so, natively: its page in a window of the system's web view, each
-// event of the page running its handler (page_event) and the page rendered anew, as the page's site.js does, till the
-// window is closed; the HTML shown last (crates/warp-webview warpWindow)
+// `warp app` (lib/app/command.warp) runs the program so, natively: its page in a window of the system's web view, as
+// the page's site.js runs it: each event of the page runs its handler (page_event), a key pressed the program's `on
+// key` (lib/keys.warp), its timers fire when due (lib/timers.warp hears each tick), and the page is rendered anew after
+// each; closing the window ends the run, the HTML shown last its output (crates/warp-webview warpWindow)
 APP_WINDOW_VARIABLE = "WARP_APP_WINDOW"
 APP_WINDOW = "warpWindow"
 EVENT_JOINER = "·"
-page_window_run(html: text): text := {
+PAGE_KEY_EVENT = "key"
+PAGE_TICK = "tick"
+WAIT_FOR_EVENT = -1
+page_window_run(html: text) := {
 	page_shown_in_js()
 	foreign_call("js", "globalThis", JS_PAGE_SHOWN, 1, [html])
 	foreign_call("js", APP_WINDOW, "show", 1, [])
 	shown = html
-	happened = page_window_event()
+	happened = page_window_event(0)
 	while happened != ø {
-		page_event(int(happened["event"].split(EVENT_JOINER)[1]), happened["detail"])
+		wait = page_happened(happened)
 		shown = page_render(page_shown)
-		happened = page_window_event()
+		happened = page_window_event(wait)
 	}
-	shown
+	// (the timers the host was told of are the window's: they end with it)
+	print shown
+	exit(0)
 }
-// the window's next event, {event: "click·1", detail}, ø once it is closed
-page_window_event(): any := foreign_call("js", APP_WINDOW, "next", 1, [])
+// the window's next event, {event: "click·1", detail, now}, else a tick once the milliseconds are over; ø once it is
+// closed
+page_window_event(milliseconds: int): any := foreign_call("js", APP_WINDOW, "next", 1, [milliseconds])
+// what happened on the page, done: the milliseconds till a timer is due, WAIT_FOR_EVENT when none is
+page_happened(happened: any): int := {
+	event = happened["event"]
+	if event == PAGE_KEY_EVENT { emitted(PAGE_KEY_EVENT, happened["detail"]) }
+	else if event != PAGE_TICK { page_event(int(event.split(EVENT_JOINER)[1]), happened["detail"]) }
+	emitted(PAGE_TICK, happened["now"]) ?? WAIT_FOR_EVENT
+}
 page_step(words: list): text := {
 	if words[0] == "click" and #words == 2 { return click(words[1]) }
 	if words[0] == "type" and #words == 3 { return type_into(words[1], words[2]) }

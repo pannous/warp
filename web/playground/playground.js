@@ -10,6 +10,7 @@ const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostics/diagnost
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
+const DEFAULT_VIEWPORT_MARGIN = 10; // CodeMirror's lines rendered beyond the visible ones, unless the editor fits its code
 // the most sounds sounding at once and how fast a stolen one fades out (src/sound/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
 const MAX_VOICES = 32;
 const STEAL_SECONDS = 0.005;
@@ -143,9 +144,17 @@ function applySizes() {
 	const main = document.querySelector("main");
 	if (sizes.guide) main.style.setProperty("--guide-width", `${clamp(sizes.guide, GUIDE_WIDTH_RANGE, main.clientWidth)}px`);
 	else main.style.removeProperty("--guide-width");
-	editor.getWrapperElement().style.height = sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
+	const fitted = fitsCode();
+	editor.setOption("viewportMargin", fitted ? Infinity : DEFAULT_VIEWPORT_MARGIN);
+	editor.getWrapperElement().style.height = fitted ? "auto" : sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
+	$("fit-code").setAttribute("aria-pressed", fitted);
 	editor.refresh();
 }
+
+// ⛶ over the code (card fullscreen-toggle-icon): the editor as tall as its code, no scrolling inside it; again: the
+// height the resizer left
+const fitsCode = () => Boolean(sizes.fitted);
+const toggleFitsCode = () => setSize("fitted", fitsCode() ? undefined : 1);
 
 function setSize(name, value) {
 	if (value === undefined) delete sizes[name];
@@ -1044,7 +1053,7 @@ function servingRequests({ shared, port }) {
 	const first = !worker.serving;
 	const waiting = worker.serving?.waiting ?? (first ? ["GET", SERVED_ROOT] : undefined);
 	worker.serving = { shared };
-	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`serving http://localhost:${port}`], address: SERVED_ROOT } };
+	if (first && pending) firstServed = { run: pending, report: { ...SERVING_RUN, printed: pending.printed, paintings: pending.paintings, listening: [`web requests (http://localhost:${port} when warp runs it)`], address: SERVED_ROOT } };
 	if (waiting) servedRequest(...waiting);
 }
 
@@ -1397,6 +1406,8 @@ function initialize() {
 		editor.focus();
 	};
 	$("full-screen").onclick = toggleFullScreen;
+	$("fit-code").append($("full-screen").firstElementChild.cloneNode(true));
+	$("fit-code").onclick = toggleFitsCode;
 	$("shown-from").value = stored(SHOWN_FROM_KEY) ?? (stored(HINTS_KEY) === "off" ? "weak" : "hint");
 	store(HINTS_KEY, null);
 	$("shown-from").onchange = () => {

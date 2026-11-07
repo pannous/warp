@@ -97,7 +97,10 @@ main { display: grid; grid-template-columns: var(--guide-width, minmax(16rem, 26
 .resizer.rows { cursor: row-resize; height: 8px; --grip: 40px 2px; }
 
 .guide-pane, .editor-pane, .output-pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
-.editor-pane { overflow: hidden; }
+.editor-pane { overflow: hidden; position: relative; }
+/* ⛶ over the code (playground.js toggleFitsCode), above CodeMirror's scrollbars; pressed: the editor fits its code */
+.fit-code { top: 4px; right: 16px; z-index: 7; }
+.fit-code[aria-pressed="true"] { opacity: 1; color: var(--ink); }
 .CodeMirror { height: 44vh; min-height: 120px; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); color: var(--ink); }
 .CodeMirror-gutters { background: var(--panel); border-right: 1px solid var(--line); }
 .CodeMirror-cursor { border-left-color: var(--ink); }

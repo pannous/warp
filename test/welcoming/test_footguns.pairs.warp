@@ -252,15 +252,15 @@
 
 # test_no_implicit_time_zone
 'now.hour >= 0 and now.hour < 24'	true
-'(2024-03-31T00:30Z in "Europe/Berlin").hour'	1
-'(2024-03-31T01:30Z in "Europe/Berlin").hour'	3
+'zoned(2024-03-31T00:30Z, "Europe/Berlin").hour'	1
+'zoned(2024-03-31T01:30Z, "Europe/Berlin").hour'	3
 
 # test_repeated_local_time_needs_disambiguation
 't=2030-10-27T02:30+02:00[Europe/Berlin]; t.offset'	7200
 
 # test_calendar_day_is_not_24_hours
-'t=(2030-03-30T12:00 in "Europe/Berlin") + 1 day; t.hour'	12
-'t=(2030-03-30T12:00 in "Europe/Berlin") + 24 hours; t.hour'	13
+'t=zoned(2030-03-30T12:00, "Europe/Berlin") + 1 day; t.hour'	12
+'t=zoned(2030-03-30T12:00, "Europe/Berlin") + 24 hours; t.hour'	13
 '1 hour == 60 minutes'	true
 '1 day == 2 days'	false
 
