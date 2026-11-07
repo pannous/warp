@@ -18,19 +18,22 @@ MARKUP_MODULE = "markup"
 FETCH_LATER = "fetch_later"
 ANSWER = "answer"
 SIGNAL_SEPARATOR = "·"
+# lib/markup.warp live(compute): a value shown anew each time the page renders
+LIVE_WORD = "live"
 
 fetch_signals(program: Node): Node := {
 	fetched = flat_statements(program).map(fetched_name).filter(name => name != "")
 	if #fetched == 0 { return program }
 	later = statements_in(program).map(later_fetched_name).filter(name => name != "")
-	# (regions first: `users.loading` reads users before it becomes no)
-	read = bottom_up(live_regions(program, fetched), n => signal_read(n, fetched, later))
+	# (regions and live items first: `users.loading` reads users before it becomes users·loading)
+	marked = live_reads(live_regions(program, fetched), later)
+	read = bottom_up(marked, n => signal_read(n, fetched, later))
 	if #later == 0 { return read }
 	# (its statements among the program's, main-level: written later by the reply, its variables are varying)
 	separated(bracketed(statements_in(read).flat_map(fetched_later), ""), ";")
 }
-# the library word the lowering calls, which the program never writes (core/passes/prelude_words.warp extension_writes)
-fetched_later_words(program: Node): list := if statements_in(program).any(statement => later_url(statement) != ø) then [FETCH_LATER] else []
+# the library words the lowering calls, which the program never writes (core/passes/prelude_words.warp extension_writes)
+fetched_later_words(program: Node): list := if statements_in(program).any(statement => later_url(statement) != ø) then [FETCH_LATER, LIVE_WORD] else []
 # the name of `name := fetch url` at the main level, fetched without waiting, else ""
 later_fetched_name(statement: Node): text := if later_url(statement) == ø then "" else name_of(key_of(statement))
 later_url(statement: Node): Node? := match statement {
@@ -75,6 +78,21 @@ live_regions(n: Node, fetched: list): Node := {
 	if items.any(item => is_key(item, Op.Colon) and key_of(item) == Text(LIVE_ATTRIBUTE)) { return n }
 	Key(key_of(n), Op.Colon, List([Key(Text(LIVE_ATTRIBUTE), Op.Colon, Text(LIVE_POLITENESS))] + items, Bracket.Curly, Separator.Comma))
 }
+# each item of markup reading a value fetched later is live, shown anew when the reply comes: the events sugar's
+# `live(() => …)` of an item reading a variable a handler writes (extensions/sugar/events.warp), which runs before this
+# pass, so it can't see the reply's writes
+live_reads(n: Node, later: list): Node := {
+	if #later == 0 { return n }
+	if not is_markup_element(n) { return children(n, child => live_reads(child, later)) }
+	Key(key_of(n), Op.Colon, group_like(value_of(n), items_of(value_of(n)).map(item => live_item(item, later))))
+}
+live_item(item: Node, later: list): Node := {
+	if is_markup_element(item) { return live_reads(item, later) }
+	if not later.any(name => mentions(item, name)) { return item }
+	if is_key(item, Op.Colon) and (key_of(item) is symbol or key_of(item) is text) { return Key(key_of(item), Op.Colon, kept_live(value_of(item))) }
+	kept_live(item)
+}
+kept_live(code: Node): Node := call_of(LIVE_WORD, [Key(Node.Empty, Op.Arrow, code)])
 # `div{ … }`: a tag of lib/markup.warp with its block
 is_markup_element(n: Node): bool := match n {
 	Key(Symbol(tag), Op.Colon, List(_, Bracket.Curly, _)): declared_tags().get(tag) == MARKUP_MODULE
