@@ -239,14 +239,16 @@ shader per paint covers only the last pass. The plan, in warp's words, with $pre
   image and painting it shifted (probes/gpu/). Then the browser host, then samples/gpu/ocean.warp's waves as a texture.
 
 ## WGSL errors at their place in the program
-WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). Both hosts report a
-shader that does not compile as `<word>: line:column: why` in the shader's text (native gpu.rs compile_errors, browser
-host-gpu.js checkedModule, `gpu_paint: …` there). pipeline::eval_source passes the failed program through
-shader_errors::relocated: it finds the program's shader blocks again in the source (warp_parser shader_blocks, the
-same dedent as the block's text: lines dropped around it, characters dropped before each line) and, when exactly one
-block has that place, says `<word>: why at line:column` in the program, which the CLI and the playground underline.
-Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
-GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
+WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). The block's reader
+(extensions/shader_blocks.warp shader_place) marks its text with where it stands: the line of its first written line,
+the columns before that line and before each later one, which the dedent took off. A paint, gpu_render or gpu_compute
+of a name the program assigns a shader block passes shader_words(s, place) (rules in extensions/rules/modules/
+prelude.warp, rule word shader_words_of): the GPU compiles the text placed as written, blank lines and spaces before
+it, so its own line:column is the program's. Both hosts then say `why at line:column` (host-gpu.js checkedModule,
+warp_gpu.c shader_failed out of naga's report), the runtime adds no call site (error_sentences names_place) and the
+playground marks the place (driver.js placeNamed, report.error_at). Columns after a `$name` hole on the same line count
+it as `values.name`. Not placed: a shader block given inline (`paint(shader {…})`), shaders from imported modules,
+shaders given as quoted text: their place stays the shader's own.
 
 ## GLSL (twigl, shadertoy)
 Not in the compiler, to keep Rust lean (naga's GLSL front end alone was a 705 KB glsl.wasm). Commit b04da3e2c has the

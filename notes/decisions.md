@@ -636,7 +636,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - baked-prelude-slices: definition_slices takes the baked LIBRARY_SLICES for a bundled file instead of cutting it anew.
 - made-by-reach: module.made counts only kinds made by functions reachable from the program's roots.
 - comments-not-candidates: words in comments or a shebang never make a program an implicit-use candidate.
-- native-window-sdl3: the native warp's window is lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
+- native-window-sdl3 (superseded by window-in-warp): the native warp's window was lib's warp_window.c over SDL3, lazily bound; headless paints one frame; the driver forwards unknown system values to loaded libraries through one hook.
 - node-attributes: marks ride on the node, an `attributes` field of $MetaNode beside `comment` (with_attribute / attributes_of); `let` inside a lambda is such a mark.
 - hello-lazy-runtime-dropped: binding runtime words lazily is dropped (under 7 MB of hello's 176 MB).
 - canonical-runtime-names: runtime words map_keys/map_values/map_get_or/collection_contains are keys/values/get/has; contains/includes stay aliases of has.
@@ -1094,3 +1094,7 @@ implement them as well." Plan and review checklist: notes/parser_cleanup.md.
 - 2026-11-07 deploy-on-push (user: deploys in a minute): Playground deploys on every push to main touching the site (build + deploy only, queued not cancelled); tours/verify on the hourly schedule and by hand.
   - notes-are-notes (user, card chord-addition-construct): note names (C4, C#4…) are lib/sound Note values, shown as C4, playing their frequency: Note + Note is a chord [C4 E4], chord + Note a bigger chord, Note + n is n semitones up, Note * number the frequency times; raw frequency math is `hertz(C4) + 1`. test_sound_note_names:8 (`C#4 + 0` → C#4) changes (user OK).
   - glued-binds-tighter (user, core OK, card chord-addition-construct): an operator with no spaces around it joins its neighbours into one item of a space-separated list: `a=1; b=2; c=3; [a+b c]` → [3, 3], as `[1+2 3]` already reads; `melody([C4+E4 E4 G4], 1000ms)` works; `warp format` prints the reading explicitly. Small parser change in core/parsing.
+- 2026-11-07 one-build-slot (user: reduce the load): <store>/build-slots/count = 1, one compiler build at a time for every session until the user raises it.
+  - quotient-period (user, extends fraction-written-form): an exact quotient of values whose decimal never ends shows its period overlined, the repeating-decimals form: `real x = 2; x / 3` → 0.6̅, `use units; 37km / 6` → 6.16̅km; it reads back as the exact value. Terminating quotients stay plain decimals (0.25, 2.5), written fractions stay n/d (1/3). Never a float's digits for an exact value.
+  - rgb-color-literal (user): an RGB color is written `color(0xFF8000)` (`rgb(0xFF8000)` the same word with one argument): 6 hex digits are opaque, 8 digits (0x80FF8000) carry their own alpha; `0xFF8000 as Color` follows the same rule (no transparent trap). No CSS text form, no bare `#FF8000`. lib/color only.
+- 2026-11-07 build-slots-three (user: as many as the Supervisor wants): build-slots/count back to 3 (the day default); lowered again when the load climbs.
