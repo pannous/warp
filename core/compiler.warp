@@ -91,7 +91,7 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø):
 	cut_runtime_words(if own then left_out_runtime_words(COMPILER_BUILD_EXTENSIONS) else [])
 	# (a program's own definition of a module's name is renamed its own, prelude_words.warp with_own_words, the module's
 	# word linked beside it: `clamp(x) := 9` beside math's clamp(x, low, high); a module being built has its own instead)
-	link_libraries(images, if linking and module.relocating then definition_slices(source).map(slice => slice#1) else [])
+	link_libraries(images, if linking and module.relocating then definition_slices(written_source(source)).map(slice => slice#1) else [])
 	used_c_functions = {}
 	timed("checked_program")
 	program = checked_program(foreign#1, folder, prelude_text)
@@ -139,7 +139,7 @@ linked_libraries(source: text): list := {
 	# module written links those it uses, never itself
 	# (the prelude too, every program's and every module's, so a run holds one instance of its words and globals: signals'
 	# listen and the program's unlisten edit the same event_listeners)
-	names = (["prelude"] + used_modules(if module_written != "" then file_text(std_module_path(module_written)) ?? "" else source)).filter(name => name != module_written)
+	names = (["prelude"] + used_modules(written_source(source))).filter(name => name != module_written)
 	timed("linking from " + folder + ": " + names.join(", "))
 	at = 0
 	while at < #names {
@@ -224,6 +224,9 @@ write_runtime(file: text) := {
 # compile needs of it: its definitions' parses and its image, the words, globals and classes it exports.
 # The prelude's too, every word of it (its compile reaches no prelude of its own, compile)
 module_source(name: text): text := "use " + name + "\nø"
+# the text a compile defines its words in: the module's own when it writes one (its source is only module_source's
+# stub), else the source
+written_source(source: text): text := if module_written != "" then file_text(std_module_path(module_written)) ?? "" else source
 # where the modules a compile links are: beside runtime.wasm, or where the module written goes
 linked_modules_folder(): text := if module_written != "" and not own_module_files.has(module_written) then module_written_folder else folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/"
 # the module a compile writes, and the folder of the modules it links: its own never linked
