@@ -1,0 +1,5 @@
+# int PCM through an effect stays a float signal, never exact ratios (card float-buffer-exact): a feedback comb of ints times 0.75 grew denominators without end
+'use sound; class_name(scaled_effect([0 for i in 0 ..< 2000] + [100, -100], ["reverb", 0.5], loudest_sample)#2001)'	"float"
+'use sound; class_name(scaled_effect([100, -100, 50], ["gain", 0.5], loudest_sample)#1)'	"float"
+'use sound; class_name(scaled_effect([100, -100, 50], ["delay", 0.01, 0.4, 0.5], loudest_sample)#2)'	"float"
+'use sound; class_name(scaled_effect([100, -100, 50], ["lowpass", 900, 0.707], loudest_sample)#3)'	"float"
