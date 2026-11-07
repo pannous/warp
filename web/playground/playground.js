@@ -224,6 +224,7 @@ function startWorker(restarts = 0) {
 	workerWarmed = false;
 	workerStages.length = 0;
 	worker = standby ?? newWorker(restarts);
+	worker.fromStandby = worker === standby;
 	standby = undefined;
 	workerReady = worker.ready;
 	if (!worker.isReady) showLoading("starting the compiler's worker", false);
@@ -270,6 +271,7 @@ function newWorker(restarts = 0) {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		starting.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		starting.onmessage = ({ data }) => {
+			starting.heard = { type: data?.type, at: Math.round(performance.now()) }; // playground.js hungWhere
 			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
@@ -659,20 +661,29 @@ function printedChunk(run, chunk) {
 function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 	clearTimeout(run.timer);
 	run.deadline = Date.now() + milliseconds;
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), milliseconds);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`, !run.animating, [hungWhere()]), milliseconds);
+}
+const HUNG_STAGES_SHOWN = 8;
+// where a run stopped by the limit hung, said beside it (card safari-hello-timeout: Hello stopped on the iPad only): the
+// worker's start, whether it was the standby, its stages and the last message it sent
+function hungWhere() {
+	const now = Math.round(performance.now());
+	const heard = worker.heard ? `"${worker.heard.type}" ${((now - worker.heard.at) / 1000).toFixed(1)} s ago` : "nothing";
+	const stages = workerStages.slice(-HUNG_STAGES_SHOWN).map(({ stage, at }) => `${stage} at ${at} ms`).join(", ") || "none seen";
+	return `where it hung: the worker ${worker.fromStandby ? "was the standby" : "started for the page"}, ${worker.isReady ? "ready" : "not ready"}; its last message ${heard}; last stages: ${stages}; page time ${now} ms`;
 }
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
 const ANIMATION_STOPPED = "animation stopped";
-function stopRun(run, message, failed = !run.animating) {
+function stopRun(run, message, failed = !run.animating, said = []) {
 	worker.terminate();
 	startWorker();
-	finish(run, stoppedReport(run, message, failed));
+	finish(run, stoppedReport(run, message, failed, said));
 }
 
-const stoppedReport = (run, message, failed) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
-	warnings: [], runtime_warnings: [], hints: [], notes: [] });
+const stoppedReport = (run, message, failed, said = []) => ({ value: message, error: failed, sounded: run.sounded, printed: run.printed, paintings: run.paintings,
+	warnings: [], runtime_warnings: said, hints: [], notes: [] });
 
 // the Run button while a program runs: Stop (card playground-turn)
 function showStop(stoppable) {
