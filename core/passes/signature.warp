@@ -23,7 +23,7 @@ module_signature_node(name: text, image: list): Node := {
 		field_node("foreign", texts_node(foreign_types(source))),
 		field_node("aliases", texts_node(module_aliases(source))),
 		field_node("patterns", square_list(rule_patterns(source).map(pattern => Text(pattern)))),
-		field_node("operators", square_list(declared_operators(source).map(operator => Text(operator_written(operator)))))] + image)
+		field_node("operators", square_list(declared_operators(source).map(operator => Text(written_operator(operator)))))] + image)
 }
 # the module's bytes with its signature as their first section
 with_signature(wasm: list, name: text, image: list): list := wasm_header + section(section_ids.custom, name_bytes(SIGNATURE_SECTION) + pack(module_signature_node(name, image)).bytes) + wasm[#wasm_header ..]

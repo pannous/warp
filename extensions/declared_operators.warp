@@ -88,7 +88,7 @@ global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
 		indexed = library_index_section("operator")
-		library_operators = indexed.keys.map(key => operator_read(key + " " + indexed[key]))
+		library_operators = indexed.keys.map(key => read_operator(key + " " + indexed[key]))
 	}
 	library_operators
 }
@@ -98,14 +98,14 @@ def library_operators_scanned(): map {
 	statements = std_module_names.filter(name => join(module_sources([name]), "").contains("operator")).flat_map(name => code_statements_of(name))
 	found = {}
 	for operator in operators_declared_in(statements).filter(operator => not is_name_start(operator.glyph#1)) {
-		words = operator_written(operator).split(" ")
+		words = written_operator(operator).split(" ")
 		found[words#1 + " " + words#2] = words#3
 	}
 	found
 }
 # an operator as one text, `∪ infix 70`, and back: as the library index and a module's signature hold it
-def operator_written(operator: DeclaredOperator): text := operator.glyph + " " + FIXITY_WORDS.keys.find(word => FIXITY_WORDS[word] == operator.fixity) + " " + "${operator.level}"
-def operator_read(written: text): DeclaredOperator {
+def written_operator(operator: DeclaredOperator): text := operator.glyph + " " + FIXITY_WORDS.keys.find(word => FIXITY_WORDS[word] == operator.fixity) + " " + "${operator.level}"
+def read_operator(written: text): DeclaredOperator {
 	words = written.split(" ")
 	DeclaredOperator{glyph: words#1, fixity: FIXITY_WORDS[words#2], level: words#3 as int}
 }
@@ -113,7 +113,7 @@ def operator_read(written: text): DeclaredOperator {
 # text's
 def module_operators(module: text): list {
 	signature = prebuilt_signature(module)
-	if signature != ø { return signature.operators.map(operator_read) }
+	if signature != ø { return signature.operators.map(read_operator) }
 	declared_operators(join(module_sources([module]), ""))
 }
 
