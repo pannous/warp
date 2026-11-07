@@ -53,13 +53,12 @@ spans_of(source: text): list := {
 	}
 	source_spans[source]
 }
-# the module of sliced_modules whose file the source is, as the library index was written of it: its length the
-# index's, and in a lib/ maybe edited since the build (library_unedited) its hash too, as rule_needs_by_module trusts the index
-# (hashing the prelude and the type modules was ~25 ms a compile); ø for any other text
+# the module of sliced_modules whose file the source is, its length the index's: the index is lib/ as the build left it
+# (decision no-lib-reads: an edited lib/ is a rebuild); ø for any other text
 indexed_module(source: text): text? := {
 	for module in sliced_modules() {
 		hash = library_index_section("hash").get(module) ?? ""
-		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) and (library_unedited() or hash == source_hash(source)) { return module }
+		if hash.starts_with("${#source}-") and source == file_text(std_module_path(module)) { return module }
 	}
 	ø
 }
@@ -365,7 +364,10 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	# a class of the program sets aside a module's word of its name too, `class square {…}` the prelude's square(x), so
 	# square(4) constructs (card field-side); a module's own class, brought in front, is no such word
 	own_classes = statements_in(program).filter(is_type_declaration).map(statement => declared_type_name(value_of(statement)#2))
-	replaced = slice => slice#1 in own_names or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
+	# a used module's definition of the name replaces the slice only when it takes the same parameter types; any other
+	# joins it as an overload, chosen by the arguments (decision cross-module-overload: shell's find(folder: Path,
+	# pattern: text) beside the prelude's find(t: text, part: text))
+	replaced = slice => (slice#1 in own_names and not overloads_brought(slice, program)) or (slice#1 in own_classes and leading_name(slice#2) not in defining_keywords)
 	kept = slice => not replaced(slice) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
 	# the program's globals, `global hue = 10`, which every function of its own shares, are no module's: hsv's `hue`
 	# stays its local
@@ -424,6 +426,25 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
 }
+# whether a slice's definition overloads the definitions of its name a used module brought, rather than being replaced
+# by them: brought (never the program's own, decision library-words-lexical) and told apart from each by the dispatch
+# (arity_overloads): as many parameters, one of another dispatchable type; color's hex_text(c: Color), its Color an
+# int, still replaces the prelude's hex_text(n: int), and so does a definition of another parameter count, which a
+# name passed as a function could no longer tell (the compiler's shader_values(s, given, program))
+overloads_brought(slice: list, program: Node): bool := {
+	if not brought_names.has(slice#1) { return no }
+	heads = statements_in(program).filter(statement => declared_name(statement) == slice#1).map(definition_head_of)
+	if heads.any(head => head == ø) { return no }
+	# (given's [name, text, packed parse or ø, identity]; its head's types only: parsed without its module's uses, which
+	# would link modules not built yet)
+	parsed_slice = if slice#3 != ø then unpack(slice#3) else plain_node(parsed(slice#2))
+	head = definition_head_of(statements_in(parsed_slice)#1)
+	if head == ø or not is_group(head) { return no }
+	types = parameter_types(head)
+	classes = declared_classes(program)
+	heads.all(other => not is_group(other) or told_apart(types, parameter_types(other), classes))
+}
+told_apart(types: list, others: list, classes: list): bool := #types == #others and (0 ..< #types).any(at => types[at] != others[at] and is_overload_type(types[at], classes) and is_overload_type(others[at], classes))
 # a linked module's definition as the program needs it: a function's head, its body left to the module's code, a
 # class with its methods so; a value, whose initializer the program runs, and a field as they are
 declared_only(n: Node): Node := {

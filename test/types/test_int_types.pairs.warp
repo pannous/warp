@@ -10,3 +10,5 @@
 'red.hex == 0xFFFF0000'	true
 'red.hash'	"#FF0000"
 'with_alpha(red, 0.5).hash'	"#80FF0000"
+# a type's `format … as text` leaves lib/text's format(template, values) callable (card program-format)
+'type Flag = int; format Flag f as text := "F"; format("{} has {} items", ["cart", 3])'	"cart has 3 items"

@@ -1,0 +1,6 @@
+# a used module's definition of other parameter types joins the prelude's word of its name, chosen by the arguments (decision cross-module-overload, card typed-overload-replace)
+'use shell; "abc".find("b")'	2
+'use shell; find("abc", "b")'	2
+'use shell; match "/u/41" { "/u/" + id: int => id + 1; _ => 0 }'	42
+'use text; match "/u/41" { "/u/" + id: int => id + 1; _ => 0 }'	42
+'k(x) := x; f(v: any, n: any) := { k = v; k.find(n) }; f("abc", "b")'	2
