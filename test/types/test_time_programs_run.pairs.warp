@@ -1,7 +1,7 @@
 # from test_time_programs_run.rs: edit the Rust test, then run the script again
 
 # a_zoned_times_rules_version_is_read_at_run_time
-'t = 2030-07-01T10:00[Europe/Berlin]; print t; t.tzdata'	'warp-2026a'
+'t = 2030-07-01T10:00 in "Europe/Berlin"; print t; t.tzdata'	'warp-2026a'
 
 # a_duration_in_a_unit_is_its_quantity_in_a_running_program
 'print 1; str(1 day in h)'	'24h'
