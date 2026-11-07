@@ -93,6 +93,10 @@ build_compiler() {
 # `library: "dir/name"` prebuilt as <clone>/dir/name.wasm; natively scripts/link-packages.sh builds it beside warp
 pack_package_libraries() {
 	local manifest clone library
+	# a fresh worktree has no packages/ (git ignores it): linked first, else the page lacks uniscript_c.wasm and
+	# samples/text/uniscript_text.warp fails "uniscript_c.uniscript_error is not available in the browser"; the served
+	# list, written after, then holds the packages samples use by path (samples/modules/packages.warp)
+	compgen -G "packages/*/package.warp" > /dev/null || "$repository/scripts/link-packages.sh" "$repository"
 	for manifest in packages/*/package.warp; do
 		[ -f "$manifest" ] || continue
 		library=$(manifest_field "$manifest" library)
