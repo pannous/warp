@@ -10,6 +10,7 @@
 #   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
 #   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
 #   warp docs|wiki|home   where the documentation is, opened
+#   warp app [check] …    lib/app/command.warp: a markup program's page in the system's web view
 #   warp repl|start       the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
 #   warp rebuild from <step>  the same from that step on (seed, optimize, runtime, modules)
@@ -431,6 +432,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 		if same_text(word, "rebuild") { return rebuild_command(first) }
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
+		if same_text(word, "app") { return compiled_and_run(compiler, joined(library_folder(), "/app/command.warp"), 1) }
 	}
 	# `warp test`, and `warp self test` as `warp test --self`: the native warp runs the cases, each by the compiler named
 	if same_text(word, "test") and (not prefixed or self_named(compiler)) { return tests_run(compiler, flagged("--self") or self_named(compiler), first) }

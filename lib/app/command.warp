@@ -1,0 +1,31 @@
+# `warp app [check] <file>` (card app-webview): the page a markup program shows (lib/markup.warp page_of, as `warp`
+# prints it) in a window of the system's web view till it is closed (lib/webview.warp); `check` prints the text the
+# page shows instead, read in a hidden web view, no window (tests, WARP_NO_WINDOW)
+use os
+use webview
+
+check_word = "check"
+usage = "warp app [check] <file.warp>  the page a markup program shows, in a window of the system's web view (check: the text it shows, no window)"
+page_start = "<"
+
+app_command(arguments: list): int := {
+	checking = #arguments > 0 and arguments[0] == check_word
+	files = if checking then arguments[1 ..] else arguments
+	if #files != 1 {
+		print usage
+		return 1
+	}
+	file = files[0]
+	html = command("warp run " + quoted_path(file))
+	if not html.trim().starts_with(page_start) {
+		print "warp app: " + file + " shows no page (its value is no markup): " + html.trim()
+		return 1
+	}
+	if checking {
+		print webview_page_text(html)
+		return 0
+	}
+	webview_show(html, file)
+}
+
+exit(app_command(args[1 ..]))
