@@ -77,13 +77,12 @@ listed_in_place(method: text, arguments: list, operation: Node): Node := {
 	appended = call_of("list_insert", [list, call_of("count", [list])] + arguments[1..])
 	Key(Key(Key(ø, Op.If, Key(list, Op.Is, symbol("list"))), Op.Then, appended), Op.Else, operation)
 }
-# a member read `m.text` of a map holding that key is its entry (an event's text, decision map-key-vs-method), not the
-# function a module's text() method falls back to; a type word's too (`m.float`)
+# a member read `m.text` of any other value is the emitter's member read (decision map-key-vs-method): a map's entry
+# of that name where it has one (an event's text, a map the page built too), else the function, never the function
+# alone, which a module's text() method left `m.text` of a map
 keyed_first(method: text, arguments: list, otherwise: Node): Node := {
 	if #arguments != 1 or method in position_words { return otherwise }
-	value = arguments#1
-	holds = Key(Key(value, Op.Is, symbol("map")), Op.And, call_of("has", [value, Text(method)]))
-	Key(Key(Key(ø, Op.If, holds), Op.Then, Key(value, Op.Dot, symbol(method))), Op.Else, otherwise)
+	Key(arguments#1, Op.Dot, symbol(method))
 }
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
