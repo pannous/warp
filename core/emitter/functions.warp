@@ -1,7 +1,7 @@
 # Functions (emitter.warp's part): calls and their arguments, each function's kinds and code, analyzer.warp's kinds
 def call(body: Body, f: Function, arguments: list): TypedCode {
 	parameters = f.signature.parameters
-	if parameters and parameters.last.rest { return rest_call(body, f, arguments) }
+	if gathers(f.signature, #arguments) { return rest_call(body, f, arguments) }
 	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments, f.signature.parameters.map(p => p.label))
 	if slots == ø { return refuse_arguments(f, #arguments) }

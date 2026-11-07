@@ -39,7 +39,7 @@ def method_function(body: Body, name: text, arguments: list): text? {
 # whether f takes these arguments: no more than its parameters (any more after a rest one), a name given once, each
 # place left out defaulted
 def takes_arguments(f: Function, arguments: list): bool {
-	if f.signature.parameters.any(parameter => parameter.rest) { return takes(f.signature, #arguments) }
+	if gathers(f.signature, #arguments) { return takes(f.signature, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments)
 	parameters = f.signature.parameters
 	slots != ø and range_list(#parameters).all(i => (i < #slots and slots[i] != ø) or parameters[i].defaulted_to != ø)
