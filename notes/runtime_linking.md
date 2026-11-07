@@ -95,8 +95,9 @@ made_case kind made, since no program decides any more what it makes.
   their heads only (prelude_words.warp declared_only: `f(x) := ø`), from the slice parses baked into the compiler, so
   nothing of their bodies is lowered or analyzed; the analyzer takes their kinds and results from warp.module
   (analyzer.warp declared_linked), the emitter binds them and refuses to compile one (functions.warp). Its classes and
-  globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails is said
-  on stderr ("units: the linked module didn't bind (…); compiled from source") and the program compiled from source.
+  globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails, that lacks
+  its warp.signature or was built of another lib/ text is the compile's error ("units.wasm won't link: …"), never
+  compiled from source (decision module-link-hard-error, 2026-11-07).
   No separate warp.declarations section: the compiler already carries every bundled module's parse.
 - A linked name keeps all its variants (card module-export-arity): draw's own show() beside the show(x) builder the
   host calls, which the layout names by index, not by name. A program's call takes the variant whose count of values

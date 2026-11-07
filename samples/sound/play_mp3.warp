@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+# plays the mp3 file beside this program
 use sound
 use file
 # beside this program (decision source-relative-prefix: play ^/tune.mp3 once path literals take ^/;

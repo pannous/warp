@@ -20,10 +20,5 @@ def levenshtein(a, b) {
 	prev#(#t + 1)
 }
 
-total = 0
-total = total + levenshtein("kitten", "sitting")   # 3
-total = total + levenshtein("flaw", "lawn")        # 2
-total = total + levenshtein("", "abc")             # 3
-total = total + levenshtein("abc", "abc")          # 0
-total = total + levenshtein("saturday", "sunday")  # 3
-total
+pairs = [["kitten", "sitting"], ["flaw", "lawn"], ["", "abc"], ["abc", "abc"], ["saturday", "sunday"]]
+for pair in pairs { print "\"\(pair#1)\" → \"\(pair#2)\": \(levenshtein(pair#1, pair#2)) edits" }
