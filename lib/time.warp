@@ -8,14 +8,14 @@ now(): Instant := Instant(wall_clock_ms(), local_zone_name())
 // in the page the browser's (web/playground/wasi.js); UTC, warned, for a zone not in time_zones
 local_zone_name(): text := {
 	for entry in wasi_environment().split(chr(0)) { if entry.starts_with(TZ_ENTRY) { return known_zone(entry[#TZ_ENTRY ..]) } }
-	UTC
+	UTC_ZONE
 }
 TZ_ENTRY = "TZ="
-UTC = "UTC"
+UTC_ZONE = "UTC"
 known_zone(name: text): text := {
 	if time_zones.any(zone => zone.name == name) { return name }
 	warning("the time zone " + name + " is not in lib/time.warp time_zones: now is UTC")
-	UTC
+	UTC_ZONE
 }
 // the one hook into the host: WASI's clock_time_get (core/analysis/host_words.warp) of the wall clock
 // (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
@@ -55,9 +55,12 @@ class Instant {
 	second(): int := wall() % 60000 /! 1000
 	minus(other: Instant or Duration) := if other is Instant then ms - other.ms else Instant(ms - other.ms, zone)
 	plus(duration: Duration) := Instant(ms + duration.ms, zone)
+	// the same instant on the UTC wall clock: now.UTC, also now.utc
+	UTC() := Instant(ms)
+	utc() := Instant(ms)
 	// RFC 3339, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z; in another
 	// zone its wall clock and offset, 2026-10-25T12:43:40.692+01:00 (the zone's name is .zone)
-	text() := format_date(wall()) + "T" + format_time(wall()) + millis_fraction(ms % 1000) + (if zone == UTC then "Z" else offset_written(offset()))
+	text() := format_date(wall()) + "T" + format_time(wall()) + millis_fraction(ms % 1000) + (if zone == UTC_ZONE then "Z" else offset_written(offset()))
 }
 // +01:00, -04:00, +05:30: seconds east of UTC as RFC 3339 writes them
 offset_written(seconds: int): text := (if seconds < 0 then "-" else "+") + two_digits(abs(seconds) /! 3600) + ":" + two_digits(abs(seconds) % 3600 /! 60)
