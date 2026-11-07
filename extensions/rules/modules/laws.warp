@@ -2,6 +2,8 @@
 # the compiler keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
 # The rule takes the law as written (`where raw`), before lib/units' rules take its c for the speed of light
 rewrite (law $law) => $check where raw and statement and $check = law_check($law, $program)
+// a test block `test "name" {…}` runs only under `warp test` (P209): a plain run skips it, over one line or several
+rewrite $t $name $body => (if no { $body }; ø) where statement and $t in [test] and not $t is function and $name is text and $body is block
 // `test C` is test_check(() => C, "C"), C as written (lib/laws.warp); a program's own function `test` keeps its word
 // (test_soft_tests). A program with tests ends in their summary. The last rule takes a condition of several items,
 // `test switch 3 {…} == "three"`

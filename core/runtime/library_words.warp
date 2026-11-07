@@ -73,6 +73,8 @@ repeated_text(n: int, t: Node): text := {
 	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
 	out
 }
+# `a * b` of values known only at run time, one of them a text: the text repeated, as `"ab" * 2` and `2 * "ab"` are
+repeated_node(a: Node, b: Node): text := if textual_node(a) then repeated_text(int_of_node(b), a) else repeated_text(int_of_node(a), b)
 # `t.split(separator)`: the texts between separator's places in t; `t.split` the words between runs of whitespace
 split_text(t: text, separator: Node = ø): list := {
 	if is_null(separator) { return text_words(t) }

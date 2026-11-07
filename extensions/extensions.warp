@@ -50,6 +50,7 @@ use "page_values.warp"
 use "fetch_signals.warp"
 use "js_globals.warp"
 use "dir_hints.warp"
+use "collection_type_tests.warp"
 use "block_definitions.warp"
 use "effects.warp"
 use "optional_unwraps.warp"
@@ -92,7 +93,7 @@ EXTENSIONS = [
 	protocols_extension
 	# right after definition_heads, in this order: a class's conversions become the program's before conversions runs
 	Extension{name: "class_methods", passes: {"definition_heads": classes_rewritten}}
-	Extension{name: "int_types", passes: {"definition_heads": int_types}}
+	Extension{name: "int_types", passes_before: {"definition_heads": formatted_definitions}, passes: {"definition_heads": int_types}}
 	conversions_extension
 	implicit_uses_extension
 	test_lines_extension
@@ -110,6 +111,7 @@ EXTENSIONS = [
 	fetch_signals_extension
 	js_globals_extension
 	dir_hints_extension
+	collection_type_tests_extension
 	block_definitions_extension
 	effects_extension
 	optional_unwraps_extension

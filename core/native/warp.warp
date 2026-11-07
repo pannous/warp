@@ -364,14 +364,13 @@ line_ran(compiler: text, state: text, line: text): nothing := {
 	file_ran(compiler, words(compiler, "repl-step", state, line, module, joined(library_folder(), "/runtime.wasm")))
 	written_run(module, "repl", arg_count())
 }
-# `warp version`: warp.wasm's version line, then when this executable was built and the stamps of the compilers
+# `warp version`: warp.wasm's version line, then when this executable and warp.wasm were built
 versioned(compiler: text): nothing := {
 	given = compiler_arguments(compiler)
 	added(given, "version")
 	file_ran(compiler, given)
 	print(joined("the native warp · built ", built_minute()))
-	self_compiler = joined(library_folder(), "/warp-self.wasm")
-	print(joined(joined(compiler_stamp(compiler_path(), "warp.wasm", "pure"), ", "), compiler_stamp(self_compiler, "warp-self.wasm", "self")))
+	print(compiler_stamp(compiler_path(), "warp.wasm"))
 }
 # when this executable was built, as `warp build native` baked it (primitive.warp built_function, cc's `Oct 30 2026
 # 12:07:33`), shown as the stamps are: `2026-10-30 12:07`
@@ -393,9 +392,9 @@ built_minute(): text := {
 	text_from(shown, 16)
 }
 # a compiler's build stamp (stamped): `warp.wasm of 1792a05d8a · built 2026-10-28 20:25`
-compiler_stamp(file: text, name: text, rebuild: text): text := {
+compiler_stamp(file: text, name: text): text := {
 	wasm = read_file(file)
-	if wasm.length == 0 { return joined(joined(joined(name, " missing (warp rebuild "), rebuild), ")") }
+	if wasm.length == 0 { return joined(name, " missing (warp rebuild)") }
 	stamp = custom_section(wasm, "warp.build")
 	if stamp.length == 0 { return joined(name, " unstamped") }
 	commit = field(stamp, 3, NEWLINE)
@@ -480,9 +479,6 @@ first = past_options(if counting then start + 2 else if prefixed then start + 1 
 # reaches it (no link to an absolute path)
 setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
-# and the installed lib/, a build's own: a compile trusts its library index while WARP_LIB names that one
-# (passes/library.warp library_unedited)
-setenv(c_string("WARP_LIB_INSTALLED"), c_string(if installed_found().length > 0 then resolved_path(installed_found()) else ""), 1)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
 setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
 if prefixed and same_text(arg(start), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }

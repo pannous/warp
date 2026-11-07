@@ -21,8 +21,9 @@ ordering_operators = ["<", "<=", ">", ">="]
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
-# the method a class's instances show their structure by (decision show-hook)
-form_method = "show"
+# the method giving a class's instances their shown form (decision show-hook), written `format as text := …` in the
+# class body (the user's decision format-as-text), a name no program spells; an int type's hook is named so too
+form_method = "format·text"
 # the method counting an instance's elements, which `#b` calls (card class-position-index)
 counting_method = "count"
 # the classes of the program, by name: [statement, parent name or "", field names, methods, the type each field is
@@ -96,9 +97,13 @@ member_node_read(member: Node): Node := special_named(brace_method(colon_method(
 # a method another spelling of a word warp asks an instance for (lib/aliases.warp) as that word: `toString()` and
 # `to_s()` as text(), `compareTo(o)` as compare(o), `size()` and `len()` as count(), which `#s` and `size(s)` call
 special_named(member: Node): Node := match member {
-	Key(head, Op.Define, body): { word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, form_method, ordering_method, counting_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
+	Key(head, Op.Define, body): {
+		if is_format_head(head) { return Key(call_of(form_method, []), Op.Define, body) }
+		word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, form_method, ordering_method, counting_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
 	_: member
 }
+# `format as text`, the head of a class's shown form
+is_format_head(head: Node): bool := is_group(head) and #head == 3 and items_of(head).map(word => if word is symbol then name_of(word) else "") == ["format", "as", "text"]
 # a method written with its body in braces, `area(side) { … }` (a call beside a block as it parses), read as
 # `area(side) := { … }`; a constructor so, `value(n) { … }`, `value { … }` (a tagged block as it parses), as init
 brace_method(member: Node): Node := {

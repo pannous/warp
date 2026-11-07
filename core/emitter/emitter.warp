@@ -292,6 +292,11 @@ def fresh_module() {
 refuse(why: text): any := {
 	throw outside_the_core + why + module.emitting_at
 }
+# the program's own mistake found while emitting, `beat(1, 2)` of beat(n): its error with a fix, as a check says one,
+# never a gap of the core
+program_error(message: text, fix: text): any := {
+	throw message + module.emitting_at + "; fix: " + fix
+}
 # a refusal of binding a linked module's word to the program, marked: the compile is retried from the modules' sources
 # (compiler.warp), a program's own error never (a global: a Module field more fails the seed's compile)
 global link_refused = no
@@ -752,6 +757,8 @@ def local_value(body: Body, n: Node): TypedCode {
 	if name not in body.names and name in module.variants { return if #module.variants[name] == 1 then case_value(module.variants[name]#1, name) else interned_symbol(body, name) }
 	# a type's name, unbound, is the type value: `k = int`
 	if name not in body.names and names_a_type_value(name) { return TypedCode(ValueKind.Node, type_value_code(name)) }
+	# a function named without the arguments it takes: `x = beat` of beat(n)
+	if name not in body.names and #functions_named(name) > 0 { return refuse_count(functions_named(name), 0) }
 	if name not in body.names { return refuse("the unknown name " + name + module_hint(name)) }
 	index = body.names[name]
 	TypedCode(body.kinds#(index + 1), [op.local_get] + uleb(index), body.marks.get(name) ?? 0)
@@ -1210,6 +1217,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
 	# `y 1+1`: values side by side are a list without brackets, a spaced group (only `;` and
 	# lines are statements); its text is the items with a space between
+	# `beat 1 1/2` of beat(n): a function before values it does not take, never a list holding it
+	if separator_of(n) == " " and #n > 1 and n#1 is symbol and name_of(n#1) not in body.names and #functions_named(name_of(n#1)) > 0 { return refuse_count(functions_named(name_of(n#1)), #n - 1) }
 	if separator_of(n) == " " and #n > 1 { return TypedCode(ValueKind.Node, node(Marked.UnbracketedList, list_value(body, items_of(n)).code)) }
 	sequence(body, items_of(n))
 }
