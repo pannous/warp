@@ -105,6 +105,7 @@ ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/finger_paint.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
+ok   samples/graphics/paint_text_gpu.warp
 drew samples/graphics/raylib_circle.warp
 drew samples/graphics/raylib_circle_forever.warp
 drew samples/graphics/raylib_debug.warp
