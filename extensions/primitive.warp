@@ -85,7 +85,7 @@ c_primitive_types = {i32: "i32", bool: BOOL_TYPE, i64: "i64", f64: "f64", f32: "
 # `allocate(bytes)`: an address of that many bytes taken from the arena
 ALLOCATE_WORD = "allocate"
 # the code of primitive files: lib/primitive.warp, their prelude, its words reached as the GC prelude's are
-PRIMITIVE_PRELUDE = library_text("primitive.warp")
+PRIMITIVE_PRELUDE = module_source("primitive")
 
 class PrimitiveCode { type: text; code: list }
 # a primitive function: its parameters' names and types, its result type ("" none, ø not yet known), its locals by
@@ -222,7 +222,7 @@ native_only(name: text, library: text, place: text) := {
 # `import strlen from "c"`: each line of lib/c.warp or lib/math.warp it names, read as a GC program reads it
 # (c_imports.warp c_functions_of), as [declaration, line number]; the statement's line left empty
 c_imported(lines: list): list := {
-	catalog = c_catalog(run_library(), [])
+	catalog = c_catalog([])
 	found = []
 	for i in 0..#lines {
 		imported = c_import(lines#(i + 1).trim())

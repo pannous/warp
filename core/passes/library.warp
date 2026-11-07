@@ -77,7 +77,7 @@ global file_texts = {}
 # read once a compile (scanning the modules' texts was the compiler's baked tables, or ~5 ms of a small compile).
 # Without one (the seed's build, a fresh lib/) a section is scanned off lib/ where it runs
 LIBRARY_INDEX = "index.tsv"
-INDEX_SECTIONS = ["block", "global", "class", "tag", "const", "typed", "word", "needs", "host", "hash", "alias", "sugar", "slice", "operator"]
+INDEX_SECTIONS = ["block", "global", "class", "tag", "const", "typed", "word", "needs", "host", "hash", "alias", "sugar", "slice", "operator", "provider", "nullary", "unary"]
 # the modules beside the runtime a compile runs behind, as the modules it links (compiler.warp linked_libraries)
 index_file(): text := modules_file(LIBRARY_INDEX)
 modules_file(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name
@@ -114,6 +114,9 @@ index_section_scanned(section: text): map := match section {
 	"sugar": sugar_modules_scanned()
 	"slice": sliced_modules_scanned()
 	"operator": library_operators_scanned()
+	"provider": type_module_providers_scanned()
+	"nullary": nullary_words_scanned()
+	"unary": unary_words_scanned()
 }
 # lib/aliases.warp's entries, each word with its fields as the index holds them (parser.warp alias_rows)
 alias_entries_scanned(): map := {
