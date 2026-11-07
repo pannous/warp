@@ -136,7 +136,7 @@ read_file(path: Node): Node := {
 		error = fd_read(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 		if error != 0 {
 			fd_close(fd)
-			return file_failure("read", t, if is_folder(t) then wasi_is_a_folder() else error)
+			return file_failure("read", t, if opens_as_folder(t) then wasi_is_a_folder() else error)
 		}
 		got = scratch_word(scratch_count())
 		if got > 0 { answer = answer + scratch_text(scratch_bytes(), got) }
@@ -158,7 +158,7 @@ std_file_exists(path: Node): bool := {
 	fd >= 0 or (0 - fd != wasi_no_entry() and 0 - fd != wasi_not_a_folder())
 }
 # whether the path opens as a folder
-is_folder(path: text): bool := {
+opens_as_folder(path: text): bool := {
 	fd = opened_entry(path, wasi_directory(), wasi_readdir_right())
 	if fd >= 0 { fd_close(fd) }
 	fd >= 0
