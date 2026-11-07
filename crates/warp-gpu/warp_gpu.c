@@ -157,8 +157,23 @@ static int values_laid_out(const char* values, Layout* layout) {
 
 // --- the pipeline
 typedef struct { int done; int failed; } Scope;
+// a shader that does not compile, as every host says it (web/playground/host-gpu.js checkedModule): why at its place,
+// `the shader: expected `;`, found "}" at 4:1`, out of naga's report "Shader '' parsing error: why … ┌─ wgsl:4:1 …"
+// (a shader block's place in the program, lib/prelude.warp shader_words); naga's whole report where it says neither
+#define NAGA_CAUSE "error: "
+#define NAGA_PLACE "wgsl:"
+static void shader_failed(WGPUStringView message) {
+	char report[sizeof failure];
+	snprintf(report, sizeof report, "%.*s", (int)(message.data ? message.length : 0), message.data ? message.data : "");
+	const char* why = strstr(report, NAGA_CAUSE);
+	const char* place = strstr(report, NAGA_PLACE);
+	if (!why || !place) { failed("the shader: ", message); return; }
+	why += strlen(NAGA_CAUSE);
+	place += strlen(NAGA_PLACE);
+	snprintf(failure, sizeof failure, "the shader: %.*s at %.*s", (int)strcspn(why, "\n"), why, (int)strspn(place, "0123456789:"), place);
+}
 static void scope_popped(WGPUPopErrorScopeStatus status, WGPUErrorType type, WGPUStringView message, void* scope, void* unused) {
-	if (type != WGPUErrorType_NoError) { failed("the shader: ", message); ((Scope*)scope)->failed = 1; }
+	if (type != WGPUErrorType_NoError) { shader_failed(message); ((Scope*)scope)->failed = 1; }
 	((Scope*)scope)->done = 1;
 }
 // whether the device reported no error since the scope was pushed

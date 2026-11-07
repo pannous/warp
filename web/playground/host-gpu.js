@@ -341,11 +341,12 @@ async function forgetDeviceIfLost() {
 // the shader's module, checked once: asking a module for its compilation info a second time crashed Chrome's page (Mac)
 const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () => checkedModule(device, shader));
 
-// the shader's module; one that does not compile throws where and why
+// the shader's module; one that does not compile throws why and where, `why at line:column`: a shader block's place in
+// the program, as the program placed its text (lib/prelude.warp shader_words), as natively (warp_gpu.c shader_failed)
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
 	const problems = (await answeredWithin(module.getCompilationInfo(), "compilation report", GPU_WORK_WAIT_MS)).messages.filter(message => message.type === "error");
-	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${essence(problem.message)}`).join("; "));
+	if (problems.length) throw new Error(problems.map(problem => `${essence(problem.message)} at ${problem.lineNum}:${problem.linePos}`).join("; "));
 	return module;
 }
 
