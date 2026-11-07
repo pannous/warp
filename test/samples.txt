@@ -1,4 +1,4 @@
-# 2fd2068422 2026-11-07 08:39 252/266 94.7%
+# e60b268542 2026-11-07 09:12 246/266 92.5%
 ok   samples/advanced/circle.warp
 ok   samples/advanced/filled_circle.warp
 ok   samples/advanced/mandelbrot_canvas.warp
@@ -93,11 +93,8 @@ ok   samples/gpu/gpu_million.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
-ok   samples/gpu/lava_lamp.warp
 ok   samples/gpu/manual_3d_object_viewer.warp
-ok   samples/gpu/northern_lights.warp
 ok   samples/gpu/ocean.warp
-ok   samples/gpu/ringed_planet.warp
 ok   samples/gpu/scene_3d.warp
 ok   samples/gpu/sdf_scene.warp
 ok   samples/gpu/voronoi.warp
@@ -184,7 +181,6 @@ ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
-ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -195,11 +191,9 @@ ok   samples/sound/signal_graph.warp
 ok   samples/sound/siren_sound.warp
 ok   samples/sound/sound_features.warp
 ok   samples/sound/sound_kick_samples.warp
-ok   samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
-ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
@@ -229,7 +223,6 @@ ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
 ok   samples/wasm/component_reflection.warp
-ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/wasm_interop.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
@@ -244,6 +237,7 @@ ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
+ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
@@ -263,5 +257,11 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 EXP  samples/storage/netbase.warp: outside the core: the unknown name load
 SRV  samples/storage/todo_app.warp
-FAIL samples/numbers/dates.warp: hint: now is time's fix: use time
-FAIL samples/web/page_elements.warp: FAIL # check: type "…" "…", click "…" → Hello Ann: the page shows sh -c WARP_PAGE_STEPS='type name Ann click Greet' warp run 'samples/web/page_elements.warp' failed (exit status: 1): a text e
+TIME samples/gpu/lava_lamp.warp: used its 30 s of CPU
+TIME samples/gpu/northern_lights.warp: used its 30 s of CPU
+TIME samples/gpu/ringed_planet.warp: used its 30 s of CPU
+FAIL samples/numbers/dates.warp: wasm trap: null reference
+FAIL samples/sound/gpu_visualizer_warp.warp: outside the core: the field ms of a list at lib/time.warp:80 (in format_date)
+FAIL samples/sound/sound_patterns.warp: sound 1.33 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-31227.wav
+FAIL samples/sound/visualizer.warp: sound 4.00 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-32313.wav
+FAIL samples/wasm/import_compiled.warp: index out of range: 12164 not in 1…12163
