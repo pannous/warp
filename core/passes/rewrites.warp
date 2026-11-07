@@ -204,7 +204,8 @@ spaced_keeps_meaning(word: text): bool := {
 	# (no library index: a standard module's own build, the runtime's, whose blocks are code)
 	if not library_indexed() { return yes }
 	if library_index_section("tag").has(word) { return no }
-	library_index_section("block").has(word) or sugar_rule_heads().has(word) or rule_needed_words().has(word) or #defining_modules(word) > 0 or word in prelude_definitions()
+	# (a builtin declared `from emitter`, `print {a: 1}`, is a call too)
+	library_index_section("block").has(word) or sugar_rule_heads().has(word) or rule_needed_words().has(word) or #defining_modules(word) > 0 or word in prelude_definitions() or is_declared_word(word)
 }
 global library_index_found = ø
 library_indexed(): bool := {
