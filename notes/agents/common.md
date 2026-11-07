@@ -145,7 +145,8 @@ before asking a question). After a context swap, this file and your role file be
   (<store>/code/<baked hash>), rebakes lib/ into it and makes its runtime and modules (`miss-rebaking-<hash>`, about a
   minute; decision lib-hash-rebake; a failed rebake is kept like a failed build, step rebake). So a library feature
   costs no compiler build, a core one does.
-- Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
+- Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never pkill or killall (the hook .claude/hooks/no-pattern-kill.sh refuses them since the 04:13 crash,
+  notes/postmortem_0413_crash.md), and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
   wording. An error/"not yet"/ignored test that now works is upgraded in its own commit without asking; a change of

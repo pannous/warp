@@ -387,6 +387,22 @@ library_folder(): text := resolved_path(library_found())
 library_found(): text := {
 	given = getenv("WARP_LIB")
 	if given.length > 0 { return given }
+	found = installed_found()
+	if found.length > 0 { return found }
+	own = folder_of(invoked_path())
+	linked = folder_of(resolved_path(executable_path()))
+	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), joined(folder_of(linked), "/share/warp")), "; WARP_LIB names one"))
+	exit(1)
+	own
+}
+# the installed warp's lib/, whatever $WARP_LIB names: its runtime and modules of a finished build; a copy of the
+# executable without one (self-check.sh runs one in a scratch folder) has the library folder
+installed_library(): text := {
+	found = installed_found()
+	if found.length > 0 then resolved_path(found) else library_folder()
+}
+# the first folder holding a lib/ beside the executable, its links followed, or of its share/warp; empty for none
+installed_found(): text := {
 	own = folder_of(invoked_path())
 	linked = folder_of(resolved_path(executable_path()))
 	shared = joined(folder_of(linked), "/share/warp")
@@ -394,9 +410,7 @@ library_found(): text := {
 	if holds_library(joined(own, "/lib")) { return joined(own, "/lib") }
 	if holds_library(linked) { return linked }
 	if holds_library(shared) { return shared }
-	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), shared), "; WARP_LIB names one"))
-	exit(1)
-	own
+	""
 }
 holds_library(folder: text): bool := access(c_string(joined(folder, "/prelude.warp")), READABLE) == 0
 # the path with its links resolved, the path itself when it names no file
@@ -647,25 +661,26 @@ word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing 
 # modules/<m>.wasm's, both from the library folder; each instantiated once per run, its own imports linked first, with
 # the run's host words, and its `warp/start` (its global initializers) run before what imports it
 # (primitive mode has no text constants: the names `warp_runtime`, `warp/` and `warp/start` are written where read)
-# `linked`: a cell holding the instance names already defined in the run's linker, each followed by a newline
-instances_linked(linker: handle, engine: handle, context: handle, compiled: handle, linked: pointer, trap: pointer): nothing := {
+# `linked`: a cell holding the instance names already defined in the run's linker, each followed by a newline;
+# `library`: the folder of runtime.wasm and modules/, built together
+instances_linked(linker: handle, engine: handle, context: handle, compiled: handle, linked: pointer, library: text, trap: pointer): nothing := {
 	imports = allocate(VECTOR_BYTES)
 	wasmtime_module_imports(compiled, imports)
 	for i in 0..long_at(imports).value {
 		from = native_vector_text(wasm_importtype_module(native_long(long_at(imports + 8).value + i * 8)))
-		path = instance_path(from)
-		if path.length > 0 and not contains_line(cell_text(linked), from) { instance_defined(linker, engine, context, from, path, linked, trap) }
+		path = instance_path(from, library)
+		if path.length > 0 and not contains_line(cell_text(linked), from) { instance_defined(linker, engine, context, from, path, linked, library, trap) }
 	}
 }
 # where the instance of that import module is: runtime.wasm or modules/<m>.wasm of the library folder, a module the
 # program uses by its path (`use counter.wasm`, extensions/c_imports/wasm_modules.warp), else ""
-instance_path(from: text): text := {
-	if same_text(from, "warp_runtime") { return joined(library_folder(), "/runtime.wasm") }
+instance_path(from: text, library: text): text := {
+	if same_text(from, "warp_runtime") { return joined(library, "/runtime.wasm") }
 	if is_wasm_path(from) { return rooted_path(from) }
 	prefix = "warp/"
 	if not starts_with(from, prefix) { return "" }
 	name = text_from(from.address + prefix.length, from.length - prefix.length)
-	joined(joined(joined(library_folder(), "/modules/"), name), ".wasm")
+	joined(joined(joined(library, "/modules/"), name), ".wasm")
 }
 is_wasm_path(from: text): bool := ends_with(from, ".wasm")
 # `•/test/fixtures/wasm/counter.wasm` (or `@/…`): the project root, the nearest folder above the working one holding
@@ -703,7 +718,7 @@ contains_line(lines: text, line: text): bool := {
 	no
 }
 # the module at `path` instantiated and defined in the linker as `name`, its start run
-instance_defined(linker: handle, engine: handle, context: handle, name: text, path: text, linked: pointer, trap: pointer): pointer := {
+instance_defined(linker: handle, engine: handle, context: handle, name: text, path: text, linked: pointer, library: text, trap: pointer): pointer := {
 	text_kept(linked, joined(joined(cell_text(linked), name), "\n"))
 	module = read_file(path)
 	if module.length == 0 {
@@ -711,7 +726,7 @@ instance_defined(linker: handle, engine: handle, context: handle, name: text, pa
 		exit(1)
 	}
 	compiled = compiled_module(engine, module, machine_code_file(path, PROGRAM_GC_HEAP_BYTES), trap)
-	instances_linked(linker, engine, context, compiled, linked, trap)
+	instances_linked(linker, engine, context, compiled, linked, library, trap)
 	host_words_defined(linker, engine, context, compiled, module, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
 	instance = allocate(INSTANCE_BYTES)
@@ -760,7 +775,7 @@ run_into(module: text, given: Arguments, machine_code: text, heap_bytes: i64, ou
 	outer_run = kept_value(RUN_SLOT)
 	if outer_run == 0 { timers_forgotten() }
 	keep_value(RUN_SLOT, run_state(linker, engine, linked) as i64)
-	instances_linked(linker, engine, context, compiled, linked, trap)
+	instances_linked(linker, engine, context, compiled, linked, library_folder(), trap)
 	host_words_defined(linker, engine, context, compiled, module, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
 	instance = allocate(INSTANCE_BYTES)
@@ -802,14 +817,19 @@ run_state(linker: handle, engine: handle, linked: pointer): pointer := {
 }
 # `"é" == "e◌́"` (decisions nfc-tables, nfc-slot; notes/text_equality_nfc.md): the runtime's canonical_text, a text's
 # NFC by lib/unicode, whose module (modules/unicode.wasm) the run links on this first call, never at its start; a
-# library folder without it ends the run naming the file (instance_defined), never a silent byte compare
+# library folder without it ends the run naming the file (instance_defined), never a silent byte compare. A program
+# linked to a runtime gets the unicode of that runtime's library; a module without one (the compiler) the installed
+# warp's, both of a finished build: a `warp rebuild` runs its compilers beside a lib/ whose runtime.wasm and modules/
+# it is writing, which do not fit together until it ends
 canonical_text_answered(context: handle, given: pointer, result: pointer): nothing := {
 	run = kept_value(RUN_SLOT) as i32
 	trap = allocate(8)
 	long_at(trap).value = 0
 	if long_at(run + 24).value == 0 {
 		module_name = "warp/unicode"
-		instance = instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name), long_at(run + 16).value as i32, trap)
+		linked = long_at(run + 16).value as i32
+		library = if contains_line(cell_text(linked), "warp_runtime") then library_folder() else installed_library()
+		instance = instance_defined(long_at(run).value, long_at(run + 8).value, context, module_name, instance_path(module_name, library), linked, library, trap)
 		memcpy(run + 32, native_pointer(instance), INSTANCE_BYTES)
 		long_at(run + 24).value = 1
 	}
@@ -2299,6 +2319,8 @@ failed_call(message: text): nothing := {
 # the call of a C function with the module's values: numbers as they are, a text NUL-terminated, bytes copied and their
 # count the length after them, a handle id its C pointer, the first out-pointer a slot that becomes the result; its
 # result crossed back the same way
+# 1 for a parameter the program passes a value for, 0 for the out pointer and the length the call adds itself
+program_argument(kind: i32): i32 := if kind == PARAMETER_OUT or kind == PARAMETER_LENGTH then 0 else 1
 c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
 	if c.wasm != 0 { wasm_called(c, caller, context, given, results, results_count) } else { library_called(c, caller, context, given, results, results_count) }
 }
@@ -2326,7 +2348,7 @@ library_called(c: Foreign, caller: handle, context: handle, given: pointer, resu
 		}
 		if kind == PARAMETER_BYTES { bytes_length = c_bytes_length(caller, context, value - VALUE_OFFSET) }
 		if kind == PARAMETER_OUT { outs = outs + 1 }
-		if kind != PARAMETER_OUT and kind != PARAMETER_LENGTH { passed = passed + 1 }
+		passed = passed + program_argument(kind)
 	}
 	returned = native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
 	c_finished(c, caller, context, returned, long_at(out).value, results, results_count)
@@ -2439,7 +2461,7 @@ wasm_called(c: Foreign, caller: handle, context: handle, given: pointer, results
 			byte_at(argument).value = if kind == PARAMETER_I32 then KIND_I32 else if kind == PARAMETER_I64 then KIND_I64 else if kind == PARAMETER_F32 then KIND_F32 else KIND_F64
 			long_at(argument + VALUE_OFFSET).value = long_at(value).value
 		}
-		if kind != PARAMETER_OUT and kind != PARAMETER_LENGTH { passed = passed + 1 }
+		passed = passed + program_argument(kind)
 	}
 	returned = wasm_function_called(context, c.wasm, WASM_FUNCTION, arguments, c.count as i64)
 	pointed = if out == 0 then 0 else (native_long(wasm_memory(context, c.wasm) + out) % 4294967296 + 4294967296) % 4294967296

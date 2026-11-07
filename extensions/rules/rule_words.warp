@@ -131,7 +131,8 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 # defines page_value(), its last expression again, which the page shows anew after each firing
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
 page_value_word = "page_value"
-listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
+# (`on message from "chat" {…}` is lib/channels.warp's message_listened by the time this reads it)
+listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "message_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
 # a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again
 is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word)
@@ -164,16 +165,22 @@ statement_start(written: text): text := {
 # a program with test checks ending in their summary (lib/laws.warp tests_end), its value kept when no test ran
 tests_end_word = "tests_end"
 tests_ended(program: Node): any := ending_appended(program, mentions(program, test_check_word), tests_end_word)
+# the words that print (extensions/effects.warp OUTPUT_WORDS, a module the rule words do not use)
+printing_heads = [symbol("print"), symbol("puts"), symbol("eprint"), symbol("say"), symbol("warn")]
 page_valued(program: Node): any := {
 	statements = level_statements(program)
 	# (the sugar reads the program before its `on click {…}` became a listen call)
 	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_named(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
+	# (`print "done"` as `print("done")`: a group the output word heads)
+	outputs = statement => nodes_in(statement).any(n => is_group(n) and #n > 1 and n#1 in printing_heads)
 	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
-	# (a write, `x = 3` once signaled notifies its listeners, is no value to read again: run again it would write anew)
-	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) { return ø }
-	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
+	# (a write, `x = 3` once signaled notifies its listeners, or an output, `print "done"`, is no value to read again:
+	# run again it would write or print anew)
+	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) or outputs(last) { return ø }
+	# (a value of any kind, as the page reads it: a text's too, never its bare bytes)
+	separated(bracketed(statements + [Key(Key(call_of(page_value_word, []), Op.Colon, symbol("any")), Op.Define, last)], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
@@ -210,8 +217,47 @@ tables_kept(program: Node): any := {
 	classes = tables.keys.map(name => tables[name]#3)
 	kept_classes = statements.filter(statement => declared_class_name(statement) in classes)
 	fields = kept_classes.flat_map(declared_field_names)
-	kept = statements.map(statement => if statement in kept_classes then with_row_id(statement) else bottom_up(statement, part => table_kept(part, tables, fields)))
-	separated(bracketed(kept, ""), ";")
+	table_of = {}
+	for name in tables.keys { table_of[tables[name]#3] = tables[name]#2 }
+	relations = kept_classes.flat_map(statement => relations_of(statement, table_of, kept_classes))
+	back_fields = relations.filter(relation => name_of(relation#1) == "stored_back").map(relation => view_of(relation#3)#2)
+	kept = statements.map(statement => if statement in kept_classes then with_row_id(statement) else bottom_up(statement, part => table_kept(part, tables, fields, back_fields)))
+	first_table = (1 to #kept).filter(i => stored_table_of(kept#i) != [])#1
+	separated(bracketed(kept[0 ..< first_table - 1] + relations + kept[first_table - 1 ..], ""), ";")
+}
+# the relations of a kept class's fields to the kept classes, registered before the first table is read: a field typed
+# with one, `team: Team?`, a foreign key, `stored_key("people", "team", "teams", Team)`; a list of one, `players: [Person]`,
+# the rows of it whose foreign key is the row, `stored_back("teams", "players", "people", Person, "team")`
+relations_of(statement: Node, table_of: map, classes: list): list := {
+	own = declared_class_name(statement)
+	related = []
+	for member in class_fields(statement) {
+		[other, many] = related_class(member)
+		if table_of.has(other) {
+			heads = [Text(table_of[own]), Text(field_name(member)), Text(table_of[other]), symbol(other)]
+			if not many { related += [call_of("stored_key", heads)] }
+			key = if many then foreign_key_to(own, other, classes) else ""
+			if key != "" { related += [call_of("stored_back", heads + [Text(key)])] }
+		}
+	}
+	related
+}
+class_fields(statement: Node): list := class_view(statement)#3[3..].map(member_read).filter(member => defined_word(member) == ø)
+# [the class a field is typed with, whether a list of it]: `team: Team?` ["Team", no], `players: [Person]` ["Person", yes]
+related_class(member: Node): list := {
+	if not is_key(member, Op.Colon) { return ["", no] }
+	written = if is_key(value_of(member), Op.Assign) then key_of(value_of(member)) else value_of(member)
+	many = is_group(written) and bracket_of(written) == "[" and #written == 1
+	named = if many then written#1 else written
+	name = if named is symbol then name_of(named) else annotated_type_name(named) ?? ""
+	[if name.ends_with("?") then name[0 ..< #name - 1] else name, many]
+}
+# the field of the class `other` that is a foreign key to the class `own`, "" for none (of the kept classes)
+foreign_key_to(own: text, other: text, classes: list): text := {
+	for statement in classes.filter(statement => declared_class_name(statement) == other) {
+		for member in class_fields(statement) { if related_class(member) == [own, no] { return field_name(member) } }
+	}
+	""
 }
 ROW_ID = "id"
 # [list name, table name, class name] of `people = stored_table("people", Person)`, else none
@@ -230,10 +276,15 @@ with_row_id(statement: Node): Node := {
 	view = class_view(statement)
 	opaque([view#1, view#2, view#3 + [view_of(plain_node(parsed(ROW_ID + ": int")))]] + view[3 ..])
 }
-# a table's add and remove kept in its table, a write of a kept class's field in its row; any other node as it is
-table_kept(n: Node, tables: map, fields: list): Node := {
+# a table's add and remove kept in its table, a write of a kept class's field in its row, a read of a list of rows
+# pointing back (`climbers.players`) their query and an add to it the foreign key written; any other node as it is
+table_kept(n: Node, tables: map, fields: list, back_fields: list): Node := {
 	if writes(n) and is_key(key_of(n), Op.Dot) and value_of(key_of(n)) is symbol and name_of(value_of(key_of(n))) in fields {
 		return call_of("stored_written", [key_of(key_of(n)), n])
+	}
+	if is_key(n, Op.Dot) and value_of(n) is symbol and name_of(value_of(n)) in back_fields { return call_of("stored_rows_of", [key_of(n), Text(name_of(value_of(n)))]) }
+	if is_key(n, Op.Dot) and is_call_named(key_of(n), "stored_rows_of") and is_call_named(value_of(n), "add") and #value_of(n) == 2 {
+		return call_of("stored_joined", items_of(key_of(n))[1..] + [value_of(n)#2])
 	}
 	if not is_key(n, Op.Dot) or not (key_of(n) is symbol) or not tables.has(name_of(key_of(n))) { return n }
 	call = value_of(n)

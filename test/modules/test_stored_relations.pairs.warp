@@ -1,0 +1,6 @@
+# relations between stored classes (lib/storage.warp, notes/orm.md, card samples-page-storage): a field typed with a stored
+# class holds its row, a list of one the rows pointing back, an add to it writes their foreign key
+'use storage; class Team{name: text; players: [Person]}; class Person{name: text; team: Team?}; stored teams: [Team]; stored people: [Person]; teams.add(Team("Red")); bo = Person("Bo"); people.add(bo); teams#1.players.add(bo); bo.team.name'	'Red'
+'use storage; class Team{name: text; players: [Person]}; class Person{name: text; team: Team?}; stored teams: [Team]; stored people: [Person]; teams.add(Team("Red")); people.add(Person("Ann")); bo = Person("Bo"); people.add(bo); teams#1.players.add(bo); count(teams#1.players)'	1
+'use storage; class Team{name: text; players: [Person]}; class Person{name: text; team: Team?}; stored teams: [Team]; stored people: [Person]; teams.add(Team("Red")); people.add(Person("Ann")); bo = Person("Bo"); people.add(bo); teams#1.players.add(bo); count(people where it.team == ø)'	1
+'use storage; class Team{name: text; players: [Person]}; class Person{name: text; team: Team?}; stored teams: [Team]; stored people: [Person]; red = Team("Red"); teams.add(red); people.add(Person("Bo", red)); stored_table("people", Person)#1.team === red'	yes

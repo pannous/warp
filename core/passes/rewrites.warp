@@ -198,13 +198,44 @@ rewritten_program(program: Node, source: text): Node := {
 	rule_source = source
 	stored(own_rules_applied(program, source))
 }
+# a spaced `word {…}` that is no tag (decision spaced-tag): a word a rule starts or needs (`do {…}`, `once {…}`) or a
+# library word that is no markup tag (`head {…}` is the element)
+spaced_keeps_meaning(word: text): bool := {
+	# (no library index: a standard module's own build, the runtime's, whose blocks are code)
+	if not library_indexed() { return yes }
+	if library_index_section("tag").has(word) { return no }
+	# (a builtin declared `from emitter`, `print {a: 1}`, is a call too)
+	library_index_section("block").has(word) or sugar_rule_heads().has(word) or rule_needed_words().has(word) or #defining_modules(word) > 0 or word in prelude_definitions() or is_declared_word(word)
+}
+global library_index_found = ø
+library_indexed(): bool := {
+	if library_index_found == ø { library_index_found = file_text(index_file()) != ø }
+	library_index_found
+}
+# the words the rules of extensions/sugar start with, `do` of `do $block`, read once
+global sugar_heads = ø
+sugar_rule_heads(): map := {
+	if sugar_heads == ø { sugar_heads = word_set(library_index_section("sugar").keys.flat_map(module => module_rules_of(std_module_path(module), "")).map(rule => rule_head(rule.pattern)).filter(word => word != ø)) }
+	sugar_heads
+}
+rule_head(pattern: Node): text? := if is_group(pattern) and #pattern > 1 and pattern#1 is symbol and not name_of(pattern#1).starts_with(rule_hole_mark) then name_of(pattern#1) else ø
+# the words the standard modules' rules need, from the library index (never scanned: the runtime's own build has no
+# modules beside it), read once
+global needed_rule_words = ø
+rule_needed_words(): map := {
+	if needed_rule_words == ø {
+		needs = library_index_section("needs")
+		needed_rule_words = word_set(needs.keys.flat_map(module => needs[module].split(" ")))
+	}
+	needed_rule_words
+}
 own_rules_applied(program: Node, source: text): Node := {
 	ruled = statements_ruled(statements_in(program), "", source)
 	rules = ruled#1
 	if #rules > 0 { program = separated(bracketed(ruled#2, ""), ";") }
 	# data as written, never rewritten by a rule or pass: `style{ td { padding: 6px } }` no units' quantity(6, "px")
 	# (decision data-parameter), `li{ animation: pop 400ms }` no call of the list word pop (decision tag-items-calls)
-	program = data_spliced(program)
+	program = data_spliced(program, spaced_keeps_meaning)
 	mentioned = word_set(symbol_words(program))
 	module_rules = []
 	needs = rule_needs_by_module()
@@ -1214,9 +1245,10 @@ has_property(code: Node, property: text): bool := {
 	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
 	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
 	if property == "instance" and is_group(code) and bracket_of(code) == "(" and #code > 0 and code#1 is symbol { return rule_classes.has(name_of(code#1)) }
-	# `p{ "count: " + count }`: a structure's item reading, where it runs, a varying value or a variable code running
-	# later writes. Only an item: the head `f(a: int)` of heads.warp's `$h := $e` is no varying code
-	if property == "varying" and not (code is symbol) and rule_item != ø { return read_now(code).any(name => varying_values().has(name) or later_written().has(name)) }
+	# `p{ "count: " + count }`, `p{ greeting }`: a structure's item reading, where it runs, a varying value or a variable
+	# code running later writes, a sum or the bare name alike (card bare-name). Only an item: the head `f(a: int)` of
+	# heads.warp's `$h := $e` is no varying code
+	if property == "varying" and rule_item != ø { return read_now(code).any(name => varying_values().has(name) or later_written().has(name)) }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }

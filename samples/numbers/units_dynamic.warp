@@ -10,7 +10,7 @@ print "run: \(total), in metres \(total.in("m"))"
 time = quantity("45 min")
 speed = total / time
 pace = speed.to("km/h")
-print "pace: \(pace), about \(round(pace.in("km/h") * 10) / 10) km/h"
+print "pace: about \(round(pace.in("km/h") * 10) / 10) km/h"
 
 unit = "kg"
 print quantity(3, unit) > quantity("2500 g")

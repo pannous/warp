@@ -16,6 +16,10 @@ function warpPlain(value) {
 	if (!warpIsPlainObject(value)) return warpHandleOf(value);
 	return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, warpPlain(item)]));
 }
+// the program's page after each render (lib/markup.warp page_render), so its elements by id (`who.focus()`) are here
+function warpShowPage(html) {
+	if (document.body.innerHTML !== html) document.body.innerHTML = html;
+}
 // `use js Math; Math.max(1, 5)`: the module's name or a handle, the member, the arguments (null: a read); a promise is
 // awaited (callAsyncJavaScript)
 async function warpForeignCall(request) {

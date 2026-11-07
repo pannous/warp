@@ -137,7 +137,20 @@ module_hashes(): map := {
 }
 # a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
 # under WARP_LIB, card signature-sha256)
-source_hash(source: text): text := "${#source}-" + std_pure("hash", "sha256", [source])
+source_hash(source: text): text := "${#source}-" + text_digest(source)
+# the sha256 of a text, of its parts' sha256s when longer than one host word is given: a page's slim compiler shows at
+# most 64 KB of an argument, lib/sound.warp is longer (its prebuilt module failed every sound sample in the page)
+HASHED_PART = 16384
+text_digest(source: text): text := {
+	if #source <= HASHED_PART { return std_pure("hash", "sha256", [source]) }
+	parts = []
+	at = 0
+	while at < #source {
+		parts += [std_pure("hash", "sha256", [source[at ..< min(at + HASHED_PART, #source)]])]
+		at += HASHED_PART
+	}
+	std_pure("hash", "sha256", [parts.join("\n")])
+}
 # what a prebuilt module is built of: its own text, then those of the modules it uses, transitively, each once; so an
 # edit of lib/reals.warp makes units.wasm, which compiled reals in, stale as an edit of units.warp does
 built_of_texts(module: text): list := {

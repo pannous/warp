@@ -1,0 +1,9 @@
+# A raise in a linked module's word is caught by try as a local one is (card try-linked): the Error with its message,
+# else the fallback, whatever kind the word gives when it finishes
+
+'use markup; r = try type_into("zz", "a"); r.message'	'no field showing zz to type into; the page: '
+'use markup; x = try type_into("zz", "a") catch e { 1 }; x'	1
+'use markup; x = try type_into("zz", "a") else 2; x'	2
+'x = try trim(5) else 1; x'	1
+'use web; n = 0; page = div{ button{ "+1", on click { n += 1 } } }; render page; r = try click("-1"); r.message'	'no element showing -1 handles click; the page: <div><button data-warp-click="1">+1</button></div>'
+'use web; n = 0; page = div{ button{ "+1", on click { n += 1 } } }; render page; r = try click "-1"; r.message'	'no element showing -1 handles click; the page: <div><button data-warp-click="1">+1</button></div>'
