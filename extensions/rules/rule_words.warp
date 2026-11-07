@@ -1302,7 +1302,8 @@ hyphen_difference(name: Node, program: Node): any := {
 	if not parts.all(part => bound.has(part)) { return ø }
 	spaced = parts.join(" - ")
 	if bound.has(written) {
-		warn written + " is the name " + written + ", not " + spaced + "; fix: " + spaced
+		# where it is written, so the page's "I meant" renames it there and at every read (P81)
+		diagnose(call_of("kebab_name", [written, spaced, parts.join("_")]), name)
 		return ø
 	}
 	warn written + " reads as " + spaced + ": " + parts.join(" and ") + " are bound, no name " + written + "; fix: " + parts.join("_") + " or " + spaced
