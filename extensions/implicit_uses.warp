@@ -88,16 +88,14 @@ implicit_modules(source: text, folder: text = "."): list := {
 }
 # whether only the modules' rules know the word, no definition: it names them where it leads a statement, never in
 # quoted code (`data(set width of p to 12)` brings no english)
-only_rules_lead(word: text, modules: list): bool := modules.all(module => not defines_word(used_module_text(module), word))
-# a definition of the word in the module's source, or its `alias ln => natural_log`
-defines_word(source: text, word: text): bool := definition_slices(source).any(slice => slice#1 == word) or module_aliases(source).has(word)
+only_rules_lead(word: text, modules: list): bool := modules.all(module => not module_defines(module, word))
 # a statement led by a word a module's rule starts with: `stored users: [User]`, whose `stored` declares (sound's
 # `pattern` function never takes `pattern Pair = [_, _]`)
 leads_statement(program: Node, word: text, modules: list): bool := flat_statements(program).any(n => is_group(n) and #n > 0 and n#1 == symbol(word)) and modules.any(module => word in module_rule_heads(module))
 # the words a module's rules start with, read once a module
 global rule_heads_by_module = {}
 module_rule_heads(module: text): list := {
-	if not rule_heads_by_module.has(module) { rule_heads_by_module[module] = rule_heads(used_module_text(module)) }
+	if not rule_heads_by_module.has(module) { rule_heads_by_module[module] = module_patterns(module).map(leading_word).filter(word => #word > 0) }
 	rule_heads_by_module[module]
 }
 # A word several modules define is the one module's whose definitions take every call the program makes of it, by
@@ -106,7 +104,7 @@ module_rule_heads(module: text): list := {
 # the defining modules do
 # the definers no other of them builds on: units' ± overloads uncertain's, which it uses, so `6 ± 1` is uncertain's
 # and `5m ± 1cm` brings units by its unit beside it
-base_definers(definers: list): list := definers.filter(module => not used_modules(used_module_text(module)).any(used => used in definers))
+base_definers(definers: list): list := definers.filter(module => not module_uses(module).any(used => used in definers))
 definers_taking(word: text, definers: list, program: Node): list := {
 	counts = nodes_in(program).filter(n => is_group(n) and #n > 0 and n#1 == symbol(word) and (bracket_of(n) == "(" or separator_of(n) == " ")).map(n => #n - 1)
 	if not counts { return definers }
@@ -118,8 +116,7 @@ definers_taking(word: text, definers: list, program: Node): list := {
 }
 # [least, most] arguments of each of module's definitions of word, read off its head `word(a, b = 1)`
 definition_arities(module: text, word: text): list := {
-	slices = definition_slices(used_module_text(module)).filter(slice => slice#1 == word)
-	heads = slices.map(slice => nodes_in(plain_node(parsed(slice#2))).reverse().filter(n => is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)))
+	heads = module_definitions(module, word).map(definition => nodes_in(definition).reverse().filter(n => is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol(word)))
 	heads.filter(found => #found > 0).map(found => arity(signature_of(items_of(found#1))))
 }
 # whether one of the module's rules the word leads goes on as a statement it leads does: the word after it a hole or
@@ -127,7 +124,7 @@ definition_arities(module: text, word: text): list := {
 # goes on only as a member of that name, `on job.stop {…}` tasks' `on $x.stop`, never as `on alarm {…}`
 rule_fits(module: text, word: text, program: Node): bool := {
 	seconds = flat_statements(program).filter(n => is_group(n) and #n > 1 and n#1 == symbol(word)).map(n => said_second(n#2))
-	rule_patterns(used_module_text(module)).filter(pattern => leading_word(pattern) == word).any(pattern => {
+	module_patterns(module).filter(pattern => leading_word(pattern) == word).any(pattern => {
 		said = hole_dropped(second_word(pattern))
 		said == "" or said in seconds
 	})

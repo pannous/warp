@@ -327,7 +327,7 @@ div{
 	melody: { value: '"done"', code: `// notes by name: one after another, then together as a chord
 use sound
 melody([C4 E4 G4], 100ms)
-play([C4 E4 G4], 300ms)
+chord([C4 E4 G4], 300ms)
 "done"` },
 	"wasm modules": { value: '[["fib"], 12586269025]', code: `// a Rust library compiled to WebAssembly: its exports are warp words
 use wasm "test/fixtures/components/rust_demo.wasm" as demo

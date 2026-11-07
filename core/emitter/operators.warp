@@ -275,7 +275,7 @@ counted_write(write: Node, held: map): bool := {
 	stepped = is_key(value, Op.Add) or is_key(value, Op.Sub)
 	stepped and ((key_of(value) is symbol and name_of(key_of(value)) in held and small_literal(value_of(value), COUNTER_STEP)) or (is_key(value, Op.Add) and value_of(value) is symbol and name_of(value_of(value)) in held and small_literal(key_of(value), COUNTER_STEP)))
 }
-exact_words = {"-": "extended_difference", "*": "extended_product", "/": "extended_quotient", "%": "extended_modulo", "rem": "extended_remainder"}
+exact_words = {"-": "extended_difference", "*": "extended_product", "^": "extended_power", "/": "extended_quotient", "%": "extended_modulo", "rem": "extended_remainder"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
 	if symbol in comparisons { return operation_code(body, symbol, runtime_call("extended_order", [left, right]), number_value(0)) }

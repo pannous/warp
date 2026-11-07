@@ -568,8 +568,7 @@ module_of_path(path: text): text := {
 modules_used_by(module_name: text, seen: list): list := {
 	if module_name in seen { return seen }
 	seen += [module_name]
-	signature = linked_signature(module_name)
-	for used in (if signature != ø then signature.uses else used_modules(used_module_text(module_name))) { seen = modules_used_by(used, seen) }
+	for used in module_uses(module_name) { seen = modules_used_by(used, seen) }
 	seen
 }
 # `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
@@ -768,10 +767,35 @@ runtime_words_of_math = math_runtime_lines.map(line => line.name)
 global used_module_texts = {}
 used_module_text(module: text): text := {
 	if not used_module_texts.has(module) {
-		native = native_path(run_library(), module)
-		used_module_texts[module] = file_text(std_module_path(module)) ?? (if native == ø then "" else file_text(native) ?? "")
+		source = file_text(std_module_path(module))
+		# (a C library's lines, lib/native/<m>.warp, only for a name no module file has)
+		if source == ø {
+			native = native_path(run_library(), module)
+			source = if native == ø then "" else file_text(native) ?? ""
+		}
+		used_module_texts[module] = source
 	}
 	used_module_texts[module]
+}
+# what a module says, by its prebuilt signature (signature.warp prebuilt_signature), else, a program's own module or
+# one not prebuilt, by its text: the modules it uses, its rule patterns (after `rewrite `), whether it defines the
+# word (a definition or an alias), the parses of its definitions of the word
+module_uses(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.uses else used_modules(used_module_text(module))
+}
+module_patterns(module: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.patterns else rule_patterns(used_module_text(module))
+}
+module_defines(module: text, word: text): bool := {
+	signature = prebuilt_signature(module)
+	if signature == ø { return definition_slices(used_module_text(module)).any(slice => slice#1 == word) or module_aliases(used_module_text(module)).has(word) }
+	signature.slices.any(slice => slice#1 == word) or signature.aliases.has(word)
+}
+module_definitions(module: text, word: text): list := {
+	signature = prebuilt_signature(module)
+	if signature != ø then signature.slices.filter(slice => slice#1 == word).map(slice => unpack(slice#3)) else definition_slices(used_module_text(module)).filter(slice => slice#1 == word).map(slice => plain_node(parsed(slice#2)))
 }
 # `use strict`, `use m`: a mode (lib/modes.data) or a C library, which a `use` names without a module file
 use_modes = module_source("modes.data").split("\n").filter(line => line != "" and not line.starts_with("#")).map(line => line.split("\t")#1)
