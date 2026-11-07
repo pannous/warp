@@ -76,12 +76,12 @@ is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
 # the empty map `{}` (number_keys.warp keys a variable that starts as one by texts) and the empty list `[]`,
 # a character as a text, an opaque type or error whole
-# the node made at the place of `at`, where the user wrote the code it stands for (a rewritten form, a rebuilt group)
+# the node made at the place of `at`, where the user wrote the code it stands for (a rewritten form, a rebuilt group);
+# ø stays ø, as a rule's `() => $e` makes its `()`
 placed(made: Node, at: Node): Node := {
+	if made === ø { return made }
 	line = line_of(at)
 	column = column_of(at)
-	# (ø, the empty `()` of a template's `() => $e`, has no place)
-	if made === ø { return made }
 	if line is int and column is int then positioned(made, line, column) else made
 }
 

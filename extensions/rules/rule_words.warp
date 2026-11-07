@@ -131,7 +131,8 @@ sleep_of(statement: Node): any := if is_call_named(statement, "sleep") and #stat
 # defines page_value(), its last expression again, which the page shows anew after each firing
 # (web/playground/driver.js); ø for any other program, one ending in a declaration or a listener, or one that has it
 page_value_word = "page_value"
-listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "exits_end", frames_end_word]
+# (`on message from "chat" {…}` is lib/channels.warp's message_listened by the time this reads it)
+listening_words = ["timer_every", "timer_at", "listen", "variable_listen", "frame_listened", "message_listened", "exits_end", frames_end_word]
 event_heads = [symbol("on"), symbol("once")]
 # a test check (extensions/rules/modules/laws.warp) and the tests' summary run where they stand: no value to read again
 is_test_line(statement: Node): bool := is_call_named(statement, test_check_word) or is_call_named(statement, tests_end_word)
@@ -164,16 +165,22 @@ statement_start(written: text): text := {
 # a program with test checks ending in their summary (lib/laws.warp tests_end), its value kept when no test ran
 tests_end_word = "tests_end"
 tests_ended(program: Node): any := ending_appended(program, mentions(program, test_check_word), tests_end_word)
+# the words that print (extensions/effects.warp OUTPUT_WORDS, a module the rule words do not use)
+printing_heads = [symbol("print"), symbol("puts"), symbol("eprint"), symbol("say"), symbol("warn")]
 page_valued(program: Node): any := {
 	statements = level_statements(program)
 	# (the sugar reads the program before its `on click {…}` became a listen call)
 	listens = statement => nodes_in(statement).any(n => listening_words.any(word => is_call_named(n, word)) or is_group(n) and #n > 1 and n#1 in event_heads)
+	# (`print "done"` as `print("done")`: a group the output word heads)
+	outputs = statement => nodes_in(statement).any(n => is_group(n) and #n > 1 and n#1 in printing_heads)
 	ending = (0 ..< #statements).filter(i => use_target(statements[i]) == ø)
 	if #ending == 0 or not statements.any(listens) or nodes_in(program).any(n => n == symbol(page_value_word)) { return ø }
 	last = statements[ending.last()]
-	# (a write, `x = 3` once signaled notifies its listeners, is no value to read again: run again it would write anew)
-	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) { return ø }
-	separated(bracketed(statements + [Key(call_of(page_value_word, []), Op.Define, last)], ""), ";")
+	# (a write, `x = 3` once signaled notifies its listeners, or an output, `print "done"`, is no value to read again:
+	# run again it would write or print anew)
+	if is_declaration(last) or listens(last) or is_test_line(last) or nodes_in(last).any(writes) or outputs(last) { return ø }
+	# (a value of any kind, as the page reads it: a text's too, never its bare bytes)
+	separated(bracketed(statements + [Key(Key(call_of(page_value_word, []), Op.Colon, symbol("any")), Op.Define, last)], ""), ";")
 }
 # the program ended by a call of the ending word, when a statement of it calls the starting word and none calls the
 # ending one yet: its last statement but a `use` (with_implicit_uses appends some) the ending's value, after it when
